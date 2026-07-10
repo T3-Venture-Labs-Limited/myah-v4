@@ -6,6 +6,7 @@ import { SNACK_BAR_DARK } from './SnackBarDark';
 import { ACCENT_DARK } from './AccentDark';
 import { BACKGROUND_DARK } from './BackgroundDark';
 import { BORDER_DARK } from './BorderDark';
+import { BRAND_DARK } from './BrandDark';
 import { BOX_SHADOW_DARK } from './BoxShadowDark';
 import { CODE_DARK } from './CodeDark';
 import { FONT_DARK } from './FontDark';
@@ -20,6 +21,7 @@ export const THEME_DARK: typeof THEME_LIGHT = {
     background: BACKGROUND_DARK,
     blur: BLUR_DARK,
     border: BORDER_DARK,
+    brand: BRAND_DARK,
     boxShadow: BOX_SHADOW_DARK,
     font: FONT_DARK,
     name: 'dark',

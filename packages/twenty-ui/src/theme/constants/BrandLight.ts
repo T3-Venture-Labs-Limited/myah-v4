@@ -1,0 +1,15 @@
+export const BRAND_LIGHT = {
+  solid: '#DF3377',
+  onSolid: '#0A0A0A',
+  onSolidMuted: '#0A0A0A99',
+  solidHover: '#E34885',
+  solidActive: '#E95B93',
+  text: '#B51F5E',
+  border: '#D92F73',
+  soft: '#FCE4EE',
+  softHover: '#FAD3E2',
+  softActive: '#F7C2D7',
+  disabled: '#E8B3CB',
+  focusRing: '#C92769',
+  focusHalo: '#DF33774D',
+};
