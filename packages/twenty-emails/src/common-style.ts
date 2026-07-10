@@ -23,7 +23,8 @@ const grayScale = {
 };
 
 const colors = {
-  blue40: '#5e90f2',
+  brand: '#DF3377',
+  brandLink: '#A51E57',
 };
 
 export const emailTheme = {
@@ -32,8 +33,9 @@ export const emailTheme = {
       highlighted: grayScale.gray60,
       primary: grayScale.gray50,
       tertiary: grayScale.gray35,
-      inverted: grayScale.gray0,
-      blue: colors.blue40,
+      inverted: '#0A0A0A',
+      brand: colors.brand,
+      brandLink: colors.brandLink,
     },
     family: 'Trebuchet MS', // Google Inter not working, we need to use a web safe font, see https://templates.mailchimp.com/design/typography/
     weight: {
@@ -54,7 +56,7 @@ export const emailTheme = {
   },
   background: {
     colors: { highlight: grayScale.gray15 },
-    button: grayScale.gray60,
+    button: colors.brand,
     transparent: {
       medium: 'rgba(0, 0, 0, 0.08)',
       light: 'rgba(0, 0, 0, 0.04)',
