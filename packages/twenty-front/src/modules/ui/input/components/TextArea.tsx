@@ -74,11 +74,11 @@ const StyledTextAreaContainer = styled.div<{ variant: TextAreaVariant }>`
       box-shadow: ${({ variant }) =>
         variant === 'transparent'
           ? 'none'
-          : `0px 0px 0px 3px ${themeCssVariables.color.transparent.blue2}`};
+          : `0px 0px 0px 3px ${themeCssVariables.brand.focusHalo}`};
       border-color: ${({ variant }) =>
         variant === 'transparent'
           ? 'transparent'
-          : themeCssVariables.color.blue};
+          : themeCssVariables.brand.focusRing};
     }
 
     &::placeholder {

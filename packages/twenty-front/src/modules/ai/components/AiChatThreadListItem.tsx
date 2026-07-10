@@ -39,12 +39,12 @@ const StyledThreadIcon = styled.div<{ $isArchived: boolean }>`
   background: ${({ $isArchived }) =>
     $isArchived
       ? themeCssVariables.background.transparent.lighter
-      : themeCssVariables.background.transparent.blue};
+      : themeCssVariables.brand.soft};
   border-radius: ${themeCssVariables.border.radius.sm};
   color: ${({ $isArchived }) =>
     $isArchived
       ? themeCssVariables.font.color.tertiary
-      : themeCssVariables.color.blue};
+      : themeCssVariables.brand.text};
   display: flex;
   justify-content: center;
   padding: ${themeCssVariables.spacing[1]};

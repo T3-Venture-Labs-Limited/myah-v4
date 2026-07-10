@@ -24,8 +24,8 @@
   }
 
   &[data-selected] {
-    border-color: var(--t-color-blue);
-    color: var(--t-color-blue);
+    border-color: var(--t-brand-border);
+    color: var(--t-brand-text);
 
     &:hover {
       background: var(--t-background-transparent-primary);
@@ -65,7 +65,7 @@
   white-space: nowrap;
 
   &[data-selected] {
-    color: var(--t-color-blue);
+    color: var(--t-brand-text);
   }
 
   &[data-disabled] {

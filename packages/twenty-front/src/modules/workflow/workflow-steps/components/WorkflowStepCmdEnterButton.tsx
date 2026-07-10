@@ -24,7 +24,7 @@ export const WorkflowStepCmdEnterButton = ({
     <Button
       title={title}
       variant={disabled ? 'secondary' : 'primary'}
-      accent="blue"
+      accent="brand"
       size="small"
       onClick={onClick}
       disabled={disabled}

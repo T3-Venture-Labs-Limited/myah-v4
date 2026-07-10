@@ -12,7 +12,7 @@ const StyledChip = styled.div<{ variant: SortOrFilterChipVariant }>`
         return themeCssVariables.background.danger;
       case 'default':
       default:
-        return themeCssVariables.accent.quaternary;
+        return themeCssVariables.brand.soft;
     }
   }};
   border: 1px solid
@@ -22,7 +22,7 @@ const StyledChip = styled.div<{ variant: SortOrFilterChipVariant }>`
           return themeCssVariables.border.color.danger;
         case 'default':
         default:
-          return themeCssVariables.accent.tertiary;
+          return themeCssVariables.brand.border;
       }
     }};
   border-radius: ${themeCssVariables.border.radius.smRound};
@@ -33,7 +33,7 @@ const StyledChip = styled.div<{ variant: SortOrFilterChipVariant }>`
         return themeCssVariables.color.red;
       case 'default':
       default:
-        return themeCssVariables.color.blue;
+        return themeCssVariables.brand.text;
     }
   }};
   column-gap: ${themeCssVariables.spacing[1]};
@@ -79,7 +79,7 @@ const StyledDelete = styled.button<{ variant: SortOrFilterChipVariant }>`
           return themeCssVariables.color.red5;
         case 'default':
         default:
-          return themeCssVariables.accent.secondary;
+          return themeCssVariables.brand.softHover;
       }
     }};
     border-radius: ${themeCssVariables.border.radius.sm};

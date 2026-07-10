@@ -5,7 +5,6 @@ import { useAtomValue } from 'jotai';
 import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { IconCheck, IconPaint } from 'twenty-ui/icon';
-import { GRAY_SCALE_LIGHT } from 'twenty-ui/theme';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { LayoutCustomizationBarMenuDropdown } from '@/layout-customization/components/LayoutCustomizationBarMenuDropdown';
@@ -23,9 +22,9 @@ import { PageLayoutType } from '~/generated-metadata/graphql';
 
 const StyledContainer = styled.div`
   align-items: center;
-  background: ${themeCssVariables.color.blue};
+  background: ${themeCssVariables.brand.solid};
   box-sizing: border-box;
-  color: ${GRAY_SCALE_LIGHT.gray1};
+  color: ${themeCssVariables.brand.onSolid};
   display: flex;
   justify-content: space-between;
   padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
@@ -33,11 +32,11 @@ const StyledContainer = styled.div`
 
   button,
   button * {
-    color: ${GRAY_SCALE_LIGHT.gray1};
+    color: ${themeCssVariables.brand.onSolid};
   }
 
   button {
-    --tw-button-color: ${GRAY_SCALE_LIGHT.gray1} !important;
+    --tw-button-color: ${themeCssVariables.brand.onSolid} !important;
   }
 
   button[type='submit']:not(:disabled):not(:focus) {

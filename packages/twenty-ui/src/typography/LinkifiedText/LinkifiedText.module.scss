@@ -1,8 +1,8 @@
 .link {
-  color: var(--t-color-blue);
+  color: var(--t-brand-text);
   text-decoration: underline;
 
   &:hover {
-    text-decoration-color: var(--t-color-blue);
+    text-decoration-color: var(--t-brand-text);
   }
 }

@@ -57,7 +57,7 @@ export const SettingsLegalDpa = () => {
           <Button
             Icon={IconPlus}
             title={t`Generate DPA`}
-            accent="blue"
+            accent="brand"
             size="small"
           />
         </UndecoratedLink>

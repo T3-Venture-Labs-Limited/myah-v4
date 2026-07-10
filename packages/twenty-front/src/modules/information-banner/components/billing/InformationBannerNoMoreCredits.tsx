@@ -63,7 +63,7 @@ export const InformationBannerNoMoreCredits = () => {
           subtitle={t`Upgrade to ${nextResourceCreditsAmount ?? ''} credits for $${nextResourceCreditPrice ?? ''}/${nextTierInterval ?? ''}.`}
           onConfirmClick={upgradeCreditPlan}
           confirmButtonText={t`Upgrade`}
-          confirmButtonAccent="blue"
+          confirmButtonAccent="brand"
           loading={isUpgrading}
         />
       )}

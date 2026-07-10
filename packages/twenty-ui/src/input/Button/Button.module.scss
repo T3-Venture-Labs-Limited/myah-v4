@@ -103,32 +103,32 @@ $gray-scale-light-gray1: color(display-p3 1 1 1);
 
 // variant=primary, not inverted, keyed by accent.
 // focus-needs-enabled mirrors the one asymmetry of the legacy switch: the
-// default accent only shows its focus border when enabled, while blue and
+// default accent only shows its focus border when enabled, while brand and
 // danger keep the focus border even when disabled.
 $primary-accents: (
   'default': (
     bg: var(--t-background-transparent-lighter),
     bg-disabled: var(--t-background-transparent-lighter),
     border: var(--t-background-transparent-light),
-    border-focus: var(--t-color-blue),
+    border-focus: var(--t-brand-focus-ring),
     focus-needs-enabled: true,
-    shadow-focus: var(--t-accent-tertiary),
+    shadow-focus: var(--t-brand-focus-halo),
     color: var(--t-font-color-secondary),
     color-disabled: var(--t-font-color-extra-light),
     hover: var(--t-background-tertiary),
     active: var(--t-background-quaternary),
   ),
-  'blue': (
-    bg: var(--t-color-blue),
-    bg-disabled: var(--t-accent-accent4060),
+  'brand': (
+    bg: var(--t-brand-solid),
+    bg-disabled: var(--t-brand-disabled),
     border: var(--t-background-transparent-light),
-    border-focus: var(--t-color-blue),
+    border-focus: var(--t-brand-focus-ring),
     focus-needs-enabled: false,
-    shadow-focus: var(--t-accent-tertiary),
-    color: $gray-scale-light-gray1,
-    color-disabled: $gray-scale-light-gray1,
-    hover: var(--t-color-blue10),
-    active: var(--t-color-blue12),
+    shadow-focus: var(--t-brand-focus-halo),
+    color: var(--t-brand-on-solid),
+    color-disabled: var(--t-brand-on-solid),
+    hover: var(--t-brand-solid-hover),
+    active: var(--t-brand-solid-active),
   ),
   'danger': (
     bg: var(--t-color-red),
@@ -193,7 +193,7 @@ $primary-accents: (
 // color.
 $primary-inverted-colors: (
   'default': var(--t-font-color-secondary),
-  'blue': var(--t-color-blue),
+  'brand': var(--t-brand-text),
   'danger': var(--t-color-red),
   'green': var(--t-color-green9),
 );
@@ -229,23 +229,23 @@ $primary-inverted-colors: (
 $secondary-accents: (
   'default': (
     border-secondary: var(--t-background-transparent-medium),
-    border-focus: var(--t-color-blue),
+    border-focus: var(--t-brand-focus-ring),
     focus-needs-enabled-secondary: true,
-    shadow-focus: var(--t-accent-tertiary),
+    shadow-focus: var(--t-brand-focus-halo),
     color: var(--t-font-color-secondary),
     color-disabled: var(--t-font-color-extra-light),
     hover: var(--t-background-transparent-light),
     active: var(--t-background-transparent-light),
   ),
-  'blue': (
-    border-secondary: var(--t-accent-primary),
-    border-focus: var(--t-color-blue),
+  'brand': (
+    border-secondary: var(--t-brand-border),
+    border-focus: var(--t-brand-focus-ring),
     focus-needs-enabled-secondary: false,
-    shadow-focus: var(--t-accent-tertiary),
-    color: var(--t-color-blue),
-    color-disabled: var(--t-accent-accent4060),
-    hover: var(--t-accent-tertiary),
-    active: var(--t-accent-secondary),
+    shadow-focus: var(--t-brand-focus-halo),
+    color: var(--t-brand-text),
+    color-disabled: var(--t-brand-disabled),
+    hover: var(--t-brand-soft-hover),
+    active: var(--t-brand-soft-active),
   ),
   'danger': (
     border-secondary: var(--t-border-color-danger),

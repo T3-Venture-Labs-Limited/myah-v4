@@ -53,7 +53,7 @@ export const RecordTableCellFirstRowFirstColumn = ({
   const zIndex = TABLE_Z_INDEX.cell.sticky;
 
   const tdBackgroundColor = isSelected
-    ? theme.accent.quaternary
+    ? theme.brand.soft
     : theme.background.primary;
 
   const borderColor = theme.border.color.light;

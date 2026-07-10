@@ -16,7 +16,7 @@ const StyledTableRow = styled.div<{
 }>`
   background-color: ${({ isSelected, isExpanded }) =>
     isSelected
-      ? themeCssVariables.accent.quaternary
+      ? themeCssVariables.brand.soft
       : isExpanded === true
         ? themeCssVariables.background.transparent.light
         : 'transparent'};

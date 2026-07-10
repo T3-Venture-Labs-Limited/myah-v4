@@ -31,6 +31,7 @@ export const SettingsWorkspaceEmail = () => {
       ]}
     >
       <SettingsPageContainer>
+
         <SettingsWorkspaceEmailGroupSection />
         <SettingsWorkspaceUnsubscribeTopicSection />
       </SettingsPageContainer>

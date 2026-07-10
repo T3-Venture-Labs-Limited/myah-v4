@@ -26,8 +26,8 @@ type Position = {
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledDragSelection = styled.div<SelectionBox>`
-  background: ${themeCssVariables.color.blue7};
-  border: 1px solid ${themeCssVariables.color.blue3};
+  background: ${themeCssVariables.brand.soft};
+  border: 1px solid ${themeCssVariables.brand.border};
   height: ${({ height }) => height}px;
   left: ${({ left }) => left}px;
   opacity: 0.2;

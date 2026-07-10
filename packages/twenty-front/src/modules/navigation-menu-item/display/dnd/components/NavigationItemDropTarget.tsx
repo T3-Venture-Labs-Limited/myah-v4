@@ -15,7 +15,7 @@ const StyledDropTarget = styled.div<{
   transition: all 150ms ease-in-out;
 
   &[data-drag-over='true'] {
-    background-color: ${themeCssVariables.background.transparent.blue};
+    background-color: ${themeCssVariables.brand.soft};
 
     &::before {
       content: '';
@@ -23,7 +23,7 @@ const StyledDropTarget = styled.div<{
       left: 0;
       width: 100%;
       height: 2px;
-      background-color: ${themeCssVariables.color.blue};
+      background-color: ${themeCssVariables.brand.solid};
       ${({ $highlightPosition }) =>
         $highlightPosition === 'top'
           ? `

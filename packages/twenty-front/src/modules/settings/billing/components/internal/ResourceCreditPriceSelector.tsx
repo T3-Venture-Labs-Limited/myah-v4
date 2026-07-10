@@ -422,7 +422,7 @@ export const ResourceCreditPriceSelector = ({
             : t`Confirm changing your current resource credit allocation.`
         }
         confirmButtonText={isUpgrade() ? t`Upgrade` : t`Downgrade`}
-        confirmButtonAccent={isUpgrade() ? 'blue' : 'danger'}
+        confirmButtonAccent={isUpgrade() ? 'brand' : 'danger'}
         loading={isUpdating}
         onConfirmClick={handleConfirmClick}
       />

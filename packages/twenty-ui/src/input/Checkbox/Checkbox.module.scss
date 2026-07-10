@@ -5,6 +5,7 @@
   --checkbox-bg: transparent;
   --checkbox-border-color: var(--t-border-color-secondary-inverted);
   --checkbox-box-radius: var(--t-border-radius-sm-round);
+  --checkbox-foreground: var(--t-font-color-inverted);
 
   align-items: center;
   border-radius: var(--t-border-radius-md-round);
@@ -53,10 +54,11 @@
   corner-shape: round;
 }
 
-.blue {
-  --checkbox-accent: var(--t-color-blue);
-  --checkbox-accent-disabled: var(--t-color-blue7);
-  --checkbox-accent-hover: var(--t-background-transparent-blue);
+.brand {
+  --checkbox-accent: var(--t-brand-solid);
+  --checkbox-accent-disabled: var(--t-brand-disabled);
+  --checkbox-accent-hover: var(--t-brand-soft-hover);
+  --checkbox-foreground: var(--t-brand-on-solid);
 }
 
 .orange {
@@ -140,6 +142,6 @@
 .indicator svg {
   display: block;
   height: 100%;
-  stroke: var(--t-font-color-inverted);
+  stroke: var(--checkbox-foreground);
   width: 100%;
 }

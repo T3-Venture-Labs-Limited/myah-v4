@@ -15,7 +15,7 @@ const StyledTr = styled.div<{
     div.table-cell,
     div.table-cell-0-0 {
       &:not(:first-of-type) {
-        background-color: ${themeCssVariables.accent.quaternary};
+        background-color: ${themeCssVariables.brand.soft};
         border-bottom: 1px solid ${themeCssVariables.border.color.medium};
         border-color: ${themeCssVariables.border.color.medium};
       }

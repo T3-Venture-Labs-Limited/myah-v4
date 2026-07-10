@@ -136,7 +136,7 @@ export const SettingsApplicationDetailAboutTab = ({
           Icon={IconDownload}
           title={isInstalling ? t`Installing...` : t`Install`}
           variant={'primary'}
-          accent={'blue'}
+          accent={'brand'}
           onClick={onInstall}
           disabled={isInstalling}
         />
@@ -153,7 +153,7 @@ export const SettingsApplicationDetailAboutTab = ({
               : t`Upgrade to ${latestAvailableVersion ?? ''}`
           }
           variant={'secondary'}
-          accent={'blue'}
+          accent={'brand'}
           onClick={onUpgrade}
           disabled={isUpgrading}
         />

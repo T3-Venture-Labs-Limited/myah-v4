@@ -102,7 +102,7 @@ export const Catalog: CatalogStory<Story, typeof Button> = {
         },
         {
           name: 'accents',
-          values: ['default', 'blue', 'danger'] satisfies ButtonAccent[],
+          values: ['default', 'brand', 'danger'] satisfies ButtonAccent[],
           props: (accent: ButtonAccent) => ({ accent }),
         },
         {
@@ -176,7 +176,7 @@ export const SoonCatalog: CatalogStory<Story, typeof Button> = {
         },
         {
           name: 'accents',
-          values: ['default', 'blue', 'danger'] satisfies ButtonAccent[],
+          values: ['default', 'brand', 'danger'] satisfies ButtonAccent[],
           props: (accent: ButtonAccent) => ({ accent }),
         },
         {
@@ -296,7 +296,7 @@ export const ShortcutCatalog: CatalogStory<Story, typeof Button> = {
         },
         {
           name: 'accents',
-          values: ['default', 'blue', 'danger'] satisfies ButtonAccent[],
+          values: ['default', 'brand', 'danger'] satisfies ButtonAccent[],
           props: (accent: ButtonAccent) => ({ accent }),
         },
         {

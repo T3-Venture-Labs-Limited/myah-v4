@@ -90,7 +90,7 @@
 }
 
 .separator {
-  background: var(--t-font-color-light);
+  background: currentColor;
   height: var(--t-spacing-4);
   margin: 0;
   width: 1px;
@@ -99,8 +99,8 @@
     height: var(--t-spacing-2);
   }
 
-  &[data-accent='blue'] {
-    background: var(--t-border-color-blue);
+  &[data-accent='brand'][data-variant='primary']:not([data-inverted]) {
+    background: var(--t-brand-on-solid-muted);
   }
 
   &[data-accent='danger'] {
@@ -109,11 +109,11 @@
 }
 
 .shortcutLabel {
-  color: var(--t-font-color-light);
+  color: inherit;
   font-weight: var(--t-font-weight-medium);
 
-  &[data-accent='blue'] {
-    color: var(--t-border-color-blue);
+  &[data-accent='brand'][data-variant='primary']:not([data-inverted]) {
+    color: var(--t-brand-on-solid-muted);
   }
 
   &[data-accent='danger'] {

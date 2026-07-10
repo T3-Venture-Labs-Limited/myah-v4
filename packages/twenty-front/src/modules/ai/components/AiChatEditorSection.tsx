@@ -57,8 +57,8 @@ const StyledInputBox = styled.div`
   width: 100%;
 
   &:focus-within {
-    border-color: ${themeCssVariables.color.blue};
-    box-shadow: 0px 0px 0px 3px ${themeCssVariables.color.transparent.blue2};
+    border-color: ${themeCssVariables.brand.focusRing};
+    box-shadow: 0px 0px 0px 3px ${themeCssVariables.brand.focusHalo};
   }
 `;
 

@@ -16,7 +16,7 @@ export const StyledHeaderDropdownButton = styled.button<StyledDropdownButtonProp
   border-radius: ${themeCssVariables.border.radius.md};
   color: ${({ isActive }) =>
     isActive
-      ? themeCssVariables.color.blue
+      ? themeCssVariables.brand.text
       : themeCssVariables.font.color.secondary};
   cursor: pointer;
   display: flex;

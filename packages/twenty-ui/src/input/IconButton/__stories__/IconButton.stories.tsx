@@ -89,7 +89,7 @@ export const Catalog: CatalogStory<Story, typeof IconButton> = {
         },
         {
           name: 'accents',
-          values: ['default', 'blue', 'danger'] satisfies IconButtonAccent[],
+          values: ['default', 'brand', 'danger'] satisfies IconButtonAccent[],
           props: (accent: IconButtonAccent) => ({ accent }),
         },
         {

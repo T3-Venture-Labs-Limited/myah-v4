@@ -48,7 +48,7 @@ export const SettingsAccountsConfigurationStepCalendar = ({
         <Button
           Icon={IconDeviceFloppy}
           title={t`Finish Setup`}
-          accent="blue"
+          accent="brand"
           size="small"
           variant="primary"
           onClick={onAddAccount}

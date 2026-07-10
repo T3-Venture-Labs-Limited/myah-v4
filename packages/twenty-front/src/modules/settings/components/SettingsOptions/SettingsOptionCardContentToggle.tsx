@@ -95,7 +95,9 @@ export const SettingsOptionCardContentToggle = ({
             onChange={onChange}
             disabled={disabled}
             toggleSize="small"
-            color={advancedMode ? theme.color.yellow : theme.color.blue}
+            color={
+              advancedMode ? theme.color.yellow : themeCssVariables.brand.solid
+            }
             centered={toggleCentered}
           />
         </StyledSettingsCardToggleButtonContainer>

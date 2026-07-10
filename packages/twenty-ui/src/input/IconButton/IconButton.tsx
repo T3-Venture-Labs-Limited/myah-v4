@@ -9,7 +9,7 @@ import styles from './IconButton.module.scss';
 export type IconButtonSize = 'medium' | 'small';
 export type IconButtonPosition = 'standalone' | 'left' | 'middle' | 'right';
 export type IconButtonVariant = 'primary' | 'secondary' | 'tertiary';
-export type IconButtonAccent = 'default' | 'blue' | 'danger';
+export type IconButtonAccent = 'default' | 'brand' | 'danger';
 
 export type IconButtonProps = {
   className?: string;
