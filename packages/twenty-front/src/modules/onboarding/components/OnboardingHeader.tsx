@@ -44,7 +44,7 @@ const StyledRightSide = styled(StyledSide)`
 `;
 
 const StyledLogoBase = styled.div`
-  background-image: url('/images/integrations/twenty-logo.svg');
+  background-image: url('/images/integrations/myah-mark.svg');
   background-size: cover;
   height: ${themeCssVariables.spacing[6]};
   opacity: 0.4;
