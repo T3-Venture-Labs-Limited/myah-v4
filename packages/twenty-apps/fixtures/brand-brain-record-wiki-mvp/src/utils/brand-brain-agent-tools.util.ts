@@ -585,7 +585,7 @@ export const getBrandBrainContext = async ({
   task?: string;
   store: BrandBrainExecutorStore;
 }): Promise<BrandBrainContextToolResult> => {
-  const brandSlug = normalizeBrandSlug(brandNameOrSlug.slice(0, 256)).slice(0, 128);
+  const brandSlug = normalizeBrandSlug(brandNameOrSlug).slice(0, 128)
   const rawPages = await store.listPagesByBrandSlug({ brandSlug });
   const brandPages = rawPages
     .filter((page) =>
@@ -731,17 +731,57 @@ export const getBrandBrainContext = async ({
     missingRecommendedPaths: [],
     truncated: true,
   };
-  const compactResult = (
-    candidate: BrandBrainContextToolResult,
-  ): BrandBrainContextToolResult => {
-    let result =
-      JSON.stringify(candidate).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT
-        ? candidate
-        : baseResult;
-    if (result === candidate) {
-      return result;
+  const compactResult = (candidate: BrandBrainContextToolResult): BrandBrainContextToolResult => {
+    if (JSON.stringify(candidate).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+      return candidate;
     }
 
+    const compactCandidate: BrandBrainContextToolResult = {
+      ...candidate,
+      pages: candidate.pages.map((page) => ({
+        ...page,
+        title: page.title.slice(0, 128),
+        summary: null,
+        markdown: null,
+      })),
+      links: candidate.links.map((link) => ({
+        ...link,
+        description: null,
+      })),
+      truncated: true,
+    };
+
+    const compactOverhead: BrandBrainContextToolResult = {
+      ...compactCandidate,
+      contextMarkdown: '',
+      contextCharacterCount: 0,
+    };
+
+    if (JSON.stringify(compactOverhead).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+      let low = 0;
+      let high = compactCandidate.contextMarkdown.length;
+      while (low < high) {
+        const midpoint = Math.ceil((low + high) / 2);
+        const attempt: BrandBrainContextToolResult = {
+          ...compactCandidate,
+          contextMarkdown: compactCandidate.contextMarkdown.slice(0, midpoint),
+          contextCharacterCount: midpoint,
+        };
+        if (JSON.stringify(attempt).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+          low = midpoint;
+        } else {
+          high = midpoint - 1;
+        }
+      }
+
+      return {
+        ...compactCandidate,
+        contextMarkdown: compactCandidate.contextMarkdown.slice(0, low),
+        contextCharacterCount: low,
+      };
+    }
+
+    let result = baseResult;
     let low = 0;
     let high = result.contextMarkdown.length;
     while (low < high) {
@@ -765,16 +805,8 @@ export const getBrandBrainContext = async ({
       contextCharacterCount: low,
       truncated: true,
     };
-    if (JSON.stringify(result).length > BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
-      result = {
-        ...baseResult,
-        contextMarkdown: '',
-        contextCharacterCount: 0,
-        truncated: true,
-      };
-    }
     return result;
-  };
+  }
 
   return compactResult(initialResult);
 

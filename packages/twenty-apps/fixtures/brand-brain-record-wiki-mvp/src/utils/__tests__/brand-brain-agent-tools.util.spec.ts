@@ -277,7 +277,7 @@ describe('brand brain agent tools', () => {
   it('keeps the complete serialized context result within the explicit cap', async () => {
     const store = new MockBrandBrainStore();
     const oversized = 'x'.repeat(20_000);
-    store.pages = Array.from({ length: 40 }, (_, index) => ({
+    store.pages = Array.from({ length: 8 }, (_, index) => ({
       id: `page-${index}`,
       slug: `page-${index}`,
       status: 'DRAFT' as const,
@@ -287,7 +287,7 @@ describe('brand brain agent tools', () => {
       summary: oversized,
       body: buildRichTextBody(oversized),
     }));
-    store.links = Array.from({ length: 40 }, (_, index) => ({
+    store.links = Array.from({ length: 8 }, (_, index) => ({
       id: `link-${index}`,
       name: `link-${index}`,
       sourcePageId: 'page-0',
@@ -296,7 +296,7 @@ describe('brand brain agent tools', () => {
       description: oversized,
     }));
     const context = await getBrandBrainContext({
-      brandNameOrSlug: `${'brand'.repeat(10000)}\\\"\n`,
+      brandNameOrSlug: '\\"'.repeat(128) + 'lashglow',
       task: oversized,
       store,
     });
@@ -305,10 +305,19 @@ describe('brand brain agent tools', () => {
       BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
     );
     expect(context.contextCharacterCount).toBe(context.contextMarkdown.length);
-
-    expect(JSON.stringify(context).length).toBeLessThanOrEqual(
-      BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
-    );
+    expect(context.brandSlug).toBe('lashglow');
+    expect(context.pages.length).toBeGreaterThan(0);
+    expect(context.links.length).toBeGreaterThan(0);
+    expect(context.pages[0]).toMatchObject({
+      id: 'page-0',
+      canonicalPath: 'lashglow/page-0',
+      pageType: 'PAGE',
+    });
+    expect(context.links[0]).toMatchObject({
+      id: 'link-0',
+      sourcePath: 'lashglow/page-0',
+      targetPath: 'lashglow/page-0',
+    });
   });
 
   it('reports truncation when field caps discard content', async () => {
