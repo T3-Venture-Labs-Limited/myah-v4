@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -41,6 +42,8 @@ const DEFAULT_READ_ONLY_SCOPES = ALLOWED_READ_ONLY_SCOPES.join(',');
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 const SHOPIFY_ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000;
 const SHOPIFY_ACCESS_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+const SHOPIFY_CUSTOMER_DATA_UNAVAILABLE =
+  'Shopify customer data is currently unavailable.';
 
 const getEnv = (key: string): string | undefined => {
   const value = process.env[key]?.trim();
@@ -323,6 +326,8 @@ const formatShopifyErrors = (errors: unknown): string => {
 
 @Injectable()
 export class MyahShopifyService {
+  private readonly logger = new Logger(MyahShopifyService.name);
+
   constructor(
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
@@ -857,9 +862,12 @@ export class MyahShopifyService {
 
           return body.data ?? {};
         } catch (error) {
+          this.logger.warn(
+            `Shopify customer summary unavailable: ${this.getReadableError(error).slice(0, 200)}`,
+          );
           return {
             unavailable: {
-              customers: this.getReadableError(error),
+              customers: SHOPIFY_CUSTOMER_DATA_UNAVAILABLE,
             },
           };
         }

@@ -65,8 +65,12 @@ const createService = () => {
     }),
   };
   const encryptionService: jest.Mocked<
-    Pick<ConnectedAccountTokenEncryptionService, 'encrypt' | 'encryptTokenPair'>
+    Pick<
+      ConnectedAccountTokenEncryptionService,
+      'decrypt' | 'encrypt' | 'encryptTokenPair'
+    >
   > = {
+    decrypt: jest.fn(() => 'shpat_decrypted_token' as never),
     encrypt: jest.fn(({ plaintext }) => `enc:v2:test:${plaintext}` as never),
     encryptTokenPair: jest.fn(({ accessToken, refreshToken, workspaceId }) => ({
       encryptedAccessToken: encryptionService.encrypt({
@@ -307,6 +311,41 @@ describe('MyahShopifyService', () => {
       service.getStatus({ workspaceId: 'workspace-id-profile-failure' }),
     ).resolves.toEqual(result);
   });
+  it('returns a fixed non-sensitive error when protected customer data is unavailable', async () => {
+    const { service, repository } = createService();
+
+    await repository.save({
+      workspaceId: 'workspace-id-customer-data',
+      handle: 'myah-9821.myshopify.com',
+      accessToken: 'shpat_test_token',
+      archivedAt: null,
+    } as ConnectedAccountEntity);
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({
+        errors: [
+          {
+            message:
+              'Customer email jane.doe@example.com leaked with token shpat_live_secret',
+          },
+        ],
+      }),
+    });
+
+    const result = await service.getCustomerSummary({
+      first: 1,
+      workspaceId: 'workspace-id-customer-data',
+    });
+
+    expect(result.data).toEqual({
+      unavailable: {
+        customers: 'Shopify customer data is currently unavailable.',
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('jane.doe@example.com');
+    expect(JSON.stringify(result)).not.toContain('shpat_live_secret');
+  });
+
 
   it('surfaces rejected Shopify callback codes as a bad request instead of a gateway error', async () => {
     const { service } = createService();
