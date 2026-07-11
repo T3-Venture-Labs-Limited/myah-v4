@@ -1,0 +1,1 @@
+export const INSTAGRAM_REPLY_POLLING_ENABLED = false;

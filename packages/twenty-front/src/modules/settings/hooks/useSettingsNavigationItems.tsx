@@ -18,6 +18,7 @@ import { isNonEmptyString } from '@sniptt/guards';
 import {
   IconApps,
   IconAt,
+  IconBrandInstagram,
   IconCalendarEvent,
   IconColorSwatch,
   type IconComponent,
@@ -106,6 +107,13 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
               label: t`Calendars`,
               path: SettingsPath.AccountsCalendars,
               Icon: IconCalendarEvent,
+              isHidden: !permissionMap[PermissionFlagType.CONNECTED_ACCOUNTS],
+              indentationLevel: 2,
+            },
+            {
+              label: t`Instagram`,
+              path: SettingsPath.AccountsInstagram,
+              Icon: IconBrandInstagram,
               isHidden: !permissionMap[PermissionFlagType.CONNECTED_ACCOUNTS],
               indentationLevel: 2,
             },

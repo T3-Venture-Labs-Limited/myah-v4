@@ -416,6 +416,21 @@ const SettingsAccountsCalendars = lazy(() =>
   ),
 );
 
+const SettingsAccountsInstagram = lazy(() =>
+  import('~/pages/settings/accounts/SettingsAccountsInstagram').then(
+    (module) => ({
+      default: module.SettingsAccountsInstagram,
+    }),
+  ),
+);
+const SettingsAccountsShopify = lazy(() =>
+  import('~/pages/settings/accounts/SettingsAccountsShopify').then(
+    (module) => ({
+      default: module.SettingsAccountsShopify,
+    }),
+  ),
+);
+
 const SettingsBilling = lazy(() =>
   import('~/pages/settings/billing/SettingsBilling').then((module) => ({
     default: module.SettingsBilling,
@@ -676,6 +691,23 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.AccountsCalendars}
           element={<SettingsAccountsCalendars />}
+        />
+        <Route
+          path={SettingsPath.AccountsComposio}
+          element={
+            <Navigate
+              to={getSettingsPath(SettingsPath.AccountsInstagram)}
+              replace
+            />
+          }
+        />
+        <Route
+          path={SettingsPath.AccountsInstagram}
+          element={<SettingsAccountsInstagram />}
+        />
+        <Route
+          path={SettingsPath.AccountsShopify}
+          element={<SettingsAccountsShopify />}
         />
         <Route
           path={SettingsPath.NewAccount}

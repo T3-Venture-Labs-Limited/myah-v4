@@ -11,7 +11,7 @@ import {
   buildMcpServerUrl,
   isHttpsUrl,
 } from '@/settings/mcp-and-apis/utils/mcpSetup';
-import { CodeEditor, CoreEditorHeader } from 'twenty-ui/input';
+import { CoreEditorHeader } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 import { H2Title } from 'twenty-ui/typography';
@@ -44,6 +44,23 @@ const StyledCardsGrid = styled.div`
   @media (max-width: ${MOBILE_VIEWPORT}px) {
     grid-template-columns: 1fr;
   }
+`;
+
+const StyledMcpConfigPre = styled.pre`
+  background: ${themeCssVariables.background.secondary};
+  border: 1px solid ${themeCssVariables.border.color.light};
+  border-radius: 0 0 ${themeCssVariables.border.radius.md}
+    ${themeCssVariables.border.radius.md};
+  border-top: 0;
+  color: ${themeCssVariables.font.color.primary};
+  font-family: ${themeCssVariables.code.font.family}, monospace;
+  font-size: ${themeCssVariables.font.size.sm};
+  line-height: ${themeCssVariables.text.lineHeight.md};
+  margin: 0;
+  overflow-x: auto;
+  padding: ${themeCssVariables.spacing[4]};
+  white-space: pre-wrap;
+  word-break: break-word;
 `;
 
 export const SettingsMcpSetup = () => {
@@ -90,24 +107,9 @@ export const SettingsMcpSetup = () => {
                   />,
                 ]}
               />
-              <CodeEditor
-                value={mcpConfig}
-                language="json"
-                variant="with-header"
-                contentPadding="comfortable"
-                autoHeight
-                options={{
-                  readOnly: true,
-                  domReadOnly: true,
-                  lineNumbers: 'off',
-                  lineNumbersMinChars: 0,
-                  folding: false,
-                  glyphMargin: false,
-                  scrollBeyondLastLine: false,
-                  renderLineHighlight: 'none',
-                  wordWrap: 'on',
-                }}
-              />
+              <StyledMcpConfigPre aria-label={t`MCP client configuration`}>
+                {mcpConfig}
+              </StyledMcpConfigPre>
             </Section>
           )}
         </Fragment>

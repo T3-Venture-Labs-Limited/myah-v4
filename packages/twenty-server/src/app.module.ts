@@ -46,6 +46,23 @@ const MIGRATED_REST_METHODS = [
   RequestMethod.GET,
 ];
 
+const MYAH_SHOPIFY_REST_ROUTES = [
+  { path: 'rest/myah/instagram/*path', method: RequestMethod.ALL },
+  { path: 'rest/myah/shopify/oauth/start', method: RequestMethod.POST },
+  { path: 'rest/myah/shopify/oauth/callback', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/status', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/store-context', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/products', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/product-detail', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/brand-content', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/custom-data', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/commerce-summary', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/customer-summary', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/promotions-summary', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/agent/channel-context', method: RequestMethod.GET },
+  { path: 'rest/myah/shopify/disconnect', method: RequestMethod.POST },
+];
+
 @Module({
   imports: [
     SentryModule.forRoot(),
@@ -140,6 +157,7 @@ export class AppModule {
     for (const method of MIGRATED_REST_METHODS) {
       consumer
         .apply(RestCoreMiddleware, WorkspaceAuthContextMiddleware)
+        .exclude(...MYAH_SHOPIFY_REST_ROUTES)
         .forRoutes({ path: 'rest/*path', method });
     }
   }

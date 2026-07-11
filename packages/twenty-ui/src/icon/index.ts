@@ -105,6 +105,7 @@ export {
   IconBrandGithub,
   IconBrandGoogle,
   IconBrandGraphql,
+  IconBrandInstagram,
   IconBrandLinkedin,
   IconBrandNpm,
   IconBrandOpenai,

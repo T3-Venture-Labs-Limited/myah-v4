@@ -4,6 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
+import { IconBrandInstagram } from 'twenty-ui/icon';
 import {
   type Billing,
   OnboardingStatus,
@@ -205,5 +206,33 @@ describe('useSettingsNavigationItems', () => {
         .filter((item) => item.path !== SettingsPath.Accounts)
         .every((item) => !item.isHidden),
     ).toBe(true);
+  });
+
+  it('should use the Instagram brand icon for the Instagram settings account item', () => {
+    (usePermissionFlagMap as jest.Mock).mockImplementation(() => ({
+      [PermissionFlagType.WORKSPACE]: true,
+      [PermissionFlagType.WORKSPACE_MEMBERS]: true,
+      [PermissionFlagType.DATA_MODEL]: true,
+      [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: true,
+      [PermissionFlagType.ROLES]: true,
+      [PermissionFlagType.SECURITY]: true,
+      [PermissionFlagType.CONNECTED_ACCOUNTS]: true,
+    }));
+
+    const { result } = renderHook(() => useSettingsNavigationItems(), {
+      wrapper: Wrapper,
+    });
+
+    const userSection = result.current.find(
+      (section) => section.label === 'User',
+    );
+    const accountsItem = userSection?.items.find(
+      (item) => item.path === SettingsPath.Accounts,
+    );
+    const instagramItem = accountsItem?.subItems?.find(
+      (item) => item.path === SettingsPath.AccountsInstagram,
+    );
+
+    expect(instagramItem?.Icon).toBe(IconBrandInstagram);
   });
 });

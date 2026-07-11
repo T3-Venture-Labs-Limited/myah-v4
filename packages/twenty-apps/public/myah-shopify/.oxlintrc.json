@@ -1,0 +1,3 @@
+{
+  "extends": ["../../../../packages/twenty-apps/public/twenty-linear/.oxlintrc.json"]
+}

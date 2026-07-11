@@ -57,7 +57,7 @@
     },
     "lint": {},
     "fmt": { "options": { "files": "src" }, "configurations": { "fix": {} } },
-    "test": {},
+    "test": { "dependsOn": ["build"] },
     "typecheck": {},
     "storybook:build": { "configurations": { "test": {} } },
     "storybook:serve:dev": { "options": { "port": 6008 } },
