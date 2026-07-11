@@ -271,6 +271,67 @@ describe('brand brain agent tools', () => {
     expect(context.truncatedLinkCount).toBeGreaterThan(0);
     expect(context.contextMarkdown).toContain('[Truncated');
   });
+  it('keeps the complete serialized context result within the explicit cap', async () => {
+    const store = new MockBrandBrainStore();
+    const oversized = 'x'.repeat(20_000);
+    store.pages = Array.from({ length: 40 }, (_, index) => ({
+      id: `page-${index}`,
+      canonicalPath: `lashglow/page-${index}`,
+      title: oversized,
+      pageType: 'PAGE' as const,
+      summary: oversized,
+      body: buildRichTextBody(oversized),
+    }));
+    store.links = Array.from({ length: 40 }, (_, index) => ({
+      id: `link-${index}`,
+      sourcePageId: 'page-0',
+      targetPageId: `page-${index}`,
+      linkType: 'RELATED',
+      description: oversized,
+    }));
+
+    const context = await getBrandBrainContext({
+      brandNameOrSlug: 'Lashglow',
+      task: oversized,
+      store,
+    });
+
+    expect(JSON.stringify(context).length).toBeLessThanOrEqual(
+      BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
+    );
+  });
+
+  it('reports truncation when field caps discard content', async () => {
+    const store = new MockBrandBrainStore({
+      pages: [
+        {
+          id: 'page-1',
+          canonicalPath: 'lashglow/overview',
+          title: 'Title '.repeat(200),
+          pageType: 'PAGE',
+          summary: 'Summary '.repeat(200),
+          body: buildRichTextBody('Body '.repeat(200)),
+        },
+      ],
+      links: [
+        {
+          id: 'link-1',
+          sourcePageId: 'page-1',
+          targetPageId: 'page-1',
+          linkType: 'RELATED',
+          description: 'Description '.repeat(200),
+        },
+      ],
+    });
+
+    const context = await getBrandBrainContext({
+      brandNameOrSlug: 'Lashglow',
+      store,
+    });
+
+    expect(context.truncated).toBe(true);
+    expect(context.contextMarkdown).toContain('[Truncated]');
+  });
 
   it('searches exact pages and body sections without relying only on summaries', async () => {
     const store = new MockBrandBrainStore();

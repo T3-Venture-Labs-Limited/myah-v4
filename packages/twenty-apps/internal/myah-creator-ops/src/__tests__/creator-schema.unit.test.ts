@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { FieldType } from 'twenty-sdk/define';
+import {
+  CAMPAIGN_CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+  CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
+  CREATOR_LIST_MEMBER_OBJECT_UNIVERSAL_IDENTIFIER,
+  CREATOR_LIST_OBJECT_UNIVERSAL_IDENTIFIER,
+  CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+  OFFER_OBJECT_UNIVERSAL_IDENTIFIER,
+  OUTREACH_ACTION_OBJECT_UNIVERSAL_IDENTIFIER,
+  OUTREACH_SEQUENCE_OBJECT_UNIVERSAL_IDENTIFIER,
+  OUTREACH_STEP_OBJECT_UNIVERSAL_IDENTIFIER,
+  PROMOTED_ASSET_OBJECT_UNIVERSAL_IDENTIFIER,
+} from 'src/constants/universal-identifiers';
 
 import creatorObjectResult from 'src/objects/creator.object';
 import defaultRoleResult from 'src/default-role';
@@ -178,6 +190,35 @@ describe('Creator object schema', () => {
     expect(defaultRole.canReadAllObjectRecords).toBe(false);
     expect(defaultRole.canUpdateAllObjectRecords).toBe(false);
     expect(defaultRole.canSoftDeleteAllObjectRecords).toBe(false);
+    const expectedObjectIds = [
+      CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+      CREATOR_LIST_OBJECT_UNIVERSAL_IDENTIFIER,
+      CREATOR_LIST_MEMBER_OBJECT_UNIVERSAL_IDENTIFIER,
+      CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
+      CAMPAIGN_CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+      PROMOTED_ASSET_OBJECT_UNIVERSAL_IDENTIFIER,
+      OFFER_OBJECT_UNIVERSAL_IDENTIFIER,
+      OUTREACH_SEQUENCE_OBJECT_UNIVERSAL_IDENTIFIER,
+      OUTREACH_STEP_OBJECT_UNIVERSAL_IDENTIFIER,
+      OUTREACH_ACTION_OBJECT_UNIVERSAL_IDENTIFIER,
+    ];
+    expect(defaultRole.objectPermissions).toHaveLength(expectedObjectIds.length);
+    expect(defaultRole.objectPermissions?.map(
+      (permission) => permission.objectUniversalIdentifier,
+    )).toEqual(expect.arrayContaining(expectedObjectIds));
+    expect(new Set(
+      defaultRole.objectPermissions?.map(
+        (permission) => permission.objectUniversalIdentifier,
+      ),
+    )).toEqual(new Set(expectedObjectIds));
+    for (const permission of defaultRole.objectPermissions ?? []) {
+      expect(permission).toMatchObject({
+        canReadObjectRecords: true,
+        canUpdateObjectRecords: true,
+        canSoftDeleteObjectRecords: true,
+        canDestroyObjectRecords: false,
+      });
+    }
     expect(defaultRole.objectPermissions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
