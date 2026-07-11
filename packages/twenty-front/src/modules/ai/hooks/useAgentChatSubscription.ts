@@ -355,6 +355,11 @@ export const useAgentChatSubscription = (threadId: string | null) => {
           break;
         }
 
+        case 'human-input-resolved': {
+          dispatchBrowserEvent(AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME);
+          break;
+        }
+
         case 'queue-updated': {
           dispatchBrowserEvent(AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME);
           break;

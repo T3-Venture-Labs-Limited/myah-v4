@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
     SSL_KEY_PATH,
     REACT_APP_PORT,
     IS_DEBUG_MODE,
+    REACT_APP_SERVER_BASE_URL,
   } = env;
 
   const port = isNonEmptyString(REACT_APP_PORT)
@@ -246,6 +247,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env': {
         IS_DEBUG_MODE,
+        REACT_APP_SERVER_BASE_URL,
         IS_DEV_ENV: mode === 'development' ? 'true' : 'false',
       },
     },
@@ -260,9 +262,15 @@ export default defineConfig(({ mode }) => {
         // wyw-in-js 1.x resolves modules in its CSS evaluator via vite's
         // resolve.alias (not resolve.tsconfigPaths), so the `@/` and `~/`
         // tsconfig path aliases must be mirrored here.
-        { find: /^@\//, replacement: path.resolve(__dirname, 'src/modules') + '/' },
+        {
+          find: /^@\//,
+          replacement: path.resolve(__dirname, 'src/modules') + '/',
+        },
         { find: /^~\//, replacement: path.resolve(__dirname, 'src') + '/' },
-        { find: 'path', replacement: 'rollup-plugin-node-polyfills/polyfills/path' },
+        {
+          find: 'path',
+          replacement: 'rollup-plugin-node-polyfills/polyfills/path',
+        },
       ],
     },
   };

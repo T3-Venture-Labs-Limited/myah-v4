@@ -1,5 +1,6 @@
 import { AiChatCompactionIndicator } from '@/ai/components/AiChatCompactionIndicator';
 import { AiChatInitialLoadingIndicator } from '@/ai/components/AiChatInitialLoadingIndicator';
+import { AiChatApprovalStatusRenderer } from '@/ai/components/AiChatApprovalStatusRenderer';
 import { CodeExecutionDisplay } from '@/ai/components/CodeExecutionDisplay';
 import { RoutingStatusDisplay } from '@/ai/components/RoutingStatusDisplay';
 import { ThinkingStepsDisplay } from '@/ai/components/ThinkingStepsDisplay';
@@ -14,6 +15,7 @@ import { getToolName, isToolUIPart } from 'ai';
 import {
   ASK_QUESTIONS_TOOL_NAME,
   type ExtendedUIMessagePart,
+  REQUEST_APPROVAL_TOOL_NAME,
 } from 'twenty-shared/ai';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -55,6 +57,15 @@ const MessagePartRenderer = ({
         if (getToolName(part) === ASK_QUESTIONS_TOOL_NAME) {
           return (
             <AiChatQuestionStatusRenderer
+              toolPart={part}
+              isStreaming={isStreaming}
+            />
+          );
+        }
+
+        if (getToolName(part) === REQUEST_APPROVAL_TOOL_NAME) {
+          return (
+            <AiChatApprovalStatusRenderer
               toolPart={part}
               isStreaming={isStreaming}
             />

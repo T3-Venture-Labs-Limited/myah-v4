@@ -62,10 +62,20 @@ import {
   ASK_QUESTIONS_TOOL_NAME,
   createAskQuestionsTool,
 } from 'src/engine/metadata-modules/ai/ai-chat/tools/ask-questions.tool';
+import {
+  createRequestApprovalTool,
+  REQUEST_APPROVAL_TOOL_NAME,
+} from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 import { MessagePruningService } from 'src/engine/metadata-modules/ai/ai-chat/services/message-pruning.service';
 import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { type ExtractedFile } from 'src/engine/metadata-modules/ai/ai-chat/types/extracted-file.type';
+import {
+  getApprovedResumeActiveToolNames,
+  getPreApprovalExcludedToolNames,
+  hasLatestMessageApprovedApproval,
+} from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
+import { assertHumanInputToolCallIsExclusive } from 'src/engine/metadata-modules/ai/ai-chat/utils/assert-human-input-tool-call-is-exclusive.util';
 import { extractCodeInterpreterFiles } from 'src/engine/metadata-modules/ai/ai-chat/utils/extract-code-interpreter-files.util';
 import {
   getCacheProviderOptions,
@@ -205,17 +215,25 @@ export class ChatExecutionService {
       ...nativeTools,
     };
 
+    const isApprovedApprovalResume = hasLatestMessageApprovedApproval(messages);
+
     const preloadedToolNames = [
       ...Object.keys(preloadedTools),
       ...Object.keys(nativeTools),
       ASK_QUESTIONS_TOOL_NAME,
+      ...(isApprovedApprovalResume ? [] : [REQUEST_APPROVAL_TOOL_NAME]),
     ];
+
+    const preApprovalExcludedToolNames = isApprovedApprovalResume
+      ? new Set<string>()
+      : getPreApprovalExcludedToolNames(toolCatalog);
 
     // ToolSet is constant for the entire conversation — no mutation.
     // learn_tools returns schemas as text; execute_tool dispatches via the registry.
     const activeTools: ToolSet = {
       ...directTools,
       [ASK_QUESTIONS_TOOL_NAME]: createAskQuestionsTool(),
+      [REQUEST_APPROVAL_TOOL_NAME]: createRequestApprovalTool(),
       [LEARN_TOOLS_TOOL_NAME]: createLearnToolsTool(
         this.toolRegistry,
         toolContext,
@@ -223,7 +241,11 @@ export class ChatExecutionService {
       [EXECUTE_TOOL_TOOL_NAME]: createExecuteToolTool(
         this.toolRegistry,
         toolContext,
-        { compactOutput: true, spillLargeOutput: true },
+        {
+          compactOutput: true,
+          excludeTools: preApprovalExcludedToolNames,
+          spillLargeOutput: true,
+        },
       ),
       [LOAD_SKILL_TOOL_NAME]: createLoadSkillTool(
         (skillNames) =>
@@ -237,6 +259,10 @@ export class ChatExecutionService {
         },
       ),
     };
+
+    const activeToolNamesForThisRun = isApprovedApprovalResume
+      ? getApprovedResumeActiveToolNames(Object.keys(activeTools))
+      : undefined;
 
     const isCodeInterpreterEnabled = this.codeInterpreterService.isEnabled();
 
@@ -472,6 +498,7 @@ export class ChatExecutionService {
       stopWhen: (step) =>
         stepCountIs(AGENT_CONFIG.MAX_STEPS)(step) ||
         hasToolCall(ASK_QUESTIONS_TOOL_NAME)(step) ||
+        hasToolCall(REQUEST_APPROVAL_TOOL_NAME)(step) ||
         hasNoMoreAvailableCredits,
       experimental_telemetry: AI_TELEMETRY_CONFIG,
       providerOptions: getCallLevelProviderOptions({
@@ -483,6 +510,7 @@ export class ChatExecutionService {
         stepStartedAt = performance.now();
 
         return {
+          activeTools: activeToolNamesForThisRun,
           messages: injectCacheBreakpoint(messages, registeredModel.sdkPackage),
         };
       },
@@ -501,6 +529,8 @@ export class ChatExecutionService {
         }
       },
       onStepFinish: async (step) => {
+        assertHumanInputToolCallIsExclusive(step.toolCalls);
+
         this.metricsService.recordHistogram({
           key: MetricsKeys.AiChatStepLatencyMs,
           value: performance.now() - stepStartedAt,

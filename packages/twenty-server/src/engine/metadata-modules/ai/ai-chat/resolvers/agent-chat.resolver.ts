@@ -25,6 +25,7 @@ import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.g
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { AgentMessageDTO } from 'src/engine/metadata-modules/ai/ai-agent-execution/dtos/agent-message.dto';
 import { type BrowsingContextType } from 'src/engine/metadata-modules/ai/ai-agent/types/browsingContext.type';
+import { AgentChatApprovalDecisionInput } from 'src/engine/metadata-modules/ai/ai-chat/dtos/agent-chat-approval-decision.input';
 import { AgentChatQuestionAnswerInput } from 'src/engine/metadata-modules/ai/ai-chat/dtos/agent-chat-question-answer.input';
 import { AgentChatThreadDTO } from 'src/engine/metadata-modules/ai/ai-chat/dtos/agent-chat-thread.dto';
 import { FileAttachmentInput } from 'src/engine/metadata-modules/ai/ai-chat/dtos/file-attachment.input';
@@ -366,6 +367,88 @@ export class AgentChatResolver {
       });
     } catch (error) {
       await this.agentChatService.restorePendingQuestion({
+        threadId,
+        messageId,
+        streamId,
+        workspaceId: workspace.id,
+        rollback,
+      });
+      throw error;
+    }
+
+    return { messageId, queued: false, streamId };
+  }
+
+  @Mutation(() => SendChatMessageResultDTO)
+  async resolveAgentChatApproval(
+    @Args('threadId', { type: () => UUIDScalarType }) threadId: string,
+    @Args('messageId', { type: () => UUIDScalarType }) messageId: string,
+    @Args('decision', { type: () => AgentChatApprovalDecisionInput })
+    decision: AgentChatApprovalDecisionInput,
+    @Args('modelId', { type: () => String, nullable: true })
+    modelId: string | undefined,
+    @AuthUserWorkspaceId() userWorkspaceId: string,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<SendChatMessageResultDTO> {
+    const thread = await this.threadRepository.findOne(workspace.id, {
+      where: { id: threadId, userWorkspaceId },
+    });
+
+    if (!isDefined(thread)) {
+      throw new AiException(
+        'Thread not found',
+        AiExceptionCode.THREAD_NOT_FOUND,
+      );
+    }
+
+    const streamId = generateId();
+
+    const { turnId, rollback, shouldResume } =
+      await this.agentChatService.resolvePendingApproval({
+        threadId,
+        messageId,
+        decision,
+        streamId,
+        workspaceId: workspace.id,
+      });
+
+    await this.eventPublisherService
+      .publish({
+        threadId,
+        workspaceId: workspace.id,
+        event: { type: 'human-input-resolved' },
+      })
+      .catch(() => {});
+
+    if (!shouldResume) {
+      return { messageId, queued: false };
+    }
+
+    try {
+      if (this.aiModelRegistryService.getAvailableModels().length === 0) {
+        throw new AiException(
+          'No AI models are available. Configure at least one AI provider.',
+          AiExceptionCode.API_KEY_NOT_CONFIGURED,
+        );
+      }
+
+      this.aiModelRegistryService.validateModelAvailability(
+        modelId ?? workspace.smartModel,
+        workspace,
+      );
+
+      await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+
+      await this.agentChatStreamingService.enqueueResumeStream({
+        threadId,
+        userWorkspaceId,
+        workspace,
+        turnId,
+        streamId,
+        modelId,
+      });
+    } catch (error) {
+      await this.agentChatService.restorePendingApproval({
         threadId,
         messageId,
         streamId,
