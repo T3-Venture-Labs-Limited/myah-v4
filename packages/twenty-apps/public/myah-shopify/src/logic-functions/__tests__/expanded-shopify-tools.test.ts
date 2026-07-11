@@ -71,31 +71,27 @@ describe('expanded Shopify tool handlers', () => {
     );
   });
 
-  it('does not expose protected customer-data provider errors', async () => {
-    const brokerResponse = {
-      success: true,
-      connected: true,
-      data: {
-        unavailable: {
-          customers: 'Shopify customer data is currently unavailable.',
-        },
-      },
-    };
+  it('redacts protected customer-data provider errors from the public result', async () => {
+    const providerSentinel =
+      'Customer email jane.doe@example.com leaked with token shpat_live_secret';
     const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => brokerResponse,
-      text: async () => JSON.stringify(brokerResponse),
+      ok: false,
+      status: 502,
+      json: async () => ({ errors: [{ message: providerSentinel }] }),
+      text: async () => providerSentinel,
     }));
 
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await getShopifyCustomerSummaryHandler({ first: 1 });
 
-    expect(result).toEqual(brokerResponse);
-    expect(JSON.stringify(result)).not.toContain(
-      'Customer email jane.doe@example.com leaked with token shpat_live_secret',
+    expect(result.success).toBe(false);
+    expect(result.connected).toBe(false);
+    expect(result.error).toBe(
+      'Myah Shopify customer summary broker request failed (HTTP 502).',
     );
+    expect(JSON.stringify(result)).not.toContain('jane.doe@example.com');
     expect(JSON.stringify(result)).not.toContain('shpat_live_secret');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

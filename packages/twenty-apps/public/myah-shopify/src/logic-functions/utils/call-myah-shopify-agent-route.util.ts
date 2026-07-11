@@ -61,9 +61,9 @@ export const callMyahShopifyAgentRoute = async ({
       return (await response.json()) as ShopifyAgentReadResult;
     }
 
-    const text = await response.text().catch(() => '');
+    await response.text().catch(() => '');
 
-    lastError = `${toolLabel} broker at ${brokerBaseUrl} responded with ${response.status}: ${text.slice(0, 500)}`;
+    lastError = `${toolLabel} broker request failed (HTTP ${response.status}).`;
 
     if (![502, 503, 504].includes(response.status)) {
       break;

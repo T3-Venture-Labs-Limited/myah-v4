@@ -313,6 +313,8 @@ describe('MyahShopifyService', () => {
   });
   it('returns a fixed non-sensitive error when protected customer data is unavailable', async () => {
     const { service, repository } = createService();
+    const logger = (service as unknown as { logger: { warn: jest.Mock } }).logger;
+    const warnSpy = jest.spyOn(logger, 'warn');
 
     await repository.save({
       workspaceId: 'workspace-id-customer-data',
@@ -344,6 +346,13 @@ describe('MyahShopifyService', () => {
     });
     expect(JSON.stringify(result)).not.toContain('jane.doe@example.com');
     expect(JSON.stringify(result)).not.toContain('shpat_live_secret');
+    expect(warnSpy).toHaveBeenCalledWith('shopify_customer_summary_unavailable');
+    expect(warnSpy.mock.calls.flat().join(' ')).not.toContain(
+      'jane.doe@example.com',
+    );
+    expect(warnSpy.mock.calls.flat().join(' ')).not.toContain(
+      'shpat_live_secret',
+    );
   });
 
 

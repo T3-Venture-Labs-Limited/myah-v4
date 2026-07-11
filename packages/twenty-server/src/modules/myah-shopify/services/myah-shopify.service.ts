@@ -861,10 +861,8 @@ export class MyahShopifyService {
           });
 
           return body.data ?? {};
-        } catch (error) {
-          this.logger.warn(
-            `Shopify customer summary unavailable: ${this.getReadableError(error).slice(0, 200)}`,
-          );
+        } catch {
+          this.logger.warn('shopify_customer_summary_unavailable');
           return {
             unavailable: {
               customers: SHOPIFY_CUSTOMER_DATA_UNAVAILABLE,
