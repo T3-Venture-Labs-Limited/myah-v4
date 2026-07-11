@@ -83,17 +83,39 @@ export const useSubmitApprovalDecision = () => {
         dispatchBrowserEvent(AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME);
       } catch (error) {
         // The subscription/refetch is canonical: a stale mutation may have
-        // failed after another client already resolved this approval. Trigger
-        // reconciliation before applying the local pending fallback.
+        // failed after another client already resolved this approval.
+        // Trigger reconciliation before applying the local pending fallback.
         dispatchBrowserEvent(AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME);
         const currentMessages = store.get(messagesAtom);
+        const hasResolvedApproval = currentMessages.some(
+          (message) =>
+            message.id === messageId &&
+            message.parts.some((part) => {
+              if (
+                !('toolCallId' in part) ||
+                part.toolCallId !== toolCallId ||
+                !('output' in part) ||
+                !isDefined(part.output) ||
+                typeof part.output !== 'object' ||
+                part.output === null ||
+                !('result' in part.output) ||
+                typeof part.output.result !== 'object' ||
+                part.output.result === null ||
+                !('status' in part.output.result)
+              ) {
+                return false;
+              }
 
-        store.set(isAwaitingFirstChunkAtom, false);
-        store.set(
-          messagesAtom,
-          markApprovalPending(currentMessages, messageId, toolCallId),
+              return part.output.result.status === 'resolved';
+            }),
         );
 
+        if (!hasResolvedApproval) {
+          store.set(
+            messagesAtom,
+            markApprovalPending(currentMessages, messageId, toolCallId),
+          );
+        }
         enqueueErrorSnackBar({
           apolloError: CombinedGraphQLErrors.is(error) ? error : undefined,
         });

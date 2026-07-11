@@ -260,29 +260,61 @@ export class ChatExecutionService {
       ),
     };
 
-    // Tool executions are concurrent in the AI SDK. Collect all calls for a
-    // step before allowing any execute callback to run, so a human-input call
-    // can never race a side-effecting tool.
+    // Tool executions are concurrent in the AI SDK. Buffer each invocation
+    // until the model has emitted the complete step, so a human-input call
+    // can never race a side-effecting tool from that same step.
     const toolCallsByStep = new Map<number, Set<string>>();
     const rejectedSteps = new Set<number>();
+    const stepGates = new Map<
+      number,
+      { promise: Promise<void>; resolve: () => void }
+    >();
     let currentToolExecutionStep = 0;
+    const getStepGate = (stepNumber: number) => {
+      const existingGate = stepGates.get(stepNumber);
+
+      if (existingGate) {
+        return existingGate;
+      }
+
+      let resolveGate!: () => void;
+      const gate = {
+        promise: new Promise<void>((resolve) => {
+          resolveGate = resolve;
+        }),
+        resolve: resolveGate,
+      };
+
+      stepGates.set(stepNumber, gate);
+      // Tool-call start callbacks for the rest of the step are delivered
+      // before the next macrotask. Waiting here buffers all of them.
+      setTimeout(() => gate.resolve(), 0);
+
+      return gate;
+    };
     const guardedTools: ToolSet = Object.fromEntries(
       Object.entries(activeTools).map(([name, tool]) => {
         if (!tool.execute) return [name, tool];
-        return [name, {
-          ...tool,
-          execute: async (input: never, options: never) => {
-            await Promise.resolve();
-            const stepNumber = currentToolExecutionStep;
-            if (rejectedSteps.has(stepNumber)) {
-              throw new AiException(
-                'Human-input tools must be exclusive and execute before no other tool in a model step.',
-                AiExceptionCode.INVALID_AGENT_INPUT,
-              );
-            }
-            return tool.execute?.(input, options);
+
+        return [
+          name,
+          {
+            ...tool,
+            execute: async (input: never, options: never) => {
+              const stepNumber = currentToolExecutionStep;
+              await getStepGate(stepNumber).promise;
+
+              if (rejectedSteps.has(stepNumber)) {
+                throw new AiException(
+                  'Human-input tools must be exclusive and execute before no other tool in a model step.',
+                  AiExceptionCode.INVALID_AGENT_INPUT,
+                );
+              }
+
+              return tool.execute?.(input, options);
+            },
           },
-        }];
+        ];
       }),
     );
 
