@@ -63,6 +63,7 @@ import {
   createAskQuestionsTool,
 } from 'src/engine/metadata-modules/ai/ai-chat/tools/ask-questions.tool';
 import { MessagePruningService } from 'src/engine/metadata-modules/ai/ai-chat/services/message-pruning.service';
+import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { type ExtractedFile } from 'src/engine/metadata-modules/ai/ai-chat/types/extracted-file.type';
 import { extractCodeInterpreterFiles } from 'src/engine/metadata-modules/ai/ai-chat/utils/extract-code-interpreter-files.util';
@@ -85,6 +86,7 @@ export type ChatExecutionOptions = {
   threadId?: string;
   messages: UIMessage<unknown, UIDataTypes, UITools>[];
   browsingContext: BrowsingContextType | null;
+  lastUserMessageText?: string;
   onCodeExecutionUpdate?: CodeExecutionStreamEmitter;
   onCompaction?: () => void;
   modelId?: string;
@@ -113,6 +115,7 @@ export class ChatExecutionService {
     private readonly systemPromptBuilder: SystemPromptBuilderService,
     private readonly exceptionHandlerService: ExceptionHandlerService,
     private readonly nativeToolBinder: NativeToolBinderService,
+    private readonly brandBrainPreflightService: BrandBrainPreflightService,
     private readonly messagePruningService: MessagePruningService,
     private readonly metricsService: MetricsService,
   ) {}
@@ -123,6 +126,7 @@ export class ChatExecutionService {
     threadId,
     messages,
     browsingContext,
+    lastUserMessageText,
     onCodeExecutionUpdate,
     onCompaction,
     modelId,
@@ -271,6 +275,40 @@ export class ChatExecutionService {
         contextString,
       );
     }
+
+    const brandBrainPreflight = await this.brandBrainPreflightService.run({
+      lastUserMessageText:
+        lastUserMessageText ?? this.extractLastUserText(processedMessages),
+      toolContext,
+    });
+
+    if (brandBrainPreflight.contextPart) {
+      processedMessages =
+        this.brandBrainPreflightService.injectContextIntoLastUserMessage(
+          processedMessages,
+          brandBrainPreflight.contextPart,
+        );
+    }
+
+    this.metricsService.recordHistogram({
+      key: MetricsKeys.AiChatBrandBrainPreflightMs,
+      value: brandBrainPreflight.durationMs,
+      unit: 'ms',
+      attributes: {
+        required: String(brandBrainPreflight.required),
+        called: String(brandBrainPreflight.called),
+        cacheHit: String(brandBrainPreflight.cacheHit),
+      },
+    });
+
+    this.logger.log(
+      `[BRAND_BRAIN_PREFLIGHT] required=${brandBrainPreflight.required} ` +
+        `called=${brandBrainPreflight.called} ` +
+        `brand=${brandBrainPreflight.brandSlug ?? brandBrainPreflight.brandNameOrSlug ?? 'none'} ` +
+        `pageCount=${brandBrainPreflight.pageCount ?? 'n/a'} ` +
+        `durationMs=${brandBrainPreflight.durationMs} ` +
+        `cacheHit=${brandBrainPreflight.cacheHit}`,
+    );
 
     const systemPrompt = this.systemPromptBuilder.buildFullPrompt(
       toolCatalog,
@@ -619,6 +657,22 @@ export class ChatExecutionService {
       modelConfig,
       hasNoMoreAvailableCredits: () => hasNoMoreAvailableCredits,
     };
+  }
+
+  private extractLastUserText(messages: UIMessage[]): string {
+    const lastUserMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === 'user');
+
+    return (
+      lastUserMessage?.parts
+        .filter(
+          (part): part is { type: 'text'; text: string } =>
+            part.type === 'text' && typeof part.text === 'string',
+        )
+        .map((part) => part.text)
+        .join('\n') ?? ''
+    );
   }
 
   private injectBrowsingContextIntoLastUserMessage(

@@ -300,6 +300,7 @@ export class StreamAgentChatJob {
               threadId: data.threadId,
               messages: data.messages,
               browsingContext: data.browsingContext,
+              lastUserMessageText: data.lastUserMessageText,
               modelId: data.modelId,
               onCodeExecutionUpdate,
               onCompaction,
