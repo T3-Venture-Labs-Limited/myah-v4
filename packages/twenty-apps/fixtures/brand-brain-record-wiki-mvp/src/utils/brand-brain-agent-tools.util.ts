@@ -26,6 +26,10 @@ const BRAND_BRAIN_RECOMMENDED_PAGE_KEYS = [
   'log',
 ] as const;
 
+export const BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT = 12000;
+const MAX_CONTEXT_PAGES = 40;
+const MAX_CONTEXT_LINKS = 40;
+const CONTEXT_METADATA_CHARACTER_LIMIT = 400;
 const BODY_CHARACTER_LIMIT_PER_PAGE = 1600;
 const BODY_CHARACTER_LIMIT_PER_SEARCH_RESULT = 2400;
 const DEFAULT_SEARCH_RESULT_LIMIT = 5;
@@ -76,6 +80,11 @@ export type BrandBrainContextToolResult = {
   pages: BrandBrainContextPage[];
   links: BrandBrainContextLink[];
   contextMarkdown: string;
+  truncated: boolean;
+  truncatedPageCount: number;
+  truncatedLinkCount: number;
+  contextCharacterCount: number;
+  contextCharacterLimit: number;
 };
 
 export type BrandBrainSearchOrReadInput = {
@@ -591,13 +600,28 @@ export const getBrandBrainContext = async ({
       };
     })
     .filter((link): link is BrandBrainContextLink => Boolean(link));
-  const pages: BrandBrainContextPage[] = brandPages.map((page) => ({
-    id: page.id,
-    title: page.title,
-    canonicalPath: normalizeCanonicalPath(page.canonicalPath),
-    pageType: page.pageType,
-    summary: page.summary,
-    markdown: page.pageType === 'INDEX' ? null : pageMarkdown(page),
+  const totalPageCount = brandPages.length;
+  const totalLinkCount = brandLinks.length;
+  const pages: BrandBrainContextPage[] = brandPages
+    .slice(0, MAX_CONTEXT_PAGES)
+    .map((page) => ({
+      id: page.id,
+      title: capMarkdown({ markdown: page.title, limit: CONTEXT_METADATA_CHARACTER_LIMIT }).markdown,
+      canonicalPath: normalizeCanonicalPath(page.canonicalPath),
+      pageType: page.pageType,
+      summary: page.summary
+        ? capMarkdown({ markdown: page.summary, limit: CONTEXT_METADATA_CHARACTER_LIMIT }).markdown
+        : page.summary,
+      markdown: page.pageType === 'INDEX' ? null : pageMarkdown(page),
+    }));
+  const links = brandLinks.slice(0, MAX_CONTEXT_LINKS).map((link) => ({
+    ...link,
+    description: link.description
+      ? capMarkdown({
+          markdown: link.description,
+          limit: CONTEXT_METADATA_CHARACTER_LIMIT,
+        }).markdown
+      : link.description,
   }));
   const existingPaths = new Set(pages.map((page) => page.canonicalPath));
   const missingRecommendedPaths = recommendedPathsForBrand(brandSlug).filter(
@@ -605,24 +629,35 @@ export const getBrandBrainContext = async ({
   );
   const hasPath = (path: string): boolean => existingPaths.has(path);
 
+  const uncappedContextMarkdown = buildContextMarkdown({
+    brandSlug,
+    task,
+    pages,
+    links,
+    missingRecommendedPaths,
+  });
+  const boundedContext = capMarkdownHeadAndTail({
+    markdown: uncappedContextMarkdown,
+    limit: BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT - 32,
+  });
+
   return {
     brandSlug,
     task,
     pageCount: pages.length,
-    linkCount: brandLinks.length,
+    linkCount: links.length,
     hasRoot: hasPath(brandSlug),
     hasIndex: hasPath(`${brandSlug}/index`),
     hasLog: hasPath(`${brandSlug}/log`),
     missingRecommendedPaths,
     pages,
-    links: brandLinks,
-    contextMarkdown: buildContextMarkdown({
-      brandSlug,
-      task,
-      pages,
-      links: brandLinks,
-      missingRecommendedPaths,
-    }),
+    links,
+    contextMarkdown: boundedContext.markdown,
+    truncated: boundedContext.truncated || totalPageCount > pages.length || totalLinkCount > links.length,
+    truncatedPageCount: Math.max(0, totalPageCount - pages.length),
+    truncatedLinkCount: Math.max(0, totalLinkCount - links.length),
+    contextCharacterCount: boundedContext.markdown.length,
+    contextCharacterLimit: BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
   };
 };
 

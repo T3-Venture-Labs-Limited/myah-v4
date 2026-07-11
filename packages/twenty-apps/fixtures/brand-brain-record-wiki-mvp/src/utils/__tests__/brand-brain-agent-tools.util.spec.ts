@@ -10,6 +10,7 @@ import {
   buildRichTextBody,
 } from 'src/utils/brand-brain-agent-executor.util';
 import {
+  BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
   getBrandBrainContext,
   searchOrReadBrandBrain,
   seedOrUpdateBrandBrainFromBrief,
@@ -234,6 +235,41 @@ describe('brand brain agent tools', () => {
     expect(
       context.pages.find((page) => page.pageType === 'INDEX')?.markdown,
     ).toBeNull();
+  });
+  it('caps total context across pages, metadata, and links with truncation metadata', async () => {
+    const store = new MockBrandBrainStore();
+
+    await seedOrUpdateBrandBrainFromBrief({ input: seedInput, store });
+    for (let index = 0; index < 100; index += 1) {
+      store.pages.push({
+        id: `extra-${index}`,
+        canonicalPath: `lashglow/extra-${index}`,
+        title: `Extra ${index}`,
+        pageType: 'PAGE',
+        summary: 'summary '.repeat(2000),
+        body: buildRichTextBody('body '.repeat(2000)),
+      });
+    }
+    store.links = store.pages.slice(1).map((page, index) => ({
+      id: `link-${index}`,
+      sourcePageId: store.pages[0].id,
+      targetPageId: page.id,
+      linkType: 'RELATED',
+      description: 'description '.repeat(2000),
+    }));
+
+    const context = await getBrandBrainContext({
+      brandNameOrSlug: 'Lashglow',
+      store,
+    });
+
+    expect(context.contextMarkdown.length).toBeLessThanOrEqual(
+      BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
+    );
+    expect(context.truncated).toBe(true);
+    expect(context.truncatedPageCount).toBeGreaterThan(0);
+    expect(context.truncatedLinkCount).toBeGreaterThan(0);
+    expect(context.contextMarkdown).toContain('[Truncated');
   });
 
   it('searches exact pages and body sections without relying only on summaries', async () => {

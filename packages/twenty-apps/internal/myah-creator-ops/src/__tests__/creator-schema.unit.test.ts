@@ -174,39 +174,57 @@ describe('Creator object schema', () => {
     }
   });
 
-  it('does not expose creator contact or platform identity fields by default', () => {
+  it('scopes the default role and protects all creator identity fields', () => {
+    expect(defaultRole.canReadAllObjectRecords).toBe(false);
+    expect(defaultRole.canUpdateAllObjectRecords).toBe(false);
+    expect(defaultRole.canSoftDeleteAllObjectRecords).toBe(false);
+    expect(defaultRole.objectPermissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          objectUniversalIdentifier: creatorObject.universalIdentifier,
+          canReadObjectRecords: true,
+          canUpdateObjectRecords: true,
+          canSoftDeleteObjectRecords: true,
+          canDestroyObjectRecords: false,
+        }),
+      ]),
+    );
+
     const protectedFieldNames = [
       'email',
       'phone',
       'instagramUrl',
       'instagramUsername',
+      'instagramBio',
       'tiktokUrl',
       'tiktokUsername',
+      'tiktokBio',
+      'youtubeUrl',
       'youtubeCustomUrl',
+      'youtubeTitle',
+      'youtubeDescription',
       'twitterUrl',
       'twitterUsername',
+      'twitterBio',
       'twitchUrl',
       'twitchUsername',
+      'twitchDisplayName',
       'patreonUrl',
     ];
-    const protectedFieldIds = new Set(
-      protectedFieldNames.map(
-        (fieldName) =>
-          creatorObject.fields.find((field) => field.name === fieldName)
-            ?.universalIdentifier,
-      ),
+    const permissionsById = new Map(
+      (defaultRole.fieldPermissions ?? []).map((permission) => [
+        permission.fieldUniversalIdentifier,
+        permission,
+      ]),
     );
 
-    for (const fieldPermission of defaultRole.fieldPermissions ?? []) {
-      if (
-        fieldPermission.objectUniversalIdentifier ===
-        creatorObject.universalIdentifier
-      ) {
-        protectedFieldIds.delete(fieldPermission.fieldUniversalIdentifier);
-      }
+    for (const fieldName of protectedFieldNames) {
+      const field = creatorObject.fields.find((candidate) => candidate.name === fieldName);
+      expect(field).toBeDefined();
+      expect(permissionsById.get(field?.universalIdentifier)).toMatchObject({
+        canReadFieldValue: false,
+        canUpdateFieldValue: false,
+      });
     }
-
-    expect(protectedFieldIds.size).toBe(0);
-
   });
 });
