@@ -1,0 +1,212 @@
+import { describe, expect, it } from 'vitest';
+import { FieldType } from 'twenty-sdk/define';
+
+import creatorObjectResult from 'src/objects/creator.object';
+import defaultRoleResult from 'src/default-role';
+
+const unwrapValidationResult = <T>(result: {
+  success: boolean;
+  config: T;
+  errors: string[];
+}): T => {
+  if (result.success === false) {
+    throw new Error(result.errors.join(', '));
+  }
+
+  return result.config;
+};
+
+const creatorObject = unwrapValidationResult(creatorObjectResult);
+const defaultRole = unwrapValidationResult(defaultRoleResult);
+
+const expectedFieldNames = [
+  'name',
+  'email',
+  'phone',
+  'location',
+  'language',
+  'profileType',
+  'creatorStatus',
+  'source',
+  'sourceUrl',
+  'importSource',
+  'lastImportedAt',
+  'hasLinkInBio',
+  'hasBrandDeals',
+  'promotesAffiliateLinks',
+  'hasMerch',
+  'linksInBio',
+  'externalUrls',
+  'hashtagsUsed',
+  'categories',
+  'niches',
+  'notes',
+  'instagramUrl',
+  'instagramUsername',
+  'instagramBio',
+  'instagramFollowerCount',
+  'instagramEngagementPercent',
+  'instagramMostRecentPostDate',
+  'instagramMediaCount',
+  'instagramAvgLikes',
+  'instagramAvgComments',
+  'instagramReelsPercent',
+  'instagramReelsAvgViewCount',
+  'instagramPostingFrequencyRecentMonths',
+  'instagramEstimatedIncomeMin',
+  'instagramEstimatedIncomeMax',
+  'tiktokUrl',
+  'tiktokUsername',
+  'tiktokBio',
+  'tiktokFollowerCount',
+  'tiktokMostRecentPostDate',
+  'tiktokEngagementPercent',
+  'tiktokVideoCount',
+  'tiktokPlayCountMedian',
+  'tiktokAvgLikes',
+  'tiktokAvgComments',
+  'tiktokAvgDownloads',
+  'tiktokPostingFrequencyRecentMonths',
+  'youtubeUrl',
+  'youtubeCustomUrl',
+  'youtubeTitle',
+  'youtubeDescription',
+  'youtubeTopicDetails',
+  'youtubeSubscriberCount',
+  'youtubeLastUploadDate',
+  'youtubeLastStreamUploadDate',
+  'youtubeShortsPercentage',
+  'youtubeVideoCount',
+  'youtubeEngagementPercent',
+  'youtubeAvgViewsLong',
+  'youtubeAvgViewsShorts',
+  'youtubeAvgStreamViews',
+  'youtubeAvgStreamDuration',
+  'youtubePostingFrequencyRecentMonths',
+  'youtubeEstimatedIncomeMin',
+  'youtubeEstimatedIncomeMax',
+  'twitterUrl',
+  'twitterUsername',
+  'twitterBio',
+  'twitterFollowerCount',
+  'twitterEngagementPercent',
+  'twitchUrl',
+  'twitchUsername',
+  'twitchDisplayName',
+  'twitchTotalFollowers',
+  'patreonUrl',
+] as const;
+
+const expectedTypeByFieldName: Partial<Record<string, FieldType>> = {
+  profileType: FieldType.SELECT,
+  creatorStatus: FieldType.SELECT,
+  lastImportedAt: FieldType.DATE_TIME,
+  hasLinkInBio: FieldType.BOOLEAN,
+  hasBrandDeals: FieldType.BOOLEAN,
+  promotesAffiliateLinks: FieldType.BOOLEAN,
+  hasMerch: FieldType.BOOLEAN,
+  instagramMostRecentPostDate: FieldType.DATE,
+  tiktokMostRecentPostDate: FieldType.DATE,
+  youtubeLastUploadDate: FieldType.DATE,
+  youtubeLastStreamUploadDate: FieldType.DATE,
+};
+
+const numberFieldNames = [
+  'instagramFollowerCount',
+  'instagramEngagementPercent',
+  'instagramMediaCount',
+  'instagramAvgLikes',
+  'instagramAvgComments',
+  'instagramReelsPercent',
+  'instagramReelsAvgViewCount',
+  'instagramPostingFrequencyRecentMonths',
+  'instagramEstimatedIncomeMin',
+  'instagramEstimatedIncomeMax',
+  'tiktokFollowerCount',
+  'tiktokEngagementPercent',
+  'tiktokVideoCount',
+  'tiktokPlayCountMedian',
+  'tiktokAvgLikes',
+  'tiktokAvgComments',
+  'tiktokAvgDownloads',
+  'tiktokPostingFrequencyRecentMonths',
+  'youtubeSubscriberCount',
+  'youtubeShortsPercentage',
+  'youtubeVideoCount',
+  'youtubeEngagementPercent',
+  'youtubeAvgViewsLong',
+  'youtubeAvgViewsShorts',
+  'youtubeAvgStreamViews',
+  'youtubeAvgStreamDuration',
+  'youtubePostingFrequencyRecentMonths',
+  'youtubeEstimatedIncomeMin',
+  'youtubeEstimatedIncomeMax',
+  'twitterFollowerCount',
+  'twitterEngagementPercent',
+  'twitchTotalFollowers',
+];
+
+describe('Creator object schema', () => {
+  it('should expose wide import fields directly on Creator', () => {
+    expect(creatorObject.nameSingular).toBe('creator');
+    expect(creatorObject.namePlural).toBe('creators');
+
+    for (const fieldName of expectedFieldNames) {
+      expect(
+        creatorObject.fields.some((field) => field.name === fieldName),
+      ).toBe(true);
+    }
+  });
+
+  it('should use import-friendly field types', () => {
+    for (const [fieldName, expectedType] of Object.entries(
+      expectedTypeByFieldName,
+    )) {
+      expect(
+        creatorObject.fields.find((field) => field.name === fieldName)?.type,
+      ).toBe(expectedType);
+    }
+
+    for (const fieldName of numberFieldNames) {
+      expect(
+        creatorObject.fields.find((field) => field.name === fieldName)?.type,
+      ).toBe(FieldType.NUMBER);
+    }
+  });
+
+  it('does not expose creator contact or platform identity fields by default', () => {
+    const protectedFieldNames = [
+      'email',
+      'phone',
+      'instagramUrl',
+      'instagramUsername',
+      'tiktokUrl',
+      'tiktokUsername',
+      'youtubeCustomUrl',
+      'twitterUrl',
+      'twitterUsername',
+      'twitchUrl',
+      'twitchUsername',
+      'patreonUrl',
+    ];
+    const protectedFieldIds = new Set(
+      protectedFieldNames.map(
+        (fieldName) =>
+          creatorObject.fields.find((field) => field.name === fieldName)
+            ?.universalIdentifier,
+      ),
+    );
+
+    for (const fieldPermission of defaultRole.fieldPermissions ?? []) {
+      if (
+        fieldPermission.objectUniversalIdentifier ===
+        creatorObject.universalIdentifier
+      ) {
+        protectedFieldIds.delete(fieldPermission.fieldUniversalIdentifier);
+      }
+    }
+
+    expect(protectedFieldIds.size).toBe(0);
+
+  });
+});
