@@ -1,3 +1,4 @@
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { SettingsAdminAI } from '@/settings/admin-panel/ai/components/SettingsAdminAI';
 import { SettingsAdminApps } from '@/settings/admin-panel/apps/components/SettingsAdminApps';
 import { SettingsAdminGeneral } from '@/settings/admin-panel/components/SettingsAdminGeneral';
@@ -16,6 +17,7 @@ const SettingsEnterprise = lazy(() =>
   })),
 );
 export const SettingsAdminTabContent = () => {
+  const isMyahTeamUser = useIsMyahTeamUser();
   const activeTabId = useAtomComponentStateValue(
     activeTabIdComponentState,
     SETTINGS_ADMIN_TABS_ID,
@@ -25,14 +27,34 @@ export const SettingsAdminTabContent = () => {
     case SETTINGS_ADMIN_TABS.GENERAL:
       return <SettingsAdminGeneral />;
     case SETTINGS_ADMIN_TABS.APPS:
+      if (!isMyahTeamUser) {
+        return <SettingsAdminGeneral />;
+      }
+
       return <SettingsAdminApps />;
     case SETTINGS_ADMIN_TABS.AI:
+      if (!isMyahTeamUser) {
+        return <SettingsAdminGeneral />;
+      }
+
       return <SettingsAdminAI />;
     case SETTINGS_ADMIN_TABS.CONFIG_VARIABLES:
+      if (!isMyahTeamUser) {
+        return <SettingsAdminGeneral />;
+      }
+
       return <SettingsAdminConfigVariables />;
     case SETTINGS_ADMIN_TABS.HEALTH_STATUS:
+      if (!isMyahTeamUser) {
+        return <SettingsAdminGeneral />;
+      }
+
       return <SettingsAdminHealthStatus />;
     case SETTINGS_ADMIN_TABS.ENTERPRISE:
+      if (!isMyahTeamUser) {
+        return <SettingsAdminGeneral />;
+      }
+
       return (
         <Suspense fallback={<SettingsSectionSkeletonLoader />}>
           <SettingsEnterprise isAdminPanelTab />

@@ -400,6 +400,53 @@ describe('UserWorkspaceService', () => {
       });
     });
 
+    it('should assign the selected invite role instead of promoting later users to Admin by default', async () => {
+      const user = {
+        id: 'user-id',
+        email: 'test@example.com',
+        createdAt: new Date('2024-01-01'),
+        updatedAt: new Date('2024-01-01'),
+        deletedAt: null,
+      } as unknown as UserEntity;
+      const workspace = {
+        id: 'workspace-id',
+        defaultRoleId: 'member-role-id',
+      } as WorkspaceEntity;
+      const selectedRoleId = 'selected-role-id';
+      const userWorkspace = {
+        id: 'user-workspace-id',
+        userId: user.id,
+        workspaceId: workspace.id,
+      } as UserWorkspaceEntity;
+
+      jest.spyOn(service, 'checkUserWorkspaceExists').mockResolvedValue(null);
+      jest.spyOn(service, 'create').mockResolvedValue(userWorkspace);
+      jest.spyOn(service, 'createWorkspaceMember').mockResolvedValue(undefined);
+      jest
+        .spyOn(userRoleService, 'assignRoleToManyUserWorkspace')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(workspaceInvitationService, 'invalidateWorkspaceInvitation')
+        .mockResolvedValue(undefined);
+
+      await service.addUserToWorkspaceIfUserNotInWorkspace(
+        user,
+        workspace,
+        selectedRoleId,
+      );
+
+      expect(
+        userRoleService.assignRoleToManyUserWorkspace,
+      ).toHaveBeenCalledWith({
+        workspaceId: workspace.id,
+        userWorkspaceIds: [userWorkspace.id],
+        roleId: selectedRoleId,
+      });
+      expect(
+        workspaceInvitationService.invalidateWorkspaceInvitation,
+      ).toHaveBeenCalledWith(workspace.id, user.email);
+    });
+
     it('should not add user to workspace if already in workspace', async () => {
       const user = {
         id: 'user-id',
