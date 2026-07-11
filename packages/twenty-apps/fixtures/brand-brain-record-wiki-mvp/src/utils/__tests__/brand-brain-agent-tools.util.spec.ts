@@ -243,6 +243,8 @@ describe('brand brain agent tools', () => {
     for (let index = 0; index < 100; index += 1) {
       store.pages.push({
         id: `extra-${index}`,
+        slug: `extra-${index}`,
+        status: 'DRAFT',
         canonicalPath: `lashglow/extra-${index}`,
         title: `Extra ${index}`,
         pageType: 'PAGE',
@@ -252,6 +254,7 @@ describe('brand brain agent tools', () => {
     }
     store.links = store.pages.slice(1).map((page, index) => ({
       id: `link-${index}`,
+      name: `link-${index}`,
       sourcePageId: store.pages[0].id,
       targetPageId: page.id,
       linkType: 'RELATED',
@@ -276,6 +279,8 @@ describe('brand brain agent tools', () => {
     const oversized = 'x'.repeat(20_000);
     store.pages = Array.from({ length: 40 }, (_, index) => ({
       id: `page-${index}`,
+      slug: `page-${index}`,
+      status: 'DRAFT' as const,
       canonicalPath: `lashglow/page-${index}`,
       title: oversized,
       pageType: 'PAGE' as const,
@@ -284,17 +289,22 @@ describe('brand brain agent tools', () => {
     }));
     store.links = Array.from({ length: 40 }, (_, index) => ({
       id: `link-${index}`,
+      name: `link-${index}`,
       sourcePageId: 'page-0',
       targetPageId: `page-${index}`,
       linkType: 'RELATED',
       description: oversized,
     }));
-
     const context = await getBrandBrainContext({
-      brandNameOrSlug: 'Lashglow',
+      brandNameOrSlug: `${'brand'.repeat(10000)}\\\"\n`,
       task: oversized,
       store,
     });
+
+    expect(JSON.stringify(context).length).toBeLessThanOrEqual(
+      BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
+    );
+    expect(context.contextCharacterCount).toBe(context.contextMarkdown.length);
 
     expect(JSON.stringify(context).length).toBeLessThanOrEqual(
       BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
@@ -306,6 +316,8 @@ describe('brand brain agent tools', () => {
       pages: [
         {
           id: 'page-1',
+          slug: 'overview',
+          status: 'DRAFT',
           canonicalPath: 'lashglow/overview',
           title: 'Title '.repeat(200),
           pageType: 'PAGE',
@@ -316,6 +328,7 @@ describe('brand brain agent tools', () => {
       links: [
         {
           id: 'link-1',
+          name: 'related',
           sourcePageId: 'page-1',
           targetPageId: 'page-1',
           linkType: 'RELATED',
@@ -331,6 +344,59 @@ describe('brand brain agent tools', () => {
 
     expect(context.truncated).toBe(true);
     expect(context.contextMarkdown).toContain('[Truncated]');
+  });
+  it.each(
+    [
+      ['title', { title: 'T'.repeat(600) }],
+      ['summary', { summary: 'S'.repeat(600) }],
+      ['body', { body: buildRichTextBody('B'.repeat(1700)) }],
+      ['description', { description: 'D'.repeat(600) }],
+      ['task', { task: 'K'.repeat(600) }],
+    ] as Array<
+      [
+        string,
+        {
+          title?: string;
+          summary?: string;
+          body?: BrandBrainExecutorPageRecord['body'];
+          description?: string;
+          task?: string;
+        },
+      ]
+    >,
+  )('marks %s-only overflow as truncated', async (_field, values) => {
+    const store = new MockBrandBrainStore({
+      pages: [
+        {
+          id: 'page-1',
+          slug: 'overview',
+          status: 'DRAFT',
+          canonicalPath: 'lashglow/overview',
+          title: values.title ?? 'Title',
+          pageType: 'PAGE',
+          summary: values.summary ?? 'Summary',
+          body: values.body ?? buildRichTextBody('Body'),
+        },
+      ],
+      links: [
+        {
+          id: 'link-1',
+          name: 'related',
+          sourcePageId: 'page-1',
+          targetPageId: 'page-1',
+          linkType: 'RELATED',
+          description: values.description ?? 'Description',
+        },
+      ],
+    });
+
+    const context = await getBrandBrainContext({
+      brandNameOrSlug: 'Lashglow',
+      task: values.task,
+      store,
+    });
+
+    expect(context.truncated).toBe(true);
   });
 
   it('searches exact pages and body sections without relying only on summaries', async () => {

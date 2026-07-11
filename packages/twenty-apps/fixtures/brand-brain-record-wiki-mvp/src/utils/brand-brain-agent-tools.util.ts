@@ -585,7 +585,7 @@ export const getBrandBrainContext = async ({
   task?: string;
   store: BrandBrainExecutorStore;
 }): Promise<BrandBrainContextToolResult> => {
-  const brandSlug = normalizeBrandSlug(brandNameOrSlug);
+  const brandSlug = normalizeBrandSlug(brandNameOrSlug.slice(0, 256)).slice(0, 128);
   const rawPages = await store.listPagesByBrandSlug({ brandSlug });
   const brandPages = rawPages
     .filter((page) =>
@@ -622,9 +622,9 @@ export const getBrandBrainContext = async ({
     .filter((link): link is BrandBrainContextLink => Boolean(link));
   const totalPageCount = brandPages.length;
   const totalLinkCount = brandLinks.length;
-  const pages: BrandBrainContextPage[] = brandPages
+  const pages = brandPages
     .slice(0, MAX_CONTEXT_PAGES)
-    .map((page) => {
+    .map((page): { value: BrandBrainContextPage; truncated: boolean } => {
       const title = capMarkdown({
         markdown: page.title,
         limit: CONTEXT_METADATA_CHARACTER_LIMIT,
@@ -635,7 +635,10 @@ export const getBrandBrainContext = async ({
             limit: CONTEXT_METADATA_CHARACTER_LIMIT,
           })
         : { markdown: page.summary, truncated: false };
-      const markdown = page.pageType === 'INDEX' ? { markdown: null, truncated: false } : pageMarkdown(page);
+      const markdown =
+        page.pageType === 'INDEX'
+          ? { markdown: null, truncated: false }
+          : pageMarkdown(page);
 
       return {
         value: {
@@ -649,22 +652,24 @@ export const getBrandBrainContext = async ({
         truncated: title.truncated || summary.truncated || markdown.truncated,
       };
     });
-  const links = brandLinks.slice(0, MAX_CONTEXT_LINKS).map((link) => {
-    const description = link.description
-      ? capMarkdown({
-          markdown: link.description,
-          limit: CONTEXT_METADATA_CHARACTER_LIMIT,
-        })
-      : { markdown: link.description, truncated: false };
+  const links = brandLinks.slice(0, MAX_CONTEXT_LINKS).map(
+    (link): { value: BrandBrainContextLink; truncated: boolean } => {
+      const description = link.description
+        ? capMarkdown({
+            markdown: link.description,
+            limit: CONTEXT_METADATA_CHARACTER_LIMIT,
+          })
+        : { markdown: link.description, truncated: false };
 
-    return {
-      value: {
-        ...link,
-        description: description.markdown,
-      },
-      truncated: description.truncated,
-    };
-  });
+      return {
+        value: {
+          ...link,
+          description: description.markdown,
+        },
+        truncated: description.truncated,
+      };
+    },
+  );
   const contextPages = pages.map(({ value }) => value);
   const contextLinks = links.map(({ value }) => value);
   const contentWasTruncated =
@@ -694,7 +699,7 @@ export const getBrandBrainContext = async ({
     limit: BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT - 32,
   });
 
-  let result = {
+  const initialResult: BrandBrainContextToolResult = {
     brandSlug,
     task: boundedTask.markdown,
     pageCount: contextPages.length,
@@ -714,71 +719,65 @@ export const getBrandBrainContext = async ({
       totalLinkCount > contextLinks.length,
     truncatedPageCount: Math.max(0, totalPageCount - contextPages.length),
     truncatedLinkCount: Math.max(0, totalLinkCount - contextLinks.length),
+    contextCharacterCount: boundedContext.markdown.length,
     contextCharacterLimit: BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT,
   };
 
-  if (JSON.stringify(result).length > BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
-    result = {
-      ...result,
-      pages: result.pages.map((page) => ({
-        ...page,
-        title: page.title.slice(0, 64),
-        markdown: null,
-        summary: null,
-      })),
-      links: result.links.map((link) => ({ ...link, description: null })),
-      truncated: true,
-    };
-  }
-  if (
-    JSON.stringify({ ...result, contextMarkdown: '' }).length >
-    BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT
-  ) {
-    result = {
-      ...result,
-      task: undefined,
-      pages: [],
-      links: [],
-      missingRecommendedPaths: [],
-      truncated: true,
-    };
-  }
+  const baseResult: BrandBrainContextToolResult = {
+    ...initialResult,
+    task: initialResult.task?.slice(0, CONTEXT_METADATA_CHARACTER_LIMIT),
+    pages: [],
+    links: [],
+    missingRecommendedPaths: [],
+    truncated: true,
+  };
+  const compactResult = (
+    candidate: BrandBrainContextToolResult,
+  ): BrandBrainContextToolResult => {
+    let result =
+      JSON.stringify(candidate).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT
+        ? candidate
+        : baseResult;
+    if (result === candidate) {
+      return result;
+    }
 
-  let markdownLimit = result.contextMarkdown.length;
-  while (
-    JSON.stringify(result).length > BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT &&
-    markdownLimit > 0
-  ) {
-    markdownLimit = Math.max(0, markdownLimit - 500);
-    const compactMarkdown = capMarkdownHeadAndTail({
-      markdown: result.contextMarkdown,
-      limit: markdownLimit,
-    });
-    result = {
-      ...result,
-      contextMarkdown: compactMarkdown.markdown,
-      truncated: true,
-      contextCharacterCount: compactMarkdown.markdown.length,
-    };
-  }
-  const resultOverhead = JSON.stringify({
-    ...result,
-    contextMarkdown: '',
-  }).length;
-  if (resultOverhead + result.contextMarkdown.length > BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
-    const markdownLimit = Math.max(
-      0,
-      BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT - resultOverhead,
-    );
-    result = {
-      ...result,
-      contextMarkdown: result.contextMarkdown.slice(0, markdownLimit),
-      truncated: true,
-      contextCharacterCount: markdownLimit,
-    };
-  }
+    let low = 0;
+    let high = result.contextMarkdown.length;
+    while (low < high) {
+      const midpoint = Math.ceil((low + high) / 2);
+      const attempt: BrandBrainContextToolResult = {
+        ...result,
+        contextMarkdown: result.contextMarkdown.slice(0, midpoint),
+        contextCharacterCount: midpoint,
+        truncated: true,
+      };
+      if (JSON.stringify(attempt).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+        low = midpoint;
+      } else {
+        high = midpoint - 1;
+      }
+    }
 
-  return result;
+    result = {
+      ...result,
+      contextMarkdown: result.contextMarkdown.slice(0, low),
+      contextCharacterCount: low,
+      truncated: true,
+    };
+    if (JSON.stringify(result).length > BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+      result = {
+        ...baseResult,
+        contextMarkdown: '',
+        contextCharacterCount: 0,
+        truncated: true,
+      };
+    }
+    return result;
+  };
+
+  return compactResult(initialResult);
+
 };
 
 const buildSearchResultMarkdown = ({
