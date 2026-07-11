@@ -1,0 +1,11 @@
+# Railway source deploy configuration for Myah v3.
+#
+# Railway builds this repo with the production Twenty Dockerfile target exposed
+# as the final `railway` stage in packages/twenty-docker/twenty/Dockerfile.
+# Service-specific runtime settings such as start commands, health checks,
+# domains, and variables should be configured per Railway service because
+# twenty-server and twenty-worker share the same image but differ at runtime.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "packages/twenty-docker/twenty/Dockerfile"
