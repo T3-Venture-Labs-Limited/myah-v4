@@ -19,6 +19,7 @@ import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { ServerLevelImpersonateGuard } from 'src/engine/guards/server-level-impersonate.guard';
 
 @MetadataResolver()
 @UsePipes(ResolverValidationPipe)
@@ -34,6 +35,7 @@ export class ImpersonationResolver {
     WorkspaceAuthGuard,
     UserAuthGuard,
     NoImpersonationGuard,
+    ServerLevelImpersonateGuard,
     ImpersonatePermissionGuard,
     CustomPermissionGuard,
   )

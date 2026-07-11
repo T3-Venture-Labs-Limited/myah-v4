@@ -82,6 +82,10 @@ export const useSubmitApprovalDecision = () => {
 
         dispatchBrowserEvent(AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME);
       } catch (error) {
+        // The subscription/refetch is canonical: a stale mutation may have
+        // failed after another client already resolved this approval. Trigger
+        // reconciliation before applying the local pending fallback.
+        dispatchBrowserEvent(AGENT_CHAT_REFETCH_MESSAGES_EVENT_NAME);
         const currentMessages = store.get(messagesAtom);
 
         store.set(isAwaitingFirstChunkAtom, false);

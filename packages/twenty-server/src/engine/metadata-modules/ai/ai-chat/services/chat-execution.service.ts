@@ -260,6 +260,32 @@ export class ChatExecutionService {
       ),
     };
 
+    // Tool executions are concurrent in the AI SDK. Collect all calls for a
+    // step before allowing any execute callback to run, so a human-input call
+    // can never race a side-effecting tool.
+    const toolCallsByStep = new Map<number, Set<string>>();
+    const rejectedSteps = new Set<number>();
+    let currentToolExecutionStep = 0;
+    const guardedTools: ToolSet = Object.fromEntries(
+      Object.entries(activeTools).map(([name, tool]) => {
+        if (!tool.execute) return [name, tool];
+        return [name, {
+          ...tool,
+          execute: async (input: never, options: never) => {
+            await Promise.resolve();
+            const stepNumber = currentToolExecutionStep;
+            if (rejectedSteps.has(stepNumber)) {
+              throw new AiException(
+                'Human-input tools must be exclusive and execute before no other tool in a model step.',
+                AiExceptionCode.INVALID_AGENT_INPUT,
+              );
+            }
+            return tool.execute?.(input, options);
+          },
+        }];
+      }),
+    );
+
     const activeToolNamesForThisRun = isApprovedApprovalResume
       ? getApprovedResumeActiveToolNames(Object.keys(activeTools))
       : undefined;
@@ -493,7 +519,7 @@ export class ChatExecutionService {
     const stream = streamText({
       model: registeredModel.model,
       messages: [systemMessage, ...modelMessages],
-      tools: activeTools,
+      tools: guardedTools,
       abortSignal,
       stopWhen: (step) =>
         stepCountIs(AGENT_CONFIG.MAX_STEPS)(step) ||
@@ -513,6 +539,23 @@ export class ChatExecutionService {
           activeTools: activeToolNamesForThisRun,
           messages: injectCacheBreakpoint(messages, registeredModel.sdkPackage),
         };
+      },
+      experimental_onToolCallStart: async ({
+        toolCall,
+        stepNumber,
+      }) => {
+        const currentStep = stepNumber ?? 0;
+        currentToolExecutionStep = currentStep;
+        const calls = toolCallsByStep.get(currentStep) ?? new Set<string>();
+        calls.add(toolCall.toolName);
+        toolCallsByStep.set(currentStep, calls);
+        if (
+          calls.size > 1 &&
+          (calls.has(ASK_QUESTIONS_TOOL_NAME) || calls.has(REQUEST_APPROVAL_TOOL_NAME))
+        ) {
+          rejectedSteps.add(currentStep);
+        }
+        await Promise.resolve();
       },
       onChunk: ({ chunk }) => {
         if (
