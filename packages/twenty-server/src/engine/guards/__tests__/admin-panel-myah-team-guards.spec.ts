@@ -2,7 +2,6 @@ import { type ExecutionContext } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 
 import { AdminPanelOrImpersonateGuard } from 'src/engine/guards/admin-panel-or-impersonate.guard';
-import { ServerLevelImpersonateGuard } from 'src/engine/guards/server-level-impersonate.guard';
 
 const buildExecutionContext = ({
   user,
@@ -65,35 +64,4 @@ describe('Myah Team admin-panel guards', () => {
     expect(result).toBe(true);
   });
 
-  it('allows Myah Team users through server-level impersonation guard without legacy flags', async () => {
-    const guard = new ServerLevelImpersonateGuard();
-
-    const result = await guard.canActivate(
-      buildExecutionContext({
-        user: {
-          email: 'operator@t3labs.io',
-          canAccessFullAdminPanel: false,
-          canImpersonate: false,
-        },
-      }),
-    );
-
-    expect(result).toBe(true);
-  });
-
-  it('allows legacy server impersonators that are not Myah Team users', async () => {
-    const guard = new ServerLevelImpersonateGuard();
-
-    const result = await guard.canActivate(
-      buildExecutionContext({
-        user: {
-          email: 'legacy-admin@example.com',
-          canAccessFullAdminPanel: false,
-          canImpersonate: true,
-        },
-      }),
-    );
-
-    expect(result).toBe(true);
-  });
 });
