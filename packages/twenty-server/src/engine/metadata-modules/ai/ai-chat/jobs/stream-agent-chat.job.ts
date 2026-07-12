@@ -241,7 +241,7 @@ export class StreamAgentChatJob {
       let streamFinishError: unknown;
       let publishError: unknown;
       let checkHasNoMoreAvailableCredits: () => boolean = () => false;
-      let resolvedModelConfig: AiModelConfig;
+      let resolvedModelConfig: AiModelConfig | undefined;
 
       let persistChain: Promise<void> = Promise.resolve();
       let lastCheckpointAt = 0;
@@ -428,6 +428,14 @@ export class StreamAgentChatJob {
           }
 
           if (finishEvent) {
+            if (!resolvedModelConfig) {
+              reject(
+                new Error(
+                  'Stream finished without resolving an AI model configuration',
+                ),
+              );
+              return;
+            }
             try {
               isFinalizingPersist = true;
               await persistChain;
