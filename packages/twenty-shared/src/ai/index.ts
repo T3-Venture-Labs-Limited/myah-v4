@@ -17,6 +17,7 @@ export type { DatabaseCrudOperation } from './constants/database-crud-operation.
 export { DATABASE_CRUD_OPERATIONS } from './constants/database-crud-operation.const';
 export type { NativeAiSdkProviderId } from './constants/native-ai-sdk-provider-ids.const';
 export { NATIVE_AI_SDK_PROVIDER_IDS } from './constants/native-ai-sdk-provider-ids.const';
+export { REQUEST_APPROVAL_TOOL_NAME } from './constants/request-approval-tool-name.const';
 export { ToolCategory } from './constants/tool-category.const';
 export type {
   AgentResponseFormatType,
@@ -29,6 +30,9 @@ export type {
   AgentResponseSchema,
 } from './types/agent-response-schema.type';
 export type { AgentChatSubscriptionEvent } from './types/AgentChatSubscriptionEvent';
+export type { ApprovalActionKind } from './types/ApprovalActionKind';
+export type { ApprovalDecision } from './types/ApprovalDecision';
+export type { ApprovalRiskLevel } from './types/ApprovalRiskLevel';
 export type { AskQuestionAnswer } from './types/AskQuestionAnswer';
 export type { AskQuestionItem } from './types/AskQuestionItem';
 export type { AskQuestionOption } from './types/AskQuestionOption';
@@ -51,6 +55,10 @@ export type {
 export type { ExtendedUIMessagePart } from './types/ExtendedUIMessagePart';
 export type { ModelConfiguration } from './types/model-configuration.type';
 export type { NavigateAppToolOutput } from './types/NavigateAppToolOutput';
+export type { RequestApprovalAffectedRecord } from './types/RequestApprovalAffectedRecord';
+export type { RequestApprovalPreview } from './types/RequestApprovalPreview';
+export type { RequestApprovalToolInput } from './types/RequestApprovalToolInput';
+export type { RequestApprovalToolResult } from './types/RequestApprovalToolResult';
 export { inferAiSdkPackage } from './utils/infer-ai-sdk-package.util';
 export { isAiSdkPackage } from './utils/is-ai-sdk-package.util';
 export { isDataResidency } from './utils/is-data-residency.util';

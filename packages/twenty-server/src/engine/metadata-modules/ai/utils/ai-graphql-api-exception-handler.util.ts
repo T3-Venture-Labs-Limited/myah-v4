@@ -32,6 +32,8 @@ export const aiGraphqlApiExceptionHandler = (error: Error) => {
       case AiExceptionCode.INVALID_CHAT_THREAD_TITLE:
       case AiExceptionCode.QUESTION_NOT_PENDING:
       case AiExceptionCode.INVALID_QUESTION_ANSWER:
+      case AiExceptionCode.APPROVAL_NOT_PENDING:
+      case AiExceptionCode.INVALID_APPROVAL_DECISION:
         throw new UserInputError(error);
       case AiExceptionCode.AGENT_ALREADY_EXISTS:
       case AiExceptionCode.NO_FAILED_TURN_TO_RETRY:

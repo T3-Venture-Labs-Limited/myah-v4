@@ -106,17 +106,21 @@ export class WorkspaceManagerService {
       },
     });
 
-    if (adminRole) {
-      const userWorkspace = await this.userWorkspaceRepository.findOneOrFail({
-        where: { workspaceId, userId },
-      });
-
-      await this.userRoleService.assignRoleToManyUserWorkspace({
-        workspaceId,
-        userWorkspaceIds: [userWorkspace.id],
-        roleId: adminRole.id,
-      });
+    if (!adminRole) {
+      throw new Error(
+        `Could not find the standard Admin role while initializing workspace ${workspaceId}`,
+      );
     }
+
+    const userWorkspace = await this.userWorkspaceRepository.findOneOrFail({
+      where: { workspaceId, userId },
+    });
+
+    await this.userRoleService.assignRoleToManyUserWorkspace({
+      workspaceId,
+      userWorkspaceIds: [userWorkspace.id],
+      roleId: adminRole.id,
+    });
 
     const existingMemberRole = await this.roleRepository.findOne(workspaceId, {
       where: { label: MEMBER_ROLE_LABEL },

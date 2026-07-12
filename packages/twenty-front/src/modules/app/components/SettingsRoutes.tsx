@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import {
   Navigate,
+  Outlet,
   type Params,
   Route,
   Routes,
@@ -11,6 +12,7 @@ import {
 import { SettingsProtectedRouteWrapper } from '@/settings/components/SettingsProtectedRouteWrapper';
 import { SettingsSkeletonLoader } from '@/settings/components/SettingsSkeletonLoader';
 import { SettingPublicDomain } from '@/settings/domains/components/SettingPublicDomain';
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
@@ -416,6 +418,21 @@ const SettingsAccountsCalendars = lazy(() =>
   ),
 );
 
+const SettingsAccountsInstagram = lazy(() =>
+  import('~/pages/settings/accounts/SettingsAccountsInstagram').then(
+    (module) => ({
+      default: module.SettingsAccountsInstagram,
+    }),
+  ),
+);
+const SettingsAccountsShopify = lazy(() =>
+  import('~/pages/settings/accounts/SettingsAccountsShopify').then(
+    (module) => ({
+      default: module.SettingsAccountsShopify,
+    }),
+  ),
+);
+
 const SettingsBilling = lazy(() =>
   import('~/pages/settings/billing/SettingsBilling').then((module) => ({
     default: module.SettingsBilling,
@@ -652,6 +669,36 @@ type SettingsRoutesProps = {
   isAdminPageEnabled?: boolean;
 };
 
+const MyahTeamSettingsRouteGuard = ({
+  fallbackPath,
+}: {
+  fallbackPath: SettingsPath;
+}) => {
+  const isMyahTeamUser = useIsMyahTeamUser();
+
+  if (!isMyahTeamUser) {
+    return <Navigate to={getSettingsPath(fallbackPath)} replace />;
+  }
+
+  return <Outlet />;
+};
+
+const MyahTeamSettingsElementGuard = ({
+  children,
+  fallbackPath,
+}: {
+  children: ReactNode;
+  fallbackPath: SettingsPath;
+}) => {
+  const isMyahTeamUser = useIsMyahTeamUser();
+
+  if (!isMyahTeamUser) {
+    return <Navigate to={getSettingsPath(fallbackPath)} replace />;
+  }
+
+  return <>{children}</>;
+};
+
 export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
   <Suspense fallback={<SettingsSkeletonLoader />}>
     <Routes>
@@ -676,6 +723,23 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.AccountsCalendars}
           element={<SettingsAccountsCalendars />}
+        />
+        <Route
+          path={SettingsPath.AccountsComposio}
+          element={
+            <Navigate
+              to={getSettingsPath(SettingsPath.AccountsInstagram)}
+              replace
+            />
+          }
+        />
+        <Route
+          path={SettingsPath.AccountsInstagram}
+          element={<SettingsAccountsInstagram />}
+        />
+        <Route
+          path={SettingsPath.AccountsShopify}
+          element={<SettingsAccountsShopify />}
         />
         <Route
           path={SettingsPath.NewAccount}
@@ -742,7 +806,11 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         />
         <Route
           path={SettingsPath.PublicDomain}
-          element={<SettingPublicDomain />}
+          element={
+            <MyahTeamSettingsElementGuard fallbackPath={SettingsPath.General}>
+              <SettingPublicDomain />
+            </MyahTeamSettingsElementGuard>
+          }
         />
         <Route path={SettingsPath.LegalDpa} element={<SettingsLegalDpa />} />
         <Route
@@ -781,7 +849,11 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         />
         <Route
           path={SettingsPath.AiUsageUserDetail}
-          element={<SettingsAiUsageUserDetail />}
+          element={
+            <MyahTeamSettingsElementGuard fallbackPath={SettingsPath.AI}>
+              <SettingsAiUsageUserDetail />
+            </MyahTeamSettingsElementGuard>
+          }
         />
         <Route
           path={SettingsPath.AiToolDetail}
@@ -944,51 +1016,57 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
 
       <Route
         element={
-          <SettingsProtectedRouteWrapper
-            settingsPermission={PermissionFlagType.APPLICATIONS}
-          />
+          <MyahTeamSettingsRouteGuard fallbackPath={SettingsPath.General} />
         }
       >
         <Route
-          path={SettingsPath.Applications}
-          element={<SettingsApplications />}
-        />
-        <Route
-          path={SettingsPath.ApplicationDetail}
-          element={<SettingsApplicationDetails />}
-        />
-        <Route
-          path={SettingsPath.ApplicationConnectionDetail}
-          element={<SettingsApplicationConnectionDetail />}
-        />
-        <Route
-          path={SettingsPath.AvailableApplicationDetail}
-          element={<SettingsAvailableApplicationDetails />}
-        />
-        <Route
-          path={SettingsPath.ApplicationRegistrationDetail}
-          element={<SettingsApplicationRegistrationDetails />}
-        />
-        <Route
-          path={SettingsPath.ApplicationLogicFunctionDetail}
-          element={<SettingsLogicFunctionDetail />}
-        />
-        <Route
-          path={SettingsPath.ApplicationFrontComponentDetail}
-          element={<SettingsApplicationFrontComponentDetail />}
-        />
-        <Route
-          path={SettingsPath.ApplicationCommandMenuItemDetail}
-          element={<SettingsApplicationCommandMenuItemDetail />}
-        />
-        <Route
-          path={SettingsPath.ApplicationViewDetail}
-          element={<SettingsLayoutViewDetail />}
-        />
-        <Route
-          path={SettingsPath.ApplicationPageLayoutDetail}
-          element={<SettingsLayoutPageLayoutDetail />}
-        />
+          element={
+            <SettingsProtectedRouteWrapper
+              settingsPermission={PermissionFlagType.APPLICATIONS}
+            />
+          }
+        >
+          <Route
+            path={SettingsPath.Applications}
+            element={<SettingsApplications />}
+          />
+          <Route
+            path={SettingsPath.ApplicationDetail}
+            element={<SettingsApplicationDetails />}
+          />
+          <Route
+            path={SettingsPath.ApplicationConnectionDetail}
+            element={<SettingsApplicationConnectionDetail />}
+          />
+          <Route
+            path={SettingsPath.AvailableApplicationDetail}
+            element={<SettingsAvailableApplicationDetails />}
+          />
+          <Route
+            path={SettingsPath.ApplicationRegistrationDetail}
+            element={<SettingsApplicationRegistrationDetails />}
+          />
+          <Route
+            path={SettingsPath.ApplicationLogicFunctionDetail}
+            element={<SettingsLogicFunctionDetail />}
+          />
+          <Route
+            path={SettingsPath.ApplicationFrontComponentDetail}
+            element={<SettingsApplicationFrontComponentDetail />}
+          />
+          <Route
+            path={SettingsPath.ApplicationCommandMenuItemDetail}
+            element={<SettingsApplicationCommandMenuItemDetail />}
+          />
+          <Route
+            path={SettingsPath.ApplicationViewDetail}
+            element={<SettingsLayoutViewDetail />}
+          />
+          <Route
+            path={SettingsPath.ApplicationPageLayoutDetail}
+            element={<SettingsLayoutPageLayoutDetail />}
+          />
+        </Route>
       </Route>
 
       <Route
@@ -1017,69 +1095,81 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
 
       {isAdminPageEnabled && (
         <>
-          <Route path={SettingsPath.AdminPanel} element={<SettingsAdmin />} />
           <Route
-            path={SettingsPath.Enterprise}
             element={
-              <Navigate
-                to={getSettingsPath(SettingsPath.AdminPanelEnterprise)}
-                replace
-              />
+              <MyahTeamSettingsRouteGuard fallbackPath={SettingsPath.General} />
             }
-          />
+          >
+            <Route path={SettingsPath.AdminPanel} element={<SettingsAdmin />} />
+          </Route>
           <Route
-            path={SettingsPath.AdminPanelInferredVersion}
-            element={<SettingsAdminInferredVersion />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelInstanceStatus}
-            element={<SettingsAdminInstanceStatus />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelWorkspacesStatus}
-            element={<SettingsAdminWorkspacesStatus />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelIndicatorHealthStatus}
-            element={<SettingsAdminIndicatorHealthStatus />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelQueueDetail}
-            element={<SettingsAdminQueueDetail />}
-          />
+            element={
+              <MyahTeamSettingsRouteGuard fallbackPath={SettingsPath.General} />
+            }
+          >
+            <Route
+              path={SettingsPath.Enterprise}
+              element={
+                <Navigate
+                  to={getSettingsPath(SettingsPath.AdminPanelEnterprise)}
+                  replace
+                />
+              }
+            />
+            <Route
+              path={SettingsPath.AdminPanelInferredVersion}
+              element={<SettingsAdminInferredVersion />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelInstanceStatus}
+              element={<SettingsAdminInstanceStatus />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelWorkspacesStatus}
+              element={<SettingsAdminWorkspacesStatus />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelIndicatorHealthStatus}
+              element={<SettingsAdminIndicatorHealthStatus />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelQueueDetail}
+              element={<SettingsAdminQueueDetail />}
+            />
 
-          <Route
-            path={SettingsPath.AdminPanelConfigVariableDetails}
-            element={<SettingsAdminConfigVariableDetails />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelNewAiProvider}
-            element={<SettingsAdminNewAiProvider />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelNewAiModel}
-            element={<SettingsAdminNewAiModel />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelAiProviderDetail}
-            element={<SettingsAdminAiProviderDetail />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelUserDetail}
-            element={<SettingsAdminUserDetail />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelWorkspaceDetail}
-            element={<SettingsAdminWorkspaceDetail />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelApplicationRegistrationDetail}
-            element={<SettingsAdminApplicationRegistrationDetail />}
-          />
-          <Route
-            path={SettingsPath.AdminPanelWorkspaceChatThread}
-            element={<SettingsAdminWorkspaceChatThread />}
-          />
+            <Route
+              path={SettingsPath.AdminPanelConfigVariableDetails}
+              element={<SettingsAdminConfigVariableDetails />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelNewAiProvider}
+              element={<SettingsAdminNewAiProvider />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelNewAiModel}
+              element={<SettingsAdminNewAiModel />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelAiProviderDetail}
+              element={<SettingsAdminAiProviderDetail />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelUserDetail}
+              element={<SettingsAdminUserDetail />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelWorkspaceDetail}
+              element={<SettingsAdminWorkspaceDetail />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelApplicationRegistrationDetail}
+              element={<SettingsAdminApplicationRegistrationDetail />}
+            />
+            <Route
+              path={SettingsPath.AdminPanelWorkspaceChatThread}
+              element={<SettingsAdminWorkspaceChatThread />}
+            />
+          </Route>
         </>
       )}
 

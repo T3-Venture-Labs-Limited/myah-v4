@@ -2,6 +2,7 @@ import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useDebouncedCallback } from 'use-debounce';
 
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { authProvidersState } from '@/client-config/states/authProvidersState';
 import { isClickHouseConfiguredState } from '@/client-config/states/isClickHouseConfiguredState';
@@ -180,6 +181,7 @@ export const SettingsSecuritySettings = () => {
   const hasEnterpriseAccess =
     currentWorkspace?.hasValidEnterpriseValidityToken === true;
   const isEventLogsEnabled = hasEnterpriseAccess && isClickHouseConfigured;
+  const isMyahTeamUser = useIsMyahTeamUser();
 
   return (
     <>
@@ -235,41 +237,43 @@ export const SettingsSecuritySettings = () => {
             <ToggleImpersonate />
           </Section>
         )}
-        <Section>
-          <H2Title
-            title={t`Audit Logs`}
-            description={t`Configure how long audit logs are retained`}
-            adornment={<OrganizationAdornment />}
-          />
-          {hasEnterpriseAccess ? (
-            <Card rounded>
-              {isEventLogsEnabled ? (
-                <SettingsOptionCardContentCounter
-                  Icon={IconClockHour8}
-                  title={t`Log retention`}
-                  description={t`Number of days to retain audit logs (30-1095 days)`}
-                  value={currentWorkspace?.eventLogRetentionDays ?? 90}
-                  onChange={handleEventLogRetentionDaysChange}
-                  minValue={30}
-                  maxValue={1095}
-                  showButtons={false}
-                />
-              ) : (
-                <SettingsOptionCardContentButton
-                  Icon={IconHistory}
-                  title={t`Audit Logs`}
-                  description={t`ClickHouse is required for audit logs. Contact your administrator.`}
-                />
-              )}
-            </Card>
-          ) : (
-            <SettingsEnterpriseFeatureGateCard
-              title={t`Enterprise feature`}
-              description={t`Upgrade to Enterprise to access audit logs.`}
-              buttonTitle={t`Activate`}
+        {isMyahTeamUser && (
+          <Section>
+            <H2Title
+              title={t`Audit Logs`}
+              description={t`Configure how long audit logs are retained`}
+              adornment={<OrganizationAdornment />}
             />
-          )}
-        </Section>
+            {hasEnterpriseAccess ? (
+              <Card rounded>
+                {isEventLogsEnabled ? (
+                  <SettingsOptionCardContentCounter
+                    Icon={IconClockHour8}
+                    title={t`Log retention`}
+                    description={t`Number of days to retain audit logs (30-1095 days)`}
+                    value={currentWorkspace?.eventLogRetentionDays ?? 90}
+                    onChange={handleEventLogRetentionDaysChange}
+                    minValue={30}
+                    maxValue={1095}
+                    showButtons={false}
+                  />
+                ) : (
+                  <SettingsOptionCardContentButton
+                    Icon={IconHistory}
+                    title={t`Audit Logs`}
+                    description={t`ClickHouse is required for audit logs. Contact your administrator.`}
+                  />
+                )}
+              </Card>
+            ) : (
+              <SettingsEnterpriseFeatureGateCard
+                title={t`Enterprise feature`}
+                description={t`Upgrade to Enterprise to access audit logs.`}
+                buttonTitle={t`Activate`}
+              />
+            )}
+          </Section>
+        )}
         <Section>
           <H2Title title={t`Other`} description={t`Other security settings`} />
           <Card rounded>

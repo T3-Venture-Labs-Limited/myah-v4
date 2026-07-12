@@ -82,9 +82,7 @@ import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.ent
 import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { AdminPanelGuard } from 'src/engine/guards/admin-panel-guard';
-import { AdminPanelOrImpersonateGuard } from 'src/engine/guards/admin-panel-or-impersonate.guard';
 import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
-import { ServerLevelImpersonateGuard } from 'src/engine/guards/server-level-impersonate.guard';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
@@ -151,7 +149,7 @@ export class AdminPanelResolver {
     private readonly workspaceQueueService: MessageQueueService,
   ) {}
 
-  @UseGuards(AdminPanelOrImpersonateGuard)
+  @UseGuards(AdminPanelGuard)
   @Query(() => UserLookup)
   async userLookupAdminPanel(
     @Args() userLookupInput: UserLookupInput,
@@ -161,7 +159,7 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelOrImpersonateGuard)
+  @UseGuards(AdminPanelGuard)
   @Query(() => [AdminPanelRecentUserDTO])
   async adminPanelRecentUsers(
     @Args('searchTerm', {
@@ -174,7 +172,7 @@ export class AdminPanelResolver {
     return this.adminStatisticsService.getRecentUsers(searchTerm);
   }
 
-  @UseGuards(ServerLevelImpersonateGuard)
+  @UseGuards(AdminPanelGuard)
   @Query(() => [AdminPanelTopWorkspaceDTO])
   async adminPanelTopWorkspaces(
     @Args('searchTerm', {
@@ -774,7 +772,7 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(ServerLevelImpersonateGuard)
+  @UseGuards(AdminPanelGuard)
   @Query(() => UserLookup)
   async workspaceLookupAdminPanel(
     @Args('workspaceId', { type: () => UUIDScalarType }) workspaceId: string,
@@ -782,7 +780,7 @@ export class AdminPanelResolver {
     return this.adminUserLookupService.workspaceLookup(workspaceId);
   }
 
-  @UseGuards(ServerLevelImpersonateGuard)
+  @UseGuards(AdminPanelGuard)
   @Query(() => AdminPanelWorkspaceBillingDTO, { nullable: true })
   async workspaceBillingAdminPanel(
     @Args('workspaceId', { type: () => UUIDScalarType }) workspaceId: string,
@@ -790,7 +788,7 @@ export class AdminPanelResolver {
     return this.adminBillingService.getWorkspaceBilling(workspaceId);
   }
 
-  @UseGuards(ServerLevelImpersonateGuard)
+  @UseGuards(AdminPanelGuard)
   @Query(() => [AdminWorkspaceChatThreadDTO])
   async getAdminWorkspaceChatThreads(
     @Args('workspaceId', { type: () => UUIDScalarType }) workspaceId: string,
@@ -798,7 +796,7 @@ export class AdminPanelResolver {
     return this.adminChatService.getWorkspaceChatThreads(workspaceId);
   }
 
-  @UseGuards(ServerLevelImpersonateGuard)
+  @UseGuards(AdminPanelGuard)
   @Query(() => AdminChatThreadMessagesDTO)
   async getAdminChatThreadMessages(
     @Args('threadId', { type: () => UUIDScalarType }) threadId: string,

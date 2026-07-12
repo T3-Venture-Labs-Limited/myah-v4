@@ -82,7 +82,7 @@ export default {
         354,
         361,
         362,
-        488
+        489
     ],
     "types": {
         "BillingProductDTO": {
@@ -8553,6 +8553,26 @@ export default {
                     ]
                 }
             ],
+            "resolveAgentChatApproval": [
+                323,
+                {
+                    "threadId": [
+                        3,
+                        "UUID!"
+                    ],
+                    "messageId": [
+                        3,
+                        "UUID!"
+                    ],
+                    "decision": [
+                        479,
+                        "AgentChatApprovalDecisionInput!"
+                    ],
+                    "modelId": [
+                        1
+                    ]
+                }
+            ],
             "stopAgentChatStream": [
                 6,
                 {
@@ -8615,7 +8635,7 @@ export default {
                 316,
                 {
                     "input": [
-                        479,
+                        480,
                         "CreateSkillInput!"
                     ]
                 }
@@ -8624,7 +8644,7 @@ export default {
                 316,
                 {
                     "input": [
-                        480,
+                        481,
                         "UpdateSkillInput!"
                     ]
                 }
@@ -8682,7 +8702,7 @@ export default {
                 250,
                 {
                     "input": [
-                        481,
+                        482,
                         "GetAuthorizationUrlForSSOInput!"
                     ]
                 }
@@ -8848,7 +8868,7 @@ export default {
                 253,
                 {
                     "input": [
-                        482
+                        483
                     ]
                 }
             ],
@@ -9003,7 +9023,7 @@ export default {
                 6,
                 {
                     "input": [
-                        483,
+                        484,
                         "UpdateWorkspaceMemberSettingsInput!"
                     ]
                 }
@@ -9037,7 +9057,7 @@ export default {
                 223,
                 {
                     "input": [
-                        484,
+                        485,
                         "SetupOIDCSsoInput!"
                     ]
                 }
@@ -9046,7 +9066,7 @@ export default {
                 223,
                 {
                     "input": [
-                        485,
+                        486,
                         "SetupSAMLSsoInput!"
                     ]
                 }
@@ -9055,7 +9075,7 @@ export default {
                 219,
                 {
                     "input": [
-                        486,
+                        487,
                         "DeleteSsoInput!"
                     ]
                 }
@@ -9064,7 +9084,7 @@ export default {
                 220,
                 {
                     "input": [
-                        487,
+                        488,
                         "EditSsoInput!"
                     ]
                 }
@@ -9093,7 +9113,7 @@ export default {
                 312,
                 {
                     "type": [
-                        488,
+                        489,
                         "AnalyticsType!"
                     ],
                     "name": [
@@ -9133,7 +9153,7 @@ export default {
                 302,
                 {
                     "input": [
-                        489,
+                        490,
                         "CreateCalendarEventInput!"
                     ]
                 }
@@ -9142,7 +9162,7 @@ export default {
                 311,
                 {
                     "input": [
-                        490,
+                        491,
                         "SendEmailInput!"
                     ]
                 }
@@ -9164,7 +9184,7 @@ export default {
                         "String!"
                     ],
                     "connectionParameters": [
-                        492,
+                        493,
                         "EmailAccountConnectionParameters!"
                     ],
                     "id": [
@@ -9176,7 +9196,7 @@ export default {
                 169,
                 {
                     "input": [
-                        494,
+                        495,
                         "UpdateLabPublicFeatureFlagInput!"
                     ]
                 }
@@ -9216,7 +9236,7 @@ export default {
                 75,
                 {
                     "input": [
-                        495,
+                        496,
                         "CreateOneAppTokenInput!"
                     ]
                 }
@@ -11646,6 +11666,17 @@ export default {
                 1
             ]
         },
+        "AgentChatApprovalDecisionInput": {
+            "decision": [
+                1
+            ],
+            "comment": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
         "CreateSkillInput": {
             "id": [
                 3
@@ -11852,7 +11883,7 @@ export default {
                 1
             ],
             "files": [
-                491
+                492
             ],
             "__typename": [
                 1
@@ -11871,13 +11902,13 @@ export default {
         },
         "EmailAccountConnectionParameters": {
             "IMAP": [
-                493
+                494
             ],
             "SMTP": [
-                493
+                494
             ],
             "CALDAV": [
-                493
+                494
             ],
             "__typename": [
                 1
@@ -11916,7 +11947,7 @@ export default {
         },
         "CreateOneAppTokenInput": {
             "appToken": [
-                496
+                497
             ],
             "__typename": [
                 1
@@ -11944,7 +11975,7 @@ export default {
                 238,
                 {
                     "input": [
-                        498,
+                        499,
                         "LogicFunctionLogsInput!"
                     ]
                 }

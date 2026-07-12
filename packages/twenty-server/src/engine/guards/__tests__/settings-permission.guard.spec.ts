@@ -30,7 +30,9 @@ describe('SettingsPermissionGuard', () => {
       },
     };
 
-    mockExecutionContext = {} as ExecutionContext;
+    mockExecutionContext = {
+      getType: jest.fn(() => 'graphql'),
+    } as unknown as ExecutionContext;
 
     jest
       .spyOn(GqlExecutionContext, 'create')
@@ -73,6 +75,41 @@ describe('SettingsPermissionGuard', () => {
         setting: PermissionFlagType.WORKSPACE,
         workspaceId: 'workspace-id',
         apiKeyId: undefined,
+        applicationId: undefined,
+      });
+    });
+
+    it('should read auth context from REST requests', async () => {
+      mockPermissionsService.userHasWorkspaceSettingPermission.mockResolvedValue(
+        true,
+      );
+
+      const httpRequest = {
+        workspace: {
+          id: 'workspace-id',
+          activationStatus: WorkspaceActivationStatus.ACTIVE,
+        },
+        userWorkspaceId: 'user-workspace-id',
+        apiKey: { id: 'api-key-id' },
+      };
+      const httpExecutionContext = {
+        getType: jest.fn(() => 'http'),
+        switchToHttp: jest.fn(() => ({
+          getRequest: jest.fn(() => httpRequest),
+        })),
+      } as unknown as ExecutionContext;
+
+      const result = await guard.canActivate(httpExecutionContext);
+
+      expect(result).toBe(true);
+      expect(
+        mockPermissionsService.userHasWorkspaceSettingPermission,
+      ).toHaveBeenCalledWith({
+        userWorkspaceId: 'user-workspace-id',
+        setting: PermissionFlagType.WORKSPACE,
+        workspaceId: 'workspace-id',
+        apiKeyId: 'api-key-id',
+        applicationId: undefined,
       });
     });
 

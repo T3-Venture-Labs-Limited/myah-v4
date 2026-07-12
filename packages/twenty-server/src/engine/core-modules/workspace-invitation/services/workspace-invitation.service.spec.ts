@@ -44,6 +44,7 @@ describe('WorkspaceInvitationService', () => {
   let twentyConfigService: TwentyConfigService;
   let emailService: EmailService;
   let onboardingService: OnboardingService;
+  let roleValidationService: RoleValidationService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -142,6 +143,9 @@ describe('WorkspaceInvitationService', () => {
     twentyConfigService = module.get<TwentyConfigService>(TwentyConfigService);
     emailService = module.get<EmailService>(EmailService);
     onboardingService = module.get<OnboardingService>(OnboardingService);
+    roleValidationService = module.get<RoleValidationService>(
+      RoleValidationService,
+    );
   });
 
   it('should be defined', () => {
@@ -324,6 +328,88 @@ describe('WorkspaceInvitationService', () => {
         onboardingService.isOnboardingInviteTeamPending,
       ).toHaveBeenCalledWith({ workspaceId: workspace.id });
     });
+
+    it('should validate and preserve the selected role when sending invitations', async () => {
+      const workspace = {
+        id: 'workspace-id',
+        inviteHash: 'invite-hash',
+        displayName: 'Test Workspace',
+      } as WorkspaceEntity;
+      const sender = {
+        userEmail: 'sender@example.com',
+        name: { firstName: 'Sender' },
+        locale: 'en',
+      };
+      const selectedRoleId = 'selected-role-id';
+
+      const createWorkspaceInvitationSpy = jest
+        .spyOn(service, 'createWorkspaceInvitation')
+        .mockResolvedValue({
+          context: { email: 'test1@example.com', roleId: selectedRoleId },
+          value: 'token-value',
+          type: AppTokenType.InvitationToken,
+        } as AppTokenEntity);
+      jest
+        .spyOn(twentyConfigService, 'get')
+        .mockReturnValue('http://localhost:3000');
+      jest.spyOn(emailService, 'send').mockResolvedValue({} as any);
+
+      await service.sendInvitations(
+        ['test1@example.com'],
+        workspace,
+        sender as WorkspaceMemberWorkspaceEntity,
+        selectedRoleId,
+      );
+
+      expect(
+        roleValidationService.validateRoleAssignableToUsersOrThrow,
+      ).toHaveBeenCalledWith(selectedRoleId, workspace.id);
+      expect(createWorkspaceInvitationSpy).toHaveBeenCalledWith(
+        'test1@example.com',
+        workspace,
+        selectedRoleId,
+        false,
+      );
+    });
+  });
+
+  describe('generateInvitationToken', () => {
+    it('should store the selected role in the invitation context', async () => {
+      const selectedRoleId = 'selected-role-id';
+
+      jest
+        .spyOn(twentyConfigService, 'get')
+        .mockImplementation((key: any) =>
+          key === 'INVITATION_TOKEN_EXPIRES_IN' ? '1h' : undefined,
+        );
+      jest.spyOn(appTokenRepository, 'create').mockReturnValue({
+        id: 'app-token-id',
+        value: 'token-value',
+        context: { email: 'test@example.com', roleId: selectedRoleId },
+      } as AppTokenEntity);
+      jest.spyOn(appTokenRepository, 'save').mockResolvedValue({
+        id: 'app-token-id',
+        value: 'token-value',
+        context: { email: 'test@example.com', roleId: selectedRoleId },
+      } as AppTokenEntity);
+
+      await service.generateInvitationToken(
+        'workspace-id',
+        'test@example.com',
+        selectedRoleId,
+      );
+
+      expect(appTokenRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 'workspace-id',
+          type: AppTokenType.InvitationToken,
+          context: {
+            email: 'test@example.com',
+            roleId: selectedRoleId,
+          },
+        }),
+      );
+    });
   });
 
   describe('resendWorkspaceInvitation', () => {
@@ -365,6 +451,44 @@ describe('WorkspaceInvitationService', () => {
       expect(
         onboardingService.isOnboardingInviteTeamPending,
       ).not.toHaveBeenCalled();
+    });
+
+    it('should preserve the selected role when resending an invitation', async () => {
+      const workspace = {
+        id: 'workspace-id',
+        inviteHash: 'invite-hash',
+        displayName: 'Test Workspace',
+      } as WorkspaceEntity;
+      const sender = {
+        userEmail: 'sender@example.com',
+        name: { firstName: 'Sender' },
+        locale: 'en',
+      };
+      const selectedRoleId = 'selected-role-id';
+
+      jest.spyOn(appTokenRepository, 'findOne').mockResolvedValue({
+        id: 'app-token-id',
+        type: AppTokenType.InvitationToken,
+        context: { email: 'test1@example.com', roleId: selectedRoleId },
+      } as AppTokenEntity);
+      jest.spyOn(appTokenRepository, 'delete').mockResolvedValue({} as any);
+      const sendInvitationsSpy = jest
+        .spyOn(service, 'sendInvitations')
+        .mockResolvedValue({ success: true, errors: [], result: [] });
+
+      await service.resendWorkspaceInvitation(
+        'app-token-id',
+        workspace,
+        sender as WorkspaceMemberWorkspaceEntity,
+      );
+
+      expect(sendInvitationsSpy).toHaveBeenCalledWith(
+        ['test1@example.com'],
+        workspace,
+        sender,
+        selectedRoleId,
+        false,
+      );
     });
   });
 });

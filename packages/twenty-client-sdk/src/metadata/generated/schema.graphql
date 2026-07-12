@@ -3452,6 +3452,7 @@ type Mutation {
   sendChatMessage(threadId: UUID!, text: String!, messageId: UUID!, browsingContext: JSON, modelId: String, fileAttachments: [FileAttachmentInput!]): SendChatMessageResult!
   retryChatMessage(threadId: UUID!, modelId: String): SendChatMessageResult!
   answerAgentChatQuestion(threadId: UUID!, messageId: UUID!, answers: [AgentChatQuestionAnswerInput!]!, modelId: String): SendChatMessageResult!
+  resolveAgentChatApproval(threadId: UUID!, messageId: UUID!, decision: AgentChatApprovalDecisionInput!, modelId: String): SendChatMessageResult!
   stopAgentChatStream(threadId: UUID!): Boolean!
   renameChatThread(id: UUID!, title: String!): AgentChatThread!
   archiveChatThread(id: UUID!): AgentChatThread!
@@ -4560,6 +4561,11 @@ input AgentChatQuestionAnswerInput {
   questionIndex: Int!
   selectedOptionIndices: [Int!]!
   freeText: String
+}
+
+input AgentChatApprovalDecisionInput {
+  decision: String!
+  comment: String
 }
 
 input CreateSkillInput {
