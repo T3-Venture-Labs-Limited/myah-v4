@@ -1,4 +1,5 @@
 import { canManageFeatureFlagsState } from '@/client-config/states/canManageFeatureFlagsState';
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
 import { useApolloAdminClient } from '@/settings/admin-panel/apollo/hooks/useApolloAdminClient';
 import { SettingsSectionSkeletonLoader } from '@/settings/components/SettingsSectionSkeletonLoader';
@@ -19,7 +20,6 @@ import { useDebounce } from 'use-debounce';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
 
-import { currentUserState } from '@/auth/states/currentUserState';
 import { Avatar } from 'twenty-ui/data-display';
 import { IconChevronRight } from 'twenty-ui/icon';
 import { OverflowingTextWithTooltip } from 'twenty-ui/surfaces';
@@ -54,17 +54,17 @@ export const SettingsAdminGeneral = () => {
   const [workspaceSearchTerm, setWorkspaceSearchTerm] = useState('');
   const [debouncedWorkspaceSearchTerm] = useDebounce(workspaceSearchTerm, 300);
 
-  const currentUser = useAtomStateValue(currentUserState);
-  const canAccessFullAdminPanel = currentUser?.canAccessFullAdminPanel;
-  const canImpersonate = currentUser?.canImpersonate;
+  const isMyahTeamUser = useIsMyahTeamUser();
   const canManageFeatureFlags = useAtomStateValue(canManageFeatureFlagsState);
+  const canAccessInternalAdminPanel = isMyahTeamUser;
+  const canAccessInternalImpersonation = isMyahTeamUser;
 
   const { data: recentUsersData, loading: isLoadingUsers } = useQuery(
     AdminPanelRecentUsersDocument,
     {
       client: apolloAdminClient,
       variables: { searchTerm: debouncedUserSearchTerm },
-      skip: !canImpersonate && !canAccessFullAdminPanel,
+      skip: !canAccessInternalImpersonation && !canAccessInternalAdminPanel,
     },
   );
 
@@ -73,7 +73,7 @@ export const SettingsAdminGeneral = () => {
     {
       client: apolloAdminClient,
       variables: { searchTerm: debouncedWorkspaceSearchTerm },
-      skip: !canImpersonate,
+      skip: !canAccessInternalImpersonation,
     },
   );
 
@@ -82,7 +82,7 @@ export const SettingsAdminGeneral = () => {
 
   return (
     <>
-      {canAccessFullAdminPanel && (
+      {canAccessInternalAdminPanel && (
         <>
           <Section>
             <H2Title
@@ -95,7 +95,7 @@ export const SettingsAdminGeneral = () => {
         </>
       )}
 
-      {(canImpersonate || canAccessFullAdminPanel) && (
+      {(canAccessInternalImpersonation || canAccessInternalAdminPanel) && (
         <Section>
           <H2Title
             title={t`Recent Users`}
@@ -197,7 +197,7 @@ export const SettingsAdminGeneral = () => {
         </Section>
       )}
 
-      {canImpersonate && (
+      {canAccessInternalImpersonation && (
         <Section>
           <H2Title
             title={t`Top Workspaces`}

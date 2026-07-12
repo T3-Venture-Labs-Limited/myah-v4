@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import {
+  type ApprovalDecision,
   ASK_QUESTIONS_TOOL_NAME,
   type AskQuestionAnswer,
   type AskQuestionItem,
   type AskQuestionsToolResult,
   ExtendedUIMessage,
+  REQUEST_APPROVAL_TOOL_NAME,
+  type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 import { isDefined } from 'twenty-shared/utils';
 import { In, IsNull, Not } from 'typeorm';
@@ -36,6 +39,17 @@ import { toDisplayCredits } from 'src/engine/core-modules/usage/utils/to-display
 import { AiChatFileAttachment } from 'src/engine/metadata-modules/ai/ai-chat/types/ai-chat-file-attachment.type';
 import { AgentTitleGenerationService } from './agent-title-generation.service';
 import { AgentChatThreadDTO } from '../dtos/agent-chat-thread.dto';
+
+const APPROVAL_DECISIONS = [
+  'approved',
+  'rejected',
+  'changes_requested',
+] as const satisfies ApprovalDecision[];
+
+type AgentChatApprovalDecision = {
+  decision: ApprovalDecision | string;
+  comment?: string;
+};
 
 const serializeThreadForBroadcast = (
   thread: AgentChatThreadEntity,
@@ -667,6 +681,163 @@ export class AgentChatService {
         { pendingQuestionMessageId: messageId, activeStreamId: null },
       )
       .catch(() => {});
+  }
+
+  async resolvePendingApproval({
+    threadId,
+    messageId,
+    decision,
+    streamId,
+    workspaceId,
+  }: {
+    threadId: string;
+    messageId: string;
+    decision: AgentChatApprovalDecision;
+    streamId: string;
+    workspaceId: string;
+  }): Promise<{
+    turnId: string | null;
+    rollback: { partId: string; previousOutput: Record<string, unknown> };
+    shouldResume: boolean;
+  }> {
+    if (!APPROVAL_DECISIONS.includes(decision.decision as ApprovalDecision)) {
+      throw new AiException(
+        'Invalid approval decision.',
+        AiExceptionCode.INVALID_APPROVAL_DECISION,
+      );
+    }
+
+    const message = await this.messageRepository.findOne(workspaceId, {
+      where: { id: messageId, threadId },
+      relations: ['parts'],
+    });
+
+    if (!message) {
+      throw new AiException(
+        'Approval message not found',
+        AiExceptionCode.MESSAGE_NOT_FOUND,
+      );
+    }
+
+    const pendingHumanInputParts = (message.parts ?? []).filter((part) => {
+      if (
+        part.toolName !== ASK_QUESTIONS_TOOL_NAME &&
+        part.toolName !== REQUEST_APPROVAL_TOOL_NAME
+      ) {
+        return false;
+      }
+
+      const result = (
+        part.toolOutput as { result?: { status?: string } } | null
+      )?.result;
+
+      return result?.status === 'pending';
+    });
+
+    if (pendingHumanInputParts.length !== 1) {
+      throw new AiException(
+        'Expected exactly one pending approval request.',
+        AiExceptionCode.APPROVAL_NOT_PENDING,
+      );
+    }
+
+    const pendingPart = pendingHumanInputParts[0];
+
+    if (pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME) {
+      throw new AiException(
+        'No pending approval request to resolve.',
+        AiExceptionCode.APPROVAL_NOT_PENDING,
+      );
+    }
+
+    const previousOutput =
+      (pendingPart.toolOutput as Record<string, unknown> | null) ?? {};
+    const previousResult = previousOutput.result as
+      | RequestApprovalToolResult
+      | undefined;
+
+    if (previousResult?.status !== 'pending') {
+      throw new AiException(
+        'No pending approval request to resolve.',
+        AiExceptionCode.APPROVAL_NOT_PENDING,
+      );
+    }
+
+    const shouldResume = decision.decision === 'approved';
+
+    const claim = await this.threadRepository.update(
+      workspaceId,
+      { id: threadId, pendingQuestionMessageId: messageId },
+      {
+        pendingQuestionMessageId: null,
+        activeStreamId: shouldResume ? streamId : null,
+      },
+    );
+
+    if ((claim.affected ?? 0) === 0) {
+      throw new AiException(
+        'No pending approval request to resolve.',
+        AiExceptionCode.APPROVAL_NOT_PENDING,
+      );
+    }
+
+    try {
+      await this.messagePartRepository.update(
+        workspaceId,
+        { id: pendingPart.id },
+        {
+          toolOutput: {
+            ...previousOutput,
+            success: true,
+            message: 'User resolved the approval request.',
+            result: {
+              request: previousResult.request,
+              status: 'resolved',
+              decision: decision.decision as ApprovalDecision,
+              comment: decision.comment,
+              decidedAt: new Date().toISOString(),
+            } satisfies RequestApprovalToolResult,
+          },
+        },
+      );
+    } catch (error) {
+      await this.threadRepository
+        .update(
+          workspaceId,
+          { id: threadId, activeStreamId: streamId },
+          { pendingQuestionMessageId: messageId, activeStreamId: null },
+        )
+        .catch(() => {});
+      throw error;
+    }
+
+    return {
+      turnId: message.turnId,
+      rollback: { partId: pendingPart.id, previousOutput },
+      shouldResume,
+    };
+  }
+
+  async restorePendingApproval({
+    threadId,
+    messageId,
+    streamId,
+    workspaceId,
+    rollback,
+  }: {
+    threadId: string;
+    messageId: string;
+    streamId: string;
+    workspaceId: string;
+    rollback: { partId: string; previousOutput: Record<string, unknown> };
+  }): Promise<void> {
+    await this.restorePendingQuestion({
+      threadId,
+      messageId,
+      streamId,
+      workspaceId,
+      rollback,
+    });
   }
 
   private validateQuestionAnswers(

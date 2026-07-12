@@ -53,5 +53,6 @@ export enum MetricsKeys {
   AiChatTurnLatencyMs = 'ai-chat/turn-latency-ms',
   AiChatStepLatencyMs = 'ai-chat/step-latency-ms',
   AiChatTtftMs = 'ai-chat/ttft-ms',
+  AiChatBrandBrainPreflightMs = 'ai-chat/brand-brain-preflight-ms',
   WorkspaceMetadataCacheLocalEviction = 'workspace-metadata-cache/local-eviction',
 }

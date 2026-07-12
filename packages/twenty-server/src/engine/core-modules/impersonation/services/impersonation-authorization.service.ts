@@ -4,6 +4,8 @@ import { PermissionFlagType } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
 
 import { userHasAdminPrivileges } from 'src/engine/core-modules/impersonation/utils/user-has-admin-privileges.util';
+import { isMyahTeamUser } from 'src/engine/core-modules/myah/utils/is-myah-team-user.util';
+
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { twoFactorAuthenticationMethodsValidator } from 'src/engine/core-modules/two-factor-authentication/two-factor-authentication.validation';
@@ -55,7 +57,12 @@ export class ImpersonationAuthorizationService {
 
     if (level === 'server') {
       const hasServerLevelImpersonatePermission =
-        impersonatorUserWorkspace.user.canImpersonate === true &&
+        (isMyahTeamUser({
+          user: impersonatorUserWorkspace.user,
+          allowedEmails: process.env.MYAH_TEAM_ALLOWED_EMAILS,
+          allowedEmailDomains: process.env.MYAH_TEAM_ALLOWED_DOMAINS,
+        }) ||
+          impersonatorUserWorkspace.user.canImpersonate === true) &&
         targetUserWorkspace.workspace.allowImpersonation === true;
 
       if (!hasServerLevelImpersonatePermission) {

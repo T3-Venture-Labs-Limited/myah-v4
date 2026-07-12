@@ -7,6 +7,7 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { AiChatBanner } from '@/ai/components/AiChatBanner';
 import { AiChatEmptyState } from '@/ai/components/AiChatEmptyState';
+import { AiChatApprovalCard } from '@/ai/components/AiChatApprovalCard';
 import { AiChatQuestionCard } from '@/ai/components/AiChatQuestionCard';
 import { AIChatNoMoreBillingCreditsBanner } from '@/ai/components/AIChatNoMoreBillingCreditsBanner';
 import { AiChatStandaloneError } from '@/ai/components/AiChatStandaloneError';
@@ -21,6 +22,7 @@ import { useAiChatEditor } from '@/ai/hooks/useAiChatEditor';
 import { useAiModelOptions } from '@/ai/hooks/useAiModelOptions';
 import { useWorkspaceAiModelAvailability } from '@/ai/hooks/useWorkspaceAiModelAvailability';
 import { agentChatUserSelectedModelState } from '@/ai/states/agentChatUserSelectedModelState';
+import { agentChatPendingApprovalComponentSelector } from '@/ai/states/selectors/agentChatPendingApprovalComponentSelector';
 import { agentChatPendingQuestionComponentSelector } from '@/ai/states/selectors/agentChatPendingQuestionComponentSelector';
 import { Select } from '@/ui/input/components/Select';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
@@ -145,6 +147,9 @@ export const AiChatEditorSection = () => {
   const pendingQuestion = useAtomComponentSelectorValue(
     agentChatPendingQuestionComponentSelector,
   );
+  const pendingApproval = useAtomComponentSelectorValue(
+    agentChatPendingApprovalComponentSelector,
+  );
 
   return (
     <>
@@ -164,7 +169,9 @@ export const AiChatEditorSection = () => {
         {hasReachedCurrentBillingPeriodCap && (
           <AIChatNoMoreBillingCreditsBanner />
         )}
-        {isDefined(pendingQuestion) ? (
+        {isDefined(pendingApproval) ? (
+          <AiChatApprovalCard pendingApproval={pendingApproval} />
+        ) : isDefined(pendingQuestion) ? (
           <AiChatQuestionCard pendingQuestion={pendingQuestion} />
         ) : (
           <StyledInputBox>

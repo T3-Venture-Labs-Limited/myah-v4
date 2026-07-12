@@ -4,6 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
+import { IconBrandInstagram } from 'twenty-ui/icon';
 import {
   type Billing,
   OnboardingStatus,
@@ -49,6 +50,19 @@ const mockBilling: Billing = {
   __typename: 'Billing',
 };
 
+const allWorkspaceSettingsPermissions = {
+  [PermissionFlagType.WORKSPACE]: true,
+  [PermissionFlagType.WORKSPACE_MEMBERS]: true,
+  [PermissionFlagType.DATA_MODEL]: true,
+  [PermissionFlagType.LAYOUTS]: true,
+  [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: true,
+  [PermissionFlagType.APPLICATIONS]: true,
+  [PermissionFlagType.AI_SETTINGS]: true,
+  [PermissionFlagType.ROLES]: true,
+  [PermissionFlagType.SECURITY]: true,
+  [PermissionFlagType.CONNECTED_ACCOUNTS]: true,
+};
+
 const Wrapper = ({ children }: { children: ReactNode }) => (
   <MockedProvider>
     <JotaiProvider store={jotaiStore}>
@@ -87,7 +101,10 @@ describe('useSettingsNavigationItems', () => {
       [PermissionFlagType.WORKSPACE]: false,
       [PermissionFlagType.WORKSPACE_MEMBERS]: false,
       [PermissionFlagType.DATA_MODEL]: false,
+      [PermissionFlagType.LAYOUTS]: false,
       [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: false,
+      [PermissionFlagType.APPLICATIONS]: false,
+      [PermissionFlagType.AI_SETTINGS]: false,
       [PermissionFlagType.ROLES]: false,
       [PermissionFlagType.SECURITY]: false,
       [PermissionFlagType.CONNECTED_ACCOUNTS]: false,
@@ -105,15 +122,9 @@ describe('useSettingsNavigationItems', () => {
   });
 
   it('should show workspace settings when has permissions', () => {
-    (usePermissionFlagMap as jest.Mock).mockImplementation(() => ({
-      [PermissionFlagType.WORKSPACE]: true,
-      [PermissionFlagType.WORKSPACE_MEMBERS]: true,
-      [PermissionFlagType.DATA_MODEL]: true,
-      [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: true,
-      [PermissionFlagType.ROLES]: true,
-      [PermissionFlagType.SECURITY]: true,
-      [PermissionFlagType.CONNECTED_ACCOUNTS]: true,
-    }));
+    (usePermissionFlagMap as jest.Mock).mockImplementation(
+      () => allWorkspaceSettingsPermissions,
+    );
 
     const { result } = renderHook(() => useSettingsNavigationItems(), {
       wrapper: Wrapper,
@@ -127,15 +138,9 @@ describe('useSettingsNavigationItems', () => {
   });
 
   it('should hide billing navigation when billing is disabled', () => {
-    (usePermissionFlagMap as jest.Mock).mockImplementation(() => ({
-      [PermissionFlagType.WORKSPACE]: true,
-      [PermissionFlagType.WORKSPACE_MEMBERS]: true,
-      [PermissionFlagType.DATA_MODEL]: true,
-      [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: true,
-      [PermissionFlagType.ROLES]: true,
-      [PermissionFlagType.SECURITY]: true,
-      [PermissionFlagType.CONNECTED_ACCOUNTS]: true,
-    }));
+    (usePermissionFlagMap as jest.Mock).mockImplementation(
+      () => allWorkspaceSettingsPermissions,
+    );
 
     const { result } = renderHook(() => useSettingsNavigationItems(), {
       wrapper: Wrapper,
@@ -155,15 +160,9 @@ describe('useSettingsNavigationItems', () => {
   it('should hide billing navigation until billing config is loaded', () => {
     jotaiStore.set(billingState.atom, null);
 
-    (usePermissionFlagMap as jest.Mock).mockImplementation(() => ({
-      [PermissionFlagType.WORKSPACE]: true,
-      [PermissionFlagType.WORKSPACE_MEMBERS]: true,
-      [PermissionFlagType.DATA_MODEL]: true,
-      [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: true,
-      [PermissionFlagType.ROLES]: true,
-      [PermissionFlagType.SECURITY]: true,
-      [PermissionFlagType.CONNECTED_ACCOUNTS]: true,
-    }));
+    (usePermissionFlagMap as jest.Mock).mockImplementation(
+      () => allWorkspaceSettingsPermissions,
+    );
 
     const { result } = renderHook(() => useSettingsNavigationItems(), {
       wrapper: Wrapper,
@@ -184,7 +183,10 @@ describe('useSettingsNavigationItems', () => {
       [PermissionFlagType.WORKSPACE]: false,
       [PermissionFlagType.WORKSPACE_MEMBERS]: false,
       [PermissionFlagType.DATA_MODEL]: false,
+      [PermissionFlagType.LAYOUTS]: false,
       [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: false,
+      [PermissionFlagType.APPLICATIONS]: false,
+      [PermissionFlagType.AI_SETTINGS]: false,
       [PermissionFlagType.ROLES]: false,
       [PermissionFlagType.SECURITY]: false,
       [PermissionFlagType.CONNECTED_ACCOUNTS]: false,
@@ -205,5 +207,142 @@ describe('useSettingsNavigationItems', () => {
         .filter((item) => item.path !== SettingsPath.Accounts)
         .every((item) => !item.isHidden),
     ).toBe(true);
+  });
+
+  it('should use the Instagram brand icon for the Instagram settings account item', () => {
+    (usePermissionFlagMap as jest.Mock).mockImplementation(() => ({
+      [PermissionFlagType.WORKSPACE]: true,
+      [PermissionFlagType.WORKSPACE_MEMBERS]: true,
+      [PermissionFlagType.DATA_MODEL]: true,
+      [PermissionFlagType.API_KEYS_AND_WEBHOOKS]: true,
+      [PermissionFlagType.ROLES]: true,
+      [PermissionFlagType.SECURITY]: true,
+      [PermissionFlagType.CONNECTED_ACCOUNTS]: true,
+    }));
+
+    const { result } = renderHook(() => useSettingsNavigationItems(), {
+      wrapper: Wrapper,
+    });
+
+    const userSection = result.current.find(
+      (section) => section.label === 'User',
+    );
+    const accountsItem = userSection?.items.find(
+      (item) => item.path === SettingsPath.Accounts,
+    );
+    const instagramItem = accountsItem?.subItems?.find(
+      (item) => item.path === SettingsPath.AccountsInstagram,
+    );
+
+    expect(instagramItem?.Icon).toBe(IconBrandInstagram);
+  });
+
+  it('should hide Myah-owned settings surfaces from customer Admins', () => {
+    (usePermissionFlagMap as jest.Mock).mockImplementation(
+      () => allWorkspaceSettingsPermissions,
+    );
+
+    const { result } = renderHook(() => useSettingsNavigationItems(), {
+      wrapper: Wrapper,
+    });
+
+    const workspaceSection = result.current.find(
+      (section) => section.label === 'Workspace',
+    );
+    const otherSection = result.current.find(
+      (section) => section.label === 'Other',
+    );
+
+    expect(
+      workspaceSection?.items.find(
+        (item) => item.path === SettingsPath.Applications,
+      )?.isHidden,
+    ).toBe(true);
+    expect(
+      otherSection?.items.find((item) => item.path === SettingsPath.AdminPanel)
+        ?.isHidden,
+    ).toBe(true);
+    expect(
+      workspaceSection?.items.find((item) => item.path === SettingsPath.Objects)
+        ?.isHidden,
+    ).toBe(false);
+    expect(
+      workspaceSection?.items.find((item) => item.path === SettingsPath.Layout)
+        ?.isHidden,
+    ).toBe(false);
+    expect(
+      workspaceSection?.items.find(
+        (item) => item.path === SettingsPath.WorkspaceMembersPage,
+      )?.isHidden,
+    ).toBe(false);
+    expect(
+      workspaceSection?.items.find(
+        (item) => item.path === SettingsPath.ApiWebhooks,
+      )?.isHidden,
+    ).toBe(false);
+    expect(
+      workspaceSection?.items.find((item) => item.path === SettingsPath.AI)
+        ?.isHidden,
+    ).toBe(false);
+  });
+
+  it('should show Myah-owned settings surfaces to allowlisted Myah Team users', () => {
+    jotaiStore.set(currentUserState.atom, {
+      ...mockCurrentUser,
+      email: 'operator@t3labs.io',
+    });
+    (usePermissionFlagMap as jest.Mock).mockImplementation(
+      () => allWorkspaceSettingsPermissions,
+    );
+
+    const { result } = renderHook(() => useSettingsNavigationItems(), {
+      wrapper: Wrapper,
+    });
+
+    const workspaceSection = result.current.find(
+      (section) => section.label === 'Workspace',
+    );
+    const otherSection = result.current.find(
+      (section) => section.label === 'Other',
+    );
+
+    expect(
+      workspaceSection?.items.find(
+        (item) => item.path === SettingsPath.Applications,
+      )?.isHidden,
+    ).toBe(false);
+    expect(
+      otherSection?.items.find((item) => item.path === SettingsPath.AdminPanel)
+        ?.isHidden,
+    ).toBe(false);
+  });
+
+  it('should not expose the global Admin Panel to non-Myah Team server-flag users', () => {
+    (usePermissionFlagMap as jest.Mock).mockImplementation(
+      () => allWorkspaceSettingsPermissions,
+    );
+
+    for (const userPatch of [
+      { canAccessFullAdminPanel: true },
+      { canImpersonate: true },
+    ]) {
+      jotaiStore.set(currentUserState.atom, {
+        ...mockCurrentUser,
+        ...userPatch,
+      });
+
+      const { result } = renderHook(() => useSettingsNavigationItems(), {
+        wrapper: Wrapper,
+      });
+      const otherSection = result.current.find(
+        (section) => section.label === 'Other',
+      );
+
+      expect(
+        otherSection?.items.find(
+          (item) => item.path === SettingsPath.AdminPanel,
+        )?.isHidden,
+      ).toBe(true);
+    }
   });
 });

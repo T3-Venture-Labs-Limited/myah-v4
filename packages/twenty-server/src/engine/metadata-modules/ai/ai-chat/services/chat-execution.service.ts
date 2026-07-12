@@ -62,9 +62,20 @@ import {
   ASK_QUESTIONS_TOOL_NAME,
   createAskQuestionsTool,
 } from 'src/engine/metadata-modules/ai/ai-chat/tools/ask-questions.tool';
+import {
+  createRequestApprovalTool,
+  REQUEST_APPROVAL_TOOL_NAME,
+} from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 import { MessagePruningService } from 'src/engine/metadata-modules/ai/ai-chat/services/message-pruning.service';
+import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { type ExtractedFile } from 'src/engine/metadata-modules/ai/ai-chat/types/extracted-file.type';
+import {
+  getApprovedResumeActiveToolNames,
+  getPreApprovalExcludedToolNames,
+  hasLatestMessageApprovedApproval,
+} from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
+import { assertHumanInputToolCallIsExclusive } from 'src/engine/metadata-modules/ai/ai-chat/utils/assert-human-input-tool-call-is-exclusive.util';
 import { extractCodeInterpreterFiles } from 'src/engine/metadata-modules/ai/ai-chat/utils/extract-code-interpreter-files.util';
 import {
   getCacheProviderOptions,
@@ -85,6 +96,7 @@ export type ChatExecutionOptions = {
   threadId?: string;
   messages: UIMessage<unknown, UIDataTypes, UITools>[];
   browsingContext: BrowsingContextType | null;
+  lastUserMessageText?: string;
   onCodeExecutionUpdate?: CodeExecutionStreamEmitter;
   onCompaction?: () => void;
   modelId?: string;
@@ -113,6 +125,7 @@ export class ChatExecutionService {
     private readonly systemPromptBuilder: SystemPromptBuilderService,
     private readonly exceptionHandlerService: ExceptionHandlerService,
     private readonly nativeToolBinder: NativeToolBinderService,
+    private readonly brandBrainPreflightService: BrandBrainPreflightService,
     private readonly messagePruningService: MessagePruningService,
     private readonly metricsService: MetricsService,
   ) {}
@@ -123,6 +136,7 @@ export class ChatExecutionService {
     threadId,
     messages,
     browsingContext,
+    lastUserMessageText,
     onCodeExecutionUpdate,
     onCompaction,
     modelId,
@@ -201,17 +215,25 @@ export class ChatExecutionService {
       ...nativeTools,
     };
 
+    const isApprovedApprovalResume = hasLatestMessageApprovedApproval(messages);
+
     const preloadedToolNames = [
       ...Object.keys(preloadedTools),
       ...Object.keys(nativeTools),
       ASK_QUESTIONS_TOOL_NAME,
+      ...(isApprovedApprovalResume ? [] : [REQUEST_APPROVAL_TOOL_NAME]),
     ];
+
+    const preApprovalExcludedToolNames = isApprovedApprovalResume
+      ? new Set<string>()
+      : getPreApprovalExcludedToolNames(toolCatalog);
 
     // ToolSet is constant for the entire conversation — no mutation.
     // learn_tools returns schemas as text; execute_tool dispatches via the registry.
     const activeTools: ToolSet = {
       ...directTools,
       [ASK_QUESTIONS_TOOL_NAME]: createAskQuestionsTool(),
+      [REQUEST_APPROVAL_TOOL_NAME]: createRequestApprovalTool(),
       [LEARN_TOOLS_TOOL_NAME]: createLearnToolsTool(
         this.toolRegistry,
         toolContext,
@@ -219,7 +241,11 @@ export class ChatExecutionService {
       [EXECUTE_TOOL_TOOL_NAME]: createExecuteToolTool(
         this.toolRegistry,
         toolContext,
-        { compactOutput: true, spillLargeOutput: true },
+        {
+          compactOutput: true,
+          excludeTools: preApprovalExcludedToolNames,
+          spillLargeOutput: true,
+        },
       ),
       [LOAD_SKILL_TOOL_NAME]: createLoadSkillTool(
         (skillNames) =>
@@ -233,6 +259,68 @@ export class ChatExecutionService {
         },
       ),
     };
+
+    // Tool executions are concurrent in the AI SDK. Buffer each invocation
+    // until the model has emitted the complete step, so a human-input call
+    // can never race a side-effecting tool from that same step.
+    const toolCallsByStep = new Map<number, Set<string>>();
+    const rejectedSteps = new Set<number>();
+    const stepGates = new Map<
+      number,
+      { promise: Promise<void>; resolve: () => void }
+    >();
+    let currentToolExecutionStep = 0;
+    const getStepGate = (stepNumber: number) => {
+      const existingGate = stepGates.get(stepNumber);
+
+      if (existingGate) {
+        return existingGate;
+      }
+
+      let resolveGate!: () => void;
+      const gate = {
+        promise: new Promise<void>((resolve) => {
+          resolveGate = resolve;
+        }),
+        resolve: resolveGate,
+      };
+
+      stepGates.set(stepNumber, gate);
+      // Tool-call start callbacks for the rest of the step are delivered
+      // before the next macrotask. Waiting here buffers all of them.
+      setTimeout(() => gate.resolve(), 0);
+
+      return gate;
+    };
+    const guardedTools: ToolSet = Object.fromEntries(
+      Object.entries(activeTools).map(([name, tool]) => {
+        if (!tool.execute) return [name, tool];
+
+        return [
+          name,
+          {
+            ...tool,
+            execute: async (input: never, options: never) => {
+              const stepNumber = currentToolExecutionStep;
+              await getStepGate(stepNumber).promise;
+
+              if (rejectedSteps.has(stepNumber)) {
+                throw new AiException(
+                  'Human-input tools must be exclusive and execute before no other tool in a model step.',
+                  AiExceptionCode.INVALID_AGENT_INPUT,
+                );
+              }
+
+              return tool.execute?.(input, options);
+            },
+          },
+        ];
+      }),
+    );
+
+    const activeToolNamesForThisRun = isApprovedApprovalResume
+      ? getApprovedResumeActiveToolNames(Object.keys(activeTools))
+      : undefined;
 
     const isCodeInterpreterEnabled = this.codeInterpreterService.isEnabled();
 
@@ -271,6 +359,40 @@ export class ChatExecutionService {
         contextString,
       );
     }
+
+    const brandBrainPreflight = await this.brandBrainPreflightService.run({
+      lastUserMessageText:
+        lastUserMessageText ?? this.extractLastUserText(processedMessages),
+      toolContext,
+    });
+
+    if (brandBrainPreflight.contextPart) {
+      processedMessages =
+        this.brandBrainPreflightService.injectContextIntoLastUserMessage(
+          processedMessages,
+          brandBrainPreflight.contextPart,
+        );
+    }
+
+    this.metricsService.recordHistogram({
+      key: MetricsKeys.AiChatBrandBrainPreflightMs,
+      value: brandBrainPreflight.durationMs,
+      unit: 'ms',
+      attributes: {
+        required: String(brandBrainPreflight.required),
+        called: String(brandBrainPreflight.called),
+        cacheHit: String(brandBrainPreflight.cacheHit),
+      },
+    });
+
+    this.logger.log(
+      `[BRAND_BRAIN_PREFLIGHT] required=${brandBrainPreflight.required} ` +
+        `called=${brandBrainPreflight.called} ` +
+        `brand=${brandBrainPreflight.brandSlug ?? brandBrainPreflight.brandNameOrSlug ?? 'none'} ` +
+        `pageCount=${brandBrainPreflight.pageCount ?? 'n/a'} ` +
+        `durationMs=${brandBrainPreflight.durationMs} ` +
+        `cacheHit=${brandBrainPreflight.cacheHit}`,
+    );
 
     const systemPrompt = this.systemPromptBuilder.buildFullPrompt(
       toolCatalog,
@@ -429,11 +551,12 @@ export class ChatExecutionService {
     const stream = streamText({
       model: registeredModel.model,
       messages: [systemMessage, ...modelMessages],
-      tools: activeTools,
+      tools: guardedTools,
       abortSignal,
       stopWhen: (step) =>
         stepCountIs(AGENT_CONFIG.MAX_STEPS)(step) ||
         hasToolCall(ASK_QUESTIONS_TOOL_NAME)(step) ||
+        hasToolCall(REQUEST_APPROVAL_TOOL_NAME)(step) ||
         hasNoMoreAvailableCredits,
       experimental_telemetry: AI_TELEMETRY_CONFIG,
       providerOptions: getCallLevelProviderOptions({
@@ -445,8 +568,24 @@ export class ChatExecutionService {
         stepStartedAt = performance.now();
 
         return {
+          activeTools: activeToolNamesForThisRun,
           messages: injectCacheBreakpoint(messages, registeredModel.sdkPackage),
         };
+      },
+      experimental_onToolCallStart: async ({ toolCall, stepNumber }) => {
+        const currentStep = stepNumber ?? 0;
+        currentToolExecutionStep = currentStep;
+        const calls = toolCallsByStep.get(currentStep) ?? new Set<string>();
+        calls.add(toolCall.toolName);
+        toolCallsByStep.set(currentStep, calls);
+        if (
+          calls.size > 1 &&
+          (calls.has(ASK_QUESTIONS_TOOL_NAME) ||
+            calls.has(REQUEST_APPROVAL_TOOL_NAME))
+        ) {
+          rejectedSteps.add(currentStep);
+        }
+        await Promise.resolve();
       },
       onChunk: ({ chunk }) => {
         if (
@@ -463,6 +602,8 @@ export class ChatExecutionService {
         }
       },
       onStepFinish: async (step) => {
+        assertHumanInputToolCallIsExclusive(step.toolCalls);
+
         this.metricsService.recordHistogram({
           key: MetricsKeys.AiChatStepLatencyMs,
           value: performance.now() - stepStartedAt,
@@ -619,6 +760,22 @@ export class ChatExecutionService {
       modelConfig,
       hasNoMoreAvailableCredits: () => hasNoMoreAvailableCredits,
     };
+  }
+
+  private extractLastUserText(messages: UIMessage[]): string {
+    const lastUserMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === 'user');
+
+    return (
+      lastUserMessage?.parts
+        .filter(
+          (part): part is { type: 'text'; text: string } =>
+            part.type === 'text' && typeof part.text === 'string',
+        )
+        .map((part) => part.text)
+        .join('\n') ?? ''
+    );
   }
 
   private injectBrowsingContextIntoLastUserMessage(

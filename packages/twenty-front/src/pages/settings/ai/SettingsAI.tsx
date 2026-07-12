@@ -1,3 +1,4 @@
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { SettingsDiscoveryHeroCard } from '@/settings/components/SettingsDiscoveryHeroCard';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
@@ -33,6 +34,7 @@ const SETTINGS_AI_HERO_INSTANCE_ID_PREFIX = 'settings-ai-hero';
 
 export const SettingsAI = () => {
   const { handleCreateTool, isCreatingTool } = useCreateTool();
+  const isMyahTeamUser = useIsMyahTeamUser();
 
   const tabs = [
     {
@@ -40,11 +42,15 @@ export const SettingsAI = () => {
       title: t`Overview`,
       Icon: IconLayoutDashboard,
     },
-    {
-      id: SETTINGS_AI_TABS.TABS_IDS.MODELS,
-      title: t`Models`,
-      Icon: IconCpu,
-    },
+    ...(isMyahTeamUser
+      ? [
+          {
+            id: SETTINGS_AI_TABS.TABS_IDS.MODELS,
+            title: t`Models`,
+            Icon: IconCpu,
+          },
+        ]
+      : []),
     {
       id: SETTINGS_AI_TABS.TABS_IDS.SKILLS,
       title: t`Skills`,
@@ -55,11 +61,15 @@ export const SettingsAI = () => {
       title: t`Tools`,
       Icon: IconTool,
     },
-    {
-      id: SETTINGS_AI_TABS.TABS_IDS.USAGE,
-      title: t`Usage`,
-      Icon: IconChartBar,
-    },
+    ...(isMyahTeamUser
+      ? [
+          {
+            id: SETTINGS_AI_TABS.TABS_IDS.USAGE,
+            title: t`Usage`,
+            Icon: IconChartBar,
+          },
+        ]
+      : []),
   ];
 
   const resolvedTabId =
@@ -130,12 +140,16 @@ export const SettingsAI = () => {
                 Icon: IconTool,
                 vimeoId: '1185511734',
               },
-              {
-                id: 'models',
-                title: t`Models`,
-                Icon: IconCpu,
-                vimeoId: '1185511734',
-              },
+              ...(isMyahTeamUser
+                ? [
+                    {
+                      id: 'models',
+                      title: t`Models`,
+                      Icon: IconCpu,
+                      vimeoId: '1185511734',
+                    },
+                  ]
+                : []),
             ]}
             playButtonAriaLabel={t`Watch AI demo`}
           />

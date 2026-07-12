@@ -1,5 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
 
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { isMultiWorkspaceEnabledState } from '@/client-config/states/isMultiWorkspaceEnabledState';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
@@ -34,13 +35,16 @@ export const SettingsGeneral = () => {
   const hasSecurityPermission = useHasPermissionFlag(
     PermissionFlagType.SECURITY,
   );
+  const isMyahTeamUser = useIsMyahTeamUser();
 
   const tabs = [
     { id: GENERAL_TAB_GENERAL, title: t`General`, Icon: IconSettings },
     ...(hasSecurityPermission
       ? [
           { id: GENERAL_TAB_SECURITY, title: t`Security`, Icon: IconKey },
-          { id: GENERAL_TAB_LOGS, title: t`Logs`, Icon: IconHistory },
+          ...(isMyahTeamUser
+            ? [{ id: GENERAL_TAB_LOGS, title: t`Logs`, Icon: IconHistory }]
+            : []),
         ]
       : []),
   ];

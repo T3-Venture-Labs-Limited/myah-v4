@@ -20,6 +20,7 @@ type BuildUserWorkspaceParams = {
   userWorkspaceId?: string;
   userId?: string;
   workspaceId?: string;
+  email?: string;
   canImpersonate?: boolean;
   canAccessFullAdminPanel?: boolean;
   allowImpersonation?: boolean;
@@ -30,6 +31,7 @@ const buildUserWorkspace = ({
   userWorkspaceId = 'user-workspace-id',
   userId = 'user-id',
   workspaceId = 'workspace-id',
+  email,
   canImpersonate = false,
   canAccessFullAdminPanel = false,
   allowImpersonation = false,
@@ -39,6 +41,7 @@ const buildUserWorkspace = ({
     id: userWorkspaceId,
     userId,
     user: {
+      email,
       id: userId,
       canImpersonate,
       canAccessFullAdminPanel,
@@ -131,6 +134,28 @@ describe('ImpersonationAuthorizationService', () => {
 
       expect(result).toEqual({ allowed: true, level: 'server' });
       expect(userHasWorkspaceSettingPermissionMock).not.toHaveBeenCalled();
+    });
+
+    it('should allow a Myah Team user with verified 2FA without legacy capability', async () => {
+      const impersonator = buildUserWorkspace({
+        userId: 'impersonator',
+        workspaceId: 'workspace-1',
+        email: 'operator@t3labs.io',
+        canImpersonate: false,
+        twoFactorAuthenticationMethods: VERIFIED_TWO_FACTOR_METHODS,
+      });
+      const target = buildUserWorkspace({
+        userId: 'target',
+        workspaceId: 'workspace-2',
+        allowImpersonation: true,
+      });
+
+      const result = await service.checkImpersonationAuthorization(
+        impersonator,
+        target,
+      );
+
+      expect(result).toEqual({ allowed: true, level: 'server' });
     });
 
     it('should deny with provisioning reason when impersonator has no 2FA method (production)', async () => {

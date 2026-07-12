@@ -18,6 +18,26 @@ import {
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 
+type SettingsPermissionRequest = {
+  workspace: {
+    id: string;
+    activationStatus: WorkspaceActivationStatus;
+  };
+  userWorkspaceId?: string;
+  apiKey?: { id?: string };
+  application?: { id?: string };
+};
+
+const getRequestFromExecutionContext = (
+  context: ExecutionContext,
+): SettingsPermissionRequest => {
+  if (context.getType() === 'http') {
+    return context.switchToHttp().getRequest<SettingsPermissionRequest>();
+  }
+
+  return GqlExecutionContext.create(context).getContext().req;
+};
+
 export const SettingsPermissionGuard = (
   requiredPermission: PermissionFlagType,
 ): Type<CanActivate> => {
@@ -26,11 +46,10 @@ export const SettingsPermissionGuard = (
     constructor(private readonly permissionsService: PermissionsService) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
-      const ctx = GqlExecutionContext.create(context);
-      const workspaceId = ctx.getContext().req.workspace.id;
-      const userWorkspaceId = ctx.getContext().req.userWorkspaceId;
-      const workspaceActivationStatus =
-        ctx.getContext().req.workspace.activationStatus;
+      const request = getRequestFromExecutionContext(context);
+      const workspaceId = request.workspace.id;
+      const userWorkspaceId = request.userWorkspaceId;
+      const workspaceActivationStatus = request.workspace.activationStatus;
 
       if (
         [
@@ -46,8 +65,8 @@ export const SettingsPermissionGuard = (
           userWorkspaceId,
           setting: requiredPermission,
           workspaceId,
-          apiKeyId: ctx.getContext().req.apiKey?.id,
-          applicationId: ctx.getContext().req.application?.id,
+          apiKeyId: request.apiKey?.id,
+          applicationId: request.application?.id,
         });
 
       if (hasPermission === true) {
