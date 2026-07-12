@@ -1008,6 +1008,7 @@ msgstr "Account Deletion"
 #: src/pages/settings/accounts/SettingsAccountsCalendars.tsx
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/accounts/SettingsNewAccount.tsx
 msgid "Accounts"
 msgstr "Accounts"
@@ -1028,6 +1029,7 @@ msgid "ACS Url copied to clipboard"
 msgstr "ACS Url copied to clipboard"
 
 #. js-lingui-id: bwRvnp
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/utils/getActionHeaderTypeOrThrow.ts
@@ -2449,6 +2451,16 @@ msgstr "Apply"
 msgid "Apply{progressText}"
 msgstr "Apply{progressText}"
 
+#. js-lingui-id: Z7ZXbT
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Approve"
+msgstr "Approve"
+
+#. js-lingui-id: 7kb4LU
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Approved"
+msgstr "Approved"
+
 #. js-lingui-id: UDlRcx
 #: src/modules/settings/security/components/approvedAccessDomains/SettingsSecurityApprovedAccessDomainValidationEffect.tsx
 msgid "Approved access domain validated"
@@ -3169,11 +3181,6 @@ msgstr "Brown"
 msgid "Browse"
 msgstr "Browse"
 
-#. js-lingui-id: hKAV/O
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Browse partners"
-msgstr "Browse partners"
-
 #. js-lingui-id: GsXRxc
 #: src/modules/settings/data-model/indexes/forms/components/SettingsObjectIndexOptionsForm.tsx
 msgid "BTREE (default, good for sorting and equality)"
@@ -3599,6 +3606,11 @@ msgstr "Change to Yearly?"
 msgid "Change visibility?"
 msgstr "Change visibility?"
 
+#. js-lingui-id: f6suyZ
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Changes requested"
+msgstr "Changes requested"
+
 #. js-lingui-id: rnTfap
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 msgid "Changing visibility requires reconnecting this OAuth connection. You will be redirected to authorize it again."
@@ -3649,6 +3661,11 @@ msgstr "ChatGPT"
 #: src/pages/settings/admin-panel/SettingsAdminWorkspaceDetail.tsx
 msgid "Chats"
 msgstr "Chats"
+
+#. js-lingui-id: d+fVrI
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Check connection"
+msgstr "Check connection"
 
 #. js-lingui-id: h5C4B4
 #: src/modules/settings/emailing-domains/components/SettingsEmailingDomainVerifyButton.tsx
@@ -4332,6 +4349,16 @@ msgstr "Connect {providerDisplayName}"
 msgid "Connect a new account to your workspace"
 msgstr "Connect a new account to your workspace"
 
+#. js-lingui-id: iLSXJ7
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Connect a Shopify store so Myah can read brand and product context."
+msgstr "Connect a Shopify store so Myah can read brand and product context."
+
+#. js-lingui-id: YTrDtl
+#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
+msgid "Connect a store so Myah can read brand and product context."
+msgstr "Connect a store so Myah can read brand and product context."
+
 #. js-lingui-id: tBOZWW
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Connect a workspace Instagram Business or Creator account for approved message reads and replies."
@@ -4351,6 +4378,16 @@ msgstr "Connect AI assistants like Claude or Cursor to your workspace via the Mo
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Connect Instagram"
 msgstr "Connect Instagram"
+
+#. js-lingui-id: 2+cg4x
+#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
+msgid "Connect Instagram messaging for your workspace."
+msgstr "Connect Instagram messaging for your workspace."
+
+#. js-lingui-id: HIjrUv
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Connect Shopify"
+msgstr "Connect Shopify"
 
 #. js-lingui-id: YLx3sC
 #: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
@@ -4374,6 +4411,7 @@ msgstr "Connect your email and calendar to see your entire network instantly. Ta
 
 #. js-lingui-id: QHcLEN
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationConnectionsSection.tsx
 msgid "Connected"
@@ -4420,6 +4458,11 @@ msgstr "Connection successfully created"
 #: src/modules/settings/accounts/hooks/useImapSmtpCaldavConnectionForm.ts
 msgid "Connection successfully updated"
 msgstr "Connection successfully updated"
+
+#. js-lingui-id: +O16x6
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Consequences"
+msgstr "Consequences"
 
 #. js-lingui-id: JdGr7p
 #: src/modules/side-panel/pages/page-layout/components/ChartLimitInfoBanner.tsx
@@ -4684,6 +4727,11 @@ msgstr "Cost per million tokens for cached input (USD)"
 msgid "Could not delete approved access domain"
 msgstr "Could not delete approved access domain"
 
+#. js-lingui-id: KgTGpb
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Could not disconnect Shopify."
+msgstr "Could not disconnect Shopify."
+
 #. js-lingui-id: E5v5TK
 #: src/modules/settings/legal/components/SettingsDpaAgreementsTable.tsx
 msgid "Could not download the document."
@@ -4698,6 +4746,11 @@ msgstr "Could not generate the signed DPA. Please try again."
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not load Instagram connection status."
 msgstr "Could not load Instagram connection status."
+
+#. js-lingui-id: g3pHAg
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Could not load Shopify connection status."
+msgstr "Could not load Shopify connection status."
 
 #. js-lingui-id: KqYYBp
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -4723,6 +4776,11 @@ msgstr "Could not refresh validity token. Please contact support."
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not start Instagram authorization. Check the server Instagram configuration."
 msgstr "Could not start Instagram authorization. Check the server Instagram configuration."
+
+#. js-lingui-id: oJAw2x
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Could not start Shopify OAuth. Check the shop domain and server configuration."
+msgstr "Could not start Shopify OAuth. Check the shop domain and server configuration."
 
 #. js-lingui-id: PiYvMl
 #: src/modules/navigation-menu-item/edit/hooks/useNavigationMenuItemEditController.ts
@@ -6182,6 +6240,11 @@ msgstr "Disconnect"
 msgid "Disconnect connection?"
 msgstr "Disconnect connection?"
 
+#. js-lingui-id: 0xMKx0
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Disconnect Shopify"
+msgstr "Disconnect Shopify"
+
 #. js-lingui-id: xt4a74
 #: src/modules/settings/security/components/SettingsSecurityAuthProvidersOptionsList.tsx
 msgid "Discoverable"
@@ -6816,11 +6879,6 @@ msgstr "Email verified."
 msgid "Email/Domain"
 msgstr "Email/Domain"
 
-#. js-lingui-id: 4B3eAl
-#: src/pages/settings/email/SettingsWorkspaceEmail.tsx
-msgid "Emailing is in demo mode"
-msgstr "Emailing is in demo mode"
-
 #. js-lingui-id: BXEcos
 #: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
@@ -6833,11 +6891,6 @@ msgstr "Emails"
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 msgid "Emails & Calendar"
 msgstr "Emails & Calendar"
-
-#. js-lingui-id: qryOF/
-#: src/pages/settings/email/SettingsWorkspaceEmail.tsx
-msgid "Emails are logged, not sent. Sending requires the AWS SES driver with an Enterprise license, or Twenty Cloud."
-msgstr "Emails are logged, not sent. Sending requires the AWS SES driver with an Enterprise license, or Twenty Cloud."
 
 #. js-lingui-id: mHrqHa
 #: src/modules/settings/accounts/components/SettingsAccountsMessageChannelDetails.tsx
@@ -7025,6 +7078,11 @@ msgstr "Enter a new secret value"
 #: src/modules/object-record/record-field/ui/form-types/components/FormNumberFieldInput.tsx
 msgid "Enter a number"
 msgstr "Enter a number"
+
+#. js-lingui-id: B5IUuN
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Enter a Shopify store domain first."
+msgstr "Enter a Shopify store domain first."
 
 #. js-lingui-id: 93ebCf
 #: src/modules/object-record/record-field/ui/form-types/components/FormUuidFieldInput.tsx
@@ -8126,11 +8184,6 @@ msgstr "Feature Flags"
 msgid "Featured only"
 msgstr "Featured only"
 
-#. js-lingui-id: PpZkda
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Features"
-msgstr "Features"
-
 #. js-lingui-id: 2lOBKV
 #: src/modules/metadata-error-handler/hooks/useMetadataErrorHandler.ts
 #: src/pages/settings/applications/SettingsApplicationDetails.tsx
@@ -8439,6 +8492,11 @@ msgstr "First Name"
 #: src/pages/onboarding/CreateProfile.tsx
 msgid "First name can not be empty"
 msgstr "First name can not be empty"
+
+#. js-lingui-id: uMsB8B
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "First-party Shopify app"
+msgstr "First-party Shopify app"
 
 #. js-lingui-id: JREYkg
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -9090,11 +9148,6 @@ msgstr "Hide label"
 msgid "Hide system indexes"
 msgstr "Hide system indexes"
 
-#. js-lingui-id: 1ETc0T
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Hire a partner to help you implement and customize Twenty."
-msgstr "Hire a partner to help you implement and customize Twenty."
-
 #. js-lingui-id: i0qMbr
 #: src/modules/navigation/components/MainNavigationDrawerTabsRow.tsx
 msgid "Home"
@@ -9650,6 +9703,7 @@ msgid "Insert your billing details to get a free trial and more AI credits"
 msgstr "Insert your billing details to get a free trial and more AI credits"
 
 #. js-lingui-id: CTWsuc
+#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -11119,6 +11173,7 @@ msgid "MCP & APIs - Settings"
 msgstr "MCP & APIs - Settings"
 
 #. js-lingui-id: KFatQ9
+#: src/modules/settings/mcp-and-apis/components/SettingsMcpSetup.tsx
 #: src/modules/settings/mcp-and-apis/components/SettingsMcpSetup.tsx
 msgid "MCP client configuration"
 msgstr "MCP client configuration"
@@ -12701,6 +12756,7 @@ msgstr "Not available on Default View"
 
 #. js-lingui-id: S33tz3
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "Not connected"
 msgstr "Not connected"
 
@@ -13230,6 +13286,11 @@ msgstr "Optional — uses IAM role if empty"
 msgid "Optional context shown to recipients on the preferences page."
 msgstr "Optional context shown to recipients on the preferences page."
 
+#. js-lingui-id: EXEzE8
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Optional note for the agent"
+msgstr "Optional note for the agent"
+
 #. js-lingui-id: hY8F2i
 #: src/modules/settings/developers/components/SettingsDevelopersWebhookForm.tsx
 msgid "Optional secret used to compute the HMAC signature for webhook payloads"
@@ -13490,11 +13551,6 @@ msgstr "Paragraph"
 #: src/pages/settings/ai/SettingsToolDetail.tsx
 msgid "Parameters"
 msgstr "Parameters"
-
-#. js-lingui-id: mPkInZ
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Partners"
-msgstr "Partners"
 
 #. js-lingui-id: 8ZsakT
 #: src/modules/auth/sign-in-up/components/internal/SignInUpPasswordField.tsx
@@ -13939,6 +13995,7 @@ msgid "Prevent from assigning the same value to different records"
 msgstr "Prevent from assigning the same value to different records"
 
 #. js-lingui-id: rdUucN
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/settings/data-model/components/SettingsDataModelPreviewFormCard.tsx
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectSettingsFormCard.tsx
 #: src/modules/settings/unsubscribe-topics/components/SettingsWorkspaceUnsubscribeTopicSection.tsx
@@ -14388,6 +14445,11 @@ msgstr "Reconnect Instagram"
 msgid "Reconnect needed"
 msgstr "Reconnect needed"
 
+#. js-lingui-id: S8Y+C0
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Reconnect Shopify"
+msgstr "Reconnect Shopify"
+
 #. js-lingui-id: hVS0gK
 #: src/modules/activities/timeline-activities/rows/generic/components/EventRowGenericLinked.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsRecordPicker.tsx
@@ -14548,6 +14610,16 @@ msgstr "Region is required for Bedrock"
 #: src/pages/settings/admin-panel/SettingsAdminNewAiProvider.tsx
 msgid "Region where inference data is processed (optional)"
 msgstr "Region where inference data is processed (optional)"
+
+#. js-lingui-id: 1t/NnN
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Reject"
+msgstr "Reject"
+
+#. js-lingui-id: ekCRTP
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Rejected"
+msgstr "Rejected"
 
 #. js-lingui-id: h9AYFD
 #: src/modules/settings/data-model/fields/forms/components/SettingsObjectNewFieldSelector.tsx
@@ -14808,6 +14880,11 @@ msgstr "Reports"
 msgid "Request"
 msgstr "Request"
 
+#. js-lingui-id: gZu9+9
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Request changes"
+msgstr "Request changes"
+
 #. js-lingui-id: /laZGZ
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestExecutionResult.tsx
 msgid "Request Failed"
@@ -15032,6 +15109,11 @@ msgstr "Revoking this key will invalidate every JWT signed with it. Users with a
 #: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutDashboardWidgetTypeSelect.tsx
 msgid "Rich Text"
 msgstr "Rich Text"
+
+#. js-lingui-id: Xwlwdm
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Risk"
+msgstr "Risk"
 
 #. js-lingui-id: E1BXUR
 #: src/modules/metadata-error-handler/hooks/useMetadataErrorHandler.ts
@@ -16233,6 +16315,19 @@ msgstr "Shared addresses your workspace uses to send and receive email."
 #: src/pages/settings/applications/components/SettingsApplicationRegistrationShareLinkButtons.tsx
 msgid "Sharing link copied to clipboard"
 msgstr "Sharing link copied to clipboard"
+
+#. js-lingui-id: irL3dj
+#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Shopify"
+msgstr "Shopify"
+
+#. js-lingui-id: PfaJ0Q
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Shopify store"
+msgstr "Shopify store"
 
 #. js-lingui-id: RRXpo1
 #: src/modules/settings/data-model/fields/forms/number/constants/NumberDataModelSelectOptions.ts
@@ -18195,11 +18290,6 @@ msgstr "True"
 msgid "Try our REST or GraphQL API playgrounds"
 msgstr "Try our REST or GraphQL API playgrounds"
 
-#. js-lingui-id: 3WWUB9
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Try our upcoming features. Note they are still in beta. Please bear with us and report any issues you find."
-msgstr "Try our upcoming features. Note they are still in beta. Please bear with us and report any issues you find."
-
 #. js-lingui-id: LQdi+H
 #: src/modules/auth/sign-in-up/components/EmailVerificationSent.tsx
 msgid "Try with another email"
@@ -18746,7 +18836,6 @@ msgstr "Updating {objectLabel}"
 #: src/modules/settings/billing/hooks/useBillingPlanActions.ts
 #: src/modules/settings/event-logs/components/SettingsLogs.tsx
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
-#: src/pages/settings/email/SettingsWorkspaceEmail.tsx
 msgid "Upgrade"
 msgstr "Upgrade"
 
@@ -19028,6 +19117,11 @@ msgstr "Use only letters, numbers, underscores, dots or hyphens (max 64 characte
 msgid "Use our API or add your first {objectLabel} manually"
 msgstr "Use our API or add your first {objectLabel} manually"
 
+#. js-lingui-id: 2PkBd7
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Use our own Shopify app for OAuth first. We can fall back to Composio if the first-party flow blocks the spike."
+msgstr "Use our own Shopify app for OAuth first. We can fall back to Composio if the first-party flow blocks the spike."
+
 #. js-lingui-id: z1f4Op
 #: src/modules/workflow/workflow-variables/utils/getWorkflowVariableSpecialItems.ts
 msgid "Use the whole item"
@@ -19064,6 +19158,7 @@ msgstr "Useful for pivot/junction tables"
 #: src/pages/settings/accounts/SettingsAccountsConfigurationStepEmail.tsx
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/accounts/SettingsNewAccount.tsx
 #: src/pages/settings/ai/SettingsAgentTurnDetail.tsx
 #: src/pages/settings/ai/SettingsAiPrompts.tsx
@@ -19479,6 +19574,11 @@ msgstr "Waiting"
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
 msgid "Waiting Children"
 msgstr "Waiting Children"
+
+#. js-lingui-id: GP1szu
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Waiting for approval..."
+msgstr "Waiting for approval..."
 
 #. js-lingui-id: TdQd9Q
 #: src/modules/ai/components/TerminalOutput.tsx
@@ -20192,6 +20292,8 @@ msgstr "You have scheduled a credit pack change. Do you want to cancel it?"
 
 #. js-lingui-id: 28Hr4M
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "You need to sign in again first."
 msgstr "You need to sign in again first."
 
