@@ -49,6 +49,22 @@ describe('Myah Team admin-panel guards', () => {
     expect(result).toBe(true);
   });
 
+  it('allows legacy admin privileges through read-only admin and impersonation guard', async () => {
+    const guard = new AdminPanelOrImpersonateGuard();
+
+    const result = await guard.canActivate(
+      buildExecutionContext({
+        user: {
+          email: 'legacy-admin@example.com',
+          canAccessFullAdminPanel: false,
+          canImpersonate: true,
+        },
+      }),
+    );
+
+    expect(result).toBe(true);
+  });
+
   it('allows Myah Team users through server-level impersonation guard without legacy flags', async () => {
     const guard = new ServerLevelImpersonateGuard();
 
