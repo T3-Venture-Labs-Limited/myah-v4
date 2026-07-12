@@ -38,7 +38,10 @@ export class MyahShopifyController {
     WorkspaceAuthGuard,
     SettingsPermissionGuard(PermissionFlagType.CONNECTED_ACCOUNTS),
   )
-  async startOAuth(@Body() body: StartShopifyOAuthBody, @Req() request: Request) {
+  async startOAuth(
+    @Body() body: StartShopifyOAuthBody,
+    @Req() request: Request,
+  ) {
     if (!request.workspace || !request.userWorkspaceId) {
       throw new ForbiddenException(
         'Shopify OAuth must be started by a workspace user.',

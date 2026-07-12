@@ -572,10 +572,7 @@ export class ChatExecutionService {
           messages: injectCacheBreakpoint(messages, registeredModel.sdkPackage),
         };
       },
-      experimental_onToolCallStart: async ({
-        toolCall,
-        stepNumber,
-      }) => {
+      experimental_onToolCallStart: async ({ toolCall, stepNumber }) => {
         const currentStep = stepNumber ?? 0;
         currentToolExecutionStep = currentStep;
         const calls = toolCallsByStep.get(currentStep) ?? new Set<string>();
@@ -583,7 +580,8 @@ export class ChatExecutionService {
         toolCallsByStep.set(currentStep, calls);
         if (
           calls.size > 1 &&
-          (calls.has(ASK_QUESTIONS_TOOL_NAME) || calls.has(REQUEST_APPROVAL_TOOL_NAME))
+          (calls.has(ASK_QUESTIONS_TOOL_NAME) ||
+            calls.has(REQUEST_APPROVAL_TOOL_NAME))
         ) {
           rejectedSteps.add(currentStep);
         }

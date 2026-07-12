@@ -56,10 +56,22 @@ const MYAH_SHOPIFY_REST_ROUTES = [
   { path: 'rest/myah/shopify/agent/product-detail', method: RequestMethod.GET },
   { path: 'rest/myah/shopify/agent/brand-content', method: RequestMethod.GET },
   { path: 'rest/myah/shopify/agent/custom-data', method: RequestMethod.GET },
-  { path: 'rest/myah/shopify/agent/commerce-summary', method: RequestMethod.GET },
-  { path: 'rest/myah/shopify/agent/customer-summary', method: RequestMethod.GET },
-  { path: 'rest/myah/shopify/agent/promotions-summary', method: RequestMethod.GET },
-  { path: 'rest/myah/shopify/agent/channel-context', method: RequestMethod.GET },
+  {
+    path: 'rest/myah/shopify/agent/commerce-summary',
+    method: RequestMethod.GET,
+  },
+  {
+    path: 'rest/myah/shopify/agent/customer-summary',
+    method: RequestMethod.GET,
+  },
+  {
+    path: 'rest/myah/shopify/agent/promotions-summary',
+    method: RequestMethod.GET,
+  },
+  {
+    path: 'rest/myah/shopify/agent/channel-context',
+    method: RequestMethod.GET,
+  },
   { path: 'rest/myah/shopify/disconnect', method: RequestMethod.POST },
 ];
 
