@@ -63,5 +63,4 @@ describe('Myah Team admin-panel guards', () => {
 
     expect(result).toBe(true);
   });
-
 });
