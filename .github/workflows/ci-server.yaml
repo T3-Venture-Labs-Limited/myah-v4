@@ -320,6 +320,9 @@ jobs:
           done
           echo "Server did not become healthy in time" >&2
           exit 1
+      - name: Server / Print startup logs on failure
+        if: failure()
+        run: tail -200 /tmp/twenty-server.log || echo "No server log file found"
       - name: Server / Check for Pending Migrations
         run: |
           npx nx database:migrate:generate twenty-server -- --name pending-migration-check || true

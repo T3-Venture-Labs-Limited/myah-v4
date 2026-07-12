@@ -70,7 +70,7 @@ describe('copyBaseApplicationProject', () => {
     }
   });
 
-  it('should call fs.copy to copy base application template', async () => {
+  it('should copy agent instructions from the template to Claude Code instructions', async () => {
     await copyBaseApplicationProject({
       appName: 'my-test-app',
       appDisplayName: 'My Test App',
@@ -78,7 +78,6 @@ describe('copyBaseApplicationProject', () => {
       appDirectory: testAppDirectory,
     });
 
-    // Two fs.copy calls: (1) the template directory, (2) AGENTS.md → CLAUDE.md
     expect(fs.copy).toHaveBeenCalledTimes(2);
     expect(fs.copy).toHaveBeenCalledWith(
       expect.stringContaining('template'),
@@ -88,6 +87,12 @@ describe('copyBaseApplicationProject', () => {
       join(testAppDirectory, 'AGENTS.md'),
       join(testAppDirectory, 'CLAUDE.md'),
     );
+  });
+
+  it('should include agent instructions in the scaffold template', async () => {
+    await expect(
+      fs.pathExists(join(__dirname, '../../constants/template/AGENTS.md')),
+    ).resolves.toBe(true);
   });
 
   it('should replace placeholders in universal-identifiers.ts with real values', async () => {
