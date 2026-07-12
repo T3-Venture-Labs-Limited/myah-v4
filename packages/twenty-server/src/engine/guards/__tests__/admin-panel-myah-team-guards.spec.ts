@@ -64,4 +64,20 @@ describe('Myah Team admin-panel guards', () => {
 
     expect(result).toBe(true);
   });
+
+  it('allows legacy server impersonators that are not Myah Team users', async () => {
+    const guard = new ServerLevelImpersonateGuard();
+
+    const result = await guard.canActivate(
+      buildExecutionContext({
+        user: {
+          email: 'legacy-admin@example.com',
+          canAccessFullAdminPanel: false,
+          canImpersonate: true,
+        },
+      }),
+    );
+
+    expect(result).toBe(true);
+  });
 });
