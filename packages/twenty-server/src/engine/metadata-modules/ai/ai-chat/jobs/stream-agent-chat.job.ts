@@ -240,6 +240,7 @@ export class StreamAgentChatJob {
       let streamError: unknown;
       let streamFinishError: unknown;
       let checkHasNoMoreAvailableCredits: () => boolean = () => false;
+      let resolvedModelConfig: AiModelConfig;
 
       let persistChain: Promise<void> = Promise.resolve();
       let lastCheckpointAt = 0;
@@ -257,21 +258,9 @@ export class StreamAgentChatJob {
         return persistChain;
       };
 
-      // onFinish fires before the uiStream is fully drained. We use this
-      // promise to coordinate: the IIFE waits for DB persist to complete
-      // before publishing message-persisted (after all chunks).
-      let resolveStreamFinished: () => void;
-      const streamFinishedPromise = new Promise<void>((res) => {
-        resolveStreamFinished = res;
-      });
-
-      abortSignal.addEventListener(
-        'abort',
-        () => {
-          void streamFinishedPromise.then(() => resolve());
-        },
-        { once: true },
-      );
+      let finishEvent:
+        | { responseMessage: Omit<ExtendedUIMessage, 'id'>; isAborted: boolean }
+        | undefined;
 
       const uiStream = createUIMessageStream<ExtendedUIMessage>({
         execute: async ({ writer }) => {
@@ -309,6 +298,7 @@ export class StreamAgentChatJob {
             });
 
           checkHasNoMoreAvailableCredits = hasNoMoreAvailableCredits;
+          resolvedModelConfig = modelConfig;
 
           const titleWritePromise = titlePromise.then((generatedTitle) => {
             if (generatedTitle) {
@@ -347,32 +337,8 @@ export class StreamAgentChatJob {
                 });
               },
               onFinish: async ({ responseMessage, isAborted }) => {
-                // Rejecting here would race chunks still draining.
-                try {
-                  isFinalizingPersist = true;
-                  await persistChain;
-                  await this.handleStreamFinish({
-                    assistantMessageId,
-                    streamId: data.streamId,
-                    responseMessage,
-                    isAborted,
-                    streamError,
-                    outOfCredits: checkHasNoMoreAvailableCredits(),
-                    threadId: data.threadId,
-                    workspaceId: data.workspaceId,
-                    userWorkspaceId: data.userWorkspaceId,
-                    streamUsage,
-                    lastStepConversationSize,
-                    totalCacheCreationTokens,
-                    modelConfig,
-                    userMessagePromise,
-                  });
-                  await titleWritePromise;
-                } catch (error) {
-                  streamFinishError = error;
-                } finally {
-                  resolveStreamFinished();
-                }
+                finishEvent = { responseMessage, isAborted };
+                await titleWritePromise;
               },
               sendReasoning: true,
             }),
@@ -381,8 +347,6 @@ export class StreamAgentChatJob {
         // Errors thrown before the model stream merges never reach onFinish.
         onError: (error) => {
           streamError = error;
-          resolveStreamFinished();
-
           return error instanceof Error ? error.message : String(error);
         },
       });
@@ -452,29 +416,53 @@ export class StreamAgentChatJob {
             });
           }
 
-          await streamFinishedPromise;
-
           if (streamError) {
             reject(streamError);
-          } else if (streamFinishError) {
-            reject(streamFinishError);
-          } else if (checkHasNoMoreAvailableCredits()) {
-            await this.eventPublisherService.publish({
-              threadId: data.threadId,
-              workspaceId: data.workspaceId,
-              event: { type: 'credits-exhausted' },
-            });
-            resolve();
+          } else if (!finishEvent) {
+            if (abortSignal.aborted) resolve();
+            else reject(new Error('AI stream ended without a finish event'));
           } else {
-            await this.eventPublisherService.publish({
-              threadId: data.threadId,
-              workspaceId: data.workspaceId,
-              event: {
-                type: 'message-persisted',
-                messageId: assistantMessageId,
-              },
-            });
-            resolve();
+            try {
+              isFinalizingPersist = true;
+              await persistChain;
+              await this.handleStreamFinish({
+                assistantMessageId,
+                streamId: data.streamId,
+                responseMessage: finishEvent.responseMessage,
+                isAborted: finishEvent.isAborted,
+                streamError,
+                outOfCredits: checkHasNoMoreAvailableCredits(),
+                threadId: data.threadId,
+                workspaceId: data.workspaceId,
+                userWorkspaceId: data.userWorkspaceId,
+                streamUsage,
+                lastStepConversationSize,
+                totalCacheCreationTokens,
+                modelConfig: resolvedModelConfig,
+                userMessagePromise,
+              });
+            } catch (error) {
+              streamFinishError = error;
+            }
+            if (streamFinishError) reject(streamFinishError);
+            else if (checkHasNoMoreAvailableCredits()) {
+              await this.eventPublisherService.publish({
+                threadId: data.threadId,
+                workspaceId: data.workspaceId,
+                event: { type: 'credits-exhausted' },
+              });
+              resolve();
+            } else {
+              await this.eventPublisherService.publish({
+                threadId: data.threadId,
+                workspaceId: data.workspaceId,
+                event: {
+                  type: 'message-persisted',
+                  messageId: assistantMessageId,
+                },
+              });
+              resolve();
+            }
           }
         } catch (error) {
           reject(error);
