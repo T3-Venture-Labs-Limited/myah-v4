@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { type ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 import { MyahShopifyService } from 'src/modules/myah-shopify/services/myah-shopify.service';
@@ -70,7 +71,10 @@ const createService = () => {
       'decrypt' | 'encrypt' | 'encryptTokenPair'
     >
   > = {
-    decrypt: jest.fn(() => 'shpat_decrypted_token' as never),
+    decrypt: jest.fn(
+      (_: Parameters<ConnectedAccountTokenEncryptionService['decrypt']>[0]) =>
+        'shpat_decrypted_token' as PlaintextString,
+    ),
     encrypt: jest.fn(({ plaintext }) => `enc:v2:test:${plaintext}` as never),
     encryptTokenPair: jest.fn(({ accessToken, refreshToken, workspaceId }) => ({
       encryptedAccessToken: encryptionService.encrypt({
