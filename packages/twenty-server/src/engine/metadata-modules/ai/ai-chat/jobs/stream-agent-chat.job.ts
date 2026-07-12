@@ -487,6 +487,7 @@ export class StreamAgentChatJob {
             }
           } else if (abortSignal.aborted) {
             resolve();
+          } else {
             reject(
               streamError ??
                 publishError ??
