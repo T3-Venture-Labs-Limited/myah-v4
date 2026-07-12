@@ -87,6 +87,7 @@ describe('StreamAgentChatJob', () => {
     streamChatRejection,
     addMessageRejection,
     assistantPersistRejection,
+    publishRejection,
     totalsUpdateAffected = 1,
   }: {
     workspaceFound?: boolean;
@@ -94,6 +95,7 @@ describe('StreamAgentChatJob', () => {
     streamChatRejection?: Error;
     addMessageRejection?: Error;
     assistantPersistRejection?: Error;
+    publishRejection?: Error;
     totalsUpdateAffected?: number;
   } = {}) => {
     const publishedEvents: PublishedEvent[] = [];
@@ -139,6 +141,15 @@ describe('StreamAgentChatJob', () => {
         .fn()
         .mockImplementation(({ event }: { event: PublishedEvent }) => {
           publishedEvents.push(event);
+
+          if (
+            publishRejection &&
+            event.type === 'stream-chunk' &&
+            publishedEvents.filter((item) => item.type === 'stream-chunk')
+              .length === 1
+          ) {
+            return Promise.reject(publishRejection);
+          }
 
           return Promise.resolve();
         }),
@@ -225,6 +236,48 @@ describe('StreamAgentChatJob', () => {
     expect(agentChatStreamingService.flushNextQueuedMessage).toHaveBeenCalled();
   });
 
+  it('waits for a late human-input chunk before persisting the assistant turn', async () => {
+    const lateHumanInput = {
+      type: 'tool-ask_questions',
+      toolCallId: 'tool-call-id',
+      state: 'output-available',
+      input: {},
+      output: {
+        result: {
+          status: 'pending',
+          questions: [{ question: 'Continue?', options: [{ label: 'Yes' }] }],
+        },
+      },
+    };
+    const { job, threadRepository, publishedEvents } = buildJob({
+      chatStream: createFakeChatStream({
+        chunks: [
+          ...TEXT_CHUNKS,
+          {
+            type: 'data-code-execution',
+            id: 'write-after-finish',
+            data: {},
+          } as UIMessageChunk,
+        ],
+        responseMessage: {
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Hello' }, lateHumanInput],
+        } as never,
+      }),
+    });
+
+    await job.handle(jobData);
+
+    expect(threadRepository.update).toHaveBeenCalledWith(
+      'workspace-id',
+      { id: 'thread-id', activeStreamId: 'stream-id' },
+      expect.objectContaining({ pendingQuestionMessageId: expect.any(String) }),
+    );
+    expect(
+      publishedEvents.find((event) => event.type === 'message-persisted'),
+    ).toBeDefined();
+  });
+
   it('gates the thread totals on still owning the stream so a prior completion is not double-counted', async () => {
     const { job, agentChatService, threadRepository } = buildJob({
       totalsUpdateAffected: 0,
@@ -269,11 +322,12 @@ describe('StreamAgentChatJob', () => {
   });
 
   it('rejects, persists the error, and unblocks the thread when the model stream fails mid-stream', async () => {
-    const { job, publishedEvents, threadRepository } = buildJob({
-      chatStream: createFakeChatStream({
-        midStreamError: new Error('provider exploded'),
-      }),
-    });
+    const { job, publishedEvents, threadRepository, agentChatService } =
+      buildJob({
+        chatStream: createFakeChatStream({
+          midStreamError: new Error('provider exploded'),
+        }),
+      });
 
     await expect(job.handle(jobData)).rejects.toThrow('provider exploded');
 
@@ -281,17 +335,17 @@ describe('StreamAgentChatJob', () => {
       (event) => event.type === 'stream-chunk',
     );
 
-    expect(chunkEvents).toHaveLength(TEXT_CHUNKS.length);
-    expect(publishedEvents[publishedEvents.length - 2]).toMatchObject({
-      type: 'stream-error',
-      code: 'STREAM_EXECUTION_FAILED',
-      message: 'provider exploded',
-    });
-    expect(publishedEvents[publishedEvents.length - 1]).toMatchObject({
-      type: 'queue-updated',
-    });
     expect(publishedEvents.map((event) => event.type)).not.toContain(
       'message-persisted',
+    );
+    expect(agentChatService.upsertAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ turnId: 'turn-id' }),
+    );
+    expect(publishedEvents.map((event) => event.type)).toContain(
+      'stream-error',
+    );
+    expect(agentChatService.notifyThreadUsageUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-id' }),
     );
     expect(threadRepository.update).toHaveBeenCalledWith(
       'workspace-id',
@@ -307,6 +361,24 @@ describe('StreamAgentChatJob', () => {
       'workspace-id',
       { id: 'thread-id', activeStreamId: 'stream-id' },
       { activeStreamId: null },
+    );
+  });
+  it('drains and persists the finish event before rethrowing a publisher failure', async () => {
+    const publishError = new Error('redis unavailable');
+    const { job, publishedEvents, agentChatService, eventPublisherService } =
+      buildJob({ publishRejection: publishError });
+
+    await expect(job.handle(jobData)).rejects.toBe(publishError);
+    expect(eventPublisherService.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({ type: 'stream-error' }),
+      }),
+    );
+    expect(publishedEvents.map((event) => event.type)).not.toContain(
+      'message-persisted',
+    );
+    expect(agentChatService.upsertAssistantMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ turnId: 'turn-id' }),
     );
   });
 

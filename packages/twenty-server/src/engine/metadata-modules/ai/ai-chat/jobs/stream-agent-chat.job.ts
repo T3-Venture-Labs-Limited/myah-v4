@@ -239,6 +239,7 @@ export class StreamAgentChatJob {
       let totalCacheCreationTokens = 0;
       let streamError: unknown;
       let streamFinishError: unknown;
+      let publishError: unknown;
       let checkHasNoMoreAvailableCredits: () => boolean = () => false;
       let resolvedModelConfig: AiModelConfig;
 
@@ -264,85 +265,90 @@ export class StreamAgentChatJob {
 
       const uiStream = createUIMessageStream<ExtendedUIMessage>({
         execute: async ({ writer }) => {
-          const onCodeExecutionUpdate = (
-            codeExecutionData: CodeExecutionData,
-          ) => {
-            writer.write({
-              type: 'data-code-execution' as const,
-              id: `code-execution-${codeExecutionData.executionId}`,
-              data: codeExecutionData,
-            });
-          };
-
-          const onCompaction = () => {
-            writer.write({
-              type: 'data-compaction' as const,
-              id: `compaction-${data.threadId}`,
-              data: {},
-            });
-          };
-
-          const { stream, modelConfig, hasNoMoreAvailableCredits } =
-            await this.chatExecutionService.streamChat({
-              workspace,
-              userWorkspaceId: data.userWorkspaceId,
-              threadId: data.threadId,
-              messages: data.messages,
-              browsingContext: data.browsingContext,
-              lastUserMessageText: data.lastUserMessageText,
-              modelId: data.modelId,
-              onCodeExecutionUpdate,
-              onCompaction,
-              abortSignal,
-              conversationSizeTokens: data.conversationSizeTokens,
-            });
-
-          checkHasNoMoreAvailableCredits = hasNoMoreAvailableCredits;
-          resolvedModelConfig = modelConfig;
-
-          const titleWritePromise = titlePromise.then((generatedTitle) => {
-            if (generatedTitle) {
+          try {
+            const onCodeExecutionUpdate = (
+              codeExecutionData: CodeExecutionData,
+            ) => {
               writer.write({
-                type: 'data-thread-title' as const,
-                id: `thread-title-${data.threadId}`,
-                data: { title: generatedTitle },
+                type: 'data-code-execution' as const,
+                id: `code-execution-${codeExecutionData.executionId}`,
+                data: codeExecutionData,
               });
-            }
-          });
+            };
 
-          writer.merge(
-            stream.toUIMessageStream({
-              onError: (error) => {
-                streamError = error;
+            const onCompaction = () => {
+              writer.write({
+                type: 'data-compaction' as const,
+                id: `compaction-${data.threadId}`,
+                data: {},
+              });
+            };
 
-                return error instanceof Error ? error.message : String(error);
-              },
-              sendStart: true,
-              generateMessageId: () => assistantMessageId,
-              messageMetadata: ({ part }) => {
-                return this.computeMessageMetadata({
-                  part,
-                  modelConfig,
-                  lastStepConversationSize,
-                  totalCacheCreationTokens,
-                  onUpdateUsage: (usage) => {
-                    streamUsage = usage;
-                  },
-                  onUpdateConversationSize: (size) => {
-                    lastStepConversationSize = size;
-                  },
-                  onUpdateCacheCreationTokens: (tokens) => {
-                    totalCacheCreationTokens = tokens;
-                  },
+            const { stream, modelConfig, hasNoMoreAvailableCredits } =
+              await this.chatExecutionService.streamChat({
+                workspace,
+                userWorkspaceId: data.userWorkspaceId,
+                threadId: data.threadId,
+                messages: data.messages,
+                browsingContext: data.browsingContext,
+                lastUserMessageText: data.lastUserMessageText,
+                modelId: data.modelId,
+                onCodeExecutionUpdate,
+                onCompaction,
+                abortSignal,
+                conversationSizeTokens: data.conversationSizeTokens,
+              });
+
+            checkHasNoMoreAvailableCredits = hasNoMoreAvailableCredits;
+            resolvedModelConfig = modelConfig;
+
+            const titleWritePromise = titlePromise.then((generatedTitle) => {
+              if (generatedTitle) {
+                writer.write({
+                  type: 'data-thread-title' as const,
+                  id: `thread-title-${data.threadId}`,
+                  data: { title: generatedTitle },
                 });
-              },
-              onFinish: async ({ responseMessage, isAborted }) => {
-                finishEvent = { responseMessage, isAborted };
-                await titleWritePromise;
-              },
-              sendReasoning: true,
-            }),
-          );
+              }
+            });
+
+            writer.merge(
+              stream.toUIMessageStream({
+                onError: (error) => {
+                  streamError = error;
+
+                  return error instanceof Error ? error.message : String(error);
+                },
+                sendStart: true,
+                generateMessageId: () => assistantMessageId,
+                messageMetadata: ({ part }) => {
+                  return this.computeMessageMetadata({
+                    part,
+                    modelConfig,
+                    lastStepConversationSize,
+                    totalCacheCreationTokens,
+                    onUpdateUsage: (usage) => {
+                      streamUsage = usage;
+                    },
+                    onUpdateConversationSize: (size) => {
+                      lastStepConversationSize = size;
+                    },
+                    onUpdateCacheCreationTokens: (tokens) => {
+                      totalCacheCreationTokens = tokens;
+                    },
+                  });
+                },
+                onFinish: async ({ responseMessage, isAborted }) => {
+                  finishEvent = { responseMessage, isAborted };
+                  await titleWritePromise;
+                },
+                sendReasoning: true,
+              }),
+            );
+          } catch (error) {
+            streamError = error;
+            reject(error);
+          }
         },
         // Errors thrown before the model stream merges never reach onFinish.
         onError: (error) => {
@@ -396,9 +402,10 @@ export class StreamAgentChatJob {
           // best-effort; the authoritative persist runs onFinish
         }
       })();
-
       // Publish all chunks first, then signal completion. This guarantees
       // message-persisted arrives after every stream-chunk on the client.
+      // A publisher failure must not abort draining: finish still carries
+      // authoritative response and usage accounting.
       void (async () => {
         try {
           for await (const chunk of publishStream) {
@@ -406,22 +413,21 @@ export class StreamAgentChatJob {
               continue;
             }
 
-            await this.eventPublisherService.publish({
-              threadId: data.threadId,
-              workspaceId: data.workspaceId,
-              event: {
-                type: 'stream-chunk',
-                chunk: chunk as Record<string, unknown>,
-              },
-            });
+            try {
+              await this.eventPublisherService.publish({
+                threadId: data.threadId,
+                workspaceId: data.workspaceId,
+                event: {
+                  type: 'stream-chunk',
+                  chunk: chunk as Record<string, unknown>,
+                },
+              });
+            } catch (error) {
+              publishError ??= error;
+            }
           }
 
-          if (streamError) {
-            reject(streamError);
-          } else if (!finishEvent) {
-            if (abortSignal.aborted) resolve();
-            else reject(new Error('AI stream ended without a finish event'));
-          } else {
+          if (finishEvent) {
             try {
               isFinalizingPersist = true;
               await persistChain;
@@ -444,25 +450,48 @@ export class StreamAgentChatJob {
             } catch (error) {
               streamFinishError = error;
             }
-            if (streamFinishError) reject(streamFinishError);
-            else if (checkHasNoMoreAvailableCredits()) {
-              await this.eventPublisherService.publish({
-                threadId: data.threadId,
-                workspaceId: data.workspaceId,
-                event: { type: 'credits-exhausted' },
-              });
-              resolve();
+
+            const originalError = streamError ?? publishError;
+
+            if (streamFinishError && !originalError) {
+              reject(streamFinishError);
+            } else if (originalError) {
+              reject(originalError);
+            } else if (checkHasNoMoreAvailableCredits()) {
+              try {
+                await this.eventPublisherService.publish({
+                  threadId: data.threadId,
+                  workspaceId: data.workspaceId,
+                  event: { type: 'credits-exhausted' },
+                });
+              } catch (error) {
+                publishError ??= error;
+              }
+              if (publishError) reject(publishError);
+              else resolve();
             } else {
-              await this.eventPublisherService.publish({
-                threadId: data.threadId,
-                workspaceId: data.workspaceId,
-                event: {
-                  type: 'message-persisted',
-                  messageId: assistantMessageId,
-                },
-              });
-              resolve();
+              try {
+                await this.eventPublisherService.publish({
+                  threadId: data.threadId,
+                  workspaceId: data.workspaceId,
+                  event: {
+                    type: 'message-persisted',
+                    messageId: assistantMessageId,
+                  },
+                });
+              } catch (error) {
+                publishError ??= error;
+              }
+              if (publishError) reject(publishError);
+              else resolve();
             }
+          } else if (abortSignal.aborted) {
+            resolve();
+            reject(
+              streamError ??
+                publishError ??
+                new Error('AI stream ended without a finish event'),
+            );
           }
         } catch (error) {
           reject(error);
