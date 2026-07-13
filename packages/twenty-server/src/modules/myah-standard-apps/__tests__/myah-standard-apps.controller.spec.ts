@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 
 import {
   ThrottlerException,
@@ -154,5 +154,11 @@ describe('Myah standard app deployment trigger', () => {
       NoPermissionGuard,
       MyahStandardAppsDeploymentGuard,
     ]);
+  });
+
+  it('does not register promotion beneath the authenticated REST API wildcard', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, MyahStandardAppsController)).toBe(
+      'myah/platform/standard-apps',
+    );
   });
 });
