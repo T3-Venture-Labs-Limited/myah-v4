@@ -185,7 +185,7 @@ const createWorkspaceAppRouter = (
                 path={AppPath.Dpa}
                 element={
                   <Navigate
-                    to={getSettingsPath(SettingsPath.LegalDpa)}
+                    to={getSettingsPath(SettingsPath.General)}
                     replace
                   />
                 }

@@ -9,6 +9,7 @@ describe('baseSchema', () => {
     expect(schema.info.description).toContain(
       'https://workspace.example/rest/open-api/core > myah-core.json',
     );
+    expect(schema.info).not.toHaveProperty('contact');
     expect(schema.servers).toEqual([
       {
         url: 'https://workspace.example/rest/',

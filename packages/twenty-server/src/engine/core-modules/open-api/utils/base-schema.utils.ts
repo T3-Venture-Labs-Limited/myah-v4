@@ -126,9 +126,6 @@ curl -H 'Authorization: Bearer <token>' \\
 `,
       termsOfService:
         'https://github.com/twentyhq/twenty?tab=coc-ov-file#readme',
-      contact: {
-        email: 'felix@twenty.com',
-      },
       license: {
         name: 'AGPL-3.0',
         url: 'https://github.com/twentyhq/twenty?tab=License-1-ov-file#readme',
