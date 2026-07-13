@@ -12,6 +12,10 @@ inputs:
     description: Path to the app directory (relative to repo root). Defaults to repo root.
     required: false
     default: '.'
+  workspace-path:
+    description: Path containing the Node.js and Yarn workspace. Defaults to repo root.
+    required: false
+    default: '.'
 
 runs:
   using: composite
@@ -23,13 +27,13 @@ runs:
     - name: Setup Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
-        node-version-file: '${{ inputs.app-path }}/.nvmrc'
+        node-version-file: '${{ inputs.workspace-path }}/.nvmrc'
         cache: yarn
-        cache-dependency-path: '${{ inputs.app-path }}/yarn.lock'
+        cache-dependency-path: '${{ inputs.workspace-path }}/yarn.lock'
 
     - name: Install dependencies
       shell: bash
-      working-directory: ${{ inputs.app-path }}
+      working-directory: ${{ inputs.workspace-path }}
       run: yarn install --immutable
 
     - name: Configure remote
