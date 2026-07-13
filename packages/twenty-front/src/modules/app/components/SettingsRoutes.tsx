@@ -172,7 +172,6 @@ const SettingsGeneral = lazy(() =>
   })),
 );
 
-
 const SettingsWorkspaceEmail = lazy(() =>
   import('~/pages/settings/email/SettingsWorkspaceEmail').then((module) => ({
     default: module.SettingsWorkspaceEmail,

@@ -41,12 +41,11 @@ describe('public Myah assets', () => {
     );
 
     await Promise.all(
-      getManifestAssetSpecifications().map(
-        ({ height, sourcePath, width }) =>
-          expectPng(resolve(PUBLIC_DIRECTORY, sourcePath), {
-            height,
-            width,
-          }),
+      getManifestAssetSpecifications().map(({ height, sourcePath, width }) =>
+        expectPng(resolve(PUBLIC_DIRECTORY, sourcePath), {
+          height,
+          width,
+        }),
       ),
     );
   });
