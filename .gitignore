@@ -63,3 +63,6 @@ screenshots/
 
 # Local Letta agent/worktree state
 /.letta/
+
+# Local Git worktrees
+/.worktrees/
