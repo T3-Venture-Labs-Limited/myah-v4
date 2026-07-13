@@ -24,6 +24,7 @@ import { BillingGraphqlApiExceptionFilter } from 'src/engine/core-modules/billin
 import { CacheStorageModule } from 'src/engine/core-modules/cache-storage/cache-storage.module';
 import { TimelineCalendarEventModule } from 'src/engine/core-modules/calendar/timeline-calendar-event.module';
 import { CaptchaModule } from 'src/engine/core-modules/captcha/captcha.module';
+import { CustomerAccountModule } from 'src/engine/core-modules/customer-account/customer-account.module';
 import { CloudflareModule } from 'src/engine/core-modules/cloudflare/cloudflare.module';
 import { CodeInterpreterModule } from 'src/engine/core-modules/code-interpreter/code-interpreter.module';
 import { DnsManagerModule } from 'src/engine/core-modules/dns-manager/dns-manager.module';
@@ -149,6 +150,7 @@ import { FileModule } from './file/file.module';
     }),
     EmailModule.forRoot(),
     CaptchaModule.forRoot(),
+    CustomerAccountModule,
     EventEmitterModule.forRoot({
       wildcard: true,
     }),
