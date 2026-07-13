@@ -25,8 +25,6 @@ describe('Myah Team platform boundary guards', () => {
   it.each([
     ['AdminPanelResolver', AdminPanelResolver],
     ['EnterpriseResolver', EnterpriseResolver],
-    ['EventLogsResolver', EventLogsResolver],
-    ['EventLogsLiveResolver', EventLogsLiveResolver],
   ])('requires a verified Myah Team identity for %s', (_name, resolver) => {
     expect(getGuards(resolver)).toEqual(
       expect.arrayContaining([MyahTeamGuard, NoImpersonationGuard]),
@@ -39,6 +37,8 @@ describe('Myah Team platform boundary guards', () => {
     ['ApplicationUpgradeResolver', ApplicationUpgradeResolver],
     ['ApplicationVariableEntityResolver', ApplicationVariableEntityResolver],
     ['MarketplaceResolver', MarketplaceResolver],
+    ['EventLogsResolver', EventLogsResolver],
+    ['EventLogsLiveResolver', EventLogsLiveResolver],
   ])('keeps %s scoped to workspace permissions', (_name, resolver) => {
     expect(getGuards(resolver)).not.toContain(MyahTeamGuard);
   });

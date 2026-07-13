@@ -16,10 +16,10 @@ exports[`Workspace-level impersonation - authorization denials (integration) rej
 {
   "extensions": {
     "code": "FORBIDDEN",
-    "subCode": "PERMISSION_DENIED",
-    "userFriendlyMessage": "User does not have permission.",
+    "subCode": "FORBIDDEN_EXCEPTION",
+    "userFriendlyMessage": "You do not have permission to impersonate users in this workspace.",
   },
-  "message": "Entity performing the request does not have permission",
+  "message": "Impersonation not allowed",
   "name": "ForbiddenError",
 }
 `;
