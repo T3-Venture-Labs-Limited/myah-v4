@@ -65,6 +65,10 @@ export type OpenSidePanelPageFunction = (
 export type CommandConfirmationModalResult = 'confirm' | 'cancel';
 
 export type CommandConfirmationModalAccent = 'default' | 'brand' | 'danger';
+// Supports front components compiled before `brand` replaced `blue`.
+type CommandConfirmationModalHostAccent =
+  | CommandConfirmationModalAccent
+  | 'blue';
 
 export type OpenCommandConfirmationModalFunction = (params: {
   title: string;
@@ -88,7 +92,12 @@ export type RequestAccessTokenRefreshFunction = () => Promise<string>;
 export type CopyToClipboardFunction = (text: string) => Promise<void>;
 
 export type OpenCommandConfirmationModalHostFunction = (
-  params: Parameters<OpenCommandConfirmationModalFunction>[0],
+  params: Omit<
+    Parameters<OpenCommandConfirmationModalFunction>[0],
+    'confirmButtonAccent'
+  > & {
+    confirmButtonAccent?: CommandConfirmationModalHostAccent;
+  },
 ) => Promise<void>;
 
 export type FrontComponentHostCommunicationApiStore = {
