@@ -3,10 +3,11 @@ import { createHash, timingSafeEqual } from 'crypto';
 import {
   type CanActivate,
   type ExecutionContext,
+  HttpException,
+  HttpStatus,
   Injectable,
-  Logger,
   InternalServerErrorException,
-  TooManyRequestsException,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { type Request } from 'express';
@@ -48,7 +49,10 @@ export class MyahStandardAppsDeploymentGuard implements CanActivate {
     } catch (error) {
       if (error instanceof ThrottlerException) {
         this.logResult(applicationUniversalIdentifier, 'rate_limited');
-        throw new TooManyRequestsException();
+        throw new HttpException(
+          'Standard app deployment rate limit reached',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
       }
 
       this.logResult(applicationUniversalIdentifier, 'failed');
