@@ -1,0 +1,41 @@
+name: Select CI runner
+
+on:
+  workflow_call:
+    outputs:
+      runs_on:
+        description: JSON runner label array for downstream CI jobs
+        value: ${{ jobs.select.outputs.runs_on }}
+
+permissions:
+  actions: read
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      runs_on: ${{ steps.selection.outputs.runs_on }}
+    steps:
+      - id: selection
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7.0.1
+        with:
+          script: |
+            const { data } = await github.rest.actions.listSelfHostedRunnersForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const runnerIsAvailable = data.runners.some((runner) =>
+              runner.status === 'online' &&
+              runner.busy === false &&
+              runner.labels.some((label) => label.name === 'myah-v4'),
+            );
+
+            core.setOutput(
+              'runs_on',
+              JSON.stringify(
+                runnerIsAvailable
+                  ? ['self-hosted', 'linux', 'x64', 'myah-v4']
+                  : ['ubuntu-latest'],
+              ),
+            );
