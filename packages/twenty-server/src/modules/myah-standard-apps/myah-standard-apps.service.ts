@@ -52,40 +52,33 @@ export class MyahStandardAppsService {
     }
 
     const registration = await this.dataSource.transaction(async (manager) => {
-      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
-        applicationUniversalIdentifier,
-      ]);
-
-      const applicationRegistration = await manager.findOneBy(
+      const initialRegistration = await manager.findOneBy(
         ApplicationRegistrationEntity,
         { universalIdentifier: applicationUniversalIdentifier },
       );
 
-      if (!applicationRegistration) {
-        throw new NotFoundException(
-          'Approved Myah standard app is not published',
-        );
-      }
+      this.assertPublisherRegistration(initialRegistration, ownerWorkspaceId);
 
-      if (
-        applicationRegistration.sourceType !==
-          ApplicationRegistrationSourceType.TARBALL ||
-        applicationRegistration.ownerWorkspaceId !== ownerWorkspaceId
-      ) {
-        throw new ForbiddenException(
-          'Application is not owned by the configured Myah publisher workspace',
-        );
-      }
+      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        initialRegistration.id,
+      ]);
 
-      if (!applicationRegistration.isPreInstalled) {
+      const lockedRegistration = await manager.findOneBy(
+        ApplicationRegistrationEntity,
+        { universalIdentifier: applicationUniversalIdentifier },
+      );
+
+      this.assertPublisherRegistration(lockedRegistration, ownerWorkspaceId);
+
+      if (!lockedRegistration.isPreInstalled) {
         await manager.update(
           ApplicationRegistrationEntity,
-          { id: applicationRegistration.id },
+          { id: lockedRegistration.id },
           { isPreInstalled: true },
         );
       }
 
-      return applicationRegistration;
+      return lockedRegistration;
     });
 
     const backfillJobId = `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registration.id}`;
@@ -100,5 +93,24 @@ export class MyahStandardAppsService {
       applicationRegistrationId: registration.id,
       backfillJobId,
     };
+  }
+  private assertPublisherRegistration(
+    registration: ApplicationRegistrationEntity | null,
+    ownerWorkspaceId: string,
+  ): asserts registration is ApplicationRegistrationEntity {
+    if (!registration) {
+      throw new NotFoundException(
+        'Approved Myah standard app is not published',
+      );
+    }
+
+    if (
+      registration.sourceType !== ApplicationRegistrationSourceType.TARBALL ||
+      registration.ownerWorkspaceId !== ownerWorkspaceId
+    ) {
+      throw new ForbiddenException(
+        'Application is not owned by the configured Myah publisher workspace',
+      );
+    }
   }
 }

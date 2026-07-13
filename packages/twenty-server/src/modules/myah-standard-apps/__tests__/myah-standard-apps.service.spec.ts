@@ -101,13 +101,72 @@ describe('MyahStandardAppsService', () => {
     );
     expect(transactionalManager.query).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
-      [BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER],
+      [registrationId],
     );
+    expect(
+      transactionalApplicationRegistrationRepository.findOneBy,
+    ).toHaveBeenCalledTimes(2);
     expect(workspaceQueueService.add).toHaveBeenCalledWith(
       BACKFILL_APPLICATION_INSTALLATION_JOB_NAME,
       { applicationRegistrationId: registrationId },
       { id: `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registrationId}` },
     );
+  });
+
+  it('uses the registration state read after acquiring its advisory lock', async () => {
+    transactionalApplicationRegistrationRepository.findOneBy
+      .mockResolvedValueOnce({
+        id: registrationId,
+        universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        ownerWorkspaceId: publisherWorkspaceId,
+        sourceType: ApplicationRegistrationSourceType.TARBALL,
+        isPreInstalled: false,
+      } as ApplicationRegistrationEntity)
+      .mockResolvedValueOnce({
+        id: registrationId,
+        universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        ownerWorkspaceId: publisherWorkspaceId,
+        sourceType: ApplicationRegistrationSourceType.TARBALL,
+        isPreInstalled: true,
+      } as ApplicationRegistrationEntity);
+
+    await expect(
+      service.promoteAndBackfill(BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER),
+    ).resolves.toEqual({
+      applicationRegistrationId: registrationId,
+      backfillJobId: `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registrationId}`,
+    });
+
+    expect(
+      transactionalApplicationRegistrationRepository.update,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects a registration whose ownership changes before the lock is acquired', async () => {
+    transactionalApplicationRegistrationRepository.findOneBy
+      .mockResolvedValueOnce({
+        id: registrationId,
+        universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        ownerWorkspaceId: publisherWorkspaceId,
+        sourceType: ApplicationRegistrationSourceType.TARBALL,
+        isPreInstalled: false,
+      } as ApplicationRegistrationEntity)
+      .mockResolvedValueOnce({
+        id: registrationId,
+        universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+        ownerWorkspaceId: '33333333-3333-4333-8333-333333333333',
+        sourceType: ApplicationRegistrationSourceType.TARBALL,
+        isPreInstalled: false,
+      } as ApplicationRegistrationEntity);
+
+    await expect(
+      service.promoteAndBackfill(BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER),
+    ).rejects.toThrow('not owned by the configured Myah publisher workspace');
+
+    expect(
+      transactionalApplicationRegistrationRepository.update,
+    ).not.toHaveBeenCalled();
+    expect(workspaceQueueService.add).not.toHaveBeenCalled();
   });
 
   it('keeps an approved registration preinstalled when queueing fails so a retry can resume the backfill', async () => {
