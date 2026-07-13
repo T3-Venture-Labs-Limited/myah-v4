@@ -77,7 +77,7 @@ jobs:
 
       - name: Promote Creator Ops
         env:
-          APPLICATION_UNIVERSAL_IDENTIFIER: 72f2fd16-880c-4c63-852f-dbf63751c152
+          APPLICATION_UNIVERSAL_IDENTIFIER: 72f2fd16-880c-4c63-852f-dbf63f51c152
         run: |
           curl --fail-with-body --silent --show-error \
             --request POST \
