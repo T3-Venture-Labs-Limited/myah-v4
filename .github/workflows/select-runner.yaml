@@ -13,22 +13,21 @@ on:
 jobs:
   select:
     runs-on: ubuntu-latest
+    env:
+      RUNNER_STATUS_TOKEN: ${{ secrets.MYAH_RUNNER_STATUS_TOKEN }}
     outputs:
-      runs_on: ${{ steps.selection.outputs.runs_on }}
+      runs_on: ${{ steps.fallback.outputs.runs_on || steps.selection.outputs.runs_on }}
     steps:
+      - id: fallback
+        if: env.RUNNER_STATUS_TOKEN == ''
+        run: echo 'runs_on=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
       - id: selection
+        if: env.RUNNER_STATUS_TOKEN != ''
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7.0.1
-        env:
-          RUNNER_STATUS_TOKEN: ${{ secrets.MYAH_RUNNER_STATUS_TOKEN }}
         with:
           github-token: ${{ secrets.MYAH_RUNNER_STATUS_TOKEN }}
           script: |
             const hostedRunner = JSON.stringify(['ubuntu-latest']);
-
-            if (!process.env.RUNNER_STATUS_TOKEN) {
-              core.setOutput('runs_on', hostedRunner);
-              return;
-            }
 
             try {
               const { data } = await github.rest.actions.listSelfHostedRunnersForRepo({
