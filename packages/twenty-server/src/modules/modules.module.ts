@@ -5,6 +5,7 @@ import { ConnectedAccountModule } from 'src/modules/connected-account/connected-
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
 import { MyahShopifyModule } from 'src/modules/myah-shopify/myah-shopify.module';
 import { MyahComposioModule } from 'src/modules/myah-composio/myah-composio.module';
+import { MyahStandardAppsModule } from 'src/modules/myah-standard-apps/myah-standard-apps.module';
 import { OnboardingInviteSuggestionsModule } from 'src/modules/onboarding-invite-suggestions/onboarding-invite-suggestions.module';
 import { WorkflowModule } from 'src/modules/workflow/workflow.module';
 import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-member.module';
@@ -16,6 +17,7 @@ import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-me
     ConnectedAccountModule,
     MyahComposioModule,
     MyahShopifyModule,
+    MyahStandardAppsModule,
     OnboardingInviteSuggestionsModule,
     WorkflowModule,
     WorkspaceMemberModule,
