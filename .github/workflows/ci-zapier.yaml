@@ -93,10 +93,10 @@ jobs:
           tasks: test
 
   zapier-test:
-    needs: [changed-files-check, server-setup, select-runner]
+    needs: [changed-files-check, server-setup]
     if: needs.changed-files-check.outputs.any_changed == 'true'
     timeout-minutes: 30
-    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         task: [lint, typecheck, validate]

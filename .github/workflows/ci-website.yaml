@@ -24,10 +24,10 @@ jobs:
         packages/twenty-website/**
         packages/twenty-shared/**
   website-task:
-    needs: [changed-files-check, select-runner]
+    needs: [changed-files-check]
     if: needs.changed-files-check.outputs.any_changed == 'true'
     timeout-minutes: 30
-    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
+    runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: '--max-old-space-size=6144'
     strategy:
