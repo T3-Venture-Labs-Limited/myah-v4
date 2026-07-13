@@ -41,7 +41,7 @@ const WINDOWS_MASTER_PATH = resolve(
 const MARK_SVG_PATH = resolve(BRAND_ASSET_DIRECTORY, 'myah-mark.svg');
 const SOCIAL_MASTER_PATH = resolve(
   BRAND_ASSET_DIRECTORY,
-  'myah-social-card.webp',
+  'myah-social-card.png',
 );
 const PUBLIC_BRAND_ASSET_DIRECTORY = resolve(PUBLIC_DIRECTORY, 'images', 'brand');
 const PUBLIC_MARK_PATH = resolve(PUBLIC_BRAND_ASSET_DIRECTORY, 'myah-mark.png');
@@ -105,7 +105,7 @@ const isWindowsLandscapeAsset = (assetSpecification: BrandAssetSpecification) =>
 const getOutputPath = (assetSpecification: BrandAssetSpecification) =>
   resolve(PUBLIC_DIRECTORY, assetSpecification.sourcePath.replace(/^\//, ''));
 
-const validateSourceMaster = async (
+const validatePng = async (
   sourcePath: string,
   expectedDimensions: { height: number; width: number },
 ) => {
@@ -120,7 +120,13 @@ const validateSourceMaster = async (
       `Expected ${sourcePath} to be a ${expectedDimensions.width}×${expectedDimensions.height} PNG`,
     );
   }
+};
 
+const validateSourceMaster = async (
+  sourcePath: string,
+  expectedDimensions: { height: number; width: number },
+) => {
+  await validatePng(sourcePath, expectedDimensions);
   const { data, info } = await sharp(sourcePath)
     .ensureAlpha()
     .raw()
@@ -251,6 +257,7 @@ export const generateBrandAssets = async () => {
 
   await validateSourceMaster(SQUARE_MASTER_PATH, { height: 1200, width: 1200 });
   await validateSourceMaster(WINDOWS_MASTER_PATH, { height: 600, width: 1200 });
+  await validatePng(SOCIAL_MASTER_PATH, { height: 630, width: 1200 });
 
   await Promise.all([
     ...assetSpecifications.map(writeAsset),

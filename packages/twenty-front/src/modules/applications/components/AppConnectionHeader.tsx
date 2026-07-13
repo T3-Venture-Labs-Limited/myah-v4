@@ -5,6 +5,8 @@ import { Avatar } from 'twenty-ui/data-display';
 import { IconRefresh } from 'twenty-ui/icon';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
+const INVERTED_LOGO_STYLE = { filter: 'invert(1)' };
+
 type AppConnectionHeaderProps = {
   appLogoUrl?: string | null;
   appName: string;
@@ -57,7 +59,7 @@ export const AppConnectionHeader = ({
   appLogoUrl,
   appName,
 }: AppConnectionHeaderProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { colorScheme, theme } = useContext(ThemeContext);
 
   const [hasAppLogoError, setHasAppLogoError] = useState(false);
 
@@ -66,7 +68,11 @@ export const AppConnectionHeader = ({
   return (
     <StyledContainer>
       <StyledAppLogoTile>
-        <StyledAppLogo src="/images/integrations/myah-mark.svg" alt="" />
+        <StyledAppLogo
+          src="/images/integrations/myah-mark.svg"
+          alt=""
+          style={colorScheme === 'dark' ? INVERTED_LOGO_STYLE : undefined}
+        />
       </StyledAppLogoTile>
       <StyledLinkIconContainer aria-hidden>
         <IconRefresh size={theme.icon.size.md} stroke={theme.icon.stroke.lg} />
