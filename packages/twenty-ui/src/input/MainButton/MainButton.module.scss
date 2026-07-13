@@ -28,6 +28,10 @@
     background: var(--main-button-hover-bg);
   }
 
+  &:active {
+    background: var(--main-button-active-bg);
+  }
+
   &[data-disabled] {
     cursor: not-allowed;
   }
@@ -36,10 +40,11 @@
 }
 
 .button[data-variant='primary'] {
-  --main-button-bg: var(--t-background-primary-inverted);
-  --main-button-border-color: var(--t-background-transparent-strong);
-  --main-button-color: var(--t-font-color-inverted);
-  --main-button-hover-bg: var(--t-background-primary-inverted-hover);
+  --main-button-bg: var(--t-brand-solid);
+  --main-button-border-color: var(--t-background-transparent-light);
+  --main-button-color: var(--t-brand-on-solid);
+  --main-button-hover-bg: var(--t-brand-solid-hover);
+  --main-button-active-bg: var(--t-brand-solid-active);
 }
 
 .button[data-variant='secondary'] {
@@ -47,6 +52,7 @@
   --main-button-border-color: var(--t-border-color-medium);
   --main-button-color: var(--t-font-color-primary);
   --main-button-hover-bg: var(--t-background-tertiary);
+  --main-button-active-bg: var(--t-background-tertiary);
 }
 
 .button[data-disabled] {
@@ -54,11 +60,15 @@
   --main-button-border-color: var(--t-background-transparent-lighter);
   --main-button-box-shadow: none;
   --main-button-color: var(--t-font-color-light);
+  --main-button-active-bg: var(--t-background-secondary);
 }
 
-// hover when disabled: the legacy hover switch ignores disabled for
-// secondary (keeps tertiary), while primary falls back to the disabled
-// background.
+// Primary actions retain the Myah state palette even when unavailable;
+// secondary actions keep their neutral disabled treatment.
 .button[data-variant='primary'][data-disabled] {
-  --main-button-hover-bg: var(--t-background-secondary);
+  --main-button-bg: var(--t-brand-disabled);
+  --main-button-border-color: var(--t-background-transparent-light);
+  --main-button-color: var(--t-brand-on-solid);
+  --main-button-hover-bg: var(--t-brand-disabled);
+  --main-button-active-bg: var(--t-brand-disabled);
 }

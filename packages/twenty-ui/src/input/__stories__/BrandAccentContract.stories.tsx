@@ -5,6 +5,7 @@ import { Button } from '@ui/input/Button/Button';
 import { ButtonGroup } from '@ui/input/ButtonGroup/ButtonGroup';
 import { Checkbox, CheckboxAccent } from '@ui/input/Checkbox/Checkbox';
 import { IconButton } from '@ui/input/IconButton/IconButton';
+import { MainButton } from '@ui/input/MainButton/MainButton';
 import { Radio } from '@ui/input/Radio/Radio';
 import { SearchInput } from '@ui/input/SearchInput/SearchInput';
 import { Toggle } from '@ui/input/Toggle/Toggle';
@@ -24,82 +25,78 @@ type BrandAccentFixtureProps = {
   name: 'light' | 'dark';
 };
 
-const BrandAccentFixture = ({
-  colorScheme,
-  name,
-}: BrandAccentFixtureProps) => {
+const BrandAccentFixture = ({ colorScheme, name }: BrandAccentFixtureProps) => {
   return (
     <ThemeProvider colorScheme={colorScheme} applyToRoot={false}>
-      <div
-        style={{ backgroundColor: themeCssVariables.background.primary }}
-      >
-      <Button
-        title={`${name} primary`}
-        accent="brand"
-        hotkeys={['⌘', 'K']}
-        dataTestId={`${name}-brand-primary`}
-      />
-      <Button
-        title={`${name} focus`}
-        accent="brand"
-        focus
-        dataTestId={`${name}-brand-focus`}
-      />
-      <Button
-        title={`${name} disabled`}
-        accent="brand"
-        disabled
-        dataTestId={`${name}-brand-disabled`}
-      />
-      <Button
-        title={`${name} secondary`}
-        variant="secondary"
-        accent="brand"
-        hotkeys={['⌘', 'S']}
-        dataTestId={`${name}-brand-secondary`}
-      />
-      <IconButton
-        Icon={IconSearch}
-        ariaLabel={`${name} brand icon`}
-        accent="brand"
-        dataTestId={`${name}-brand-icon`}
-      />
-      <AnimatedButton
-        title={`${name} animated`}
-        accent="brand"
-        animatedSvg={<svg aria-hidden />}
-        dataTestId={`${name}-brand-animated`}
-      />
-      <AnimatedButton
-        title={`${name} animated secondary`}
-        variant="secondary"
-        accent="brand"
-        animatedSvg={<svg aria-hidden />}
-        hotkeys={['⌘', 'A']}
-        dataTestId={`${name}-brand-animated-secondary`}
-      />
-      <ButtonGroup accent="brand">
+      <div style={{ backgroundColor: themeCssVariables.background.primary }}>
         <Button
-          title={`${name} grouped`}
-          dataTestId={`${name}-brand-grouped`}
+          title={`${name} primary`}
+          accent="brand"
+          hotkeys={['⌘', 'K']}
+          dataTestId={`${name}-brand-primary`}
+        />
+        <MainButton title={`${name} main`} />
+        <Button
+          title={`${name} focus`}
+          accent="brand"
+          focus
+          dataTestId={`${name}-brand-focus`}
         />
         <Button
-          title={`${name} grouped secondary`}
-          dataTestId={`${name}-brand-grouped-secondary`}
+          title={`${name} disabled`}
+          accent="brand"
+          disabled
+          dataTestId={`${name}-brand-disabled`}
         />
-      </ButtonGroup>
-      <Checkbox
-        checked
-        accent={CheckboxAccent.Brand}
-        aria-label={`${name} brand checkbox`}
-      />
-      <Radio checked label={`${name} brand radio`} />
-      <Toggle value aria-label={`${name} brand toggle`} />
-      <SearchInput
-        value=""
-        onChange={() => {}}
-        aria-label={`${name} brand search`}
-      />
+        <Button
+          title={`${name} secondary`}
+          variant="secondary"
+          accent="brand"
+          hotkeys={['⌘', 'S']}
+          dataTestId={`${name}-brand-secondary`}
+        />
+        <IconButton
+          Icon={IconSearch}
+          ariaLabel={`${name} brand icon`}
+          accent="brand"
+          dataTestId={`${name}-brand-icon`}
+        />
+        <AnimatedButton
+          title={`${name} animated`}
+          accent="brand"
+          animatedSvg={<svg aria-hidden />}
+          dataTestId={`${name}-brand-animated`}
+        />
+        <AnimatedButton
+          title={`${name} animated secondary`}
+          variant="secondary"
+          accent="brand"
+          animatedSvg={<svg aria-hidden />}
+          hotkeys={['⌘', 'A']}
+          dataTestId={`${name}-brand-animated-secondary`}
+        />
+        <ButtonGroup accent="brand">
+          <Button
+            title={`${name} grouped`}
+            dataTestId={`${name}-brand-grouped`}
+          />
+          <Button
+            title={`${name} grouped secondary`}
+            dataTestId={`${name}-brand-grouped-secondary`}
+          />
+        </ButtonGroup>
+        <Checkbox
+          checked
+          accent={CheckboxAccent.Brand}
+          aria-label={`${name} brand checkbox`}
+        />
+        <Radio checked label={`${name} brand radio`} />
+        <Toggle value aria-label={`${name} brand toggle`} />
+        <SearchInput
+          value=""
+          onChange={() => {}}
+          aria-label={`${name} brand search`}
+        />
       </div>
     </ThemeProvider>
   );
@@ -127,6 +124,26 @@ export const BrandAccentContract: Story = {
     );
     expect(window.getComputedStyle(lightPrimary).color).toBe('rgb(10, 10, 10)');
     expect(window.getComputedStyle(darkPrimary).color).toBe('rgb(10, 10, 10)');
+
+    const lightMainButton = canvas.getByRole('button', {
+      name: 'light main',
+    });
+    const darkMainButton = canvas.getByRole('button', {
+      name: 'dark main',
+    });
+
+    expect(window.getComputedStyle(lightMainButton).backgroundColor).toBe(
+      'rgb(223, 51, 119)',
+    );
+    expect(window.getComputedStyle(darkMainButton).backgroundColor).toBe(
+      'rgb(223, 51, 119)',
+    );
+    expect(window.getComputedStyle(lightMainButton).color).toBe(
+      'rgb(10, 10, 10)',
+    );
+    expect(window.getComputedStyle(darkMainButton).color).toBe(
+      'rgb(10, 10, 10)',
+    );
 
     expect(
       window
@@ -178,9 +195,9 @@ export const BrandAccentContract: Story = {
       'light-brand-animated',
       'light-brand-grouped',
     ]) {
-      expect(window.getComputedStyle(canvas.getByTestId(dataTestId)).backgroundColor).toBe(
-        'rgb(223, 51, 119)',
-      );
+      expect(
+        window.getComputedStyle(canvas.getByTestId(dataTestId)).backgroundColor,
+      ).toBe('rgb(223, 51, 119)');
     }
 
     const checkboxes = canvas.getAllByTestId('input-checkbox');
@@ -203,8 +220,9 @@ export const BrandAccentContract: Story = {
     const lightSearchInput = canvas.getByLabelText('light brand search');
 
     await userEvent.click(lightSearchInput);
-    expect(window.getComputedStyle(lightSearchInput.parentElement as HTMLElement).borderColor).toBe(
-      'rgb(201, 39, 105)',
-    );
+    expect(
+      window.getComputedStyle(lightSearchInput.parentElement as HTMLElement)
+        .borderColor,
+    ).toBe('rgb(201, 39, 105)');
   },
 };
