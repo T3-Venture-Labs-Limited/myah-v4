@@ -16,6 +16,10 @@ inputs:
     description: Path containing the Node.js and Yarn workspace. Defaults to repo root.
     required: false
     default: '.'
+  allow-existing-version:
+    description: Treat an already published identical package version as a successful publish.
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -54,4 +58,26 @@ runs:
     - name: Deploy
       shell: bash
       working-directory: ${{ inputs.app-path }}
-      run: yarn twenty app:publish --private --remote target
+      env:
+        ALLOW_EXISTING_VERSION: ${{ inputs.allow-existing-version }}
+      run: |
+        set +e
+        output="$(yarn twenty app:publish --private --remote target 2>&1)"
+        status=$?
+        set -e
+        printf '%s\n' "$output"
+
+        if [ "$status" -eq 0 ]; then
+          exit 0
+        fi
+
+        version="$(node -p "require('./package.json').version")"
+
+        if [ "$ALLOW_EXISTING_VERSION" = 'true' ] &&
+          printf '%s\n' "$output" |
+            grep -Fq "version must be higher than the currently deployed version ${version}."; then
+          echo "Package version ${version} is already published; continuing to promotion."
+          exit 0
+        fi
+
+        exit "$status"
