@@ -6,6 +6,7 @@ import { SettingsTableCard } from '@/settings/components/SettingsTableCard';
 import { getWorkspaceLogoUrl } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { UserContext } from '@/users/contexts/UserContext';
+import { isNonEmptyString } from '@sniptt/guards';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useContext } from 'react';
