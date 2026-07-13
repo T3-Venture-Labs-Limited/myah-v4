@@ -158,6 +158,39 @@ export class MyahComposioService {
     userId,
     workspace,
   }: ListInstagramAccountsInput): Promise<InstagramAccountStatus[]> {
+    const canonicalInstagramAccounts = selectCanonicalInstagramAccounts(
+      await this.fetchActiveInstagramAccounts(userId),
+    );
+
+    await this.upsertAgentVisibleInstagramAccounts({
+      accounts: canonicalInstagramAccounts,
+      workspace,
+    });
+
+    return canonicalInstagramAccounts;
+  }
+
+  async getExactlyOneActiveInstagramAccount({
+    workspaceId,
+  }: {
+    workspaceId: string;
+  }): Promise<InstagramAccountStatus> {
+    const accounts = await this.fetchActiveInstagramAccounts(
+      buildInstagramComposioUserId(workspaceId),
+    );
+
+    if (accounts.length !== 1) {
+      throw new BadGatewayException(
+        'Exactly one active Instagram account is required to send a reply.',
+      );
+    }
+
+    return accounts[0];
+  }
+
+  private async fetchActiveInstagramAccounts(
+    userId: string,
+  ): Promise<InstagramAccountStatus[]> {
     const apiKey = getEnv('COMPOSIO_API_KEY');
 
     if (!apiKey) {
@@ -171,7 +204,6 @@ export class MyahComposioService {
       statuses: 'ACTIVE',
       limit: '50',
     });
-
     const response = await fetch(
       `${COMPOSIO_API_BASE_URL}/connected_accounts?${query.toString()}`,
       {
@@ -199,7 +231,7 @@ export class MyahComposioService {
 
     const accounts = body.items ?? body.data ?? [];
 
-    const instagramAccounts = accounts
+    return accounts
       .filter((account) => getToolkitSlug(account) === INSTAGRAM_TOOLKIT_SLUG)
       .flatMap((account): InstagramAccountStatus[] => {
         const connectedAccountId = getConnectedAccountId(account);
@@ -220,15 +252,6 @@ export class MyahComposioService {
           },
         ];
       });
-    const canonicalInstagramAccounts =
-      selectCanonicalInstagramAccounts(instagramAccounts);
-
-    await this.upsertAgentVisibleInstagramAccounts({
-      accounts: canonicalInstagramAccounts,
-      workspace,
-    });
-
-    return canonicalInstagramAccounts;
   }
 
   private async upsertAgentVisibleInstagramAccounts({

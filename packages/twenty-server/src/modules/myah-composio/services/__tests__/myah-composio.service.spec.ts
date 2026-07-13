@@ -190,6 +190,34 @@ describe('MyahComposioService', () => {
     );
   });
 
+  it('rejects a send path when the workspace has multiple active Instagram accounts', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            id: 'ca_instagram_one',
+            status: 'ACTIVE',
+            toolkit: { slug: 'instagram' },
+          },
+          {
+            id: 'ca_instagram_two',
+            status: 'ACTIVE',
+            toolkit: { slug: 'instagram' },
+          },
+        ],
+      }),
+    });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.getExactlyOneActiveInstagramAccount({
+        workspaceId: 'workspace-id',
+      }),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
   it('upserts the latest active Instagram account and removes stale local rows for that workspace user', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-08T04:30:00.000Z'));
 

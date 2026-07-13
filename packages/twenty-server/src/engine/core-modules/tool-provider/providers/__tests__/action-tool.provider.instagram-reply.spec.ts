@@ -1,0 +1,74 @@
+import { ActionToolProvider } from 'src/engine/core-modules/tool-provider/providers/action-tool.provider';
+
+const createTool = () => ({
+  description: 'test tool',
+  inputSchema: {},
+  execute: jest.fn().mockResolvedValue({ success: true, message: 'executed' }),
+});
+
+const buildProvider = ({ hasPermission }: { hasPermission: boolean }) => {
+  const sendInstagramReplyTool = createTool();
+  const permissionsService = {
+    hasToolPermission: jest.fn().mockResolvedValue(hasPermission),
+  };
+
+  return {
+    sendInstagramReplyTool,
+    permissionsService,
+    provider: new ActionToolProvider(
+      createTool() as never,
+      createTool() as never,
+      createTool() as never,
+      createTool() as never,
+      createTool() as never,
+      createTool() as never,
+      createTool() as never,
+      createTool() as never,
+      createTool() as never,
+      { isEnabled: jest.fn().mockReturnValue(true) } as never,
+      sendInstagramReplyTool as never,
+      permissionsService as never,
+      {} as never,
+    ),
+  };
+};
+
+describe('ActionToolProvider Instagram reply execution', () => {
+  const context = {
+    workspaceId: 'workspace-id',
+    rolePermissionConfig: {},
+  };
+
+  it('refuses an Instagram reply action when the role lacks its explicit permission', async () => {
+    const { provider, sendInstagramReplyTool } = buildProvider({
+      hasPermission: false,
+    });
+
+    await expect(
+      provider.executeStaticTool('send_instagram_reply', {}, context as never),
+    ).rejects.toThrow(
+      'Missing permission to execute the Instagram reply action',
+    );
+
+    expect(sendInstagramReplyTool.execute).not.toHaveBeenCalled();
+  });
+
+  it('executes an Instagram reply only after the permission check succeeds', async () => {
+    const { provider, permissionsService, sendInstagramReplyTool } =
+      buildProvider({ hasPermission: true });
+
+    await expect(
+      provider.executeStaticTool(
+        'send_instagram_reply',
+        { approvalId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
+        context as never,
+      ),
+    ).resolves.toEqual({ success: true, message: 'executed' });
+
+    expect(permissionsService.hasToolPermission).toHaveBeenCalledTimes(1);
+    expect(sendInstagramReplyTool.execute).toHaveBeenCalledWith(
+      { approvalId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
+      expect.objectContaining({ workspaceId: 'workspace-id' }),
+    );
+  });
+});

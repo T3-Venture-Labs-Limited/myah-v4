@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 import { Injectable, Logger } from '@nestjs/common';
 
 import {
@@ -18,6 +20,7 @@ import type { UIDataTypes, UIMessagePart, UITools } from 'ai';
 
 import { CodeInterpreterService } from 'src/engine/core-modules/code-interpreter/code-interpreter.service';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
+import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
 import { AgentMessagePartEntity } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-message-part.entity';
 import {
   AgentMessageEntity,
@@ -89,6 +92,7 @@ export class AgentChatService {
     private readonly titleGenerationService: AgentTitleGenerationService,
     private readonly workspaceEventBroadcaster: WorkspaceEventBroadcaster,
     private readonly codeInterpreterService: CodeInterpreterService,
+    private readonly instagramReplyApprovalService: InstagramReplyApprovalService,
   ) {}
 
   async createThread({
@@ -689,12 +693,14 @@ export class AgentChatService {
     decision,
     streamId,
     workspaceId,
+    userWorkspaceId,
   }: {
     threadId: string;
     messageId: string;
     decision: AgentChatApprovalDecision;
     streamId: string;
     workspaceId: string;
+    userWorkspaceId: string;
   }): Promise<{
     turnId: string | null;
     rollback: { partId: string; previousOutput: Record<string, unknown> };
@@ -782,6 +788,44 @@ export class AgentChatService {
     }
 
     try {
+      const instagramReply = previousResult.request.instagramReply;
+
+      if (previousResult.request.toolName === 'send_instagram_reply') {
+        if (
+          !instagramReply ||
+          !previousResult.approvalId ||
+          previousResult.request.preview?.format !== 'text'
+        ) {
+          throw new AiException(
+            'Instagram reply approval binding is invalid.',
+            AiExceptionCode.APPROVAL_NOT_PENDING,
+          );
+        }
+
+        await this.instagramReplyApprovalService.createPendingApproval({
+          workspaceId,
+          userWorkspaceId,
+          threadId,
+          approvalId: previousResult.approvalId,
+          toolName: 'send_instagram_reply',
+          connectedAccountId: instagramReply.connectedAccountId,
+          draftId: instagramReply.draftId,
+          conversationId: instagramReply.conversationId,
+          previewTextSha256: createHash('sha256')
+            .update(previousResult.request.preview.content)
+            .digest('hex'),
+        });
+        await this.instagramReplyApprovalService.resolveApproval({
+          workspaceId,
+          userWorkspaceId,
+          approvalId: previousResult.approvalId,
+          decision: decision.decision as
+            | 'approved'
+            | 'rejected'
+            | 'changes_requested',
+        });
+      }
+
       await this.messagePartRepository.update(
         workspaceId,
         { id: pendingPart.id },
@@ -792,6 +836,7 @@ export class AgentChatService {
             message: 'User resolved the approval request.',
             result: {
               request: previousResult.request,
+              approvalId: previousResult.approvalId,
               status: 'resolved',
               decision: decision.decision as ApprovalDecision,
               comment: decision.comment,

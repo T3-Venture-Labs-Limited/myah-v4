@@ -119,6 +119,11 @@ const STANDARD_PERMISSION_FLAG_METADATA: Record<
     description: 'Send emails via connected accounts',
     icon: 'IconMail',
   },
+  [PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL]: {
+    label: 'Send Instagram Reply',
+    description: 'Send an approved reply in an existing Instagram conversation',
+    icon: 'IconMessage',
+  },
   [PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL]: {
     label: 'Create Calendar Event',
     description: 'Create calendar events via connected accounts',

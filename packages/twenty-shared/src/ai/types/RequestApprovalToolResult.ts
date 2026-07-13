@@ -3,6 +3,7 @@ import { type RequestApprovalToolInput } from '@/ai/types/RequestApprovalToolInp
 
 export type RequestApprovalToolResult = {
   request: RequestApprovalToolInput;
+  approvalId?: string;
   status: 'pending' | 'resolved';
   decision?: ApprovalDecision;
   comment?: string;

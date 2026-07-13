@@ -253,7 +253,7 @@ export const SettingsAccountsInstagram = () => {
               </StyledStatusPill>
             </StyledCardHeader>
             <StyledDescription>
-              {t`This enables manual testing of existing Instagram conversations and approved replies. It does not enable polling, background sends, cold first-contact DMs, bulk messaging, or auto-replies.`}
+              {t`This connection supports manual reads of existing Instagram conversations. Reply delivery requires a server-owned, user-approved action and the Send Instagram Reply role permission. It does not enable polling, cold first-contact DMs, bulk messaging, or auto-replies.`}
             </StyledDescription>
             {accounts.length > 0 && (
               <StyledAccountList>

@@ -15,7 +15,9 @@ import {
 export const listInstagramMessagesHandler = async (
   input: ListInstagramMessagesInput = {},
 ) => {
-  const connectedAccountId = resolveConnectedAccountId(input.connectedAccountId);
+  const connectedAccountId = resolveConnectedAccountId(
+    input.connectedAccountId,
+  );
   const missingFields = requireFields({
     connectedAccountId,
     conversationId: input.conversationId,
@@ -53,6 +55,8 @@ export const listInstagramMessagesHandler = async (
     success: true,
     toolSlug: INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
     messages: extractNestedDataList(result.data),
-    ...(sanitizePaging(result.data) ? { paging: sanitizePaging(result.data) } : {}),
+    ...(sanitizePaging(result.data)
+      ? { paging: sanitizePaging(result.data) }
+      : {}),
   };
 };

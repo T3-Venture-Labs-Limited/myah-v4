@@ -22,7 +22,8 @@ export const sanitizePaging = (data: unknown): SanitizedPaging | undefined => {
     return undefined;
   }
 
-  const paging = (data as { paging?: { cursors?: SanitizedPaging['cursors'] } }).paging;
+  const paging = (data as { paging?: { cursors?: SanitizedPaging['cursors'] } })
+    .paging;
 
   const after = paging?.cursors?.after;
   const before = paging?.cursors?.before;

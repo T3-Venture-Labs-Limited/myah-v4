@@ -6,6 +6,7 @@ import { i18nLabel } from 'src/engine/workspace-manager/twenty-standard-applicat
 export const ACTION_TOOL_IDS = [
   'http_request',
   'send_email',
+  'send_instagram_reply',
   'draft_email',
   'create_calendar_event',
   'search_help_center',
@@ -21,6 +22,9 @@ export const ACTION_TOOL_LABELS: Record<ActionToolId, ActionToolLabel> = {
   },
   send_email: {
     label: i18nLabel(msg`Send Email`),
+  },
+  send_instagram_reply: {
+    label: i18nLabel(msg`Send Instagram Reply`),
   },
   draft_email: {
     label: i18nLabel(msg`Draft Email`),

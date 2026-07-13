@@ -142,7 +142,8 @@ export default defineObject({
       name: 'approvedAt',
       isNullable: true,
       defaultValue: null,
-      description: 'When a human approved this draft for a future explicit send.',
+      description:
+        'When a human approved this draft for a future explicit send.',
     },
     {
       universalIdentifier: REPLY_DRAFT_SENT_AT_FIELD_UNIVERSAL_IDENTIFIER,

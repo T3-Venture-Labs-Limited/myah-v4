@@ -16,5 +16,6 @@ import { MyahComposioService } from 'src/modules/myah-composio/services/myah-com
   ],
   controllers: [MyahComposioController],
   providers: [MyahComposioService],
+  exports: [MyahComposioService],
 })
 export class MyahComposioModule {}

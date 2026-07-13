@@ -1,6 +1,4 @@
-import {
-  INSTAGRAM_LIST_ALL_CONVERSATIONS_TOOL_SLUG,
-} from 'src/logic-functions/constants/composio-instagram.constants';
+import { INSTAGRAM_LIST_ALL_CONVERSATIONS_TOOL_SLUG } from 'src/logic-functions/constants/composio-instagram.constants';
 import { type ListInstagramConversationsInput } from 'src/logic-functions/types/instagram-messaging-inputs.type';
 import { executeComposioInstagramTool } from 'src/logic-functions/utils/execute-composio-instagram-tool';
 import {
@@ -17,7 +15,9 @@ import {
 export const listInstagramConversationsHandler = async (
   input: ListInstagramConversationsInput = {},
 ) => {
-  const connectedAccountId = resolveConnectedAccountId(input.connectedAccountId);
+  const connectedAccountId = resolveConnectedAccountId(
+    input.connectedAccountId,
+  );
   const missingFields = requireFields({
     connectedAccountId,
   });
@@ -54,6 +54,8 @@ export const listInstagramConversationsHandler = async (
     success: true,
     toolSlug: INSTAGRAM_LIST_ALL_CONVERSATIONS_TOOL_SLUG,
     conversations: extractNestedDataList(result.data),
-    ...(sanitizePaging(result.data) ? { paging: sanitizePaging(result.data) } : {}),
+    ...(sanitizePaging(result.data)
+      ? { paging: sanitizePaging(result.data) }
+      : {}),
   };
 };

@@ -16027,6 +16027,11 @@ msgstr "Send"
 msgid "Send an invite email to your team"
 msgstr "Send an invite email to your team"
 
+#. js-lingui-id: QjPgX3
+#: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
+msgid "Send approved replies in existing Instagram conversations"
+msgstr "Send approved replies in existing Instagram conversations"
+
 #. js-lingui-id: WRLt0i
 #: src/modules/side-panel/pages/compose-campaign/components/SidePanelCampaignComposerPage.tsx
 msgid "Send campaign"
@@ -16047,6 +16052,11 @@ msgstr "Send Email"
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
 msgid "Send emails via connected accounts"
 msgstr "Send emails via connected accounts"
+
+#. js-lingui-id: 11W7Ux
+#: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
+msgid "Send Instagram Reply"
+msgstr "Send Instagram Reply"
 
 #. js-lingui-id: 6nwEi6
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionCreateCalendarEvent.tsx
@@ -17728,15 +17738,15 @@ msgstr "This component runs without a UI and renders nothing here."
 msgid "This connection does not exist or is not available for this application."
 msgstr "This connection does not exist or is not available for this application."
 
+#. js-lingui-id: 2uRIxZ
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "This connection supports manual reads of existing Instagram conversations. Reply delivery requires a server-owned, user-approved action and the Send Instagram Reply role permission. It does not enable polling, cold first-contact DMs, bulk messaging, or auto-replies."
+msgstr "This connection supports manual reads of existing Instagram conversations. Reply delivery requires a server-owned, user-approved action and the Send Instagram Reply role permission. It does not enable polling, cold first-contact DMs, bulk messaging, or auto-replies."
+
 #. js-lingui-id: SLIRqz
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableHelpText.tsx
 msgid "This database value overrides environment settings. "
 msgstr "This database value overrides environment settings. "
-
-#. js-lingui-id: tadl3P
-#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-msgid "This enables manual testing of existing Instagram conversations and approved replies. It does not enable polling, background sends, cold first-contact DMs, bulk messaging, or auto-replies."
-msgstr "This enables manual testing of existing Instagram conversations and approved replies. It does not enable polling, background sends, cold first-contact DMs, bulk messaging, or auto-replies."
 
 #. js-lingui-id: 8IRnd6
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx

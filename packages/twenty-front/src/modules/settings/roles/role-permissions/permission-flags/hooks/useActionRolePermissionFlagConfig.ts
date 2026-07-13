@@ -79,6 +79,16 @@ export const useActionRolePermissionFlagConfig = ({
         isRelevantForUsers: true,
       },
       {
+        key: PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
+        name: t`Send Instagram Reply`,
+        description: t`Send approved replies in existing Instagram conversations`,
+        Icon: IconMail,
+        isToolPermission: true,
+        isRelevantForAgents: true,
+        isRelevantForApiKeys: false,
+        isRelevantForUsers: true,
+      },
+      {
         key: PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL,
         name: t`Create Calendar Event`,
         description: t`Create calendar events via connected accounts`,

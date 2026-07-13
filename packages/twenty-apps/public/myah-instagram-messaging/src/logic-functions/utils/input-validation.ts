@@ -30,7 +30,9 @@ export const resolveConnectedAccountId = (
     : undefined;
   const resolvedConnectedAccountId = explicitId || configuredDefault;
 
-  return resolvedConnectedAccountId === '' ? undefined : resolvedConnectedAccountId;
+  return resolvedConnectedAccountId === ''
+    ? undefined
+    : resolvedConnectedAccountId;
 };
 
 export const buildMissingConnectedAccountError = (

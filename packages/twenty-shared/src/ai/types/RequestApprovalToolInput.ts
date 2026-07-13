@@ -12,6 +12,11 @@ export type RequestApprovalToolInput = {
   targetLabel?: string;
   affectedRecords?: RequestApprovalAffectedRecord[];
   preview?: RequestApprovalPreview;
+  instagramReply?: {
+    draftId: string;
+    connectedAccountId: string;
+    conversationId: string;
+  };
   consequences: string[];
   options?: {
     allowRequestChanges?: boolean;

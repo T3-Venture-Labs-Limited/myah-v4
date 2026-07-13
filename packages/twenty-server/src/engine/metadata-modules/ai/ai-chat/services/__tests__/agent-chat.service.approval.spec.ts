@@ -45,6 +45,10 @@ const buildService = ({
   const messagePartRepository = {
     update: jest.fn().mockResolvedValue({ affected: 1 }),
   };
+  const instagramReplyApprovalService = {
+    createPendingApproval: jest.fn().mockResolvedValue(undefined),
+    resolveApproval: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new AgentChatService(
     threadRepository as never,
@@ -55,9 +59,15 @@ const buildService = ({
     {} as never,
     {} as never,
     {} as never,
+    instagramReplyApprovalService as never,
   );
 
-  return { service, threadRepository, messagePartRepository };
+  return {
+    service,
+    threadRepository,
+    messagePartRepository,
+    instagramReplyApprovalService,
+  };
 };
 
 describe('AgentChatService.resolvePendingApproval', () => {
@@ -70,6 +80,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
       decision: { decision: 'approved', comment: 'Looks good' },
       streamId: 'stream-id',
       workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
     });
 
     expect(threadRepository.update).toHaveBeenCalledWith(
@@ -101,6 +112,67 @@ describe('AgentChatService.resolvePendingApproval', () => {
     });
   });
 
+  it('records the exact Instagram reply binding before resuming the approved turn', async () => {
+    const instagramPendingOutput = {
+      ...pendingApprovalOutput,
+      result: {
+        ...pendingApprovalOutput.result,
+        request: {
+          ...pendingApprovalOutput.result.request,
+          actionKind: 'external_write',
+          toolName: 'send_instagram_reply',
+          preview: { format: 'text', content: 'Thank you for your message.' },
+          instagramReply: {
+            draftId: '9b05e648-d3f0d-4fd7-8e4e-bc6a31b980ea',
+            connectedAccountId: 'ca_instagram_123',
+            conversationId: 'd81e9de7-899e-4259-ae1e-e2770b405f4b',
+          },
+        },
+        approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
+      },
+    };
+    const { service, instagramReplyApprovalService } = buildService({
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolOutput: instagramPendingOutput,
+        },
+      ],
+    });
+
+    await service.resolvePendingApproval({
+      threadId: 'thread-id',
+      messageId: 'message-id',
+      decision: { decision: 'approved' },
+      streamId: 'stream-id',
+      workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
+    });
+
+    expect(
+      instagramReplyApprovalService.createPendingApproval,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+        threadId: 'thread-id',
+        approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
+        toolName: 'send_instagram_reply',
+        connectedAccountId: 'ca_instagram_123',
+        draftId: '9b05e648-d3f0d-4fd7-8e4e-bc6a31b980ea',
+        conversationId: 'd81e9de7-899e-4259-ae1e-e2770b405f4b',
+        previewTextSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+    );
+    expect(instagramReplyApprovalService.resolveApproval).toHaveBeenCalledWith({
+      workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
+      approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
+      decision: 'approved',
+    });
+  });
+
   it('resolves rejected approvals without starting a resume stream', async () => {
     const { service, threadRepository } = buildService();
 
@@ -110,6 +182,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
       decision: { decision: 'rejected', comment: 'No thanks' },
       streamId: 'stream-id',
       workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
     });
 
     expect(threadRepository.update).toHaveBeenCalledWith(
@@ -143,6 +216,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
         decision: { decision: 'approved' },
         streamId: 'stream-id',
         workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
       }),
     ).rejects.toMatchObject({ code: AiExceptionCode.APPROVAL_NOT_PENDING });
   });
@@ -157,6 +231,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
         decision: { decision: 'maybe' },
         streamId: 'stream-id',
         workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
       }),
     ).rejects.toMatchObject({
       code: AiExceptionCode.INVALID_APPROVAL_DECISION,
