@@ -1944,6 +1944,9 @@ export default {
             "supportUserHash": [
                 1
             ],
+            "isMyahTeamMember": [
+                6
+            ],
             "workspaces": [
                 17
             ],

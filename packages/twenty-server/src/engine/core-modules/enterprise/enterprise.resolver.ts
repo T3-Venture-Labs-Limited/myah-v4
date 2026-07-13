@@ -18,14 +18,16 @@ import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { ConfigVariableExceptionCode } from 'src/engine/core-modules/twenty-config/twenty-config.exception';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
-import { AdminPanelGuard } from 'src/engine/guards/admin-panel-guard';
 import { BillingDisabledGuard } from 'src/engine/guards/billing-disabled.guard';
+import { MyahTeamGuard } from 'src/engine/guards/myah-team.guard';
+import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 
 @Resolver()
 @UsePipes(ResolverValidationPipe)
 @UseFilters(EnterpriseExceptionFilter, PreventNestToAutoLogGraphqlErrorsFilter)
+@UseGuards(MyahTeamGuard, NoImpersonationGuard)
 export class EnterpriseResolver {
   constructor(
     private readonly enterprisePlanService: EnterprisePlanService,
@@ -42,12 +44,7 @@ export class EnterpriseResolver {
   }
 
   @Query(() => String, { nullable: true })
-  @UseGuards(
-    WorkspaceAuthGuard,
-    BillingDisabledGuard,
-    AdminPanelGuard,
-    NoPermissionGuard,
-  )
+  @UseGuards(WorkspaceAuthGuard, BillingDisabledGuard, NoPermissionGuard)
   async enterprisePortalSession(
     // for existing subscriptions
     @Args('returnUrlPath', { nullable: true }) returnUrlPath?: string,
@@ -56,12 +53,7 @@ export class EnterpriseResolver {
   }
 
   @Query(() => String, { nullable: true })
-  @UseGuards(
-    WorkspaceAuthGuard,
-    BillingDisabledGuard,
-    AdminPanelGuard,
-    NoPermissionGuard,
-  )
+  @UseGuards(WorkspaceAuthGuard, BillingDisabledGuard, NoPermissionGuard)
   async enterpriseCheckoutSession(
     // for new subscriptions
     @Args('billingInterval', { nullable: true }) billingInterval?: string,
@@ -73,34 +65,19 @@ export class EnterpriseResolver {
   }
 
   @Query(() => EnterpriseSubscriptionStatusDTO, { nullable: true })
-  @UseGuards(
-    WorkspaceAuthGuard,
-    BillingDisabledGuard,
-    AdminPanelGuard,
-    NoPermissionGuard,
-  )
+  @UseGuards(WorkspaceAuthGuard, BillingDisabledGuard, NoPermissionGuard)
   async enterpriseSubscriptionStatus(): Promise<EnterpriseSubscriptionStatusDTO | null> {
     return this.enterprisePlanService.getSubscriptionStatus();
   }
 
   @Mutation(() => Boolean)
-  @UseGuards(
-    WorkspaceAuthGuard,
-    BillingDisabledGuard,
-    AdminPanelGuard,
-    NoPermissionGuard,
-  )
+  @UseGuards(WorkspaceAuthGuard, BillingDisabledGuard, NoPermissionGuard)
   async refreshEnterpriseValidityToken(): Promise<boolean> {
     return this.enterprisePlanService.refreshValidityToken();
   }
 
   @Mutation(() => EnterpriseLicenseInfoDTO)
-  @UseGuards(
-    WorkspaceAuthGuard,
-    BillingDisabledGuard,
-    AdminPanelGuard,
-    NoPermissionGuard,
-  )
+  @UseGuards(WorkspaceAuthGuard, BillingDisabledGuard, NoPermissionGuard)
   async setEnterpriseKey(
     @Args('enterpriseKey') enterpriseKey: string,
   ): Promise<EnterpriseLicenseInfoDTO> {

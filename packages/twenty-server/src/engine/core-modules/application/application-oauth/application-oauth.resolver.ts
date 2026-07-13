@@ -18,8 +18,11 @@ import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspac
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
+import { MyahTeamGuard } from 'src/engine/guards/myah-team.guard';
+import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
+import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 
 const APP_TOKEN_RATE_LIMIT_MAX = 30;
@@ -28,7 +31,6 @@ const APP_TOKEN_RATE_LIMIT_WINDOW_MS = 30_000;
 @UsePipes(ResolverValidationPipe)
 @MetadataResolver()
 @UseFilters(ApplicationExceptionFilter, AuthGraphqlApiExceptionFilter)
-@UseGuards(WorkspaceAuthGuard)
 export class ApplicationOAuthResolver {
   constructor(
     private readonly applicationTokenService: ApplicationTokenService,
@@ -36,11 +38,16 @@ export class ApplicationOAuthResolver {
   ) {}
 
   @Mutation(() => ApplicationTokenPairDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.APPLICATIONS))
+  @UseGuards(
+    UserAuthGuard,
+    WorkspaceAuthGuard,
+    MyahTeamGuard,
+    NoImpersonationGuard,
+  )
   async generateApplicationToken(
     @Args() { applicationId }: GenerateApplicationTokenInput,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
-    @AuthUser({ allowUndefined: true }) user?: { id: string },
+    @AuthUser() user: AuthContextUser,
     @AuthUserWorkspaceId({ allowUndefined: true }) userWorkspaceId?: string,
   ): Promise<ApplicationTokenPairDTO> {
     await this.throttlerService.tokenBucketThrottleOrThrow(
@@ -59,7 +66,7 @@ export class ApplicationOAuthResolver {
   }
 
   @Mutation(() => ApplicationTokenPairDTO)
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(WorkspaceAuthGuard, NoPermissionGuard)
   async renewApplicationToken(
     @Args('applicationRefreshToken') applicationRefreshToken: string,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,

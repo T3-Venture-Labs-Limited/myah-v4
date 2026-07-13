@@ -11,6 +11,7 @@ import { LoginTokenService } from 'src/engine/core-modules/auth/token/services/l
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { EventLogEmitterService } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.service';
 import { ImpersonationAuthorizationService } from 'src/engine/core-modules/impersonation/services/impersonation-authorization.service';
+import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
 import { ImpersonationService } from 'src/engine/core-modules/impersonation/services/impersonation.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { OTPStatus } from 'src/engine/core-modules/two-factor-authentication/strategies/otp/otp.constants';
@@ -22,6 +23,7 @@ const UserWorkspaceFindOneMock = jest.fn();
 const LoginTokenServiceGenerateLoginTokenMock = jest.fn();
 const PermissionsServiceUserHasWorkspaceSettingPermissionMock = jest.fn();
 const TwentyConfigServiceGetMock = jest.fn();
+const MyahTeamAuthorizationServiceIsMyahTeamMemberMock = jest.fn();
 
 describe('ImpersonationService', () => {
   let service: ImpersonationService;
@@ -34,6 +36,7 @@ describe('ImpersonationService', () => {
 
       return undefined;
     });
+    MyahTeamAuthorizationServiceIsMyahTeamMemberMock.mockReturnValue(false);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ImpersonationService,
@@ -84,6 +87,12 @@ describe('ImpersonationService', () => {
           useValue: {
             userHasWorkspaceSettingPermission:
               PermissionsServiceUserHasWorkspaceSettingPermissionMock,
+          },
+        },
+        {
+          provide: MyahTeamAuthorizationService,
+          useValue: {
+            isMyahTeamMember: MyahTeamAuthorizationServiceIsMyahTeamMemberMock,
           },
         },
       ],
@@ -374,7 +383,7 @@ describe('ImpersonationService', () => {
     );
   });
 
-  it('should throw an error when impersonation is not enabled at server level for the user', async () => {
+  it('should deny a legacy-only cross-workspace impersonator when the Team claim is false', async () => {
     const mockToImpersonateUserWorkspace = {
       userId: 'target-user-id',
       workspaceId: 'target-workspace-id',
@@ -386,9 +395,19 @@ describe('ImpersonationService', () => {
       id: 'impersonator-user-workspace-id',
       userId: 'impersonator-user-id',
       workspaceId: 'impersonator-workspace-id',
-      user: { id: 'impersonator-user-id', canImpersonate: false },
+      user: {
+        id: 'impersonator-user-id',
+        canImpersonate: true,
+        canAccessFullAdminPanel: false,
+      },
       workspace: { id: 'impersonator-workspace-id', allowImpersonation: true },
-      twoFactorAuthenticationMethods: [],
+      twoFactorAuthenticationMethods: [
+        {
+          id: '2fa-method-id',
+          status: OTPStatus.VERIFIED,
+          strategy: 'TOTP',
+        },
+      ],
     };
 
     UserWorkspaceFindOneMock.mockResolvedValueOnce(
@@ -396,11 +415,6 @@ describe('ImpersonationService', () => {
     );
     UserWorkspaceFindOneMock.mockResolvedValueOnce(
       mockImpersonatorUserWorkspace,
-    );
-
-    // Mock workspace-level permission check to return false
-    PermissionsServiceUserHasWorkspaceSettingPermissionMock.mockResolvedValueOnce(
-      false,
     );
 
     await expect(
@@ -415,6 +429,10 @@ describe('ImpersonationService', () => {
         AuthExceptionCode.FORBIDDEN_EXCEPTION,
       ),
     );
+
+    expect(
+      PermissionsServiceUserHasWorkspaceSettingPermissionMock,
+    ).not.toHaveBeenCalled();
   });
 
   describe('admin privilege escalation prevention', () => {
@@ -589,7 +607,8 @@ describe('ImpersonationService', () => {
   });
 
   describe('2FA requirements for server-level impersonation', () => {
-    it('should allow server-level impersonation when 2FA is enabled and verified', async () => {
+    it('should allow a claim-only Team member with verified 2FA to impersonate across opted-in workspaces', async () => {
+      MyahTeamAuthorizationServiceIsMyahTeamMemberMock.mockReturnValue(true);
       TwentyConfigServiceGetMock.mockImplementation((key: string) => {
         if (key === 'NODE_ENV') {
           return NodeEnvironment.PRODUCTION;
@@ -609,7 +628,11 @@ describe('ImpersonationService', () => {
         id: 'impersonator-user-workspace-id',
         userId: 'impersonator-user-id',
         workspaceId: 'impersonator-workspace-id',
-        user: { id: 'impersonator-user-id', canImpersonate: true },
+        user: {
+          id: 'impersonator-user-id',
+          canImpersonate: false,
+          canAccessFullAdminPanel: false,
+        },
         workspace: {
           id: 'impersonator-workspace-id',
           allowImpersonation: true,
@@ -657,6 +680,7 @@ describe('ImpersonationService', () => {
     });
 
     it('should throw an error when 2FA is not enabled for server-level impersonation in production', async () => {
+      MyahTeamAuthorizationServiceIsMyahTeamMemberMock.mockReturnValue(true);
       TwentyConfigServiceGetMock.mockImplementation((key: string) => {
         if (key === 'NODE_ENV') {
           return NodeEnvironment.PRODUCTION;
@@ -676,7 +700,7 @@ describe('ImpersonationService', () => {
         id: 'impersonator-user-workspace-id',
         userId: 'impersonator-user-id',
         workspaceId: 'impersonator-workspace-id',
-        user: { id: 'impersonator-user-id', canImpersonate: true },
+        user: { id: 'impersonator-user-id' },
         workspace: {
           id: 'impersonator-workspace-id',
           allowImpersonation: true,
@@ -706,6 +730,7 @@ describe('ImpersonationService', () => {
     });
 
     it('should throw an error when 2FA is not verified for server-level impersonation in production', async () => {
+      MyahTeamAuthorizationServiceIsMyahTeamMemberMock.mockReturnValue(true);
       TwentyConfigServiceGetMock.mockImplementation((key: string) => {
         if (key === 'NODE_ENV') {
           return NodeEnvironment.PRODUCTION;
@@ -725,7 +750,7 @@ describe('ImpersonationService', () => {
         id: 'impersonator-user-workspace-id',
         userId: 'impersonator-user-id',
         workspaceId: 'impersonator-workspace-id',
-        user: { id: 'impersonator-user-id', canImpersonate: true },
+        user: { id: 'impersonator-user-id' },
         workspace: {
           id: 'impersonator-workspace-id',
           allowImpersonation: true,
@@ -761,6 +786,7 @@ describe('ImpersonationService', () => {
     });
 
     it('should allow server-level impersonation without 2FA in development environment', async () => {
+      MyahTeamAuthorizationServiceIsMyahTeamMemberMock.mockReturnValue(true);
       TwentyConfigServiceGetMock.mockImplementation((key: string) => {
         if (key === 'NODE_ENV') {
           return NodeEnvironment.DEVELOPMENT;
@@ -780,7 +806,7 @@ describe('ImpersonationService', () => {
         id: 'impersonator-user-workspace-id',
         userId: 'impersonator-user-id',
         workspaceId: 'impersonator-workspace-id',
-        user: { id: 'impersonator-user-id', canImpersonate: true },
+        user: { id: 'impersonator-user-id' },
         workspace: {
           id: 'impersonator-workspace-id',
           allowImpersonation: true,

@@ -1,8 +1,6 @@
 import { UseFilters, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Parent, ResolveField } from '@nestjs/graphql';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
-
 import { ApplicationVariableEntityExceptionFilter } from 'src/engine/core-modules/application/application-variable/application-variable-exception-filter';
 import { ApplicationVariableEntity } from 'src/engine/core-modules/application/application-variable/application-variable.entity';
 import { ApplicationVariableEntityService } from 'src/engine/core-modules/application/application-variable/application-variable.service';
@@ -11,13 +9,11 @@ import { UpdateApplicationVariableEntityInput } from 'src/engine/core-modules/ap
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
+import { MyahTeamGuard } from 'src/engine/guards/myah-team.guard';
+import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 
-@UseGuards(
-  WorkspaceAuthGuard,
-  SettingsPermissionGuard(PermissionFlagType.APPLICATIONS),
-)
+@UseGuards(WorkspaceAuthGuard, MyahTeamGuard, NoImpersonationGuard)
 @MetadataResolver(() => ApplicationVariableEntityDTO)
 @UseFilters(ApplicationVariableEntityExceptionFilter)
 export class ApplicationVariableEntityResolver {

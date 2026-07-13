@@ -3,7 +3,6 @@ import { Args, Int, Mutation, Query } from '@nestjs/graphql';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import GraphQLJSON from 'graphql-type-json';
-import { PermissionFlagType } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
 import { In, type Repository } from 'typeorm';
 
@@ -81,9 +80,8 @@ import { UsageAnalyticsService } from 'src/engine/core-modules/usage/services/us
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { AdminPanelGuard } from 'src/engine/guards/admin-panel-guard';
+import { MyahTeamGuard } from 'src/engine/guards/myah-team.guard';
 import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { MODEL_FAMILY_LABELS } from 'src/engine/metadata-modules/ai/ai-models/constants/model-family-labels.const';
@@ -116,7 +114,8 @@ const INSTALLED_WORKSPACES_PAGE_SIZE = 10;
 @UseGuards(
   WorkspaceAuthGuard,
   UserAuthGuard,
-  SettingsPermissionGuard(PermissionFlagType.SECURITY),
+  MyahTeamGuard,
+  NoImpersonationGuard,
 )
 export class AdminPanelResolver {
   constructor(
@@ -149,7 +148,6 @@ export class AdminPanelResolver {
     private readonly workspaceQueueService: MessageQueueService,
   ) {}
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => UserLookup)
   async userLookupAdminPanel(
     @Args() userLookupInput: UserLookupInput,
@@ -159,7 +157,6 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [AdminPanelRecentUserDTO])
   async adminPanelRecentUsers(
     @Args('searchTerm', {
@@ -172,7 +169,6 @@ export class AdminPanelResolver {
     return this.adminStatisticsService.getRecentUsers(searchTerm);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [AdminPanelTopWorkspaceDTO])
   async adminPanelTopWorkspaces(
     @Args('searchTerm', {
@@ -185,13 +181,11 @@ export class AdminPanelResolver {
     return this.adminStatisticsService.getTopWorkspaces(searchTerm);
   }
 
-  @UseGuards(AdminPanelGuard, NoImpersonationGuard)
   @Query(() => [ServerAdminDTO])
   async getServerAdmins(): Promise<ServerAdminDTO[]> {
     return this.adminServerAdminService.getServerAdmins();
   }
 
-  @UseGuards(AdminPanelGuard, NoImpersonationGuard)
   @Mutation(() => ServerAdminDTO)
   async updateServerAdminAccess(
     @Args() input: UpdateServerAdminAccessInput,
@@ -208,7 +202,6 @@ export class AdminPanelResolver {
     });
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async updateWorkspaceFeatureFlag(
     @Args() updateFlagInput: UpdateWorkspaceFeatureFlagInput,
@@ -230,19 +223,16 @@ export class AdminPanelResolver {
     }
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => ConfigVariablesDTO)
   async getConfigVariablesGrouped(): Promise<ConfigVariablesDTO> {
     return this.adminConfigService.getConfigVariablesGrouped();
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => SystemHealthDTO)
   async getSystemHealthStatus(): Promise<SystemHealthDTO> {
     return this.adminPanelHealthService.getSystemHealthStatus();
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => AdminPanelHealthServiceDataDTO)
   async getIndicatorHealthStatus(
     @Args('indicatorId', {
@@ -253,7 +243,6 @@ export class AdminPanelResolver {
     return this.adminPanelHealthService.getIndicatorHealthStatus(indicatorId);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => QueueMetricsDataDTO)
   async getQueueMetrics(
     @Args('queueName', { type: () => String })
@@ -271,13 +260,11 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => VersionInfoDTO)
   async versionInfo(): Promise<VersionInfoDTO> {
     return this.adminVersionService.getVersionInfo();
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => AdminAiModelsDTO)
   async getAdminAiModels(): Promise<AdminAiModelsDTO> {
     const resolvedProviders =
@@ -327,7 +314,6 @@ export class AdminPanelResolver {
     };
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async setAdminAiModelEnabled(
     @Args('modelId', { type: () => String }) modelId: string,
@@ -338,7 +324,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async setAdminAiModelsEnabled(
     @Args('modelIds', { type: () => [String] }) modelIds: string[],
@@ -349,7 +334,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async setAdminAiModelRecommended(
     @Args('modelId', { type: () => String }) modelId: string,
@@ -360,7 +344,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async setAdminAiModelsRecommended(
     @Args('modelIds', { type: () => [String] }) modelIds: string[],
@@ -374,7 +357,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async setAdminDefaultAiModel(
     @Args('role', { type: () => AiModelRole }) role: AiModelRole,
@@ -385,7 +367,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => ConfigVariableDTO)
   async getDatabaseConfigVariable(
     @Args('key', { type: () => String }) key: keyof ConfigVariables,
@@ -395,7 +376,6 @@ export class AdminPanelResolver {
     return this.adminConfigService.getConfigVariable(key);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async createDatabaseConfigVariable(
     @Args('key', { type: () => String }) key: keyof ConfigVariables,
@@ -407,7 +387,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async updateDatabaseConfigVariable(
     @Args('key', { type: () => String }) key: keyof ConfigVariables,
@@ -419,7 +398,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async deleteDatabaseConfigVariable(
     @Args('key', { type: () => String }) key: keyof ConfigVariables,
@@ -429,7 +407,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => QueueJobsResponseDTO)
   async getQueueJobs(
     @Args('queueName', { type: () => String })
@@ -449,7 +426,6 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => RetryJobsResponseDTO)
   async retryJobs(
     @Args('queueName', { type: () => String })
@@ -463,7 +439,6 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => DeleteJobsResponseDTO)
   async deleteJobs(
     @Args('queueName', { type: () => String })
@@ -477,7 +452,6 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [ApplicationRegistrationEntity])
   async findAllApplicationRegistrations(): Promise<
     ApplicationRegistrationEntity[]
@@ -485,7 +459,6 @@ export class AdminPanelResolver {
     return this.applicationRegistrationService.findAll();
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async syncMarketplaceCatalog(): Promise<boolean> {
     await this.cronQueueService.add(
@@ -497,7 +470,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => ApplicationRegistrationEntity)
   async updateAdminApplicationRegistration(
     @Args('input') input: UpdateApplicationRegistrationInput,
@@ -505,7 +477,6 @@ export class AdminPanelResolver {
     return this.applicationRegistrationService.updateGlobal(input);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async backfillApplicationInstallation(
     @Args('applicationRegistrationId') applicationRegistrationId: string,
@@ -532,7 +503,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => GraphQLJSON)
   async getAiProviders(): Promise<Record<string, unknown>> {
     const providers =
@@ -568,7 +538,6 @@ export class AdminPanelResolver {
     return masked;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async addAiProvider(
     @Args('providerName', { type: () => String }) providerName: string,
@@ -589,7 +558,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async removeAiProvider(
     @Args('providerName', { type: () => String })
@@ -605,13 +573,11 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [ModelsDevProviderSuggestionDTO])
   async getModelsDevProviders(): Promise<ModelsDevProviderSuggestionDTO[]> {
     return this.modelsDevCatalogService.getProviderSuggestions();
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [ModelsDevModelSuggestionDTO])
   async getModelsDevSuggestions(
     @Args('providerType', { type: () => String }) providerType: string,
@@ -619,7 +585,6 @@ export class AdminPanelResolver {
     return this.modelsDevCatalogService.getModelSuggestions(providerType);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async addModelToProvider(
     @Args('providerName', { type: () => String }) providerName: string,
@@ -659,7 +624,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async removeModelFromProvider(
     @Args('providerName', { type: () => String }) providerName: string,
@@ -691,7 +655,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [UsageBreakdownItemDTO])
   async getAdminAiUsageByWorkspace(
     @Args('periodStart', { type: () => Date, nullable: true })
@@ -734,7 +697,6 @@ export class AdminPanelResolver {
     }));
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => MaintenanceModeDTO, { nullable: true })
   async getMaintenanceMode(): Promise<MaintenanceModeDTO | null> {
     const value = await this.maintenanceModeService.getMaintenanceMode();
@@ -750,7 +712,6 @@ export class AdminPanelResolver {
     };
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async setMaintenanceMode(
     @Args() { startAt, endAt, link }: SetMaintenanceModeInput,
@@ -764,7 +725,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => Boolean)
   async clearMaintenanceMode(): Promise<boolean> {
     await this.maintenanceModeService.clearMaintenanceMode();
@@ -772,7 +732,6 @@ export class AdminPanelResolver {
     return true;
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => UserLookup)
   async workspaceLookupAdminPanel(
     @Args('workspaceId', { type: () => UUIDScalarType }) workspaceId: string,
@@ -780,7 +739,6 @@ export class AdminPanelResolver {
     return this.adminUserLookupService.workspaceLookup(workspaceId);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => AdminPanelWorkspaceBillingDTO, { nullable: true })
   async workspaceBillingAdminPanel(
     @Args('workspaceId', { type: () => UUIDScalarType }) workspaceId: string,
@@ -788,7 +746,6 @@ export class AdminPanelResolver {
     return this.adminBillingService.getWorkspaceBilling(workspaceId);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [AdminWorkspaceChatThreadDTO])
   async getAdminWorkspaceChatThreads(
     @Args('workspaceId', { type: () => UUIDScalarType }) workspaceId: string,
@@ -796,7 +753,6 @@ export class AdminPanelResolver {
     return this.adminChatService.getWorkspaceChatThreads(workspaceId);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => AdminChatThreadMessagesDTO)
   async getAdminChatThreadMessages(
     @Args('threadId', { type: () => UUIDScalarType }) threadId: string,
@@ -804,7 +760,6 @@ export class AdminPanelResolver {
     return this.adminChatService.getChatThreadMessages(threadId);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => ApplicationRegistrationEntity)
   async findOneAdminApplicationRegistration(
     @Args('id') id: string,
@@ -812,7 +767,6 @@ export class AdminPanelResolver {
     return this.applicationRegistrationService.findOneByIdGlobal(id);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [ApplicationRegistrationVariableDTO])
   async findAdminApplicationRegistrationVariables(
     @Args('applicationRegistrationId') applicationRegistrationId: string,
@@ -822,7 +776,6 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => ApplicationRegistrationStatsDTO)
   async findAdminApplicationRegistrationStats(
     @Args('id') id: string,
@@ -830,7 +783,6 @@ export class AdminPanelResolver {
     return this.applicationRegistrationService.getStatsGlobal(id);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => ApplicationRegistrationInstalledWorkspacesDTO)
   async findAdminApplicationRegistrationInstalledWorkspaces(
     @Args('input')
@@ -848,7 +800,6 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => ApplicationRegistrationVariableDTO)
   async updateAdminApplicationRegistrationVariable(
     @Args('input') input: UpdateApplicationRegistrationVariableInput,
@@ -858,19 +809,16 @@ export class AdminPanelResolver {
     );
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => InstanceAndAllWorkspacesUpgradeStatusDTO)
   async getInstanceAndAllWorkspacesUpgradeStatus(): Promise<InstanceAndAllWorkspacesUpgradeStatusDTO> {
     return this.upgradeStatusService.getInstanceAndAllWorkspacesStatus();
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => InstanceAndAllWorkspacesUpgradeStatusDTO)
   async refreshUpgradeStatus(): Promise<InstanceAndAllWorkspacesUpgradeStatusDTO> {
     return this.upgradeStatusService.refreshInstanceAndAllWorkspacesStatus();
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => [WorkspaceUpgradeStatusDTO])
   async getUpgradeStatus(
     @Args('workspaceIds', { type: () => [UUIDScalarType] })
@@ -883,13 +831,11 @@ export class AdminPanelResolver {
     return this.upgradeStatusService.getWorkspaceStatuses(workspaceIds);
   }
 
-  @UseGuards(AdminPanelGuard)
   @Query(() => SigningKeysAdminPanelDTO)
   async getSigningKeys(): Promise<SigningKeysAdminPanelDTO> {
     return this.adminPanelSigningKeyService.getSigningKeys();
   }
 
-  @UseGuards(AdminPanelGuard)
   @Mutation(() => SigningKeyDTO)
   async revokeSigningKey(
     @Args() { id }: RevokeSigningKeyInput,
