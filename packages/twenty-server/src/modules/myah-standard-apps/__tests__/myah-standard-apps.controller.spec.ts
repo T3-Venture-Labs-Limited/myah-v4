@@ -150,9 +150,9 @@ describe('Myah standard app deployment trigger', () => {
         MyahStandardAppsController.prototype.promote,
       ),
     ).toEqual([
-      MyahStandardAppsDeploymentGuard,
-      NoPermissionGuard,
       PublicEndpointGuard,
+      NoPermissionGuard,
+      MyahStandardAppsDeploymentGuard,
     ]);
   });
 });

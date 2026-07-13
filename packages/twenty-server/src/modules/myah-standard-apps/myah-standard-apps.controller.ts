@@ -25,9 +25,9 @@ export class MyahStandardAppsController {
   ) {}
 
   @UseGuards(
-    MyahStandardAppsDeploymentGuard,
-    NoPermissionGuard,
     PublicEndpointGuard,
+    NoPermissionGuard,
+    MyahStandardAppsDeploymentGuard,
   )
   @Post(':applicationUniversalIdentifier/promote')
   @HttpCode(HttpStatus.OK)
