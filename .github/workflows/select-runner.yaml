@@ -2,13 +2,13 @@ name: Select CI runner
 
 on:
   workflow_call:
+    secrets:
+      MYAH_RUNNER_STATUS_TOKEN:
+        required: false
     outputs:
       runs_on:
         description: JSON runner label array for downstream CI jobs
         value: ${{ jobs.select.outputs.runs_on }}
-
-permissions:
-  actions: read
 
 jobs:
   select:
@@ -18,24 +18,40 @@ jobs:
     steps:
       - id: selection
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7.0.1
+        env:
+          RUNNER_STATUS_TOKEN: ${{ secrets.MYAH_RUNNER_STATUS_TOKEN }}
         with:
+          github-token: ${{ secrets.MYAH_RUNNER_STATUS_TOKEN }}
           script: |
-            const { data } = await github.rest.actions.listSelfHostedRunnersForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
+            const hostedRunner = JSON.stringify(['ubuntu-latest']);
 
-            const runnerIsAvailable = data.runners.some((runner) =>
-              runner.status === 'online' &&
-              runner.busy === false &&
-              runner.labels.some((label) => label.name === 'myah-v4'),
-            );
+            if (!process.env.RUNNER_STATUS_TOKEN) {
+              core.setOutput('runs_on', hostedRunner);
+              return;
+            }
 
-            core.setOutput(
-              'runs_on',
-              JSON.stringify(
-                runnerIsAvailable
-                  ? ['self-hosted', 'linux', 'x64', 'myah-v4']
-                  : ['ubuntu-latest'],
-              ),
-            );
+            try {
+              const { data } = await github.rest.actions.listSelfHostedRunnersForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              });
+
+              const runnerIsAvailable = data.runners.some((runner) =>
+                runner.status === 'online' &&
+                runner.busy === false &&
+                runner.labels.some((label) => label.name === 'myah-v4'),
+              );
+
+              core.setOutput(
+                'runs_on',
+                JSON.stringify(
+                  runnerIsAvailable
+                    ? ['self-hosted', 'linux', 'x64', 'myah-v4']
+                    : ['ubuntu-latest'],
+                ),
+              );
+            } catch (error) {
+              core.warning(`Unable to read self-hosted runner status: ${error.message}`);
+              core.setOutput('runs_on', hostedRunner);
+            }
