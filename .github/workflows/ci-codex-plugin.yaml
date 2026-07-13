@@ -15,6 +15,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  select-runner:
+    uses: ./.github/workflows/select-runner.yaml
+    secrets: inherit
+
   changed-files-check:
     uses: ./.github/workflows/changed-files.yaml
     with:
@@ -24,10 +28,10 @@ jobs:
         .github/workflows/ci-codex-plugin.yaml
 
   codex-plugin-validate:
-    needs: changed-files-check
+    needs: [changed-files-check, select-runner]
     if: needs.changed-files-check.outputs.any_changed == 'true'
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     steps:
       - name: Fetch local actions
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
