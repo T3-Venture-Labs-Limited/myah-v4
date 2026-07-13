@@ -19,5 +19,11 @@ export default defineApplication({
       isSecret: true,
       isRequired: true,
     },
+    COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID: {
+      description:
+        'Shared Myah Composio Instagram OAuth configuration used to create workspace-scoped authorization links.',
+      isSecret: false,
+      isRequired: true,
+    },
   },
 });
