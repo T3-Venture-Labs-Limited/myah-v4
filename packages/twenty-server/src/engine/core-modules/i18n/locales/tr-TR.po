@@ -3394,6 +3394,11 @@ msgstr ""
 msgid "Invalid application variable input."
 msgstr ""
 
+#. js-lingui-id: qVj0QU
+#: src/engine/metadata-modules/ai/ai.exception.ts
+msgid "Invalid approval decision."
+msgstr ""
+
 #. js-lingui-id: KNrRpL
 #: src/engine/metadata-modules/permissions/permissions.exception.ts
 msgid "Invalid argument provided."
@@ -7734,6 +7739,11 @@ msgstr "Bu API anahtarına herhangi bir rol atanmadı."
 #: src/engine/core-modules/application/application-registration/application-registration.exception.ts
 #: src/engine/core-modules/application/application.exception.ts
 msgid "This app requires a newer version of the Twenty server. Please upgrade your server or use a compatible app version."
+msgstr ""
+
+#. js-lingui-id: J8K9l8
+#: src/engine/metadata-modules/ai/ai.exception.ts
+msgid "This approval request has already been resolved."
 msgstr ""
 
 #. js-lingui-id: 99gsJ/

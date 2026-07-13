@@ -117,7 +117,6 @@ export const SettingsCommunity = () => {
             ))}
           </StyledCardsGrid>
         </Section>
-        </Section>
       </SettingsPageContainer>
     </SettingsPageLayout>
   );

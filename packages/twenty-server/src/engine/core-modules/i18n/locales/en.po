@@ -3389,6 +3389,11 @@ msgstr "Invalid answer for this question."
 msgid "Invalid application variable input."
 msgstr "Invalid application variable input."
 
+#. js-lingui-id: qVj0QU
+#: src/engine/metadata-modules/ai/ai.exception.ts
+msgid "Invalid approval decision."
+msgstr "Invalid approval decision."
+
 #. js-lingui-id: KNrRpL
 #: src/engine/metadata-modules/permissions/permissions.exception.ts
 msgid "Invalid argument provided."
@@ -7730,6 +7735,11 @@ msgstr "This API key has no role assigned."
 #: src/engine/core-modules/application/application.exception.ts
 msgid "This app requires a newer version of the Twenty server. Please upgrade your server or use a compatible app version."
 msgstr "This app requires a newer version of the Twenty server. Please upgrade your server or use a compatible app version."
+
+#. js-lingui-id: J8K9l8
+#: src/engine/metadata-modules/ai/ai.exception.ts
+msgid "This approval request has already been resolved."
+msgstr "This approval request has already been resolved."
 
 #. js-lingui-id: 99gsJ/
 #: src/engine/metadata-modules/index-metadata/utils/validate-no-duplicate-unique-index.util.ts
