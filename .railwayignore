@@ -1,0 +1,15 @@
+# Local VCS, dependencies, and generated build output
+.git
+.github
+**/node_modules/
+.nx/cache/
+.nx/workspace-data/
+coverage/
+dist/
+
+# Packages not copied by packages/twenty-docker/twenty/Dockerfile
+packages/create-twenty-app/
+packages/twenty-apps/
+packages/twenty-docs/
+packages/twenty-website/
+packages/twenty-zapier/

@@ -1,0 +1,15 @@
+export const BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER =
+  '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991';
+
+export const CREATOR_OPS_APPLICATION_UNIVERSAL_IDENTIFIER =
+  '72f2fd16-880c-4c63-852f-dbf63f51c152';
+
+export const MYAH_STANDARD_APP_UNIVERSAL_IDENTIFIER_LOOKUP: Readonly<
+  Record<string, true>
+> = Object.freeze({
+  [BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER]: true,
+  [CREATOR_OPS_APPLICATION_UNIVERSAL_IDENTIFIER]: true,
+});
+
+export const isMyahStandardAppUniversalIdentifier = (value: string): boolean =>
+  MYAH_STANDARD_APP_UNIVERSAL_IDENTIFIER_LOOKUP[value] === true;

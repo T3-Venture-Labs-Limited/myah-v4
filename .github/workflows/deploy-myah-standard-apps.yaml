@@ -1,0 +1,85 @@
+name: Deploy Myah Standard Apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    name: Publish and promote Myah standard apps
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Select staging credentials
+        if: inputs.environment == 'staging'
+        env:
+          SELECTED_API_URL: ${{ secrets.MYAH_STAGING_API_URL }}
+          SELECTED_APP_PUBLISHER_KEY: ${{ secrets.MYAH_STAGING_APP_PUBLISHER_KEY }}
+          SELECTED_DEPLOYMENT_TOKEN: ${{ secrets.MYAH_STAGING_STANDARD_APPS_DEPLOYMENT_TOKEN }}
+        run: |
+          printf 'MYAH_API_URL=%s\n' "$SELECTED_API_URL" >> "$GITHUB_ENV"
+          printf 'MYAH_APP_PUBLISHER_KEY=%s\n' "$SELECTED_APP_PUBLISHER_KEY" >> "$GITHUB_ENV"
+          printf 'MYAH_STANDARD_APPS_DEPLOYMENT_TOKEN=%s\n' "$SELECTED_DEPLOYMENT_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Select production credentials
+        if: inputs.environment == 'production'
+        env:
+          SELECTED_API_URL: ${{ secrets.MYAH_PRODUCTION_API_URL }}
+          SELECTED_APP_PUBLISHER_KEY: ${{ secrets.MYAH_PRODUCTION_APP_PUBLISHER_KEY }}
+          SELECTED_DEPLOYMENT_TOKEN: ${{ secrets.MYAH_PRODUCTION_STANDARD_APPS_DEPLOYMENT_TOKEN }}
+        run: |
+          printf 'MYAH_API_URL=%s\n' "$SELECTED_API_URL" >> "$GITHUB_ENV"
+          printf 'MYAH_APP_PUBLISHER_KEY=%s\n' "$SELECTED_APP_PUBLISHER_KEY" >> "$GITHUB_ENV"
+          printf 'MYAH_STANDARD_APPS_DEPLOYMENT_TOKEN=%s\n' "$SELECTED_DEPLOYMENT_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Verify selected credentials
+        run: |
+          test -n "$MYAH_API_URL"
+          test -n "$MYAH_APP_PUBLISHER_KEY"
+          test -n "$MYAH_STANDARD_APPS_DEPLOYMENT_TOKEN"
+
+      - name: Publish Brand Brain
+        uses: ./.github/actions/deploy-twenty-app
+        with:
+          api-url: ${{ env.MYAH_API_URL }}
+          api-key: ${{ env.MYAH_APP_PUBLISHER_KEY }}
+          app-path: packages/twenty-apps/fixtures/brand-brain-record-wiki-mvp
+          workspace-path: .
+
+      - name: Promote Brand Brain
+        env:
+          APPLICATION_UNIVERSAL_IDENTIFIER: 2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "x-myah-apps-deployment-token: ${MYAH_STANDARD_APPS_DEPLOYMENT_TOKEN}" \
+            "${MYAH_API_URL%/}/rest/myah/platform/standard-apps/${APPLICATION_UNIVERSAL_IDENTIFIER}/promote"
+
+      - name: Publish Creator Ops
+        uses: ./.github/actions/deploy-twenty-app
+        with:
+          api-url: ${{ env.MYAH_API_URL }}
+          api-key: ${{ env.MYAH_APP_PUBLISHER_KEY }}
+          app-path: packages/twenty-apps/internal/myah-creator-ops
+          workspace-path: .
+
+      - name: Promote Creator Ops
+        env:
+          APPLICATION_UNIVERSAL_IDENTIFIER: 72f2fd16-880c-4c63-852f-dbf63751c152
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "x-myah-apps-deployment-token: ${MYAH_STANDARD_APPS_DEPLOYMENT_TOKEN}" \
+            "${MYAH_API_URL%/}/rest/myah/platform/standard-apps/${APPLICATION_UNIVERSAL_IDENTIFIER}/promote"
