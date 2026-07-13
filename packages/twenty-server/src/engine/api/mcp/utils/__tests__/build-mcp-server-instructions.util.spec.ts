@@ -11,9 +11,7 @@ describe('buildMcpServerInstructions', () => {
     expect(instructions).toContain('Myah primitives:');
     expect(instructions).toContain("never for Myah's own data");
     expect(instructions).toContain('Available objects: people, companies.');
-    expect(instructions).toContain(
-      'Available skills: campaign-management.',
-    );
+    expect(instructions).toContain('Available skills: campaign-management.');
     expect(instructions).not.toContain('Twenty CRM workspace');
     expect(instructions).not.toContain('Twenty primitives:');
   });

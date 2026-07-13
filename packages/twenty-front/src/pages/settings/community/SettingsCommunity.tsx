@@ -5,11 +5,7 @@ import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLay
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { useContext } from 'react';
-import {
-  IconBrandX,
-  type IconComponent,
-  useIcons,
-} from 'twenty-ui/icon';
+import { IconBrandX, type IconComponent, useIcons } from 'twenty-ui/icon';
 import { H2Title } from 'twenty-ui/typography';
 import { Section } from 'twenty-ui/layout';
 import { SettingsPath } from 'twenty-shared/types';
@@ -38,9 +34,6 @@ const StyledCardsGrid = styled.div`
     grid-template-columns: 1fr;
   }
 `;
-
-
-
 
 type SettingsCommunityLink = {
   href: string;

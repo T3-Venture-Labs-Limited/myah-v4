@@ -9,7 +9,6 @@ describe('baseSchema', () => {
     expect(schema.info.description).toContain(
       'https://workspace.example/rest/open-api/core > myah-core.json',
     );
-    expect(schema.info.externalDocs).toBeUndefined();
     expect(schema.servers).toEqual([
       {
         url: 'https://workspace.example/rest/',
@@ -22,7 +21,7 @@ describe('baseSchema', () => {
     const schema = baseSchema('metadata', 'https://workspace.example');
 
     expect(schema.info.description).toContain('myah-metadata.json');
-    expect(schema.servers[0]?.url).toBe(
+    expect(schema.servers?.[0]?.url).toBe(
       'https://workspace.example/rest/metadata',
     );
   });

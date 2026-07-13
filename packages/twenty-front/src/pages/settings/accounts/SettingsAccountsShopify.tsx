@@ -303,7 +303,7 @@ export const SettingsAccountsShopify = () => {
                   status.connected ? t`Reconnect Shopify` : t`Connect Shopify`
                 }
                 variant={status.connected ? 'secondary' : 'primary'}
-                accent="blue"
+                accent="brand"
                 isLoading={isConnecting}
                 onClick={handleConnectShopify}
               />
