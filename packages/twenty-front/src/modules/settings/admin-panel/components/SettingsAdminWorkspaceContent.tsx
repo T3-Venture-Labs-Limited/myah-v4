@@ -3,12 +3,11 @@ import { type WorkspaceInfo } from '@/settings/admin-panel/types/WorkspaceInfo';
 import { getUpgradeHealthStatusBadge } from '@/settings/admin-panel/utils/getUpgradeHealthStatusBadge';
 import { getWorkspaceSchemaName } from '@/settings/admin-panel/utils/getWorkspaceSchemaName';
 import { SettingsTableCard } from '@/settings/components/SettingsTableCard';
-import { DEFAULT_WORKSPACE_LOGO } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
+import { getWorkspaceLogoUrl } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { UserContext } from '@/users/contexts/UserContext';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { isNonEmptyString } from '@sniptt/guards';
 import { useContext } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import {
@@ -31,7 +30,6 @@ import { H2Title } from 'twenty-ui/typography';
 import { Section } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { dateLocaleState } from '~/localization/states/dateLocaleState';
-import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 import { formatDateTimeString } from '~/utils/string/formatDateTimeString';
 
 type SettingsAdminWorkspaceContentProps = {
@@ -84,11 +82,7 @@ export const SettingsAdminWorkspaceContent = ({
           })}
           leftComponent={
             <AvatarOrIcon
-              avatarUrl={getAbsoluteImageUrl(
-                isNonEmptyString(activeWorkspace?.logo)
-                  ? activeWorkspace?.logo
-                  : DEFAULT_WORKSPACE_LOGO,
-              )}
+              avatarUrl={getWorkspaceLogoUrl(activeWorkspace?.logo)}
             />
           }
         />

@@ -22,7 +22,7 @@ import {
 import { getAvailableWorkspacePathAndSearchParams } from '@/auth/utils/availableWorkspacesUtils';
 import { authProvidersState } from '@/client-config/states/authProvidersState';
 import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
-import { DEFAULT_WORKSPACE_LOGO } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
+import { getWorkspaceLogoUrl } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { isNonEmptyString } from '@sniptt/guards';
@@ -36,7 +36,6 @@ import {
   GetWorkspaceCreationDefaultsDocument,
 } from '~/generated-metadata/graphql';
 import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
-import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 
 const StyledContentContainer = styled(StyledOnboardingContentContainer)`
   max-width: 100%;
@@ -185,9 +184,7 @@ export const SignInUpGlobalScopeForm = () => {
                     <StyledWorkspaceContent>
                       <Avatar
                         placeholder={availableWorkspace.displayName || ''}
-                        avatarUrl={getAbsoluteImageUrl(
-                          availableWorkspace.logo ?? DEFAULT_WORKSPACE_LOGO,
-                        )}
+                        avatarUrl={getWorkspaceLogoUrl(availableWorkspace.logo)}
                         size="lg"
                       />
                       <StyledWorkspaceTextContainer>
