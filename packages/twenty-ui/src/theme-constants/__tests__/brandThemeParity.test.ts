@@ -101,13 +101,11 @@ const getCssVariableValue = (css: string, role: BrandRole) => {
 };
 
 const getRelativeLuminance = (color: string) => {
-  const channels = [1, 3, 5].map((index) =>
-    Number.parseInt(color.slice(index, index + 2), 16) / 255,
+  const channels = [1, 3, 5].map(
+    (index) => Number.parseInt(color.slice(index, index + 2), 16) / 255,
   );
   const [red, green, blue] = channels.map((channel) =>
-    channel <= 0.04045
-      ? channel / 12.92
-      : ((channel + 0.055) / 1.055) ** 2.4,
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
   );
 
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
@@ -123,59 +121,60 @@ const getContrastRatio = (firstColor: string, secondColor: string) => {
   );
 };
 
-describe.each(BRAND_CASES)('$name brand tokens', ({
-  theme,
-  cssFileName,
-  textBackground,
-}) => {
-  it('defines the approved semantic roles in its TypeScript theme object', () => {
-    const brandTokens = getBrandTokens(theme);
+describe.each(BRAND_CASES)(
+  '$name brand tokens',
+  ({ theme, cssFileName, textBackground }) => {
+    it('defines the approved semantic roles in its TypeScript theme object', () => {
+      const brandTokens = getBrandTokens(theme);
 
-    expect(Object.keys(brandTokens)).toEqual(BRAND_ROLES);
-    expect(brandTokens).toMatchObject({
-      solid: '#DF3377',
-      onSolid: '#0A0A0A',
+      expect(Object.keys(brandTokens)).toEqual(BRAND_ROLES);
+      expect(brandTokens).toMatchObject({
+        solid: '#DF3377',
+        onSolid: '#0A0A0A',
+      });
     });
-  });
 
-  it('maps every semantic role to its CSS custom property', () => {
-    const brandCssVariables = getBrandCssVariables();
+    it('maps every semantic role to its CSS custom property', () => {
+      const brandCssVariables = getBrandCssVariables();
 
-    expect(Object.keys(brandCssVariables)).toEqual(BRAND_ROLES);
+      expect(Object.keys(brandCssVariables)).toEqual(BRAND_ROLES);
 
-    for (const role of BRAND_ROLES) {
-      expect(brandCssVariables[role]).toBe(
-        `var(${BRAND_CSS_VARIABLES[role]})`,
+      for (const role of BRAND_ROLES) {
+        expect(brandCssVariables[role]).toBe(
+          `var(${BRAND_CSS_VARIABLES[role]})`,
+        );
+      }
+    });
+
+    it('keeps source CSS synchronized with the TypeScript theme object', () => {
+      const brandTokens = getBrandTokens(theme);
+      const css = fs.readFileSync(
+        path.join(THEME_CONSTANTS_DIR, cssFileName),
+        'utf-8',
       );
-    }
-  });
 
-  it('keeps source CSS synchronized with the TypeScript theme object', () => {
-    const brandTokens = getBrandTokens(theme);
-    const css = fs.readFileSync(
-      path.join(THEME_CONSTANTS_DIR, cssFileName),
-      'utf-8',
-    );
+      for (const role of BRAND_ROLES) {
+        expect(getCssVariableValue(css, role).toLowerCase()).toBe(
+          brandTokens[role].toLowerCase(),
+        );
+      }
+    });
 
-    for (const role of BRAND_ROLES) {
-      expect(getCssVariableValue(css, role)).toBe(brandTokens[role]);
-    }
-  });
+    it('keeps solid controls and regular-size brand text accessible', () => {
+      const brandTokens = getBrandTokens(theme);
 
-  it('keeps solid controls and regular-size brand text accessible', () => {
-    const brandTokens = getBrandTokens(theme);
-
-    expect(
-      getContrastRatio(brandTokens.solid, brandTokens.onSolid),
-    ).toBeGreaterThanOrEqual(4.5);
-    expect(
-      getContrastRatio(brandTokens.solidHover, brandTokens.onSolid),
-    ).toBeGreaterThanOrEqual(4.5);
-    expect(
-      getContrastRatio(brandTokens.solidActive, brandTokens.onSolid),
-    ).toBeGreaterThanOrEqual(4.5);
-    expect(
-      getContrastRatio(brandTokens.text, textBackground),
-    ).toBeGreaterThanOrEqual(4.5);
-  });
-});
+      expect(
+        getContrastRatio(brandTokens.solid, brandTokens.onSolid),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        getContrastRatio(brandTokens.solidHover, brandTokens.onSolid),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        getContrastRatio(brandTokens.solidActive, brandTokens.onSolid),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        getContrastRatio(brandTokens.text, textBackground),
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+  },
+);
