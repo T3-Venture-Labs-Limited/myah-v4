@@ -1,6 +1,5 @@
 import {
   type ExecutionContext,
-  HttpException,
   HttpStatus,
   InternalServerErrorException,
   UnauthorizedException,
@@ -83,7 +82,7 @@ describe('Myah standard app deployment trigger', () => {
       guard.canActivate(buildContext(deploymentToken)),
     ).rejects.toMatchObject({
       status: HttpStatus.TOO_MANY_REQUESTS,
-    } satisfies Pick<HttpException, 'status'>);
+    });
   });
 
   it('hides unexpected rate-limit infrastructure errors', async () => {
