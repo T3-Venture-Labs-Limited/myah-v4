@@ -16,7 +16,7 @@ import {
   MyahStandardAppsService,
 } from 'src/modules/myah-standard-apps/myah-standard-apps.service';
 
-@Controller('rest/myah/platform/standard-apps')
+@Controller('myah/platform/standard-apps')
 export class MyahStandardAppsController {
   private readonly logger = new Logger(MyahStandardAppsController.name);
 
