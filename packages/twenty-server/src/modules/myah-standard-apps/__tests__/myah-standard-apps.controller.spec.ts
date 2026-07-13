@@ -1,6 +1,7 @@
 import {
   type ExecutionContext,
-  TooManyRequestsException,
+  HttpException,
+  HttpStatus,
   InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,6 +11,7 @@ import {
   ThrottlerException,
   ThrottlerExceptionCode,
 } from 'src/engine/core-modules/throttler/throttler.exception';
+import { type ThrottlerService } from 'src/engine/core-modules/throttler/throttler.service';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
 
@@ -23,7 +25,7 @@ describe('Myah standard app deployment trigger', () => {
   const deploymentToken = 'deployment-token';
   const throttlerService = {
     tokenBucketThrottleOrThrow: jest.fn().mockResolvedValue(0),
-  };
+  } as unknown as jest.Mocked<ThrottlerService>;
 
   const buildContext = (
     token: string | undefined,
@@ -79,7 +81,9 @@ describe('Myah standard app deployment trigger', () => {
 
     await expect(
       guard.canActivate(buildContext(deploymentToken)),
-    ).rejects.toThrow(TooManyRequestsException);
+    ).rejects.toMatchObject({
+      status: HttpStatus.TOO_MANY_REQUESTS,
+    } satisfies Pick<HttpException, 'status'>);
   });
 
   it('hides unexpected rate-limit infrastructure errors', async () => {
