@@ -10,6 +10,7 @@ describe('baseSchema', () => {
       'https://workspace.example/rest/open-api/core > myah-core.json',
     );
     expect(schema.info).not.toHaveProperty('contact');
+    expect(schema.info).not.toHaveProperty('termsOfService');
     expect(schema.servers).toEqual([
       {
         url: 'https://workspace.example/rest/',

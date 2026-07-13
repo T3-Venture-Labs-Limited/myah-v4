@@ -124,8 +124,6 @@ curl -H 'Authorization: Bearer <token>' \\
   ${serverUrl}/rest/open-api/${schemaName} > myah-${schemaName}.json
 \`\`\`
 `,
-      termsOfService:
-        'https://github.com/twentyhq/twenty?tab=coc-ov-file#readme',
       license: {
         name: 'AGPL-3.0',
         url: 'https://github.com/twentyhq/twenty?tab=License-1-ov-file#readme',
