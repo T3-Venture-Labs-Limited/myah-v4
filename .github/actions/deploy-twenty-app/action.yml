@@ -31,9 +31,9 @@ runs:
         cache: yarn
         cache-dependency-path: '${{ inputs.workspace-path }}/yarn.lock'
 
-    - name: Install dependencies
+    - name: Install app dependencies
       shell: bash
-      working-directory: ${{ inputs.workspace-path }}
+      working-directory: ${{ inputs.app-path }}
       run: yarn install --immutable
 
     - name: Configure remote
