@@ -25,11 +25,6 @@ describe('Myah Team platform boundary guards', () => {
   it.each([
     ['AdminPanelResolver', AdminPanelResolver],
     ['EnterpriseResolver', EnterpriseResolver],
-    ['ApplicationInstallResolver', ApplicationInstallResolver],
-    ['ApplicationDevelopmentResolver', ApplicationDevelopmentResolver],
-    ['ApplicationUpgradeResolver', ApplicationUpgradeResolver],
-    ['ApplicationVariableEntityResolver', ApplicationVariableEntityResolver],
-    ['MarketplaceResolver', MarketplaceResolver],
     ['EventLogsResolver', EventLogsResolver],
     ['EventLogsLiveResolver', EventLogsLiveResolver],
   ])('requires a verified Myah Team identity for %s', (_name, resolver) => {
@@ -38,9 +33,25 @@ describe('Myah Team platform boundary guards', () => {
     );
   });
 
-  it('requires a Team identity to mint application tokens', () => {
+  it.each([
+    ['ApplicationInstallResolver', ApplicationInstallResolver],
+    ['ApplicationDevelopmentResolver', ApplicationDevelopmentResolver],
+    ['ApplicationUpgradeResolver', ApplicationUpgradeResolver],
+    ['ApplicationVariableEntityResolver', ApplicationVariableEntityResolver],
+    ['MarketplaceResolver', MarketplaceResolver],
+  ])('keeps %s scoped to workspace permissions', (_name, resolver) => {
+    expect(getGuards(resolver)).not.toContain(MyahTeamGuard);
+  });
+
+  it('keeps application-token minting scoped to workspace permissions', () => {
     expect(
       getGuards(ApplicationOAuthResolver.prototype.generateApplicationToken),
+    ).not.toEqual(expect.arrayContaining([MyahTeamGuard]));
+  });
+
+  it('requires a Team identity to synchronize the marketplace catalog', () => {
+    expect(
+      getGuards(MarketplaceResolver.prototype.syncMarketplaceCatalog),
     ).toEqual(expect.arrayContaining([MyahTeamGuard, NoImpersonationGuard]));
   });
 
