@@ -98,6 +98,7 @@ import { BackfillLogoOnApplicationRegistrationSlowInstanceCommand } from './2-19
 import { AddDisplayFieldsToApplicationRegistrationFastInstanceCommand } from './2-19/2-19-instance-command-fast-1783073776590-add-display-fields-to-application-registration';
 import { BackfillDisplayFieldsOnApplicationRegistrationSlowInstanceCommand } from './2-19/2-19-instance-command-slow-1783073776591-backfill-display-fields-on-application-registration';
 import { CreateCustomerAccountControlPlaneFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1783922687955-create-customer-account-control-plane';
+import { RebrandEmailSenderToMyahSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1783918126676-rebrand-email-sender-to-myah';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -198,4 +199,5 @@ export const INSTANCE_COMMANDS = [
   BackfillDisplayFieldsOnApplicationRegistrationSlowInstanceCommand,
   AddStatusToFileFastInstanceCommand,
   CreateCustomerAccountControlPlaneFastInstanceCommand,
+  RebrandEmailSenderToMyahSlowInstanceCommand,
 ];
