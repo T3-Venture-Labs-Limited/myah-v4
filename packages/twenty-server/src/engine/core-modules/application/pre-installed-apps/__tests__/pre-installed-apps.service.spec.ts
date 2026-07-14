@@ -119,7 +119,10 @@ describe('PreInstalledAppsService', () => {
 
       await expect(
         service.backfillApplicationOnAllWorkspaces('app-1'),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        success: [{ workspaceId: 'workspace-1' }],
+        fail: [],
+      });
     });
 
     it('should rethrow unexpected install errors to the iterator', async () => {
@@ -149,7 +152,10 @@ describe('PreInstalledAppsService', () => {
 
       await expect(
         service.backfillApplicationOnAllWorkspaces('app-1'),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        success: [],
+        fail: [{ workspaceId: 'workspace-1', error: unexpectedError }],
+      });
     });
   });
 });
