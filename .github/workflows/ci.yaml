@@ -56,10 +56,12 @@ jobs:
           fetch-depth: 0
       - name: Set up dependencies
         uses: ./.github/actions/setup-yarn
-      - name: Test affected projects
+      # These integration suites provision their services in dedicated workflows.
+      - name: Test affected unit projects
         run: >-
           npx nx affected -t test --configuration=ci
-          --base=origin/${{ github.base_ref }} --head=${{ github.sha }} --parallel=1
+          --base=origin/${{ github.base_ref }} --head=${{ github.sha }}
+          --exclude=twenty-e2e-testing,twenty-zapier --parallel=1
 
   container-build:
     name: container build
