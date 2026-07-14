@@ -1,9 +1,10 @@
-import { IsBoolean, IsString } from 'class-validator';
+import { IsBoolean, IsEnum } from 'class-validator';
+import { FeatureFlagKey } from 'twenty-shared/types';
 
 export class SetMyahPlatformFeatureFlagDto {
   @IsBoolean()
   enabled: boolean;
 
-  @IsString()
-  featureFlag: string;
+  @IsEnum(FeatureFlagKey)
+  featureFlag: FeatureFlagKey;
 }

@@ -18,6 +18,7 @@ import {
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
 import { SetMyahPlatformFeatureFlagDto } from 'src/modules/myah-platform-admin/dtos/set-myah-platform-feature-flag.dto';
+import { type MyahPlatformAuthenticatedRequest } from 'src/modules/myah-platform-admin/auth/myah-platform-authenticated-request';
 import { MyahPlatformOperatorGuard } from 'src/modules/myah-platform-admin/auth/myah-platform-operator.guard';
 import { MyahPlatformScope } from 'src/modules/myah-platform-admin/auth/myah-platform-scope';
 import { RequireMyahPlatformScopes } from 'src/modules/myah-platform-admin/auth/require-myah-platform-scopes.decorator';
@@ -84,6 +85,7 @@ export class MyahPlatformAdminController {
     @Body() body: SetMyahPlatformFeatureFlagDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('workspaceId', new ParseUUIDPipe()) workspaceId: string,
+    @Req() request: MyahPlatformAuthenticatedRequest,
   ) {
     return this.workspaceService.setFeatureFlag({
       ...body,
