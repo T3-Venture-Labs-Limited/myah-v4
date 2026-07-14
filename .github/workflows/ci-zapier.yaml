@@ -23,8 +23,8 @@ jobs:
     with:
       files: |
         packages/twenty-zapier/**
+        packages/twenty-shared/**
         packages/twenty-server/**
-        !packages/twenty-zapier/package.json
         !packages/twenty-zapier/CHANGELOG.md
   server-setup:
     needs: [changed-files-check, select-runner]

@@ -22,11 +22,14 @@ const StyledContainer = styled.div`
 const StyledSelectableItem = styled.div<{ selected?: boolean }>`
   width: 100px;
   height: 80px;
-  border: 1px solid ${themeCssVariables.border.color.medium};
+  border: ${({ selected }) =>
+    selected
+      ? `1px solid ${themeCssVariables.brand.border}`
+      : `1px solid ${themeCssVariables.border.color.medium}`};
   border-radius: ${themeCssVariables.border.radius.sm};
   background: ${({ selected }) =>
     selected
-      ? themeCssVariables.color.blue3
+      ? themeCssVariables.brand.soft
       : themeCssVariables.background.secondary};
   display: flex;
   align-items: center;
@@ -38,7 +41,7 @@ const StyledSelectableItem = styled.div<{ selected?: boolean }>`
   &:hover {
     background: ${({ selected }) =>
       selected
-        ? themeCssVariables.color.blue5
+        ? themeCssVariables.brand.softHover
         : themeCssVariables.background.tertiary};
   }
 `;

@@ -23,6 +23,7 @@ export const SignInUpSSOIdentityProviderSelection = () => {
           workspaceAuthProviders?.sso.map((idp) => (
             <React.Fragment key={idp.id}>
               <MainButton
+                accent="dark"
                 title={idp.name}
                 onClick={() => redirectToSSOLoginPage(idp.id)}
                 Icon={guessSSOIdentityProviderIconByUrl(idp.issuer)}

@@ -23,7 +23,7 @@ export enum CheckboxSize {
 }
 
 export enum CheckboxAccent {
-  Blue = 'blue',
+  Brand = 'brand',
   Orange = 'orange',
 }
 
@@ -55,7 +55,7 @@ export const Checkbox = ({
   hoverable = true,
   className,
   disabled = false,
-  accent = CheckboxAccent.Blue,
+  accent = CheckboxAccent.Brand,
   id,
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,

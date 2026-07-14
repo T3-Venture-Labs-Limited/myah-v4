@@ -26,7 +26,7 @@ const StyledRecordTableCellHoveredPortalContent = styled.div<{
   background: ${themeCssVariables.background.transparent.secondary};
   background-color: ${({ isRecordTableRowActive }) =>
     isRecordTableRowActive
-      ? themeCssVariables.accent.quaternary
+      ? themeCssVariables.brand.soft
       : themeCssVariables.background.primary};
   border-radius: ${({ showInteractiveStyle }) =>
     showInteractiveStyle ? themeCssVariables.border.radius.sm : 'none'};

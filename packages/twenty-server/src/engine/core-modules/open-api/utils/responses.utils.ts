@@ -341,10 +341,6 @@ export const getJsonResponse = () => {
                 title: { type: 'string' },
                 description: { type: 'string' },
                 termsOfService: { type: 'string' },
-                contact: {
-                  type: 'object',
-                  properties: { email: { type: 'string' } },
-                },
                 license: {
                   type: 'object',
                   properties: {

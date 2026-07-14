@@ -57,7 +57,7 @@ export const InformationBanner = ({
   );
 
   const isPrimary = variant === 'primary';
-  const buttonAccent = color === 'danger' ? 'danger' : 'blue';
+  const buttonAccent = color === 'danger' ? 'danger' : 'brand';
 
   return (
     <InformationBannerComponentInstanceContext.Provider

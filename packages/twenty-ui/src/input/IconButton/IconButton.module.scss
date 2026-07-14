@@ -105,9 +105,9 @@ $primary-accents: (
   'default': (
     bg: var(--t-background-transparent-lighter),
     border: var(--t-background-transparent-light),
-    border-focus: var(--t-color-blue),
+    border-focus: var(--t-brand-focus-ring),
     border-disabled: null,
-    shadow-focus: var(--t-accent-tertiary),
+    shadow-focus: var(--t-brand-focus-halo),
     color: var(--t-font-color-secondary),
     color-disabled: var(--t-font-color-extra-light),
     opacity-disabled: null,
@@ -116,19 +116,20 @@ $primary-accents: (
     hover-disabled: var(--t-background-transparent-lighter),
     active-disabled: var(--t-background-transparent-lighter),
   ),
-  'blue': (
-    bg: var(--t-color-blue),
+  'brand': (
+    bg: var(--t-brand-solid),
+    bg-disabled: var(--t-brand-disabled),
     border: var(--t-background-transparent-light),
-    border-focus: var(--t-color-blue),
+    border-focus: var(--t-brand-focus-ring),
     border-disabled: transparent,
-    shadow-focus: var(--t-accent-tertiary),
-    color: var(--t-gray-scale-gray1),
+    shadow-focus: var(--t-brand-focus-halo),
+    color: var(--t-brand-on-solid),
     color-disabled: null,
-    opacity-disabled: 0.24,
-    hover: var(--t-color-blue10),
-    active: var(--t-color-blue12),
-    hover-disabled: var(--t-color-blue),
-    active-disabled: var(--t-color-blue),
+    opacity-disabled: null,
+    hover: var(--t-brand-solid-hover),
+    active: var(--t-brand-solid-active),
+    hover-disabled: var(--t-brand-disabled),
+    active-disabled: var(--t-brand-disabled),
   ),
   'danger': (
     bg: var(--t-color-red),
@@ -166,6 +167,10 @@ $primary-accents: (
     --icon-button-box-shadow: none;
     --icon-button-hover-bg: #{map.get($tokens, hover-disabled)};
     --icon-button-active-bg: #{map.get($tokens, active-disabled)};
+
+    @if map.get($tokens, bg-disabled) {
+      --icon-button-bg: #{map.get($tokens, bg-disabled)};
+    }
 
     @if map.get($tokens, border-disabled) {
       --icon-button-border-color: #{map.get($tokens, border-disabled)};
@@ -210,8 +215,8 @@ $primary-accents: (
     [data-variant='tertiary']
   )[data-accent='default'][data-focus] {
   --icon-button-bg: var(--t-background-transparent-primary);
-  --icon-button-border-color: var(--t-color-blue);
-  --icon-button-box-shadow: 0 0 0 3px var(--t-accent-tertiary);
+  --icon-button-border-color: var(--t-brand-focus-ring);
+  --icon-button-box-shadow: 0 0 0 3px var(--t-brand-focus-halo);
 }
 
 .button:is(
@@ -224,52 +229,47 @@ $primary-accents: (
   --icon-button-active-bg: transparent;
 }
 
-// The secondary border only turns blue on enabled focus; tertiary keeps the
-// blue border even for disabled+focus (raw focus in the legacy source).
+// The secondary border only turns the brand focus color on enabled focus;
+// tertiary keeps it even for disabled+focus (raw focus in the legacy source).
 .button[data-variant='secondary'][data-accent='default'][data-disabled] {
   --icon-button-border-color: var(--t-background-transparent-medium);
 }
 
-// accent=blue
+// accent=brand
 .button:is(
     [data-variant='secondary'],
     [data-variant='tertiary']
-  )[data-accent='blue'] {
-  --icon-button-color: var(--t-color-blue);
-  --icon-button-hover-bg: var(--t-accent-tertiary);
-  --icon-button-active-bg: var(--t-accent-secondary);
+  )[data-accent='brand'] {
+  --icon-button-color: var(--t-brand-text);
+  --icon-button-hover-bg: var(--t-brand-soft-hover);
+  --icon-button-active-bg: var(--t-brand-soft-active);
 }
 
-.button[data-variant='secondary'][data-accent='blue'] {
-  --icon-button-border-color: var(--t-color-blue);
-}
-
-.button:is(
-    [data-variant='secondary'],
-    [data-variant='tertiary']
-  )[data-accent='blue'][data-focus] {
-  --icon-button-bg: var(--t-background-transparent-primary);
-  --icon-button-box-shadow: 0 0 0 3px var(--t-accent-tertiary);
-}
-
-// Only the tertiary border reacts to focus for the blue accent; the
-// secondary border is keyed on disabled alone.
-.button[data-variant='tertiary'][data-accent='blue'][data-focus] {
-  --icon-button-border-color: var(--t-color-blue);
+.button[data-variant='secondary'][data-accent='brand'] {
+  --icon-button-border-color: var(--t-brand-border);
 }
 
 .button:is(
     [data-variant='secondary'],
     [data-variant='tertiary']
-  )[data-accent='blue'][data-disabled] {
+  )[data-accent='brand'][data-focus] {
+  --icon-button-bg: var(--t-brand-soft);
+  --icon-button-border-color: var(--t-brand-focus-ring);
+  --icon-button-box-shadow: 0 0 0 3px var(--t-brand-focus-halo);
+}
+
+.button:is(
+    [data-variant='secondary'],
+    [data-variant='tertiary']
+  )[data-accent='brand'][data-disabled] {
   --icon-button-box-shadow: none;
-  --icon-button-color: var(--t-accent-accent4060);
+  --icon-button-color: var(--t-brand-disabled);
   --icon-button-hover-bg: transparent;
   --icon-button-active-bg: transparent;
 }
 
-.button[data-variant='secondary'][data-accent='blue'][data-disabled] {
-  --icon-button-border-color: var(--t-color-blue5);
+.button[data-variant='secondary'][data-accent='brand'][data-disabled] {
+  --icon-button-border-color: var(--t-brand-disabled);
 }
 
 // accent=danger

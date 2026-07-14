@@ -70,7 +70,7 @@ const StyledSummaryButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 2px solid ${themeCssVariables.color.blue};
+    outline: 2px solid ${themeCssVariables.brand.focusRing};
     outline-offset: 2px;
   }
 `;
@@ -198,7 +198,7 @@ const StyledToolRowButton = styled.button<{ isExpandable: boolean }>`
   }
 
   &:focus-visible {
-    outline: 2px solid ${themeCssVariables.color.blue};
+    outline: 2px solid ${themeCssVariables.brand.focusRing};
     outline-offset: 2px;
   }
 `;

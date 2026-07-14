@@ -94,9 +94,9 @@
 // data-focus is gated by !disabled in the component, like the legacy
 // call-site passing focus={focus && !disabled}.
 .button[data-focus] {
-  border-color: var(--t-color-blue);
-  box-shadow: 0 0 0 3px var(--t-color-blue3);
-  color: var(--t-color-blue);
+  border-color: var(--t-brand-focus-ring);
+  box-shadow: 0 0 0 3px var(--t-brand-focus-halo);
+  color: var(--t-brand-text);
 }
 
 // applyShadow wins over the focus ring, replicating the legacy ternary order.

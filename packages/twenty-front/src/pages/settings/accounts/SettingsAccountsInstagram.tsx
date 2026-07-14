@@ -278,7 +278,7 @@ export const SettingsAccountsInstagram = () => {
                 isConnected ? t`Reconnect Instagram` : t`Connect Instagram`
               }
               variant="primary"
-              accent="blue"
+              accent="brand"
               isLoading={isConnecting}
               onClick={handleConnectInstagram}
             />

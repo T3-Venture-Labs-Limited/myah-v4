@@ -1,5 +1,10 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import {
+  themeCssVariables,
+  useThemeColorScheme,
+} from 'twenty-ui/theme-constants';
+
+const INVERTED_LOGO_STYLE = { filter: 'invert(1)' };
 
 const StyledLogo = styled.img`
   animation: onboardingPulsingLogo 0.8s ease-in-out infinite alternate;
@@ -22,6 +27,14 @@ const StyledLogo = styled.img`
   }
 `;
 
-export const OnboardingPulsingLogo = () => (
-  <StyledLogo src="/images/integrations/twenty-logo.svg" alt="" />
-);
+export const OnboardingPulsingLogo = () => {
+  const colorScheme = useThemeColorScheme();
+
+  return (
+    <StyledLogo
+      alt=""
+      src="/images/integrations/myah-mark.svg"
+      style={colorScheme === 'dark' ? INVERTED_LOGO_STYLE : undefined}
+    />
+  );
+};

@@ -150,7 +150,7 @@ export const SettingsAdminApplicationRegistrationGeneralToggles = ({
         subtitle={t`This will install the latest version of "${registration.name}" on all existing active and suspended workspaces, upgrading any workspace that already has an older version. It runs as a background job and may take a while. Continue?`}
         onConfirmClick={handleBackfill}
         confirmButtonText={t`Backfill`}
-        confirmButtonAccent="blue"
+        confirmButtonAccent="brand"
         loading={isBackfilling}
       />
     </Section>

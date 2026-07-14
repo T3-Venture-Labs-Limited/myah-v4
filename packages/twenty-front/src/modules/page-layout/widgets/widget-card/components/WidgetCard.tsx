@@ -21,7 +21,7 @@ const computeBorderColor = (
   >,
 ): string => {
   if (props.isEditable && (props.isEditing || props.isDragging)) {
-    return themeCssVariables.color.blue;
+    return themeCssVariables.brand.border;
   }
   if (props.variant === 'dashboard' || props.variant === 'standalone') {
     return themeCssVariables.border.color.light;

@@ -16,7 +16,7 @@ export const Checkmark = ({ className }: CheckmarkProps) => {
 
   return (
     <div className={clsx(styles.root, className)}>
-      <IconCheck color={theme.grayScale.gray1} size={14} />
+      <IconCheck color={theme.brand.onSolid} size={14} />
     </div>
   );
 };

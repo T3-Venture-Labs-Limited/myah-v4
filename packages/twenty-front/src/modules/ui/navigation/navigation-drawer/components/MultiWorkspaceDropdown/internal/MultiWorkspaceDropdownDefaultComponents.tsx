@@ -1,4 +1,4 @@
-import { DEFAULT_WORKSPACE_LOGO } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
+import { getWorkspaceLogoUrl } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
 
 import { useAuth } from '@/auth/hooks/useAuth';
 import { availableWorkspacesState } from '@/auth/states/availableWorkspacesState';
@@ -46,7 +46,6 @@ import {
 } from 'twenty-ui/navigation';
 import { type AvailableWorkspace } from '~/generated-metadata/graphql';
 import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
-import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 
 const StyledDescription = styled.div`
   color: ${themeCssVariables.font.color.light};
@@ -105,9 +104,7 @@ export const MultiWorkspaceDropdownDefaultComponents = () => {
             Avatar={
               <Avatar
                 placeholder={currentWorkspace?.displayName || ''}
-                avatarUrl={getAbsoluteImageUrl(
-                  currentWorkspace?.logo ?? DEFAULT_WORKSPACE_LOGO,
-                )}
+                avatarUrl={getWorkspaceLogoUrl(currentWorkspace?.logo)}
               />
             }
           />
@@ -170,9 +167,7 @@ export const MultiWorkspaceDropdownDefaultComponents = () => {
                     avatar={
                       <Avatar
                         placeholder={availableWorkspace.displayName || ''}
-                        avatarUrl={getAbsoluteImageUrl(
-                          availableWorkspace.logo ?? DEFAULT_WORKSPACE_LOGO,
-                        )}
+                        avatarUrl={getWorkspaceLogoUrl(availableWorkspace.logo)}
                       />
                     }
                     selected={false}

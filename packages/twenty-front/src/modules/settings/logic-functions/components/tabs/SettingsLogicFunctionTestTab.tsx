@@ -155,7 +155,7 @@ export const SettingsLogicFunctionTestTab = ({
               <Button
                 title={t`Run Function`}
                 variant="primary"
-                accent="blue"
+                accent="brand"
                 size="small"
                 Icon={IconPlayerPlay}
                 onClick={handleExecute}

@@ -173,7 +173,7 @@ export const SettingsLogs = () => {
           <Button
             title={t`Upgrade`}
             variant="primary"
-            accent="blue"
+            accent="brand"
             size="small"
             Icon={IconArrowUp}
             onClick={() =>

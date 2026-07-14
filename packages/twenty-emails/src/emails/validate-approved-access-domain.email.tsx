@@ -56,7 +56,7 @@ export const SendApprovedAccessDomainValidation = ({
               <Link
                 href={`mailto:${senderEmail}`}
                 value={senderEmail}
-                color={emailTheme.font.colors.blue}
+                color={emailTheme.font.colors.brandLink}
               />
             ),
             1: <b />,
@@ -80,7 +80,7 @@ export const SendApprovedAccessDomainValidation = ({
 };
 
 SendApprovedAccessDomainValidation.PreviewProps = {
-  link: 'https://app.twenty.com/validate-domain',
+  link: 'https://workspace.example/validate-domain',
   domain: 'example.com',
   workspace: {
     name: 'Acme Inc.',
@@ -91,7 +91,7 @@ SendApprovedAccessDomainValidation.PreviewProps = {
     firstName: 'John',
     lastName: 'Doe',
   },
-  serverUrl: 'https://app.twenty.com',
+  serverUrl: 'https://workspace.example',
   locale: 'en',
 };
 

@@ -7,8 +7,8 @@ const StyledIconButtonGroupContainer = styled.div`
 `;
 
 const StyledSelectedIconButtonGroupContainer = styled.div`
-  background-color: ${themeCssVariables.color.blue2};
-  border-color: ${themeCssVariables.color.blue};
+  background-color: ${themeCssVariables.brand.soft};
+  border-color: ${themeCssVariables.brand.border};
   pointer-events: all;
 `;
 

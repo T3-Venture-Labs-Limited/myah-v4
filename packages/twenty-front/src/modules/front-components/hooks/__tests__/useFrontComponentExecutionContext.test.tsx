@@ -532,33 +532,36 @@ describe('useFrontComponentExecutionContext', () => {
   });
 
   describe('openCommandConfirmationModal', () => {
-    it('should call openConfirmationModal with frontComponent caller', async () => {
-      const { result } = renderUseFrontComponentExecutionContext({
-        frontComponentId: FRONT_COMPONENT_ID,
-      });
-
-      await act(async () => {
-        await result.current.frontComponentHostCommunicationApi.openCommandConfirmationModal(
-          {
-            title: 'Confirm?',
-            subtitle: 'Are you sure?',
-            confirmButtonText: 'Yes',
-            confirmButtonAccent: 'danger',
-          },
-        );
-      });
-
-      expect(mockOpenConfirmationModal).toHaveBeenCalledWith({
-        caller: {
-          type: 'frontComponent',
+    it.each(['brand', 'blue'] as const)(
+      'normalizes %s to the brand confirmation accent',
+      async (confirmButtonAccent) => {
+        const { result } = renderUseFrontComponentExecutionContext({
           frontComponentId: FRONT_COMPONENT_ID,
-        },
-        title: 'Confirm?',
-        subtitle: 'Are you sure?',
-        confirmButtonText: 'Yes',
-        confirmButtonAccent: 'danger',
-      });
-    });
+        });
+
+        await act(async () => {
+          await result.current.frontComponentHostCommunicationApi.openCommandConfirmationModal(
+            {
+              title: 'Confirm?',
+              subtitle: 'Are you sure?',
+              confirmButtonText: 'Yes',
+              confirmButtonAccent,
+            },
+          );
+        });
+
+        expect(mockOpenConfirmationModal).toHaveBeenCalledWith({
+          caller: {
+            type: 'frontComponent',
+            frontComponentId: FRONT_COMPONENT_ID,
+          },
+          title: 'Confirm?',
+          subtitle: 'Are you sure?',
+          confirmButtonText: 'Yes',
+          confirmButtonAccent: 'brand',
+        });
+      },
+    );
 
     it('should preserve danger as the default confirmation accent', async () => {
       const { result } = renderUseFrontComponentExecutionContext({

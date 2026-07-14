@@ -7,6 +7,7 @@ import { ACCENT_LIGHT } from './AccentLight';
 import { BACKGROUND_LIGHT } from './BackgroundLight';
 import { BORDER_LIGHT } from './BorderLight';
 import { BOX_SHADOW_LIGHT } from './BoxShadowLight';
+import { BRAND_LIGHT } from './BrandLight';
 import { CODE_LIGHT } from './CodeLight';
 import { FONT_LIGHT } from './FontLight';
 import { TAG_LIGHT } from './TagLight';
@@ -19,6 +20,7 @@ export const THEME_LIGHT = {
     background: BACKGROUND_LIGHT,
     blur: BLUR_LIGHT,
     border: BORDER_LIGHT,
+    brand: BRAND_LIGHT,
     boxShadow: BOX_SHADOW_LIGHT,
     font: FONT_LIGHT,
     name: 'light',

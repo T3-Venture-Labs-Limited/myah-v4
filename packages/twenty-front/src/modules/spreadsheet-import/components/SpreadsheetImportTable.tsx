@@ -19,7 +19,7 @@ const StyledDataGridContainer = styled.div<{ headerRowHeight?: number }>`
   --rdg-row-selected-background-color: ${themeCssVariables.background.primary};
   --rdg-row-selected-hover-background-color: ${themeCssVariables.background
     .secondary};
-  --rdg-selection-color: ${themeCssVariables.color.blue};
+  --rdg-selection-color: ${themeCssVariables.brand.solid};
   --rdg-summary-border-color: ${themeCssVariables.border.color.medium};
   --rdg-warning-cell-background-color: ${themeCssVariables.color.orange};
   --row-selected-hover-background-color: ${themeCssVariables.background

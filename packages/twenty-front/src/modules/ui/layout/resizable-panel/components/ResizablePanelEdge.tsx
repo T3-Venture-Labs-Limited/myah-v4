@@ -31,7 +31,7 @@ const StyledEdge = styled.div<StyledEdgeProps>`
 const StyledHandle = styled.div<{ isActive: boolean; isHovered: boolean }>`
   background-color: ${({ isActive, isHovered }) =>
     isActive
-      ? themeCssVariables.color.blue
+      ? themeCssVariables.brand.solid
       : isHovered
         ? themeCssVariables.font.color.tertiary
         : themeCssVariables.background.quaternary};

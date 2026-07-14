@@ -48,6 +48,7 @@ export const SignInUpWithGoogle = ({
     <>
       <StyledSSOButtonContainer>
         <MainButton
+          accent={signInUpStep === SignInUpStep.Init ? 'dark' : undefined}
           Icon={GoogleIcon}
           title={t`Continue with Google`}
           onClick={handleClick}

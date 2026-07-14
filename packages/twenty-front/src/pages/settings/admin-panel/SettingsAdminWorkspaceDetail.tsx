@@ -2,7 +2,6 @@ import { useParams } from 'react-router-dom';
 
 import { useMutation, useQuery } from '@apollo/client/react';
 import { t } from '@lingui/core/macro';
-import { isNonEmptyString } from '@sniptt/guards';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 
@@ -31,7 +30,7 @@ import { TableBody } from '@/ui/layout/table/components/TableBody';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableHeader } from '@/ui/layout/table/components/TableHeader';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { DEFAULT_WORKSPACE_LOGO } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
+import { getWorkspaceLogoUrl } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { Avatar } from 'twenty-ui/data-display';
@@ -200,9 +199,7 @@ export const SettingsAdminWorkspaceDetail = () => {
   ];
 
   const workspaceName = workspace?.name || workspaceId || '';
-  const workspaceLogo = isNonEmptyString(workspace?.logo)
-    ? workspace.logo
-    : DEFAULT_WORKSPACE_LOGO;
+  const workspaceLogo = getWorkspaceLogoUrl(workspace?.logo);
 
   if (isLoadingWorkspace) {
     return <SettingsSkeletonLoader />;
@@ -213,7 +210,7 @@ export const SettingsAdminWorkspaceDetail = () => {
       title={workspaceName}
       icon={
         <Avatar
-          avatarUrl={getAbsoluteImageUrl(workspaceLogo)}
+          avatarUrl={workspaceLogo}
           placeholder={workspaceName}
           placeholderColorSeed={workspace?.id}
           size="md"

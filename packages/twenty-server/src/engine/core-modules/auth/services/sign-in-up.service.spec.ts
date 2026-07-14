@@ -2,8 +2,13 @@ import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
-import { type SignInUpNewUserPayload } from 'src/engine/core-modules/auth/types/signInUp.type';
+import {
+  type ExistingUserOrPartialUserWithPicture,
+  type SignInUpNewUserPayload,
+} from 'src/engine/core-modules/auth/types/signInUp.type';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
+import { type ApplicationService } from 'src/engine/core-modules/application/application.service';
+import { type DataSource } from 'typeorm';
 
 import { SignInUpService } from './sign-in-up.service';
 
@@ -23,14 +28,14 @@ type MockConfigurationValues = {
 
 const createSignInUpServiceForTests = () => {
   const mockUserRepository = {
-    create: jest.fn((user) => user),
-    save: jest.fn(async (user) => ({ id: 'saved-user-id', ...user })),
+    create: jest.fn((user: object) => user),
+    save: jest.fn(async (user: object) => ({ id: 'saved-user-id', ...user })),
     count: jest.fn(),
   };
 
   const mockWorkspaceRepository = {
     count: jest.fn(),
-    create: jest.fn(),
+    create: jest.fn((workspace: object) => workspace),
   };
 
   const mockConfigurationValues: MockConfigurationValues = {
@@ -48,13 +53,36 @@ const createSignInUpServiceForTests = () => {
 
   const queryRunnerMock = {
     manager: {
-      save: jest.fn(),
+      save: jest.fn(
+        async <Entity extends object>(_target: unknown, entity: Entity) => ({
+          id: 'persisted-entity-id',
+          ...entity,
+        }),
+      ),
+      update: jest.fn(),
     },
     connect: jest.fn(),
     startTransaction: jest.fn(),
     commitTransaction: jest.fn(),
     rollbackTransaction: jest.fn(),
     release: jest.fn(),
+  };
+
+  const mockApplicationService = {
+    createWorkspaceCustomApplication: jest.fn().mockResolvedValue({
+      universalIdentifier: 'workspace-custom-application-id',
+    }),
+  };
+
+  const mockDataSource = {
+    createQueryRunner: jest.fn(() => queryRunnerMock),
+    transaction: jest.fn(
+      async (
+        callback: (entityManager: {
+          queryRunner: typeof queryRunnerMock;
+        }) => Promise<unknown>,
+      ) => callback({ queryRunner: queryRunnerMock }),
+    ),
   };
 
   const service = new SignInUpService(
@@ -69,7 +97,9 @@ const createSignInUpServiceForTests = () => {
       checkUserWorkspaceExists: jest.fn(),
     } as any,
     {
+      setOnboardingConnectAccountPending: jest.fn(),
       setOnboardingCreateProfilePending: jest.fn(),
+      setOnboardingInstallAppsPending: jest.fn(),
       setOnboardingInviteTeamPending: jest.fn(),
       createOnboardingStatusForWorkspaceMember: jest.fn(),
     } as any,
@@ -91,9 +121,7 @@ const createSignInUpServiceForTests = () => {
     {
       invalidateAndRecompute: jest.fn(),
     } as any,
-    {
-      createWorkspaceCustomApplication: jest.fn(),
-    } as any,
+    mockApplicationService as unknown as ApplicationService,
     {
       uploadWorkspaceLogoFromUrl: jest.fn(),
     } as any,
@@ -108,9 +136,7 @@ const createSignInUpServiceForTests = () => {
     {
       creditWorkspaceBalance: jest.fn(),
     } as any,
-    {
-      createQueryRunner: jest.fn(() => queryRunnerMock),
-    } as any,
+    mockDataSource as unknown as DataSource,
   );
 
   return {
@@ -118,6 +144,7 @@ const createSignInUpServiceForTests = () => {
     mockUserRepository,
     mockWorkspaceRepository,
     mockConfigurationValues,
+    queryRunnerMock,
   };
 };
 
@@ -304,5 +331,29 @@ describe('SignInUpService workspace-creation policy', () => {
     ).rejects.toMatchObject({
       code: AuthExceptionCode.SIGNUP_DISABLED,
     });
+  });
+
+  it('does not record a click-through DPA for a new workspace', async () => {
+    const { service, queryRunnerMock, mockWorkspaceRepository } =
+      createSignInUpServiceForTests();
+
+    mockWorkspaceRepository.count.mockResolvedValue(0);
+    const newUserWithPicture = {
+      type: 'newUserWithPicture',
+      newUserWithPicture: {
+        email: 'new.user@gmail.com',
+        firstName: 'New',
+        lastName: 'User',
+        picture: '',
+        locale: 'en',
+        isEmailVerified: true,
+      },
+    } satisfies ExistingUserOrPartialUserWithPicture['userData'];
+
+    await service.signUpOnNewWorkspace(newUserWithPicture, {
+      displayName: 'New workspace',
+    });
+
+    expect(queryRunnerMock.manager.save).toHaveBeenCalledTimes(2);
   });
 });

@@ -20,7 +20,7 @@ const StyledRecordTableCellFocusPortalContent = styled.div<{
   background: ${themeCssVariables.background.transparent.secondary};
   background-color: ${({ isRecordTableRowActive }) =>
     isRecordTableRowActive
-      ? themeCssVariables.accent.quaternary
+      ? themeCssVariables.brand.soft
       : themeCssVariables.background.primary};
   border-radius: ${themeCssVariables.border.radius.sm};
   box-sizing: border-box;
@@ -28,7 +28,7 @@ const StyledRecordTableCellFocusPortalContent = styled.div<{
 
   height: ${RECORD_TABLE_ROW_HEIGHT}px;
 
-  outline: 1px solid ${themeCssVariables.color.blue8};
+  outline: 1px solid ${themeCssVariables.brand.focusRing};
   outline-offset: -1px;
 
   user-select: none;

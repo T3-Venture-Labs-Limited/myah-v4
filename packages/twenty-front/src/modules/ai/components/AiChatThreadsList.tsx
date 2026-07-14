@@ -112,7 +112,7 @@ export const AiChatThreadsList = () => {
         <StyledButtonsContainer>
           <Button
             variant="primary"
-            accent="blue"
+            accent="brand"
             size="medium"
             title={t`New chat`}
             onClick={() => switchToNewChat()}

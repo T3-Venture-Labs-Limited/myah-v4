@@ -5,12 +5,7 @@ import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLay
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { useContext } from 'react';
-import {
-  IconBrandX,
-  IconTransform,
-  type IconComponent,
-  useIcons,
-} from 'twenty-ui/icon';
+import { IconBrandX, type IconComponent, useIcons } from 'twenty-ui/icon';
 import { H2Title } from 'twenty-ui/typography';
 import { Section } from 'twenty-ui/layout';
 import { SettingsPath } from 'twenty-shared/types';
@@ -24,7 +19,6 @@ import coverDark from '~/pages/settings/community/assets/cover-dark.png';
 import coverLight from '~/pages/settings/community/assets/cover-light.png';
 
 const SETTINGS_COMMUNITY_HERO_INSTANCE_ID_PREFIX = 'settings-community-hero';
-
 const StyledCardLink = styled.a`
   display: block;
   min-width: 0;
@@ -115,24 +109,6 @@ export const SettingsCommunity = () => {
               </StyledCardLink>
             ))}
           </StyledCardsGrid>
-        </Section>
-
-        <Section>
-          <StyledCardLink
-            href="https://twenty.com/releases"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <SettingsCard
-              Icon={
-                <IconTransform
-                  size={theme.icon.size.md}
-                  stroke={theme.icon.stroke.sm}
-                />
-              }
-              title={t`Read changelog`}
-            />
-          </StyledCardLink>
         </Section>
       </SettingsPageContainer>
     </SettingsPageLayout>

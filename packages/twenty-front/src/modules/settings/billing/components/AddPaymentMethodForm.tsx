@@ -92,7 +92,7 @@ const AddPaymentMethodFormContent = ({
         data?.createBillingPaymentMethodSetupIntent?.clientSecret;
       if (!isDefined(clientSecret)) {
         enqueueErrorSnackBar({
-          message: t`Subscription error. Please retry or contact Twenty team`,
+          message: t`Subscription error. Please retry or contact Myah team`,
         });
         setIsSubmitting(false);
         return;
@@ -123,7 +123,7 @@ const AddPaymentMethodFormContent = ({
         enqueueErrorSnackBar({ apolloError: error });
       } else {
         enqueueErrorSnackBar({
-          message: t`Subscription error. Please retry or contact Twenty team`,
+          message: t`Subscription error. Please retry or contact Myah team`,
         });
       }
       setIsSubmitting(false);
@@ -143,7 +143,7 @@ const AddPaymentMethodFormContent = ({
         title={t`Add credit card`}
         onClick={handleSubmit}
         variant="secondary"
-        accent="blue"
+        accent="brand"
         fullWidth
         justify="center"
         isLoading={isSubmitting}

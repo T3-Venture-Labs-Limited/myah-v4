@@ -27,6 +27,7 @@ export const InlineBanner = ({
   className,
 }: InlineBannerProps) => {
   const theme = useTheme();
+  const buttonAccent = color === 'danger' ? 'danger' : 'brand';
 
   return (
     <Banner
@@ -42,7 +43,7 @@ export const InlineBanner = ({
         <Button
           size="small"
           variant="secondary"
-          accent={color}
+          accent={buttonAccent}
           title={button?.title}
           onClick={button?.onClick}
         />

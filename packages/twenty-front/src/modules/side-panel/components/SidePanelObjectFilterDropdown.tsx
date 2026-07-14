@@ -28,7 +28,7 @@ export const SidePanelObjectFilterDropdown = ({
         <IconButton
           Icon={IconFilter}
           variant="tertiary"
-          accent={isFilterActive ? 'blue' : 'default'}
+          accent={isFilterActive ? 'brand' : 'default'}
           size="small"
           ariaLabel={t`Filter by object type`}
         />

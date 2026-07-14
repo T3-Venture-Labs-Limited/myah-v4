@@ -411,7 +411,7 @@ export const ResourceCreditPackagePickerModal = ({
         <Button
           onClick={onConfirm}
           variant="primary"
-          accent="blue"
+          accent="brand"
           title={t`Confirm`}
           fullWidth
           justify="center"

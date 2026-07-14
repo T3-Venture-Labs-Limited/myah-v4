@@ -47,7 +47,7 @@ export const SettingsAccountsConfigurationStepEmail = ({
           <Button
             Icon={IconChevronRight}
             title={t`Next`}
-            accent="blue"
+            accent="brand"
             size="small"
             variant="secondary"
             onClick={onNext}
@@ -57,7 +57,7 @@ export const SettingsAccountsConfigurationStepEmail = ({
           <Button
             Icon={IconPlus}
             title={t`Add account`}
-            accent="blue"
+            accent="brand"
             size="small"
             variant="primary"
             onClick={onAddAccount}

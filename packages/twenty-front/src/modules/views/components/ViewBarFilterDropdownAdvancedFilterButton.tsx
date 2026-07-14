@@ -31,8 +31,8 @@ import { v4 } from 'uuid';
 
 const StyledPillContainer = styled.span`
   & > * {
-    background: ${themeCssVariables.color.blue3};
-    color: ${themeCssVariables.color.blue};
+    background: ${themeCssVariables.brand.soft};
+    color: ${themeCssVariables.brand.text};
   }
 `;
 

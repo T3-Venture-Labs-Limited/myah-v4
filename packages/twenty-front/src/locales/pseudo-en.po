@@ -1008,6 +1008,7 @@ msgstr ""
 #: src/pages/settings/accounts/SettingsAccountsCalendars.tsx
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/accounts/SettingsNewAccount.tsx
 msgid "Accounts"
 msgstr ""
@@ -1028,6 +1029,7 @@ msgid "ACS Url copied to clipboard"
 msgstr ""
 
 #. js-lingui-id: bwRvnp
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/utils/getActionHeaderTypeOrThrow.ts
@@ -1328,6 +1330,11 @@ msgstr ""
 msgid "Add Model"
 msgstr ""
 
+#. js-lingui-id: KATzux
+#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
+msgid "Add Myah as a Streamable HTTP extension in Goose."
+msgstr ""
+
 #. js-lingui-id: Hkobke
 #: src/modules/object-record/record-table/record-table-section/components/RecordTableRecordGroupSectionAddNew.tsx
 msgid "Add new"
@@ -1443,34 +1450,34 @@ msgstr ""
 msgid "Add test input for evaluation (e.g., \"Find all customers in NY\")"
 msgstr ""
 
-#. js-lingui-id: FKGcEL
+#. js-lingui-id: COf4dM
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Add the Twenty MCP server as a remote context server in Zed."
+msgid "Add the Myah MCP server as a remote context server in Zed."
 msgstr ""
 
-#. js-lingui-id: iA2nHX
+#. js-lingui-id: lmpGWt
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Add the Twenty MCP server from Augment Code settings."
+msgid "Add the Myah MCP server from Augment Code settings."
 msgstr ""
 
-#. js-lingui-id: l+NzAk
+#. js-lingui-id: g4fW7f
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Add the Twenty MCP server from Raycast's MCP commands or settings."
+msgid "Add the Myah MCP server from Raycast's MCP commands or settings."
 msgstr ""
 
-#. js-lingui-id: j6G/yI
+#. js-lingui-id: ZR1ikC
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Add the Twenty MCP server in Gemini CLI settings."
+msgid "Add the Myah MCP server in Gemini CLI settings."
 msgstr ""
 
-#. js-lingui-id: /OyhlM
+#. js-lingui-id: X2dM01
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Add the Twenty MCP server to your LibreChat configuration file."
+msgid "Add the Myah MCP server to your LibreChat configuration file."
 msgstr ""
 
-#. js-lingui-id: K0DXoj
+#. js-lingui-id: g6oa1R
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Add the Twenty remote server with LM Studio's install link."
+msgid "Add the Myah remote server with LM Studio's install link."
 msgstr ""
 
 #. js-lingui-id: 5+ttxv
@@ -1481,11 +1488,6 @@ msgstr ""
 #. js-lingui-id: yVOmgE
 #: src/modules/views/view-picker/components/ViewPickerOptionDropdown.tsx
 msgid "Add to Favorite"
-msgstr ""
-
-#. js-lingui-id: 4D/zWv
-#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Add Twenty as a Streamable HTTP extension in Goose."
 msgstr ""
 
 #. js-lingui-id: YttdVS
@@ -2449,6 +2451,16 @@ msgstr ""
 msgid "Apply{progressText}"
 msgstr ""
 
+#. js-lingui-id: Z7ZXbT
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Approve"
+msgstr ""
+
+#. js-lingui-id: 7kb4LU
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Approved"
+msgstr ""
+
 #. js-lingui-id: UDlRcx
 #: src/modules/settings/security/components/approvedAccessDomains/SettingsSecurityApprovedAccessDomainValidationEffect.tsx
 msgid "Approved access domain validated"
@@ -3087,9 +3099,9 @@ msgstr ""
 msgid "Billing period"
 msgstr ""
 
-#. js-lingui-id: xF/NXI
+#. js-lingui-id: x4f/Vb
 #: src/modules/settings/billing/hooks/useBillingPortalSession.ts
-msgid "Billing portal session error. Please retry or contact Twenty team"
+msgid "Billing portal session error. Please retry or contact Myah team"
 msgstr ""
 
 #. js-lingui-id: hnsQvv
@@ -3167,11 +3179,6 @@ msgstr ""
 #. js-lingui-id: O2UpM1
 #: src/pages/settings/applications/SettingsApplications.tsx
 msgid "Browse"
-msgstr ""
-
-#. js-lingui-id: hKAV/O
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Browse partners"
 msgstr ""
 
 #. js-lingui-id: GsXRxc
@@ -3599,6 +3606,11 @@ msgstr ""
 msgid "Change visibility?"
 msgstr ""
 
+#. js-lingui-id: f6suyZ
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Changes requested"
+msgstr ""
+
 #. js-lingui-id: rnTfap
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 msgid "Changing visibility requires reconnecting this OAuth connection. You will be redirected to authorize it again."
@@ -3640,14 +3652,14 @@ msgstr ""
 msgid "Chat with AI agents and use AI features"
 msgstr ""
 
-#. js-lingui-id: yOaaWk
-#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "ChatGPT"
-msgstr ""
-
 #. js-lingui-id: 8Q+lLG
 #: src/pages/settings/admin-panel/SettingsAdminWorkspaceDetail.tsx
 msgid "Chats"
+msgstr ""
+
+#. js-lingui-id: d+fVrI
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Check connection"
 msgstr ""
 
 #. js-lingui-id: h5C4B4
@@ -3670,10 +3682,10 @@ msgstr ""
 msgid "Checking status"
 msgstr ""
 
-#. js-lingui-id: SxwQE8
+#. js-lingui-id: RiLCZf
 #: src/modules/settings/billing/hooks/useHandleCheckoutSession.ts
 #: src/modules/settings/billing/hooks/useHandleCheckoutSession.ts
-msgid "Checkout session error. Please retry or contact Twenty team"
+msgid "Checkout session error. Please retry or contact Myah team"
 msgstr ""
 
 #. js-lingui-id: SviKkE
@@ -4217,6 +4229,16 @@ msgstr ""
 msgid "Configure the default AI models for all workspaces"
 msgstr ""
 
+#. js-lingui-id: dJUgsV
+#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
+msgid "Configure the Myah MCP server manually in Cascade."
+msgstr ""
+
+#. js-lingui-id: w7Ko8D
+#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
+msgid "Configure the Myah MCP server manually in Cline."
+msgstr ""
+
 #. js-lingui-id: CcCy4C
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 msgid "Configure the remote MCP server through Warp's agent settings."
@@ -4225,16 +4247,6 @@ msgstr ""
 #. js-lingui-id: pHIR4s
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 msgid "Configure the remote server in Amazon Q Developer's MCP settings."
-msgstr ""
-
-#. js-lingui-id: g1/8jH
-#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Configure the Twenty MCP server manually in Cascade."
-msgstr ""
-
-#. js-lingui-id: XiyvRh
-#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Configure the Twenty MCP server manually in Cline."
 msgstr ""
 
 #. js-lingui-id: qA9AGQ
@@ -4332,6 +4344,16 @@ msgstr ""
 msgid "Connect a new account to your workspace"
 msgstr ""
 
+#. js-lingui-id: iLSXJ7
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Connect a Shopify store so Myah can read brand and product context."
+msgstr ""
+
+#. js-lingui-id: YTrDtl
+#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
+msgid "Connect a store so Myah can read brand and product context."
+msgstr ""
+
 #. js-lingui-id: tBOZWW
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Connect a workspace Instagram Business or Creator account for approved message reads and replies."
@@ -4350,6 +4372,16 @@ msgstr ""
 #. js-lingui-id: V640pB
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Connect Instagram"
+msgstr ""
+
+#. js-lingui-id: 2+cg4x
+#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
+msgid "Connect Instagram messaging for your workspace."
+msgstr ""
+
+#. js-lingui-id: HIjrUv
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Connect Shopify"
 msgstr ""
 
 #. js-lingui-id: YLx3sC
@@ -4374,6 +4406,7 @@ msgstr ""
 
 #. js-lingui-id: QHcLEN
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationConnectionsSection.tsx
 msgid "Connected"
@@ -4419,6 +4452,11 @@ msgstr ""
 #. js-lingui-id: aJTn2g
 #: src/modules/settings/accounts/hooks/useImapSmtpCaldavConnectionForm.ts
 msgid "Connection successfully updated"
+msgstr ""
+
+#. js-lingui-id: +O16x6
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Consequences"
 msgstr ""
 
 #. js-lingui-id: JdGr7p
@@ -4684,6 +4722,11 @@ msgstr ""
 msgid "Could not delete approved access domain"
 msgstr ""
 
+#. js-lingui-id: KgTGpb
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Could not disconnect Shopify."
+msgstr ""
+
 #. js-lingui-id: E5v5TK
 #: src/modules/settings/legal/components/SettingsDpaAgreementsTable.tsx
 msgid "Could not download the document."
@@ -4697,6 +4740,11 @@ msgstr ""
 #. js-lingui-id: O5XFg7
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not load Instagram connection status."
+msgstr ""
+
+#. js-lingui-id: g3pHAg
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Could not load Shopify connection status."
 msgstr ""
 
 #. js-lingui-id: KqYYBp
@@ -4722,6 +4770,11 @@ msgstr ""
 #. js-lingui-id: 6baIaY
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not start Instagram authorization. Check the server Instagram configuration."
+msgstr ""
+
+#. js-lingui-id: oJAw2x
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Could not start Shopify OAuth. Check the shop domain and server configuration."
 msgstr ""
 
 #. js-lingui-id: PiYvMl
@@ -6182,6 +6235,11 @@ msgstr ""
 msgid "Disconnect connection?"
 msgstr ""
 
+#. js-lingui-id: 0xMKx0
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Disconnect Shopify"
+msgstr ""
+
 #. js-lingui-id: xt4a74
 #: src/modules/settings/security/components/SettingsSecurityAuthProvidersOptionsList.tsx
 msgid "Discoverable"
@@ -6816,11 +6874,6 @@ msgstr ""
 msgid "Email/Domain"
 msgstr ""
 
-#. js-lingui-id: 4B3eAl
-#: src/pages/settings/email/SettingsWorkspaceEmail.tsx
-msgid "Emailing is in demo mode"
-msgstr ""
-
 #. js-lingui-id: BXEcos
 #: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
@@ -6832,11 +6885,6 @@ msgstr ""
 #. js-lingui-id: XGd8Wo
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 msgid "Emails & Calendar"
-msgstr ""
-
-#. js-lingui-id: qryOF/
-#: src/pages/settings/email/SettingsWorkspaceEmail.tsx
-msgid "Emails are logged, not sent. Sending requires the AWS SES driver with an Enterprise license, or Twenty Cloud."
 msgstr ""
 
 #. js-lingui-id: mHrqHa
@@ -7024,6 +7072,11 @@ msgstr ""
 #. js-lingui-id: u2fAme
 #: src/modules/object-record/record-field/ui/form-types/components/FormNumberFieldInput.tsx
 msgid "Enter a number"
+msgstr ""
+
+#. js-lingui-id: B5IUuN
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Enter a Shopify store domain first."
 msgstr ""
 
 #. js-lingui-id: 93ebCf
@@ -7446,9 +7499,9 @@ msgstr ""
 msgid "Error while cancelling plan switching."
 msgstr ""
 
-#. js-lingui-id: QmR+2U
+#. js-lingui-id: EPiVTW
 #: src/modules/settings/billing/hooks/useEndSubscriptionTrialPeriod.ts
-msgid "Error while ending trial period. Please contact Twenty team."
+msgid "Error while ending trial period. Please contact Myah team."
 msgstr ""
 
 #. js-lingui-id: 5g78zo
@@ -8126,11 +8179,6 @@ msgstr ""
 msgid "Featured only"
 msgstr ""
 
-#. js-lingui-id: PpZkda
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Features"
-msgstr ""
-
 #. js-lingui-id: 2lOBKV
 #: src/modules/metadata-error-handler/hooks/useMetadataErrorHandler.ts
 #: src/pages/settings/applications/SettingsApplicationDetails.tsx
@@ -8438,6 +8486,11 @@ msgstr ""
 #. js-lingui-id: cgevMo
 #: src/pages/onboarding/CreateProfile.tsx
 msgid "First name can not be empty"
+msgstr ""
+
+#. js-lingui-id: uMsB8B
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "First-party Shopify app"
 msgstr ""
 
 #. js-lingui-id: JREYkg
@@ -9090,11 +9143,6 @@ msgstr ""
 msgid "Hide system indexes"
 msgstr ""
 
-#. js-lingui-id: 1ETc0T
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Hire a partner to help you implement and customize Twenty."
-msgstr ""
-
 #. js-lingui-id: i0qMbr
 #: src/modules/navigation/components/MainNavigationDrawerTabsRow.tsx
 msgid "Home"
@@ -9627,6 +9675,7 @@ msgid "Insert your billing details to get a free trial and more AI credits"
 msgstr ""
 
 #. js-lingui-id: CTWsuc
+#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -11097,6 +11146,7 @@ msgstr ""
 
 #. js-lingui-id: KFatQ9
 #: src/modules/settings/mcp-and-apis/components/SettingsMcpSetup.tsx
+#: src/modules/settings/mcp-and-apis/components/SettingsMcpSetup.tsx
 msgid "MCP client configuration"
 msgstr ""
 
@@ -11513,6 +11563,11 @@ msgstr ""
 #. js-lingui-id: XTGSZU
 #: src/modules/views/view-picker/components/ViewPickerListContent.tsx
 msgid "My unlisted views"
+msgstr ""
+
+#. js-lingui-id: uLncIJ
+#: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/components/ColumnGrid.tsx
+msgid "Myah fields"
 msgstr ""
 
 #. js-lingui-id: JUrq94
@@ -12678,6 +12733,7 @@ msgstr ""
 
 #. js-lingui-id: S33tz3
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "Not connected"
 msgstr ""
 
@@ -12945,11 +13001,6 @@ msgstr ""
 msgid "Off the beaten path"
 msgstr ""
 
-#. js-lingui-id: s1X4Cm
-#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Official app"
-msgstr ""
-
 #. js-lingui-id: Zd5vVt
 #: src/modules/workflow/workflow-steps/workflow-actions/find-records-action/components/WorkflowEditActionFindRecords.tsx
 msgid "Offset"
@@ -13109,7 +13160,6 @@ msgstr ""
 #. js-lingui-id: 1TNIig
 #: src/modules/command-menu-item/components/RecordShowSidePanelOpenRecordButton.tsx
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
-#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 #: src/pages/settings/members/tabs/SettingsWorkspaceMembersTeamTab.tsx
 msgid "Open"
 msgstr ""
@@ -13124,14 +13174,14 @@ msgstr ""
 msgid "Open as link"
 msgstr ""
 
-#. js-lingui-id: n0vVgf
+#. js-lingui-id: BULAkO
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Open Claude with the Twenty connector name and MCP URL prefilled."
+msgid "Open Claude with the Myah connector name and MCP URL prefilled."
 msgstr ""
 
-#. js-lingui-id: +n2jpB
+#. js-lingui-id: DsssZn
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Open Cursor's MCP installer with the Twenty remote server config."
+msgid "Open Cursor's MCP installer with the Myah remote server config."
 msgstr ""
 
 #. js-lingui-id: pZZH4Q
@@ -13165,14 +13215,9 @@ msgstr ""
 msgid "Open records in"
 msgstr ""
 
-#. js-lingui-id: q170S2
+#. js-lingui-id: f2H65a
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Open Replit with the Twenty remote server config."
-msgstr ""
-
-#. js-lingui-id: sBd/cl
-#: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
-msgid "Open Twenty's official ChatGPT integration for your workspace."
+msgid "Open Replit with the Myah remote server config."
 msgstr ""
 
 #. js-lingui-id: OV5wZZ
@@ -13205,6 +13250,11 @@ msgstr ""
 #: src/pages/settings/email/SettingsWorkspaceNewUnsubscribeTopic.tsx
 #: src/pages/settings/email/SettingsWorkspaceUnsubscribeTopicDetail.tsx
 msgid "Optional context shown to recipients on the preferences page."
+msgstr ""
+
+#. js-lingui-id: EXEzE8
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Optional note for the agent"
 msgstr ""
 
 #. js-lingui-id: hY8F2i
@@ -13437,9 +13487,9 @@ msgstr ""
 msgid "Page name"
 msgstr ""
 
-#. js-lingui-id: NRvxzv
+#. js-lingui-id: IlIKsY
 #: src/pages/not-found/NotFound.tsx
-msgid "Page Not Found | Twenty"
+msgid "Page Not Found | Myah"
 msgstr ""
 
 #. js-lingui-id: sF+Xp9
@@ -13466,11 +13516,6 @@ msgstr ""
 #. js-lingui-id: F18WP3
 #: src/pages/settings/ai/SettingsToolDetail.tsx
 msgid "Parameters"
-msgstr ""
-
-#. js-lingui-id: mPkInZ
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Partners"
 msgstr ""
 
 #. js-lingui-id: 8ZsakT
@@ -13916,6 +13961,7 @@ msgid "Prevent from assigning the same value to different records"
 msgstr ""
 
 #. js-lingui-id: rdUucN
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/settings/data-model/components/SettingsDataModelPreviewFormCard.tsx
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectSettingsFormCard.tsx
 #: src/modules/settings/unsubscribe-topics/components/SettingsWorkspaceUnsubscribeTopicSection.tsx
@@ -14241,11 +14287,6 @@ msgstr ""
 msgid "Raycast"
 msgstr ""
 
-#. js-lingui-id: 549d7o
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Read changelog"
-msgstr ""
-
 #. js-lingui-id: ibPuCP
 #: src/pages/settings/applications/tabs/SettingsApplicationsDeveloperTab.tsx
 msgid "Read documentation"
@@ -14363,6 +14404,11 @@ msgstr ""
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationConnectionsSection.tsx
 msgid "Reconnect needed"
+msgstr ""
+
+#. js-lingui-id: S8Y+C0
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Reconnect Shopify"
 msgstr ""
 
 #. js-lingui-id: hVS0gK
@@ -14524,6 +14570,16 @@ msgstr ""
 #. js-lingui-id: qeXMXz
 #: src/pages/settings/admin-panel/SettingsAdminNewAiProvider.tsx
 msgid "Region where inference data is processed (optional)"
+msgstr ""
+
+#. js-lingui-id: 1t/NnN
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Reject"
+msgstr ""
+
+#. js-lingui-id: ekCRTP
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Rejected"
 msgstr ""
 
 #. js-lingui-id: h9AYFD
@@ -14785,6 +14841,11 @@ msgstr ""
 msgid "Request"
 msgstr ""
 
+#. js-lingui-id: gZu9+9
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Request changes"
+msgstr ""
+
 #. js-lingui-id: /laZGZ
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestExecutionResult.tsx
 msgid "Request Failed"
@@ -15008,6 +15069,11 @@ msgstr ""
 #: src/modules/side-panel/hooks/useOpenRichTextInSidePanel.ts
 #: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutDashboardWidgetTypeSelect.tsx
 msgid "Rich Text"
+msgstr ""
+
+#. js-lingui-id: Xwlwdm
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Risk"
 msgstr ""
 
 #. js-lingui-id: E1BXUR
@@ -16211,6 +16277,19 @@ msgstr ""
 msgid "Sharing link copied to clipboard"
 msgstr ""
 
+#. js-lingui-id: irL3dj
+#: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Shopify"
+msgstr ""
+
+#. js-lingui-id: PfaJ0Q
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Shopify store"
+msgstr ""
+
 #. js-lingui-id: RRXpo1
 #: src/modules/settings/data-model/fields/forms/number/constants/NumberDataModelSelectOptions.ts
 #: src/modules/side-panel/pages/page-layout/utils/getChartNumberFormatLabel.ts
@@ -16920,12 +16999,12 @@ msgstr ""
 msgid "Subscription activated."
 msgstr ""
 
-#. js-lingui-id: 0okvpx
+#. js-lingui-id: vkvcQH
 #: src/modules/settings/billing/components/AddPaymentMethodForm.tsx
 #: src/modules/settings/billing/components/AddPaymentMethodForm.tsx
 #: src/modules/settings/billing/hooks/useSubmitSubscriptionPayment.ts
 #: src/modules/settings/billing/hooks/useSubmitSubscriptionPayment.ts
-msgid "Subscription error. Please retry or contact Twenty team"
+msgid "Subscription error. Please retry or contact Myah team"
 msgstr ""
 
 #. js-lingui-id: FooJUj
@@ -17283,14 +17362,14 @@ msgstr ""
 msgid "The AWS region for Bedrock"
 msgstr ""
 
-#. js-lingui-id: HP7per
+#. js-lingui-id: XnxeqX
 #: src/pages/settings/applications/utils/getStandardApplicationDescription.ts
 msgid ""
-"The base data model every Twenty workspace runs on.\n"
+"The base data model every Myah workspace runs on.\n"
 "\n"
 "#### What \"foundation\" means\n"
 "\n"
-"Every Twenty workspace starts with this set of objects. They define the shape of your CRM, including relationships, activity, and reporting. Everything else, including marketplace apps, AI agents, and custom objects, plugs into them.\n"
+"Every Myah workspace starts with this set of objects. They define the shape of your CRM, including relationships, activity, and reporting. Everything else, including marketplace apps, AI agents, and custom objects, plugs into them.\n"
 "\n"
 "#### Included objects\n"
 "- **People & Companies**: contact and account records\n"
@@ -17298,11 +17377,11 @@ msgid ""
 "- **Notes & Tasks**: activity and follow-ups\n"
 "- **Workflows & Dashboards**: automation and reporting\n"
 "\n"
-"Remove this app and the rest of Twenty has nothing to hang off.\n"
+"Remove this app and the rest of Myah has nothing to hang off.\n"
 "\n"
 "#### Build your own app\n"
 "\n"
-"Extend Twenty with your own objects, fields, logic functions, or AI skills. Scaffold a new app in one command:\n"
+"Extend Myah with your own objects, fields, logic functions, or AI skills. Scaffold a new app in one command:\n"
 "\n"
 "```bash\n"
 "npx create-twenty-app@latest my-twenty-app\n"
@@ -17315,7 +17394,7 @@ msgid ""
 "yarn twenty dev\n"
 "```\n"
 "\n"
-"See the [Getting Started guide](https://twenty.com/developers/extend/apps/getting-started) for the full walkthrough, and [Building Apps](https://twenty.com/developers/extend/apps/building) for the `defineApplication` / `defineEntity` APIs."
+""
 msgstr ""
 
 #. js-lingui-id: /kfzmx
@@ -18140,11 +18219,6 @@ msgstr ""
 msgid "Try our REST or GraphQL API playgrounds"
 msgstr ""
 
-#. js-lingui-id: 3WWUB9
-#: src/pages/settings/community/SettingsCommunity.tsx
-msgid "Try our upcoming features. Note they are still in beta. Please bear with us and report any issues you find."
-msgstr ""
-
 #. js-lingui-id: LQdi+H
 #: src/modules/auth/sign-in-up/components/EmailVerificationSent.tsx
 msgid "Try with another email"
@@ -18191,11 +18265,6 @@ msgstr ""
 #. js-lingui-id: EdHWDU
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
 msgid "Turquoise"
-msgstr ""
-
-#. js-lingui-id: JnaRPe
-#: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/components/ColumnGrid.tsx
-msgid "Twenty fields"
 msgstr ""
 
 #. js-lingui-id: YIjS4q
@@ -18691,7 +18760,6 @@ msgstr ""
 #: src/modules/settings/billing/hooks/useBillingPlanActions.ts
 #: src/modules/settings/event-logs/components/SettingsLogs.tsx
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
-#: src/pages/settings/email/SettingsWorkspaceEmail.tsx
 msgid "Upgrade"
 msgstr ""
 
@@ -18973,6 +19041,11 @@ msgstr ""
 msgid "Use our API or add your first {objectLabel} manually"
 msgstr ""
 
+#. js-lingui-id: 2PkBd7
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+msgid "Use our own Shopify app for OAuth first. We can fall back to Composio if the first-party flow blocks the spike."
+msgstr ""
+
 #. js-lingui-id: z1f4Op
 #: src/modules/workflow/workflow-variables/utils/getWorkflowVariableSpecialItems.ts
 msgid "Use the whole item"
@@ -19009,6 +19082,7 @@ msgstr ""
 #: src/pages/settings/accounts/SettingsAccountsConfigurationStepEmail.tsx
 #: src/pages/settings/accounts/SettingsAccountsEmails.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 #: src/pages/settings/accounts/SettingsNewAccount.tsx
 #: src/pages/settings/ai/SettingsAgentTurnDetail.tsx
 #: src/pages/settings/ai/SettingsAiPrompts.tsx
@@ -19425,6 +19499,11 @@ msgstr ""
 msgid "Waiting Children"
 msgstr ""
 
+#. js-lingui-id: GP1szu
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Waiting for approval..."
+msgstr ""
+
 #. js-lingui-id: TdQd9Q
 #: src/modules/ai/components/TerminalOutput.tsx
 msgid "Waiting for output..."
@@ -19630,9 +19709,9 @@ msgstr ""
 msgid "Weight"
 msgstr ""
 
-#. js-lingui-id: nTuObL
+#. js-lingui-id: 8SurIq
 #: src/pages/auth/SignInUp.tsx
-msgid "Welcome to Twenty"
+msgid "Welcome to Myah"
 msgstr ""
 
 #. js-lingui-id: t8ZvkC
@@ -20137,6 +20216,8 @@ msgstr ""
 
 #. js-lingui-id: 28Hr4M
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
+#: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "You need to sign in again first."
 msgstr ""
 

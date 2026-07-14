@@ -16,7 +16,7 @@ const StyledBoardCard = styled.div<{
   width: 100%;
 
   &[data-selected='true'] {
-    background-color: ${themeCssVariables.accent.quaternary};
+    background-color: ${themeCssVariables.brand.soft};
   }
 
   &[data-focused='true'] {
@@ -24,15 +24,15 @@ const StyledBoardCard = styled.div<{
   }
 
   &[data-active='true'] {
-    background-color: ${themeCssVariables.accent.quaternary};
-    border: 1px solid ${themeCssVariables.color.blue7};
+    background-color: ${themeCssVariables.brand.soft};
+    border: 1px solid ${themeCssVariables.brand.border};
   }
 
   &:hover {
     border: 1px solid ${themeCssVariables.border.color.strong};
 
     &[data-active='true'] {
-      border: 1px solid ${themeCssVariables.color.blue7};
+      border: 1px solid ${themeCssVariables.brand.border};
     }
   }
 

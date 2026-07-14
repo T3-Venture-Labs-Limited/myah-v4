@@ -19,7 +19,7 @@ export const Link = ({ value, href, color }: LinkProps) => {
       href={href}
       style={{
         ...linkStyle,
-        color: color ?? emailTheme.font.colors.tertiary,
+        color: color ?? emailTheme.font.colors.brandLink,
       }}
     >
       {value}

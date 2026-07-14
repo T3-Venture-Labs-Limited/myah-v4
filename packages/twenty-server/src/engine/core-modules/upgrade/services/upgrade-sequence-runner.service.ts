@@ -131,7 +131,10 @@ export class UpgradeSequenceRunnerService {
 
         await this.runInstanceStep({
           instanceStep: step,
-          skipDataMigration: allActiveOrSuspendedWorkspaceIds.length === 0,
+          skipDataMigration:
+            step.kind === 'slow-instance' &&
+            allActiveOrSuspendedWorkspaceIds.length === 0 &&
+            !step.command.runDataMigrationWithoutWorkspaces,
         });
 
         await this.upgradeAwareEntityMetadataAdapter.refresh();

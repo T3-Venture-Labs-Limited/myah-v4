@@ -1,4 +1,6 @@
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
+import { type SlowInstanceUpgradeStep } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
+
 
 import {
   type IntegrationTestContext,
@@ -208,6 +210,43 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
       // Runner runs Ic2 (slow, no workspaces → skip data migration)
       'Ic2:instance:completed:1',
     ]);
+  });
+
+  it('should run opted-in slow data migrations when no workspaces exist', async () => {
+    const slowInstanceStep = makeSlowInstance(
+      'Ic2',
+    ) as SlowInstanceUpgradeStep;
+    const sequence = [makeFastInstance('Ic1'), slowInstanceStep];
+    const runDataMigration = jest.fn().mockResolvedValue(undefined);
+
+    slowInstanceStep.command = {
+      ...slowInstanceStep.command,
+      runDataMigration,
+      runDataMigrationWithoutWorkspaces: true,
+    };
+
+    await seedInstanceMigration(context.dataSource, {
+      name: 'Ic1',
+      status: 'completed',
+    });
+
+    const instanceCommandRunnerService = context.module.get(
+      InstanceCommandRunnerService,
+    );
+    const spy = jest.spyOn(
+      instanceCommandRunnerService,
+      'runSlowInstanceCommand',
+    );
+
+    await context.runner.run({
+      sequence,
+      options: DEFAULT_OPTIONS,
+    });
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDataMigration: false }),
+    );
+    expect(runDataMigration).toHaveBeenCalledWith(context.dataSource);
   });
 
   it('should run data migration for slow instance commands when workspaces exist', async () => {
