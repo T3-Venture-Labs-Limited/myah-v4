@@ -1,3 +1,5 @@
+import { describe, expect, it } from '@jest/globals';
+
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { SendEmailVerificationLinkEmail } from './send-email-verification-link.email';
