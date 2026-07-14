@@ -14,6 +14,7 @@ import { ImpersonationService } from 'src/engine/core-modules/impersonation/serv
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { CustomPermissionGuard } from 'src/engine/guards/custom-permission.guard';
+import { ImpersonatePermissionGuard } from 'src/engine/guards/impersonate-permission.guard';
 import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
@@ -33,6 +34,7 @@ export class ImpersonationResolver {
     WorkspaceAuthGuard,
     UserAuthGuard,
     NoImpersonationGuard,
+    ImpersonatePermissionGuard,
     CustomPermissionGuard,
   )
   @Mutation(() => ImpersonateDTO)
