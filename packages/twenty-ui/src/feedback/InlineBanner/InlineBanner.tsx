@@ -29,7 +29,6 @@ export const InlineBanner = ({
   const theme = useTheme();
   const buttonAccent = color === 'danger' ? 'danger' : 'brand';
 
-
   return (
     <Banner
       className={clsx(styles.banner, className)}
