@@ -83,3 +83,14 @@ jobs:
             --request POST \
             --header "x-myah-apps-deployment-token: ${MYAH_STANDARD_APPS_DEPLOYMENT_TOKEN}" \
             "${MYAH_API_URL%/}/myah/platform/standard-apps/${APPLICATION_UNIVERSAL_IDENTIFIER}/promote"
+      - name: Publish Myah Instagram Messaging
+        uses: ./.github/actions/deploy-twenty-app
+        with:
+          api-url: ${{ env.MYAH_API_URL }}
+          api-key: ${{ env.MYAH_APP_PUBLISHER_KEY }}
+          app-path: packages/twenty-apps/public/myah-instagram-messaging
+          workspace-path: .
+
+      - name: Install Myah Instagram Messaging
+        working-directory: packages/twenty-apps/public/myah-instagram-messaging
+        run: yarn twenty app:install --remote target
