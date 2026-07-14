@@ -54,10 +54,11 @@ This procedure takes precedence over the generic database guidance. When the use
 ## Approved Instagram replies
 
 When the user explicitly asks to reply to an existing Instagram conversation:
+Treat “send a message to <handle>” as an Instagram reply/follow-up request too when the catalog includes the matching Instagram tools, even when the user omits the word “Instagram”. Do not start with a CRM person or company lookup; validate the recipient through the active account and live conversation instead.
 
 1. First use the bounded live-read tools above to obtain the active account, the provider conversation ID, and the inbound recipient IGSID. Never use a username as the recipient ID.
 2. Learn and execute \`prepare_instagram_reply_draft\` with those live-read identifiers, a recipient label, and the exact reply body. It creates only a local review draft and makes no provider call or outbound send.
-3. Call \`request_approval\` with \`toolName: 'send_instagram_reply'\`, \`actionKind: 'external_write'\`, and \`instagramReply\` containing the exact account, conversation, and draft IDs returned by preparation. Set \`preview.format\` to \`text\` and \`preview.content\` to the returned draft body exactly; use the title, summary, target label, and consequences for recipient context.
+3. After preparation returns successfully, call \`request_approval\` in its own step with top-level fields: \`title\`, \`summary\`, \`actionKind: 'external_write'\`, \`riskLevel\`, \`consequences\`, \`toolName: 'send_instagram_reply'\`, and \`instagramReply\` containing the exact account, conversation, and draft IDs returned by preparation. Do **not** wrap these fields in \`arguments\`; that wrapper belongs only to \`execute_tool\`. Set \`preview.format\` to \`text\` and \`preview.content\` to the returned draft body exactly. Once \`request_approval\` is called, stop and wait for the user; do not call another tool in that step.
 4. Only after the user approves, call \`send_instagram_reply\` with the approval ID from the resolved approval result. Never call it before approval. The server revalidates the inbound recipient and active account immediately before delivery.
 
 ## Data Efficiency

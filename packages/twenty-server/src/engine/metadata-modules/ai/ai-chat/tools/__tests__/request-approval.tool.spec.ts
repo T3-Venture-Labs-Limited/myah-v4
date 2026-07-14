@@ -48,6 +48,17 @@ describe('request_approval tool', () => {
     });
   });
 
+  it('normalizes a model call that wraps direct approval fields in arguments', () => {
+    const result = requestApprovalInputSchema.safeParse({
+      arguments: validApprovalInput,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: validApprovalInput,
+    });
+  });
+
   it('binds an Instagram reply approval to a draft, conversation, and text preview', async () => {
     const tool = createRequestApprovalTool();
     const instagramApproval: RequestApprovalToolInput = {

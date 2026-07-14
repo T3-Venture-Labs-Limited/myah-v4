@@ -302,15 +302,21 @@ export class StreamAgentChatJob {
             checkHasNoMoreAvailableCredits = hasNoMoreAvailableCredits;
             resolvedModelConfig = modelConfig;
 
-            const titleWritePromise = titlePromise.then((generatedTitle) => {
-              if (generatedTitle) {
-                writer.write({
-                  type: 'data-thread-title' as const,
-                  id: `thread-title-${data.threadId}`,
-                  data: { title: generatedTitle },
-                });
-              }
-            });
+            void titlePromise
+              .then((generatedTitle) => {
+                if (generatedTitle) {
+                  writer.write({
+                    type: 'data-thread-title' as const,
+                    id: `thread-title-${data.threadId}`,
+                    data: { title: generatedTitle },
+                  });
+                }
+              })
+              .catch((error) => {
+                this.logger.warn(
+                  `Failed to publish generated chat title for thread ${data.threadId}: ${error instanceof Error ? error.message : String(error)}`,
+                );
+              });
 
             writer.merge(
               stream.toUIMessageStream({
@@ -338,9 +344,8 @@ export class StreamAgentChatJob {
                     },
                   });
                 },
-                onFinish: async ({ responseMessage, isAborted }) => {
+                onFinish: ({ responseMessage, isAborted }) => {
                   finishEvent = { responseMessage, isAborted };
-                  await titleWritePromise;
                 },
                 sendReasoning: true,
               }),

@@ -47,7 +47,7 @@ const requestApprovalAffectedRecordSchema = z.object({
 
 const INSTAGRAM_REPLY_TOOL_NAME = 'send_instagram_reply';
 
-export const requestApprovalInputSchema = z
+const requestApprovalInputObjectSchema = z
   .object({
     title: z.string().min(1).describe('Short title for the approval card.'),
     summary: z
@@ -124,6 +124,35 @@ export const requestApprovalInputSchema = z
       });
     }
   });
+
+const unwrapDirectApprovalArguments = (input: unknown): unknown => {
+  if (
+    !input ||
+    typeof input !== 'object' ||
+    Array.isArray(input) ||
+    !('arguments' in input)
+  ) {
+    return input;
+  }
+
+  const { arguments: argumentsValue, ...otherFields } = input;
+
+  if (
+    Object.keys(otherFields).length !== 0 ||
+    !argumentsValue ||
+    typeof argumentsValue !== 'object' ||
+    Array.isArray(argumentsValue)
+  ) {
+    return input;
+  }
+
+  return argumentsValue;
+};
+
+export const requestApprovalInputSchema = z.preprocess(
+  unwrapDirectApprovalArguments,
+  requestApprovalInputObjectSchema,
+);
 
 type RequestApprovalPendingOutput = {
   success: true;
