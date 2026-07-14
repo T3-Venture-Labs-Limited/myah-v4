@@ -20,6 +20,7 @@ const jestConfig = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  testMatch: ['<rootDir>/src/**/*.test.ts?(x)'],
 };
 
 export default jestConfig;

@@ -43,6 +43,8 @@ jobs:
         run: npx nx run twenty-emails:lingui:extract
       - name: Compile translations (lingui)
         run: npx nx run twenty-emails:lingui:compile
+      - name: Run email unit tests
+        run: npx nx run twenty-emails:test --configuration=ci
       - name: Run email tests
         run: |
           # Start the email server in the background

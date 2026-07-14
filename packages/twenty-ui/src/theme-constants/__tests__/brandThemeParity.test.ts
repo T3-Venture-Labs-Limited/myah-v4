@@ -175,6 +175,12 @@ describe.each(BRAND_CASES)(
       expect(
         getContrastRatio(brandTokens.text, textBackground),
       ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        getContrastRatio(brandTokens.text, brandTokens.softHover),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        getContrastRatio(brandTokens.text, brandTokens.softActive),
+      ).toBeGreaterThanOrEqual(4.5);
     });
   },
 );

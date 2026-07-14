@@ -4,7 +4,7 @@ export const BRAND_LIGHT = {
   onSolidMuted: '#FFFFFFF6',
   solidHover: '#D42B6D',
   solidActive: '#B71E5B',
-  text: '#B51F5E',
+  text: '#A51E57',
   border: '#D92F73',
   soft: '#FCE4EE',
   softHover: '#FAD3E2',

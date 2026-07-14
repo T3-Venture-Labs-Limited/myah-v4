@@ -34,6 +34,10 @@ describe('RebrandEmailSenderToMyahSlowInstanceCommand', () => {
     expect(query.mock.calls[0][0]).toContain('value = to_jsonb($2::text)');
   });
 
+  it('runs its global sender backfill without workspaces', () => {
+    expect(command.runDataMigrationWithoutWorkspaces).toBe(true);
+  });
+
   it('registers as a slow data migration', () => {
     expect(
       getRegisteredInstanceCommandMetadata(

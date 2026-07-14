@@ -10,6 +10,8 @@ const MYAH_SENDER_NAME = 'Myah';
 export class RebrandEmailSenderToMyahSlowInstanceCommand
   implements SlowInstanceCommand
 {
+  public readonly runDataMigrationWithoutWorkspaces = true;
+
   public async runDataMigration(dataSource: DataSource): Promise<void> {
     await dataSource.query(
       `UPDATE "core"."keyValuePair"
