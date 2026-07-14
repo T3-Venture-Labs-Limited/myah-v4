@@ -28,6 +28,7 @@ type MockedUser = Pick<
   | 'lastName'
   | 'canAccessFullAdminPanel'
   | 'canImpersonate'
+  | 'isMyahTeamMember'
   | '__typename'
   | 'supportUserHash'
   | 'onboardingStatus'
@@ -194,6 +195,7 @@ export const mockedUserData: MockedUser = {
   lastName: 'Test',
   canAccessFullAdminPanel: false,
   canImpersonate: false,
+  isMyahTeamMember: false,
   hasPassword: true,
   supportUserHash:
     'a95afad9ff6f0b364e2a3fd3e246a1a852c22b6e55a3ca33745a86c201f9c10d',
@@ -264,6 +266,7 @@ export const mockedOnboardingUserData = (
     hasPassword: false,
     canAccessFullAdminPanel: false,
     canImpersonate: false,
+    isMyahTeamMember: false,
     supportUserHash:
       '4fb61d34ed3a4aeda2476d4b308b5162db9e1809b2b8277e6fdc6efc4a609254',
     workspaceMember: null,

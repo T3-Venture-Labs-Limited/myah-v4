@@ -36,6 +36,7 @@ const mockCurrentUser = {
   supportUserHash: null,
   canAccessFullAdminPanel: false,
   canImpersonate: false,
+  isMyahTeamMember: false,
   onboardingStatus: OnboardingStatus.COMPLETED,
   userVars: {},
   firstName: 'fake-first-name',
@@ -286,10 +287,10 @@ describe('useSettingsNavigationItems', () => {
     ).toBe(false);
   });
 
-  it('should show Myah-owned settings surfaces to allowlisted Myah Team users', () => {
+  it('should show Myah-owned settings surfaces to server-authorized Team users', () => {
     jotaiStore.set(currentUserState.atom, {
       ...mockCurrentUser,
-      email: 'operator@t3labs.io',
+      isMyahTeamMember: true,
     });
     (usePermissionFlagMap as jest.Mock).mockImplementation(
       () => allWorkspaceSettingsPermissions,
@@ -317,15 +318,13 @@ describe('useSettingsNavigationItems', () => {
     ).toBe(false);
   });
 
-  it('should not expose the global Admin Panel to non-Myah Team server-flag users', () => {
-    (usePermissionFlagMap as jest.Mock).mockImplementation(
-      () => allWorkspaceSettingsPermissions,
-    );
+  it.each([{ canAccessFullAdminPanel: true }, { canImpersonate: true }])(
+    'should not expose the global Admin Panel to non-Myah Team server-flag users',
+    (userPatch) => {
+      (usePermissionFlagMap as jest.Mock).mockImplementation(
+        () => allWorkspaceSettingsPermissions,
+      );
 
-    for (const userPatch of [
-      { canAccessFullAdminPanel: true },
-      { canImpersonate: true },
-    ]) {
       jotaiStore.set(currentUserState.atom, {
         ...mockCurrentUser,
         ...userPatch,
@@ -343,6 +342,6 @@ describe('useSettingsNavigationItems', () => {
           (item) => item.path === SettingsPath.AdminPanel,
         )?.isHidden,
       ).toBe(true);
-    }
-  });
+    },
+  );
 });

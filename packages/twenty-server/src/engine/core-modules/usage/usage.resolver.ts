@@ -27,6 +27,10 @@ import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 @MetadataResolver()
 @UseFilters(PreventNestToAutoLogGraphqlErrorsFilter)
 @UsePipes(ResolverValidationPipe)
+@UseGuards(
+  WorkspaceAuthGuard,
+  SettingsPermissionGuard(PermissionFlagType.WORKSPACE),
+)
 export class UsageResolver {
   constructor(
     private readonly usageAnalyticsService: UsageAnalyticsService,
@@ -35,10 +39,6 @@ export class UsageResolver {
   ) {}
 
   @Query(() => UsageAnalyticsDTO)
-  @UseGuards(
-    WorkspaceAuthGuard,
-    SettingsPermissionGuard(PermissionFlagType.WORKSPACE),
-  )
   async getUsageAnalytics(
     @AuthWorkspace() workspace: WorkspaceEntity,
     @Args('input', { nullable: true }) input?: UsageAnalyticsInput,

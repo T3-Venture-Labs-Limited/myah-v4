@@ -6,6 +6,7 @@ import { isNonEmptyString } from '@sniptt/guards';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { billingState } from '@/client-config/states/billingState';
@@ -80,6 +81,7 @@ export const SettingsAdminWorkspaceDetail = () => {
   const billing = useAtomStateValue(billingState);
   const isBillingEnabled = billing?.isBillingEnabled ?? false;
   const canManageFeatureFlags = useAtomStateValue(canManageFeatureFlagsState);
+  const isMyahTeamUser = useIsMyahTeamUser();
   const { enqueueErrorSnackBar } = useSnackBar();
   const { updateFeatureFlagState } = useAdminUpdateFeatureFlag();
   const { handleImpersonate, impersonatingUserId } = useHandleImpersonate();
@@ -168,7 +170,7 @@ export const SettingsAdminWorkspaceDetail = () => {
           },
         ]
       : []),
-    ...(currentUser?.canImpersonate
+    ...(isMyahTeamUser
       ? [
           {
             id: WORKSPACE_DETAIL_TAB_IDS.MEMBERS,
@@ -253,77 +255,79 @@ export const SettingsAdminWorkspaceDetail = () => {
             <SettingsAdminWorkspaceBillingContent workspaceId={workspaceId} />
           )}
 
-        {effectiveTabId === WORKSPACE_DETAIL_TAB_IDS.MEMBERS && workspace && (
-          <Section>
-            <H2Title title={t`Members`} description={t`Workspace members`} />
-            <Table>
-              <TableBody>
-                <TableRow gridTemplateColumns="1fr 2fr 100px">
-                  <TableHeader>{t`Name`}</TableHeader>
-                  <TableHeader>{t`Email`}</TableHeader>
-                  <TableHeader align="right">{t`Actions`}</TableHeader>
-                </TableRow>
-                {workspace.users?.map((user) => {
-                  const userId = user.id;
+        {isMyahTeamUser &&
+          effectiveTabId === WORKSPACE_DETAIL_TAB_IDS.MEMBERS &&
+          workspace && (
+            <Section>
+              <H2Title title={t`Members`} description={t`Workspace members`} />
+              <Table>
+                <TableBody>
+                  <TableRow gridTemplateColumns="1fr 2fr 100px">
+                    <TableHeader>{t`Name`}</TableHeader>
+                    <TableHeader>{t`Email`}</TableHeader>
+                    <TableHeader align="right">{t`Actions`}</TableHeader>
+                  </TableRow>
+                  {workspace.users?.map((user) => {
+                    const userId = user.id;
 
-                  if (!isDefined(userId)) return null;
+                    if (!isDefined(userId)) return null;
 
-                  return (
-                    <TableRow
-                      key={userId}
-                      gridTemplateColumns="1fr 2fr 100px"
-                      to={getSettingsPath(SettingsPath.AdminPanelUserDetail, {
-                        userId,
-                      })}
-                    >
-                      <TableCell
-                        color={themeCssVariables.font.color.primary}
-                        gap={themeCssVariables.spacing[2]}
-                        overflow="hidden"
+                    return (
+                      <TableRow
+                        key={userId}
+                        gridTemplateColumns="1fr 2fr 100px"
+                        to={getSettingsPath(SettingsPath.AdminPanelUserDetail, {
+                          userId,
+                        })}
                       >
-                        <Avatar
-                          avatarUrl={getAbsoluteImageUrl(user.avatarUrl)}
-                          placeholder={
-                            `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
-                            user.email
-                          }
-                          placeholderColorSeed={user.id}
-                          size="md"
-                          type="rounded"
-                        />
-                        <OverflowingTextWithTooltip
-                          text={
-                            `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
-                            '\u2014'
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell align="right">
-                        {workspace.allowImpersonation &&
-                          isDefined(currentUser?.id) &&
-                          userId !== currentUser.id && (
-                            <Button
-                              Icon={IconEyeShare}
-                              variant="secondary"
-                              size="small"
-                              title={t`Impersonate`}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleImpersonate(userId, workspaceId!);
-                              }}
-                              disabled={impersonatingUserId === userId}
-                            />
-                          )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Section>
-        )}
+                        <TableCell
+                          color={themeCssVariables.font.color.primary}
+                          gap={themeCssVariables.spacing[2]}
+                          overflow="hidden"
+                        >
+                          <Avatar
+                            avatarUrl={getAbsoluteImageUrl(user.avatarUrl)}
+                            placeholder={
+                              `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+                              user.email
+                            }
+                            placeholderColorSeed={user.id}
+                            size="md"
+                            type="rounded"
+                          />
+                          <OverflowingTextWithTooltip
+                            text={
+                              `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+                              '\u2014'
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell align="right">
+                          {workspace.allowImpersonation &&
+                            isDefined(currentUser?.id) &&
+                            userId !== currentUser.id && (
+                              <Button
+                                Icon={IconEyeShare}
+                                variant="secondary"
+                                size="small"
+                                title={t`Impersonate`}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleImpersonate(userId, workspaceId!);
+                                }}
+                                disabled={impersonatingUserId === userId}
+                              />
+                            )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Section>
+          )}
 
         {effectiveTabId === WORKSPACE_DETAIL_TAB_IDS.FEATURE_FLAGS &&
           workspace && (
