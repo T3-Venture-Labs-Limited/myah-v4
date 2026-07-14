@@ -5,7 +5,12 @@ import { SettingsCard } from '@/settings/components/SettingsCard';
 import { useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { IconBrandInstagram, IconCalendarEvent, IconMailCog, IconTags } from 'twenty-ui/icon';
+import {
+  IconBrandInstagram,
+  IconCalendarEvent,
+  IconMailCog,
+  IconTags,
+} from 'twenty-ui/icon';
 import { H2Title } from 'twenty-ui/typography';
 import { Section } from 'twenty-ui/layout';
 import { UndecoratedLink } from 'twenty-ui/navigation';
