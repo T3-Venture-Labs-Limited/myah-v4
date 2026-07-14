@@ -1,6 +1,6 @@
 import { type DataSource, type QueryRunner } from 'typeorm';
 
-import { RebrandEmailSenderToMyahSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1783918126676-rebrand-email-sender-to-myah';
+import { RebrandEmailSenderToMyahSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784005792206-rebrand-email-sender-to-myah';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
 describe('RebrandEmailSenderToMyahSlowInstanceCommand', () => {

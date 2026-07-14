@@ -6,7 +6,7 @@ import { SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/
 const LEGACY_SENDER_NAME = 'Felix from Twenty';
 const MYAH_SENDER_NAME = 'Myah';
 
-@RegisteredInstanceCommand('2.19.0', 1783918126676, { type: 'slow' })
+@RegisteredInstanceCommand('2.19.0', 1784005792206, { type: 'slow' })
 export class RebrandEmailSenderToMyahSlowInstanceCommand
   implements SlowInstanceCommand
 {
