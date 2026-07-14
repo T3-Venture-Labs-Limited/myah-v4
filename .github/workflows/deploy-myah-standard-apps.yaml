@@ -57,6 +57,7 @@ jobs:
           api-key: ${{ env.MYAH_APP_PUBLISHER_KEY }}
           app-path: packages/twenty-apps/fixtures/brand-brain-record-wiki-mvp
           workspace-path: .
+          allow-existing-version: true
 
       - name: Promote Brand Brain
         env:
@@ -74,6 +75,7 @@ jobs:
           api-key: ${{ env.MYAH_APP_PUBLISHER_KEY }}
           app-path: packages/twenty-apps/internal/myah-creator-ops
           workspace-path: .
+          allow-existing-version: true
 
       - name: Promote Creator Ops
         env:
