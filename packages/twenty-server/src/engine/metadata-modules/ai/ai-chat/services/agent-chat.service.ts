@@ -1,5 +1,3 @@
-import { createHash } from 'crypto';
-
 import { Injectable, Logger } from '@nestjs/common';
 
 import {
@@ -10,6 +8,7 @@ import {
   type AskQuestionsToolResult,
   ExtendedUIMessage,
   REQUEST_APPROVAL_TOOL_NAME,
+  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
   type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 import { isDefined } from 'twenty-shared/utils';
@@ -728,7 +727,8 @@ export class AgentChatService {
     const pendingHumanInputParts = (message.parts ?? []).filter((part) => {
       if (
         part.toolName !== ASK_QUESTIONS_TOOL_NAME &&
-        part.toolName !== REQUEST_APPROVAL_TOOL_NAME
+        part.toolName !== REQUEST_APPROVAL_TOOL_NAME &&
+        part.toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
       ) {
         return false;
       }
@@ -749,7 +749,10 @@ export class AgentChatService {
 
     const pendingPart = pendingHumanInputParts[0];
 
-    if (pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME) {
+    if (
+      pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME &&
+      pendingPart.toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
+    ) {
       throw new AiException(
         'No pending approval request to resolve.',
         AiExceptionCode.APPROVAL_NOT_PENDING,
@@ -788,36 +791,18 @@ export class AgentChatService {
     }
 
     try {
-      const instagramReply = previousResult.request.instagramReply;
-
-      if (previousResult.request.toolName === 'send_instagram_reply') {
-        if (
-          !instagramReply ||
-          !previousResult.approvalId ||
-          previousResult.request.preview?.format !== 'text'
-        ) {
+      if (pendingPart.toolName === REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME) {
+        if (!previousResult?.approvalId) {
           throw new AiException(
             'Instagram reply approval binding is invalid.',
             AiExceptionCode.APPROVAL_NOT_PENDING,
           );
         }
 
-        await this.instagramReplyApprovalService.createPendingApproval({
-          workspaceId,
-          userWorkspaceId,
-          threadId,
-          approvalId: previousResult.approvalId,
-          toolName: 'send_instagram_reply',
-          connectedAccountId: instagramReply.connectedAccountId,
-          draftId: instagramReply.draftId,
-          conversationId: instagramReply.conversationId,
-          previewTextSha256: createHash('sha256')
-            .update(previousResult.request.preview.content)
-            .digest('hex'),
-        });
         await this.instagramReplyApprovalService.resolveApproval({
           workspaceId,
           userWorkspaceId,
+          threadId,
           approvalId: previousResult.approvalId,
           decision: decision.decision as
             | 'approved'

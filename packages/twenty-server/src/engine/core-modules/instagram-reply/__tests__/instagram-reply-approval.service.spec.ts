@@ -27,7 +27,6 @@ const workspaceId = '7c36727d-117e-491b-8676-14e31daf610f';
 const userWorkspaceId = '5f2ca278-f41f-4cf8-9b8d-a9ce5a9f2c76';
 const otherUserWorkspaceId = '11e3d652-7ddb-4af3-9d36-7b99430a2b69';
 const threadId = 'a99a4f1c-e934-4a7c-ab77-7df745bf3a8c';
-const approvalId = 'e437e762-d5f3-4ab6-b33d-363e38e4c6ee';
 const draftId = 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b';
 const conversationId = '2370f3fb-5738-458c-ae4d-0bdb2c24611e';
 const connectedAccountId = 'ca_instagram_123';
@@ -122,7 +121,6 @@ describe('InstagramReplyApprovalService', () => {
       workspaceId,
       userWorkspaceId,
       threadId,
-      approvalId,
       toolName: 'send_instagram_reply',
       connectedAccountId,
       draftId,
@@ -130,7 +128,7 @@ describe('InstagramReplyApprovalService', () => {
       previewTextSha256,
     });
 
-  it('persists an immutable request bound to the initiating member and exact preview', async () => {
+  it('persists an immutable server-generated request bound to the initiating member and exact preview', async () => {
     const { service, approvalRepository, instagramReplyDraftService } =
       createService();
 
@@ -140,7 +138,9 @@ describe('InstagramReplyApprovalService', () => {
       workspaceId,
       userWorkspaceId,
       threadId,
-      approvalId,
+      approvalId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      ),
       toolName: 'send_instagram_reply',
       connectedAccountId,
       draftId,
@@ -152,7 +152,7 @@ describe('InstagramReplyApprovalService', () => {
     expect(approvalRepository.save).toHaveBeenCalledWith(
       workspaceId,
       expect.objectContaining({
-        approvalId,
+        approvalId: request.approvalId,
         connectedAccountId,
         draftId,
         conversationId,
@@ -162,17 +162,15 @@ describe('InstagramReplyApprovalService', () => {
 
     expect(
       instagramReplyDraftService.validateApprovalBinding,
-    ).toHaveBeenCalledWith({
-      workspaceId,
-      userWorkspaceId,
-      threadId,
-      approvalId,
-      toolName: 'send_instagram_reply',
-      connectedAccountId,
-      draftId,
-      conversationId,
-      previewTextSha256,
-    });
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId,
+        connectedAccountId,
+        draftId,
+        conversationId,
+        previewTextSha256,
+      }),
+    );
   });
 
   it('does not let another member approve the bound request', async () => {
@@ -183,10 +181,26 @@ describe('InstagramReplyApprovalService', () => {
       service.resolveApproval({
         workspaceId,
         userWorkspaceId: otherUserWorkspaceId,
+        threadId,
         approvalId: request.approvalId,
         decision: 'approved',
       }),
-    ).rejects.toThrow('only the initiating workspace member may approve');
+    ).rejects.toThrow('only the initiating workspace member');
+  });
+
+  it('does not let the initiating member approve from another chat thread', async () => {
+    const { service } = createService();
+    const request = await createPendingApproval(service);
+
+    await expect(
+      service.resolveApproval({
+        workspaceId,
+        userWorkspaceId,
+        threadId: '7f5c8329-0d71-4dac-a74f-e51e5e5e1a29',
+        approvalId: request.approvalId,
+        decision: 'approved',
+      }),
+    ).rejects.toThrow('only the initiating workspace member and chat thread');
   });
 
   it('does not persist an approval when the draft binding is invalid', async () => {
@@ -213,6 +227,7 @@ describe('InstagramReplyApprovalService', () => {
     await service.resolveApproval({
       workspaceId,
       userWorkspaceId,
+      threadId,
       approvalId: request.approvalId,
       decision: 'approved',
     });
@@ -249,6 +264,7 @@ describe('InstagramReplyApprovalService', () => {
     await service.resolveApproval({
       workspaceId,
       userWorkspaceId,
+      threadId,
       approvalId: request.approvalId,
       decision: 'approved',
     });
@@ -272,6 +288,7 @@ describe('InstagramReplyApprovalService', () => {
       await service.resolveApproval({
         workspaceId,
         userWorkspaceId,
+        threadId,
         approvalId: request.approvalId,
         decision,
       });

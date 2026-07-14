@@ -1,4 +1,7 @@
-import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
+import {
+  REQUEST_APPROVAL_TOOL_NAME,
+  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+} from 'twenty-shared/ai';
 
 import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
 import { AiExceptionCode } from 'src/engine/metadata-modules/ai/ai.exception';
@@ -112,7 +115,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
     });
   });
 
-  it('records the exact Instagram reply binding before resuming the approved turn', async () => {
+  it('resolves the server-created Instagram approval without recreating it', async () => {
     const instagramPendingOutput = {
       ...pendingApprovalOutput,
       result: {
@@ -121,12 +124,6 @@ describe('AgentChatService.resolvePendingApproval', () => {
           ...pendingApprovalOutput.result.request,
           actionKind: 'external_write',
           toolName: 'send_instagram_reply',
-          preview: { format: 'text', content: 'Thank you for your message.' },
-          instagramReply: {
-            draftId: '9b05e648-d3f0d-4fd7-8e4e-bc6a31b980ea',
-            connectedAccountId: 'ca_instagram_123',
-            conversationId: 'd81e9de7-899e-4259-ae1e-e2770b405f4b',
-          },
         },
         approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
       },
@@ -135,7 +132,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
       messageParts: [
         {
           id: 'part-id',
-          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolName: REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
           toolOutput: instagramPendingOutput,
         },
       ],
@@ -152,22 +149,11 @@ describe('AgentChatService.resolvePendingApproval', () => {
 
     expect(
       instagramReplyApprovalService.createPendingApproval,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: 'workspace-id',
-        userWorkspaceId: 'user-workspace-id',
-        threadId: 'thread-id',
-        approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
-        toolName: 'send_instagram_reply',
-        connectedAccountId: 'ca_instagram_123',
-        draftId: '9b05e648-d3f0d-4fd7-8e4e-bc6a31b980ea',
-        conversationId: 'd81e9de7-899e-4259-ae1e-e2770b405f4b',
-        previewTextSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-      }),
-    );
+    ).not.toHaveBeenCalled();
     expect(instagramReplyApprovalService.resolveApproval).toHaveBeenCalledWith({
       workspaceId: 'workspace-id',
       userWorkspaceId: 'user-workspace-id',
+      threadId: 'thread-id',
       approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
       decision: 'approved',
     });

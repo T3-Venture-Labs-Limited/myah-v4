@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { FieldActorSource } from 'twenty-shared/types';
 
 import {
   InstagramReplyExecutionError,
@@ -29,7 +30,7 @@ const createService = () => {
     findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
   };
   const myahComposioService = {
-    getExactlyOneActiveInstagramAccount: jest.fn().mockResolvedValue({
+    getActiveInstagramAccount: jest.fn().mockResolvedValue({
       connectedAccountId: 'ca_instagram_123',
     }),
   };
@@ -85,7 +86,7 @@ describe('InstagramReplyExecutionService', () => {
     });
 
     expect(
-      myahComposioService.getExactlyOneActiveInstagramAccount,
+      myahComposioService.getActiveInstagramAccount,
     ).not.toHaveBeenCalled();
     expect(global.fetch).not.toHaveBeenCalled();
   });
@@ -162,7 +163,7 @@ describe('InstagramReplyExecutionService', () => {
           recipientIgsid: 'igsid-123',
         },
       ])
-      .mockResolvedValueOnce([{ id: 'draft-id' }])
+      .mockResolvedValueOnce([[{ id: 'draft-id' }], 1])
       .mockResolvedValueOnce({});
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
@@ -184,6 +185,51 @@ describe('InstagramReplyExecutionService', () => {
     ).resolves.toEqual({ providerMessageId: 'provider-message-id' });
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      'https://backend.composio.dev/api/v3.1/tools/execute/INSTAGRAM_LIST_ALL_MESSAGES',
+      expect.objectContaining({
+        body: JSON.stringify({
+          connected_account_id: 'ca_instagram_123',
+          user_id: `workspace:${workspaceId}:instagram`,
+          arguments: {
+            conversation_id: 'provider-conversation-id',
+            limit: 25,
+          },
+        }),
+      }),
+    );
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      'https://backend.composio.dev/api/v3.1/tools/execute/INSTAGRAM_SEND_TEXT_MESSAGE',
+      expect.objectContaining({
+        body: JSON.stringify({
+          connected_account_id: 'ca_instagram_123',
+          user_id: `workspace:${workspaceId}:instagram`,
+          arguments: {
+            recipient_id: 'igsid-123',
+            text: replyText,
+          },
+        }),
+      }),
+    );
+    expect(query).toHaveBeenLastCalledWith(
+      expect.stringContaining('"createdBySource"'),
+      [
+        expect.any(String),
+        replyText,
+        'provider-message-id',
+        FieldActorSource.SYSTEM,
+        null,
+        'System',
+        {},
+        FieldActorSource.SYSTEM,
+        null,
+        'System',
+        {},
+      ],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
     expect(query).toHaveBeenCalledTimes(4);
   });
 });

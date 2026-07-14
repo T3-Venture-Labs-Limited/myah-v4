@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import {
   InstagramReplyExecutionError,
@@ -17,6 +17,8 @@ import {
 
 @Injectable()
 export class SendInstagramReplyTool implements Tool {
+  private readonly logger = new Logger(SendInstagramReplyTool.name);
+
   description =
     'Send a user-approved text reply only within a provider-verified existing Instagram conversation. Never use it for a first-contact DM.';
   inputSchema = InstagramReplyToolInputZodSchema;
@@ -69,6 +71,10 @@ export class SendInstagramReplyTool implements Tool {
           result: { providerMessageId: result.providerMessageId },
         };
       } catch (error) {
+        if (!(error instanceof InstagramReplyExecutionError)) {
+          this.logger.error('Unexpected Instagram reply execution error');
+        }
+
         const executionError =
           error instanceof InstagramReplyExecutionError
             ? error

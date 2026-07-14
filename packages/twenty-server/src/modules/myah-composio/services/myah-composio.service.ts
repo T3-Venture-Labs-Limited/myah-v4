@@ -104,9 +104,7 @@ const extractSessionId = (
 const toTrimmedString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() ? value.trim() : undefined;
 
-const extractInstagramProfile = (
-  data: unknown,
-): InstagramProfile => {
+const extractInstagramProfile = (data: unknown): InstagramProfile => {
   let profile = data;
 
   if (typeof profile === 'string') {
@@ -217,22 +215,29 @@ export class MyahComposioService {
     return enrichedInstagramAccounts;
   }
 
-  async getExactlyOneActiveInstagramAccount({
+  async getActiveInstagramAccount({
     workspaceId,
+    connectedAccountId,
   }: {
     workspaceId: string;
+    connectedAccountId: string;
   }): Promise<InstagramAccountStatus> {
-    const accounts = await this.fetchActiveInstagramAccounts(
-      buildInstagramComposioUserId(workspaceId),
+    const account = (
+      await this.fetchActiveInstagramAccounts(
+        buildInstagramComposioUserId(workspaceId),
+      )
+    ).find(
+      (activeAccount) =>
+        activeAccount.connectedAccountId === connectedAccountId,
     );
 
-    if (accounts.length !== 1) {
+    if (!account) {
       throw new BadGatewayException(
-        'Exactly one active Instagram account is required to send a reply.',
+        'The approved Instagram account is no longer active.',
       );
     }
 
-    return accounts[0];
+    return account;
   }
 
   private async fetchActiveInstagramAccounts(
@@ -498,9 +503,7 @@ export class MyahComposioService {
       );
     }
 
-    const instagramAuthConfigId = getEnv(
-      'COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID',
-    );
+    const instagramAuthConfigId = getEnv('COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID');
 
     if (!instagramAuthConfigId) {
       throw new InternalServerErrorException(

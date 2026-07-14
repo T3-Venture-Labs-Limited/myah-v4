@@ -2,6 +2,10 @@ import { streamText } from 'ai';
 
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { ChatExecutionService } from 'src/engine/metadata-modules/ai/ai-chat/services/chat-execution.service';
+import {
+  REQUEST_APPROVAL_TOOL_NAME,
+  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+} from 'twenty-shared/ai';
 
 jest.mock('ai', () => ({
   ...jest.requireActual('ai'),
@@ -106,6 +110,8 @@ const buildService = () => {
     recordHistogram: jest.fn(),
     incrementCounterBy: jest.fn(),
   };
+  const instagramReplyDraftService = {};
+  const instagramReplyApprovalService = {};
 
   const service = new ChatExecutionService(
     toolRegistry as never,
@@ -121,6 +127,8 @@ const buildService = () => {
     brandBrainPreflightService as never,
     messagePruningService as never,
     metricsService as never,
+    instagramReplyDraftService as never,
+    instagramReplyApprovalService as never,
   );
 
   return {
@@ -195,6 +203,58 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
           cacheHit: 'false',
         }),
       }),
+    );
+  });
+
+  it('exposes only the minimal Instagram approval tool after a local draft succeeds', async () => {
+    const { service } = buildService();
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'thread-id',
+      browsingContext: null,
+      conversationSizeTokens: 10,
+      messages: [
+        {
+          id: 'message-id',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Send an Instagram reply.' }],
+        },
+      ],
+    });
+
+    const streamTextCalls = (streamText as jest.Mock).mock.calls;
+    const streamTextCall = streamTextCalls[streamTextCalls.length - 1]?.[0];
+    const beforeDraft = streamTextCall.prepareStep({
+      steps: [],
+      messages: [],
+    });
+    const afterDraft = streamTextCall.prepareStep({
+      steps: [
+        {
+          toolResults: [
+            {
+              toolName: 'prepare_instagram_reply_draft',
+              output: { success: true },
+            },
+          ],
+        },
+      ],
+      messages: [],
+    });
+
+    expect(beforeDraft.activeTools).toContain(REQUEST_APPROVAL_TOOL_NAME);
+    expect(beforeDraft.activeTools).not.toContain(
+      REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+    );
+    expect(afterDraft.activeTools).not.toContain(REQUEST_APPROVAL_TOOL_NAME);
+    expect(afterDraft.activeTools).toContain(
+      REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
     );
   });
 });

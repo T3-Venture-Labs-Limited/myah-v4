@@ -36,6 +36,19 @@ type ApprovalBindingInput = {
   previewTextSha256: string;
 };
 
+type ApprovalDetailsInput = {
+  workspaceId: string;
+  connectedAccountId: string;
+  conversationId: string;
+  draftId: string;
+};
+
+export type InstagramReplyApprovalDetails = {
+  body: string;
+  draftLabel: string;
+  conversationLabel: string;
+};
+
 type ConversationRecord = {
   id: string;
   recipientIgsid: string | null;
@@ -58,7 +71,12 @@ export class InstagramReplyDraftService {
     const providerConversationId = input.providerConversationId.trim();
     const recipientIgsid = input.recipientIgsid.trim();
 
-    if (!body || !recipientLabel || !providerConversationId || !recipientIgsid) {
+    if (
+      !body ||
+      !recipientLabel ||
+      !providerConversationId ||
+      !recipientIgsid
+    ) {
       throw new Error('Instagram reply draft details are incomplete.');
     }
 
@@ -211,19 +229,26 @@ export class InstagramReplyDraftService {
     );
   }
 
-  async validateApprovalBinding(input: ApprovalBindingInput): Promise<void> {
+  async getApprovalDetails(
+    input: ApprovalDetailsInput,
+  ): Promise<InstagramReplyApprovalDetails> {
     const workspace = await this.getWorkspace(input.workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(workspace.id);
         const [draft] = await dataSource.query<
-          { body: string; sentAt: string | null }[]
+          {
+            body: string;
+            name: string | null;
+            sentAt: string | null;
+            title: string | null;
+          }[]
         >(
           `
-            SELECT "body", "sentAt"
+            SELECT "body", "sentAt", "title", "name"
             FROM "${schemaName}"."_myahInstagramReplyDraft"
             WHERE "id" = $1
               AND "deletedAt" IS NULL
@@ -234,12 +259,14 @@ export class InstagramReplyDraftService {
         );
         const [conversation] = await dataSource.query<
           {
+            label: string | null;
+            name: string | null;
             providerConversationId: string | null;
             recipientIgsid: string | null;
           }[]
         >(
           `
-            SELECT "providerConversationId", "recipientIgsid"
+            SELECT "providerConversationId", "recipientIgsid", "label", "name"
             FROM "${schemaName}"."_myahSocialConversation"
             WHERE "id" = $1
               AND "deletedAt" IS NULL
@@ -262,24 +289,24 @@ export class InstagramReplyDraftService {
           { shouldBypassPermissionChecks: true },
         );
 
-        if (!draft || draft.sentAt || !draft.body.trim()) {
-          throw new Error('The Instagram reply draft is unavailable for approval.');
-        }
+        const draftLabel = draft?.title?.trim() || draft?.name?.trim();
+        const conversationLabel =
+          conversation?.label?.trim() || conversation?.name?.trim();
 
-        if (
-          createHash('sha256').update(draft.body).digest('hex') !==
-          input.previewTextSha256
-        ) {
+        if (!draft || draft.sentAt || !draft.body.trim() || !draftLabel) {
           throw new Error(
-            'The Instagram reply preview does not match the stored draft.',
+            'The Instagram reply draft is unavailable for approval.',
           );
         }
 
         if (
           !conversation?.providerConversationId?.trim() ||
-          !conversation.recipientIgsid?.trim()
+          !conversation.recipientIgsid?.trim() ||
+          !conversationLabel
         ) {
-          throw new Error('The Instagram conversation is unavailable for approval.');
+          throw new Error(
+            'The Instagram conversation is unavailable for approval.',
+          );
         }
 
         if (activeAccounts.length !== 1) {
@@ -287,9 +314,28 @@ export class InstagramReplyDraftService {
             'The approved Instagram account is unavailable for approval.',
           );
         }
+
+        return {
+          body: draft.body,
+          draftLabel,
+          conversationLabel,
+        };
       },
       buildSystemAuthContext({ workspace }),
     );
+  }
+
+  async validateApprovalBinding(input: ApprovalBindingInput): Promise<void> {
+    const details = await this.getApprovalDetails(input);
+
+    if (
+      createHash('sha256').update(details.body).digest('hex') !==
+      input.previewTextSha256
+    ) {
+      throw new Error(
+        'The Instagram reply preview does not match the stored draft.',
+      );
+    }
   }
 
   private async getWorkspace(workspaceId: string): Promise<FlatWorkspace> {

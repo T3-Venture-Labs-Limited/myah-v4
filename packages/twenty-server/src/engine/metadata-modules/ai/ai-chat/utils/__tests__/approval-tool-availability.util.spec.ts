@@ -1,8 +1,10 @@
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
+import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 import {
   getApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
+  hasApprovedInstagramReplyApproval,
   hasLatestMessageApprovedApproval,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
 import { ToolCategory } from 'twenty-shared/ai';
@@ -44,6 +46,7 @@ describe('approval tool availability', () => {
       getApprovedResumeActiveToolNames([
         'execute_tool',
         REQUEST_APPROVAL_TOOL_NAME,
+        REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
         'ask_questions',
       ]),
     ).toEqual(['execute_tool', 'ask_questions']);
@@ -126,6 +129,20 @@ describe('approval tool availability', () => {
           role: 'assistant',
           parts: [
             {
+              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
+              output: { result: { status: 'resolved', decision: 'approved' } },
+            },
+          ],
+        },
+      ]),
+    ).toBe(true);
+
+    expect(
+      hasLatestMessageApprovedApproval([
+        {
+          role: 'assistant',
+          parts: [
+            {
               type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
               output: { result: { status: 'resolved', decision: 'approved' } },
             },
@@ -148,5 +165,22 @@ describe('approval tool availability', () => {
         },
       ]),
     ).toBe(false);
+  });
+
+  it('preserves Instagram send eligibility after an approval when a follow-up user message is newer', () => {
+    expect(
+      hasApprovedInstagramReplyApproval([
+        {
+          role: 'assistant',
+          parts: [
+            {
+              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
+              output: { result: { status: 'resolved', decision: 'approved' } },
+            },
+          ],
+        },
+        { role: 'user', parts: [] },
+      ]),
+    ).toBe(true);
   });
 });

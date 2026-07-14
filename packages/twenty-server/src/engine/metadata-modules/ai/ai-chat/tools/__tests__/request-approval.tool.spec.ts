@@ -59,32 +59,7 @@ describe('request_approval tool', () => {
     });
   });
 
-  it('binds an Instagram reply approval to a draft, conversation, and text preview', async () => {
-    const tool = createRequestApprovalTool();
-    const instagramApproval: RequestApprovalToolInput = {
-      ...validApprovalInput,
-      actionKind: 'external_write',
-      toolName: 'send_instagram_reply',
-      preview: { format: 'text', content: 'Thank you for your message.' },
-      instagramReply: {
-        draftId: '9b05e648-d3f0d-4fd7-8e4e-bc6a31b980ea',
-        connectedAccountId: 'ca_instagram_123',
-        conversationId: 'd81e9de7-899e-4259-ae1e-e2770b405f4b',
-      },
-    };
-
-    const output = await tool.execute(instagramApproval);
-
-    expect(output.result).toEqual({
-      request: instagramApproval,
-      approvalId: expect.stringMatching(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-      ),
-      status: 'pending',
-    });
-  });
-
-  it('rejects an unbound Instagram reply approval', () => {
+  it('rejects an Instagram reply approval so its card is derived server-side', () => {
     const result = requestApprovalInputSchema.safeParse({
       ...validApprovalInput,
       actionKind: 'external_write',
@@ -95,14 +70,12 @@ describe('request_approval tool', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects an Instagram reply approval without a bound account', () => {
+  it('rejects Instagram reply identifiers on the generic approval tool', () => {
     const result = requestApprovalInputSchema.safeParse({
       ...validApprovalInput,
-      actionKind: 'external_write',
-      toolName: 'send_instagram_reply',
-      preview: { format: 'text', content: 'Thank you for your message.' },
       instagramReply: {
-        draftId: '9b05e648-d3f0d-4fd7-8e4e-bc6a31b980ea',
+        draftId: '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea',
+        connectedAccountId: 'ca_instagram_123',
         conversationId: 'd81e9de7-899e-4259-ae1e-e2770b405f4b',
       },
     });

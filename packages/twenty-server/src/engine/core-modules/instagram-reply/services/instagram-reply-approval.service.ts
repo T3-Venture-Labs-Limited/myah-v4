@@ -32,7 +32,6 @@ export type CreateInstagramReplyApprovalInput = {
   workspaceId: string;
   userWorkspaceId: string;
   threadId: string;
-  approvalId: string;
   toolName: 'send_instagram_reply';
   connectedAccountId: string;
   draftId: string;
@@ -43,6 +42,7 @@ export type CreateInstagramReplyApprovalInput = {
 export type ResolveInstagramReplyApprovalInput = {
   workspaceId: string;
   userWorkspaceId: string;
+  threadId: string;
   approvalId: string;
   decision: 'approved' | 'rejected' | 'changes_requested';
 };
@@ -64,35 +64,12 @@ export class InstagramReplyApprovalService {
   ): Promise<InstagramReplyApprovalRequestEntity> {
     await this.instagramReplyDraftService.validateApprovalBinding(input);
 
-    const existingRequest = await this.approvalRequestRepository.findOneBy(
-      input.workspaceId,
-      { approvalId: input.approvalId },
-    );
-
-    if (existingRequest) {
-      if (
-        existingRequest.userWorkspaceId !== input.userWorkspaceId ||
-        existingRequest.threadId !== input.threadId ||
-        existingRequest.toolName !== input.toolName ||
-        existingRequest.connectedAccountId !== input.connectedAccountId ||
-        existingRequest.draftId !== input.draftId ||
-        existingRequest.conversationId !== input.conversationId ||
-        existingRequest.previewTextSha256 !== input.previewTextSha256
-      ) {
-        throw new Error(
-          'Instagram reply approval ID is already bound to a different request.',
-        );
-      }
-
-      return existingRequest;
-    }
-
     const now = new Date();
     return this.approvalRequestRepository.save(input.workspaceId, {
       id: randomUUID(),
       userWorkspaceId: input.userWorkspaceId,
       threadId: input.threadId,
-      approvalId: input.approvalId,
+      approvalId: randomUUID(),
       toolName: input.toolName,
       connectedAccountId: input.connectedAccountId,
       draftId: input.draftId,
@@ -116,9 +93,12 @@ export class InstagramReplyApprovalService {
       throw new Error('Instagram reply approval request was not found');
     }
 
-    if (request.userWorkspaceId !== input.userWorkspaceId) {
+    if (
+      request.userWorkspaceId !== input.userWorkspaceId ||
+      request.threadId !== input.threadId
+    ) {
       throw new Error(
-        'only the initiating workspace member may approve an Instagram reply',
+        'only the initiating workspace member and chat thread may approve an Instagram reply',
       );
     }
 

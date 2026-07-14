@@ -12,11 +12,23 @@ const replyBody = 'Thanks for reaching out.';
 const buildService = ({
   activeAccounts = [{ id: 'account-record-id' }],
   conversations = [],
-  draft = { body: replyBody, sentAt: null },
+  draft = {
+    body: replyBody,
+    name: 'Reply to wakozaco',
+    sentAt: null,
+    title: 'Reply to wakozaco',
+  },
 }: {
   activeAccounts?: { id: string }[];
   conversations?: { id: string; recipientIgsid: string | null }[];
-  draft?: { body: string; sentAt: string | null } | undefined;
+  draft?:
+    | {
+        body: string;
+        name: string | null;
+        sentAt: string | null;
+        title: string | null;
+      }
+    | undefined;
 } = {}) => {
   const query = jest.fn(async (sql: string) => {
     if (sql.includes('FROM') && sql.includes('_myahInstagramAccount')) {
@@ -34,6 +46,8 @@ const buildService = ({
     if (sql.includes('SELECT "providerConversationId", "recipientIgsid"')) {
       return [
         {
+          label: 'wakozaco',
+          name: 'wakozaco',
           providerConversationId: 'provider-conversation-id',
           recipientIgsid: 'recipient-igsid',
         },
@@ -84,9 +98,9 @@ describe('InstagramReplyDraftService', () => {
       draftId: expect.any(String),
     });
     expect(result.conversationId).not.toBe(result.draftId);
-    expect(globalWorkspaceOrmManager.executeInWorkspaceContext).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).toHaveBeenCalledTimes(1);
     expect(query.mock.calls.map(([sql]) => sql).join('\n')).toContain(
       '"_myahSocialConversation"',
     );
@@ -148,5 +162,21 @@ describe('InstagramReplyDraftService', () => {
         previewTextSha256: createHash('sha256').update(replyBody).digest('hex'),
       }),
     ).resolves.toBeUndefined();
+  });
+  it('derives approval card details only from the validated stored reply', async () => {
+    const { service } = buildService();
+
+    await expect(
+      service.getApprovalDetails({
+        workspaceId,
+        connectedAccountId,
+        conversationId,
+        draftId,
+      }),
+    ).resolves.toEqual({
+      body: replyBody,
+      draftLabel: 'Reply to wakozaco',
+      conversationLabel: 'wakozaco',
+    });
   });
 });

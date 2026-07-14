@@ -5,7 +5,7 @@ export const InstagramReplyToolInputZodSchema = z.object({
     .string()
     .uuid()
     .describe(
-      'Opaque approval id returned by request_approval for this exact Instagram reply.',
+      'Opaque approval id returned by request_instagram_reply_approval for this exact Instagram reply.',
     ),
 });
 

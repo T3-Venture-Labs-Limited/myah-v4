@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'crypto';
 
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { FieldActorSource } from 'twenty-shared/types';
+
 import { type Repository } from 'typeorm';
 
 import { InstagramReplyApprovalRequestEntity } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-approval-request.entity';
@@ -11,7 +13,10 @@ import { buildSystemAuthContext } from 'src/engine/core-modules/auth/utils/build
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
-import { MyahComposioService } from 'src/modules/myah-composio/services/myah-composio.service';
+import {
+  buildInstagramComposioUserId,
+  MyahComposioService,
+} from 'src/modules/myah-composio/services/myah-composio.service';
 
 const COMPOSIO_API_BASE_URL = 'https://backend.composio.dev/api/v3.1';
 const INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG = 'INSTAGRAM_LIST_ALL_MESSAGES';
@@ -223,11 +228,10 @@ export class InstagramReplyExecutionService {
       );
     }
 
-    const account =
-      await this.myahComposioService.getExactlyOneActiveInstagramAccount({
-        workspaceId,
-      });
-
+    const account = await this.myahComposioService.getActiveInstagramAccount({
+      workspaceId,
+      connectedAccountId: approvalRequest.connectedAccountId,
+    });
     if (account.connectedAccountId !== approvalRequest.connectedAccountId) {
       throw new InstagramReplyExecutionError(
         'The approved Instagram account is no longer the active account.',
@@ -236,6 +240,7 @@ export class InstagramReplyExecutionService {
       );
     }
     const verification = await this.executeComposioTool({
+      workspaceId,
       connectedAccountId: account.connectedAccountId,
       toolSlug: INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
       arguments: {
@@ -258,6 +263,7 @@ export class InstagramReplyExecutionService {
     }
 
     const response = await this.executeComposioTool({
+      workspaceId,
       connectedAccountId: account.connectedAccountId,
       toolSlug: INSTAGRAM_SEND_TEXT_MESSAGE_TOOL_SLUG,
       arguments: {
@@ -347,7 +353,7 @@ export class InstagramReplyExecutionService {
       const dataSource =
         await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
       const schemaName = getWorkspaceSchemaName(workspace.id);
-      const updatedDrafts = await dataSource.query<{ id: string }[]>(
+      const updateResult = await dataSource.query<{ id: string }[]>(
         `
             UPDATE "${schemaName}"."_myahInstagramReplyDraft"
             SET "status" = 'SENT', "sentAt" = NOW(), "updatedAt" = NOW()
@@ -360,6 +366,9 @@ export class InstagramReplyExecutionService {
         undefined,
         { shouldBypassPermissionChecks: true },
       );
+      // TypeORM's PostgreSQL driver returns UPDATE ... RETURNING results as
+      // [records, affectedRowCount], unlike SELECT which returns records.
+      const [updatedDrafts] = updateResult as [{ id: string }[], number];
 
       if (updatedDrafts.length !== 1) {
         throw new InstagramReplyExecutionError(
@@ -378,11 +387,34 @@ export class InstagramReplyExecutionService {
               "sentVia",
               "providerMessageId",
               "createdAt",
-              "updatedAt"
+              "updatedAt",
+              "createdBySource",
+              "createdByWorkspaceMemberId",
+              "createdByName",
+              "createdByContext",
+              "updatedBySource",
+              "updatedByWorkspaceMemberId",
+              "updatedByName",
+              "updatedByContext"
             )
-            VALUES ($1, $2, 'OUTBOUND', 'COMPOSIO', $3, NOW(), NOW())
+            VALUES (
+              $1, $2, 'OUTBOUND', 'COMPOSIO', $3, NOW(), NOW(),
+              $4, $5, $6, $7, $8, $9, $10, $11
+            )
           `,
-        [randomUUID(), text, providerMessageId],
+        [
+          randomUUID(),
+          text,
+          providerMessageId,
+          FieldActorSource.SYSTEM,
+          null,
+          'System',
+          {},
+          FieldActorSource.SYSTEM,
+          null,
+          'System',
+          {},
+        ],
         undefined,
         { shouldBypassPermissionChecks: true },
       );
@@ -390,10 +422,12 @@ export class InstagramReplyExecutionService {
   }
 
   private async executeComposioTool({
+    workspaceId,
     connectedAccountId,
     toolSlug,
     arguments: toolArguments,
   }: {
+    workspaceId: string;
     connectedAccountId: string;
     toolSlug:
       | typeof INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG
@@ -423,6 +457,7 @@ export class InstagramReplyExecutionService {
           },
           body: JSON.stringify({
             connected_account_id: connectedAccountId,
+            user_id: buildInstagramComposioUserId(workspaceId),
             arguments: toolArguments,
           }),
         },

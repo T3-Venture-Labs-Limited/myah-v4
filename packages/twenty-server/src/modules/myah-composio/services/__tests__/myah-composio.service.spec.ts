@@ -288,20 +288,22 @@ describe('MyahComposioService', () => {
     ]);
   });
 
-  it('rejects a send path when the workspace has multiple active Instagram accounts', async () => {
+  it('resolves the approved active Instagram account when stale active accounts remain', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => ({
         items: [
           {
-            id: 'ca_instagram_one',
+            id: 'ca_instagram_old',
             status: 'ACTIVE',
             toolkit: { slug: 'instagram' },
+            updated_at: '2026-07-07T03:20:15.347Z',
           },
           {
-            id: 'ca_instagram_two',
+            id: 'ca_instagram_approved',
             status: 'ACTIVE',
             toolkit: { slug: 'instagram' },
+            updated_at: '2026-07-08T11:01:01.962Z',
           },
         ],
       }),
@@ -310,10 +312,15 @@ describe('MyahComposioService', () => {
     const service = new MyahComposioService();
 
     await expect(
-      service.getExactlyOneActiveInstagramAccount({
+      service.getActiveInstagramAccount({
         workspaceId: 'workspace-id',
+        connectedAccountId: 'ca_instagram_approved',
       }),
-    ).rejects.toBeInstanceOf(BadGatewayException);
+    ).resolves.toEqual(
+      expect.objectContaining({
+        connectedAccountId: 'ca_instagram_approved',
+      }),
+    );
   });
 
   it('upserts the latest active Instagram account and removes stale local rows for that workspace user', async () => {

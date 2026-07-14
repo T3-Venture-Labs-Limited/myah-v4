@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 import { InstagramReplyExecutionState } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-execution-receipt.entity';
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 
@@ -116,6 +118,9 @@ describe('SendInstagramReplyTool', () => {
         'untrusted provider response https://secret.example/?access_token=abc',
       ),
     );
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
 
     await expect(
       tool.execute(
@@ -141,5 +146,9 @@ describe('SendInstagramReplyTool', () => {
       failureCode: 'UNEXPECTED_EXECUTION_ERROR',
       failureReason: 'Instagram reply status is unknown; it was not retried.',
     });
+    expect(loggerError).toHaveBeenCalledWith(
+      'Unexpected Instagram reply execution error',
+    );
+    loggerError.mockRestore();
   });
 });

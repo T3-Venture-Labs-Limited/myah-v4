@@ -1,5 +1,6 @@
 import { ASK_QUESTIONS_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/ask-questions.tool';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
+import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 import {
   AiException,
   AiExceptionCode,
@@ -8,6 +9,7 @@ import {
 const HUMAN_INPUT_TOOL_NAMES = new Set([
   ASK_QUESTIONS_TOOL_NAME,
   REQUEST_APPROVAL_TOOL_NAME,
+  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
 ]);
 
 type ToolCallLike = {
