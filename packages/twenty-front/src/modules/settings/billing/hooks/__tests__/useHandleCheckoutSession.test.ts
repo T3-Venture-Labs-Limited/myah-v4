@@ -34,8 +34,8 @@ describe('useHandleCheckoutSession', () => {
 
     const { result } = renderHook(() =>
       useHandleCheckoutSession({
-        recurringInterval: SubscriptionInterval.MONTHLY,
-        plan: BillingPlanKey.FREE,
+        recurringInterval: SubscriptionInterval.Month,
+        plan: BillingPlanKey.PRO,
         requirePaymentMethod: true,
         successUrlPath: '/settings/billing',
       }),
@@ -56,8 +56,8 @@ describe('useHandleCheckoutSession', () => {
 
     const { result } = renderHook(() =>
       useHandleCheckoutSession({
-        recurringInterval: SubscriptionInterval.MONTHLY,
-        plan: BillingPlanKey.FREE,
+        recurringInterval: SubscriptionInterval.Month,
+        plan: BillingPlanKey.PRO,
         requirePaymentMethod: true,
         successUrlPath: '/settings/billing',
       }),
