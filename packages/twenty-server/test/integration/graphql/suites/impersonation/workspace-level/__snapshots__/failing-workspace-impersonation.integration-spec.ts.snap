@@ -12,14 +12,14 @@ exports[`Workspace-level impersonation - authorization denials (integration) rej
 }
 `;
 
-exports[`Workspace-level impersonation - authorization denials (integration) rejects a user without the impersonate permission 1`] = `
+exports[`Workspace-level impersonation - authorization denials (integration) rejects a user without the impersonate permission before target lookup 1`] = `
 {
   "extensions": {
     "code": "FORBIDDEN",
-    "subCode": "FORBIDDEN_EXCEPTION",
-    "userFriendlyMessage": "You do not have permission to impersonate users in this workspace.",
+    "subCode": "PERMISSION_DENIED",
+    "userFriendlyMessage": "User does not have permission.",
   },
-  "message": "Impersonation not allowed",
+  "message": "Entity performing the request does not have permission",
   "name": "ForbiddenError",
 }
 `;

@@ -12,14 +12,14 @@ exports[`Server-level impersonation - authorization denials (integration) reject
 }
 `;
 
-exports[`Server-level impersonation - authorization denials (integration) rejects a non-Team legacy server impersonator before evaluating 2FA 1`] = `
+exports[`Server-level impersonation - authorization denials (integration) rejects a non-Team legacy server impersonator before target lookup 1`] = `
 {
   "extensions": {
     "code": "FORBIDDEN",
-    "subCode": "FORBIDDEN_EXCEPTION",
-    "userFriendlyMessage": "Server-level impersonation is not enabled for this user or workspace.",
+    "subCode": "PERMISSION_DENIED",
+    "userFriendlyMessage": "User does not have permission.",
   },
-  "message": "Server level impersonation not allowed",
+  "message": "Entity performing the request does not have permission",
   "name": "ForbiddenError",
 }
 `;
