@@ -7,17 +7,36 @@ const READ_ONLY_DATABASE_OPERATIONS = new Set([
   'group_by',
 ]);
 
+// These Composio functions are bounded, read-only calls. They remain
+// executable before approval so the agent can discover current Instagram
+// state. The application runtime can materialize these as static or logic
+// function entries, so the source-controlled generated tool name is the gate.
+export const PRE_APPROVAL_READ_ONLY_TOOL_NAMES = new Set([
+  'app_myah_list_instagram_conversations',
+  'app_myah_list_instagram_messages',
+]);
+
+// This narrow native action may create a reviewable local draft and
+// conversation candidate after a user requests an outbound reply. It performs
+// no provider I/O and cannot deliver a message; all generic writes stay denied.
+export const PRE_APPROVAL_SAFE_TOOL_NAMES = new Set([
+  ...PRE_APPROVAL_READ_ONLY_TOOL_NAMES,
+  'prepare_instagram_reply_draft',
+]);
+
 export const getPreApprovalExcludedToolNames = (
   toolCatalog: ToolIndexEntry[],
 ): Set<string> =>
   new Set(
     toolCatalog
       .filter((entry) => {
-        if (entry.executionRef.kind !== 'database_crud') {
-          return true;
+        if (entry.executionRef.kind === 'database_crud') {
+          return !READ_ONLY_DATABASE_OPERATIONS.has(
+            entry.executionRef.operation,
+          );
         }
 
-        return !READ_ONLY_DATABASE_OPERATIONS.has(entry.executionRef.operation);
+        return !PRE_APPROVAL_SAFE_TOOL_NAMES.has(entry.name);
       })
       .map((entry) => entry.name),
   );

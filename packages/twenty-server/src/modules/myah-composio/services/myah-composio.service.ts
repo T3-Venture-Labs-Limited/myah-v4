@@ -14,6 +14,7 @@ import { FieldActorSource } from 'twenty-shared/types';
 const COMPOSIO_API_BASE_URL = 'https://backend.composio.dev/api/v3.1';
 const INSTAGRAM_TOOLKIT_SLUG = 'instagram';
 
+const INSTAGRAM_GET_USER_INFO_TOOL_SLUG = 'INSTAGRAM_GET_USER_INFO';
 export const buildInstagramComposioUserId = (workspaceId: string): string =>
   `workspace:${workspaceId}:instagram`;
 
@@ -65,6 +66,17 @@ type ComposioConnectedAccountsResponse = {
   data?: ComposioConnectedAccount[];
 };
 
+type ComposioToolExecutionResponse = {
+  successful?: boolean;
+  successfull?: boolean;
+  data?: unknown;
+};
+
+type InstagramProfile = {
+  igUserId?: string;
+  username?: string;
+};
+
 const getConnectedAccountId = (
   account: ComposioConnectedAccount,
 ): string | undefined => account.id ?? account.nanoid;
@@ -89,6 +101,34 @@ const extractSessionId = (
   body: ComposioToolRouterSessionResponse,
 ): string | undefined => body.id ?? body.session_id ?? body.sessionId;
 
+const toTrimmedString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value.trim() : undefined;
+
+const extractInstagramProfile = (
+  data: unknown,
+): InstagramProfile => {
+  let profile = data;
+
+  if (typeof profile === 'string') {
+    try {
+      profile = JSON.parse(profile) as unknown;
+    } catch {
+      return {};
+    }
+  }
+
+  if (!profile || typeof profile !== 'object') {
+    return {};
+  }
+
+  const record = profile as Record<string, unknown>;
+
+  return {
+    igUserId: toTrimmedString(record.id),
+    username: toTrimmedString(record.username),
+  };
+};
+
 export type StartInstagramOAuthInput = {
   userId: string;
   callbackUrl?: string;
@@ -109,6 +149,8 @@ export type InstagramAccountStatus = {
   status: string;
   composioUserId?: string;
   authConfigId?: string;
+  igUserId?: string;
+  username?: string;
   toolkitSlug: string;
   createdAt?: string;
   updatedAt?: string;
@@ -161,13 +203,18 @@ export class MyahComposioService {
     const canonicalInstagramAccounts = selectCanonicalInstagramAccounts(
       await this.fetchActiveInstagramAccounts(userId),
     );
+    const enrichedInstagramAccounts = await Promise.all(
+      canonicalInstagramAccounts.map((account) =>
+        this.enrichInstagramAccountWithProfile(account),
+      ),
+    );
 
     await this.upsertAgentVisibleInstagramAccounts({
-      accounts: canonicalInstagramAccounts,
+      accounts: enrichedInstagramAccounts,
       workspace,
     });
 
-    return canonicalInstagramAccounts;
+    return enrichedInstagramAccounts;
   }
 
   async getExactlyOneActiveInstagramAccount({
@@ -254,6 +301,63 @@ export class MyahComposioService {
       });
   }
 
+  private async enrichInstagramAccountWithProfile(
+    account: InstagramAccountStatus,
+  ): Promise<InstagramAccountStatus> {
+    if (!account.composioUserId) {
+      return account;
+    }
+
+    const apiKey = getEnv('COMPOSIO_API_KEY');
+
+    if (!apiKey) {
+      return account;
+    }
+
+    let response: Response;
+
+    try {
+      response = await fetch(
+        `${COMPOSIO_API_BASE_URL}/tools/execute/${INSTAGRAM_GET_USER_INFO_TOOL_SLUG}`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            connected_account_id: account.connectedAccountId,
+            user_id: account.composioUserId,
+            arguments: { ig_user_id: 'me' },
+          }),
+        },
+      );
+    } catch {
+      return account;
+    }
+
+    if (!response.ok) {
+      return account;
+    }
+
+    let body: ComposioToolExecutionResponse;
+
+    try {
+      body = (await response.json()) as ComposioToolExecutionResponse;
+    } catch {
+      return account;
+    }
+
+    if (body.successful !== true && body.successfull !== true) {
+      return account;
+    }
+
+    return {
+      ...account,
+      ...extractInstagramProfile(body.data),
+    };
+  }
+
   private async upsertAgentVisibleInstagramAccounts({
     accounts,
     workspace,
@@ -313,6 +417,8 @@ export class MyahComposioService {
                 "connectedAccountId",
                 "composioUserId",
                 "authConfigId",
+                "igUserId",
+                "username",
                 "status",
                 "lastCheckedAt",
                 "lastError",
@@ -325,14 +431,16 @@ export class MyahComposioService {
                 "updatedByName",
                 "updatedByContext"
               ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8,
-                $9, $10, $11, $12, $13, $14, $15, $16
+                $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                $10, $11, $12, $13, $14, $15, $16, $17, $18
               )
               ON CONFLICT ("connectedAccountId") DO UPDATE SET
                 "name" = EXCLUDED."name",
                 "label" = EXCLUDED."label",
                 "composioUserId" = EXCLUDED."composioUserId",
                 "authConfigId" = EXCLUDED."authConfigId",
+                "igUserId" = EXCLUDED."igUserId",
+                "username" = EXCLUDED."username",
                 "status" = EXCLUDED."status",
                 "lastCheckedAt" = EXCLUDED."lastCheckedAt",
                 "lastError" = EXCLUDED."lastError",
@@ -343,11 +451,17 @@ export class MyahComposioService {
                 "updatedByContext" = EXCLUDED."updatedByContext"
             `,
             [
-              'Workspace Instagram account',
-              'Workspace Instagram account',
+              account.username
+                ? `@${account.username}`
+                : 'Workspace Instagram account',
+              account.username
+                ? `@${account.username}`
+                : 'Workspace Instagram account',
               account.connectedAccountId,
               account.composioUserId ?? null,
               account.authConfigId ?? null,
+              account.igUserId ?? null,
+              account.username ?? null,
               account.status,
               lastCheckedAt,
               null,
@@ -384,6 +498,16 @@ export class MyahComposioService {
       );
     }
 
+    const instagramAuthConfigId = getEnv(
+      'COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID',
+    );
+
+    if (!instagramAuthConfigId) {
+      throw new InternalServerErrorException(
+        'COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID is not configured on the Twenty server.',
+      );
+    }
+
     const createSessionResponse = await fetch(
       `${COMPOSIO_API_BASE_URL}/tool_router/session`,
       {
@@ -394,10 +518,13 @@ export class MyahComposioService {
         },
         body: JSON.stringify({
           user_id: userId,
+          auth_configs: {
+            [INSTAGRAM_TOOLKIT_SLUG]: instagramAuthConfigId,
+          },
           multi_account: {
             enable: true,
             require_explicit_selection: true,
-            max_accounts_per_toolkit: 1,
+            max_accounts_per_toolkit: 2,
           },
         }),
       },

@@ -7,12 +7,14 @@ const createTool = () => ({
 });
 
 const buildProvider = ({ hasPermission }: { hasPermission: boolean }) => {
+  const prepareInstagramReplyDraftTool = createTool();
   const sendInstagramReplyTool = createTool();
   const permissionsService = {
     hasToolPermission: jest.fn().mockResolvedValue(hasPermission),
   };
 
   return {
+    prepareInstagramReplyDraftTool,
     sendInstagramReplyTool,
     permissionsService,
     provider: new ActionToolProvider(
@@ -26,6 +28,7 @@ const buildProvider = ({ hasPermission }: { hasPermission: boolean }) => {
       createTool() as never,
       createTool() as never,
       { isEnabled: jest.fn().mockReturnValue(true) } as never,
+      prepareInstagramReplyDraftTool as never,
       sendInstagramReplyTool as never,
       permissionsService as never,
       {} as never,
@@ -70,5 +73,23 @@ describe('ActionToolProvider Instagram reply execution', () => {
       { approvalId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
       expect.objectContaining({ workspaceId: 'workspace-id' }),
     );
+  });
+
+  it('gates draft preparation behind the same explicit Instagram reply permission', async () => {
+    const { provider, prepareInstagramReplyDraftTool } = buildProvider({
+      hasPermission: false,
+    });
+
+    await expect(
+      provider.executeStaticTool(
+        'prepare_instagram_reply_draft',
+        {},
+        context as never,
+      ),
+    ).rejects.toThrow(
+      'Missing permission to execute the Instagram reply action',
+    );
+
+    expect(prepareInstagramReplyDraftTool.execute).not.toHaveBeenCalled();
   });
 });

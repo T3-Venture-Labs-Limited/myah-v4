@@ -8,6 +8,7 @@ import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-wo
 import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 import { MyahComposioModule } from 'src/modules/myah-composio/myah-composio.module';
 import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
+import { InstagramReplyDraftService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-draft.service';
 
 import { InstagramReplyExecutionService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-execution.service';
 @Module({
@@ -23,8 +24,13 @@ import { InstagramReplyExecutionService } from 'src/engine/core-modules/instagra
   providers: [
     InstagramReplyApprovalService,
     InstagramReplyExecutionService,
+    InstagramReplyDraftService,
     provideWorkspaceScopedRepository(InstagramReplyApprovalRequestEntity),
   ],
-  exports: [InstagramReplyApprovalService, InstagramReplyExecutionService],
+  exports: [
+    InstagramReplyApprovalService,
+    InstagramReplyDraftService,
+    InstagramReplyExecutionService,
+  ],
 })
 export class InstagramReplyModule {}

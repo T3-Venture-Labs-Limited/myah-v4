@@ -99,13 +99,18 @@ describe('InstagramReplyApprovalService', () => {
   const createService = () => {
     const approvalRepository = createApprovalRepository();
     const receiptRepository = createReceiptRepository();
+    const instagramReplyDraftService = {
+      validateApprovalBinding: jest.fn().mockResolvedValue(undefined),
+    };
 
     return {
       approvalRepository,
       receiptRepository,
+      instagramReplyDraftService,
       service: new InstagramReplyApprovalService(
         approvalRepository as never,
         receiptRepository as never,
+        instagramReplyDraftService as never,
       ),
     };
   };
@@ -126,7 +131,8 @@ describe('InstagramReplyApprovalService', () => {
     });
 
   it('persists an immutable request bound to the initiating member and exact preview', async () => {
-    const { service, approvalRepository } = createService();
+    const { service, approvalRepository, instagramReplyDraftService } =
+      createService();
 
     const request = await createPendingApproval(service);
 
@@ -153,6 +159,20 @@ describe('InstagramReplyApprovalService', () => {
         previewTextSha256,
       }),
     );
+
+    expect(
+      instagramReplyDraftService.validateApprovalBinding,
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId,
+      toolName: 'send_instagram_reply',
+      connectedAccountId,
+      draftId,
+      conversationId,
+      previewTextSha256,
+    });
   });
 
   it('does not let another member approve the bound request', async () => {
@@ -167,6 +187,23 @@ describe('InstagramReplyApprovalService', () => {
         decision: 'approved',
       }),
     ).rejects.toThrow('only the initiating workspace member may approve');
+  });
+
+  it('does not persist an approval when the draft binding is invalid', async () => {
+    const {
+      service,
+      approvalRepository,
+      instagramReplyDraftService,
+    } = createService();
+    instagramReplyDraftService.validateApprovalBinding.mockRejectedValue(
+      new Error('The Instagram reply preview does not match the stored draft.'),
+    );
+
+    await expect(createPendingApproval(service)).rejects.toThrow(
+      'preview does not match the stored draft',
+    );
+
+    expect(approvalRepository.save).not.toHaveBeenCalled();
   });
 
   it('transitions only an approved request into a single processing receipt', async () => {

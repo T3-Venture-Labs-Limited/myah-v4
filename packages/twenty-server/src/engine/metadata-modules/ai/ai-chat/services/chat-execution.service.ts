@@ -74,6 +74,7 @@ import {
   getApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
   hasLatestMessageApprovedApproval,
+  PRE_APPROVAL_SAFE_TOOL_NAMES,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
 import { assertHumanInputToolCallIsExclusive } from 'src/engine/metadata-modules/ai/ai-chat/utils/assert-human-input-tool-call-is-exclusive.util';
 import { extractCodeInterpreterFiles } from 'src/engine/metadata-modules/ai/ai-chat/utils/extract-code-interpreter-files.util';
@@ -224,9 +225,17 @@ export class ChatExecutionService {
       ...(isApprovedApprovalResume ? [] : [REQUEST_APPROVAL_TOOL_NAME]),
     ];
 
-    const preApprovalExcludedToolNames = isApprovedApprovalResume
-      ? new Set<string>()
-      : getPreApprovalExcludedToolNames(toolCatalog);
+    const preApprovalExcludedToolNames = new Set(
+      isApprovedApprovalResume
+        ? []
+        : getPreApprovalExcludedToolNames(toolCatalog),
+    );
+
+    // Enforce the source-controlled safe-tool exception at the execution
+    // boundary; catalog filtering remains only an earlier prompt guard.
+    for (const toolName of PRE_APPROVAL_SAFE_TOOL_NAMES) {
+      preApprovalExcludedToolNames.delete(toolName);
+    }
 
     // ToolSet is constant for the entire conversation — no mutation.
     // learn_tools returns schemas as text; execute_tool dispatches via the registry.
@@ -244,6 +253,7 @@ export class ChatExecutionService {
         {
           compactOutput: true,
           excludeTools: preApprovalExcludedToolNames,
+          allowedTools: PRE_APPROVAL_SAFE_TOOL_NAMES,
           spillLargeOutput: true,
         },
       ),

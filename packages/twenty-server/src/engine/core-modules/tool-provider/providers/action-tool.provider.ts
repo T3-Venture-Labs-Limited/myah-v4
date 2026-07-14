@@ -27,6 +27,7 @@ import { DraftEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/dr
 import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
 import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool';
 import { NavigateAppTool } from 'src/engine/core-modules/tool/tools/navigate-tool/navigate-app-tool';
+import { PrepareInstagramReplyDraftTool } from 'src/engine/core-modules/tool/tools/instagram-tool/prepare-instagram-reply-draft-tool';
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 import { ExtractJsonPathsTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/extract-json-paths-tool';
 import { SearchOutputTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/search-output-tool';
@@ -52,6 +53,7 @@ export class ActionToolProvider implements ToolProvider {
     private readonly extractJsonPathsTool: ExtractJsonPathsTool,
     private readonly searchOutputTool: SearchOutputTool,
     private readonly codeInterpreterService: CodeInterpreterService,
+    private readonly prepareInstagramReplyDraftTool: PrepareInstagramReplyDraftTool,
     private readonly sendInstagramReplyTool: SendInstagramReplyTool,
     private readonly permissionsService: PermissionsService,
     private readonly i18nService: I18nService,
@@ -60,6 +62,10 @@ export class ActionToolProvider implements ToolProvider {
       ['http_request', this.httpTool],
       ['send_email', this.sendEmailTool],
       ['draft_email', this.draftEmailTool],
+      [
+        'prepare_instagram_reply_draft',
+        this.prepareInstagramReplyDraftTool,
+      ],
       ['send_instagram_reply', this.sendInstagramReplyTool],
       ['create_calendar_event', this.createCalendarEventTool],
       ['search_help_center', this.searchHelpCenterTool],
@@ -135,6 +141,14 @@ export class ActionToolProvider implements ToolProvider {
         this.buildDescriptor(
           'send_instagram_reply',
           this.sendInstagramReplyTool,
+          includeSchemas,
+          context.locale,
+        ),
+      );
+      descriptors.push(
+        this.buildDescriptor(
+          'prepare_instagram_reply_draft',
+          this.prepareInstagramReplyDraftTool,
           includeSchemas,
           context.locale,
         ),
@@ -220,7 +234,10 @@ export class ActionToolProvider implements ToolProvider {
     args: Record<string, unknown>,
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
-    if (toolName === 'send_instagram_reply') {
+    if (
+      toolName === 'send_instagram_reply' ||
+      toolName === 'prepare_instagram_reply_draft'
+    ) {
       const hasInstagramReplyPermission =
         await this.permissionsService.hasToolPermission(
           context.rolePermissionConfig,

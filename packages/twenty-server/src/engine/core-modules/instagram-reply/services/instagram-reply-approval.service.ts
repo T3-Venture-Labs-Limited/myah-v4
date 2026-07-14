@@ -10,6 +10,7 @@ import {
   InstagramReplyExecutionReceiptEntity,
   InstagramReplyExecutionState,
 } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-execution-receipt.entity';
+import { InstagramReplyDraftService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-draft.service';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
@@ -55,17 +56,34 @@ export class InstagramReplyApprovalService {
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(InstagramReplyExecutionReceiptEntity)
     private readonly executionReceiptRepository: ExecutionReceiptRepository,
+    private readonly instagramReplyDraftService: InstagramReplyDraftService,
   ) {}
 
   async createPendingApproval(
     input: CreateInstagramReplyApprovalInput,
   ): Promise<InstagramReplyApprovalRequestEntity> {
+    await this.instagramReplyDraftService.validateApprovalBinding(input);
+
     const existingRequest = await this.approvalRequestRepository.findOneBy(
       input.workspaceId,
       { approvalId: input.approvalId },
     );
 
     if (existingRequest) {
+      if (
+        existingRequest.userWorkspaceId !== input.userWorkspaceId ||
+        existingRequest.threadId !== input.threadId ||
+        existingRequest.toolName !== input.toolName ||
+        existingRequest.connectedAccountId !== input.connectedAccountId ||
+        existingRequest.draftId !== input.draftId ||
+        existingRequest.conversationId !== input.conversationId ||
+        existingRequest.previewTextSha256 !== input.previewTextSha256
+      ) {
+        throw new Error(
+          'Instagram reply approval ID is already bound to a different request.',
+        );
+      }
+
       return existingRequest;
     }
 

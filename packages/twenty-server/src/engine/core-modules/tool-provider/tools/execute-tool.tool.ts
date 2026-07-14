@@ -47,6 +47,7 @@ export const createExecuteToolTool = (
   context: ToolContext,
   options?: {
     excludeTools?: Set<string>;
+    allowedTools?: Set<string>;
     compactOutput?: boolean;
     spillLargeOutput?: boolean;
   },
@@ -57,7 +58,10 @@ export const createExecuteToolTool = (
   execute: async (parameters: ExecuteToolInput): Promise<ToolOutput> => {
     const { toolName, arguments: args = {} } = parameters;
 
-    if (options?.excludeTools?.has(toolName)) {
+    if (
+      options?.excludeTools?.has(toolName) &&
+      !options.allowedTools?.has(toolName)
+    ) {
       return {
         success: false,
         message: `Tool "${toolName}" is not available`,

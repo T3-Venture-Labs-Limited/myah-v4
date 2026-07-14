@@ -34,6 +34,7 @@ describe('MyahComposioService', () => {
     process.env = {
       ...originalEnv,
       COMPOSIO_API_KEY: 'cmp_test_key',
+      COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID: 'ac_instagram_test',
     };
     global.fetch = jest.fn();
   });
@@ -44,7 +45,7 @@ describe('MyahComposioService', () => {
     jest.restoreAllMocks();
   });
 
-  it('creates an Instagram OAuth link through Composio without exposing the API key', async () => {
+  it('selects the configured Instagram auth config when creating an OAuth session', async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
@@ -81,10 +82,13 @@ describe('MyahComposioService', () => {
         },
         body: JSON.stringify({
           user_id: 'workspace:workspace-id:instagram',
+          auth_configs: {
+            instagram: 'ac_instagram_test',
+          },
           multi_account: {
             enable: true,
             require_explicit_selection: true,
-            max_accounts_per_toolkit: 1,
+            max_accounts_per_toolkit: 2,
           },
         }),
       }),
@@ -190,6 +194,100 @@ describe('MyahComposioService', () => {
     );
   });
 
+  it('enriches an active Instagram account with its server-fetched profile identity', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'ca_instagram_active',
+              status: 'ACTIVE',
+              user_id: 'workspace:workspace-id:instagram',
+              auth_config_id: 'ac_instagram',
+              toolkit: { slug: 'instagram' },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          successful: true,
+          data: {
+            id: '17841400008460056',
+            username: 'myah_test_account',
+          },
+        }),
+      });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.listInstagramAccounts({
+        userId: buildInstagramComposioUserId('workspace-id'),
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        connectedAccountId: 'ca_instagram_active',
+        igUserId: '17841400008460056',
+        username: 'myah_test_account',
+      }),
+    ]);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://backend.composio.dev/api/v3.1/tools/execute/INSTAGRAM_GET_USER_INFO',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'cmp_test_key',
+        },
+        body: JSON.stringify({
+          connected_account_id: 'ca_instagram_active',
+          user_id: 'workspace:workspace-id:instagram',
+          arguments: { ig_user_id: 'me' },
+        }),
+      }),
+    );
+  });
+
+  it('keeps the active connection visible when profile lookup is unavailable', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'ca_instagram_active',
+              status: 'ACTIVE',
+              user_id: 'workspace:workspace-id:instagram',
+              auth_config_id: 'ac_instagram',
+              toolkit: { slug: 'instagram' },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'provider unavailable' }),
+      });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.listInstagramAccounts({
+        userId: buildInstagramComposioUserId('workspace-id'),
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        connectedAccountId: 'ca_instagram_active',
+        status: 'ACTIVE',
+      }),
+    ]);
+  });
+
   it('rejects a send path when the workspace has multiple active Instagram accounts', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
@@ -292,6 +390,8 @@ describe('MyahComposioService', () => {
         'ca_instagram_new',
         buildInstagramComposioUserId(workspaceId),
         'ac_instagram',
+        null,
+        null,
         'ACTIVE',
         '2026-07-08T04:30:00.000Z',
         null,

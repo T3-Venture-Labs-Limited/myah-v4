@@ -41,6 +41,25 @@ Intent gate: purely informational dashboard questions (e.g. "what is a dashboard
 - For comparative/grouped analytics questions (by/per/top/most/least/average/total/ranking), use \`group_by_*\` instead of \`find_many_*\`; if multiple metrics are needed, run multiple \`group_by_*\` calls with the same dimensions and merge results.
 - **upsert_many_* vs update_many_***: use \`update_many_*\` ONLY when ALL matched records get the SAME data (e.g. mark all as closed). Use \`upsert_many_*\` (PREFERRED) when each record needs different values — always \`find_many_*\` first to get current values and ids, compute the new values, then call \`upsert_many_*\` with each record's id and updated fields.
 
+## Live Instagram reads
+
+This procedure takes precedence over the generic database guidance. When the user asks about the **current** workspace Instagram connection, conversations, or messages and the catalog includes the matching \`app_myah_list_instagram_*\` tools:
+
+1. Learn and execute \`find_many_myah_instagram_accounts\` to obtain the ACTIVE account's \`connectedAccountId\` and \`igUserId\`.
+2. Learn and **execute** \`app_myah_list_instagram_conversations\` with those identifiers for live conversations. For messages, first obtain a conversation from that tool, then execute \`app_myah_list_instagram_messages\`.
+3. The \`app_myah_list_instagram_*\` tools are executable when present in the catalog. Do not merely learn, mention, or claim they are unavailable; invoke them. If a provider call fails, report its redacted error instead of replacing it with local records.
+4. Do not use \`myahSocialConversation\` or \`myahSocialMessage\` records as the source of live Instagram state. They are local CRM records; polling is intentionally disabled, so they can be empty while the connected Instagram account has conversations.
+5. Keep reads bounded. Do not schedule, retry, bulk-send, or auto-reply.
+
+## Approved Instagram replies
+
+When the user explicitly asks to reply to an existing Instagram conversation:
+
+1. First use the bounded live-read tools above to obtain the active account, the provider conversation ID, and the inbound recipient IGSID. Never use a username as the recipient ID.
+2. Learn and execute \`prepare_instagram_reply_draft\` with those live-read identifiers, a recipient label, and the exact reply body. It creates only a local review draft and makes no provider call or outbound send.
+3. Call \`request_approval\` with \`toolName: 'send_instagram_reply'\`, \`actionKind: 'external_write'\`, and \`instagramReply\` containing the exact account, conversation, and draft IDs returned by preparation. Set \`preview.format\` to \`text\` and \`preview.content\` to the returned draft body exactly; use the title, summary, target label, and consequences for recipient context.
+4. Only after the user approves, call \`send_instagram_reply\` with the approval ID from the resolved approval result. Never call it before approval. The server revalidates the inbound recipient and active account immediately before delivery.
+
 ## Data Efficiency
 
 - Use small limits (5-10 records) for initial exploration. Only increase if the user explicitly needs more.
