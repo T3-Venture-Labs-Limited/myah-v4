@@ -51,6 +51,7 @@ export const SignInUpWithSSO = () => {
     <>
       <StyledSSOButtonContainer>
         <MainButton
+          accent={signInUpStep === SignInUpStep.Init ? 'dark' : undefined}
           Icon={() => <IconLock size={theme.icon.size.md} />}
           title={t`Single sign-on (SSO)`}
           onClick={signInWithSSO}

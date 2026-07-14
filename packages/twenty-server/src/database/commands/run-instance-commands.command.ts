@@ -89,7 +89,9 @@ export class RunInstanceCommandsCommand extends CommandRunner {
             await this.instanceUpgradeService.runSlowInstanceCommand({
               command: step.command,
               name: step.name,
-              skipDataMigration: activeOrSuspendedWorkspaceIds.length === 0,
+              skipDataMigration:
+                activeOrSuspendedWorkspaceIds.length === 0 &&
+                !step.command.runDataMigrationWithoutWorkspaces,
             });
 
           if (result.status === 'failed') {

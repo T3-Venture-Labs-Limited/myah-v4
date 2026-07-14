@@ -121,7 +121,7 @@ export const useBillingPlanActions = ({
         ),
       title: isSwitchingToOrganizationPlan ? t`Upgrade` : t`Switch to Pro`,
       variant: isSwitchingToOrganizationPlan ? 'primary' : 'secondary',
-      accent: isSwitchingToOrganizationPlan ? 'blue' : 'default',
+      accent: isSwitchingToOrganizationPlan ? 'brand' : 'default',
     };
   };
 

@@ -11,7 +11,7 @@ export const baseSchema = (
   return {
     openapi: '3.1.1',
     info: {
-      title: 'Twenty Api',
+      title: 'Myah API',
       description: `Use this page to explore and call the **REST API**.
 
 ## Authentication
@@ -105,7 +105,7 @@ order_by=id[AscNullsFirst],createdAt[DescNullsLast]
 ## Usage with LLMs
 
 The recommended way to give an LLM agent (Claude Desktop, Cursor, Windsurf, …)
-access to your workspace is the **Twenty MCP server**, not this OpenAPI schema.
+access to your workspace is the **Myah MCP server**, not this OpenAPI schema.
 The MCP server exposes typed tools the agent can call directly with proper
 header-based auth (OAuth or API key), no tokens in URLs.
 
@@ -121,14 +121,9 @@ hand the file to your tool — never paste a tokenized URL into a chat:
 
 \`\`\`bash
 curl -H 'Authorization: Bearer <token>' \\
-  ${serverUrl}/rest/open-api/${schemaName} > twenty-${schemaName}.json
+  ${serverUrl}/rest/open-api/${schemaName} > myah-${schemaName}.json
 \`\`\`
 `,
-      termsOfService:
-        'https://github.com/twentyhq/twenty?tab=coc-ov-file#readme',
-      contact: {
-        email: 'felix@twenty.com',
-      },
       license: {
         name: 'AGPL-3.0',
         url: 'https://github.com/twentyhq/twenty?tab=License-1-ov-file#readme',
@@ -158,10 +153,6 @@ curl -H 'Authorization: Bearer <token>' \\
         bearerAuth: [],
       },
     ],
-    externalDocs: {
-      description: 'Find out more about **Twenty**',
-      url: 'https://twenty.com',
-    },
     paths: { [`/open-api/${schemaName}`]: computeOpenApiPath(serverUrl) },
   };
 };

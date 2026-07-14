@@ -91,7 +91,7 @@ export const SettingsRolePermissionsObjectsTableRow = ({
           checked={permission.value ?? false}
           onChange={() => permission.setValue(!permission.value)}
           disabled={isDisabled}
-          accent={isRevoked ? CheckboxAccent.Orange : CheckboxAccent.Blue}
+          accent={isRevoked ? CheckboxAccent.Orange : CheckboxAccent.Brand}
         />
       </TableCell>
     </TableRow>

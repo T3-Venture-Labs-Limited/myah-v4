@@ -170,7 +170,7 @@ export const InstallAppsContent = ({
                 <IconButton
                   size="small"
                   variant="secondary"
-                  accent={isSelected ? 'blue' : 'default'}
+                  accent={isSelected ? 'brand' : 'default'}
                   ariaLabel={
                     isSelected
                       ? t`Deselect ${labelText}`

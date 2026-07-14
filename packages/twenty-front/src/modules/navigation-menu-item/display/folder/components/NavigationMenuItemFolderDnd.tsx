@@ -57,13 +57,13 @@ const StyledFolderContainer = styled.div<{
 }>`
   border: ${({ $isSelectedInEditMode }) =>
     $isSelectedInEditMode
-      ? `1px solid ${themeCssVariables.color.blue}`
+      ? `1px solid ${themeCssVariables.brand.border}`
       : 'none'};
   border-radius: ${themeCssVariables.border.radius.sm};
   transition: background-color 150ms ease-in-out;
 
   &[data-drag-over-header='true'] {
-    background-color: ${themeCssVariables.background.transparent.blue};
+    background-color: ${themeCssVariables.brand.soft};
   }
 
   &[data-forbidden-drop-target='true'] {

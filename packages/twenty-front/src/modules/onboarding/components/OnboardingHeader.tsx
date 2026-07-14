@@ -6,7 +6,13 @@ import { useLingui } from '@lingui/react/macro';
 import { isDefined } from 'twenty-shared/utils';
 import { IconChevronLeft, IconCoins, IconInfoCircle } from 'twenty-ui/icon';
 import { LightIconButton } from 'twenty-ui/input';
-import { themeCssVariables, useTheme } from 'twenty-ui/theme-constants';
+import {
+  themeCssVariables,
+  useTheme,
+  useThemeColorScheme,
+} from 'twenty-ui/theme-constants';
+
+const INVERTED_LOGO_STYLE = { filter: 'invert(1)' };
 
 const StyledHeader = styled.div`
   align-items: flex-start;
@@ -43,9 +49,7 @@ const StyledRightSide = styled(StyledSide)`
   padding-left: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledLogoBase = styled.div`
-  background-image: url('/images/integrations/twenty-logo.svg');
-  background-size: cover;
+const StyledLogoBase = styled.img`
   height: ${themeCssVariables.spacing[6]};
   opacity: 0.4;
   width: ${themeCssVariables.spacing[6]};
@@ -109,6 +113,7 @@ export const OnboardingHeader = ({
 }: OnboardingHeaderProps) => {
   const { t } = useLingui();
   const theme = useTheme();
+  const colorScheme = useThemeColorScheme();
   const contentWidth = useOnboardingContentWidth();
   const transition = useOnboardingMotionTransition();
 
@@ -126,7 +131,13 @@ export const OnboardingHeader = ({
         )}
       </StyledLeftSide>
       <StyledCenter contentWidth={contentWidth}>
-        <StyledLogo layout transition={transition} />
+        <StyledLogo
+          alt=""
+          layout
+          src="/images/integrations/myah-mark.svg"
+          style={colorScheme === 'dark' ? INVERTED_LOGO_STYLE : undefined}
+          transition={transition}
+        />
       </StyledCenter>
       <StyledRightSide>
         {isDefined(freeCredits) && (

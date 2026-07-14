@@ -39,7 +39,7 @@ export const SettingsEnterpriseFeatureGateCard = ({
             <Button
               title={buttonTitle}
               variant="primary"
-              accent="blue"
+              accent="brand"
               size="small"
               Icon={IconArrowUp}
               onClick={() => navigateSettings(upgradeSettingsPath)}

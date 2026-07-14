@@ -91,7 +91,7 @@ export const PlaygroundSetupForm = () => {
       <Button
         title={t`Launch`}
         variant="primary"
-        accent="blue"
+        accent="brand"
         type="submit"
         disabled={isSubmitting}
       />

@@ -8,6 +8,7 @@ const PLUGIN_JSON_PATH = path.join(PLUGIN_ROOT, '.codex-plugin', 'plugin.json');
 const PACKAGE_JSON_PATH = path.join(PLUGIN_ROOT, 'package.json');
 const MCP_JSON_PATH = path.join(PLUGIN_ROOT, '.mcp.json');
 const MARKETPLACE_TEMPLATE_PATH = path.join(PLUGIN_ROOT, 'templates', 'marketplace.example.json');
+const AGENTS_PATH = path.join(PLUGIN_ROOT, 'AGENTS.md');
 
 const metadata = require('../validators/metadata');
 const assets = require('../validators/assets');
@@ -109,6 +110,17 @@ test('assertFrontComponentGuidance passes on current state', () => {
 
 test('assertCliGuidanceSplit passes on current state', () => {
   assert.deepStrictEqual(collectFailures(crossDocContracts.assertCliGuidanceSplit), []);
+});
+
+test('package manifest AGENTS.md carries isolated test guidance', () => {
+  assert.ok(fs.existsSync(AGENTS_PATH), 'package manifest declares missing AGENTS.md');
+  const agents = fs.readFileSync(AGENTS_PATH, 'utf8');
+  for (const fragment of [
+    'TWENTY_API_URL=http://localhost:2021 yarn test',
+    'Integration tests must target the isolated test instance on port `2021`',
+  ]) {
+    assert.ok(agents.includes(fragment), `AGENTS.md is missing durable test guidance: ${fragment}`);
+  }
 });
 
 test('assertTestingGuidance passes on current state', () => {

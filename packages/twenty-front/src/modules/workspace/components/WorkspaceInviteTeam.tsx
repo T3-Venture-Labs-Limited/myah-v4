@@ -220,7 +220,7 @@ export const WorkspaceInviteTeam = ({ roles }: WorkspaceInviteTeamProps) => {
         <Button
           Icon={IconSend}
           variant="primary"
-          accent="blue"
+          accent="brand"
           title={t`Invite`}
           type="submit"
           disabled={isEmailsEmpty || !!errors.emails}

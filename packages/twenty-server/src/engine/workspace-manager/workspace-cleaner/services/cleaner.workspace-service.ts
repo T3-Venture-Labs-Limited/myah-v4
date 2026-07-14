@@ -215,6 +215,7 @@ export class CleanerWorkspaceService {
   ) {
     const emailData = {
       daysSinceInactive: daysSinceInactive,
+      link: this.twentyConfigService.get('SERVER_URL'),
       userName: `${workspaceMember.name.firstName} ${workspaceMember.name.lastName}`,
       workspaceDisplayName,
       locale: workspaceMember.locale,

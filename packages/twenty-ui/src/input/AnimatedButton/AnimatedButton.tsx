@@ -60,7 +60,7 @@ const computeAnimatedButtonDynamicStyles = (
             : themeCssVariables.background.primary;
           result.borderColor = !inverted
             ? !disabled && focus
-              ? themeCssVariables.color.blue
+              ? themeCssVariables.brand.focusRing
               : themeCssVariables.background.transparent.light
             : themeCssVariables.background.transparent.light;
           result.borderWidthOverride = '1px 1px 1px 1px';
@@ -68,7 +68,7 @@ const computeAnimatedButtonDynamicStyles = (
             !disabled && focus
               ? `0 0 0 3px ${
                   !inverted
-                    ? themeCssVariables.accent.tertiary
+                    ? themeCssVariables.brand.focusHalo
                     : themeCssVariables.background.transparent.medium
                 }`
               : 'none';
@@ -89,13 +89,15 @@ const computeAnimatedButtonDynamicStyles = (
             result.activeBackground = result.background;
           }
           break;
-        case 'blue':
+        case 'brand':
           result.background = !inverted
-            ? themeCssVariables.color.blue
+            ? disabled
+              ? themeCssVariables.brand.disabled
+              : themeCssVariables.brand.solid
             : themeCssVariables.background.primary;
           result.borderColor = !inverted
             ? focus
-              ? themeCssVariables.color.blue
+              ? themeCssVariables.brand.focusRing
               : themeCssVariables.background.transparent.light
             : themeCssVariables.background.transparent.light;
           result.borderWidthOverride = '1px 1px 1px 1px';
@@ -103,19 +105,19 @@ const computeAnimatedButtonDynamicStyles = (
             !disabled && focus
               ? `0 0 0 3px ${
                   !inverted
-                    ? themeCssVariables.accent.tertiary
+                    ? themeCssVariables.brand.focusHalo
                     : themeCssVariables.background.transparent.medium
                 }`
               : 'none';
           result.color = !inverted
-            ? GRAY_SCALE_LIGHT.gray1
-            : themeCssVariables.color.blue;
+            ? themeCssVariables.brand.onSolid
+            : themeCssVariables.brand.text;
           if (!disabled) {
             result.hoverBackground = !inverted
-              ? themeCssVariables.color.blue10
+              ? themeCssVariables.brand.solidHover
               : themeCssVariables.background.secondary;
             result.activeBackground = !inverted
-              ? themeCssVariables.color.blue12
+              ? themeCssVariables.brand.solidActive
               : themeCssVariables.background.tertiary;
           } else {
             result.hoverBackground = result.background;
@@ -165,10 +167,10 @@ const computeAnimatedButtonDynamicStyles = (
           result.borderColor = !inverted
             ? variant === 'secondary'
               ? !disabled && focus
-                ? themeCssVariables.color.blue
+                ? themeCssVariables.brand.focusRing
                 : themeCssVariables.background.transparent.medium
               : focus
-                ? themeCssVariables.color.blue
+                ? themeCssVariables.brand.focusRing
                 : 'transparent'
             : variant === 'secondary'
               ? focus || disabled
@@ -182,7 +184,7 @@ const computeAnimatedButtonDynamicStyles = (
             !disabled && focus
               ? `0 0 0 3px ${
                   !inverted
-                    ? themeCssVariables.accent.tertiary
+                    ? themeCssVariables.brand.focusHalo
                     : themeCssVariables.background.transparent.medium
                 }`
               : 'none';
@@ -202,15 +204,15 @@ const computeAnimatedButtonDynamicStyles = (
               : 'transparent'
             : themeCssVariables.background.transparent.medium;
           break;
-        case 'blue':
+        case 'brand':
           result.background = 'transparent';
           result.borderColor = !inverted
             ? variant === 'secondary'
               ? focus
-                ? themeCssVariables.color.blue
-                : themeCssVariables.accent.primary
+                ? themeCssVariables.brand.focusRing
+                : themeCssVariables.brand.border
               : focus
-                ? themeCssVariables.color.blue
+                ? themeCssVariables.brand.focusRing
                 : 'transparent'
             : variant === 'secondary'
               ? focus || disabled
@@ -224,23 +226,23 @@ const computeAnimatedButtonDynamicStyles = (
             !disabled && focus
               ? `0 0 0 3px ${
                   !inverted
-                    ? themeCssVariables.accent.tertiary
+                    ? themeCssVariables.brand.focusHalo
                     : themeCssVariables.background.transparent.medium
                 }`
               : 'none';
           result.color = !inverted
             ? !disabled
-              ? themeCssVariables.color.blue
-              : themeCssVariables.accent.accent4060
+              ? themeCssVariables.brand.text
+              : themeCssVariables.brand.disabled
             : themeCssVariables.font.color.inverted;
           result.hoverBackground = !inverted
             ? !disabled
-              ? themeCssVariables.accent.tertiary
+              ? themeCssVariables.brand.softHover
               : 'transparent'
             : themeCssVariables.background.transparent.light;
           result.activeBackground = !inverted
             ? !disabled
-              ? themeCssVariables.accent.secondary
+              ? themeCssVariables.brand.softActive
               : 'transparent'
             : themeCssVariables.background.transparent.medium;
           break;
@@ -370,7 +372,11 @@ export const AnimatedButton = ({
         fullWidth && styles.fullWidth,
         className,
       )}
+      data-variant={variant}
+      data-accent={accent}
       data-position={position}
+      data-inverted={inverted || undefined}
+      data-focus={focus || undefined}
       data-disabled={isDisabled || undefined}
       disabled={isDisabled}
       style={
@@ -400,11 +406,14 @@ export const AnimatedButton = ({
             className={styles.separator}
             data-size={size}
             data-accent={accent}
+            data-variant={variant}
+            data-inverted={inverted || undefined}
           />
           <div
             className={styles.shortcutLabel}
             data-variant={variant}
             data-accent={accent}
+            data-inverted={inverted || undefined}
           >
             {hotkeys.join(getOsShortcutSeparator())}
           </div>

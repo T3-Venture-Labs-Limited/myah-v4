@@ -133,7 +133,7 @@ const StyledEditor = styled.div`
   }
 
   & .bn-inline-content a {
-    color: ${themeCssVariables.color.blue};
+    color: ${themeCssVariables.brand.text};
   }
 
   & .bn-inline-content code {

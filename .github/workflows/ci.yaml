@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - name: Set up dependencies
+        uses: ./.github/actions/setup-yarn
+      - name: Lint affected projects
+        run: >-
+          npx nx affected -t lint --base=origin/${{ github.base_ref }}
+          --head=${{ github.sha }} --parallel=3
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - name: Set up dependencies
+        uses: ./.github/actions/setup-yarn
+      - name: Typecheck affected projects
+        run: >-
+          npx nx affected -t typecheck --base=origin/${{ github.base_ref }}
+          --head=${{ github.sha }} --parallel=2
+
+  unit-tests:
+    name: unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - name: Set up dependencies
+        uses: ./.github/actions/setup-yarn
+      # These integration suites provision their services in dedicated workflows.
+      - name: Test affected unit projects
+        run: >-
+          npx nx affected -t test --configuration=ci
+          --base=origin/${{ github.base_ref }} --head=${{ github.sha }}
+          --exclude=twenty-e2e-testing,twenty-zapier --parallel=1
+
+  container-build:
+    name: container build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Build production container
+        run: >-
+          docker build --file packages/twenty-docker/twenty/Dockerfile
+          --tag myah-ci:${{ github.sha }} .

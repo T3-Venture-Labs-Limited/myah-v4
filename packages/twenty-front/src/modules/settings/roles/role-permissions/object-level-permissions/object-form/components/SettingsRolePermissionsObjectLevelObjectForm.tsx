@@ -161,7 +161,7 @@ export const SettingsRolePermissionsObjectLevelObjectForm = ({
               title={t`Finish`}
               variant="primary"
               size="small"
-              accent="blue"
+              accent="brand"
               to={isFinishDisabled ? undefined : finishButtonPath}
               disabled={isFinishDisabled}
             />

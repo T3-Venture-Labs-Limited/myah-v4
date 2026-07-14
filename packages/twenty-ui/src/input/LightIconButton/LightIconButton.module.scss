@@ -76,15 +76,15 @@
   --light-icon-button-active-bg: transparent;
 }
 
-// active || focus turn the icon blue even when disabled, matching the legacy
-// switch where the (active || focus) branch came first.
+// Active and focus use semantic brand text, including when disabled, matching
+// the legacy precedence where the active-or-focus branch came first.
 .button[data-active],
 .button[data-focus] {
-  --light-icon-button-color: var(--t-color-blue);
+  --light-icon-button-color: var(--t-brand-text);
 }
 
 // focus is gated by !disabled in the component, like the legacy call-site.
 .button[data-focus] {
-  --light-icon-button-border: 1px solid var(--t-color-blue);
-  --light-icon-button-box-shadow: 0 0 0 3px var(--t-color-blue3);
+  --light-icon-button-border: 1px solid var(--t-brand-focus-ring);
+  --light-icon-button-box-shadow: 0 0 0 3px var(--t-brand-focus-halo);
 }

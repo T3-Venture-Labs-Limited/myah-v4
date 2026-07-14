@@ -66,7 +66,7 @@ const StyledGridContainer = styled.div`
   width: 100%;
 
   .react-grid-placeholder {
-    background: ${themeCssVariables.color.blue7} !important;
+    background: ${themeCssVariables.brand.soft} !important;
 
     border-radius: ${themeCssVariables.border.radius.md};
   }

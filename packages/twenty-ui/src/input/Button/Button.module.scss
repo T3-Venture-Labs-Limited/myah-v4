@@ -46,16 +46,57 @@ $gray-scale-light-gray1: color(display-p3 1 1 1);
   justify-content: var(--btn-justify, flex-start);
   padding: 0 var(--t-spacing-2) 0 var(--t-spacing-2);
   text-decoration: none;
-  transition: background 0.1s ease;
+  isolation: isolate;
+  overflow: hidden;
+  position: relative;
+  transition:
+    background 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
   white-space: nowrap;
   width: auto;
 
-  &:hover {
+  &:hover:not([data-disabled]) {
     background: var(--btn-hover-bg, transparent);
+    border-color: var(--btn-hover-border-color, var(--btn-border-color));
   }
 
-  &:active {
+  &:active:not([data-disabled]) {
     background: var(--btn-active-bg, transparent);
+    border-color: var(--btn-active-border-color, var(--btn-border-color));
+  }
+
+  &::before,
+  &::after {
+    border-radius: inherit;
+    content: '';
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    transition: opacity 220ms ease;
+  }
+
+  &::before {
+    // Keep the label's center line on the solid color for readable white text.
+    background: linear-gradient(
+      to bottom,
+      transparent 65%,
+      rgb(255 255 255 / 42%) 100%
+    );
+  }
+
+  &::after {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3Cfilter id%3D'n'%3E%3CfeTurbulence type%3D'fractalNoise' baseFrequency%3D'0.75' numOctaves%3D'4' stitchTiles%3D'stitch'%2F%3E%3CfeColorMatrix type%3D'saturate' values%3D'0'%2F%3E%3C%2Ffilter%3E%3Crect width%3D'100%25' height%3D'100%25' filter%3D'url(%23n)'%2F%3E%3C%2Fsvg%3E");
+    mix-blend-mode: overlay;
+  }
+
+  &:hover:not([data-disabled])::before {
+    opacity: var(--btn-hover-gradient-opacity, 0);
+  }
+
+  &:hover:not([data-disabled])::after {
+    opacity: var(--btn-hover-texture-opacity, 0);
   }
 
   &:focus {
@@ -103,32 +144,32 @@ $gray-scale-light-gray1: color(display-p3 1 1 1);
 
 // variant=primary, not inverted, keyed by accent.
 // focus-needs-enabled mirrors the one asymmetry of the legacy switch: the
-// default accent only shows its focus border when enabled, while blue and
+// default accent only shows its focus border when enabled, while brand and
 // danger keep the focus border even when disabled.
 $primary-accents: (
   'default': (
     bg: var(--t-background-transparent-lighter),
     bg-disabled: var(--t-background-transparent-lighter),
     border: var(--t-background-transparent-light),
-    border-focus: var(--t-color-blue),
+    border-focus: var(--t-brand-focus-ring),
     focus-needs-enabled: true,
-    shadow-focus: var(--t-accent-tertiary),
+    shadow-focus: var(--t-brand-focus-halo),
     color: var(--t-font-color-secondary),
     color-disabled: var(--t-font-color-extra-light),
     hover: var(--t-background-tertiary),
     active: var(--t-background-quaternary),
   ),
-  'blue': (
-    bg: var(--t-color-blue),
-    bg-disabled: var(--t-accent-accent4060),
+  'brand': (
+    bg: var(--t-brand-solid),
+    bg-disabled: var(--t-brand-disabled),
     border: var(--t-background-transparent-light),
-    border-focus: var(--t-color-blue),
+    border-focus: var(--t-brand-focus-ring),
     focus-needs-enabled: false,
-    shadow-focus: var(--t-accent-tertiary),
-    color: $gray-scale-light-gray1,
-    color-disabled: $gray-scale-light-gray1,
-    hover: var(--t-color-blue10),
-    active: var(--t-color-blue12),
+    shadow-focus: var(--t-brand-focus-halo),
+    color: var(--t-brand-on-solid),
+    color-disabled: var(--t-brand-on-solid),
+    hover: var(--t-brand-solid-hover),
+    active: var(--t-brand-solid-active),
   ),
   'danger': (
     bg: var(--t-color-red),
@@ -189,11 +230,18 @@ $primary-accents: (
   }
 }
 
+.button[data-variant='primary'][data-accent='brand']:not([data-inverted]) {
+  --btn-hover-gradient-opacity: 1;
+  --btn-hover-texture-opacity: 0.5;
+  --btn-hover-border-color: var(--t-brand-solid-hover);
+  --btn-active-border-color: var(--t-brand-solid-active);
+}
+
 // variant=primary, inverted: identical across accents except for the text
 // color.
 $primary-inverted-colors: (
   'default': var(--t-font-color-secondary),
-  'blue': var(--t-color-blue),
+  'brand': var(--t-brand-text),
   'danger': var(--t-color-red),
   'green': var(--t-color-green9),
 );
@@ -229,23 +277,23 @@ $primary-inverted-colors: (
 $secondary-accents: (
   'default': (
     border-secondary: var(--t-background-transparent-medium),
-    border-focus: var(--t-color-blue),
+    border-focus: var(--t-brand-focus-ring),
     focus-needs-enabled-secondary: true,
-    shadow-focus: var(--t-accent-tertiary),
+    shadow-focus: var(--t-brand-focus-halo),
     color: var(--t-font-color-secondary),
     color-disabled: var(--t-font-color-extra-light),
     hover: var(--t-background-transparent-light),
     active: var(--t-background-transparent-light),
   ),
-  'blue': (
-    border-secondary: var(--t-accent-primary),
-    border-focus: var(--t-color-blue),
+  'brand': (
+    border-secondary: var(--t-brand-border),
+    border-focus: var(--t-brand-focus-ring),
     focus-needs-enabled-secondary: false,
-    shadow-focus: var(--t-accent-tertiary),
-    color: var(--t-color-blue),
-    color-disabled: var(--t-accent-accent4060),
-    hover: var(--t-accent-tertiary),
-    active: var(--t-accent-secondary),
+    shadow-focus: var(--t-brand-focus-halo),
+    color: var(--t-brand-text),
+    color-disabled: var(--t-brand-disabled),
+    hover: var(--t-brand-soft-hover),
+    active: var(--t-brand-soft-active),
   ),
   'danger': (
     border-secondary: var(--t-border-color-danger),

@@ -153,7 +153,7 @@ export const MemberPermissionsTab = ({
           subtitle={t`Are you sure you want to update the role of this user from "${oldRoleLabel}" to "${newRoleLabel}"?`}
           onConfirmClick={handleConfirmRoleChange}
           confirmButtonText={t`Update role`}
-          confirmButtonAccent="blue"
+          confirmButtonAccent="brand"
         />
       )}
     </>

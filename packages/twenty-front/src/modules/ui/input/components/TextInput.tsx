@@ -169,7 +169,7 @@ const StyledInput = styled.input<
     border-color: ${({ error }) =>
       error
         ? themeCssVariables.border.color.danger
-        : themeCssVariables.color.blue};
+        : themeCssVariables.brand.focusRing};
   }
 `;
 

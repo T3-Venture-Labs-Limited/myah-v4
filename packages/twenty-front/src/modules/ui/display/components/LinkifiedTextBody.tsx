@@ -13,11 +13,11 @@ const StyledTextBody = styled(motion.div)`
   white-space: pre-line;
 
   a {
-    color: ${themeCssVariables.color.blue};
+    color: ${themeCssVariables.brand.text};
     text-decoration: underline;
 
     &:hover {
-      text-decoration-color: ${themeCssVariables.color.blue};
+      text-decoration-color: ${themeCssVariables.brand.text};
     }
   }
 `;

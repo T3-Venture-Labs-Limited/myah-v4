@@ -19,12 +19,11 @@ jest.mock('@/settings/components/SettingsCard', () => ({
 }));
 jest.mock('twenty-ui/icon', () => ({
   IconBrandX: () => <span>X</span>,
-  IconTransform: () => <span>Changelog</span>,
   useIcons: () => ({ getIcon: () => () => <span>Discord</span> }),
 }));
 
 describe('SettingsCommunity', () => {
-  it('uses Myah community links and keeps only the changelog utility card', () => {
+  it('uses only supported Myah community links', () => {
     render(<SettingsCommunity />);
 
     expect(
@@ -33,7 +32,10 @@ describe('SettingsCommunity', () => {
     expect(
       screen.getByRole('link', { name: 'Follow us on X' }),
     ).toHaveAttribute('href', 'https://x.com/MyahDev');
-    expect(screen.getByRole('link', { name: 'Read changelog' })).toBeVisible();
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    expect(
+      screen.queryByRole('link', { name: 'Read changelog' }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Partners')).not.toBeInTheDocument();
     expect(screen.queryByText('Browse partners')).not.toBeInTheDocument();
     expect(screen.queryByText('Features')).not.toBeInTheDocument();

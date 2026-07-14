@@ -14,19 +14,23 @@ env:
   SERVER_SETUP_CACHE_KEY: server-setup
 
 jobs:
+  select-runner:
+    uses: ./.github/workflows/select-runner.yaml
+    secrets: inherit
+
   changed-files-check:
     uses: ./.github/workflows/changed-files.yaml
     with:
       files: |
         packages/twenty-zapier/**
+        packages/twenty-shared/**
         packages/twenty-server/**
-        !packages/twenty-zapier/package.json
         !packages/twenty-zapier/CHANGELOG.md
   server-setup:
-    needs: changed-files-check
+    needs: [changed-files-check, select-runner]
     if: needs.changed-files-check.outputs.any_changed == 'true'
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     services:
       postgres:
         image: postgres:18
@@ -89,7 +93,7 @@ jobs:
           tasks: test
 
   zapier-test:
-    needs: server-setup
+    needs: [changed-files-check, server-setup]
     if: needs.changed-files-check.outputs.any_changed == 'true'
     timeout-minutes: 30
     runs-on: ubuntu-latest
@@ -114,8 +118,8 @@ jobs:
     if: always() && !cancelled()
     timeout-minutes: 5
     runs-on: ubuntu-latest
-    needs: [changed-files-check, zapier-test]
+    needs: [changed-files-check, zapier-test, select-runner]
     steps:
       - name: Fail job if any needs failed
-        if: contains(needs.*.result, 'failure')
+        if: contains(needs.*.result, 'failure') || needs.select-runner.result != 'success'
         run: exit 1

@@ -18,7 +18,7 @@ import {
 import styles from './Banner.stories.module.scss';
 
 const getButtonAccent = (color?: BannerColor) =>
-  color === 'danger' ? 'danger' : 'blue';
+  color === 'danger' ? 'danger' : 'brand';
 
 const BannerCloseButton = ({
   color,

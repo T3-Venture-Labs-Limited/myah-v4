@@ -3,14 +3,10 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { isNonEmptyString } from '@sniptt/guards';
 import { SettingsPath } from 'twenty-shared/types';
-import {
-  getImageAbsoluteURI,
-  getSettingsPath,
-  isDefined,
-} from 'twenty-shared/utils';
+import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { useApolloAdminClient } from '@/settings/admin-panel/apollo/hooks/useApolloAdminClient';
 import { SettingsAdminServerAdminAccess } from '@/settings/admin-panel/components/SettingsAdminServerAdminAccess';
@@ -23,7 +19,7 @@ import { SettingsTableCard } from '@/settings/components/SettingsTableCard';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { TabList } from '@/ui/layout/tab-list/components/TabList';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
-import { DEFAULT_WORKSPACE_LOGO } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
+import { getWorkspaceLogoUrl } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import {
@@ -39,7 +35,6 @@ import { H2Title } from 'twenty-ui/typography';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { REACT_APP_SERVER_BASE_URL } from '~/config';
 import {
   type UserLookupAdminPanelQuery,
   UserLookupAdminPanelDocument,
@@ -68,6 +63,7 @@ export const SettingsAdminUserDetail = () => {
   const userLookupResult = userLookupData?.userLookupAdminPanel;
 
   const currentUser = useAtomStateValue(currentUserState);
+  const isMyahTeamUser = useIsMyahTeamUser();
   const { handleImpersonate, impersonatingUserId } = useHandleImpersonate();
 
   const effectiveTabId = activeTabId || userLookupResult?.workspaces?.[0]?.id;
@@ -85,13 +81,7 @@ export const SettingsAdminUserDetail = () => {
     userLookupResult?.workspaces.map((workspace) => ({
       id: workspace.id,
       title: workspace.name,
-      logo:
-        getImageAbsoluteURI({
-          imageUrl: isNonEmptyString(workspace.logo)
-            ? workspace.logo
-            : DEFAULT_WORKSPACE_LOGO,
-          baseUrl: REACT_APP_SERVER_BASE_URL,
-        }) ?? '',
+      logo: getWorkspaceLogoUrl(workspace.logo),
     })) ?? [];
 
   const displayName = userFullName || userId || '';
@@ -119,7 +109,7 @@ export const SettingsAdminUserDetail = () => {
         ? new Date(user.createdAt).toLocaleDateString()
         : '',
     },
-    ...(currentUser?.canAccessFullAdminPanel && isDefined(userId)
+    ...(isMyahTeamUser && isDefined(userId)
       ? [
           {
             Icon: IconLock,
@@ -190,7 +180,8 @@ export const SettingsAdminUserDetail = () => {
               <SettingsAdminWorkspaceContent
                 activeWorkspace={activeWorkspace}
               />
-              {currentUser?.canImpersonate &&
+              {isMyahTeamUser &&
+                currentUser &&
                 activeWorkspace &&
                 isDefined(user) &&
                 user.id !== currentUser.id && (

@@ -84,16 +84,16 @@
 
 // focus is gated by !disabled in the component, like the legacy call-site.
 .button[data-focus] {
-  --floating-button-border: 1px solid var(--t-color-blue);
-  --floating-button-box-shadow: 0 0 0 3px var(--t-color-blue3);
-  --floating-button-color: var(--t-color-blue);
+  --floating-button-border: 1px solid var(--t-brand-focus-ring);
+  --floating-button-box-shadow: 0 0 0 3px var(--t-brand-focus-halo);
+  --floating-button-color: var(--t-brand-text);
 }
 
 .button[data-apply-shadow][data-focus] {
   --floating-button-box-shadow:
     0px 2px 4px 0px var(--t-background-transparent-light),
     0px 0px 4px 0px var(--t-background-transparent-medium),
-    0 0 0 3px var(--t-color-blue3);
+    0 0 0 3px var(--t-brand-focus-halo);
 }
 
 // disabled comes last: it beats focus in the legacy color ternary.

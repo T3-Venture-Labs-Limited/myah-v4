@@ -318,7 +318,7 @@ export const SettingsApplicationConnectionDetail = () => {
                     title={t`Reconnect`}
                     Icon={IconRefresh}
                     variant="secondary"
-                    accent="blue"
+                    accent="brand"
                     onClick={handleReconnect}
                   />
                 )}
@@ -394,7 +394,7 @@ export const SettingsApplicationConnectionDetail = () => {
               }
               onConfirmClick={handleChangeVisibility}
               confirmButtonText={t`Reconnect and change visibility`}
-              confirmButtonAccent="blue"
+              confirmButtonAccent="brand"
             />
           </>
         )}

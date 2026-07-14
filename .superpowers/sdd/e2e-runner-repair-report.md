@@ -1,0 +1,7 @@
+# E2E runner repair
+
+- **Reproduction:** GitHub Actions run `#29263863666` stayed pending with zero jobs because `ci-e2e-main.yaml` requested unavailable `ubuntu-latest-8-cores`.
+- **Exact change:** Added the reusable `select-runner` job with `secrets: inherit`; made `e2e-test` require it and use `${{ fromJSON(needs.select-runner.outputs.runs_on) }}`; made `ci-e2e-main-status-check` require both jobs and fail when selector execution is not successful, while preserving the E2E condition, execution settings, steps, and notification semantics. The selector contract was verified in `.github/workflows/select-runner.yaml`: it accepts optional inherited `MYAH_RUNNER_STATUS_TOKEN`, emits `runs_on` as JSON, chooses an online idle `myah-v4` self-hosted label set when available, and falls back to `["ubuntu-latest"]` when unavailable or on lookup failure; this matches `.github/workflows/ci-sdk.yaml`.
+- **Validation:** `actionlint .github/workflows/ci-e2e-main.yaml` reports the pre-existing local-action metadata error (`description is required in metadata of "Yarn Install" action` at `.github/actions/yarn-install/action.yaml`). Focused validation excluding that unrelated error: `actionlint -ignore 'description is required in metadata' .github/workflows/ci-e2e-main.yaml` — no output, exit 0.
+- **CI fix commit:** `21d6c2750` (`ci(e2e): Use safe runner selector`).
+- **Self-review:** Diff is limited to `.github/workflows/ci-e2e-main.yaml`; no `ubuntu-latest-8-cores` remains, selector output wiring matches `ci-sdk.yaml`, and `notify-main-ci-failure` is unchanged.

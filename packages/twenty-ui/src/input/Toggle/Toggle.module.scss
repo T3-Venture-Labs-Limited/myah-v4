@@ -11,7 +11,7 @@
   transition: background-color duration(normal) ease;
 
   &[data-checked] {
-    background-color: var(--toggle-on-color, var(--t-color-blue));
+    background-color: var(--toggle-on-color, var(--t-brand-solid));
   }
 
   &[data-disabled] {

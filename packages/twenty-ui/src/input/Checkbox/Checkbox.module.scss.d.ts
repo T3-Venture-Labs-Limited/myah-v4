@@ -7,7 +7,7 @@ declare const classNames: {
   readonly large: 'large';
   readonly squared: 'squared';
   readonly rounded: 'rounded';
-  readonly blue: 'blue';
+  readonly brand: 'brand';
   readonly orange: 'orange';
   readonly hoverable: 'hoverable';
   readonly box: 'box';

@@ -50,13 +50,13 @@
   // data-focus is only set when enabled, so disabled+focus stays unstyled,
   // matching the legacy focus={focus && !disabled} gating.
   &[data-focus] {
-    border: 1px solid var(--t-color-blue);
-    box-shadow: 0 0 0 3px var(--t-color-blue3);
-    color: var(--t-color-blue);
+    border: 1px solid var(--t-brand-focus-ring);
+    box-shadow: 0 0 0 3px var(--t-brand-focus-halo);
+    color: var(--t-brand-text);
   }
 
   &[data-active] {
-    color: var(--t-color-blue);
+    color: var(--t-brand-text);
   }
 }
 

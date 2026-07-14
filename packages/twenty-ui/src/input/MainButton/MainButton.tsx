@@ -7,12 +7,14 @@ import { useTheme } from '@ui/theme-constants';
 import styles from './MainButton.module.scss';
 
 export type MainButtonVariant = 'primary' | 'secondary';
+export type MainButtonAccent = 'brand' | 'dark';
 
 type Props = {
   title: string;
   fullWidth?: boolean;
   width?: number;
   variant?: MainButtonVariant;
+  accent?: MainButtonAccent;
   soon?: boolean;
 } & React.ComponentProps<'button'>;
 
@@ -26,6 +28,7 @@ export const MainButton = ({
   width,
   fullWidth = false,
   variant = 'primary',
+  accent = 'brand',
   type,
   onClick,
   disabled,
@@ -41,6 +44,7 @@ export const MainButton = ({
     <button
       className={clsx(styles.button, className)}
       data-variant={variant}
+      data-accent={accent}
       data-disabled={disabled || undefined}
       disabled={disabled}
       onClick={onClick}

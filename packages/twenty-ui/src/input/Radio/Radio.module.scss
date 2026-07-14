@@ -39,17 +39,17 @@
 }
 
 .radio[data-checked] {
-  background-color: var(--t-color-blue);
+  background-color: var(--t-brand-solid);
   border: none;
   transform: scale(1.05);
 }
 
 .radio[data-checked]:hover {
-  outline-color: var(--t-color-transparent-blue2);
+  outline-color: var(--t-brand-focus-halo);
 }
 
 .radio[data-checked]::after {
-  background-color: var(--t-gray-scale-gray1);
+  background-color: var(--t-brand-on-solid);
   border-radius: 50%;
   corner-shape: round;
   content: '';

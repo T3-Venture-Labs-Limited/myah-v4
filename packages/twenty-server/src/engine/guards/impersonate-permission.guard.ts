@@ -9,7 +9,7 @@ import { msg } from '@lingui/core/macro';
 import { isDefined } from 'class-validator';
 import { PermissionFlagType } from 'twenty-shared/constants';
 
-import { userCanServerImpersonate } from 'src/engine/core-modules/impersonation/utils/user-can-server-impersonate.util';
+import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
 import {
   PermissionsException,
   PermissionsExceptionCode,
@@ -17,15 +17,27 @@ import {
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 
+type ImpersonatePermissionContext = {
+  req: {
+    user?: Parameters<MyahTeamAuthorizationService['isMyahTeamMember']>[0];
+    userWorkspaceId?: string;
+    workspace: {
+      id: string;
+    };
+  };
+};
+
 @Injectable()
 export class ImpersonatePermissionGuard implements CanActivate {
-  constructor(private readonly permissionsService: PermissionsService) {}
+  constructor(
+    private readonly permissionsService: PermissionsService,
+    private readonly myahTeamAuthorizationService: MyahTeamAuthorizationService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const ctx = GqlExecutionContext.create(context);
-    const request = ctx.getContext().req;
-    const userWorkspaceId = request.userWorkspaceId;
-    const workspaceId = request.workspace.id;
+    const graphqlContext = GqlExecutionContext.create(context);
+    const { req } = graphqlContext.getContext<ImpersonatePermissionContext>();
+    const { userWorkspaceId, workspace } = req;
 
     if (!isDefined(userWorkspaceId)) {
       throw new PermissionsException(
@@ -37,7 +49,7 @@ export class ImpersonatePermissionGuard implements CanActivate {
       );
     }
 
-    if (userCanServerImpersonate(request.user)) {
+    if (this.myahTeamAuthorizationService.isMyahTeamMember(req.user)) {
       return true;
     }
 
@@ -45,10 +57,12 @@ export class ImpersonatePermissionGuard implements CanActivate {
       await this.permissionsService.userHasWorkspaceSettingPermission({
         userWorkspaceId,
         setting: PermissionFlagType.IMPERSONATE,
-        workspaceId,
+        workspaceId: workspace.id,
       });
 
-    if (hasPermission === true) return true;
+    if (hasPermission) {
+      return true;
+    }
 
     throw new PermissionsException(
       PermissionsExceptionMessage.PERMISSION_DENIED,

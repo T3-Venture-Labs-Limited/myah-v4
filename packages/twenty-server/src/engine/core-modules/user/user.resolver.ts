@@ -27,6 +27,7 @@ import {
   OnboardingStepKeys,
 } from 'src/engine/core-modules/onboarding/onboarding.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
 import { buildTwoFactorAuthenticationMethodSummary } from 'src/engine/core-modules/two-factor-authentication/utils/two-factor-authentication-method.presenter';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
@@ -96,6 +97,7 @@ export class UserResolver {
     private readonly workspaceMemberTranspiler: WorkspaceMemberTranspiler,
     private readonly userWorkspaceService: UserWorkspaceService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly myahTeamAuthorizationService: MyahTeamAuthorizationService,
   ) {}
 
   private async getUserWorkspacePermissions({
@@ -552,6 +554,11 @@ export class UserResolver {
     }
 
     return true;
+  }
+
+  @ResolveField(() => Boolean)
+  isMyahTeamMember(@Parent() user: UserEntity): boolean {
+    return this.myahTeamAuthorizationService.isMyahTeamMember(user);
   }
 
   @ResolveField(() => OnboardingStatus, {

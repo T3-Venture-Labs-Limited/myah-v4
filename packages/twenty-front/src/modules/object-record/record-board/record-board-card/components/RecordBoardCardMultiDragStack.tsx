@@ -4,7 +4,7 @@ import { styled } from '@linaria/react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledRecordBoardCardStackCard = styled.div<{ offset: number }>`
-  background-color: ${themeCssVariables.accent.tertiary};
+  background-color: ${themeCssVariables.brand.soft};
   border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.sm};
   height: 100%;

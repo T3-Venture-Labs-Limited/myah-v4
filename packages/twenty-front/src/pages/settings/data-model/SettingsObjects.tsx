@@ -59,7 +59,7 @@ export const SettingsObjects = () => {
           <Button
             Icon={IconPlus}
             title={t`Add object`}
-            accent="blue"
+            accent="brand"
             size="small"
             disabled
           />
@@ -68,7 +68,7 @@ export const SettingsObjects = () => {
             <Button
               Icon={IconPlus}
               title={t`Add object`}
-              accent="blue"
+              accent="brand"
               size="small"
             />
           </UndecoratedLink>

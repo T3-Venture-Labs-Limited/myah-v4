@@ -220,7 +220,7 @@ export const SettingsAdminServerAdminAccess = ({
       <ConfirmationModal
         modalInstanceId={SERVER_ADMIN_ACCESS_CONFIRMATION_MODAL_ID}
         title={pendingChange?.isRevoking ? t`Revoke access` : t`Grant access`}
-        confirmButtonAccent={pendingChange?.isRevoking ? 'danger' : 'blue'}
+        confirmButtonAccent={pendingChange?.isRevoking ? 'danger' : 'brand'}
         confirmButtonText={t`Confirm`}
         onConfirmClick={handleConfirm}
         onClose={() => {

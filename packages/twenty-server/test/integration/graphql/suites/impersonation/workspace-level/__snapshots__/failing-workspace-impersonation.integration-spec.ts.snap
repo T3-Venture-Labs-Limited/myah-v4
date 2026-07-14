@@ -12,7 +12,7 @@ exports[`Workspace-level impersonation - authorization denials (integration) rej
 }
 `;
 
-exports[`Workspace-level impersonation - authorization denials (integration) rejects a user without the impersonate permission 1`] = `
+exports[`Workspace-level impersonation - authorization denials (integration) rejects a user without the impersonate permission before target lookup 1`] = `
 {
   "extensions": {
     "code": "FORBIDDEN",

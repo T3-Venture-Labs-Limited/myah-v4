@@ -28,7 +28,6 @@ import { CustomerAccountModule } from 'src/engine/core-modules/customer-account/
 import { CloudflareModule } from 'src/engine/core-modules/cloudflare/cloudflare.module';
 import { CodeInterpreterModule } from 'src/engine/core-modules/code-interpreter/code-interpreter.module';
 import { DnsManagerModule } from 'src/engine/core-modules/dns-manager/dns-manager.module';
-import { DpaModule } from 'src/engine/core-modules/dpa/dpa.module';
 import { EmailModule } from 'src/engine/core-modules/email/email.module';
 import { EmailingDomainModule } from 'src/engine/core-modules/emailing-domain/emailing-domain.module';
 import { EmailingModule } from 'src/modules/emailing/emailing.module';
@@ -52,6 +51,7 @@ import { MessagingWebhooksModule } from 'src/modules/messaging-webhooks/messagin
 import { ConnectedAccountSyncWebhooksModule } from 'src/modules/connected-account-sync-webhooks/connected-account-sync-webhooks.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 import { OpenApiModule } from 'src/engine/core-modules/open-api/open-api.module';
 import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public-domain.module';
 import { RedisClientModule } from 'src/engine/core-modules/redis-client/redis-client.module';
@@ -140,6 +140,7 @@ import { FileModule } from './file/file.module';
       inject: [TwentyConfigService],
     }),
     MetricsModule,
+    MyahModule,
     MessageQueueModule.registerAsync({
       useFactory: messageQueueModuleFactory,
       inject: [TwentyConfigService, RedisClientService, MetricsService],
@@ -161,7 +162,6 @@ import { FileModule } from './file/file.module';
     CodeInterpreterModule.forRoot(),
     SearchModule,
     ApiKeyModule,
-    DpaModule,
     PageLayoutModule,
     ImpersonationModule,
     TrashCleanupModule,

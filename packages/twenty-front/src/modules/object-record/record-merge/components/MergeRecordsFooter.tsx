@@ -52,7 +52,7 @@ export const MergeRecordsFooter = ({
         <Button
           title={isMerging ? t`Merging...` : t`Merge`}
           variant="primary"
-          accent="blue"
+          accent="brand"
           size="medium"
           Icon={IconArrowMerge}
           hotkeys={isMerging ? undefined : ['⌘', '⏎']}

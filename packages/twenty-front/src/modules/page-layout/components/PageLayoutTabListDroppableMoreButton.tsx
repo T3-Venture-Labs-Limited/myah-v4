@@ -14,7 +14,7 @@ const StyledTabMoreButtonWrapper = styled.div<{ isDraggingOver: boolean }>`
   ${({ isDraggingOver }) =>
     isDraggingOver
       ? `
-    background-color: ${themeCssVariables.background.transparent.blue};
+    background-color: ${themeCssVariables.brand.soft};
     pointer-events: none;
   `
       : ''}

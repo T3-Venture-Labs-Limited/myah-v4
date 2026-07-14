@@ -47,7 +47,7 @@ export const SettingsBillingSubscriptionInfoModals = ({
         subtitle={switchToYearlySubtitle}
         onConfirmClick={onSwitchInterval}
         confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
+        confirmButtonAccent="brand"
         loading={isSwitchingInterval}
       />
       <ConfirmationModal
@@ -56,7 +56,7 @@ export const SettingsBillingSubscriptionInfoModals = ({
         subtitle={switchToMonthlySubtitle}
         onConfirmClick={onSwitchInterval}
         confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
+        confirmButtonAccent="brand"
         loading={isSwitchingInterval}
       />
       <ConfirmationModal
@@ -65,7 +65,7 @@ export const SettingsBillingSubscriptionInfoModals = ({
         subtitle={cancelIntervalSwitchingSubtitle}
         onConfirmClick={onCancelIntervalSwitching}
         confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
+        confirmButtonAccent="brand"
         loading={isCancellingIntervalSwitch}
       />
       <ConfirmationModal
@@ -74,7 +74,7 @@ export const SettingsBillingSubscriptionInfoModals = ({
         subtitle={cancelPlanSwitchingSubtitle}
         onConfirmClick={onCancelPlanSwitching}
         confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
+        confirmButtonAccent="brand"
         loading={isCancellingPlanSwitch}
       />
       <ConfirmationModal
@@ -83,7 +83,7 @@ export const SettingsBillingSubscriptionInfoModals = ({
         subtitle={startSubscriptionSubtitle}
         onConfirmClick={onEndTrialPeriod}
         confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
+        confirmButtonAccent="brand"
         loading={isEndTrialPeriodLoading}
       />
       <ConfirmationModal
@@ -92,7 +92,7 @@ export const SettingsBillingSubscriptionInfoModals = ({
         subtitle={t`You have scheduled a credit pack change. Do you want to cancel it?`}
         onConfirmClick={onCancelResourceCreditSwitching}
         confirmButtonText={t`Confirm`}
-        confirmButtonAccent="blue"
+        confirmButtonAccent="brand"
         loading={isCancellingMeteredSwitch}
       />
     </>

@@ -163,11 +163,10 @@ export const SignInUpWithCredentials = ({
           )}
           <StyledSSOButtonContainer>
             <MainButton
+              accent="dark"
               title={buttonTitle}
               type="submit"
-              variant={
-                signInUpStep === SignInUpStep.Init ? 'secondary' : 'primary'
-              }
+              variant="primary"
               Icon={() => (form.formState.isSubmitting ? <Loader /> : null)}
               disabled={isSubmitButtonDisabled}
               fullWidth

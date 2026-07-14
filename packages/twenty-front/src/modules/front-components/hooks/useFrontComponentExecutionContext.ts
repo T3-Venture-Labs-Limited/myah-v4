@@ -211,12 +211,14 @@ export const useFrontComponentExecutionContext = ({
       confirmButtonText,
       confirmButtonAccent = 'danger',
     }) => {
+      const normalizedConfirmButtonAccent =
+        confirmButtonAccent === 'blue' ? 'brand' : confirmButtonAccent;
       openConfirmationModal({
         caller: { type: 'frontComponent', frontComponentId },
         title,
         subtitle,
         confirmButtonText,
-        confirmButtonAccent,
+        confirmButtonAccent: normalizedConfirmButtonAccent,
       });
     };
 

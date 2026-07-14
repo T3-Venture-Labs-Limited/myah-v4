@@ -142,6 +142,16 @@ ruleTester.run(RULE_NAME, rule, {
       `,
       filename: 'test.tsx',
     },
+    {
+      code: `
+        @UseGuards(UserAuthGuard, MyahTeamGuard)
+        class TestResolver {
+          @Query()
+          testQuery() {}
+        }
+      `,
+      filename: 'test.tsx',
+    },
   ],
   invalid: [
     {

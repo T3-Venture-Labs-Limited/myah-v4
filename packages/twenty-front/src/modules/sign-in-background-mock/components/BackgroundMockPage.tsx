@@ -36,7 +36,7 @@ export const BackgroundMockPage = () => {
                 Icon={IconPlus}
                 title={t`New Company`}
                 variant="primary"
-                accent="blue"
+                accent="brand"
                 size="small"
               />
               <LightIconButton

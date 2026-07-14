@@ -65,7 +65,7 @@ export const ViewPickerCreateButton = () => {
         title={t`Go to Settings`}
         onClick={navigateToSelectSettings}
         size="small"
-        accent="blue"
+        accent="brand"
         fullWidth
         justify="center"
       />
@@ -81,7 +81,7 @@ export const ViewPickerCreateButton = () => {
         title={t`Go to Settings`}
         onClick={navigateToDateFieldSettings}
         size="small"
-        accent="blue"
+        accent="brand"
         fullWidth
         justify="center"
       />
@@ -97,7 +97,7 @@ export const ViewPickerCreateButton = () => {
         title={t`Create`}
         onClick={handleCreateButtonClick}
         ariaLabel={t`Create new view`}
-        accent="blue"
+        accent="brand"
         fullWidth
         size="small"
         justify="center"

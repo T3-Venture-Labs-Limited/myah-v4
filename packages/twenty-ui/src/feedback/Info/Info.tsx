@@ -22,6 +22,11 @@ const INFO_ACCENT_CLASS_NAMES: Record<InfoAccent, string> = {
   danger: styles.accentDanger,
 };
 
+const INFO_BUTTON_ACCENTS = {
+  blue: 'brand',
+  danger: 'danger',
+} as const;
+
 export const Info = ({
   accent = 'blue',
   text,
@@ -44,7 +49,7 @@ export const Info = ({
               title={buttonTitle}
               size="small"
               variant="secondary"
-              accent={accent}
+              accent={INFO_BUTTON_ACCENTS[accent]}
             />
           </Link>
         </span>
@@ -55,7 +60,7 @@ export const Info = ({
           onClick={onClick}
           size="small"
           variant="secondary"
-          accent={accent}
+          accent={INFO_BUTTON_ACCENTS[accent]}
         />
       )}
     </div>

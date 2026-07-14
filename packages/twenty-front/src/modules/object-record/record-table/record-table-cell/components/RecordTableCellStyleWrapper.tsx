@@ -48,7 +48,7 @@ export const RecordTableCellStyleWrapper = ({
   const { theme } = useContext(ThemeContext);
 
   const tdBackgroundColor = isSelected
-    ? theme.accent.quaternary
+    ? theme.brand.soft
     : theme.background.primary;
 
   const borderColor = theme.border.color.light;
