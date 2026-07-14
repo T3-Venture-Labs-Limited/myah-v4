@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { Repository } from 'typeorm';
 
-import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
+import {
+  type WorkspaceIteratorReport,
+  WorkspaceIteratorService,
+} from 'src/database/commands/command-runners/workspace-iterator.service';
 import { ApplicationInstallService } from 'src/engine/core-modules/application/application-install/application-install.service';
 import { ApplicationRegistrationEntity } from 'src/engine/core-modules/application/application-registration/application-registration.entity';
 import {
@@ -54,7 +57,7 @@ export class PreInstalledAppsService {
 
   async backfillApplicationOnAllWorkspaces(
     applicationRegistrationId: string,
-  ): Promise<void> {
+  ): Promise<WorkspaceIteratorReport> {
     const registration = await this.applicationRegistrationRepository.findOne({
       where: { id: applicationRegistrationId, isPreInstalled: true },
     });
@@ -89,5 +92,6 @@ export class PreInstalledAppsService {
     this.logger.log(
       `Backfilled app "${registration.name}" (${registration.id}): ${report.success.length} succeeded, ${report.fail.length} failed`,
     );
+    return report;
   }
 }

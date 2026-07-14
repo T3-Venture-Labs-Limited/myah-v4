@@ -3,4 +3,5 @@ export const BACKFILL_APPLICATION_INSTALLATION_JOB_NAME =
 
 export type BackfillApplicationInstallationJobData = {
   applicationRegistrationId: string;
+  operationId?: string;
 };

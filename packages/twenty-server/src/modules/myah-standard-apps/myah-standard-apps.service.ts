@@ -34,8 +34,31 @@ export class MyahStandardAppsService {
     private readonly workspaceQueueService: MessageQueueService,
   ) {}
 
+  async getPublishedStandardApp(
+    applicationUniversalIdentifier: string,
+  ): Promise<ApplicationRegistrationEntity> {
+    if (!isMyahStandardAppUniversalIdentifier(applicationUniversalIdentifier)) {
+      throw new BadRequestException(
+        'Application is not an approved Myah standard app',
+      );
+    }
+    const ownerWorkspaceId = process.env.MYAH_STANDARD_APPS_OWNER_WORKSPACE_ID;
+    if (!ownerWorkspaceId) {
+      throw new InternalServerErrorException(
+        'MYAH_STANDARD_APPS_OWNER_WORKSPACE_ID is not configured',
+      );
+    }
+    const registration = await this.dataSource.manager.findOneBy(
+      ApplicationRegistrationEntity,
+      { universalIdentifier: applicationUniversalIdentifier },
+    );
+    this.assertPublisherRegistration(registration, ownerWorkspaceId);
+    return registration;
+  }
+
   async promoteAndBackfill(
     applicationUniversalIdentifier: string,
+    operationId?: string,
   ): Promise<PromoteMyahStandardAppResult> {
     if (!isMyahStandardAppUniversalIdentifier(applicationUniversalIdentifier)) {
       throw new BadRequestException(
@@ -81,12 +104,18 @@ export class MyahStandardAppsService {
       return lockedRegistration;
     });
 
-    const backfillJobId = `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registration.id}`;
+    const backfillJobId = `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registration.id}${operationId === undefined ? '' : `-${operationId}`}`;
 
     await this.workspaceQueueService.add<BackfillApplicationInstallationJobData>(
       BACKFILL_APPLICATION_INSTALLATION_JOB_NAME,
-      { applicationRegistrationId: registration.id },
-      { id: backfillJobId },
+      {
+        applicationRegistrationId: registration.id,
+        ...(operationId === undefined ? {} : { operationId }),
+      },
+      {
+        id: backfillJobId,
+        ...(operationId === undefined ? {} : { retryLimit: 3 }),
+      },
     );
 
     return {

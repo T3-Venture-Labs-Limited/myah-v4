@@ -4,7 +4,7 @@ import {
 } from 'src/modules/myah-standard-apps/myah-standard-apps.constants';
 
 describe('Myah standard app allowlist', () => {
-  it('recognizes the immutable Brand Brain and Creator Ops identifiers', () => {
+  it('recognizes every immutable Myah standard app identifier', () => {
     expect(
       isMyahStandardAppUniversalIdentifier(
         '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991',
@@ -16,8 +16,13 @@ describe('Myah standard app allowlist', () => {
       ),
     ).toBe(true);
     expect(
+      isMyahStandardAppUniversalIdentifier(
+        '4738ebcd-6662-4ecc-a190-374fa0525951',
+      ),
+    ).toBe(true);
+    expect(
       Object.keys(MYAH_STANDARD_APP_UNIVERSAL_IDENTIFIER_LOOKUP),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   it('rejects display names and unknown identifiers', () => {

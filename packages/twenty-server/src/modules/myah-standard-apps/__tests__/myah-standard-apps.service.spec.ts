@@ -225,4 +225,30 @@ describe('MyahStandardAppsService', () => {
     ).not.toHaveBeenCalled();
     expect(workspaceQueueService.add).not.toHaveBeenCalled();
   });
+  it('gives an operation-tracked rollout its own retryable queue job', async () => {
+    transactionalApplicationRegistrationRepository.findOneBy.mockResolvedValue({
+      id: registrationId,
+      universalIdentifier: BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      ownerWorkspaceId: publisherWorkspaceId,
+      sourceType: ApplicationRegistrationSourceType.TARBALL,
+      isPreInstalled: true,
+    } as ApplicationRegistrationEntity);
+
+    await service.promoteAndBackfill(
+      BRAND_BRAIN_APPLICATION_UNIVERSAL_IDENTIFIER,
+      'operation-1',
+    );
+
+    expect(workspaceQueueService.add).toHaveBeenCalledWith(
+      BACKFILL_APPLICATION_INSTALLATION_JOB_NAME,
+      {
+        applicationRegistrationId: registrationId,
+        operationId: 'operation-1',
+      },
+      {
+        id: `${BACKFILL_APPLICATION_INSTALLATION_JOB_NAME}-${registrationId}-operation-1`,
+        retryLimit: 3,
+      },
+    );
+  });
 });
