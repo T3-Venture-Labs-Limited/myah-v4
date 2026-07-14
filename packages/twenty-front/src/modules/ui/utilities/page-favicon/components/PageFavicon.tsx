@@ -1,8 +1,16 @@
+import { isNonEmptyString } from '@sniptt/guards';
+
 import { workspacePublicDataState } from '@/auth/states/workspacePublicDataState';
-import { getWorkspaceLogoUrl } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
 import { Helmet } from '@dr.pogodin/react-helmet';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 
+export const DEFAULT_PAGE_FAVICON = '/images/brand/myah-favicon.png';
+
+export const getPageFaviconUrl = (workspaceLogo?: string | null): string =>
+  isNonEmptyString(workspaceLogo)
+    ? (getAbsoluteImageUrl(workspaceLogo) ?? DEFAULT_PAGE_FAVICON)
+    : DEFAULT_PAGE_FAVICON;
 export const PageFavicon = () => {
   const workspacePublicData = useAtomStateValue(workspacePublicDataState);
   return (
@@ -10,7 +18,7 @@ export const PageFavicon = () => {
       <link
         rel="icon"
         type="image/png"
-        href={getWorkspaceLogoUrl(workspacePublicData?.logo)}
+        href={getPageFaviconUrl(workspacePublicData?.logo)}
       />
     </Helmet>
   );

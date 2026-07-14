@@ -24,7 +24,6 @@ export type BrandAssetSpecification = {
 };
 
 const BRAND_BACKGROUND = { r: 223, g: 51, b: 119, alpha: 1 };
-const BRAND_BACKGROUND_HEX = '#DF3377';
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const FRONT_ROOT = resolve(SCRIPT_DIRECTORY, '..');
 const PUBLIC_DIRECTORY = resolve(FRONT_ROOT, 'public');
@@ -43,11 +42,23 @@ const SOCIAL_MASTER_PATH = resolve(
   BRAND_ASSET_DIRECTORY,
   'myah-social-card.png',
 );
-const PUBLIC_BRAND_ASSET_DIRECTORY = resolve(PUBLIC_DIRECTORY, 'images', 'brand');
+const FAVICON_MASTER_PATH = resolve(
+  BRAND_ASSET_DIRECTORY,
+  'myah-favicon-master.png',
+);
+const PUBLIC_BRAND_ASSET_DIRECTORY = resolve(
+  PUBLIC_DIRECTORY,
+  'images',
+  'brand',
+);
 const PUBLIC_MARK_PATH = resolve(PUBLIC_BRAND_ASSET_DIRECTORY, 'myah-mark.png');
 const PUBLIC_SOCIAL_CARD_PATH = resolve(
   PUBLIC_BRAND_ASSET_DIRECTORY,
   'myah-social-card.png',
+);
+const PUBLIC_FAVICON_PATH = resolve(
+  PUBLIC_BRAND_ASSET_DIRECTORY,
+  'myah-favicon.png',
 );
 const PUBLIC_MARK_SVG_PATH = resolve(
   PUBLIC_DIRECTORY,
@@ -139,9 +150,7 @@ const validateSourceMaster = async (
     firstPixel[2] !== BRAND_BACKGROUND.b ||
     firstPixel[3] !== 255
   ) {
-    throw new Error(
-      `Expected ${sourcePath} to have an opaque ${BRAND_BACKGROUND_HEX} canvas`,
-    );
+    throw new Error(`Expected ${sourcePath} to have an opaque Myah canvas`);
   }
 };
 
@@ -160,6 +169,17 @@ const hasTransparentPixels = async (sourcePath: string) => {
   return false;
 };
 
+const validateTransparentSourceMaster = async (
+  sourcePath: string,
+  expectedDimensions: { height: number; width: number },
+) => {
+  await validatePng(sourcePath, expectedDimensions);
+
+  if (!(await hasTransparentPixels(sourcePath))) {
+    throw new Error(`Expected ${sourcePath} to preserve transparent pixels`);
+  }
+};
+
 const getUnplatedMarkInput = async (isLight: boolean) => {
   const markSvg = await readFile(MARK_SVG_PATH, 'utf8');
 
@@ -174,7 +194,9 @@ const writeSquareAsset = async (
   await sharp(SQUARE_MASTER_PATH)
     .flatten({ background: BRAND_BACKGROUND })
     .removeAlpha()
-    .resize(assetSpecification.width, assetSpecification.height, { fit: 'fill' })
+    .resize(assetSpecification.width, assetSpecification.height, {
+      fit: 'fill',
+    })
     .png()
     .toFile(getOutputPath(assetSpecification));
 };
@@ -210,7 +232,9 @@ const writeUnplatedAsset = async (
   );
 
   await sharp(markInput)
-    .resize(assetSpecification.width, assetSpecification.height, { fit: 'contain' })
+    .resize(assetSpecification.width, assetSpecification.height, {
+      fit: 'contain',
+    })
     .png()
     .toFile(getOutputPath(assetSpecification));
 };
@@ -243,6 +267,10 @@ const writePublicBrandAssets = async () => {
       .resize(1024, 1024, { fit: 'fill' })
       .png()
       .toFile(PUBLIC_MARK_PATH),
+    sharp(FAVICON_MASTER_PATH)
+      .resize(48, 48, { fit: 'fill' })
+      .png()
+      .toFile(PUBLIC_FAVICON_PATH),
     sharp(SOCIAL_MASTER_PATH)
       .flatten({ background: { r: 255, g: 255, b: 255, alpha: 1 } })
       .removeAlpha()
@@ -258,6 +286,10 @@ export const generateBrandAssets = async () => {
   await validateSourceMaster(SQUARE_MASTER_PATH, { height: 1200, width: 1200 });
   await validateSourceMaster(WINDOWS_MASTER_PATH, { height: 600, width: 1200 });
   await validatePng(SOCIAL_MASTER_PATH, { height: 630, width: 1200 });
+  await validateTransparentSourceMaster(FAVICON_MASTER_PATH, {
+    height: 1200,
+    width: 1200,
+  });
 
   await Promise.all([
     ...assetSpecifications.map(writeAsset),
@@ -277,8 +309,24 @@ const getExpectedPlatformCount = (platform: BrandAssetPlatform) => {
 };
 
 const PUBLIC_RASTER_ASSET_SPECIFICATIONS = [
-  { height: 1024, outputPath: PUBLIC_MARK_PATH, width: 1024 },
-  { height: 630, outputPath: PUBLIC_SOCIAL_CARD_PATH, width: 1200 },
+  {
+    expectsTransparency: false,
+    height: 1024,
+    outputPath: PUBLIC_MARK_PATH,
+    width: 1024,
+  },
+  {
+    expectsTransparency: false,
+    height: 630,
+    outputPath: PUBLIC_SOCIAL_CARD_PATH,
+    width: 1200,
+  },
+  {
+    expectsTransparency: true,
+    height: 48,
+    outputPath: PUBLIC_FAVICON_PATH,
+    width: 48,
+  },
 ] as const;
 
 const checkPublicBrandAssets = async (validationErrors: string[]) => {
@@ -293,7 +341,8 @@ const checkPublicBrandAssets = async (validationErrors: string[]) => {
   }
 
   for (const publicRasterAssetSpecification of PUBLIC_RASTER_ASSET_SPECIFICATIONS) {
-    const { height, outputPath, width } = publicRasterAssetSpecification;
+    const { expectsTransparency, height, outputPath, width } =
+      publicRasterAssetSpecification;
 
     try {
       const metadata = await sharp(outputPath).metadata();
@@ -302,7 +351,7 @@ const checkPublicBrandAssets = async (validationErrors: string[]) => {
         metadata.format !== 'png' ||
         metadata.width !== width ||
         metadata.height !== height ||
-        (await hasTransparentPixels(outputPath))
+        (await hasTransparentPixels(outputPath)) !== expectsTransparency
       ) {
         validationErrors.push(`Invalid public brand asset: ${outputPath}`);
       }

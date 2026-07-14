@@ -129,8 +129,8 @@ describe.each(BRAND_CASES)(
 
       expect(Object.keys(brandTokens)).toEqual(BRAND_ROLES);
       expect(brandTokens).toMatchObject({
-        solid: '#DF3377',
-        onSolid: '#0A0A0A',
+        solid: '#C92769',
+        onSolid: '#FFFFFF',
       });
     });
 

@@ -36,6 +36,7 @@ const BrandAccentFixture = ({ colorScheme, name }: BrandAccentFixtureProps) => {
           dataTestId={`${name}-brand-primary`}
         />
         <MainButton title={`${name} main`} />
+        <MainButton title={`${name} login main`} accent="dark" />
         <Button
           title={`${name} focus`}
           accent="brand"
@@ -117,13 +118,17 @@ export const BrandAccentContract: Story = {
     expect(lightPrimary).toHaveAttribute('data-accent', 'brand');
     expect(darkPrimary).toHaveAttribute('data-accent', 'brand');
     expect(window.getComputedStyle(lightPrimary).backgroundColor).toBe(
-      'rgb(223, 51, 119)',
+      'rgb(201, 39, 105)',
     );
     expect(window.getComputedStyle(darkPrimary).backgroundColor).toBe(
-      'rgb(223, 51, 119)',
+      'rgb(201, 39, 105)',
     );
-    expect(window.getComputedStyle(lightPrimary).color).toBe('rgb(10, 10, 10)');
-    expect(window.getComputedStyle(darkPrimary).color).toBe('rgb(10, 10, 10)');
+    expect(window.getComputedStyle(lightPrimary).color).toBe(
+      'rgb(255, 255, 255)',
+    );
+    expect(window.getComputedStyle(darkPrimary).color).toBe(
+      'rgb(255, 255, 255)',
+    );
 
     const lightMainButton = canvas.getByRole('button', {
       name: 'light main',
@@ -133,16 +138,27 @@ export const BrandAccentContract: Story = {
     });
 
     expect(window.getComputedStyle(lightMainButton).backgroundColor).toBe(
-      'rgb(223, 51, 119)',
+      'rgb(201, 39, 105)',
     );
     expect(window.getComputedStyle(darkMainButton).backgroundColor).toBe(
-      'rgb(223, 51, 119)',
+      'rgb(201, 39, 105)',
     );
     expect(window.getComputedStyle(lightMainButton).color).toBe(
-      'rgb(10, 10, 10)',
+      'rgb(255, 255, 255)',
     );
     expect(window.getComputedStyle(darkMainButton).color).toBe(
+      'rgb(255, 255, 255)',
+    );
+
+    const lightLoginMainButton = canvas.getByRole('button', {
+      name: 'light login main',
+    });
+
+    expect(window.getComputedStyle(lightLoginMainButton).backgroundColor).toBe(
       'rgb(10, 10, 10)',
+    );
+    expect(window.getComputedStyle(lightLoginMainButton).color).toBe(
+      'rgb(255, 255, 255)',
     );
 
     expect(
@@ -150,13 +166,39 @@ export const BrandAccentContract: Story = {
         .getComputedStyle(lightPrimary)
         .getPropertyValue('--btn-hover-bg')
         .trim(),
-    ).toBe('#E34885');
+    ).toBe('#d42b6d');
     expect(
       window
         .getComputedStyle(lightPrimary)
         .getPropertyValue('--btn-active-bg')
         .trim(),
-    ).toBe('#E95B93');
+    ).toBe('#b71e5b');
+
+    expect(
+      window
+        .getComputedStyle(lightPrimary)
+        .getPropertyValue('--btn-hover-border-color')
+        .trim(),
+    ).toBe('#d42b6d');
+
+    expect(
+      window.getComputedStyle(lightPrimary, '::before').backgroundImage,
+    ).toContain('linear-gradient');
+    expect(
+      window.getComputedStyle(lightPrimary, '::after').backgroundImage,
+    ).toContain('data:image/svg+xml');
+    expect(
+      window
+        .getComputedStyle(lightLoginMainButton)
+        .getPropertyValue('--main-button-hover-bg')
+        .trim(),
+    ).toBe('#c92769');
+    expect(
+      window
+        .getComputedStyle(lightLoginMainButton)
+        .getPropertyValue('--main-button-hover-border-color')
+        .trim(),
+    ).toBe('#c92769');
 
     const lightFocus = canvas.getByTestId('light-brand-focus');
     const lightDisabled = canvas.getByTestId('light-brand-disabled');
@@ -197,7 +239,7 @@ export const BrandAccentContract: Story = {
     ]) {
       expect(
         window.getComputedStyle(canvas.getByTestId(dataTestId)).backgroundColor,
-      ).toBe('rgb(223, 51, 119)');
+      ).toBe('rgb(201, 39, 105)');
     }
 
     const checkboxes = canvas.getAllByTestId('input-checkbox');
@@ -209,12 +251,12 @@ export const BrandAccentContract: Story = {
         checkboxes[0].querySelector('span') as HTMLElement,
         '::before',
       ).backgroundColor,
-    ).toBe('rgb(223, 51, 119)');
+    ).toBe('rgb(201, 39, 105)');
     expect(window.getComputedStyle(radios[0]).backgroundColor).toBe(
-      'rgb(223, 51, 119)',
+      'rgb(201, 39, 105)',
     );
     expect(window.getComputedStyle(toggles[0]).backgroundColor).toBe(
-      'rgb(223, 51, 119)',
+      'rgb(201, 39, 105)',
     );
 
     const lightSearchInput = canvas.getByLabelText('light brand search');
