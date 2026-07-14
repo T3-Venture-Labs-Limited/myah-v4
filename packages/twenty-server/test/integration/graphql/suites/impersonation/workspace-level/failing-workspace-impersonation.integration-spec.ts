@@ -7,7 +7,7 @@ import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder
 import { USER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-users.util';
 
 describe('Workspace-level impersonation - authorization denials (integration)', () => {
-  it('rejects a user without the impersonate permission', async () => {
+  it('rejects a user without the impersonate permission before target lookup', async () => {
     const memberWithoutPermissionAccessToken =
       await signUpInWorkspaceAndGetAccessToken(
         'impersonation-no-permission@apple.dev',

@@ -1,9 +1,5 @@
-
 export const typedTokenHelpers = {
-  nodeHasDecoratorsNamed: (
-    node: any,
-    decoratorNames: string[],
-  ): boolean => {
+  nodeHasDecoratorsNamed: (node: any, decoratorNames: string[]): boolean => {
     if (!node.decorators) {
       return false;
     }
@@ -73,7 +69,10 @@ export const typedTokenHelpers = {
             }
           }
           if (arg.type === 'Identifier') {
-            return arg.name.endsWith('PermissionGuard');
+            return (
+              arg.name.endsWith('PermissionGuard') ||
+              arg.name === 'MyahTeamGuard'
+            );
           }
           return false;
         });

@@ -6,6 +6,7 @@ import { t } from '@lingui/core/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 
+import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { useApolloAdminClient } from '@/settings/admin-panel/apollo/hooks/useApolloAdminClient';
 import { SettingsAdminServerAdminAccess } from '@/settings/admin-panel/components/SettingsAdminServerAdminAccess';
@@ -62,6 +63,7 @@ export const SettingsAdminUserDetail = () => {
   const userLookupResult = userLookupData?.userLookupAdminPanel;
 
   const currentUser = useAtomStateValue(currentUserState);
+  const isMyahTeamUser = useIsMyahTeamUser();
   const { handleImpersonate, impersonatingUserId } = useHandleImpersonate();
 
   const effectiveTabId = activeTabId || userLookupResult?.workspaces?.[0]?.id;
@@ -107,7 +109,7 @@ export const SettingsAdminUserDetail = () => {
         ? new Date(user.createdAt).toLocaleDateString()
         : '',
     },
-    ...(currentUser?.canAccessFullAdminPanel && isDefined(userId)
+    ...(isMyahTeamUser && isDefined(userId)
       ? [
           {
             Icon: IconLock,
@@ -178,7 +180,8 @@ export const SettingsAdminUserDetail = () => {
               <SettingsAdminWorkspaceContent
                 activeWorkspace={activeWorkspace}
               />
-              {currentUser?.canImpersonate &&
+              {isMyahTeamUser &&
+                currentUser &&
                 activeWorkspace &&
                 isDefined(user) &&
                 user.id !== currentUser.id && (

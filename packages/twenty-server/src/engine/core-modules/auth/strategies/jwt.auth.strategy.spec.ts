@@ -9,6 +9,7 @@ import {
 import { type JwtPayload } from 'src/engine/core-modules/auth/types/jwt-payload.type';
 import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
 import { ImpersonationAuthorizationService } from 'src/engine/core-modules/impersonation/services/impersonation-authorization.service';
+import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
@@ -22,6 +23,9 @@ describe('JwtAuthStrategy', () => {
   let twentyConfigService: any;
   let workspaceCacheService: any;
   let coreEntityCacheService: any;
+  let myahTeamAuthorizationService: jest.Mocked<
+    Pick<MyahTeamAuthorizationService, 'isMyahTeamMember'>
+  >;
 
   const jwt = {
     sub: 'sub-default',
@@ -59,6 +63,9 @@ describe('JwtAuthStrategy', () => {
       get: jest.fn((key: string) =>
         key === 'NODE_ENV' ? NodeEnvironment.DEVELOPMENT : undefined,
       ),
+    };
+    myahTeamAuthorizationService = {
+      isMyahTeamMember: jest.fn().mockReturnValue(false),
     };
 
     workspaceCacheService = {
@@ -132,6 +139,7 @@ describe('JwtAuthStrategy', () => {
       new ImpersonationAuthorizationService(
         permissionsService,
         twentyConfigService,
+        myahTeamAuthorizationService as unknown as MyahTeamAuthorizationService,
       ),
     );
 
@@ -939,6 +947,7 @@ describe('JwtAuthStrategy', () => {
     });
 
     it('should successfully validate server level impersonation with permission', async () => {
+      myahTeamAuthorizationService.isMyahTeamMember.mockReturnValue(true);
       const validUserId = 'valid-user-id';
       const validUserWorkspaceId = randomUUID();
       const validWorkspaceId = randomUUID();
@@ -991,7 +1000,7 @@ describe('JwtAuthStrategy', () => {
       userWorkspaceRepository.findOne
         .mockResolvedValueOnce({
           id: impersonatorUserWorkspaceId,
-          user: { id: 'valid-user-id', canImpersonate: true },
+          user: { id: 'valid-user-id' },
           workspace: { id: differentWorkspaceId },
         })
         .mockResolvedValueOnce({

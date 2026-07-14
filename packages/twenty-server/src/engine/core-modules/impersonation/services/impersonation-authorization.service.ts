@@ -4,7 +4,7 @@ import { PermissionFlagType } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
 
 import { userHasAdminPrivileges } from 'src/engine/core-modules/impersonation/utils/user-has-admin-privileges.util';
-import { isMyahTeamUser } from 'src/engine/core-modules/myah/utils/is-myah-team-user.util';
+import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
 
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -34,6 +34,7 @@ export class ImpersonationAuthorizationService {
   constructor(
     private readonly permissionsService: PermissionsService,
     private readonly twentyConfigService: TwentyConfigService,
+    private readonly myahTeamAuthorizationService: MyahTeamAuthorizationService,
   ) {}
 
   getImpersonationLevel(
@@ -57,13 +58,9 @@ export class ImpersonationAuthorizationService {
 
     if (level === 'server') {
       const hasServerLevelImpersonatePermission =
-        (isMyahTeamUser({
-          user: impersonatorUserWorkspace.user,
-          allowedEmails: process.env.MYAH_TEAM_ALLOWED_EMAILS,
-          allowedEmailDomains: process.env.MYAH_TEAM_ALLOWED_DOMAINS,
-        }) ||
-          impersonatorUserWorkspace.user.canImpersonate === true) &&
-        targetUserWorkspace.workspace.allowImpersonation === true;
+        this.myahTeamAuthorizationService.isMyahTeamMember(
+          impersonatorUserWorkspace.user,
+        ) && targetUserWorkspace.workspace.allowImpersonation === true;
 
       if (!hasServerLevelImpersonatePermission) {
         return { allowed: false, level, reason: 'SERVER_LEVEL_NOT_ALLOWED' };
