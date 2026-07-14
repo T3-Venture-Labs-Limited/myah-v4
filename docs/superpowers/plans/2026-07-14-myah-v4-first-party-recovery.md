@@ -451,11 +451,11 @@ target. Run the adjacent frontend test target used by the Settings Accounts
 feature. Expected: the strengthened server test fails before its assertion
 change, then both pass after the existing behavior is correctly covered.
 
-- [ ] **Step 3: Record the capability inventory as test-backed evidence**
+- [ ] **Step 3: Record the local capability inventory and preserve the production gate**
 
-Add a test or checked-in source assertion that the public app has no callers
-outside its package and the deployment workflow, using its four logic function
-names and universal identifiers:
+Use repository search tooling to scan every tracked source, workflow, and test
+outside `packages/twenty-apps/public/myah-instagram-messaging/` for these four
+logic-function names and their universal identifiers:
 
 ```ts
 const retiredLogicFunctions = [
@@ -466,11 +466,13 @@ const retiredLogicFunctions = [
 ];
 ```
 
-The implementation review must separately inspect installed production
-applications by universal identifier. If an installed legacy application exists
-and users rely on one of its functions, stop this removal path and create a
-new, separately approved first-party capability spec; do not silently recreate
-DM send behavior in this migration.
+Record the zero-reference result in the task report. This scan proves only the
+repository state; it is not a test and must not authorize deletion by itself.
+Task 7 must separately inspect installed production applications by universal
+identifier. If an installed legacy application exists and users rely on one of
+its functions, stop this removal path and create a new, separately approved
+first-party capability spec; do not silently recreate DM send behavior in this
+migration.
 
 - [ ] **Step 4: Commit the verification evidence**
 
