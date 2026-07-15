@@ -4,6 +4,7 @@ import { RunInstanceCommandsCommand } from 'src/database/commands/run-instance-c
 import { type SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
 import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784106536001-add-instagram-reply-approval-provider-binding';
 import { RepairInstagramReplyApprovalSchemaFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963055-repair-instagram-reply-approval-schema';
+import { PendingMigrationCheckFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112688976-pending-migration-check';
 import { type InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import { type UpgradeCommandRegistryService } from 'src/engine/core-modules/upgrade/services/upgrade-command-registry.service';
 import { type UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
@@ -148,6 +149,40 @@ describe('RunInstanceCommandsCommand', () => {
     expect(query).toHaveBeenNthCalledWith(
       3,
       'ALTER TABLE "core"."instagramReplyApprovalRequest" ADD COLUMN IF NOT EXISTS "recipientIgsid" text',
+    );
+  });
+
+  it('recreates the missing Instagram reply audit schema for a failed pending check', async () => {
+    const query = jest.fn().mockResolvedValue(undefined);
+
+    await new PendingMigrationCheckFastInstanceCommand().up({
+      query,
+    } as unknown as QueryRunner);
+
+    expect(query).toHaveBeenCalledTimes(7);
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining(
+        'CREATE TYPE "core"."instagramReplyApprovalRequest_state_enum"',
+      ),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining(
+        'CREATE TABLE IF NOT EXISTS "core"."instagramReplyApprovalRequest"',
+      ),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      5,
+      expect.stringContaining(
+        'CREATE TABLE IF NOT EXISTS "core"."instagramReplyExecutionReceipt"',
+      ),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      7,
+      expect.stringContaining(
+        'ADD CONSTRAINT "FK_617792f9cfed9d503e2333b2a83"',
+      ),
     );
   });
 });
