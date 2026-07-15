@@ -49,10 +49,10 @@ describe('Myah standard metadata contract', () => {
   });
 
   it('links the canonical path index to its canonical field', () => {
-    const { index, object, indexField, field } = contract.canonicalPathIndex;
+    const { index, object, field } = contract.canonicalPathIndex;
     expect(result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[index]).toMatchObject({
       objectMetadataUniversalIdentifier: object,
-      universalFlatIndexFieldMetadatas: [{ indexMetadataUniversalIdentifier: indexField, fieldMetadataUniversalIdentifier: field }],
+      universalFlatIndexFieldMetadatas: [{ indexMetadataUniversalIdentifier: index, fieldMetadataUniversalIdentifier: field }],
     });
   });
 });
