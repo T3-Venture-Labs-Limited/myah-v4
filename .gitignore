@@ -64,5 +64,9 @@ screenshots/
 # Local Letta agent/worktree state
 /.letta/
 
-# Local Git worktrees
+# Local-only agent, worktree, planning, and documentation artifacts
 /.worktrees/
+/.omp/
+/.docs/
+/docs/operations/environment-isolation-audit.md
+/.superpowers/
