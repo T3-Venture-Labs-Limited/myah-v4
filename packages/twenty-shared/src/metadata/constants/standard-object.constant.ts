@@ -1,3 +1,5 @@
+import { MYAH_STANDARD_OBJECTS } from './myah-standard-objects.constant';
+
 /**
  * Important notice:
  * - Never ever mutate an existing universal identifier
@@ -3047,6 +3049,7 @@ export const STANDARD_OBJECTS = {
       },
     },
   },
+  ...MYAH_STANDARD_OBJECTS,
 } as const satisfies Record<
   string,
   {
