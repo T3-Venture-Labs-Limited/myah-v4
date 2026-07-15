@@ -12,10 +12,10 @@ export class AddInstagramReplyApprovalProviderBindingSlowInstanceCommand
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      'ALTER TABLE "core"."instagramReplyApprovalRequest" ADD COLUMN "providerConversationId" character varying',
+      'ALTER TABLE "core"."instagramReplyApprovalRequest" ADD COLUMN IF NOT EXISTS "providerConversationId" character varying',
     );
     await queryRunner.query(
-      'ALTER TABLE "core"."instagramReplyApprovalRequest" ADD COLUMN "recipientIgsid" character varying',
+      'ALTER TABLE "core"."instagramReplyApprovalRequest" ADD COLUMN IF NOT EXISTS "recipientIgsid" character varying',
     );
   }
 
