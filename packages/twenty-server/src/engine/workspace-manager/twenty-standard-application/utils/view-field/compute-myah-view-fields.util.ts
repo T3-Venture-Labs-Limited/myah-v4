@@ -88,4 +88,4 @@ export const computeMyahBrandBrainPageViewFields = (args: Args) => Object.fromEn
 export const computeMyahBrandBrainUpdateProposalViewFields = (args: Args) => Object.fromEntries(Object.entries(computeMyahViewFields(args)).filter(([key]) => key.startsWith('brandBrainUpdateProposal')));
 export const computeMyahCampaignViewFields = (args: Args) => Object.fromEntries(Object.entries(computeMyahViewFields(args)).filter(([key]) => key.startsWith('campaign')));
 export const computeMyahCreatorListViewFields = (args: Args) => Object.fromEntries(Object.entries(computeMyahViewFields(args)).filter(([key]) => key.startsWith('creatorList')));
-export const computeMyahCreatorViewFields = (args: Args) => Object.fromEntries(Object.entries(computeMyahViewFields(args)).filter(([key]) => key.startsWith('creator')));
+export const computeMyahCreatorViewFields = (args: Args) => Object.fromEntries(Object.entries(computeMyahViewFields(args)).filter(([key]) => key.startsWith('creatorview')));
