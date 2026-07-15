@@ -28,6 +28,13 @@ import { computeStandardWorkflowRunViewFields } from 'src/engine/workspace-manag
 import { computeStandardWorkflowVersionViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workflow-version-view-fields.util';
 import { computeStandardWorkflowViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workflow-view-fields.util';
 import { computeStandardWorkspaceMemberViewFields } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-standard-workspace-member-view-fields.util';
+import {
+  computeMyahBrandBrainPageViewFields,
+  computeMyahBrandBrainUpdateProposalViewFields,
+  computeMyahCampaignViewFields,
+  computeMyahCreatorListViewFields,
+  computeMyahCreatorViewFields,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-myah-view-fields.util';
 import { type CreateStandardViewFieldArgs } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/create-standard-view-field-flat-metadata.util';
 
 type StandardViewFieldBuilder<P extends AllStandardObjectName> = (
@@ -63,6 +70,11 @@ const STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   workflowRun: computeStandardWorkflowRunViewFields,
   workflowVersion: computeStandardWorkflowVersionViewFields,
   workspaceMember: computeStandardWorkspaceMemberViewFields,
+  brandBrainPage: computeMyahBrandBrainPageViewFields,
+  brandBrainUpdateProposal: computeMyahBrandBrainUpdateProposalViewFields,
+  campaign: computeMyahCampaignViewFields,
+  creatorList: computeMyahCreatorListViewFields,
+  creator: computeMyahCreatorViewFields,
 } as const satisfies {
   [P in AllStandardObjectName]?: StandardViewFieldBuilder<P>;
 };
@@ -75,8 +87,6 @@ export type BuildStandardFlatViewFieldMetadataMapsArgs = Omit<
 export const buildStandardFlatViewFieldMetadataMaps = (
   args: BuildStandardFlatViewFieldMetadataMapsArgs,
 ): FlatEntityMaps<FlatViewField> => {
-  const { flatViewMaps } = args.dependencyFlatEntityMaps;
-
   const allViewFieldMetadatas: FlatViewField[] = (
     Object.keys(
       STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME,
@@ -96,15 +106,9 @@ export const buildStandardFlatViewFieldMetadataMaps = (
   let flatViewFieldMaps = createEmptyFlatEntityMaps();
 
   for (const viewFieldMetadata of allViewFieldMetadatas) {
-    const parentView =
-      flatViewMaps.byUniversalIdentifier[
-        viewFieldMetadata.viewUniversalIdentifier
-      ];
-
     flatViewFieldMaps = addFlatEntityToFlatEntityMapsOrThrow({
       flatEntity: {
         ...viewFieldMetadata,
-        isSystemSideEffect: parentView?.isSystemSideEffect ?? false,
       },
       flatEntityMaps: flatViewFieldMaps,
     });

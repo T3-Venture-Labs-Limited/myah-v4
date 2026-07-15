@@ -4,6 +4,13 @@ import { addFlatEntityToFlatEntityMapsOrThrow } from 'src/engine/metadata-module
 import { type FlatView } from 'src/engine/metadata-modules/flat-view/types/flat-view.type';
 import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
 import { computeStandardAttachmentViews } from 'src/engine/workspace-manager/twenty-standard-application/utils/view/compute-standard-attachment-views.util';
+import {
+  computeMyahBrandBrainPageViews,
+  computeMyahBrandBrainUpdateProposalViews,
+  computeMyahCampaignViews,
+  computeMyahCreatorListViews,
+  computeMyahCreatorViews,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/view/compute-myah-views.util';
 import { computeStandardBlocklistViews } from 'src/engine/workspace-manager/twenty-standard-application/utils/view/compute-standard-blocklist-views.util';
 import { computeStandardCalendarChannelEventAssociationViews } from 'src/engine/workspace-manager/twenty-standard-application/utils/view/compute-standard-calendar-channel-event-association-views.util';
 import { computeStandardCalendarEventParticipantViews } from 'src/engine/workspace-manager/twenty-standard-application/utils/view/compute-standard-calendar-event-participant-views.util';
@@ -63,10 +70,14 @@ const STANDARD_FLAT_VIEW_METADATA_BUILDERS_BY_OBJECT_NAME = {
   workflowRun: computeStandardWorkflowRunViews,
   workflowVersion: computeStandardWorkflowVersionViews,
   workspaceMember: computeStandardWorkspaceMemberViews,
+  brandBrainPage: computeMyahBrandBrainPageViews,
+  brandBrainUpdateProposal: computeMyahBrandBrainUpdateProposalViews,
+  campaign: computeMyahCampaignViews,
+  creatorList: computeMyahCreatorListViews,
+  creator: computeMyahCreatorViews,
 } as const satisfies {
   [P in AllStandardObjectName]?: StandardViewBuilder<P>;
 };
-
 export type BuildStandardFlatViewMetadataMapsArgs = Omit<
   CreateStandardViewArgs,
   'context' | 'objectName'

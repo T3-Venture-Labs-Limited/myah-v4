@@ -15,6 +15,7 @@ export {
 export { ALL_METADATA_NAME } from './constants/all-metadata-name.constant';
 export { DEFAULT_RELATIONS_OBJECTS_STANDARD_IDS } from './constants/default-relations-object-standard-ids.constant';
 export { IDENTIFIER_MAX_CHAR_LENGTH } from './constants/identifier-max-char-length.constant';
+export { MYAH_STANDARD_OBJECTS } from './constants/myah-standard-objects.constant';
 export { RESERVED_METADATA_NAME_KEYWORDS } from './constants/reserved-metadata-name-keywords.constant';
 export { STANDARD_OBJECTS } from './constants/standard-object.constant';
 export { STANDARD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIERS } from './constants/standard-page-layout-universal-identifiers.constant';
