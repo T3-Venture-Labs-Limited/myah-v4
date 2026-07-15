@@ -145,7 +145,7 @@ describe('InstagramReplyApprovalService', () => {
         },
       ),
     };
-    Object.assign(receiptRepository, {
+    const receiptRepositoryWithManager = Object.assign(receiptRepository, {
       manager: {
         transaction: jest.fn(async (callback) => callback(transactionManager)),
       },
@@ -156,7 +156,7 @@ describe('InstagramReplyApprovalService', () => {
 
     return {
       approvalRepository,
-      receiptRepository,
+      receiptRepository: receiptRepositoryWithManager,
       instagramReplyDraftService,
       transactionManager,
       service: new InstagramReplyApprovalService(

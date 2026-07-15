@@ -5,6 +5,7 @@ import {
   InstagramReplyExecutionError,
   InstagramReplyExecutionService,
 } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-execution.service';
+import { InstagramReplyExecutionState } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-execution-receipt.entity';
 
 const workspaceId = '7c36727d-117e-491b-8676-14e31daf610f';
 const replyText = 'Thank you for your message.';
@@ -297,7 +298,7 @@ describe('InstagramReplyExecutionService', () => {
     ).rejects.toMatchObject<Partial<InstagramReplyExecutionError>>({
       message:
         'Instagram provider delivery status is unknown; the draft was not marked sent.',
-      state: 'UNKNOWN',
+      state: InstagramReplyExecutionState.UNKNOWN,
       code: 'PROVIDER_MESSAGE_ID_MISSING',
     });
 
@@ -355,7 +356,7 @@ describe('InstagramReplyExecutionService', () => {
     expect(thrownError).toBeInstanceOf(InstagramReplyExecutionError);
     expect(thrownError).toMatchObject<Partial<InstagramReplyExecutionError>>({
       message: 'Instagram provider request failed.',
-      state: 'FAILED',
+      state: InstagramReplyExecutionState.FAILED,
       code: 'PROVIDER_REQUEST_FAILED',
     });
     expect((thrownError as Error).message).not.toContain(providerSecret);
@@ -402,7 +403,7 @@ describe('InstagramReplyExecutionService', () => {
       }),
     ).rejects.toMatchObject<Partial<InstagramReplyExecutionError>>({
       message: 'Instagram provider request failed.',
-      state: 'BLOCKED',
+      state: InstagramReplyExecutionState.BLOCKED,
       code: '2534022',
     });
 

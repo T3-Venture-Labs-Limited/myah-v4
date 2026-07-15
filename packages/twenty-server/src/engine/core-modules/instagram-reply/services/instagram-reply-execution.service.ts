@@ -364,7 +364,9 @@ export class InstagramReplyExecutionService {
       const dataSource =
         await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
       const schemaName = getWorkspaceSchemaName(workspace.id);
-      const updateResult = await dataSource.query<{ id: string }[]>(
+      const [updatedDrafts] = await dataSource.query<
+        [{ id: string }[], number]
+      >(
         `
             UPDATE "${schemaName}"."_myahInstagramReplyDraft"
             SET "status" = 'SENT', "sentAt" = NOW(), "updatedAt" = NOW()
@@ -377,9 +379,6 @@ export class InstagramReplyExecutionService {
         undefined,
         { shouldBypassPermissionChecks: true },
       );
-      // TypeORM's PostgreSQL driver returns UPDATE ... RETURNING results as
-      // [records, affectedRowCount], unlike SELECT which returns records.
-      const [updatedDrafts] = updateResult as [{ id: string }[], number];
 
       if (updatedDrafts.length !== 1) {
         throw new InstagramReplyExecutionError(

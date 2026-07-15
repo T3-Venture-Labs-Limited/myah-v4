@@ -146,6 +146,8 @@ describe('InstagramReplyDraftService', () => {
         previewTextSha256: createHash('sha256')
           .update('Changed after preparation.')
           .digest('hex'),
+        providerConversationId: 'provider-conversation-id',
+        recipientIgsid: 'recipient-igsid',
       }),
     ).rejects.toThrow('preview does not match the stored draft');
   });

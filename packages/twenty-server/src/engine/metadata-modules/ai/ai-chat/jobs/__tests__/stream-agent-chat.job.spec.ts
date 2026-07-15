@@ -315,7 +315,7 @@ describe('StreamAgentChatJob', () => {
       { id: 'thread-id', activeStreamId: 'stream-id' },
       expect.objectContaining({ pendingQuestionMessageId: expect.any(String) }),
     );
-    expect(publishedEvents.at(-1)).toMatchObject({
+    expect(publishedEvents[publishedEvents.length - 1]).toMatchObject({
       type: 'message-persisted',
     });
   });
