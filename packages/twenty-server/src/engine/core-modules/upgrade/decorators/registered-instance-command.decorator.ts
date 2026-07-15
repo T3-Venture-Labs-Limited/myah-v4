@@ -12,6 +12,7 @@ export type RegisteredInstanceCommandMetadata = {
   version: TwentyAllVersion;
   timestamp: number;
   type: InstanceCommandType;
+  runAfterWorkspace: false;
 };
 
 const REGISTERED_INSTANCE_COMMAND_KEY = 'REGISTERED_INSTANCE_COMMAND';
@@ -33,6 +34,7 @@ export const RegisteredInstanceCommand =
         version,
         timestamp,
         type: options?.type ?? 'fast',
+        runAfterWorkspace: false,
       },
       target,
     );
