@@ -1,6 +1,3 @@
-jest.mock('twenty-sdk/define', () => new Proxy({}, {
-  get: (_target, key: string) => key.startsWith('define') ? (declaration: unknown) => declaration : new Proxy({}, { get: () => 'mock' }),
-}), { virtual: true });
 
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
