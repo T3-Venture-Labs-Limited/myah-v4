@@ -12,6 +12,8 @@ type ApprovalRequest = {
   connectedAccountId: string;
   draftId: string;
   conversationId: string;
+  providerConversationId: string;
+  recipientIgsid: string;
   previewTextSha256: string;
   state: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED';
   approvedAt: Date | null;
@@ -30,6 +32,8 @@ const threadId = 'a99a4f1c-e934-4a7c-ab77-7df745bf3a8c';
 const draftId = 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b';
 const conversationId = '2370f3fb-5738-458c-ae4d-0bdb2c24611e';
 const connectedAccountId = 'ca_instagram_123';
+const providerConversationId = 'provider-conversation-id';
+const recipientIgsid = 'igsid-123';
 
 const previewText = 'Thanks for reaching out — I would love to help.';
 const previewTextSha256 = createHash('sha256')
@@ -126,6 +130,8 @@ describe('InstagramReplyApprovalService', () => {
       draftId,
       conversationId,
       previewTextSha256,
+      providerConversationId,
+      recipientIgsid,
     });
 
   it('persists an immutable server-generated request bound to the initiating member and exact preview', async () => {
@@ -146,6 +152,8 @@ describe('InstagramReplyApprovalService', () => {
       draftId,
       conversationId,
       previewTextSha256,
+      providerConversationId,
+      recipientIgsid,
       state: 'PENDING',
       decidedAt: null,
     });
@@ -157,6 +165,8 @@ describe('InstagramReplyApprovalService', () => {
         draftId,
         conversationId,
         previewTextSha256,
+        providerConversationId,
+        recipientIgsid,
       }),
     );
 

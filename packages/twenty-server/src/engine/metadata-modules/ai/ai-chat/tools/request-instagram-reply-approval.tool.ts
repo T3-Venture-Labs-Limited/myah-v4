@@ -71,6 +71,8 @@ export const createRequestInstagramReplyApprovalTool = ({
       threadId,
       toolName: 'send_instagram_reply',
       ...input,
+      providerConversationId: details.providerConversationId,
+      recipientIgsid: details.recipientIgsid,
       previewTextSha256: createHash('sha256')
         .update(details.body)
         .digest('hex'),

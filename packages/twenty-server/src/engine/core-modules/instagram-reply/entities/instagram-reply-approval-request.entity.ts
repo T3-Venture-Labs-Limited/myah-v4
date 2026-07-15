@@ -51,6 +51,12 @@ export class InstagramReplyApprovalRequestEntity extends WorkspaceRelatedEntity 
   @Column({ type: 'uuid' })
   conversationId: string;
 
+  @Column({ type: 'text', nullable: true })
+  providerConversationId: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  recipientIgsid: string | null;
+
   @Column({ length: 64 })
   previewTextSha256: string;
 

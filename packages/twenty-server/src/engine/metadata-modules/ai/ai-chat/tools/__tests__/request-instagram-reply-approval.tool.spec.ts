@@ -16,6 +16,8 @@ const buildTool = () => {
       body: 'How\'s it going over there? "All good", I hope.',
       conversationLabel: 'wakozaco',
       draftLabel: 'Reply to wakozaco',
+      providerConversationId: 'provider-conversation-id',
+      recipientIgsid: 'igsid-123',
     }),
   };
   const instagramReplyApprovalService = {
@@ -69,6 +71,8 @@ describe('request_instagram_reply_approval tool', () => {
       threadId: 'thread-id',
       toolName: 'send_instagram_reply',
       ...input,
+      providerConversationId: 'provider-conversation-id',
+      recipientIgsid: 'igsid-123',
       previewTextSha256: createHash('sha256')
         .update('How\'s it going over there? "All good", I hope.')
         .digest('hex'),

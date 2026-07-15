@@ -13,6 +13,8 @@ const createApprovalRequest = (previewText = replyText) => ({
   connectedAccountId: 'ca_instagram_123',
   draftId: '9b05e648-d3f0d-4fd7-8e4e-bc6a31b980ea',
   conversationId: 'd81e9de7-899e-4259-ae1e-e2770b405f4b',
+  providerConversationId: 'provider-conversation-id',
+  recipientIgsid: 'igsid-123',
   previewTextSha256: createHash('sha256').update(previewText).digest('hex'),
 });
 
@@ -117,6 +119,35 @@ describe('InstagramReplyExecutionService', () => {
       code: 'APPROVAL_BINDING_MISMATCH',
     });
 
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a conversation retargeted after approval before provider I/O', async () => {
+    const { service, query, myahComposioService } = createService();
+    query
+      .mockResolvedValueOnce([
+        { id: 'draft-id', body: replyText, sentAt: null },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'conversation-id',
+          providerConversationId: 'different-provider-conversation-id',
+          recipientIgsid: 'different-igsid',
+        },
+      ]);
+
+    await expect(
+      service.execute({
+        workspaceId,
+        approvalRequest: createApprovalRequest() as never,
+      }),
+    ).rejects.toMatchObject<Partial<InstagramReplyExecutionError>>({
+      code: 'APPROVAL_BINDING_MISMATCH',
+    });
+
+    expect(
+      myahComposioService.getActiveInstagramAccount,
+    ).not.toHaveBeenCalled();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

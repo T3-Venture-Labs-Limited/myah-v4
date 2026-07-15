@@ -368,8 +368,14 @@ export class ChatExecutionService {
       steps.some((step) =>
         step.toolResults.some(
           (toolResult) =>
-            toolResult.toolName === PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME &&
-            isToolOutputSuccessful(toolResult.output),
+            isToolOutputSuccessful(toolResult.output) &&
+            (toolResult.toolName ===
+              PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME ||
+              (toolResult.toolName === EXECUTE_TOOL_TOOL_NAME &&
+                isObject(toolResult.input) &&
+                'toolName' in toolResult.input &&
+                toolResult.input.toolName ===
+                  PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME)),
         ),
       );
     const activeToolNamesForStep = (steps: StepResult<ToolSet>[]) => {

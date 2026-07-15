@@ -34,6 +34,8 @@ type ApprovalBindingInput = {
   conversationId: string;
   draftId: string;
   previewTextSha256: string;
+  providerConversationId: string;
+  recipientIgsid: string;
 };
 
 type ApprovalDetailsInput = {
@@ -47,6 +49,8 @@ export type InstagramReplyApprovalDetails = {
   body: string;
   draftLabel: string;
   conversationLabel: string;
+  providerConversationId: string;
+  recipientIgsid: string;
 };
 
 type ConversationRecord = {
@@ -319,6 +323,8 @@ export class InstagramReplyDraftService {
           body: draft.body,
           draftLabel,
           conversationLabel,
+          providerConversationId: conversation.providerConversationId,
+          recipientIgsid: conversation.recipientIgsid,
         };
       },
       buildSystemAuthContext({ workspace }),
@@ -334,6 +340,15 @@ export class InstagramReplyDraftService {
     ) {
       throw new Error(
         'The Instagram reply preview does not match the stored draft.',
+      );
+    }
+
+    if (
+      details.providerConversationId !== input.providerConversationId ||
+      details.recipientIgsid !== input.recipientIgsid
+    ) {
+      throw new Error(
+        'The Instagram conversation no longer matches the approved recipient.',
       );
     }
   }

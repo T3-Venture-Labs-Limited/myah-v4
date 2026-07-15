@@ -100,6 +100,7 @@ import { BackfillDisplayFieldsOnApplicationRegistrationSlowInstanceCommand } fro
 import { CreateCustomerAccountControlPlaneFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1783922687955-create-customer-account-control-plane';
 import { CreateInstagramReplyAuditFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1783930150801-create-instagram-reply-audit';
 import { RebrandEmailSenderToMyahSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784005792206-rebrand-email-sender-to-myah';
+import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784091587010-add-instagram-reply-approval-provider-binding';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -202,4 +203,5 @@ export const INSTANCE_COMMANDS = [
   CreateCustomerAccountControlPlaneFastInstanceCommand,
   CreateInstagramReplyAuditFastInstanceCommand,
   RebrandEmailSenderToMyahSlowInstanceCommand,
+  AddInstagramReplyApprovalProviderBindingSlowInstanceCommand,
 ];

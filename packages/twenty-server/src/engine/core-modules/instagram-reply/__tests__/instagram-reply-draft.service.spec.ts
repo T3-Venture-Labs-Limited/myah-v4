@@ -160,6 +160,8 @@ describe('InstagramReplyDraftService', () => {
         conversationId,
         draftId,
         previewTextSha256: createHash('sha256').update(replyBody).digest('hex'),
+        providerConversationId: 'provider-conversation-id',
+        recipientIgsid: 'recipient-igsid',
       }),
     ).resolves.toBeUndefined();
   });
@@ -177,6 +179,8 @@ describe('InstagramReplyDraftService', () => {
       body: replyBody,
       draftLabel: 'Reply to wakozaco',
       conversationLabel: 'wakozaco',
+      providerConversationId: 'provider-conversation-id',
+      recipientIgsid: 'recipient-igsid',
     });
   });
 });

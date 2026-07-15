@@ -217,6 +217,20 @@ export class InstagramReplyExecutionService {
       );
     }
 
+    if (
+      !approvalRequest.providerConversationId ||
+      !approvalRequest.recipientIgsid ||
+      records.conversation.providerConversationId !==
+        approvalRequest.providerConversationId ||
+      records.conversation.recipientIgsid !== approvalRequest.recipientIgsid
+    ) {
+      throw new InstagramReplyExecutionError(
+        'The Instagram conversation changed after approval and was not sent.',
+        InstagramReplyExecutionState.FAILED,
+        'APPROVAL_BINDING_MISMATCH',
+      );
+    }
+
     const account = await this.myahComposioService.getActiveInstagramAccount({
       workspaceId,
       connectedAccountId: approvalRequest.connectedAccountId,

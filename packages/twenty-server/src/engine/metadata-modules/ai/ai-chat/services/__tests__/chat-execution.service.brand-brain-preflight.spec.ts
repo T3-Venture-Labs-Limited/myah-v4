@@ -241,7 +241,11 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
         {
           toolResults: [
             {
-              toolName: 'prepare_instagram_reply_draft',
+              toolName: 'execute_tool',
+              input: {
+                toolName: 'prepare_instagram_reply_draft',
+                arguments: {},
+              },
               output: { success: true },
             },
           ],

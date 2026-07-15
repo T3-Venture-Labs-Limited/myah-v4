@@ -36,6 +36,8 @@ export type CreateInstagramReplyApprovalInput = {
   connectedAccountId: string;
   draftId: string;
   conversationId: string;
+  providerConversationId: string;
+  recipientIgsid: string;
   previewTextSha256: string;
 };
 
@@ -74,6 +76,8 @@ export class InstagramReplyApprovalService {
       connectedAccountId: input.connectedAccountId,
       draftId: input.draftId,
       conversationId: input.conversationId,
+      providerConversationId: input.providerConversationId,
+      recipientIgsid: input.recipientIgsid,
       previewTextSha256: input.previewTextSha256,
       state: InstagramReplyApprovalState.PENDING,
       expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS),
