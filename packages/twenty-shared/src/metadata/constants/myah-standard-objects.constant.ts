@@ -1,4 +1,18 @@
-type StandardObjectDefinition = { universalIdentifier: string; fields: Record<string, { universalIdentifier: string }>; indexes: Record<string, { universalIdentifier: string }>; views: Record<string, { universalIdentifier: string; viewFields: Record<string, { universalIdentifier: string }>; viewFieldGroups?: Record<string, { universalIdentifier: string }>; viewFilters?: Record<string, { universalIdentifier: string }>; viewGroups?: Record<string, { universalIdentifier: string }> }>;
+type StandardObjectDefinition = {
+  universalIdentifier: string;
+  fields: Record<string, { universalIdentifier: string }>;
+  indexes: Record<string, { universalIdentifier: string }>;
+  views: Record<
+    string,
+    {
+      universalIdentifier: string;
+      viewFields: Record<string, { universalIdentifier: string }>;
+      viewFieldGroups?: Record<string, { universalIdentifier: string }>;
+      viewFilters?: Record<string, { universalIdentifier: string }>;
+      viewGroups?: Record<string, { universalIdentifier: string }>;
+    }
+  >;
+};
 
 export const MYAH_STANDARD_OBJECTS = {
   brandBrainLink: {
