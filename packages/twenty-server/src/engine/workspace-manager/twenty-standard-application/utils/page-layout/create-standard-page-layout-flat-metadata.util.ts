@@ -4,7 +4,7 @@ import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { type FlatPageLayout } from 'src/engine/metadata-modules/flat-page-layout/types/flat-page-layout.type';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 import { PageLayoutType } from 'src/engine/metadata-modules/page-layout/enums/page-layout-type.enum';
-import { STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { type StandardObjectMetadataRelatedEntityIds } from 'src/engine/workspace-manager/twenty-standard-application/utils/get-standard-object-metadata-related-entity-ids.util';
 import { type StandardPageLayoutMetadataRelatedEntityIds } from 'src/engine/workspace-manager/twenty-standard-application/utils/get-standard-page-layout-metadata-related-entity-ids.util';
 
@@ -25,6 +25,9 @@ export type CreateStandardPageLayoutArgs = {
   context: CreateStandardPageLayoutContext;
 };
 
+const MYAH_OBJECT_NAMES_BY_UNIVERSAL_IDENTIFIER: Record<string, string> = {
+  '6a8289d7-8034-4f70-b3fa-47bc0e52828f': 'brandBrainPage',
+};
 export const findObjectNameByUniversalIdentifier = (
   objectUniversalIdentifier: string,
 ): string => {
@@ -32,6 +35,13 @@ export const findObjectNameByUniversalIdentifier = (
     if (objectConfig.universalIdentifier === objectUniversalIdentifier) {
       return objectName;
     }
+  }
+
+  const myahObjectName =
+    MYAH_OBJECT_NAMES_BY_UNIVERSAL_IDENTIFIER[objectUniversalIdentifier];
+
+  if (isDefined(myahObjectName)) {
+    return myahObjectName;
   }
 
   throw new Error(
@@ -44,7 +54,7 @@ const findTabKeyByUniversalIdentifier = (
   tabUniversalIdentifier: string,
 ): string => {
   const layout =
-    STANDARD_PAGE_LAYOUTS[layoutName as keyof typeof STANDARD_PAGE_LAYOUTS];
+    ALL_STANDARD_PAGE_LAYOUTS[layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS];
 
   if (!isDefined(layout)) {
     throw new Error(`Layout with name ${layoutName} not found`);
@@ -76,7 +86,7 @@ export const createStandardPageLayoutFlatMetadata = ({
   now,
 }: CreateStandardPageLayoutArgs): FlatPageLayout => {
   const layout =
-    STANDARD_PAGE_LAYOUTS[layoutName as keyof typeof STANDARD_PAGE_LAYOUTS];
+    ALL_STANDARD_PAGE_LAYOUTS[layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS];
   const universalIdentifier = layout.universalIdentifier;
   const layoutIds = standardPageLayoutMetadataRelatedEntityIds[layoutName];
 

@@ -2,7 +2,7 @@ import { createEmptyFlatEntityMaps } from 'src/engine/metadata-modules/flat-enti
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { addFlatEntityToFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/add-flat-entity-to-flat-entity-maps-or-throw.util';
 import { type FlatPageLayoutTab } from 'src/engine/metadata-modules/flat-page-layout-tab/types/flat-page-layout-tab.type';
-import { STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { type StandardPageLayoutTabConfig } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-config/standard-page-layout-config.type';
 import {
   type CreateStandardPageLayoutTabArgs,
@@ -22,9 +22,9 @@ export const buildStandardFlatPageLayoutTabMetadataMaps = ({
 }: BuildStandardFlatPageLayoutTabMetadataMapsArgs): FlatEntityMaps<FlatPageLayoutTab> => {
   const allPageLayoutTabMetadatas: FlatPageLayoutTab[] = [];
 
-  for (const layoutName of Object.keys(STANDARD_PAGE_LAYOUTS)) {
-    const layout = STANDARD_PAGE_LAYOUTS[
-      layoutName as keyof typeof STANDARD_PAGE_LAYOUTS
+  for (const layoutName of Object.keys(ALL_STANDARD_PAGE_LAYOUTS)) {
+    const layout = ALL_STANDARD_PAGE_LAYOUTS[
+      layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS
     ] as { tabs: Record<string, StandardPageLayoutTabConfig> };
 
     for (const tabTitle of Object.keys(layout.tabs)) {

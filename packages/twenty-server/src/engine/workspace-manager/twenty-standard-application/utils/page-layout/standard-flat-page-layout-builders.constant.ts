@@ -1,6 +1,6 @@
 import { type FlatPageLayout } from 'src/engine/metadata-modules/flat-page-layout/types/flat-page-layout.type';
 import { type StandardPageLayoutConfig } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-config';
-import { STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import {
   type CreateStandardPageLayoutArgs,
   createStandardPageLayoutFlatMetadata,
@@ -29,7 +29,7 @@ const createBuilderFromConfig = (
 
 const createBuilders = (): Record<string, BuilderFn> => {
   return Object.fromEntries(
-    Object.entries(STANDARD_PAGE_LAYOUTS).map(([layoutName, config]) => [
+    Object.entries(ALL_STANDARD_PAGE_LAYOUTS).map(([layoutName, config]) => [
       layoutName,
       createBuilderFromConfig(layoutName, config),
     ]),
