@@ -203,6 +203,30 @@ describe('InstagramReplyApprovalService', () => {
     ).rejects.toThrow('only the initiating workspace member and chat thread');
   });
 
+  it('rejects an expired request before persisting an approval decision', async () => {
+    const { service, approvalRepository } = createService();
+    const request = await createPendingApproval(service);
+    request.expiresAt = new Date('2020-01-01T00:00:00.000Z');
+
+    await expect(
+      service.resolveApproval({
+        workspaceId,
+        userWorkspaceId,
+        threadId,
+        approvalId: request.approvalId,
+        decision: 'approved',
+      }),
+    ).rejects.toThrow('Instagram reply approval request has expired');
+
+    expect(request.state).toBe('PENDING');
+    expect(approvalRepository.requests.get(request.id)?.state).toBe('PENDING');
+    expect(approvalRepository.save).toHaveBeenCalledTimes(1);
+    expect(approvalRepository.save).not.toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({ state: 'APPROVED' }),
+    );
+  });
+
   it('does not persist an approval when the draft binding is invalid', async () => {
     const {
       service,

@@ -23,6 +23,7 @@ const buildService = () => {
   const toolRegistry = {
     buildToolIndex: jest.fn().mockResolvedValue([]),
     getToolsByName: jest.fn().mockResolvedValue({}),
+    resolveAndExecute: jest.fn().mockResolvedValue({ success: true }),
   };
   const skillService = {
     findAllFlatSkills: jest.fn().mockResolvedValue([]),
@@ -133,6 +134,7 @@ const buildService = () => {
 
   return {
     service,
+    toolRegistry,
     brandBrainPreflightService,
     metricsService,
   };
@@ -256,5 +258,83 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
     expect(afterDraft.activeTools).toContain(
       REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
     );
+  });
+
+  it('keeps unrelated writes dispatcher-denied after an immediately approved Instagram card', async () => {
+    const { service, toolRegistry } = buildService();
+
+    toolRegistry.buildToolIndex.mockResolvedValue([
+      {
+        name: 'create_one_task',
+        label: 'Create task',
+        description: 'Create a task',
+        category: 'DATABASE_CRUD',
+        executionRef: {
+          kind: 'database_crud',
+          objectNameSingular: 'task',
+          operation: 'create_one',
+        },
+      },
+    ]);
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'thread-id',
+      browsingContext: null,
+      conversationSizeTokens: 10,
+      messages: [
+        {
+          id: 'message-id',
+          role: 'assistant',
+          parts: [
+            {
+              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
+              toolCallId: 'instagram-approval-call',
+              state: 'output-available',
+              input: {},
+              output: {
+                success: true,
+                message: 'Instagram reply approved.',
+                result: {
+                  status: 'resolved',
+                  decision: 'approved',
+                  request: {
+                    title: 'Review Instagram reply',
+                    summary: 'Review the local draft.',
+                    actionKind: 'external_write',
+                    riskLevel: 'medium',
+                    consequences: ['The message will be sent.'],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const streamTextCalls = (streamText as jest.Mock).mock.calls;
+    const streamTextCall = streamTextCalls[streamTextCalls.length - 1]?.[0];
+    const execution = streamTextCall.tools.execute_tool.execute({
+      toolName: 'create_one_task',
+      arguments: {},
+    });
+
+    await jest.runOnlyPendingTimersAsync();
+
+    const result = await execution;
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        message: 'Tool "create_one_task" is not available',
+      }),
+    );
+    expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalled();
   });
 });

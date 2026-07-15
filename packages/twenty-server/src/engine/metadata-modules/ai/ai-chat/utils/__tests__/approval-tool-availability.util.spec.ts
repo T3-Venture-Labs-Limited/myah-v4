@@ -2,10 +2,10 @@ import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 import {
-  getApprovedResumeActiveToolNames,
+  getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
   hasApprovedInstagramReplyApproval,
-  hasLatestMessageApprovedApproval,
+  hasLatestMessageApprovedGenericApproval,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
 import { ToolCategory } from 'twenty-shared/ai';
 
@@ -41,9 +41,9 @@ const logicFunctionToolEntry = (name: string): ToolIndexEntry =>
   }) as ToolIndexEntry;
 
 describe('approval tool availability', () => {
-  it('keeps write execution available but removes request approval during an approved resume', () => {
+  it('keeps write execution available but removes approval tools during a generic approved resume', () => {
     expect(
-      getApprovedResumeActiveToolNames([
+      getGenericApprovedResumeActiveToolNames([
         'execute_tool',
         REQUEST_APPROVAL_TOOL_NAME,
         REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
@@ -108,9 +108,9 @@ describe('approval tool availability', () => {
     expect(excluded.has('app_myah_list_instagram_conversations')).toBe(false);
   });
 
-  it('only treats a resolved approved approval on the latest assistant message as an approval grant', () => {
+  it('only treats a resolved approved generic approval on the latest assistant message as a generic approval grant', () => {
     expect(
-      hasLatestMessageApprovedApproval([
+      hasLatestMessageApprovedGenericApproval([
         {
           role: 'assistant',
           parts: [
@@ -124,7 +124,7 @@ describe('approval tool availability', () => {
     ).toBe(true);
 
     expect(
-      hasLatestMessageApprovedApproval([
+      hasLatestMessageApprovedGenericApproval([
         {
           role: 'assistant',
           parts: [
@@ -135,10 +135,10 @@ describe('approval tool availability', () => {
           ],
         },
       ]),
-    ).toBe(true);
+    ).toBe(false);
 
     expect(
-      hasLatestMessageApprovedApproval([
+      hasLatestMessageApprovedGenericApproval([
         {
           role: 'assistant',
           parts: [
@@ -153,7 +153,7 @@ describe('approval tool availability', () => {
     ).toBe(false);
 
     expect(
-      hasLatestMessageApprovedApproval([
+      hasLatestMessageApprovedGenericApproval([
         {
           role: 'assistant',
           parts: [

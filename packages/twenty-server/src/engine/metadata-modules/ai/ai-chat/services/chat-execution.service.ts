@@ -78,10 +78,10 @@ import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-ch
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { type ExtractedFile } from 'src/engine/metadata-modules/ai/ai-chat/types/extracted-file.type';
 import {
-  getApprovedResumeActiveToolNames,
+  getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
   hasApprovedInstagramReplyApproval,
-  hasLatestMessageApprovedApproval,
+  hasLatestMessageApprovedGenericApproval,
   PRE_APPROVAL_SAFE_TOOL_NAMES,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
 import { assertHumanInputToolCallIsExclusive } from 'src/engine/metadata-modules/ai/ai-chat/utils/assert-human-input-tool-call-is-exclusive.util';
@@ -226,7 +226,8 @@ export class ChatExecutionService {
       ...nativeTools,
     };
 
-    const isApprovedApprovalResume = hasLatestMessageApprovedApproval(messages);
+    const isApprovedGenericApprovalResume =
+      hasLatestMessageApprovedGenericApproval(messages);
     const hasApprovedInstagramReply =
       hasApprovedInstagramReplyApproval(messages);
 
@@ -234,7 +235,7 @@ export class ChatExecutionService {
       ...Object.keys(preloadedTools),
       ...Object.keys(nativeTools),
       ASK_QUESTIONS_TOOL_NAME,
-      ...(isApprovedApprovalResume
+      ...(isApprovedGenericApprovalResume
         ? []
         : [
             REQUEST_APPROVAL_TOOL_NAME,
@@ -243,7 +244,7 @@ export class ChatExecutionService {
     ];
 
     const preApprovalExcludedToolNames = new Set(
-      isApprovedApprovalResume
+      isApprovedGenericApprovalResume
         ? []
         : getPreApprovalExcludedToolNames(toolCatalog),
     );
@@ -372,8 +373,8 @@ export class ChatExecutionService {
         ),
       );
     const activeToolNamesForStep = (steps: StepResult<ToolSet>[]) => {
-      if (isApprovedApprovalResume) {
-        return getApprovedResumeActiveToolNames(Object.keys(activeTools));
+      if (isApprovedGenericApprovalResume) {
+        return getGenericApprovedResumeActiveToolNames(Object.keys(activeTools));
       }
 
       if (!hasPreparedInstagramReplyDraft(steps)) {

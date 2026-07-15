@@ -74,13 +74,6 @@ const getComposioApiKey = (): string | undefined => {
   return value || undefined;
 };
 
-const redactProviderMessage = (message: string): string =>
-  message
-    .replace(/https?:\/\/\S+/g, '[redacted-url]')
-    .replace(/\baccess_token=[^\s&]+/gi, 'access_token=[redacted]')
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, 'Bearer [redacted]')
-    .replace(/\bx-api-key\b\s*[:=]\s*[^\s,;]+/gi, 'x-api-key=[redacted]');
-
 const extractProviderError = (
   body: ComposioToolResponse,
 ): {
@@ -88,19 +81,15 @@ const extractProviderError = (
   code: string;
 } => {
   const error = body.error;
-  const errorRecord = typeof error === 'string' ? undefined : error;
-  const message =
-    (typeof error === 'string' ? error : errorRecord?.message) ??
-    body.message ??
-    'Instagram provider request failed.';
-  const errorSubcode = errorRecord?.error_subcode;
+  const errorSubcode =
+    typeof error === 'string' ? undefined : error?.error_subcode;
 
   return {
-    message: redactProviderMessage(message),
+    message: 'Instagram provider request failed.',
     code:
-      errorSubcode === undefined
-        ? 'PROVIDER_REQUEST_FAILED'
-        : String(errorSubcode),
+      String(errorSubcode) === OUTSIDE_MESSAGING_WINDOW_SUBCODE
+        ? OUTSIDE_MESSAGING_WINDOW_SUBCODE
+        : 'PROVIDER_REQUEST_FAILED',
   };
 };
 
@@ -271,7 +260,15 @@ export class InstagramReplyExecutionService {
         text,
       },
     });
-    const providerMessageId = extractProviderMessageId(response) ?? null;
+    const providerMessageId = extractProviderMessageId(response);
+
+    if (!providerMessageId) {
+      throw new InstagramReplyExecutionError(
+        'Instagram provider delivery status is unknown; the draft was not marked sent.',
+        InstagramReplyExecutionState.UNKNOWN,
+        'PROVIDER_MESSAGE_ID_MISSING',
+      );
+    }
 
     await this.persistSentReply({
       workspace: workspace as unknown as FlatWorkspace,
@@ -347,7 +344,7 @@ export class InstagramReplyExecutionService {
     workspace: FlatWorkspace;
     draftId: string;
     text: string;
-    providerMessageId: string | null;
+    providerMessageId: string;
   }): Promise<void> {
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
       const dataSource =

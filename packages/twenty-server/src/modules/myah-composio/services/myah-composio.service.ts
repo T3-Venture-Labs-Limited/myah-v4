@@ -154,38 +154,6 @@ export type InstagramAccountStatus = {
   updatedAt?: string;
 };
 
-const getAccountSortTime = (account: InstagramAccountStatus): number => {
-  const value = account.updatedAt ?? account.createdAt;
-
-  if (!value) {
-    return 0;
-  }
-
-  const time = Date.parse(value);
-
-  return Number.isNaN(time) ? 0 : time;
-};
-
-const selectCanonicalInstagramAccounts = (
-  accounts: InstagramAccountStatus[],
-): InstagramAccountStatus[] => {
-  if (accounts.length <= 1) {
-    return accounts;
-  }
-
-  return [...accounts]
-    .sort((left, right) => {
-      const timeDelta = getAccountSortTime(right) - getAccountSortTime(left);
-
-      if (timeDelta !== 0) {
-        return timeDelta;
-      }
-
-      return left.connectedAccountId.localeCompare(right.connectedAccountId);
-    })
-    .slice(0, 1);
-};
-
 @Injectable()
 export class MyahComposioService {
   private readonly logger = new Logger(MyahComposioService.name);
@@ -198,11 +166,10 @@ export class MyahComposioService {
     userId,
     workspace,
   }: ListInstagramAccountsInput): Promise<InstagramAccountStatus[]> {
-    const canonicalInstagramAccounts = selectCanonicalInstagramAccounts(
-      await this.fetchActiveInstagramAccounts(userId),
-    );
+    const activeInstagramAccounts =
+      await this.fetchActiveInstagramAccounts(userId);
     const enrichedInstagramAccounts = await Promise.all(
-      canonicalInstagramAccounts.map((account) =>
+      activeInstagramAccounts.map((account) =>
         this.enrichInstagramAccountWithProfile(account),
       ),
     );
@@ -222,16 +189,30 @@ export class MyahComposioService {
     workspaceId: string;
     connectedAccountId: string;
   }): Promise<InstagramAccountStatus> {
-    const account = (
-      await this.fetchActiveInstagramAccounts(
-        buildInstagramComposioUserId(workspaceId),
-      )
-    ).find(
-      (activeAccount) =>
-        activeAccount.connectedAccountId === connectedAccountId,
-    );
+    const userId = buildInstagramComposioUserId(workspaceId);
+    const activeAccounts = await this.fetchActiveInstagramAccounts(userId);
 
-    if (!account) {
+    if (activeAccounts.length === 0) {
+      throw new BadGatewayException(
+        'The approved Instagram account is no longer active.',
+      );
+    }
+
+    if (activeAccounts.length !== 1) {
+      throw new BadGatewayException(
+        'More than one active Instagram account is connected to this workspace.',
+      );
+    }
+
+    const [account] = activeAccounts;
+
+    if (account.composioUserId !== userId) {
+      throw new BadGatewayException(
+        'The active Instagram account could not be verified for this workspace.',
+      );
+    }
+
+    if (account.connectedAccountId !== connectedAccountId) {
       throw new BadGatewayException(
         'The approved Instagram account is no longer active.',
       );

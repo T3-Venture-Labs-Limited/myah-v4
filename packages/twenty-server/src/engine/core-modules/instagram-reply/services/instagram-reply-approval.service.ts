@@ -106,6 +106,10 @@ export class InstagramReplyApprovalService {
       throw new Error('Instagram reply approval request is no longer pending');
     }
 
+    if (request.expiresAt < new Date()) {
+      throw new Error('Instagram reply approval request has expired');
+    }
+
     request.state = this.toApprovalState(input.decision);
     request.decidedAt = new Date();
 

@@ -42,7 +42,7 @@ export const getPreApprovalExcludedToolNames = (
       .map((entry) => entry.name),
   );
 
-export const getApprovedResumeActiveToolNames = (toolNames: string[]) =>
+export const getGenericApprovedResumeActiveToolNames = (toolNames: string[]) =>
   toolNames.filter(
     (toolName) =>
       toolName !== REQUEST_APPROVAL_TOOL_NAME &&
@@ -60,7 +60,9 @@ type MessageLike = {
   parts?: MessagePartLike[];
 };
 
-export const hasLatestMessageApprovedApproval = (messages: MessageLike[]) => {
+export const hasLatestMessageApprovedGenericApproval = (
+  messages: MessageLike[],
+) => {
   const latestMessage = messages[messages.length - 1];
 
   if (latestMessage?.role !== 'assistant') {
@@ -75,8 +77,7 @@ export const hasLatestMessageApprovedApproval = (messages: MessageLike[]) => {
     }
 
     return (
-      (part.type === `tool-${REQUEST_APPROVAL_TOOL_NAME}` ||
-        part.type === `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`) &&
+      part.type === `tool-${REQUEST_APPROVAL_TOOL_NAME}` &&
       output.result.status === 'resolved' &&
       output.result.decision === 'approved'
     );

@@ -232,4 +232,149 @@ describe('InstagramReplyExecutionService', () => {
     );
     expect(query).toHaveBeenCalledTimes(4);
   });
+
+  it('does not persist a sent draft when a successful provider response has no message identifier', async () => {
+    const { service, query } = createService();
+    query
+      .mockResolvedValueOnce([
+        { id: 'draft-id', body: replyText, sentAt: null },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'conversation-id',
+          providerConversationId: 'provider-conversation-id',
+          recipientIgsid: 'igsid-123',
+        },
+      ]);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { data: [{ from: { id: 'igsid-123' }, direction: 'INBOUND' }] },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { accepted: true } }),
+      });
+
+    await expect(
+      service.execute({
+        workspaceId,
+        approvalRequest: createApprovalRequest() as never,
+      }),
+    ).rejects.toMatchObject<Partial<InstagramReplyExecutionError>>({
+      message:
+        'Instagram provider delivery status is unknown; the draft was not marked sent.',
+      state: 'UNKNOWN',
+      code: 'PROVIDER_MESSAGE_ID_MISSING',
+    });
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(
+      query.mock.calls.some(
+        ([sql]) =>
+          typeof sql === 'string' && sql.includes(`SET "status" = 'SENT'`),
+      ),
+    ).toBe(false);
+  });
+
+  it('does not disclose structured provider error text containing credentials', async () => {
+    const providerSecret = 'super-secret-provider-token';
+    const { service, query } = createService();
+    query
+      .mockResolvedValueOnce([
+        { id: 'draft-id', body: replyText, sentAt: null },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'conversation-id',
+          providerConversationId: 'provider-conversation-id',
+          recipientIgsid: 'igsid-123',
+        },
+      ]);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { data: [{ from: { id: 'igsid-123' }, direction: 'INBOUND' }] },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: {
+            message: `Provider error: {"access_token":"${providerSecret}"}`,
+          },
+        }),
+      });
+
+    let thrownError: unknown;
+
+    try {
+      await service.execute({
+        workspaceId,
+        approvalRequest: createApprovalRequest() as never,
+      });
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBeInstanceOf(InstagramReplyExecutionError);
+    expect(thrownError).toMatchObject<Partial<InstagramReplyExecutionError>>({
+      message: 'Instagram provider request failed.',
+      state: 'FAILED',
+      code: 'PROVIDER_REQUEST_FAILED',
+    });
+    expect((thrownError as Error).message).not.toContain(providerSecret);
+    expect(
+      (thrownError as InstagramReplyExecutionError).code,
+    ).not.toContain(providerSecret);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a recognized messaging-window provider failure blocked', async () => {
+    const { service, query } = createService();
+    query
+      .mockResolvedValueOnce([
+        { id: 'draft-id', body: replyText, sentAt: null },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'conversation-id',
+          providerConversationId: 'provider-conversation-id',
+          recipientIgsid: 'igsid-123',
+        },
+      ]);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { data: [{ from: { id: 'igsid-123' }, direction: 'INBOUND' }] },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: {
+            error_subcode: '2534022',
+            message: 'Messaging window closed',
+          },
+        }),
+      });
+
+    await expect(
+      service.execute({
+        workspaceId,
+        approvalRequest: createApprovalRequest() as never,
+      }),
+    ).rejects.toMatchObject<Partial<InstagramReplyExecutionError>>({
+      message: 'Instagram provider request failed.',
+      state: 'BLOCKED',
+      code: '2534022',
+    });
+
+    expect(query).toHaveBeenCalledTimes(2);
+  });
 });
