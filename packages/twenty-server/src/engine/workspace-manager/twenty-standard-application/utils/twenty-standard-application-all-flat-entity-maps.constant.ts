@@ -25,7 +25,6 @@ import { buildStandardFlatViewFilterMetadataMaps } from 'src/engine/workspace-ma
 import { buildStandardFlatViewGroupMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-group/build-standard-flat-view-group-metadata-maps.util';
 import { buildStandardFlatViewMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/view/build-standard-flat-view-metadata-maps.util';
 import { type IdByUniversalIdentifierByMetadataName } from 'src/engine/workspace-manager/workspace-migration/services/utils/enrich-create-workspace-migration-action-with-ids.util';
-import { mergeMyahStandardSourceMetadata } from 'src/engine/workspace-manager/twenty-standard-application/utils/myah-standard-source-metadata.util';
 
 export type ComputeTwentyStandardApplicationAllFlatEntityMapsArgs = {
   now: string;
@@ -243,19 +242,13 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
     flatPageLayoutWidgetMaps,
     flatCommandMenuItemMaps,
   };
-  const mergedAllFlatEntityMaps = mergeMyahStandardSourceMetadata({
-    maps: allFlatEntityMaps,
-    workspaceId,
-    twentyStandardApplicationId,
-    now,
-  });
-  const allFlatEntityMapsWithMyah = mergedAllFlatEntityMaps;
+
   const idByUniversalIdentifierByMetadataName: IdByUniversalIdentifierByMetadataName =
     {};
 
   for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
     const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
-    const flatEntityMaps = allFlatEntityMapsWithMyah[flatEntityMapsKey];
+    const flatEntityMaps = allFlatEntityMaps[flatEntityMapsKey];
 
     const idByUniversalIdentifier = Object.fromEntries(
       Object.entries(flatEntityMaps.universalIdentifierById)
@@ -270,7 +263,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
   }
 
   return {
-    allFlatEntityMaps: allFlatEntityMapsWithMyah,
+    allFlatEntityMaps,
     idByUniversalIdentifierByMetadataName,
   };
 };
