@@ -21,6 +21,8 @@ export const MYAH_STANDARD_OBJECTS = {
       name: { universalIdentifier: '56a8c222-bc15-48e2-a608-4c40a791ac4b' },
       linkType: { universalIdentifier: '806a4b82-1fc8-43c4-b965-e5271c73b7bb' },
       description: { universalIdentifier: '9688a814-290f-460f-9604-d5ffea3c78ac' },
+      sourcePage: { universalIdentifier: '94d2f0e6-0915-40e3-bc40-b1a6336dc16a' },
+      targetPage: { universalIdentifier: '93ed2052-7d48-4a60-b43f-f0a07ccdf1ff' },
     },
     indexes: {
     },
@@ -41,6 +43,11 @@ export const MYAH_STANDARD_OBJECTS = {
       tags: { universalIdentifier: '322e4f8d-a9b7-4293-a596-5df62e3961e9' },
       sortOrder: { universalIdentifier: '0a3cd691-7971-45c3-8e8d-996d9b631c84' },
       aliases: { universalIdentifier: '24d415b8-fc54-4c18-8cd8-0b5575d39e88' },
+      childPages: { universalIdentifier: '0bbf483c-9c52-4286-9427-a14058456611' },
+      parentPage: { universalIdentifier: '62f3e27e-3c6c-4449-9d81-2b24501f5e3f' },
+      sourcePageLinks: { universalIdentifier: '776301dc-08a6-4692-b9b8-f427f040085b' },
+      targetPageLinks: { universalIdentifier: '3cb59cb6-8ef0-4608-bc1a-872e888a60ed' },
+      updateProposals: { universalIdentifier: '4fd149a3-b506-45f8-94c4-970a3106eccf' },
     },
     indexes: {
       canonicalPath: { universalIdentifier: 'b75fa72e-7365-4da0-a910-b6ef96f306c2' },
@@ -82,6 +89,7 @@ export const MYAH_STANDARD_OBJECTS = {
       reason: { universalIdentifier: '6a5f0131-32c8-41a2-968c-1dd429071f18' },
       proposedPatch: { universalIdentifier: 'cf1caf3f-e423-43e6-bd47-62a27bb513e2' },
       sourceSummary: { universalIdentifier: '31fe27f7-a5cb-4590-95a0-f9247f490bb2' },
+      targetPage: { universalIdentifier: 'da4861d8-2d29-498d-8a70-62461022dbfd' },
     },
     indexes: {
     },
