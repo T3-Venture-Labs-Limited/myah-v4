@@ -3,7 +3,10 @@ import { QueryRunner } from 'typeorm';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
 
-@RegisteredInstanceCommand('2.19.0', 1784091587010, { type: 'slow' })
+@RegisteredInstanceCommand('2.19.0', 1784091587010, {
+  type: 'slow',
+  runAfterWorkspace: true,
+})
 export class AddInstagramReplyApprovalProviderBindingSlowInstanceCommand
   implements SlowInstanceCommand
 {
