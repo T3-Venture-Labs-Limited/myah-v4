@@ -21,7 +21,6 @@ describe('DropMetadataStandardOverridesColumnFastInstanceCommand', () => {
         version: '2.20.0',
         timestamp: 1825000000000,
         type: 'fast',
-        runAfterWorkspace: false,
       });
     });
 

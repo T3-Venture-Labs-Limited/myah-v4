@@ -74,34 +74,6 @@ const makeFastInstance = (name: string) => makeStep('fast-instance', name);
 const makeWorkspace = (name: string) => makeStep('workspace', name);
 
 describe('UpgradeSequenceReaderService', () => {
-  it('places post-workspace instance commands after the workspace segment', () => {
-    const fast = makeFastInstance('Fast');
-    const workspace = makeWorkspace('Workspace');
-    const late = makeStep('slow-instance', 'Late');
-    const registry = {
-      getBundleForVersion: (version: string) =>
-        version === VERSION
-          ? {
-              fastInstanceCommands: [fast],
-              slowInstanceCommands: [],
-              workspaceCommands: [workspace],
-              postWorkspaceSlowInstanceCommands: [late],
-            }
-          : {
-              fastInstanceCommands: [],
-              slowInstanceCommands: [],
-              workspaceCommands: [],
-              postWorkspaceSlowInstanceCommands: [],
-            },
-    } as unknown as UpgradeCommandRegistryService;
-    const service = new UpgradeSequenceReaderService(registry);
-
-    expect(service.getUpgradeSequence().map((step) => step.name)).toEqual([
-      'Fast',
-      'Workspace',
-      'Late',
-    ]);
-  });
 
   describe('getInitialCursorForNewWorkspace', () => {
     it('should return last workspace command of segment following completed instance command', async () => {

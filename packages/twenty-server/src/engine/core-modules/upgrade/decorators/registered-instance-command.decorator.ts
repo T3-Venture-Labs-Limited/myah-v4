@@ -6,15 +6,12 @@ import { type TwentyAllVersion } from 'src/engine/core-modules/upgrade/constants
 
 export type InstanceCommandType = 'fast' | 'slow';
 
-type RegisteredInstanceCommandOptions =
-  | { type?: 'fast'; runAfterWorkspace?: never }
-  | { type: 'slow'; runAfterWorkspace?: boolean };
+type RegisteredInstanceCommandOptions = { type?: InstanceCommandType };
 
 export type RegisteredInstanceCommandMetadata = {
   version: TwentyAllVersion;
   timestamp: number;
   type: InstanceCommandType;
-  runAfterWorkspace: boolean;
 };
 
 const REGISTERED_INSTANCE_COMMAND_KEY = 'REGISTERED_INSTANCE_COMMAND';
@@ -36,7 +33,6 @@ export const RegisteredInstanceCommand =
         version,
         timestamp,
         type: options?.type ?? 'fast',
-        runAfterWorkspace: options?.runAfterWorkspace ?? false,
       },
       target,
     );
