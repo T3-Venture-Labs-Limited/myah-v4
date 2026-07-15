@@ -1,4 +1,9 @@
+jest.mock('twenty-sdk/define', () => new Proxy({}, {
+  get: (_target, key: string) => key.startsWith('define') ? (declaration: unknown) => declaration : new Proxy({}, { get: () => 'mock' }),
+}), { virtual: true });
+
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
+import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { buildMyahStandardMetadataContract } from './myah-standard-metadata-contract.fixture';
 
 const contract = buildMyahStandardMetadataContract();
@@ -9,22 +14,26 @@ const result = computeTwentyStandardApplicationAllFlatEntityMaps({
 });
 
 describe('Myah standard metadata contract', () => {
-  it('places every source-derived declaration in its exact flat map', () => {
-    const categories = Object.entries(contract)
-      .filter(([key]) => key.startsWith('flat')) as [keyof typeof result.allFlatEntityMaps, readonly string[]][];
-    const myahIds = new Set(categories.flatMap(([, ids]) => ids));
+  const categories = Object.entries(contract)
+    .filter(([key]) => key.startsWith('flat')) as [keyof TwentyStandardAllFlatEntityMaps, readonly string[]][];
 
+  it('places every source-derived declaration in its exact flat map', () => {
+    const myahIds = new Set(categories.flatMap(([, ids]) => ids));
     for (const [mapName, expected] of categories) {
       const actual = Object.keys(result.allFlatEntityMaps[mapName].byUniversalIdentifier)
         .filter((id) => myahIds.has(id)).sort();
       expect(actual).toEqual([...expected].sort());
       for (const id of expected) {
         for (const [otherName] of categories) {
-          if (otherName !== mapName) {
-            expect(result.allFlatEntityMaps[otherName].byUniversalIdentifier[id]).toBeUndefined();
-          }
+          if (otherName !== mapName) expect(result.allFlatEntityMaps[otherName].byUniversalIdentifier[id]).toBeUndefined();
         }
       }
+    }
+  });
+
+  it('excludes nested select options from every flat category', () => {
+    for (const optionId of contract.nestedOptionUniversalIdentifiers) {
+      for (const [mapName] of categories) expect(result.allFlatEntityMaps[mapName].byUniversalIdentifier[optionId]).toBeUndefined();
     }
   });
 
@@ -43,7 +52,7 @@ describe('Myah standard metadata contract', () => {
     const { index, object, indexField, field } = contract.canonicalPathIndex;
     expect(result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[index]).toMatchObject({
       objectMetadataUniversalIdentifier: object,
-      indexFieldMetadata: [{ universalIdentifier: indexField, fieldMetadataUniversalIdentifier: field }],
+      universalFlatIndexFieldMetadatas: [{ indexMetadataUniversalIdentifier: indexField, fieldMetadataUniversalIdentifier: field }],
     });
   });
 });

@@ -1,35 +1,46 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
+import ts from 'typescript';
+import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 
-type Declaration = { universalIdentifier?: string; objectUniversalIdentifier?: string; fields?: Declaration[]; tabs?: Declaration[]; widgets?: Declaration[]; fieldUniversalIdentifier?: string };
+type Value = string | Value[] | { [key: string]: Value } | undefined;
+type Declaration = { universalIdentifier?: string; objectUniversalIdentifier?: string; fieldUniversalIdentifier?: string; relationTargetObjectMetadataUniversalIdentifier?: string; relationTargetFieldMetadataUniversalIdentifier?: string; fields?: Declaration[]; options?: { id?: string }[]; tabs?: { universalIdentifier?: string; widgets?: { universalIdentifier?: string }[] }[] };
 const root = resolve(__dirname, '../../../../../../../../');
-const read = (relativePath: string) => readFileSync(resolve(root, relativePath), 'utf8');
-const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi;
-const ids = (paths: readonly string[]) => [...new Set(paths.flatMap((path) => read(path).match(uuid) ?? []))];
-const files = (folder: string, names: readonly string[]) => names.map((name) => `${folder}/${name}`);
 const brand = 'packages/twenty-apps/fixtures/brand-brain-record-wiki-mvp/src';
 const creatorOps = 'packages/twenty-apps/internal/myah-creator-ops/src';
-const objectFiles = [...files(`${brand}/objects`, ['brand-brain-link.object.ts', 'brand-brain-page.object.ts', 'brand-brain-update-proposal.object.ts']), ...files(`${creatorOps}/objects`, ['offer.object.ts', 'outreach-action.object.ts', 'outreach-sequence.object.ts', 'outreach-step.object.ts', 'promoted-asset.object.ts', 'campaign-creator.object.ts', 'campaign.object.ts', 'creator-list-member.object.ts', 'creator-list.object.ts', 'creator.object.ts'])];
-const fieldFiles = files(`${brand}/fields`, ['target-page-links-on-brand-brain-page.field.ts', 'target-page-on-brand-brain-link.field.ts', 'target-page-on-brand-brain-update-proposal.field.ts', 'update-proposals-on-brand-brain-page.field.ts', 'child-pages-on-brand-brain-page.field.ts', 'parent-page-on-brand-brain-page.field.ts', 'source-page-links-on-brand-brain-page.field.ts', 'source-page-on-brand-brain-link.field.ts']);
-const viewFiles = [...files(`${brand}/views`, ['brand-brain-page-record-page-fields.view.ts', 'pending-brand-brain-proposals.view.ts', 'all-brand-brain-pages.view.ts']), ...files(`${creatorOps}/views`, ['campaigns.view.ts', 'creator-lists.view.ts', 'creators.view.ts'])];
-const indexFiles = [`${brand}/indexes/brand-brain-page-canonical-path.index.ts`];
-const navFiles = [ `${brand}/navigation-menu-items/brand-brain-pages.navigation-menu-item.ts`, ...files(`${creatorOps}/navigation-menu-items`, ['campaigns.navigation-menu-item.ts', 'creator-lists.navigation-menu-item.ts', 'creators.navigation-menu-item.ts'])];
-const layoutFiles = [`${brand}/page-layouts/brand-brain-page-record-page.page-layout.ts`];
-const roleFiles = [`${brand}/roles/brand-brain-admin.role.ts`];
-const constants = [`${creatorOps}/constants/universal-identifiers.ts`, `${creatorOps}/constants/creator-field-universal-identifiers.ts`];
-const all = (paths: readonly string[]) => ids(paths);
-const constantsText = constants.map(read).join('\n');
-const namedConstants = (suffix: string) => [...constantsText.matchAll(new RegExp(`([A-Z0-9_]+${suffix})\\s*=\\s*['\\"](${uuid.source})['\\"]`, 'g'))].map((match) => match[2]);
-const objectIds = [...new Set([...namedConstants('OBJECT_UNIVERSAL_IDENTIFIER'), ...objectFiles.map((path) => read(path).match(uuid)?.[0]).filter((id): id is string => Boolean(id))])];
-const fieldIds = [...new Set([...namedConstants('FIELD_UNIVERSAL_IDENTIFIER'), ...all(objectFiles), ...all(fieldFiles)])].filter((id) => !objectIds.includes(id));
-const viewIds = all(viewFiles);
-const viewFieldIds = viewFiles.flatMap((path) => [...read(path).matchAll(/universalIdentifier:\s*['\"]([0-9a-f-]{36})['\"]/gi)].map((match) => match[1])).filter((id, index, values) => values.indexOf(id) !== index || !viewIds.includes(id));
-const indexIds = [all(indexFiles)[0]];
-const layoutIds = all(layoutFiles);
-const layoutTabIds = layoutIds.slice(1, 4);
-const layoutWidgetIds = layoutIds.slice(4);
+const modules = (folder: string, names: readonly string[]) => names.map((name) => `${folder}/${name}`);
+const objectPaths = [...modules(`${brand}/objects`, ['brand-brain-link.object.ts', 'brand-brain-page.object.ts', 'brand-brain-update-proposal.object.ts']), ...modules(`${creatorOps}/objects`, ['offer.object.ts', 'outreach-action.object.ts', 'outreach-sequence.object.ts', 'outreach-step.object.ts', 'promoted-asset.object.ts', 'campaign-creator.object.ts', 'campaign.object.ts', 'creator-list-member.object.ts', 'creator-list.object.ts', 'creator.object.ts'])];
+const fieldPaths = modules(`${brand}/fields`, ['target-page-links-on-brand-brain-page.field.ts', 'target-page-on-brand-brain-link.field.ts', 'target-page-on-brand-brain-update-proposal.field.ts', 'update-proposals-on-brand-brain-page.field.ts', 'child-pages-on-brand-brain-page.field.ts', 'parent-page-on-brand-brain-page.field.ts', 'source-page-links-on-brand-brain-page.field.ts', 'source-page-on-brand-brain-link.field.ts']);
+const viewPaths = [...modules(`${brand}/views`, ['brand-brain-page-record-page-fields.view.ts', 'pending-brand-brain-proposals.view.ts', 'all-brand-brain-pages.view.ts']), ...modules(`${creatorOps}/views`, ['campaigns.view.ts', 'creator-lists.view.ts', 'creators.view.ts'])];
+const navigationPaths = [`${brand}/navigation-menu-items/brand-brain-pages.navigation-menu-item.ts`, ...modules(`${creatorOps}/navigation-menu-items`, ['campaigns.navigation-menu-item.ts', 'creator-lists.navigation-menu-item.ts', 'creators.navigation-menu-item.ts'])];
+const layoutPaths = [`${brand}/page-layouts/brand-brain-page-record-page.page-layout.ts`];
+const indexPaths = [`${brand}/indexes/brand-brain-page-canonical-path.index.ts`];
+const rolePaths = [`${brand}/roles/brand-brain-admin.role.ts`, `${creatorOps}/default-role.ts`];
+const fileCache = new Map<string, ts.SourceFile>();
+const file = (p: string) => fileCache.get(p) ?? (fileCache.set(p, ts.createSourceFile(p, readFileSync(resolve(root, p), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)), fileCache.get(p)!);
+const resolveImport = (from: string, spec: string) => { if (!spec.startsWith('src/')) return spec.startsWith('.') ? `${join(dirname(from), spec)}.ts` : undefined; return `${from.split('/src/')[0]}/${spec}.ts`; };
+const prop = (o: ts.ObjectLiteralExpression, name: string) => o.properties.find((p): p is ts.PropertyAssignment => ts.isPropertyAssignment(p) && ((ts.isIdentifier(p.name) && p.name.text === name) || (ts.isStringLiteral(p.name) && p.name.text === name)))?.initializer;
+const evalExpr = (node: ts.Node, source: string): Value => {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  if (ts.isArrayLiteralExpression(node)) return node.elements.map((e) => evalExpr(e, source));
+  if (ts.isObjectLiteralExpression(node)) { const out: Record<string, Value> = {}; for (const p of node.properties) if (ts.isPropertyAssignment(p)) { const n = ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) ? p.name.text : ''; if (n) out[n] = evalExpr(p.initializer, source); } return out; }
+  if (ts.isParenthesizedExpression(node)) return evalExpr(node.expression, source);
+  if (ts.isPropertyAccessExpression(node)) { const base = evalExpr(node.expression, source); return base && typeof base === 'object' && !Array.isArray(base) ? (base as Record<string, Value>)[node.name.text] : undefined; }
+  if (ts.isIdentifier(node)) {
+    const sf = file(source);
+    const imp = sf.statements.find((s): s is ts.ImportDeclaration => ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) && s.importClause?.namedBindings && ts.isNamedImports(s.importClause.namedBindings) && s.importClause.namedBindings.elements.some((e) => e.name.text === node.text));
+    if (imp && ts.isStringLiteral(imp.moduleSpecifier)) { const el = (imp.importClause!.namedBindings as ts.NamedImports).elements.find((e) => e.name.text === node.text)!; const target = resolveImport(source, imp.moduleSpecifier.text); if (!target) return undefined; const d = file(target).statements.find((s): s is ts.VariableStatement => ts.isVariableStatement(s) && s.declarationList.declarations.some((x) => ts.isIdentifier(x.name) && x.name.text === (el.propertyName?.text ?? node.text))); const init = d?.declarationList.declarations[0]?.initializer; return init ? evalExpr(init, target) : undefined; }
+    const d = sf.statements.find((s): s is ts.VariableStatement => ts.isVariableStatement(s) && s.declarationList.declarations.some((x) => ts.isIdentifier(x.name) && x.name.text === node.text)); const init = d?.declarationList.declarations[0]?.initializer; return init ? evalExpr(init, source) : undefined;
+  }
+  return undefined;
+};
+const declaration = (p: string, callee: string): Declaration => { const sf = file(p); let result: Declaration | undefined; const visit = (n: ts.Node) => { if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === callee && n.arguments[0]) result = evalExpr(n.arguments[0], p) as Declaration; ts.forEachChild(n, visit); }; visit(sf); return result ?? {}; };
+const unique = (v: readonly (string | undefined)[]) => [...new Set(v.filter((x): x is string => Boolean(x)))];
+const objects = objectPaths.map((p) => declaration(p, 'defineObject')); const standaloneFields = fieldPaths.map((p) => declaration(p, 'defineField')); const views = viewPaths.map((p) => declaration(p, 'defineView')); const nav = navigationPaths.map((p) => declaration(p, 'defineNavigationMenuItem')); const layouts = layoutPaths.map((p) => declaration(p, 'definePageLayout')); const indexes = indexPaths.map((p) => declaration(p, 'defineIndex')); const roles = rolePaths.map((p) => declaration(p, 'defineApplicationRole'));
+const objectIds = unique(objects.map((x) => x.universalIdentifier)); const objectFields = objects.flatMap((x) => x.fields ?? []); const fields = unique([...objectFields, ...standaloneFields].map((x) => x.universalIdentifier)); const nestedOptionUniversalIdentifiers = unique(objectFields.flatMap((x) => (x.options ?? []).map((o) => o.id))); const viewIds = unique(views.map((x) => x.universalIdentifier)); const viewFieldIds = unique(views.flatMap((x) => (x.fields ?? []).map((f) => f.universalIdentifier))); const layoutIds = unique(layouts.map((x) => x.universalIdentifier)); const layoutTabIds = unique(layouts.flatMap((x) => (x.tabs ?? []).map((t) => t.universalIdentifier))); const layoutWidgetIds = unique(layouts.flatMap((x) => (x.tabs ?? []).flatMap((t) => (t.widgets ?? []).map((w) => w.universalIdentifier))));
 export type RelationContract = Readonly<{ sourceField: string; sourceObject: string; targetObject: string; targetField: string }>;
-export type MyahStandardMetadataContract = Readonly<{ [key: string]: unknown; relations: readonly RelationContract[]; canonicalPathIndex: Readonly<{ index: string; object: string; indexField: string; field: string }> }>;
-export const buildMyahStandardMetadataContract = (): MyahStandardMetadataContract => ({
-  flatObjectMetadataMaps: objectIds, flatFieldMetadataMaps: fieldIds, flatIndexMaps: indexIds, flatSearchFieldMetadataMaps: [], flatViewMaps: viewIds, flatViewGroupMaps: [], flatViewFilterMaps: [], flatViewFieldGroupMaps: [], flatViewFieldMaps: viewFieldIds, flatRoleMetadataMaps: all(roleFiles), flatPermissionFlagMaps: [], flatAgentMaps: [], flatSkillMaps: [], flatPageLayoutMaps: [layoutIds[0]], flatPageLayoutTabMaps: layoutTabIds, flatPageLayoutWidgetMaps: layoutWidgetIds, flatNavigationMenuItemMaps: all(navFiles), flatCommandMenuItemMaps: [], relations: [], canonicalPathIndex: { index: 'b75fa72e-7365-4da0-a910-b6ef96f306c2', object: '6a8289d7-8034-4f70-b3fa-47bc0e52828f', indexField: '30cf8266-372a-44b7-bdf5-f1188b168d6a', field: '4452d201-44a5-46fc-bf11-e26fa85cc3b2' },
-});
+const relations: RelationContract[] = [...objectFields, ...standaloneFields].filter((x) => x.relationTargetObjectMetadataUniversalIdentifier && x.relationTargetFieldMetadataUniversalIdentifier).map((x) => ({ sourceField: x.universalIdentifier!, sourceObject: x.objectUniversalIdentifier!, targetObject: x.relationTargetObjectMetadataUniversalIdentifier!, targetField: x.relationTargetFieldMetadataUniversalIdentifier! }));
+type FlatContract = { readonly [K in keyof TwentyStandardAllFlatEntityMaps]: readonly string[] };
+export type MyahStandardMetadataContract = FlatContract & Readonly<{ relations: readonly RelationContract[]; nestedOptionUniversalIdentifiers: readonly string[]; canonicalPathIndex: Readonly<{ index: string; object: string; indexField: string; field: string }> }>;
+const canonicalIndexField = indexes[0].fields?.[0];
+export const buildMyahStandardMetadataContract = (): MyahStandardMetadataContract => ({ flatObjectMetadataMaps: objectIds, flatFieldMetadataMaps: fields, flatIndexMaps: unique(indexes.map((x) => x.universalIdentifier)), flatSearchFieldMetadataMaps: [], flatViewMaps: viewIds, flatViewGroupMaps: [], flatViewFilterMaps: [], flatViewFieldGroupMaps: [], flatViewFieldMaps: viewFieldIds, flatRoleMaps: unique(roles.map((x) => x.universalIdentifier)), flatPermissionFlagMaps: [], flatAgentMaps: [], flatSkillMaps: [], flatPageLayoutMaps: layoutIds, flatPageLayoutTabMaps: layoutTabIds, flatPageLayoutWidgetMaps: layoutWidgetIds, flatNavigationMenuItemMaps: unique(nav.map((x) => x.universalIdentifier)), flatCommandMenuItemMaps: [], relations, nestedOptionUniversalIdentifiers, canonicalPathIndex: { index: indexes[0].universalIdentifier!, object: indexes[0].objectUniversalIdentifier!, indexField: canonicalIndexField?.universalIdentifier!, field: canonicalIndexField?.fieldUniversalIdentifier! } });
