@@ -20,7 +20,17 @@ describe('polling-disabled MVP invariant', () => {
       'cronTriggerSettings',
     );
     expect(JSON.stringify(applicationConfig.config)).not.toContain('0 * * * *');
-    expect(applicationConfig.config.serverVariables).toBeUndefined();
+    expect(applicationConfig.config.serverVariables).toEqual({
+      COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID: {
+        description:
+          'Shared Myah Composio Instagram OAuth configuration used to create workspace-scoped authorization links.',
+        isSecret: false,
+        isRequired: true,
+      },
+    });
+    expect(JSON.stringify(applicationConfig.config)).not.toContain(
+      'COMPOSIO_API_KEY',
+    );
   });
 
   it('keeps every messaging function manual or workflow-invoked, never cron-invoked', () => {
