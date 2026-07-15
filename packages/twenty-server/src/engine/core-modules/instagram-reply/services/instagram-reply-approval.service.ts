@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { type EntityManager } from 'typeorm';
 
 import {
   InstagramReplyApprovalRequestEntity,
@@ -26,6 +27,7 @@ type ExecutionReceiptRepository = {
   findOneBy: (
     where: Partial<InstagramReplyExecutionReceiptEntity>,
   ) => Promise<InstagramReplyExecutionReceiptEntity | null>;
+  manager: Pick<EntityManager, 'transaction'>;
 };
 
 export type CreateInstagramReplyApprovalInput = {
@@ -120,6 +122,54 @@ export class InstagramReplyApprovalService {
     return this.approvalRequestRepository.save(input.workspaceId, request);
   }
 
+  async restorePendingApproval({
+    workspaceId,
+    threadId,
+    approvalId,
+  }: {
+    workspaceId: string;
+    threadId: string;
+    approvalId: string;
+  }): Promise<InstagramReplyApprovalRequestEntity> {
+    return this.executionReceiptRepository.manager.transaction(
+      async (manager) => {
+        const request = await manager.findOne(
+          InstagramReplyApprovalRequestEntity,
+          {
+            where: { workspaceId, approvalId },
+            lock: { mode: 'pessimistic_write' },
+          },
+        );
+
+        if (!request || request.threadId !== threadId) {
+          throw new Error('Instagram reply approval request was not found');
+        }
+
+        if (request.state === InstagramReplyApprovalState.PENDING) {
+          throw new Error(
+            'Instagram reply approval request is already pending',
+          );
+        }
+
+        const receipt = await manager.findOneBy(
+          InstagramReplyExecutionReceiptEntity,
+          { approvalRequestId: request.id },
+        );
+
+        if (receipt) {
+          throw new Error(
+            'Cannot restore an Instagram reply approval after execution has started',
+          );
+        }
+
+        request.state = InstagramReplyApprovalState.PENDING;
+        request.decidedAt = null;
+
+        return manager.save(InstagramReplyApprovalRequestEntity, request);
+      },
+    );
+  }
+
   async reserveExecution(input: {
     workspaceId: string;
     userWorkspaceId: string;
@@ -130,62 +180,71 @@ export class InstagramReplyApprovalService {
     created: boolean;
     receipt: InstagramReplyExecutionReceiptEntity;
   }> {
-    const request = await this.approvalRequestRepository.findOneBy(
-      input.workspaceId,
-      { approvalId: input.approvalId },
+    return this.executionReceiptRepository.manager.transaction(
+      async (manager) => {
+        const request = await manager.findOne(
+          InstagramReplyApprovalRequestEntity,
+          {
+            where: {
+              workspaceId: input.workspaceId,
+              approvalId: input.approvalId,
+            },
+            lock: { mode: 'pessimistic_write' },
+          },
+        );
+
+        if (
+          !request ||
+          request.state !== InstagramReplyApprovalState.APPROVED
+        ) {
+          throw new Error('An approved approval request is required');
+        }
+
+        if (
+          request.userWorkspaceId !== input.userWorkspaceId ||
+          request.threadId !== input.threadId
+        ) {
+          throw new Error(
+            'Instagram reply approval request is bound to another thread and workspace member',
+          );
+        }
+
+        if (request.expiresAt < new Date()) {
+          throw new Error('Instagram reply approval request has expired');
+        }
+
+        const priorReceipt = await manager.findOneBy(
+          InstagramReplyExecutionReceiptEntity,
+          { approvalRequestId: request.id },
+        );
+
+        if (priorReceipt) {
+          return {
+            approvalRequest: request,
+            created: false,
+            receipt: priorReceipt,
+          };
+        }
+
+        const receipt = manager.create(InstagramReplyExecutionReceiptEntity, {
+          id: randomUUID(),
+          approvalRequestId: request.id,
+          state: InstagramReplyExecutionState.PROCESSING,
+          providerMessageId: null,
+          failureCode: null,
+          failureReason: null,
+        });
+
+        return {
+          approvalRequest: request,
+          created: true,
+          receipt: await manager.save(
+            InstagramReplyExecutionReceiptEntity,
+            receipt,
+          ),
+        };
+      },
     );
-
-    if (!request || request.state !== InstagramReplyApprovalState.APPROVED) {
-      throw new Error('An approved approval request is required');
-    }
-
-    if (
-      request.userWorkspaceId !== input.userWorkspaceId ||
-      request.threadId !== input.threadId
-    ) {
-      throw new Error(
-        'Instagram reply approval request is bound to another thread and workspace member',
-      );
-    }
-
-    if (request.expiresAt < new Date()) {
-      throw new Error('Instagram reply approval request has expired');
-    }
-
-    const receipt = this.executionReceiptRepository.create({
-      id: randomUUID(),
-      approvalRequestId: request.id,
-      state: InstagramReplyExecutionState.PROCESSING,
-      providerMessageId: null,
-      failureCode: null,
-      failureReason: null,
-    });
-
-    try {
-      return {
-        approvalRequest: request,
-        created: true,
-        receipt: await this.executionReceiptRepository.save(receipt),
-      };
-    } catch (error) {
-      if (!this.isUniqueViolation(error)) {
-        throw error;
-      }
-
-      const priorReceipt = await this.executionReceiptRepository.findOneBy({
-        approvalRequestId: request.id,
-      });
-
-      if (!priorReceipt) {
-        throw error;
-      }
-
-      return {
-        approvalRequest: request,
-        created: false,
-        receipt: priorReceipt,
-      };
-    }
   }
 
   async finalizeExecution({
@@ -224,14 +283,5 @@ export class InstagramReplyApprovalService {
       case 'changes_requested':
         return InstagramReplyApprovalState.CHANGES_REQUESTED;
     }
-  }
-
-  private isUniqueViolation(error: unknown): error is { code: string } {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === '23505'
-    );
   }
 }

@@ -1,6 +1,8 @@
 import { createHash } from 'crypto';
 
 import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
+import { InstagramReplyApprovalRequestEntity } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-approval-request.entity';
+import { InstagramReplyExecutionReceiptEntity } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-execution-receipt.entity';
 
 type ApprovalRequest = {
   id: string;
@@ -102,6 +104,52 @@ describe('InstagramReplyApprovalService', () => {
   const createService = () => {
     const approvalRepository = createApprovalRepository();
     const receiptRepository = createReceiptRepository();
+    const transactionManager = {
+      create: jest.fn((_entity: unknown, receipt: Receipt) => receipt),
+      findOne: jest.fn(
+        async (
+          _entity: unknown,
+          options: { where: Partial<ApprovalRequest> },
+        ) =>
+          Array.from(approvalRepository.requests.values()).find((request) =>
+            Object.entries(options.where).every(
+              ([key, value]) => request[key as keyof ApprovalRequest] === value,
+            ),
+          ) ?? null,
+      ),
+      findOneBy: jest.fn(
+        async (_entity: unknown, where: Partial<Receipt>) =>
+          Array.from(receiptRepository.receipts.values()).find((receipt) =>
+            Object.entries(where).every(
+              ([key, value]) => receipt[key as keyof Receipt] === value,
+            ),
+          ) ?? null,
+      ),
+      save: jest.fn(
+        async (entity: unknown, value: ApprovalRequest | Receipt) => {
+          if (entity === InstagramReplyApprovalRequestEntity) {
+            approvalRepository.requests.set(
+              (value as ApprovalRequest).id,
+              value as ApprovalRequest,
+            );
+
+            return value;
+          }
+
+          receiptRepository.receipts.set(
+            (value as Receipt).id,
+            value as Receipt,
+          );
+
+          return value;
+        },
+      ),
+    };
+    Object.assign(receiptRepository, {
+      manager: {
+        transaction: jest.fn(async (callback) => callback(transactionManager)),
+      },
+    });
     const instagramReplyDraftService = {
       validateApprovalBinding: jest.fn().mockResolvedValue(undefined),
     };
@@ -110,6 +158,7 @@ describe('InstagramReplyApprovalService', () => {
       approvalRepository,
       receiptRepository,
       instagramReplyDraftService,
+      transactionManager,
       service: new InstagramReplyApprovalService(
         approvalRepository as never,
         receiptRepository as never,
@@ -238,11 +287,8 @@ describe('InstagramReplyApprovalService', () => {
   });
 
   it('does not persist an approval when the draft binding is invalid', async () => {
-    const {
-      service,
-      approvalRepository,
-      instagramReplyDraftService,
-    } = createService();
+    const { service, approvalRepository, instagramReplyDraftService } =
+      createService();
     instagramReplyDraftService.validateApprovalBinding.mockRejectedValue(
       new Error('The Instagram reply preview does not match the stored draft.'),
     );
@@ -252,6 +298,115 @@ describe('InstagramReplyApprovalService', () => {
     );
 
     expect(approvalRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('restores an approved request to pending only before execution begins', async () => {
+    const { service, approvalRepository } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'approved',
+    });
+
+    await service.restorePendingApproval({
+      workspaceId,
+      threadId,
+      approvalId: request.approvalId,
+    });
+
+    expect(approvalRepository.requests.get(request.id)).toMatchObject({
+      state: 'PENDING',
+      decidedAt: null,
+    });
+  });
+
+  it('restores a rejected request to pending when its chat decision cannot persist', async () => {
+    const { service, approvalRepository } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'rejected',
+    });
+
+    await service.restorePendingApproval({
+      workspaceId,
+      threadId,
+      approvalId: request.approvalId,
+    });
+
+    expect(approvalRepository.requests.get(request.id)).toMatchObject({
+      state: 'PENDING',
+      decidedAt: null,
+    });
+  });
+
+  it('locks the approval request while restoring it', async () => {
+    const { service, transactionManager, receiptRepository } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'approved',
+    });
+
+    await service.restorePendingApproval({
+      workspaceId,
+      threadId,
+      approvalId: request.approvalId,
+    });
+
+    expect(receiptRepository.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(transactionManager.findOne).toHaveBeenCalledWith(
+      InstagramReplyApprovalRequestEntity,
+      expect.objectContaining({
+        lock: { mode: 'pessimistic_write' },
+        where: { approvalId: request.approvalId, workspaceId },
+      }),
+    );
+    expect(transactionManager.findOneBy).toHaveBeenCalledWith(
+      InstagramReplyExecutionReceiptEntity,
+      { approvalRequestId: request.id },
+    );
+  });
+
+  it('does not restore an approved request once execution is reserved', async () => {
+    const { service, approvalRepository } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'approved',
+    });
+    await service.reserveExecution({
+      workspaceId,
+      approvalId: request.approvalId,
+      userWorkspaceId,
+      threadId,
+    });
+
+    await expect(
+      service.restorePendingApproval({
+        workspaceId,
+        threadId,
+        approvalId: request.approvalId,
+      }),
+    ).rejects.toThrow('Cannot restore an Instagram reply approval');
+
+    expect(approvalRepository.requests.get(request.id)?.state).toBe('APPROVED');
   });
 
   it('transitions only an approved request into a single processing receipt', async () => {

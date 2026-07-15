@@ -359,9 +359,9 @@ describe('InstagramReplyExecutionService', () => {
       code: 'PROVIDER_REQUEST_FAILED',
     });
     expect((thrownError as Error).message).not.toContain(providerSecret);
-    expect(
-      (thrownError as InstagramReplyExecutionError).code,
-    ).not.toContain(providerSecret);
+    expect((thrownError as InstagramReplyExecutionError).code).not.toContain(
+      providerSecret,
+    );
     expect(query).toHaveBeenCalledTimes(2);
   });
 

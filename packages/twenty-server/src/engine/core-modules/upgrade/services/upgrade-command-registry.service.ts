@@ -33,6 +33,7 @@ export type RegisteredSlowInstanceCommand = {
   command: SlowInstanceCommand;
   version: TwentyAllVersion;
   timestamp: number;
+  runAfterWorkspace: boolean;
 };
 
 export type RegisteredWorkspaceCommand = {
@@ -112,6 +113,8 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
           const slowCommand = {
             ...entry,
             command: instance as SlowInstanceCommand,
+            runAfterWorkspace:
+              instanceCommandMetadata.runAfterWorkspace === true,
           };
 
           if (instanceCommandMetadata.runAfterWorkspace) {

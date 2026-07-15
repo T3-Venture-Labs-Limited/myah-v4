@@ -369,8 +369,7 @@ export class ChatExecutionService {
         step.toolResults.some(
           (toolResult) =>
             isToolOutputSuccessful(toolResult.output) &&
-            (toolResult.toolName ===
-              PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME ||
+            (toolResult.toolName === PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME ||
               (toolResult.toolName === EXECUTE_TOOL_TOOL_NAME &&
                 isObject(toolResult.input) &&
                 'toolName' in toolResult.input &&
@@ -380,7 +379,9 @@ export class ChatExecutionService {
       );
     const activeToolNamesForStep = (steps: StepResult<ToolSet>[]) => {
       if (isApprovedGenericApprovalResume) {
-        return getGenericApprovedResumeActiveToolNames(Object.keys(activeTools));
+        return getGenericApprovedResumeActiveToolNames(
+          Object.keys(activeTools),
+        );
       }
 
       if (!hasPreparedInstagramReplyDraft(steps)) {

@@ -62,10 +62,7 @@ export class ActionToolProvider implements ToolProvider {
       ['http_request', this.httpTool],
       ['send_email', this.sendEmailTool],
       ['draft_email', this.draftEmailTool],
-      [
-        'prepare_instagram_reply_draft',
-        this.prepareInstagramReplyDraftTool,
-      ],
+      ['prepare_instagram_reply_draft', this.prepareInstagramReplyDraftTool],
       ['send_instagram_reply', this.sendInstagramReplyTool],
       ['create_calendar_event', this.createCalendarEventTool],
       ['search_help_center', this.searchHelpCenterTool],

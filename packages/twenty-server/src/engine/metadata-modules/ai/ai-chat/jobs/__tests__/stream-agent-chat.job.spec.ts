@@ -373,10 +373,6 @@ describe('StreamAgentChatJob', () => {
 
     await expect(job.handle(jobData)).rejects.toThrow('provider exploded');
 
-    const chunkEvents = publishedEvents.filter(
-      (event) => event.type === 'stream-chunk',
-    );
-
     expect(publishedEvents.map((event) => event.type)).not.toContain(
       'message-persisted',
     );

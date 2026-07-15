@@ -61,4 +61,53 @@ describe('RunInstanceCommandsCommand', () => {
       skipDataMigration: false,
     });
   });
+
+  it('does not run post-workspace slow migrations before workspace upgrades', async () => {
+    const postWorkspaceCommand = {
+      down: jest.fn().mockResolvedValue(undefined),
+      runDataMigration: jest.fn().mockResolvedValue(undefined),
+      runDataMigrationWithoutWorkspaces: true,
+      up: jest.fn().mockResolvedValue(undefined),
+    } satisfies SlowInstanceCommand & {
+      runDataMigrationWithoutWorkspaces: boolean;
+    };
+    const runSlowInstanceCommand = jest
+      .fn()
+      .mockResolvedValue({ status: 'success' });
+
+    const command = new RunInstanceCommandsCommand(
+      {
+        runMigrations: jest.fn().mockResolvedValue([]),
+      } as unknown as DataSource,
+      {
+        getActiveOrSuspendedWorkspaceIds: jest.fn().mockResolvedValue([]),
+      } as unknown as WorkspaceVersionService,
+      {} as UpgradeCommandRegistryService,
+      {
+        getUpgradeSequence: jest.fn().mockReturnValue([
+          {
+            command: postWorkspaceCommand,
+            kind: 'slow-instance',
+            name: 'add-instagram-reply-approval-provider-binding',
+            runAfterWorkspace: true,
+            timestamp: 1784091587010,
+            version: '2.19.0',
+          },
+        ]),
+      } as unknown as UpgradeSequenceReaderService,
+      {
+        runSlowInstanceCommand,
+      } as unknown as InstanceCommandRunnerService,
+      {} as UpgradeMigrationService,
+      {
+        invalidateInstanceAndAllWorkspacesStatus: jest
+          .fn()
+          .mockResolvedValue(undefined),
+      } as unknown as UpgradeStatusService,
+    );
+
+    await command.run([], { force: true, includeSlow: true });
+
+    expect(runSlowInstanceCommand).not.toHaveBeenCalled();
+  });
 });
