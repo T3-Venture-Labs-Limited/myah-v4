@@ -6,10 +6,15 @@ import { type TwentyAllVersion } from 'src/engine/core-modules/upgrade/constants
 
 export type InstanceCommandType = 'fast' | 'slow';
 
+type RegisteredInstanceCommandOptions =
+  | { type?: 'fast'; runAfterWorkspace?: never }
+  | { type: 'slow'; runAfterWorkspace?: boolean };
+
 export type RegisteredInstanceCommandMetadata = {
   version: TwentyAllVersion;
   timestamp: number;
   type: InstanceCommandType;
+  runAfterWorkspace: boolean;
 };
 
 const REGISTERED_INSTANCE_COMMAND_KEY = 'REGISTERED_INSTANCE_COMMAND';
@@ -21,13 +26,18 @@ export const RegisteredInstanceCommand =
   (
     version: TwentyAllVersion,
     timestamp: number,
-    options?: { type: 'slow' },
+    options?: RegisteredInstanceCommandOptions,
   ): ClassDecorator =>
   (target) => {
     Injectable()(target);
     Reflect.defineMetadata(
       REGISTERED_INSTANCE_COMMAND_KEY,
-      { version, timestamp, type: options?.type ?? 'fast' },
+      {
+        version,
+        timestamp,
+        type: options?.type ?? 'fast',
+        runAfterWorkspace: options?.runAfterWorkspace ?? false,
+      },
       target,
     );
   };

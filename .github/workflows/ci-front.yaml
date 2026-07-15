@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
       - name: Diagnostic disk space issue
-        run: df -h
+        run: df -h || true
       - name: Front / Write .env
         run: npx nx reset:env twenty-front
       - name: Front / Build storybook

@@ -444,4 +444,28 @@ describe('UpgradeCommandRegistryService', () => {
       `${VERSION_A}_SlowMigration1780000000000_1780000000000`,
     ]);
   });
+
+  it('marks post-workspace slow instance commands in their registry entry', async () => {
+    @RegisteredInstanceCommand(VERSION_A, 1781000000000, {
+      type: 'slow',
+      runAfterWorkspace: true,
+    })
+    class PostWorkspaceSlowMigration implements SlowInstanceCommand {
+      async runDataMigration(_dataSource: DataSource): Promise<void> {}
+      async up(): Promise<void> {}
+      async down(): Promise<void> {}
+    }
+
+    const service = await buildRegistryService([
+      new PostWorkspaceSlowMigration(),
+      new WorkspaceCommandA(),
+    ]);
+
+    const bundle = service.getBundleForVersion(VERSION_A);
+
+    expect(bundle.slowInstanceCommands).toHaveLength(0);
+    expect(bundle.postWorkspaceSlowInstanceCommands).toEqual([
+      expect.objectContaining({ runAfterWorkspace: true }),
+    ]);
+  });
 });

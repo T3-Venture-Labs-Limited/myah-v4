@@ -4,14 +4,14 @@ No-polling Twenty app for manual Instagram account and conversation lookup throu
 
 ## Scope
 
-This first slice is intentionally read-only for provider operations:
+This app remains intentionally read-only for provider operations:
 
 - Reply polling is disabled.
 - No cron trigger settings are defined.
 - No first-contact Instagram DM automation is implemented.
 - Existing Instagram conversations and messages can be listed manually.
-- Instagram send operations are fail-closed until an authenticated server-side workspace ownership broker exists. The send action rejects before any provider request and must not be treated as landed messaging behavior.
-- Composio calls are limited to the allowlisted read tools:
+- The app exposes no sender or draft-creation function. A separate server-owned action may prepare a local review draft and, only after an exact user approval, validate and send a reply through the canonical workspace account.
+- Composio calls from this app are limited to the allowlisted read tools:
   - `INSTAGRAM_LIST_ALL_CONVERSATIONS`
   - `INSTAGRAM_LIST_ALL_MESSAGES`
 
@@ -34,7 +34,7 @@ You can also pass `connectedAccountId` per invocation instead of setting `MYAH_C
 3. Run **List Instagram Conversations**.
 4. Pick a returned conversation id.
 5. Run **List Instagram Messages** for that conversation.
-6. Do not invoke a send action: it is intentionally disabled and returns a non-sensitive rejection without provider I/O.
+6. For a real reply, use the authenticated server-owned chat action, verify the approval card's exact text and recipient, then explicitly approve it. The app itself must never call a provider send operation.
 
 Important constraints:
 
@@ -54,4 +54,4 @@ corepack yarn twenty dev:build .
 
 ## Production follow-up boundary
 
-When background reply polling or authenticated sending becomes part of scope, implement it behind a server-side workspace ownership broker with durable idempotency and persistence gates. Do not implement polling as a front-component refresh loop.
+Background reply polling, bulk sends, auto-replies, schedules, and automatic retries remain out of scope. Keep all outbound delivery behind the server-owned workspace broker, exact approval binding, durable idempotency receipt, and provider-side recipient verification.

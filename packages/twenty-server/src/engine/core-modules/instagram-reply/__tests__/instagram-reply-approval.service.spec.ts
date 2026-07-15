@@ -1,0 +1,495 @@
+import { createHash } from 'crypto';
+
+import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
+import { InstagramReplyApprovalRequestEntity } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-approval-request.entity';
+import { InstagramReplyExecutionReceiptEntity } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-execution-receipt.entity';
+
+type ApprovalRequest = {
+  id: string;
+  workspaceId: string;
+  userWorkspaceId: string;
+  threadId: string;
+  approvalId: string;
+  toolName: string;
+  connectedAccountId: string;
+  draftId: string;
+  conversationId: string;
+  providerConversationId: string;
+  recipientIgsid: string;
+  previewTextSha256: string;
+  state: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED';
+  approvedAt: Date | null;
+};
+
+type Receipt = {
+  id: string;
+  approvalRequestId: string;
+  state: 'PROCESSING' | 'SENT' | 'FAILED' | 'BLOCKED' | 'UNKNOWN';
+};
+
+const workspaceId = '7c36727d-117e-491b-8676-14e31daf610f';
+const userWorkspaceId = '5f2ca278-f41f-4cf8-9b8d-a9ce5a9f2c76';
+const otherUserWorkspaceId = '11e3d652-7ddb-4af3-9d36-7b99430a2b69';
+const threadId = 'a99a4f1c-e934-4a7c-ab77-7df745bf3a8c';
+const draftId = 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b';
+const conversationId = '2370f3fb-5738-458c-ae4d-0bdb2c24611e';
+const connectedAccountId = 'ca_instagram_123';
+const providerConversationId = 'provider-conversation-id';
+const recipientIgsid = 'igsid-123';
+
+const previewText = 'Thanks for reaching out — I would love to help.';
+const previewTextSha256 = createHash('sha256')
+  .update(previewText)
+  .digest('hex');
+
+const createApprovalRepository = () => {
+  const requests = new Map<string, ApprovalRequest>();
+
+  return {
+    requests,
+    save: jest.fn(
+      async (
+        _workspaceId: string,
+        request: ApprovalRequest,
+      ): Promise<ApprovalRequest> => {
+        const scopedRequest = { ...request, workspaceId: _workspaceId };
+        requests.set(scopedRequest.id, scopedRequest);
+
+        return scopedRequest;
+      },
+    ),
+    findOneBy: jest.fn(
+      async (
+        _workspaceId: string,
+        where: Partial<ApprovalRequest>,
+      ): Promise<ApprovalRequest | undefined> =>
+        Array.from(requests.values()).find((request) =>
+          Object.entries(where).every(
+            ([key, value]) => request[key as keyof ApprovalRequest] === value,
+          ),
+        ),
+    ),
+  };
+};
+
+const createReceiptRepository = () => {
+  const receipts = new Map<string, Receipt>();
+
+  return {
+    receipts,
+    create: jest.fn((receipt: Receipt) => receipt),
+    save: jest.fn(async (receipt: Receipt) => {
+      if (
+        Array.from(receipts.values()).some(
+          (saved) => saved.approvalRequestId === receipt.approvalRequestId,
+        )
+      ) {
+        throw Object.assign(new Error('duplicate receipt'), { code: '23505' });
+      }
+
+      receipts.set(receipt.id, receipt);
+      return receipt;
+    }),
+    findOneBy: jest.fn(async (where: Partial<Receipt>) =>
+      Array.from(receipts.values()).find((receipt) =>
+        Object.entries(where).every(
+          ([key, value]) => receipt[key as keyof Receipt] === value,
+        ),
+      ),
+    ),
+  };
+};
+
+describe('InstagramReplyApprovalService', () => {
+  const createService = () => {
+    const approvalRepository = createApprovalRepository();
+    const receiptRepository = createReceiptRepository();
+    const transactionManager = {
+      create: jest.fn((_entity: unknown, receipt: Receipt) => receipt),
+      findOne: jest.fn(
+        async (
+          _entity: unknown,
+          options: { where: Partial<ApprovalRequest> },
+        ) =>
+          Array.from(approvalRepository.requests.values()).find((request) =>
+            Object.entries(options.where).every(
+              ([key, value]) => request[key as keyof ApprovalRequest] === value,
+            ),
+          ) ?? null,
+      ),
+      findOneBy: jest.fn(
+        async (_entity: unknown, where: Partial<Receipt>) =>
+          Array.from(receiptRepository.receipts.values()).find((receipt) =>
+            Object.entries(where).every(
+              ([key, value]) => receipt[key as keyof Receipt] === value,
+            ),
+          ) ?? null,
+      ),
+      save: jest.fn(
+        async (entity: unknown, value: ApprovalRequest | Receipt) => {
+          if (entity === InstagramReplyApprovalRequestEntity) {
+            approvalRepository.requests.set(
+              (value as ApprovalRequest).id,
+              value as ApprovalRequest,
+            );
+
+            return value;
+          }
+
+          receiptRepository.receipts.set(
+            (value as Receipt).id,
+            value as Receipt,
+          );
+
+          return value;
+        },
+      ),
+    };
+    const receiptRepositoryWithManager = Object.assign(receiptRepository, {
+      manager: {
+        transaction: jest.fn(async (callback) => callback(transactionManager)),
+      },
+    });
+    const instagramReplyDraftService = {
+      validateApprovalBinding: jest.fn().mockResolvedValue(undefined),
+    };
+
+    return {
+      approvalRepository,
+      receiptRepository: receiptRepositoryWithManager,
+      instagramReplyDraftService,
+      transactionManager,
+      service: new InstagramReplyApprovalService(
+        approvalRepository as never,
+        receiptRepository as never,
+        instagramReplyDraftService as never,
+      ),
+    };
+  };
+
+  const createPendingApproval = async (
+    service: InstagramReplyApprovalService,
+  ) =>
+    service.createPendingApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      toolName: 'send_instagram_reply',
+      connectedAccountId,
+      draftId,
+      conversationId,
+      previewTextSha256,
+      providerConversationId,
+      recipientIgsid,
+    });
+
+  it('persists an immutable server-generated request bound to the initiating member and exact preview', async () => {
+    const { service, approvalRepository, instagramReplyDraftService } =
+      createService();
+
+    const request = await createPendingApproval(service);
+
+    expect(request).toMatchObject({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      ),
+      toolName: 'send_instagram_reply',
+      connectedAccountId,
+      draftId,
+      conversationId,
+      previewTextSha256,
+      providerConversationId,
+      recipientIgsid,
+      state: 'PENDING',
+      decidedAt: null,
+    });
+    expect(approvalRepository.save).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({
+        approvalId: request.approvalId,
+        connectedAccountId,
+        draftId,
+        conversationId,
+        previewTextSha256,
+        providerConversationId,
+        recipientIgsid,
+      }),
+    );
+
+    expect(
+      instagramReplyDraftService.validateApprovalBinding,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId,
+        connectedAccountId,
+        draftId,
+        conversationId,
+        previewTextSha256,
+      }),
+    );
+  });
+
+  it('does not let another member approve the bound request', async () => {
+    const { service } = createService();
+    const request = await createPendingApproval(service);
+
+    await expect(
+      service.resolveApproval({
+        workspaceId,
+        userWorkspaceId: otherUserWorkspaceId,
+        threadId,
+        approvalId: request.approvalId,
+        decision: 'approved',
+      }),
+    ).rejects.toThrow('only the initiating workspace member');
+  });
+
+  it('does not let the initiating member approve from another chat thread', async () => {
+    const { service } = createService();
+    const request = await createPendingApproval(service);
+
+    await expect(
+      service.resolveApproval({
+        workspaceId,
+        userWorkspaceId,
+        threadId: '7f5c8329-0d71-4dac-a74f-e51e5e5e1a29',
+        approvalId: request.approvalId,
+        decision: 'approved',
+      }),
+    ).rejects.toThrow('only the initiating workspace member and chat thread');
+  });
+
+  it('rejects an expired request before persisting an approval decision', async () => {
+    const { service, approvalRepository } = createService();
+    const request = await createPendingApproval(service);
+    request.expiresAt = new Date('2020-01-01T00:00:00.000Z');
+
+    await expect(
+      service.resolveApproval({
+        workspaceId,
+        userWorkspaceId,
+        threadId,
+        approvalId: request.approvalId,
+        decision: 'approved',
+      }),
+    ).rejects.toThrow('Instagram reply approval request has expired');
+
+    expect(request.state).toBe('PENDING');
+    expect(approvalRepository.requests.get(request.id)?.state).toBe('PENDING');
+    expect(approvalRepository.save).toHaveBeenCalledTimes(1);
+    expect(approvalRepository.save).not.toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({ state: 'APPROVED' }),
+    );
+  });
+
+  it('does not persist an approval when the draft binding is invalid', async () => {
+    const { service, approvalRepository, instagramReplyDraftService } =
+      createService();
+    instagramReplyDraftService.validateApprovalBinding.mockRejectedValue(
+      new Error('The Instagram reply preview does not match the stored draft.'),
+    );
+
+    await expect(createPendingApproval(service)).rejects.toThrow(
+      'preview does not match the stored draft',
+    );
+
+    expect(approvalRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('restores an approved request to pending only before execution begins', async () => {
+    const { service, approvalRepository } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'approved',
+    });
+
+    await service.restorePendingApproval({
+      workspaceId,
+      threadId,
+      approvalId: request.approvalId,
+    });
+
+    expect(approvalRepository.requests.get(request.id)).toMatchObject({
+      state: 'PENDING',
+      decidedAt: null,
+    });
+  });
+
+  it('restores a rejected request to pending when its chat decision cannot persist', async () => {
+    const { service, approvalRepository } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'rejected',
+    });
+
+    await service.restorePendingApproval({
+      workspaceId,
+      threadId,
+      approvalId: request.approvalId,
+    });
+
+    expect(approvalRepository.requests.get(request.id)).toMatchObject({
+      state: 'PENDING',
+      decidedAt: null,
+    });
+  });
+
+  it('locks the approval request while restoring it', async () => {
+    const { service, transactionManager, receiptRepository } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'approved',
+    });
+
+    await service.restorePendingApproval({
+      workspaceId,
+      threadId,
+      approvalId: request.approvalId,
+    });
+
+    expect(receiptRepository.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(transactionManager.findOne).toHaveBeenCalledWith(
+      InstagramReplyApprovalRequestEntity,
+      expect.objectContaining({
+        lock: { mode: 'pessimistic_write' },
+        where: { approvalId: request.approvalId, workspaceId },
+      }),
+    );
+    expect(transactionManager.findOneBy).toHaveBeenCalledWith(
+      InstagramReplyExecutionReceiptEntity,
+      { approvalRequestId: request.id },
+    );
+  });
+
+  it('does not restore an approved request once execution is reserved', async () => {
+    const { service, approvalRepository } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'approved',
+    });
+    await service.reserveExecution({
+      workspaceId,
+      approvalId: request.approvalId,
+      userWorkspaceId,
+      threadId,
+    });
+
+    await expect(
+      service.restorePendingApproval({
+        workspaceId,
+        threadId,
+        approvalId: request.approvalId,
+      }),
+    ).rejects.toThrow('Cannot restore an Instagram reply approval');
+
+    expect(approvalRepository.requests.get(request.id)?.state).toBe('APPROVED');
+  });
+
+  it('transitions only an approved request into a single processing receipt', async () => {
+    const { service } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'approved',
+    });
+
+    const firstReservation = await service.reserveExecution({
+      workspaceId,
+      approvalId: request.approvalId,
+      userWorkspaceId,
+      threadId,
+    });
+    const replay = await service.reserveExecution({
+      workspaceId,
+      approvalId: request.approvalId,
+      userWorkspaceId,
+      threadId,
+    });
+
+    expect(firstReservation.receipt).toMatchObject({
+      approvalRequestId: request.id,
+      state: 'PROCESSING',
+    });
+    expect(firstReservation.created).toBe(true);
+    expect(replay).toMatchObject({
+      approvalRequest: request,
+      created: false,
+      receipt: firstReservation.receipt,
+    });
+  });
+
+  it('rejects a receipt reservation from another thread or workspace member', async () => {
+    const { service } = createService();
+    const request = await createPendingApproval(service);
+
+    await service.resolveApproval({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalId: request.approvalId,
+      decision: 'approved',
+    });
+
+    await expect(
+      service.reserveExecution({
+        workspaceId,
+        userWorkspaceId: otherUserWorkspaceId,
+        threadId,
+        approvalId: request.approvalId,
+      }),
+    ).rejects.toThrow('bound to another thread and workspace member');
+  });
+
+  it.each(['rejected', 'changes_requested'] as const)(
+    'does not issue a receipt after a %s decision',
+    async (decision) => {
+      const { service } = createService();
+      const request = await createPendingApproval(service);
+
+      await service.resolveApproval({
+        workspaceId,
+        userWorkspaceId,
+        threadId,
+        approvalId: request.approvalId,
+        decision,
+      });
+
+      await expect(
+        service.reserveExecution({
+          workspaceId,
+          approvalId: request.approvalId,
+          userWorkspaceId,
+          threadId,
+        }),
+      ).rejects.toThrow('approved approval request');
+    },
+  );
+});

@@ -1,6 +1,7 @@
 import { getToolName, isToolUIPart } from 'ai';
 import {
   REQUEST_APPROVAL_TOOL_NAME,
+  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
   type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 
@@ -35,7 +36,8 @@ export const agentChatPendingApprovalComponentSelector =
         for (const part of lastAssistantMessage.parts) {
           if (
             !isToolUIPart(part) ||
-            getToolName(part) !== REQUEST_APPROVAL_TOOL_NAME
+            (getToolName(part) !== REQUEST_APPROVAL_TOOL_NAME &&
+              getToolName(part) !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME)
           ) {
             continue;
           }

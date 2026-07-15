@@ -410,6 +410,7 @@ export class AgentChatResolver {
         decision,
         streamId,
         workspaceId: workspace.id,
+        userWorkspaceId,
       });
 
     await this.eventPublisherService

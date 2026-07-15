@@ -84,7 +84,11 @@ export class RunInstanceCommandsCommand extends CommandRunner {
           }
         }
 
-        if (step.kind === 'slow-instance' && options.includeSlow) {
+        if (
+          step.kind === 'slow-instance' &&
+          !step.runAfterWorkspace &&
+          options.includeSlow
+        ) {
           const result =
             await this.instanceUpgradeService.runSlowInstanceCommand({
               command: step.command,

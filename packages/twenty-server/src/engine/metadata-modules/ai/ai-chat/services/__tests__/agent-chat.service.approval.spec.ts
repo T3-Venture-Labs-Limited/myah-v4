@@ -1,4 +1,7 @@
-import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
+import {
+  REQUEST_APPROVAL_TOOL_NAME,
+  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+} from 'twenty-shared/ai';
 
 import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
 import { AiExceptionCode } from 'src/engine/metadata-modules/ai/ai.exception';
@@ -45,6 +48,11 @@ const buildService = ({
   const messagePartRepository = {
     update: jest.fn().mockResolvedValue({ affected: 1 }),
   };
+  const instagramReplyApprovalService = {
+    createPendingApproval: jest.fn().mockResolvedValue(undefined),
+    resolveApproval: jest.fn().mockResolvedValue(undefined),
+    restorePendingApproval: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new AgentChatService(
     threadRepository as never,
@@ -55,9 +63,15 @@ const buildService = ({
     {} as never,
     {} as never,
     {} as never,
+    instagramReplyApprovalService as never,
   );
 
-  return { service, threadRepository, messagePartRepository };
+  return {
+    service,
+    threadRepository,
+    messagePartRepository,
+    instagramReplyApprovalService,
+  };
 };
 
 describe('AgentChatService.resolvePendingApproval', () => {
@@ -70,6 +84,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
       decision: { decision: 'approved', comment: 'Looks good' },
       streamId: 'stream-id',
       workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
     });
 
     expect(threadRepository.update).toHaveBeenCalledWith(
@@ -101,6 +116,136 @@ describe('AgentChatService.resolvePendingApproval', () => {
     });
   });
 
+  it('resolves the server-created Instagram approval without recreating it', async () => {
+    const instagramPendingOutput = {
+      ...pendingApprovalOutput,
+      result: {
+        ...pendingApprovalOutput.result,
+        request: {
+          ...pendingApprovalOutput.result.request,
+          actionKind: 'external_write',
+          toolName: 'send_instagram_reply',
+        },
+        approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
+      },
+    };
+    const { service, instagramReplyApprovalService } = buildService({
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+          toolOutput: instagramPendingOutput,
+        },
+      ],
+    });
+
+    await service.resolvePendingApproval({
+      threadId: 'thread-id',
+      messageId: 'message-id',
+      decision: { decision: 'approved' },
+      streamId: 'stream-id',
+      workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
+    });
+
+    expect(
+      instagramReplyApprovalService.createPendingApproval,
+    ).not.toHaveBeenCalled();
+    expect(instagramReplyApprovalService.resolveApproval).toHaveBeenCalledWith({
+      workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'thread-id',
+      approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
+      decision: 'approved',
+    });
+  });
+
+  it('restores a native approval when persisting the chat decision fails', async () => {
+    const approvalId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const { service, messagePartRepository, instagramReplyApprovalService } =
+      buildService({
+        messageParts: [
+          {
+            id: 'part-id',
+            toolName: REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+            toolOutput: {
+              ...pendingApprovalOutput,
+              result: {
+                ...pendingApprovalOutput.result,
+                approvalId,
+              },
+            },
+          },
+        ],
+      });
+    messagePartRepository.update.mockRejectedValue(
+      new Error('message-part persistence failed'),
+    );
+
+    await expect(
+      service.resolvePendingApproval({
+        threadId: 'thread-id',
+        messageId: 'message-id',
+        decision: { decision: 'rejected' },
+        streamId: 'stream-id',
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+      }),
+    ).rejects.toThrow('message-part persistence failed');
+
+    expect(
+      instagramReplyApprovalService.restorePendingApproval,
+    ).toHaveBeenCalledWith({
+      approvalId,
+      threadId: 'thread-id',
+      workspaceId: 'workspace-id',
+    });
+  });
+
+  it('restores the native Instagram approval when resume setup fails', async () => {
+    const approvalId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const { service, instagramReplyApprovalService } = buildService({
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+          toolOutput: {
+            ...pendingApprovalOutput,
+            result: {
+              ...pendingApprovalOutput.result,
+              approvalId,
+            },
+          },
+        },
+      ],
+    });
+
+    const resolution = await service.resolvePendingApproval({
+      threadId: 'thread-id',
+      messageId: 'message-id',
+      decision: { decision: 'approved' },
+      streamId: 'stream-id',
+      workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
+    });
+
+    await service.restorePendingApproval({
+      threadId: 'thread-id',
+      messageId: 'message-id',
+      streamId: 'stream-id',
+      workspaceId: 'workspace-id',
+      rollback: resolution.rollback,
+    });
+
+    expect(
+      instagramReplyApprovalService.restorePendingApproval,
+    ).toHaveBeenCalledWith({
+      approvalId,
+      threadId: 'thread-id',
+      workspaceId: 'workspace-id',
+    });
+  });
+
   it('resolves rejected approvals without starting a resume stream', async () => {
     const { service, threadRepository } = buildService();
 
@@ -110,6 +255,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
       decision: { decision: 'rejected', comment: 'No thanks' },
       streamId: 'stream-id',
       workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
     });
 
     expect(threadRepository.update).toHaveBeenCalledWith(
@@ -143,6 +289,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
         decision: { decision: 'approved' },
         streamId: 'stream-id',
         workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
       }),
     ).rejects.toMatchObject({ code: AiExceptionCode.APPROVAL_NOT_PENDING });
   });
@@ -157,6 +304,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
         decision: { decision: 'maybe' },
         streamId: 'stream-id',
         workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
       }),
     ).rejects.toMatchObject({
       code: AiExceptionCode.INVALID_APPROVAL_DECISION,

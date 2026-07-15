@@ -8,8 +8,6 @@ import {
   type ComposioToolResponse,
 } from 'src/logic-functions/types/composio-tool-result.type';
 
-const OUTSIDE_MESSAGING_WINDOW_SUBCODE = 2534022;
-
 const getComposioApiKey = (): string | undefined => {
   const apiKey = process.env.COMPOSIO_API_KEY?.trim();
 
@@ -29,7 +27,9 @@ const redactExternalErrorMessage = (message: string): string =>
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, 'Bearer [redacted]')
     .replace(/\bx-api-key\b\s*[:=]\s*[^\s,;]+/gi, 'x-api-key=[redacted]');
 
-const parseEmbeddedGraphApiError = (message?: string): ComposioToolError | undefined => {
+const parseEmbeddedGraphApiError = (
+  message?: string,
+): ComposioToolError | undefined => {
   if (!message) {
     return undefined;
   }
@@ -51,20 +51,28 @@ const parseEmbeddedGraphApiError = (message?: string): ComposioToolError | undef
   }
 };
 
-const resolveNestedStatus = (body: ComposioToolResponse): number | undefined => {
+const resolveNestedStatus = (
+  body: ComposioToolResponse,
+): number | undefined => {
   const data = body.data as { status_code?: number } | undefined;
 
-  return body.mercury_last_http_status_code ?? body.status_code ?? data?.status_code;
+  return (
+    body.mercury_last_http_status_code ?? body.status_code ?? data?.status_code
+  );
 };
 
 const isFailedComposioExecution = (body: ComposioToolResponse): boolean =>
   body.successful === false || body.successfull === false;
 
-const extractError = (body: ComposioToolResponse): Required<Pick<ComposioExecutionResult, 'error'>> &
+const extractError = (
+  body: ComposioToolResponse,
+): Required<Pick<ComposioExecutionResult, 'error'>> &
   Pick<ComposioExecutionResult, 'errorCode' | 'errorSubcode'> => {
   const error = body.error;
   const errorMessage = typeof error === 'string' ? error : error?.message;
-  const embeddedGraphApiError = parseEmbeddedGraphApiError(errorMessage ?? body.message);
+  const embeddedGraphApiError = parseEmbeddedGraphApiError(
+    errorMessage ?? body.message,
+  );
 
   return {
     error: redactExternalErrorMessage(
@@ -73,20 +81,17 @@ const extractError = (body: ComposioToolResponse): Required<Pick<ComposioExecuti
         body.message ??
         'Composio tool execution failed.',
     ),
-    errorCode: embeddedGraphApiError?.code ?? (typeof error === 'string' ? undefined : error?.code),
+    errorCode:
+      embeddedGraphApiError?.code ??
+      (typeof error === 'string' ? undefined : error?.code),
     errorSubcode:
       embeddedGraphApiError?.error_subcode ??
       (typeof error === 'string' ? undefined : error?.error_subcode),
   };
 };
 
-const isRetryable = ({ status, errorSubcode }: { status: number; errorSubcode?: number }) => {
-  if (errorSubcode === OUTSIDE_MESSAGING_WINDOW_SUBCODE) {
-    return false;
-  }
-
-  return status === 429 || status >= 500;
-};
+const isRetryable = ({ status }: { status: number }) =>
+  status === 429 || status >= 500;
 
 export const executeComposioInstagramTool = async ({
   toolSlug,
@@ -97,38 +102,33 @@ export const executeComposioInstagramTool = async ({
   connectedAccountId: string;
   arguments: Record<string, unknown>;
 }): Promise<ComposioExecutionResult> => {
-  if (toolSlug === 'INSTAGRAM_SEND_TEXT_MESSAGE') {
-    return {
-      success: false,
-      error:
-        'Instagram send operations are disabled until an authenticated workspace ownership broker is available.',
-    };
-  }
-
   const apiKey = getComposioApiKey();
 
   if (!apiKey) {
     return {
       success: false,
-      error: 'COMPOSIO_API_KEY is required to send Instagram messages.',
+      error: 'COMPOSIO_API_KEY is required to read Instagram data.',
     };
   }
 
   let response: Response;
 
   try {
-    response = await fetch(`${COMPOSIO_API_BASE_URL}/tools/execute/${toolSlug}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
+    response = await fetch(
+      `${COMPOSIO_API_BASE_URL}/tools/execute/${toolSlug}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          connected_account_id: connectedAccountId,
+          ...(getComposioUserId() ? { user_id: getComposioUserId() } : {}),
+          arguments: toolArguments,
+        }),
       },
-      body: JSON.stringify({
-        connected_account_id: connectedAccountId,
-        ...(getComposioUserId() ? { user_id: getComposioUserId() } : {}),
-        arguments: toolArguments,
-      }),
-    });
+    );
   } catch (error) {
     return {
       success: false,
@@ -161,10 +161,7 @@ export const executeComposioInstagramTool = async ({
     return {
       success: false,
       ...parsedError,
-      retryable: isRetryable({
-        status: effectiveStatus,
-        errorSubcode: parsedError.errorSubcode,
-      }),
+      retryable: isRetryable({ status: effectiveStatus }),
       status: effectiveStatus,
     };
   }

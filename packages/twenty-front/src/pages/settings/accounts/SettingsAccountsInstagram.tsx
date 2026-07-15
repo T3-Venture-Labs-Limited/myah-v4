@@ -70,9 +70,7 @@ const StyledStatusPill = styled.div<{ connected: boolean }>`
       : themeCssVariables.background.tertiary};
   border-radius: ${themeCssVariables.border.radius.pill};
   color: ${({ connected }) =>
-    connected
-      ? themeCssVariables.color.green
-      : themeCssVariables.font.color.secondary};
+    connected ? 'white' : themeCssVariables.font.color.secondary};
   font-size: ${themeCssVariables.font.size.sm};
   font-weight: ${themeCssVariables.font.weight.medium};
   padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
@@ -104,6 +102,7 @@ type InstagramAccount = {
   status: string;
   composioUserId?: string;
   authConfigId?: string;
+  username?: string;
   toolkitSlug: string;
   createdAt?: string;
   updatedAt?: string;
@@ -229,7 +228,7 @@ export const SettingsAccountsInstagram = () => {
         <Section>
           <H2Title
             title={t`Instagram`}
-            description={t`Connect a workspace Instagram Business or Creator account for approved message reads and replies.`}
+            description={t`Connect your Instagram Business or Creator account to read conversations and reply with your approval.`}
           />
           <StyledConnectionCard>
             <StyledCardHeader>
@@ -240,7 +239,7 @@ export const SettingsAccountsInstagram = () => {
                 <div>
                   <StyledTitle>{t`Instagram messaging`}</StyledTitle>
                   <StyledDescription>
-                    {t`Team members and future agents will use this workspace connection without authorizing their own Instagram account.`}
+                    {t`Connect the Instagram account you use for your business. You can review conversations and approve each reply before it is sent.`}
                   </StyledDescription>
                 </div>
               </StyledTitleRow>
@@ -253,13 +252,17 @@ export const SettingsAccountsInstagram = () => {
               </StyledStatusPill>
             </StyledCardHeader>
             <StyledDescription>
-              {t`This enables manual testing of existing Instagram conversations and approved replies. It does not enable polling, background sends, cold first-contact DMs, bulk messaging, or auto-replies.`}
+              {t`Read your existing Instagram conversations and reply when you're ready. Myah will always ask for your approval before sending a reply.`}
             </StyledDescription>
             {accounts.length > 0 && (
               <StyledAccountList>
                 {accounts.map((account) => (
                   <StyledAccountRow key={account.connectedAccountId}>
-                    <StyledTitle>{t`Workspace Instagram account`}</StyledTitle>
+                    <StyledTitle>
+                      {account.username
+                        ? `@${account.username}`
+                        : t`Workspace Instagram account`}
+                    </StyledTitle>
                     <StyledDescription>
                       {t`Status`}: {account.status}
                     </StyledDescription>

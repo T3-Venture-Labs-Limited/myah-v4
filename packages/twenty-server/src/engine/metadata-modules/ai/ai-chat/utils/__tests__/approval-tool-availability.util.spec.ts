@@ -1,9 +1,11 @@
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
+import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 import {
-  getApprovedResumeActiveToolNames,
+  getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
-  hasLatestMessageApprovedApproval,
+  hasApprovedInstagramReplyApproval,
+  hasLatestMessageApprovedGenericApproval,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
 import { ToolCategory } from 'twenty-shared/ai';
 
@@ -26,18 +28,31 @@ const toolEntry = ({
     },
   }) as ToolIndexEntry;
 
+const logicFunctionToolEntry = (name: string): ToolIndexEntry =>
+  ({
+    name,
+    label: name,
+    description: name,
+    category: ToolCategory.LOGIC_FUNCTION,
+    executionRef: {
+      kind: 'logic_function',
+      logicFunctionId: name,
+    },
+  }) as ToolIndexEntry;
+
 describe('approval tool availability', () => {
-  it('keeps write execution available but removes request approval during an approved resume', () => {
+  it('keeps write execution available but removes approval tools during a generic approved resume', () => {
     expect(
-      getApprovedResumeActiveToolNames([
+      getGenericApprovedResumeActiveToolNames([
         'execute_tool',
         REQUEST_APPROVAL_TOOL_NAME,
+        REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
         'ask_questions',
       ]),
     ).toEqual(['execute_tool', 'ask_questions']);
   });
 
-  it('excludes side-effecting and unknown tools before approval', () => {
+  it('excludes writes and unknown logic functions before approval', () => {
     const excluded = getPreApprovalExcludedToolNames([
       toolEntry({ name: 'find_many_companies', operation: 'find_many' }),
       toolEntry({ name: 'group_by_companies', operation: 'group_by' }),
@@ -50,6 +65,19 @@ describe('approval tool availability', () => {
         category: ToolCategory.ACTION,
         executionRef: { kind: 'static', toolId: 'send_email' },
       } as ToolIndexEntry,
+      {
+        name: 'prepare_instagram_reply_draft',
+        label: 'Prepare Instagram reply draft',
+        description: 'Prepare a local draft without provider I/O',
+        category: ToolCategory.ACTION,
+        executionRef: {
+          kind: 'static',
+          toolId: 'prepare_instagram_reply_draft',
+        },
+      } as ToolIndexEntry,
+      logicFunctionToolEntry('app_myah_list_instagram_conversations'),
+      logicFunctionToolEntry('app_myah_list_instagram_messages'),
+      logicFunctionToolEntry('app_myah_send_instagram_reply'),
     ]);
 
     expect(excluded.has('find_many_companies')).toBe(false);
@@ -57,11 +85,32 @@ describe('approval tool availability', () => {
     expect(excluded.has('create_one_task')).toBe(true);
     expect(excluded.has('update_one_company')).toBe(true);
     expect(excluded.has('send_email')).toBe(true);
+    expect(excluded.has('prepare_instagram_reply_draft')).toBe(false);
+    expect(excluded.has('app_myah_list_instagram_conversations')).toBe(false);
+    expect(excluded.has('app_myah_list_instagram_messages')).toBe(false);
+    expect(excluded.has('app_myah_send_instagram_reply')).toBe(true);
   });
 
-  it('only treats a resolved approved approval on the latest assistant message as an approval grant', () => {
+  it('allows the intentional read-only app function by its generated tool name', () => {
+    const excluded = getPreApprovalExcludedToolNames([
+      {
+        name: 'app_myah_list_instagram_conversations',
+        label: 'List Instagram conversations',
+        description: 'List Instagram conversations',
+        category: ToolCategory.ACTION,
+        executionRef: {
+          kind: 'static',
+          toolId: 'myah-list-instagram-conversations',
+        },
+      } as ToolIndexEntry,
+    ]);
+
+    expect(excluded.has('app_myah_list_instagram_conversations')).toBe(false);
+  });
+
+  it('only treats a resolved approved generic approval on the latest assistant message as a generic approval grant', () => {
     expect(
-      hasLatestMessageApprovedApproval([
+      hasLatestMessageApprovedGenericApproval([
         {
           role: 'assistant',
           parts: [
@@ -75,7 +124,21 @@ describe('approval tool availability', () => {
     ).toBe(true);
 
     expect(
-      hasLatestMessageApprovedApproval([
+      hasLatestMessageApprovedGenericApproval([
+        {
+          role: 'assistant',
+          parts: [
+            {
+              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
+              output: { result: { status: 'resolved', decision: 'approved' } },
+            },
+          ],
+        },
+      ]),
+    ).toBe(false);
+
+    expect(
+      hasLatestMessageApprovedGenericApproval([
         {
           role: 'assistant',
           parts: [
@@ -90,7 +153,7 @@ describe('approval tool availability', () => {
     ).toBe(false);
 
     expect(
-      hasLatestMessageApprovedApproval([
+      hasLatestMessageApprovedGenericApproval([
         {
           role: 'assistant',
           parts: [
@@ -102,5 +165,22 @@ describe('approval tool availability', () => {
         },
       ]),
     ).toBe(false);
+  });
+
+  it('preserves Instagram send eligibility after an approval when a follow-up user message is newer', () => {
+    expect(
+      hasApprovedInstagramReplyApproval([
+        {
+          role: 'assistant',
+          parts: [
+            {
+              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
+              output: { result: { status: 'resolved', decision: 'approved' } },
+            },
+          ],
+        },
+        { role: 'user', parts: [] },
+      ]),
+    ).toBe(true);
   });
 });

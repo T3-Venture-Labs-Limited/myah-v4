@@ -17,11 +17,13 @@ const listInstagramConversationsInputSchema: InputJsonSchema = {
       type: 'integer',
       minimum: 1,
       maximum: 25,
-      description: 'Maximum conversations to fetch. Capped to 25 for cost control.',
+      description:
+        'Maximum conversations to fetch. Capped to 25 for cost control.',
     },
     after: {
       type: 'string',
-      description: 'Pagination cursor from paging.cursors.after. Do not pass a paging.next URL.',
+      description:
+        'Pagination cursor from paging.cursors.after. Do not pass a paging.next URL.',
     },
     igUserId: {
       type: 'string',
@@ -29,7 +31,8 @@ const listInstagramConversationsInputSchema: InputJsonSchema = {
     },
     graphApiVersion: {
       type: 'string',
-      description: 'Optional Instagram Graph API version, defaults upstream to v21.0.',
+      description:
+        'Optional Instagram Graph API version, defaults upstream to v21.0.',
     },
   },
   required: [],

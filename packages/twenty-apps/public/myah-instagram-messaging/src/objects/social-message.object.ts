@@ -92,7 +92,8 @@ export default defineObject({
       ],
     },
     {
-      universalIdentifier: SOCIAL_MESSAGE_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        SOCIAL_MESSAGE_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
       label: 'Provider message ID',
       name: 'providerMessageId',

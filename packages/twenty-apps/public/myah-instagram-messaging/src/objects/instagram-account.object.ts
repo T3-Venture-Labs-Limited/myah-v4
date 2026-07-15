@@ -68,19 +68,23 @@ export default defineObject({
       name: 'authConfigId',
       isNullable: true,
       defaultValue: null,
-      description: 'Composio Instagram auth config id used to create this link.',
+      description:
+        'Composio Instagram auth config id used to create this link.',
     },
     {
-      universalIdentifier: INSTAGRAM_ACCOUNT_IG_USER_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        INSTAGRAM_ACCOUNT_IG_USER_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
       label: 'Instagram account ID',
       name: 'igUserId',
       isNullable: true,
       defaultValue: null,
-      description: 'Instagram-scoped account id when returned by provider data.',
+      description:
+        'Instagram-scoped account id when returned by provider data.',
     },
     {
-      universalIdentifier: INSTAGRAM_ACCOUNT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        INSTAGRAM_ACCOUNT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
       label: 'Username',
       name: 'username',
@@ -133,7 +137,8 @@ export default defineObject({
       name: 'lastCheckedAt',
       isNullable: true,
       defaultValue: null,
-      description: 'Most recent status check time for this Instagram connection.',
+      description:
+        'Most recent status check time for this Instagram connection.',
     },
     {
       universalIdentifier:
@@ -143,7 +148,8 @@ export default defineObject({
       name: 'lastConversationSyncAt',
       isNullable: true,
       defaultValue: null,
-      description: 'Most recent manual conversation sync time. Polling is disabled.',
+      description:
+        'Most recent manual conversation sync time. Polling is disabled.',
     },
     {
       universalIdentifier:
@@ -157,13 +163,15 @@ export default defineObject({
         'Safe cursor for future manual or scheduled conversation sync. Do not store tokenized paging.next URLs.',
     },
     {
-      universalIdentifier: INSTAGRAM_ACCOUNT_LAST_ERROR_FIELD_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        INSTAGRAM_ACCOUNT_LAST_ERROR_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
       label: 'Last error',
       name: 'lastError',
       isNullable: true,
       defaultValue: null,
-      description: 'Redacted latest provider/status error if the connection fails.',
+      description:
+        'Redacted latest provider/status error if the connection fails.',
     },
   ],
 });

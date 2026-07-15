@@ -20,6 +20,16 @@ const RESPONSE_MESSAGE = {
   parts: [{ type: 'text' as const, text: 'Hello' }],
 };
 
+type FakeChatStream = {
+  toUIMessageStream: (options: {
+    onError?: (error: unknown) => string;
+    onFinish?: (event: {
+      responseMessage: typeof RESPONSE_MESSAGE;
+      isAborted: boolean;
+    }) => Promise<void> | void;
+  }) => ReadableStream<UIMessageChunk>;
+};
+
 const createFakeChatStream = ({
   chunks = TEXT_CHUNKS,
   responseMessage = RESPONSE_MESSAGE,
@@ -30,14 +40,8 @@ const createFakeChatStream = ({
   responseMessage?: typeof RESPONSE_MESSAGE;
   midStreamError?: Error;
   onFirstChunk?: () => void;
-} = {}) => ({
-  toUIMessageStream: (options: {
-    onError?: (error: unknown) => string;
-    onFinish?: (event: {
-      responseMessage: typeof RESPONSE_MESSAGE;
-      isAborted: boolean;
-    }) => Promise<void> | void;
-  }) =>
+} = {}): FakeChatStream => ({
+  toUIMessageStream: (options) =>
     new ReadableStream<UIMessageChunk>({
       async start(controller) {
         let isFirstChunk = true;
@@ -89,14 +93,16 @@ describe('StreamAgentChatJob', () => {
     assistantPersistRejection,
     publishRejection,
     totalsUpdateAffected = 1,
+    titlePromise = Promise.resolve(null),
   }: {
     workspaceFound?: boolean;
-    chatStream?: ReturnType<typeof createFakeChatStream>;
+    chatStream?: FakeChatStream;
     streamChatRejection?: Error;
     addMessageRejection?: Error;
     assistantPersistRejection?: Error;
     publishRejection?: Error;
     totalsUpdateAffected?: number;
+    titlePromise?: Promise<string | null>;
   } = {}) => {
     const publishedEvents: PublishedEvent[] = [];
 
@@ -123,7 +129,7 @@ describe('StreamAgentChatJob', () => {
       upsertAssistantMessage: assistantPersistRejection
         ? jest.fn().mockRejectedValue(assistantPersistRejection)
         : jest.fn().mockResolvedValue(undefined),
-      generateTitleIfNeeded: jest.fn().mockResolvedValue(null),
+      generateTitleIfNeeded: jest.fn().mockReturnValue(titlePromise),
       notifyThreadUsageUpdated: jest.fn().mockResolvedValue(undefined),
     };
     const chatExecutionService = {
@@ -278,6 +284,42 @@ describe('StreamAgentChatJob', () => {
     ).toBeDefined();
   });
 
+  it('does not wait for title generation before finishing a pending approval stream', async () => {
+    const pendingApproval = {
+      type: 'tool-request_approval',
+      toolCallId: 'approval-call-id',
+      state: 'output-available',
+      input: {},
+      output: {
+        result: {
+          status: 'pending',
+          request: {},
+        },
+      },
+    };
+    const neverResolvingTitle = new Promise<string | null>(() => {});
+    const { job, publishedEvents, threadRepository } = buildJob({
+      titlePromise: neverResolvingTitle,
+      chatStream: createFakeChatStream({
+        responseMessage: {
+          role: 'assistant',
+          parts: [pendingApproval],
+        } as never,
+      }),
+    });
+
+    await job.handle({ ...jobData, hasTitle: false });
+
+    expect(threadRepository.update).toHaveBeenCalledWith(
+      'workspace-id',
+      { id: 'thread-id', activeStreamId: 'stream-id' },
+      expect.objectContaining({ pendingQuestionMessageId: expect.any(String) }),
+    );
+    expect(publishedEvents[publishedEvents.length - 1]).toMatchObject({
+      type: 'message-persisted',
+    });
+  });
+
   it('gates the thread totals on still owning the stream so a prior completion is not double-counted', async () => {
     const { job, agentChatService, threadRepository } = buildJob({
       totalsUpdateAffected: 0,
@@ -330,10 +372,6 @@ describe('StreamAgentChatJob', () => {
       });
 
     await expect(job.handle(jobData)).rejects.toThrow('provider exploded');
-
-    const chunkEvents = publishedEvents.filter(
-      (event) => event.type === 'stream-chunk',
-    );
 
     expect(publishedEvents.map((event) => event.type)).not.toContain(
       'message-persisted',

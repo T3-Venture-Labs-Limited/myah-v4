@@ -8,6 +8,7 @@ import {
   type AskQuestionsToolResult,
   ExtendedUIMessage,
   REQUEST_APPROVAL_TOOL_NAME,
+  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
   type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 import { isDefined } from 'twenty-shared/utils';
@@ -18,6 +19,7 @@ import type { UIDataTypes, UIMessagePart, UITools } from 'ai';
 
 import { CodeInterpreterService } from 'src/engine/core-modules/code-interpreter/code-interpreter.service';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
+import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
 import { AgentMessagePartEntity } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-message-part.entity';
 import {
   AgentMessageEntity,
@@ -89,6 +91,7 @@ export class AgentChatService {
     private readonly titleGenerationService: AgentTitleGenerationService,
     private readonly workspaceEventBroadcaster: WorkspaceEventBroadcaster,
     private readonly codeInterpreterService: CodeInterpreterService,
+    private readonly instagramReplyApprovalService: InstagramReplyApprovalService,
   ) {}
 
   async createThread({
@@ -689,15 +692,21 @@ export class AgentChatService {
     decision,
     streamId,
     workspaceId,
+    userWorkspaceId,
   }: {
     threadId: string;
     messageId: string;
     decision: AgentChatApprovalDecision;
     streamId: string;
     workspaceId: string;
+    userWorkspaceId: string;
   }): Promise<{
     turnId: string | null;
-    rollback: { partId: string; previousOutput: Record<string, unknown> };
+    rollback: {
+      partId: string;
+      previousOutput: Record<string, unknown>;
+      instagramReplyApprovalId?: string;
+    };
     shouldResume: boolean;
   }> {
     if (!APPROVAL_DECISIONS.includes(decision.decision as ApprovalDecision)) {
@@ -722,7 +731,8 @@ export class AgentChatService {
     const pendingHumanInputParts = (message.parts ?? []).filter((part) => {
       if (
         part.toolName !== ASK_QUESTIONS_TOOL_NAME &&
-        part.toolName !== REQUEST_APPROVAL_TOOL_NAME
+        part.toolName !== REQUEST_APPROVAL_TOOL_NAME &&
+        part.toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
       ) {
         return false;
       }
@@ -743,7 +753,10 @@ export class AgentChatService {
 
     const pendingPart = pendingHumanInputParts[0];
 
-    if (pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME) {
+    if (
+      pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME &&
+      pendingPart.toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
+    ) {
       throw new AiException(
         'No pending approval request to resolve.',
         AiExceptionCode.APPROVAL_NOT_PENDING,
@@ -763,6 +776,11 @@ export class AgentChatService {
       );
     }
 
+    const instagramReplyApprovalId =
+      pendingPart.toolName === REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
+        ? previousResult.approvalId
+        : undefined;
+
     const shouldResume = decision.decision === 'approved';
 
     const claim = await this.threadRepository.update(
@@ -781,7 +799,30 @@ export class AgentChatService {
       );
     }
 
+    let hasResolvedNativeApproval = false;
+
     try {
+      if (pendingPart.toolName === REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME) {
+        if (!instagramReplyApprovalId) {
+          throw new AiException(
+            'Instagram reply approval binding is invalid.',
+            AiExceptionCode.APPROVAL_NOT_PENDING,
+          );
+        }
+
+        await this.instagramReplyApprovalService.resolveApproval({
+          workspaceId,
+          userWorkspaceId,
+          threadId,
+          approvalId: instagramReplyApprovalId,
+          decision: decision.decision as
+            | 'approved'
+            | 'rejected'
+            | 'changes_requested',
+        });
+        hasResolvedNativeApproval = true;
+      }
+
       await this.messagePartRepository.update(
         workspaceId,
         { id: pendingPart.id },
@@ -792,6 +833,7 @@ export class AgentChatService {
             message: 'User resolved the approval request.',
             result: {
               request: previousResult.request,
+              approvalId: previousResult.approvalId,
               status: 'resolved',
               decision: decision.decision as ApprovalDecision,
               comment: decision.comment,
@@ -801,6 +843,13 @@ export class AgentChatService {
         },
       );
     } catch (error) {
+      if (hasResolvedNativeApproval && instagramReplyApprovalId) {
+        await this.instagramReplyApprovalService.restorePendingApproval({
+          workspaceId,
+          threadId,
+          approvalId: instagramReplyApprovalId,
+        });
+      }
       await this.threadRepository
         .update(
           workspaceId,
@@ -813,7 +862,11 @@ export class AgentChatService {
 
     return {
       turnId: message.turnId,
-      rollback: { partId: pendingPart.id, previousOutput },
+      rollback: {
+        partId: pendingPart.id,
+        previousOutput,
+        ...(instagramReplyApprovalId ? { instagramReplyApprovalId } : {}),
+      },
       shouldResume,
     };
   }
@@ -829,8 +882,20 @@ export class AgentChatService {
     messageId: string;
     streamId: string;
     workspaceId: string;
-    rollback: { partId: string; previousOutput: Record<string, unknown> };
+    rollback: {
+      partId: string;
+      previousOutput: Record<string, unknown>;
+      instagramReplyApprovalId?: string;
+    };
   }): Promise<void> {
+    if (rollback.instagramReplyApprovalId) {
+      await this.instagramReplyApprovalService.restorePendingApproval({
+        workspaceId,
+        threadId,
+        approvalId: rollback.instagramReplyApprovalId,
+      });
+    }
+
     await this.restorePendingQuestion({
       threadId,
       messageId,

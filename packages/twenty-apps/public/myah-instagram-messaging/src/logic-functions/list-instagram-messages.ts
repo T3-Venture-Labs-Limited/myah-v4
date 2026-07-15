@@ -15,7 +15,8 @@ const listInstagramMessagesInputSchema: InputJsonSchema = {
     },
     conversationId: {
       type: 'string',
-      description: 'Instagram conversation id returned by myah-list-instagram-conversations.',
+      description:
+        'Instagram conversation id returned by myah-list-instagram-conversations.',
     },
     limit: {
       type: 'integer',
@@ -25,11 +26,13 @@ const listInstagramMessagesInputSchema: InputJsonSchema = {
     },
     after: {
       type: 'string',
-      description: 'Pagination cursor from paging.cursors.after. Do not pass a paging.next URL.',
+      description:
+        'Pagination cursor from paging.cursors.after. Do not pass a paging.next URL.',
     },
     graphApiVersion: {
       type: 'string',
-      description: 'Optional Instagram Graph API version, defaults upstream to v21.0.',
+      description:
+        'Optional Instagram Graph API version, defaults upstream to v21.0.',
     },
   },
   required: ['conversationId'],

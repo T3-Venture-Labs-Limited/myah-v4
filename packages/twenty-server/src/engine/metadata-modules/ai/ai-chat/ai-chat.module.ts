@@ -6,6 +6,7 @@ import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { WorkspaceDomainsModule } from 'src/engine/core-modules/domain/workspace-domains/workspace-domains.module';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
+import { InstagramReplyModule } from 'src/engine/core-modules/instagram-reply/instagram-reply.module';
 import { ThrottlerModule } from 'src/engine/core-modules/throttler/throttler.module';
 import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-provider.module';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
@@ -51,6 +52,7 @@ import { SystemPromptBuilderService } from './services/system-prompt-builder.ser
       WorkspaceEntity,
     ]),
     AiAgentExecutionModule,
+    InstagramReplyModule,
     BillingModule,
     ThrottlerModule,
     FileModule,

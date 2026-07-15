@@ -1,5 +1,6 @@
 import { ASK_QUESTIONS_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/ask-questions.tool';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
+import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 import { assertHumanInputToolCallIsExclusive } from 'src/engine/metadata-modules/ai/ai-chat/utils/assert-human-input-tool-call-is-exclusive.util';
 import { AiExceptionCode } from 'src/engine/metadata-modules/ai/ai.exception';
 
@@ -21,7 +22,11 @@ describe('assertHumanInputToolCallIsExclusive', () => {
     ).not.toThrow();
   });
 
-  it.each([ASK_QUESTIONS_TOOL_NAME, REQUEST_APPROVAL_TOOL_NAME])(
+  it.each([
+    ASK_QUESTIONS_TOOL_NAME,
+    REQUEST_APPROVAL_TOOL_NAME,
+    REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+  ])(
     'rejects %s when mixed with another tool call in the same step',
     (toolName) => {
       expect(() =>

@@ -6,6 +6,7 @@ import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { JwtModule } from 'src/engine/core-modules/jwt/jwt.module';
+import { InstagramReplyModule } from 'src/engine/core-modules/instagram-reply/instagram-reply.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
 import { CodeInterpreterTool } from 'src/engine/core-modules/tool/tools/code-interpreter-tool/code-interpreter-tool';
@@ -13,6 +14,8 @@ import { DraftEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/dr
 import { EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
 import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
 import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool';
+import { PrepareInstagramReplyDraftTool } from 'src/engine/core-modules/tool/tools/instagram-tool/prepare-instagram-reply-draft-tool';
+import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 import { NavigateAppTool } from 'src/engine/core-modules/tool/tools/navigate-tool/navigate-app-tool';
 import { ExtractJsonPathsTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/extract-json-paths-tool';
 import { SearchOutputTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/search-output-tool';
@@ -32,6 +35,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     MessagingImportManagerModule,
     MessagingSendManagerModule,
     CalendarEventCreationManagerModule,
+    InstagramReplyModule,
     TypeOrmModule.forFeature([FileEntity, ConnectedAccountEntity]),
     ApplicationModule,
     FeatureFlagModule,
@@ -48,6 +52,8 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     SendEmailTool,
     DraftEmailTool,
     CreateCalendarEventTool,
+    PrepareInstagramReplyDraftTool,
+    SendInstagramReplyTool,
     EmailComposerService,
     SearchHelpCenterTool,
     CodeInterpreterTool,
@@ -63,6 +69,8 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     DraftEmailTool,
     CreateCalendarEventTool,
     EmailComposerService,
+    PrepareInstagramReplyDraftTool,
+    SendInstagramReplyTool,
     SearchHelpCenterTool,
     CodeInterpreterTool,
     NavigateAppTool,

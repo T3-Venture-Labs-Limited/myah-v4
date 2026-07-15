@@ -34,6 +34,7 @@ describe('MyahComposioService', () => {
     process.env = {
       ...originalEnv,
       COMPOSIO_API_KEY: 'cmp_test_key',
+      COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID: 'ac_instagram_test',
     };
     global.fetch = jest.fn();
   });
@@ -44,7 +45,7 @@ describe('MyahComposioService', () => {
     jest.restoreAllMocks();
   });
 
-  it('creates an Instagram OAuth link through Composio without exposing the API key', async () => {
+  it('selects the configured Instagram auth config when creating an OAuth session', async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
@@ -81,10 +82,13 @@ describe('MyahComposioService', () => {
         },
         body: JSON.stringify({
           user_id: 'workspace:workspace-id:instagram',
+          auth_configs: {
+            instagram: 'ac_instagram_test',
+          },
           multi_account: {
             enable: true,
             require_explicit_selection: true,
-            max_accounts_per_toolkit: 1,
+            max_accounts_per_toolkit: 2,
           },
         }),
       }),
@@ -127,7 +131,7 @@ describe('MyahComposioService', () => {
     expect(linkRequestBody).not.toHaveProperty('catalog');
   });
 
-  it('lists only the latest active Instagram connected account for the workspace-scoped Composio user', async () => {
+  it('lists every active Instagram connected account instead of silently selecting the newest one', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -168,6 +172,15 @@ describe('MyahComposioService', () => {
       }),
     ).resolves.toEqual([
       {
+        connectedAccountId: 'ca_instagram_old',
+        status: 'ACTIVE',
+        composioUserId: 'workspace:workspace-id:instagram',
+        authConfigId: 'ac_instagram',
+        toolkitSlug: 'instagram',
+        createdAt: '2026-07-07T03:19:50.756Z',
+        updatedAt: '2026-07-07T03:20:15.347Z',
+      },
+      {
         connectedAccountId: 'ca_instagram_new',
         status: 'ACTIVE',
         composioUserId: 'workspace:workspace-id:instagram',
@@ -190,7 +203,262 @@ describe('MyahComposioService', () => {
     );
   });
 
-  it('upserts the latest active Instagram account and removes stale local rows for that workspace user', async () => {
+  it('enriches an active Instagram account with its server-fetched profile identity', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'ca_instagram_active',
+              status: 'ACTIVE',
+              user_id: 'workspace:workspace-id:instagram',
+              auth_config_id: 'ac_instagram',
+              toolkit: { slug: 'instagram' },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          successful: true,
+          data: {
+            id: '17841400008460056',
+            username: 'myah_test_account',
+          },
+        }),
+      });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.listInstagramAccounts({
+        userId: buildInstagramComposioUserId('workspace-id'),
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        connectedAccountId: 'ca_instagram_active',
+        igUserId: '17841400008460056',
+        username: 'myah_test_account',
+      }),
+    ]);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://backend.composio.dev/api/v3.1/tools/execute/INSTAGRAM_GET_USER_INFO',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'cmp_test_key',
+        },
+        body: JSON.stringify({
+          connected_account_id: 'ca_instagram_active',
+          user_id: 'workspace:workspace-id:instagram',
+          arguments: { ig_user_id: 'me' },
+        }),
+      }),
+    );
+  });
+
+  it('keeps the active connection visible when profile lookup is unavailable', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'ca_instagram_active',
+              status: 'ACTIVE',
+              user_id: 'workspace:workspace-id:instagram',
+              auth_config_id: 'ac_instagram',
+              toolkit: { slug: 'instagram' },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'provider unavailable' }),
+      });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.listInstagramAccounts({
+        userId: buildInstagramComposioUserId('workspace-id'),
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        connectedAccountId: 'ca_instagram_active',
+        status: 'ACTIVE',
+      }),
+    ]);
+  });
+
+  it('resolves the single active Instagram account bound to the workspace user and approval', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            id: 'ca_instagram_approved',
+            status: 'ACTIVE',
+            user_id: 'workspace:workspace-id:instagram',
+            toolkit: { slug: 'instagram' },
+          },
+        ],
+      }),
+    });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.getActiveInstagramAccount({
+        workspaceId: 'workspace-id',
+        connectedAccountId: 'ca_instagram_approved',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        connectedAccountId: 'ca_instagram_approved',
+        composioUserId: 'workspace:workspace-id:instagram',
+      }),
+    );
+  });
+
+  it('rejects the approved account when no active Instagram account remains', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] }),
+    });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.getActiveInstagramAccount({
+        workspaceId: 'workspace-id',
+        connectedAccountId: 'ca_instagram_approved',
+      }),
+    ).rejects.toThrow(BadGatewayException);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects the approved account when multiple active Instagram accounts remain', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            id: 'ca_instagram_old',
+            status: 'ACTIVE',
+            user_id: 'workspace:workspace-id:instagram',
+            toolkit: { slug: 'instagram' },
+          },
+          {
+            id: 'ca_instagram_approved',
+            status: 'ACTIVE',
+            user_id: 'workspace:workspace-id:instagram',
+            toolkit: { slug: 'instagram' },
+          },
+        ],
+      }),
+    });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.getActiveInstagramAccount({
+        workspaceId: 'workspace-id',
+        connectedAccountId: 'ca_instagram_approved',
+      }),
+    ).rejects.toThrow(BadGatewayException);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an active Instagram account with a missing provider user ID', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            id: 'ca_instagram_approved',
+            status: 'ACTIVE',
+            toolkit: { slug: 'instagram' },
+          },
+        ],
+      }),
+    });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.getActiveInstagramAccount({
+        workspaceId: 'workspace-id',
+        connectedAccountId: 'ca_instagram_approved',
+      }),
+    ).rejects.toThrow(BadGatewayException);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an active Instagram account owned by a different provider user', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            id: 'ca_instagram_approved',
+            status: 'ACTIVE',
+            user_id: 'workspace:other-workspace:instagram',
+            toolkit: { slug: 'instagram' },
+          },
+        ],
+      }),
+    });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.getActiveInstagramAccount({
+        workspaceId: 'workspace-id',
+        connectedAccountId: 'ca_instagram_approved',
+      }),
+    ).rejects.toThrow(BadGatewayException);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the approved connected account ID bound to the active account', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            id: 'ca_instagram_other',
+            status: 'ACTIVE',
+            user_id: 'workspace:workspace-id:instagram',
+            toolkit: { slug: 'instagram' },
+          },
+        ],
+      }),
+    });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.getActiveInstagramAccount({
+        workspaceId: 'workspace-id',
+        connectedAccountId: 'ca_instagram_approved',
+      }),
+    ).rejects.toThrow(BadGatewayException);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('upserts every active Instagram account and removes stale local rows for that workspace user', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-08T04:30:00.000Z'));
 
     const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
@@ -249,7 +517,10 @@ describe('MyahComposioService', () => {
       expect.stringContaining(
         'DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahInstagramAccount"',
       ),
-      [buildInstagramComposioUserId(workspaceId), ['ca_instagram_new']],
+      [
+        buildInstagramComposioUserId(workspaceId),
+        ['ca_instagram_old', 'ca_instagram_new'],
+      ],
       undefined,
       { shouldBypassPermissionChecks: true },
     );
@@ -261,9 +532,39 @@ describe('MyahComposioService', () => {
       [
         'Workspace Instagram account',
         'Workspace Instagram account',
+        'ca_instagram_old',
+        buildInstagramComposioUserId(workspaceId),
+        'ac_instagram',
+        null,
+        null,
+        'ACTIVE',
+        '2026-07-08T04:30:00.000Z',
+        null,
+        FieldActorSource.SYSTEM,
+        null,
+        'System',
+        {},
+        FieldActorSource.SYSTEM,
+        null,
+        'System',
+        {},
+      ],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining(
+        'INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."_myahInstagramAccount"',
+      ),
+      [
+        'Workspace Instagram account',
+        'Workspace Instagram account',
         'ca_instagram_new',
         buildInstagramComposioUserId(workspaceId),
         'ac_instagram',
+        null,
+        null,
         'ACTIVE',
         '2026-07-08T04:30:00.000Z',
         null,

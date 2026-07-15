@@ -27,21 +27,24 @@ export default defineObject({
       description: 'Human-readable thread label, such as creator handle.',
     },
     {
-      universalIdentifier: SOCIAL_CONVERSATION_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        SOCIAL_CONVERSATION_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
       label: 'Provider conversation ID',
       name: 'providerConversationId',
-      description: 'Instagram/Composio conversation id used for manual message lookup.',
+      description:
+        'Instagram/Composio conversation id used for manual message lookup.',
     },
     {
-      universalIdentifier: SOCIAL_CONVERSATION_RECIPIENT_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      universalIdentifier:
+        SOCIAL_CONVERSATION_RECIPIENT_ID_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.TEXT,
       label: 'Recipient IGSID',
       name: 'recipientIgsid',
       isNullable: true,
       defaultValue: null,
       description:
-        'Instagram-scoped recipient id required by INSTAGRAM_SEND_TEXT_MESSAGE. Usernames are not accepted.',
+        'Instagram-scoped recipient id required by server-owned reply delivery. Usernames are not accepted.',
     },
   ],
 });
