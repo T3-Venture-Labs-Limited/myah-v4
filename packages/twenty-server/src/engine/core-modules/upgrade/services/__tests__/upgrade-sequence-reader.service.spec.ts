@@ -74,7 +74,6 @@ const makeFastInstance = (name: string) => makeStep('fast-instance', name);
 const makeWorkspace = (name: string) => makeStep('workspace', name);
 
 describe('UpgradeSequenceReaderService', () => {
-
   describe('getInitialCursorForNewWorkspace', () => {
     it('should return last workspace command of segment following completed instance command', async () => {
       const sequence = [

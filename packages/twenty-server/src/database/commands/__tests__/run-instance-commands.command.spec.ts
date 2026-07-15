@@ -65,7 +65,6 @@ describe('RunInstanceCommandsCommand', () => {
     });
   });
 
-
   it('keeps the slow provider binding idempotent after schema initialization', async () => {
     const query = jest.fn().mockResolvedValue(undefined);
 

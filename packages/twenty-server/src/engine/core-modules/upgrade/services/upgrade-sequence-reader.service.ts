@@ -52,7 +52,6 @@ export class UpgradeSequenceReaderService {
       for (const command of bundle.workspaceCommands) {
         sequence.push({ kind: 'workspace', ...command });
       }
-
     }
 
     return sequence;
