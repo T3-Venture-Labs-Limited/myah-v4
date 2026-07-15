@@ -171,6 +171,13 @@ Retain general Twenty marketplace support and required Composio configuration.
 - Add focused standard-map tests that assert the full Brand Brain and Creator
   Ops metadata surface: object and field universal identifiers, relations,
   indexes, views, navigation, roles, layouts, commands, agents, and skills.
+- Build those expectations through a test-only source-derived contract fixture.
+  The fixture must classify each canonical manifest declaration by its actual
+  flat-map category and relation endpoints; it must not duplicate hundreds of
+  universal identifiers by hand. Until the legacy packages are deleted, the
+  fixture may read their declarations as the migration source of truth. Before
+  deletion, replace the fixture's legacy imports with an equivalent static
+  contract generated from the verified source-owned definitions.
 - Confirm new-workspace initialization synchronizes the standard application.
 - Add a focused versioned-command test for dry-run, idempotency, successful
   migration, and legacy-installation ownership preservation.

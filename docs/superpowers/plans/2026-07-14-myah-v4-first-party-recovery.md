@@ -37,6 +37,7 @@
 ### Task 1: Lock the standard-metadata contract in a failing map test
 
 **Files:**
+- Create: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/myah-standard-metadata-contract.fixture.ts`
 - Create: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/compute-myah-standard-metadata.spec.ts`
 - Read as canonical inputs: `packages/twenty-apps/fixtures/brand-brain-record-wiki-mvp/src/{objects,fields,indexes,views,navigation-menu-items,page-layouts,roles,logic-functions}/**`
 - Read as canonical inputs: `packages/twenty-apps/internal/myah-creator-ops/src/{objects,views,navigation-menu-items,default-role.ts,constants}/**`
@@ -44,54 +45,53 @@
 - Read pattern: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/compute-call-recording-standard-metadata.spec.ts`
 
 **Interfaces:**
-- Consumes: `computeTwentyStandardApplicationAllFlatEntityMaps({ now, workspaceId, twentyStandardApplicationId })`.
-- Produces: a fixed contract test for the Myah universal identifiers and cross-map references consumed by Tasks 2 and 3.
+- Consumes: `computeTwentyStandardApplicationAllFlatEntityMaps({ now, workspaceId, twentyStandardApplicationId })` and the two canonical manifest trees.
+- Produces: `buildMyahStandardMetadataContract(): MyahStandardMetadataContract`, a test-only typed contract grouped by actual flat-map key and containing fixed relation/index references. Tasks 2 and 3 consume its tested schema surface.
 
-- [ ] **Step 1: Write the failing contract test with fixed IDs and time**
+- [ ] **Step 1: Write the source-derived failing contract fixture and test**
 
 ```ts
+const contract = buildMyahStandardMetadataContract();
 const result = computeTwentyStandardApplicationAllFlatEntityMaps({
   now: '2026-07-14T00:00:00.000Z',
   workspaceId: '00000000-0000-4000-8000-000000000001',
   twentyStandardApplicationId: '00000000-0000-4000-8000-000000000002',
 });
 
-expect(result.allFlatEntityMaps.flatObjectMetadataMaps
-  .idByUniversalIdentifier['6a8289d7-8034-4f70-b3fa-47bc0e52828f'])
-  .toBeDefined();
-expect(result.allFlatEntityMaps.flatObjectMetadataMaps
-  .idByUniversalIdentifier['f99ff6bc-3b56-4600-beb3-cfc2c23364f6'])
-  .toBeDefined();
+expect(result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier)
+  .toEqual(expect.objectContaining(contract.flatObjectMetadataMaps));
 ```
 
-Add assertions generated from the two source packages for every Myah object,
-field, relation field, index, search field, view, view field/group/filter,
-role, navigation item, layout/tab/widget, agent, skill, and command item. For
-Brand Brain, assert the page and link object IDs above, the page fields
-`title`, `slug`, `canonicalPath`, `idPath`, `pageType`, `status`, `body`,
-`summary`, `tags`, `sortOrder`, and `aliases`, all page/link relation fields,
-and the `canonicalPath` index. For Creator Ops, assert all ten declared
-objects, their relations, the three views, and the three navigation entries.
+The fixture must derive category tables from actual manifest declarations rather
+than a manually copied UUID list. It must distinguish flat entities from nested
+field-option identifiers, group every expected entity by its exact
+`allFlatEntityMaps` key, enumerate fixed source-object/target-object/target-field
+relation tuples, and expose the Brand Brain canonical-path index field linkage.
+For each expected Myah category, the test asserts inclusion in the correct map
+and absence from the other Myah categories. It covers every Brand Brain and
+Creator Ops object, field, index, search field, view, view child, role,
+navigation item, layout/tab/widget, agent, skill, and command item that the
+canonical manifests actually declare.
 
 - [ ] **Step 2: Run the test and confirm it fails because Myah metadata is absent**
 
-Run:
+Run the established narrow server test target. If its transitive Nx build chain
+prevents Jest from starting in a fresh worktree, use an ignored local Jest
+resolver only to map `twenty-shared/*` source barrels for this focused test;
+do not commit or alter the production/CI Jest configuration.
+
+Expected: assertion-only failure because Myah metadata is absent. A resolver,
+type, syntax, or unrelated suite failure does not establish the required red
+state.
+
+- [ ] **Step 3: Commit the failing fixture and contract test separately**
 
 ```sh
-npx nx run twenty-server:test --runTestsByPath \
-  packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/compute-myah-standard-metadata.spec.ts \
-  --coverage=false
+git add packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/myah-standard-metadata-contract.fixture.ts \
+  packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/compute-myah-standard-metadata.spec.ts
+git commit -m "test(myah): Define source-derived standard metadata contract"
 ```
 
-Expected: failure at the first missing Brand Brain or Creator Ops universal
-identifier. Do not weaken the assertions to make the missing metadata pass.
-
-- [ ] **Step 3: Commit the failing contract test separately**
-
-```sh
-git add packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/compute-myah-standard-metadata.spec.ts
-git commit -m "test(myah): Define standard metadata contract"
-```
 
 ### Task 2: Port declarative Brand Brain and Creator Ops metadata into standard maps
 
