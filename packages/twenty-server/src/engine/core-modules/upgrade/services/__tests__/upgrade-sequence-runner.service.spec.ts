@@ -57,13 +57,30 @@ describe('UpgradeSequenceRunnerService', () => {
             },
     } as unknown as UpgradeCommandRegistryService);
     const sequence = sequenceReader.getUpgradeSequence();
-    const runFastInstanceCommand = jest
-      .fn()
-      .mockResolvedValue({ status: 'success' });
-    const runSlowInstanceCommand = jest
-      .fn()
-      .mockResolvedValue({ status: 'success' });
-    const runWorkspaceCommands = jest.fn().mockResolvedValue(undefined);
+    const executedSteps: string[] = [];
+    const runFastInstanceCommand = jest.fn(
+      async ({ name }: { name: string }) => {
+        executedSteps.push(name);
+
+        return { status: 'success' };
+      },
+    );
+    const runSlowInstanceCommand = jest.fn(
+      async ({ name }: { name: string }) => {
+        executedSteps.push(name);
+
+        return { status: 'success' };
+      },
+    );
+    const runWorkspaceCommands = jest.fn(
+      async ({
+        workspaceCommands,
+      }: {
+        workspaceCommands: Array<{ name: string }>;
+      }) => {
+        executedSteps.push(...workspaceCommands.map(({ name }) => name));
+      },
+    );
     const workspaceCursors = new Map([
       [
         WORKSPACE_ID,
@@ -127,15 +144,18 @@ describe('UpgradeSequenceRunnerService', () => {
       totalSuccesses: 1,
     });
 
+    expect(runFastInstanceCommand).toHaveBeenCalledTimes(1);
     expect(runFastInstanceCommand).toHaveBeenCalledWith({
       command: repair.command,
       name: repair.name,
     });
+    expect(runSlowInstanceCommand).toHaveBeenCalledTimes(1);
     expect(runSlowInstanceCommand).toHaveBeenCalledWith({
       command: providerBinding.command,
       name: providerBinding.name,
       skipDataMigration: false,
     });
+    expect(runWorkspaceCommands).toHaveBeenCalledTimes(1);
     expect(runWorkspaceCommands).toHaveBeenCalledWith(
       expect.objectContaining({
         options: {} satisfies ParsedUpgradeCommandOptions,
@@ -144,5 +164,10 @@ describe('UpgradeSequenceRunnerService', () => {
         ],
       }),
     );
+    expect(executedSteps).toStrictEqual([
+      repair.name,
+      providerBinding.name,
+      workspaceCommand.name,
+    ]);
   });
 });
