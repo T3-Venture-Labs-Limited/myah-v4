@@ -29,6 +29,132 @@ export class ActionApprovalService {
     private readonly projector: ActionReceiptProjectorService,
   ) {}
 
+  async getApprovedBinding({
+    workspaceId,
+    approvalBindingId,
+    initiatorUserWorkspaceId,
+    threadId,
+  }: {
+    workspaceId: string;
+    approvalBindingId: string;
+    initiatorUserWorkspaceId: string;
+    threadId: string;
+  }): Promise<ExpectedActionBindingWithWorkspace> {
+    const binding = await this.dataSource
+      .getRepository(ActionApprovalBindingEntity)
+      .findOne({
+        where: { id: approvalBindingId, workspaceId },
+        relations: { evidenceLinks: true },
+      });
+
+    if (
+      !binding ||
+      binding.state !== ActionApprovalBindingState.APPROVED ||
+      binding.expiresAt <= new Date() ||
+      binding.initiatorUserWorkspaceId !== initiatorUserWorkspaceId ||
+      binding.threadId !== threadId
+    ) {
+      throw new Error('An approved action binding is required');
+    }
+
+    return {
+      workspaceId: binding.workspaceId,
+      actionName: binding.actionName as 'send_instagram_reply',
+      actionVersion: binding.actionVersion as 1,
+      draftId: binding.draftId,
+      contentDigest: binding.contentDigest,
+      recipientFingerprint: binding.recipientFingerprint ?? '',
+      sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
+      threadId: binding.threadId,
+      initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+      evidenceLinks: binding.evidenceLinks,
+    };
+  }
+
+  async reserveExecutionForBinding({
+    approvalBindingId,
+    expectedActionBinding,
+  }: {
+    approvalBindingId: string;
+    expectedActionBinding: ExpectedActionBindingWithWorkspace;
+  }): Promise<SafeActionExecutionReceipt> {
+    try {
+      return await this.dataSource.transaction((manager) =>
+        this.reserveBindingInTransaction(
+          manager,
+          approvalBindingId,
+          expectedActionBinding,
+        ),
+      );
+    } catch (error) {
+      if (!this.isUniqueViolation(error)) {
+        throw error;
+      }
+
+      const receipt = await this.dataSource
+        .getRepository(ActionExecutionReceiptEntity)
+        .findOne({
+          where: {
+            workspaceId: expectedActionBinding.workspaceId,
+            idempotencyKey: computeLogicalActionKey(expectedActionBinding),
+          },
+          relations: { actionApprovalBinding: { evidenceLinks: true } },
+        });
+      if (!receipt || receipt.actionApprovalBindingId !== approvalBindingId) {
+        throw error;
+      }
+      this.assertBindingMatches(
+        receipt.actionApprovalBinding,
+        expectedActionBinding,
+      );
+
+      return this.redactionService.toSafeReceipt(receipt);
+    }
+  }
+
+  async recordProviderTerminalState({
+    receiptId,
+    state,
+    code,
+  }: {
+    receiptId: string;
+    state:
+      | ActionExecutionReceiptState.BLOCKED
+      | ActionExecutionReceiptState.FAILED
+      | ActionExecutionReceiptState.UNKNOWN;
+    code: 'blocked' | 'failed' | 'unknown';
+  }): Promise<SafeActionExecutionReceipt> {
+    if (
+      (state === ActionExecutionReceiptState.BLOCKED && code !== 'blocked') ||
+      (state === ActionExecutionReceiptState.FAILED && code !== 'failed') ||
+      (state === ActionExecutionReceiptState.UNKNOWN && code !== 'unknown')
+    ) {
+      throw new Error('Unsafe provider outcome');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const receipt = await manager.findOne(ActionExecutionReceiptEntity, {
+        where: { id: receiptId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!receipt) {
+        throw new Error('Action execution receipt was not found');
+      }
+      if (receipt.state !== ActionExecutionReceiptState.PROCESSING) {
+        return this.redactionService.toSafeReceipt(receipt);
+      }
+
+      receipt.state = state;
+      receipt.providerMessageId = null;
+      receipt.providerCode = code;
+      receipt.redactedOutcome = code;
+
+      return this.redactionService.toSafeReceipt(
+        await manager.save(ActionExecutionReceiptEntity, receipt),
+      );
+    });
+  }
+
   async reserveExecution(
     input: ExpectedActionBindingWithWorkspace,
   ): Promise<SafeActionExecutionReceipt> {
@@ -144,6 +270,57 @@ export class ActionApprovalService {
     }
 
     return { unknown: staleProcessing.affected ?? 0, projected };
+  }
+
+  private async reserveBindingInTransaction(
+    manager: EntityManager,
+    approvalBindingId: string,
+    input: ExpectedActionBindingWithWorkspace,
+  ): Promise<SafeActionExecutionReceipt> {
+    const idempotencyKey = computeLogicalActionKey(input);
+    const priorReceipt = await manager.findOne(ActionExecutionReceiptEntity, {
+      where: { workspaceId: input.workspaceId, idempotencyKey },
+      relations: { actionApprovalBinding: { evidenceLinks: true } },
+    });
+    if (priorReceipt) {
+      if (priorReceipt.actionApprovalBindingId !== approvalBindingId) {
+        throw new Error('An approved action binding is required');
+      }
+      this.assertBindingMatches(priorReceipt.actionApprovalBinding, input);
+
+      return this.redactionService.toSafeReceipt(priorReceipt);
+    }
+
+    const binding = await manager.findOne(ActionApprovalBindingEntity, {
+      where: { id: approvalBindingId, workspaceId: input.workspaceId },
+      relations: { evidenceLinks: true },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (
+      !binding ||
+      binding.state !== ActionApprovalBindingState.APPROVED ||
+      binding.expiresAt <= new Date()
+    ) {
+      throw new Error('An approved action binding is required');
+    }
+    this.assertBindingMatches(binding, input);
+
+    binding.state = ActionApprovalBindingState.CONSUMED;
+    await manager.save(ActionApprovalBindingEntity, binding);
+
+    const receipt = manager.create(ActionExecutionReceiptEntity, {
+      workspaceId: input.workspaceId,
+      actionApprovalBindingId: binding.id,
+      idempotencyKey,
+      state: ActionExecutionReceiptState.PROCESSING,
+      providerMessageId: null,
+      providerCode: null,
+      redactedOutcome: null,
+    });
+
+    return this.redactionService.toSafeReceipt(
+      await manager.save(ActionExecutionReceiptEntity, receipt),
+    );
   }
 
   private async reserveInTransaction(

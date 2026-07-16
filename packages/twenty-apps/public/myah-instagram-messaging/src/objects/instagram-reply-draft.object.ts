@@ -1,15 +1,23 @@
-import { defineObject, FieldType } from 'twenty-sdk/define';
+import {
+  defineObject,
+  FieldType,
+  OnDeleteAction,
+  RelationType,
+} from 'twenty-sdk/define';
 
 import {
   REPLY_DRAFT_APPROVED_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_BODY_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_GENERATED_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SEND_BLOCKED_REASON_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SENT_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SOURCE_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_STATUS_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_TITLE_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_REPLY_DRAFTS_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
 enum ReplyDraftStatus {
@@ -164,6 +172,24 @@ export default defineObject({
       defaultValue: null,
       description:
         'Reason a draft cannot be sent, such as a closed Instagram reply window.',
+    },
+    {
+      universalIdentifier:
+        REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RELATION,
+      label: 'Conversation',
+      name: 'conversation',
+      description: 'Conversation this draft replies to.',
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        SOCIAL_CONVERSATION_REPLY_DRAFTS_FIELD_UNIVERSAL_IDENTIFIER,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'conversationId',
+      },
     },
   ],
 });

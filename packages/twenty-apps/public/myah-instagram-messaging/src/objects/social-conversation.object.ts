@@ -1,10 +1,24 @@
-import { defineObject, FieldType } from 'twenty-sdk/define';
+import {
+  defineObject,
+  FieldType,
+  OnDeleteAction,
+  RelationType,
+} from 'twenty-sdk/define';
 
 import {
+  INSTAGRAM_ACCOUNT_CONVERSATIONS_FIELD_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_ACCOUNT_OBJECT_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_ACCOUNT_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_MESSAGES_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_REPLY_DRAFTS_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_LABEL_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_RECIPIENT_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_MESSAGE_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_MESSAGE_OBJECT_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
 export default defineObject({
@@ -45,6 +59,56 @@ export default defineObject({
       defaultValue: null,
       description:
         'Instagram-scoped recipient id required by server-owned reply delivery. Usernames are not accepted.',
+    },
+    {
+      universalIdentifier:
+        SOCIAL_CONVERSATION_ACCOUNT_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RELATION,
+      label: 'Instagram account',
+      name: 'instagramAccount',
+      description: 'Connected Instagram account that owns this conversation.',
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        INSTAGRAM_ACCOUNT_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        INSTAGRAM_ACCOUNT_CONVERSATIONS_FIELD_UNIVERSAL_IDENTIFIER,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'instagramAccountId',
+      },
+    },
+    {
+      universalIdentifier:
+        SOCIAL_CONVERSATION_MESSAGES_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RELATION,
+      label: 'Messages',
+      name: 'messages',
+      description: 'Messages in this conversation.',
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        SOCIAL_MESSAGE_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        SOCIAL_MESSAGE_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
+    },
+    {
+      universalIdentifier:
+        SOCIAL_CONVERSATION_REPLY_DRAFTS_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RELATION,
+      label: 'Reply drafts',
+      name: 'replyDrafts',
+      description: 'Reply drafts prepared for this conversation.',
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
     },
   ],
 });

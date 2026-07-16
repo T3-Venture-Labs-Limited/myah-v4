@@ -14,6 +14,10 @@ import { FieldActorSource } from 'twenty-shared/types';
 const COMPOSIO_API_BASE_URL = 'https://backend.composio.dev/api/v3.1';
 const INSTAGRAM_TOOLKIT_SLUG = 'instagram';
 
+export const INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG =
+  'INSTAGRAM_LIST_ALL_MESSAGES';
+export const INSTAGRAM_SEND_TEXT_MESSAGE_TOOL_SLUG =
+  'INSTAGRAM_SEND_TEXT_MESSAGE';
 const INSTAGRAM_GET_USER_INFO_TOOL_SLUG = 'INSTAGRAM_GET_USER_INFO';
 export const buildInstagramComposioUserId = (workspaceId: string): string =>
   `workspace:${workspaceId}:instagram`;
@@ -70,7 +74,21 @@ type ComposioToolExecutionResponse = {
   successful?: boolean;
   successfull?: boolean;
   data?: unknown;
+  error?:
+    | string
+    | {
+        error_subcode?: string | number;
+      };
 };
+
+export type InstagramToolSlug =
+  | typeof INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG
+  | typeof INSTAGRAM_SEND_TEXT_MESSAGE_TOOL_SLUG;
+
+export type InstagramToolExecutionResult =
+  | { kind: 'success'; data: unknown }
+  | { kind: 'provider_failure'; providerSubcode?: string }
+  | { kind: 'unknown' };
 
 type InstagramProfile = {
   igUserId?: string;
@@ -219,6 +237,70 @@ export class MyahComposioService {
     }
 
     return account;
+  }
+
+  async executeInstagramTool({
+    workspaceId,
+    connectedAccountId,
+    toolSlug,
+    arguments: toolArguments,
+  }: {
+    workspaceId: string;
+    connectedAccountId: string;
+    toolSlug: InstagramToolSlug;
+    arguments: Record<string, string | number>;
+  }): Promise<InstagramToolExecutionResult> {
+    const apiKey = getEnv('COMPOSIO_API_KEY');
+    if (!apiKey) {
+      return { kind: 'provider_failure' };
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(
+        `${COMPOSIO_API_BASE_URL}/tools/execute/${toolSlug}`,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            connected_account_id: connectedAccountId,
+            user_id: buildInstagramComposioUserId(workspaceId),
+            arguments: toolArguments,
+          }),
+        },
+      );
+    } catch {
+      return { kind: 'unknown' };
+    }
+
+    let body: ComposioToolExecutionResponse;
+    try {
+      body = (await response.json()) as ComposioToolExecutionResponse;
+    } catch {
+      return { kind: 'unknown' };
+    }
+
+    if (
+      !response.ok ||
+      body.error ||
+      body.successful === false ||
+      body.successfull === false
+    ) {
+      const providerSubcode =
+        typeof body.error === 'object' && body.error !== null
+          ? toTrimmedString(body.error.error_subcode)?.toString() ??
+            (typeof body.error.error_subcode === 'number'
+              ? String(body.error.error_subcode)
+              : undefined)
+          : undefined;
+
+      return { kind: 'provider_failure', providerSubcode };
+    }
+
+    return { kind: 'success', data: body.data ?? body };
   }
 
   private async fetchActiveInstagramAccounts(

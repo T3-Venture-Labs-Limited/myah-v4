@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionApprovalBindingEvidenceLinkEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding-evidence-link.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
@@ -8,14 +9,18 @@ import { ActionApprovalService } from 'src/engine/core-modules/action-approval/s
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 import { ActionReceiptRedactionService } from 'src/engine/core-modules/action-approval/services/action-receipt-redaction.service';
 import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-modules/action-approval/services/action-receipt-workspace-projection-writer.service';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 
 @Module({
   imports: [
+    GlobalWorkspaceDataSourceModule,
     TypeOrmModule.forFeature([
       ActionApprovalBindingEntity,
       ActionApprovalBindingEvidenceLinkEntity,
       ActionExecutionReceiptEntity,
+      WorkspaceEntity,
     ]),
   ],
   providers: [
@@ -23,6 +28,7 @@ import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action
     ActionReceiptProjectorService,
     ActionReceiptRedactionService,
     ActionReceiptWorkspaceProjectionWriterService,
+    InstagramReplyActionDefinition,
     {
       provide: ACTION_RECEIPT_PROJECTION_WRITER,
       useExisting: ActionReceiptWorkspaceProjectionWriterService,
@@ -32,6 +38,7 @@ import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action
     ActionApprovalService,
     ActionReceiptProjectorService,
     ActionReceiptRedactionService,
+    InstagramReplyActionDefinition,
   ],
 })
 export class ActionApprovalModule {}

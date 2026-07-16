@@ -1,128 +1,251 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 import {
-  InstagramReplyExecutionError,
-  InstagramReplyExecutionService,
-} from 'src/engine/core-modules/instagram-reply/services/instagram-reply-execution.service';
-import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
-import { InstagramReplyExecutionState } from 'src/engine/core-modules/instagram-reply/entities/instagram-reply-execution-receipt.entity';
+  InstagramReplyActionDefinition,
+} from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import {
+  ActionExecutionReceiptState,
+} from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 import { type ToolExecutionContext } from 'src/engine/core-modules/tool/types/tool-execution-context.type';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
+import {
+  INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
+  INSTAGRAM_SEND_TEXT_MESSAGE_TOOL_SLUG,
+  MyahComposioService,
+  type InstagramToolExecutionResult,
+} from 'src/modules/myah-composio/services/myah-composio.service';
 
 import {
-  InstagramReplyToolInputZodSchema,
-  type InstagramReplyToolInput,
+  sendInstagramReplyInputSchema,
+  type SendInstagramReplyInput,
 } from './instagram-reply-tool.schema';
 
 @Injectable()
 export class SendInstagramReplyTool implements Tool {
-  private readonly logger = new Logger(SendInstagramReplyTool.name);
-
   description =
-    'Send a user-approved text reply only within a provider-verified existing Instagram conversation. Never use it for a first-contact DM.';
-  inputSchema = InstagramReplyToolInputZodSchema;
+    'Send exactly one bound, user-approved text reply after the server re-proves the canonical account, conversation, recipient, and inbound message. Never use it for a first-contact DM.';
+  inputSchema = sendInstagramReplyInputSchema;
 
   constructor(
-    private readonly instagramReplyApprovalService: InstagramReplyApprovalService,
-    private readonly instagramReplyExecutionService: InstagramReplyExecutionService,
+    private readonly actionApprovalService: ActionApprovalService,
+    private readonly actionDefinition: InstagramReplyActionDefinition,
+    private readonly myahComposioService: MyahComposioService,
+    private readonly projector: ActionReceiptProjectorService,
   ) {}
 
   async execute(
-    parameters: InstagramReplyToolInput,
+    parameters: SendInstagramReplyInput,
     context: ToolExecutionContext,
   ): Promise<ToolOutput> {
-    if (!context.userWorkspaceId || !context.threadId) {
+    const parsedInput = sendInstagramReplyInputSchema.safeParse(parameters);
+    if (!parsedInput.success || !context.userWorkspaceId || !context.threadId) {
       return {
         success: false,
         message: 'Instagram reply could not be authorized.',
         error:
-          'An authenticated chat thread is required to send an Instagram reply.',
+          'An authenticated chat thread and an approval binding are required to send an Instagram reply.',
       };
     }
 
     try {
+      const binding = await this.actionApprovalService.getApprovedBinding({
+        workspaceId: context.workspaceId,
+        approvalBindingId: parsedInput.data.approvalBindingId,
+        initiatorUserWorkspaceId: context.userWorkspaceId,
+        threadId: context.threadId,
+      });
+      const authority = await this.actionDefinition.rebuildExecutionAuthority({
+        workspaceId: context.workspaceId,
+        binding,
+      });
       const reservation =
-        await this.instagramReplyApprovalService.reserveExecution({
-          workspaceId: context.workspaceId,
-          userWorkspaceId: context.userWorkspaceId,
-          threadId: context.threadId,
-          approvalId: parameters.approvalId,
+        await this.actionApprovalService.reserveExecutionForBinding({
+          approvalBindingId: parsedInput.data.approvalBindingId,
+          expectedActionBinding: authority.expectedActionBinding,
         });
 
-      if (!reservation.created) {
-        return this.toExistingReceiptOutput(reservation.receipt.state);
+      if (reservation.state !== ActionExecutionReceiptState.PROCESSING) {
+        return {
+          success: false,
+          message:
+            'Instagram reply has already been processed and was not retried.',
+        };
       }
 
       try {
-        const result = await this.instagramReplyExecutionService.execute({
-          workspaceId: context.workspaceId,
-          approvalRequest: reservation.approvalRequest,
-        });
-        await this.instagramReplyApprovalService.finalizeExecution({
-          receipt: reservation.receipt,
-          state: InstagramReplyExecutionState.SENT,
-          providerMessageId: result.providerMessageId,
-        });
-
-        return {
-          success: true,
-          message: 'Instagram reply sent.',
-          result: { providerMessageId: result.providerMessageId },
-        };
-      } catch (error) {
-        if (!(error instanceof InstagramReplyExecutionError)) {
-          this.logger.error('Unexpected Instagram reply execution error');
+        const activeAccount =
+          await this.myahComposioService.getActiveInstagramAccount({
+            workspaceId: context.workspaceId,
+            connectedAccountId:
+              authority.canonicalGraph.account.connectedAccountId,
+          });
+        if (
+          activeAccount.connectedAccountId !==
+            authority.canonicalGraph.account.connectedAccountId ||
+          activeAccount.composioUserId !==
+            authority.canonicalGraph.account.composioUserId
+        ) {
+          return this.recordTerminalState(
+            reservation.id,
+            ActionExecutionReceiptState.FAILED,
+            'failed',
+          );
         }
 
-        const executionError =
-          error instanceof InstagramReplyExecutionError
-            ? error
-            : new InstagramReplyExecutionError(
-                'Instagram reply status is unknown; it was not retried.',
-                InstagramReplyExecutionState.UNKNOWN,
-                'UNEXPECTED_EXECUTION_ERROR',
-              );
-
-        await this.instagramReplyApprovalService.finalizeExecution({
-          receipt: reservation.receipt,
-          state: executionError.state,
-          failureCode: executionError.code,
-          failureReason: executionError.message,
+        const proof = await this.myahComposioService.executeInstagramTool({
+          workspaceId: context.workspaceId,
+          connectedAccountId:
+            authority.canonicalGraph.account.connectedAccountId,
+          toolSlug: INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
+          arguments: {
+            conversation_id: authority.canonicalGraph.providerConversationId,
+            limit: 25,
+          },
         });
+        if (proof.kind !== 'success') {
+          return this.recordProviderResult(reservation.id, proof);
+        }
+        if (
+          !this.hasInboundMessageFromRecipient(
+            proof.data,
+            authority.canonicalGraph.recipientIgsid,
+          )
+        ) {
+          return this.recordTerminalState(
+            reservation.id,
+            ActionExecutionReceiptState.FAILED,
+            'failed',
+          );
+        }
 
-        return {
-          success: false,
-          message: 'Instagram reply was not sent.',
-          error: executionError.message,
-        };
+        const sendResult =
+          await this.myahComposioService.executeInstagramTool({
+            workspaceId: context.workspaceId,
+            connectedAccountId:
+              authority.canonicalGraph.account.connectedAccountId,
+            toolSlug: INSTAGRAM_SEND_TEXT_MESSAGE_TOOL_SLUG,
+            arguments: {
+              recipient_id: authority.canonicalGraph.recipientIgsid,
+              text: authority.canonicalGraph.draftBody,
+            },
+          });
+        if (sendResult.kind !== 'success') {
+          return this.recordProviderResult(reservation.id, sendResult);
+        }
+
+        await this.actionApprovalService.recordProviderAccepted(reservation.id, {
+          code: 'accepted',
+          acceptedAt: new Date(),
+        });
+        try {
+          await this.projector.projectReceipt(reservation.id);
+        } catch {
+          // Reconciliation can replay this provider-free projection.
+        }
+
+        return { success: true, message: 'Instagram reply accepted.' };
+      } catch {
+        return this.recordTerminalState(
+          reservation.id,
+          ActionExecutionReceiptState.UNKNOWN,
+          'unknown',
+        );
       }
-    } catch (error) {
+    } catch {
       return {
         success: false,
         message: 'Instagram reply could not be authorized.',
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Instagram reply could not be authorized.',
+        error: 'Instagram reply could not be authorized.',
       };
     }
   }
 
-  private toExistingReceiptOutput(
-    state: InstagramReplyExecutionState,
-  ): ToolOutput {
-    if (state === InstagramReplyExecutionState.SENT) {
-      return {
-        success: true,
-        message: 'Instagram reply was already sent.',
-      };
+  private async recordProviderResult(
+    receiptId: string,
+    result: Exclude<InstagramToolExecutionResult, { kind: 'success' }>,
+  ): Promise<ToolOutput> {
+    if (
+      result.kind === 'provider_failure' &&
+      result.providerSubcode === '2534022'
+    ) {
+      return this.recordTerminalState(
+        receiptId,
+        ActionExecutionReceiptState.BLOCKED,
+        'blocked',
+      );
     }
+
+    return this.recordTerminalState(
+      receiptId,
+      result.kind === 'unknown'
+        ? ActionExecutionReceiptState.UNKNOWN
+        : ActionExecutionReceiptState.FAILED,
+      result.kind === 'unknown' ? 'unknown' : 'failed',
+    );
+  }
+
+  private async recordTerminalState(
+    receiptId: string,
+    state:
+      | ActionExecutionReceiptState.BLOCKED
+      | ActionExecutionReceiptState.FAILED
+      | ActionExecutionReceiptState.UNKNOWN,
+    code: 'blocked' | 'failed' | 'unknown',
+  ): Promise<ToolOutput> {
+    await this.actionApprovalService.recordProviderTerminalState({
+      receiptId,
+      state,
+      code,
+    });
 
     return {
       success: false,
-      message:
-        'Instagram reply has already been processed and was not retried.',
+      message: 'Instagram reply was not sent.',
     };
+  }
+
+  private hasInboundMessageFromRecipient(
+    data: unknown,
+    recipientIgsid: string,
+  ): boolean {
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
+
+    const record = data as Record<string, unknown>;
+    const nestedData =
+      record.data && typeof record.data === 'object'
+        ? (record.data as Record<string, unknown>).data
+        : undefined;
+    const messages = [record.data, record.items, nestedData].find(Array.isArray);
+    if (!messages) {
+      return false;
+    }
+
+    return messages.some((message) => {
+      if (!message || typeof message !== 'object') {
+        return false;
+      }
+      const candidate = message as Record<string, unknown>;
+      const sender =
+        candidate.from && typeof candidate.from === 'object'
+          ? candidate.from
+          : candidate.sender && typeof candidate.sender === 'object'
+            ? candidate.sender
+            : undefined;
+      const senderId =
+        sender && typeof (sender as Record<string, unknown>).id === 'string'
+          ? (sender as Record<string, unknown>).id
+          : undefined;
+      const direction =
+        typeof candidate.direction === 'string'
+          ? candidate.direction.toUpperCase()
+          : undefined;
+
+      return senderId === recipientIgsid && (!direction || direction === 'INBOUND');
+    });
   }
 }

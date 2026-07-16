@@ -258,8 +258,9 @@ export class ActionToolProvider implements ToolProvider {
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
     const approvalBindingId =
-      toolName === 'send_instagram_reply' && typeof args.approvalId === 'string'
-        ? args.approvalId
+      toolName === 'send_instagram_reply' &&
+      typeof args.approvalBindingId === 'string'
+        ? args.approvalBindingId
         : undefined;
 
     await this.externalWritePolicyService.assertExecutable({

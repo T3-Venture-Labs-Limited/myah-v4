@@ -52,7 +52,7 @@ describe('ActionToolProvider Instagram reply execution', () => {
     await expect(
       provider.executeStaticTool(
         'send_instagram_reply',
-        { approvalId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
+        { approvalBindingId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
         context as never,
       ),
     ).rejects.toThrow(
@@ -69,14 +69,14 @@ describe('ActionToolProvider Instagram reply execution', () => {
     await expect(
       provider.executeStaticTool(
         'send_instagram_reply',
-        { approvalId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
+        { approvalBindingId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
         context as never,
       ),
     ).resolves.toEqual({ success: true, message: 'executed' });
 
     expect(permissionsService.hasToolPermission).toHaveBeenCalledTimes(1);
     expect(sendInstagramReplyTool.execute).toHaveBeenCalledWith(
-      { approvalId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
+      { approvalBindingId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
       expect.objectContaining({ workspaceId: 'workspace-id' }),
     );
   });
