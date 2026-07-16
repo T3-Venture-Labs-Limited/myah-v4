@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { type Repository } from 'typeorm';
 
@@ -17,9 +17,8 @@ export class ActionReceiptProjectorService {
   constructor(
     @InjectRepository(ActionExecutionReceiptEntity)
     private readonly receiptRepository: Repository<ActionExecutionReceiptEntity>,
-    @Optional()
     @Inject(ACTION_RECEIPT_PROJECTION_WRITER)
-    private readonly projectionWriter?: ActionReceiptProjectionWriter,
+    private readonly projectionWriter: ActionReceiptProjectionWriter,
   ) {}
 
   async projectReceipt(
@@ -33,9 +32,6 @@ export class ActionReceiptProjectorService {
 
     if (receipt?.state !== ActionExecutionReceiptState.PROVIDER_ACCEPTED) {
       return { projected: false };
-    }
-    if (!this.projectionWriter) {
-      throw new Error('Action receipt projection writer is not configured');
     }
 
     await this.projectionWriter.project({

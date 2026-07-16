@@ -19,7 +19,7 @@ export class ActionReceiptRedactionService {
   toAcceptedProviderOutcome(
     input: ProviderAcceptedOutcomeInput,
   ): AcceptedProviderOutcome {
-    if (!SAFE_PROVIDER_OUTCOME_CODES[input.code]) {
+    if (!Object.hasOwn(SAFE_PROVIDER_OUTCOME_CODES, input.code)) {
       throw new Error('Unsafe provider outcome');
     }
 

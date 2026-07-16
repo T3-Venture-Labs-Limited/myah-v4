@@ -38,18 +38,29 @@ describe('ActionReceiptRedactionService', () => {
     );
   });
 
-  it('rejects provider outcomes outside the safe allowlist', () => {
-    expect(() =>
-      service.toAcceptedProviderOutcome({
-        code: 'accepted',
-        acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
-      }),
-    ).not.toThrow();
-    expect(() =>
-      service.toAcceptedProviderOutcome({
-        code: 'Bearer secret',
-        acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
-      }),
-    ).toThrow('Unsafe provider outcome');
+  it('accepts only explicit provider outcome codes', () => {
+    for (const code of ['accepted', 'queued']) {
+      expect(() =>
+        service.toAcceptedProviderOutcome({
+          code,
+          acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
+        }),
+      ).not.toThrow();
+    }
+
+    for (const code of [
+      'Bearer secret',
+      'constructor',
+      'toString',
+      '__proto__',
+      'arbitrary',
+    ]) {
+      expect(() =>
+        service.toAcceptedProviderOutcome({
+          code,
+          acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
+        }),
+      ).toThrow('Unsafe provider outcome');
+    }
   });
 });

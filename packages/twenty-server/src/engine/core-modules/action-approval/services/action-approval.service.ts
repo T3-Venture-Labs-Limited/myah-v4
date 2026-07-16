@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { DataSource, type EntityManager } from 'typeorm';
 
 import {
@@ -26,8 +26,7 @@ export class ActionApprovalService {
 
   constructor(
     private readonly dataSource: DataSource,
-    @Optional()
-    private readonly projector?: ActionReceiptProjectorService,
+    private readonly projector: ActionReceiptProjectorService,
   ) {}
 
   async reserveExecution(
@@ -130,10 +129,6 @@ export class ActionApprovalService {
       .andWhere('"updatedAt" < :processingBefore', { processingBefore })
       .execute();
 
-    if (!this.projector) {
-      return { unknown: staleProcessing.affected ?? 0, projected: 0 };
-    }
-
     const acceptedReceipts = await this.dataSource.getRepository(
       ActionExecutionReceiptEntity,
     ).find({
@@ -155,7 +150,21 @@ export class ActionApprovalService {
     manager: EntityManager,
     input: ExpectedActionBindingWithWorkspace,
   ): Promise<SafeActionExecutionReceipt> {
-    const binding = await manager
+    const idempotencyKey = computeLogicalActionKey(input);
+    const priorReceipt = await manager.findOne(ActionExecutionReceiptEntity, {
+      where: {
+        workspaceId: input.workspaceId,
+        idempotencyKey,
+      },
+      relations: { actionApprovalBinding: { evidenceLinks: true } },
+    });
+    if (priorReceipt) {
+      this.assertBindingMatches(priorReceipt.actionApprovalBinding, input);
+
+      return this.redactionService.toSafeReceipt(priorReceipt);
+    }
+
+    const candidates = await manager
       .getRepository(ActionApprovalBindingEntity)
       .createQueryBuilder('binding')
       .setLock('pessimistic_write')
@@ -175,37 +184,47 @@ export class ActionApprovalService {
       .andWhere('binding.state = :state', {
         state: ActionApprovalBindingState.APPROVED,
       })
+      .andWhere('binding."expiresAt" > :now', { now: new Date() })
       .orderBy('binding."createdAt"', 'ASC')
-      .getOne();
+      .getMany();
 
+    let binding: ActionApprovalBindingEntity | undefined;
+    for (const candidate of candidates) {
+      try {
+        this.assertBindingMatches(
+          candidate,
+          input,
+          await this.findEvidence(manager, candidate.id),
+        );
+        binding = candidate;
+        break;
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          error.message !== 'Action evidence does not match approved binding'
+        ) {
+          throw error;
+        }
+      }
+    }
     if (!binding) {
-      const priorReceipt = await manager.findOne(ActionExecutionReceiptEntity, {
+      const racedReceipt = await manager.findOne(ActionExecutionReceiptEntity, {
         where: {
           workspaceId: input.workspaceId,
-          idempotencyKey: computeLogicalActionKey(input),
+          idempotencyKey,
         },
         relations: { actionApprovalBinding: { evidenceLinks: true } },
       });
-      if (!priorReceipt) {
-        throw new Error('An approved action binding is required');
+      if (racedReceipt) {
+        this.assertBindingMatches(racedReceipt.actionApprovalBinding, input);
+
+        return this.redactionService.toSafeReceipt(racedReceipt);
       }
-      this.assertBindingMatches(priorReceipt.actionApprovalBinding, input);
-
-      return this.redactionService.toSafeReceipt(priorReceipt);
-    }
-
-    this.assertBindingMatches(binding, input, await this.findEvidence(manager, binding.id));
-    if (binding.expiresAt <= new Date()) {
-      throw new Error('Action approval binding has expired');
-    }
-
-    const idempotencyKey = computeLogicalActionKey(input);
-    const priorReceipt = await manager.findOneBy(ActionExecutionReceiptEntity, {
-      workspaceId: input.workspaceId,
-      idempotencyKey,
-    });
-    if (priorReceipt) {
-      return this.redactionService.toSafeReceipt(priorReceipt);
+      throw new Error(
+        candidates.length > 0
+          ? 'Action evidence does not match approved binding'
+          : 'An approved action binding is required',
+      );
     }
 
     binding.state = ActionApprovalBindingState.CONSUMED;

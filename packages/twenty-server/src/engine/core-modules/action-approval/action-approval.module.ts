@@ -7,6 +7,8 @@ import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-app
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 import { ActionReceiptRedactionService } from 'src/engine/core-modules/action-approval/services/action-receipt-redaction.service';
+import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-modules/action-approval/services/action-receipt-workspace-projection-writer.service';
+import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 
 @Module({
   imports: [
@@ -20,6 +22,11 @@ import { ActionReceiptRedactionService } from 'src/engine/core-modules/action-ap
     ActionApprovalService,
     ActionReceiptProjectorService,
     ActionReceiptRedactionService,
+    ActionReceiptWorkspaceProjectionWriterService,
+    {
+      provide: ACTION_RECEIPT_PROJECTION_WRITER,
+      useExisting: ActionReceiptWorkspaceProjectionWriterService,
+    },
   ],
   exports: [
     ActionApprovalService,

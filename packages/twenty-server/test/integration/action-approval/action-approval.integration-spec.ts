@@ -11,6 +11,9 @@ import {
   ActionExecutionReceiptState,
 } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
+import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-modules/action-approval/services/action-receipt-workspace-projection-writer.service';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { SEED_EMPTY_WORKSPACE_3_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 
@@ -21,6 +24,11 @@ const threadId = '90000000-0000-4000-8000-000000000004';
 const initiatorUserWorkspaceId = '90000000-0000-4000-8000-000000000005';
 const objectMetadataId = '90000000-0000-4000-8000-000000000006';
 const recordId = '90000000-0000-4000-8000-000000000007';
+const projectionWorkspaceId = workspaceId;
+const projectionBindingId = '90000000-0000-4000-8000-000000000010';
+const projectionReceiptId = '90000000-0000-4000-8000-000000000011';
+const projectionDraftId = '90000000-0000-4000-8000-000000000012';
+const projectionSchemaName = getWorkspaceSchemaName(projectionWorkspaceId);
 
 const expectedBinding = {
   workspaceId,
@@ -70,7 +78,44 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       }
     }
 
-    service = new ActionApprovalService(dataSource);
+    const projectionWriter = new ActionReceiptWorkspaceProjectionWriterService(
+      dataSource,
+    );
+    service = new ActionApprovalService(
+      dataSource,
+      new ActionReceiptProjectorService(
+        dataSource.getRepository(ActionExecutionReceiptEntity),
+        projectionWriter,
+      ),
+    );
+    await dataSource.query(`CREATE SCHEMA IF NOT EXISTS "${projectionSchemaName}"`);
+    await dataSource.query(`
+      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahInstagramReplyDraft" (
+        "id" uuid PRIMARY KEY,
+        "body" text NOT NULL,
+        "status" varchar NOT NULL,
+        "sentAt" timestamptz,
+        "updatedAt" timestamptz NOT NULL DEFAULT NOW()
+      )
+    `);
+    await dataSource.query(`
+      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahSocialMessage" (
+        "id" uuid PRIMARY KEY,
+        "text" text NOT NULL,
+        "direction" varchar NOT NULL,
+        "sentVia" varchar NOT NULL,
+        "createdAt" timestamptz NOT NULL,
+        "updatedAt" timestamptz NOT NULL,
+        "createdBySource" varchar NOT NULL,
+        "createdByWorkspaceMemberId" uuid,
+        "createdByName" varchar NOT NULL,
+        "createdByContext" jsonb NOT NULL,
+        "updatedBySource" varchar NOT NULL,
+        "updatedByWorkspaceMemberId" uuid,
+        "updatedByName" varchar NOT NULL,
+        "updatedByContext" jsonb NOT NULL
+      )
+    `);
   });
 
   afterAll(async () => {
@@ -81,6 +126,15 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     await dataSource.query(
       'DELETE FROM core."actionApprovalBinding" WHERE "workspaceId" = $1',
       [workspaceId],
+    );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahSocialMessage"
+      WHERE "createdByContext" ->> 'actionReceiptId' = $1`,
+      [projectionReceiptId],
+    );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahInstagramReplyDraft" WHERE "id" = $1`,
+      [projectionDraftId],
     );
     await dataSource.destroy();
   });
@@ -93,6 +147,15 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     await dataSource.query(
       'DELETE FROM core."actionApprovalBinding" WHERE "workspaceId" = $1',
       [workspaceId],
+    );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahSocialMessage"
+      WHERE "createdByContext" ->> 'actionReceiptId' = $1`,
+      [projectionReceiptId],
+    );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahInstagramReplyDraft" WHERE "id" = $1`,
+      [projectionDraftId],
     );
     await dataSource.getRepository(ActionApprovalBindingEntity).save({
       id: bindingId,
@@ -149,6 +212,104 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         where: { workspaceId },
       }),
     ).toBe(0);
+  });
+
+  it('replays an existing receipt before considering a separately-created expired or mismatched approval', async () => {
+    const first = await service.reserveExecution(expectedBinding);
+    const competingBindingId = '90000000-0000-4000-8000-000000000008';
+    await dataSource.getRepository(ActionApprovalBindingEntity).save({
+      id: competingBindingId,
+      workspaceId,
+      initiatorUserWorkspaceId,
+      actionName: expectedBinding.actionName,
+      actionVersion: expectedBinding.actionVersion,
+      draftId,
+      contentDigest: expectedBinding.contentDigest,
+      recipientFingerprint: expectedBinding.recipientFingerprint,
+      sendingAccountFingerprint: expectedBinding.sendingAccountFingerprint,
+      threadId,
+      state: ActionApprovalBindingState.APPROVED,
+      expiresAt: new Date('2020-01-01T00:00:00.000Z'),
+    });
+    await dataSource.getRepository(ActionApprovalBindingEvidenceLinkEntity).save({
+      actionApprovalBindingId: competingBindingId,
+      objectMetadataId,
+      recordId,
+      role: 'mismatched-role',
+    });
+
+    await expect(service.reserveExecution(expectedBinding)).resolves.toEqual(first);
+  });
+
+  it('retries a real PostgreSQL workspace projection after post-projection loss', async () => {
+    await dataSource.getRepository(ActionApprovalBindingEntity).save({
+      id: projectionBindingId,
+      workspaceId: projectionWorkspaceId,
+      initiatorUserWorkspaceId,
+      actionName: expectedBinding.actionName,
+      actionVersion: expectedBinding.actionVersion,
+      draftId: projectionDraftId,
+      contentDigest: expectedBinding.contentDigest,
+      recipientFingerprint: expectedBinding.recipientFingerprint,
+      sendingAccountFingerprint: expectedBinding.sendingAccountFingerprint,
+      threadId,
+      state: ActionApprovalBindingState.CONSUMED,
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+    });
+    await dataSource.getRepository(ActionExecutionReceiptEntity).save({
+      id: projectionReceiptId,
+      workspaceId: projectionWorkspaceId,
+      actionApprovalBindingId: projectionBindingId,
+      idempotencyKey: 'projection-retry-key',
+      state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      providerMessageId: null,
+      providerCode: 'accepted',
+      redactedOutcome: 'accepted',
+    });
+    await dataSource.query(
+      `INSERT INTO "${projectionSchemaName}"."_myahInstagramReplyDraft" (
+        "id", "body", "status"
+      ) VALUES ($1, $2, 'NEEDS_REVIEW')`,
+      [projectionDraftId, 'Projected message'],
+    );
+
+    const projector = new ActionReceiptProjectorService(
+      dataSource.getRepository(ActionExecutionReceiptEntity),
+      new ActionReceiptWorkspaceProjectionWriterService(dataSource),
+    );
+
+    await expect(
+      projector.projectReceipt(projectionReceiptId, {
+        afterWorkspaceProjection: async () => {
+          throw new Error('lost after workspace projection');
+        },
+      }),
+    ).rejects.toThrow('lost after workspace projection');
+
+    await expect(projector.projectReceipt(projectionReceiptId)).resolves.toEqual({
+      projected: true,
+    });
+    await expect(
+      dataSource.getRepository(ActionExecutionReceiptEntity).findOneByOrFail({
+        id: projectionReceiptId,
+      }),
+    ).resolves.toMatchObject({ state: ActionExecutionReceiptState.SENT });
+    await expect(
+      dataSource.query<{ count: string }[]>(
+        `SELECT count(*)::text AS "count"
+        FROM "${projectionSchemaName}"."_myahSocialMessage"
+        WHERE "createdByContext" ->> 'actionReceiptId' = $1`,
+        [projectionReceiptId],
+      ),
+    ).resolves.toEqual([{ count: '1' }]);
+    await expect(
+      dataSource.query(
+        `SELECT "status", "sentAt" IS NOT NULL AS "sent"
+        FROM "${projectionSchemaName}"."_myahInstagramReplyDraft"
+        WHERE "id" = $1`,
+        [projectionDraftId],
+      ),
+    ).resolves.toEqual([{ status: 'SENT', sent: true }]);
   });
 
   it('marks a receipt UNKNOWN after an injected post-reservation loss without submitting to a provider', async () => {
