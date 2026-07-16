@@ -1,4 +1,6 @@
 
+import { FieldMetadataType } from 'twenty-shared/types';
+
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { buildMyahStandardMetadataContract } from './myah-standard-metadata-contract.fixture';
@@ -80,6 +82,33 @@ describe('Myah standard metadata contract', () => {
           'searchVector',
         ]),
       );
+    }
+  });
+
+  it('normalizes select option positions and defaults', () => {
+    const myahObjectIds = new Set(contract.flatObjectMetadataMaps);
+    const fields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(
+      (field) =>
+        myahObjectIds.has(field.objectMetadataUniversalIdentifier) &&
+        field.type === FieldMetadataType.SELECT,
+    );
+
+    expect(fields).not.toHaveLength(0);
+
+    for (const field of fields) {
+      const options = field.options ?? [];
+
+      expect(options.map((option) => option.position)).toEqual(
+        options.map((_, position) => position),
+      );
+
+      if (field.defaultValue !== null) {
+        expect(options.map((option) => option.value)).toContain(
+          field.defaultValue,
+        );
+      }
     }
   });
 });
