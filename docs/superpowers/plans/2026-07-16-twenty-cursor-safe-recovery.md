@@ -279,7 +279,7 @@
 - [ ] **Step 2: Build the Railway production Docker target**
 
   ```bash
-  docker build --target production -f packages/twenty-docker/twenty/Dockerfile .
+  docker build --target railway -f packages/twenty-docker/twenty/Dockerfile .
   ```
 
   Expected: exit status 0; no TypeScript compilation or Docker-stage error.
