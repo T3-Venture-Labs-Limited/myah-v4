@@ -1,0 +1,3 @@
+export const BRAND_BRAIN_TOOL_SERVICE_TOKEN = Symbol(
+  'BRAND_BRAIN_TOOL_SERVICE',
+);
