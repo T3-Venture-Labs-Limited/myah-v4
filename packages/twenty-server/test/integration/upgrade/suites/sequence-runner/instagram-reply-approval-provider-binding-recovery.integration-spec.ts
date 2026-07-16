@@ -32,6 +32,37 @@ const dropApprovalSchema = async (context: IntegrationTestContext) => {
   );
 };
 
+const restoreApprovalSchema = async (context: IntegrationTestContext) => {
+  const queryRunner = context.dataSource.createQueryRunner();
+
+  try {
+    await new AddInstagramReplyApprovalProviderBindingSlowInstanceCommand().up(
+      queryRunner,
+    );
+  } finally {
+    await queryRunner.release();
+  }
+};
+
+const getApprovalTables = async (context: IntegrationTestContext) =>
+  context.dataSource.query<
+    { approvalRequest: string | null; executionReceipt: string | null }[]
+  >(
+    `SELECT
+      to_regclass('core."instagramReplyApprovalRequest"') AS "approvalRequest",
+      to_regclass('core."instagramReplyExecutionReceipt"') AS "executionReceipt"`,
+  );
+
+const getProviderColumns = async (context: IntegrationTestContext) =>
+  context.dataSource.query<{ column_name: string; data_type: string }[]>(
+    `SELECT column_name, data_type
+     FROM information_schema.columns
+     WHERE table_schema = 'core'
+       AND table_name = 'instagramReplyApprovalRequest'
+       AND column_name IN ('providerConversationId', 'recipientIgsid')
+     ORDER BY column_name`,
+  );
+
 describe('UpgradeSequenceRunnerService — provider-binding recovery (integration)', () => {
   let context: IntegrationTestContext;
 
@@ -40,10 +71,30 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
   }, 30000);
 
   afterAll(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
-    setMockActiveWorkspaceIds([]);
-    await context.module?.close();
-    await context.dataSource?.destroy();
+    try {
+      await restoreApprovalSchema(context);
+      await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+
+      const approvalTables = await getApprovalTables(context);
+
+      expect(approvalTables).toHaveLength(1);
+      expect(approvalTables[0]).toMatchObject({
+        approvalRequest: expect.any(String),
+        executionReceipt: expect.any(String),
+      });
+      await expect(getProviderColumns(context)).resolves.toStrictEqual([
+        { column_name: 'providerConversationId', data_type: 'text' },
+        { column_name: 'recipientIgsid', data_type: 'text' },
+      ]);
+    } finally {
+      setMockActiveWorkspaceIds([]);
+
+      try {
+        await context.module?.close();
+      } finally {
+        await context.dataSource?.destroy();
+      }
+    }
   }, 15000);
 
   beforeEach(async () => {
@@ -84,13 +135,7 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
 
     expect(report).toEqual({ totalFailures: 0, totalSuccesses: 1 });
 
-    const approvalTables = await context.dataSource.query<
-      { approvalRequest: string | null; executionReceipt: string | null }[]
-    >(
-      `SELECT
-        to_regclass('core."instagramReplyApprovalRequest"') AS "approvalRequest",
-        to_regclass('core."instagramReplyExecutionReceipt"') AS "executionReceipt"`,
-    );
+    const approvalTables = await getApprovalTables(context);
 
     expect(approvalTables).toHaveLength(1);
     expect(approvalTables[0]).toMatchObject({
@@ -98,16 +143,7 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
       executionReceipt: expect.any(String),
     });
 
-    const providerColumns = await context.dataSource.query<
-      { column_name: string; data_type: string }[]
-    >(
-      `SELECT column_name, data_type
-       FROM information_schema.columns
-       WHERE table_schema = 'core'
-         AND table_name = 'instagramReplyApprovalRequest'
-         AND column_name IN ('providerConversationId', 'recipientIgsid')
-       ORDER BY column_name`,
-    );
+    const providerColumns = await getProviderColumns(context);
 
     expect(providerColumns).toStrictEqual([
       { column_name: 'providerConversationId', data_type: 'text' },
@@ -145,5 +181,40 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
       await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executedAfterSecondRun).toStrictEqual(executed);
+  });
+  it('leaves missing approval schema for teardown after a recovery throws', async () => {
+    const recoveryError = new Error('provider-binding recovery exploded');
+    const sequence: UpgradeStep[] = [
+      {
+        kind: 'slow-instance',
+        name: providerBindingName,
+        version: '2.19.0',
+        timestamp: 1784106536001,
+        command: {
+          up: async () => {
+            throw recoveryError;
+          },
+          down: async () => {},
+          runDataMigration: async () => {},
+        },
+      } as unknown as UpgradeStep,
+    ];
+
+    await seedInstanceMigration(context.dataSource, {
+      name: providerBindingName,
+      status: 'failed',
+      workspaceIds: [WS_1],
+    });
+
+    await expect(
+      context.runner.run({
+        sequence,
+        options: DEFAULT_OPTIONS,
+      }),
+    ).rejects.toThrow(recoveryError);
+
+    expect(await getApprovalTables(context)).toStrictEqual([
+      { approvalRequest: null, executionReceipt: null },
+    ]);
   });
 });
