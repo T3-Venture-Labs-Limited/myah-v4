@@ -79,7 +79,7 @@ export class ExternalWritePolicyService {
       );
     }
 
-    if (!('permissionFlag' in policy)) {
+    if (policy.permissionFlag === undefined) {
       return;
     }
 

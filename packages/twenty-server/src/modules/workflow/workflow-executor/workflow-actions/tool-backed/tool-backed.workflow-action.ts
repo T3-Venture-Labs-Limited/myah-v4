@@ -78,7 +78,7 @@ export abstract class ToolBackedWorkflowAction<
       context: {
         workspaceId: runInfo.workspaceId,
         roleId: '',
-        rolePermissionConfig: {},
+        rolePermissionConfig: { shouldBypassPermissionChecks: true },
       },
     });
 

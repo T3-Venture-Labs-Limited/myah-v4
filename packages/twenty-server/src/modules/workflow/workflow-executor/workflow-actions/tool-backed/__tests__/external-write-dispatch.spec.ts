@@ -81,6 +81,10 @@ describe('workflow external write dispatch', () => {
     const externalWritePolicyService = new ExternalWritePolicyService({
       hasToolPermission: jest.fn().mockResolvedValue(true),
     } as never);
+    const assertExecutable = jest.spyOn(
+      externalWritePolicyService,
+      'assertExecutable',
+    );
     const action = new TestToolBackedWorkflowAction(
       tool,
       externalWritePolicyService,
@@ -102,6 +106,14 @@ describe('workflow external write dispatch', () => {
     ).rejects.toThrow('approval binding');
 
     expect(tool.execute).not.toHaveBeenCalled();
+    expect(assertExecutable).toHaveBeenCalledWith({
+      toolName: 'http_request',
+      context: {
+        workspaceId: 'workspace-id',
+        roleId: '',
+        rolePermissionConfig: { shouldBypassPermissionChecks: true },
+      },
+    });
   });
 
   it.each([

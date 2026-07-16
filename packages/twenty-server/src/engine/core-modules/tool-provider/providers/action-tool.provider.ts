@@ -43,6 +43,20 @@ export class ActionToolProvider implements ToolProvider {
 
   private readonly toolMap: Map<string, Tool>;
 
+  static readonly actionToolNames = Object.freeze([
+    'http_request',
+    'send_email',
+    'draft_email',
+    'prepare_instagram_reply_draft',
+    'send_instagram_reply',
+    'create_calendar_event',
+    'search_help_center',
+    'code_interpreter',
+    'navigate_app',
+    'extract_json_paths',
+    'search_output',
+  ] as const);
+
   constructor(
     private readonly httpTool: HttpTool,
     private readonly sendEmailTool: SendEmailTool,
@@ -60,19 +74,29 @@ export class ActionToolProvider implements ToolProvider {
     private readonly i18nService: I18nService,
     private readonly externalWritePolicyService: ExternalWritePolicyService,
   ) {
-    this.toolMap = new Map<string, Tool>([
-      ['http_request', this.httpTool],
-      ['send_email', this.sendEmailTool],
-      ['draft_email', this.draftEmailTool],
-      ['prepare_instagram_reply_draft', this.prepareInstagramReplyDraftTool],
-      ['send_instagram_reply', this.sendInstagramReplyTool],
-      ['create_calendar_event', this.createCalendarEventTool],
-      ['search_help_center', this.searchHelpCenterTool],
-      ['code_interpreter', this.codeInterpreterTool],
-      ['navigate_app', this.navigateAppTool],
-      ['extract_json_paths', this.extractJsonPathsTool],
-      ['search_output', this.searchOutputTool],
-    ]);
+    const actionTools: Record<
+      (typeof ActionToolProvider.actionToolNames)[number],
+      Tool
+    > = {
+      http_request: this.httpTool,
+      send_email: this.sendEmailTool,
+      draft_email: this.draftEmailTool,
+      prepare_instagram_reply_draft: this.prepareInstagramReplyDraftTool,
+      send_instagram_reply: this.sendInstagramReplyTool,
+      create_calendar_event: this.createCalendarEventTool,
+      search_help_center: this.searchHelpCenterTool,
+      code_interpreter: this.codeInterpreterTool,
+      navigate_app: this.navigateAppTool,
+      extract_json_paths: this.extractJsonPathsTool,
+      search_output: this.searchOutputTool,
+    };
+
+    this.toolMap = new Map(
+      ActionToolProvider.actionToolNames.map((toolName) => [
+        toolName,
+        actionTools[toolName],
+      ]),
+    );
   }
 
   async isAvailable(_context: ToolProviderContext): Promise<boolean> {

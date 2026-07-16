@@ -6,15 +6,17 @@ describe('WorkflowVersionStepResolver', () => {
     const httpTool = {
       execute: jest.fn().mockResolvedValue({ result: { status: 200 } }),
     };
-    const externalWritePolicyService = new ExternalWritePolicyService({
-      hasToolPermission: jest.fn().mockResolvedValue(true),
-    } as never);
+    const externalWritePolicyService = {
+      assertExecutable: jest
+        .fn()
+        .mockRejectedValue(new Error('approval binding required')),
+    };
     const resolver = new WorkflowVersionStepResolver(
       {} as never,
       {} as never,
       {} as never,
       httpTool as never,
-      externalWritePolicyService,
+      externalWritePolicyService as never,
       {} as never,
     );
 
@@ -31,5 +33,14 @@ describe('WorkflowVersionStepResolver', () => {
     ).rejects.toThrow('approval binding');
 
     expect(httpTool.execute).not.toHaveBeenCalled();
+
+    expect(externalWritePolicyService.assertExecutable).toHaveBeenCalledWith({
+      toolName: 'http_request',
+      context: {
+        workspaceId: 'workspace-id',
+        roleId: '',
+        rolePermissionConfig: { shouldBypassPermissionChecks: true },
+      },
+    });
   });
 });

@@ -171,7 +171,7 @@ export class WorkflowVersionStepResolver {
       context: {
         workspaceId: workspace.id,
         roleId: '',
-        rolePermissionConfig: {},
+        rolePermissionConfig: { shouldBypassPermissionChecks: true },
       },
     });
 
