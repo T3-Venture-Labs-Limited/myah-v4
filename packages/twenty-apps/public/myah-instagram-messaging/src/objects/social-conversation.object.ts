@@ -5,6 +5,8 @@ import {
   SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_CONVERSATION_RECIPIENT_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_LAST_INBOUND_AT_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_REPLY_WINDOW_ENDS_AT_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
 export default defineObject({
@@ -45,6 +47,30 @@ export default defineObject({
       defaultValue: null,
       description:
         'Instagram-scoped recipient id required by server-owned reply delivery. Usernames are not accepted.',
+    },
+    {
+      universalIdentifier:
+        SOCIAL_CONVERSATION_LAST_INBOUND_AT_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.DATE_TIME,
+      label: 'Last inbound message at',
+      name: 'lastInboundAt',
+      isNullable: true,
+      defaultValue: null,
+      isUIEditable: false,
+      description:
+        'Newest verified inbound creator-message timestamp used to calculate the reply window.',
+    },
+    {
+      universalIdentifier:
+        SOCIAL_CONVERSATION_REPLY_WINDOW_ENDS_AT_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.DATE_TIME,
+      label: 'Reply window',
+      name: 'replyWindowEndsAt',
+      isNullable: true,
+      defaultValue: null,
+      isUIEditable: false,
+      description:
+        'System-maintained deadline for replying to the creator on Instagram.',
     },
   ],
 });

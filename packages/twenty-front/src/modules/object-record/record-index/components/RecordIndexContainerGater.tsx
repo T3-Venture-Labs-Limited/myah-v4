@@ -1,6 +1,8 @@
 import { RecordIndexContextProvider } from '@/object-record/record-index/contexts/RecordIndexContext';
 
 import { getCommandMenuIdFromRecordIndexId } from '@/command-menu-item/utils/getCommandMenuIdFromRecordIndexId';
+import { isApplicationViewNavigationMenuItem } from '@/navigation-menu-item/common/utils/isApplicationViewNavigationMenuItem';
+import { navigationMenuItemsSelector } from '@/navigation-menu-item/common/states/navigationMenuItemsSelector';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { RecordIndexViewBar } from '@/object-record/record-index/components/RecordIndexViewBar';
@@ -19,6 +21,8 @@ import { useRecordIndexIdFromCurrentContextStore } from '@/object-record/record-
 import { RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS } from '@/ui/utilities/drag-select/constants/RecordIndecDragSelectBoundaryClass';
 import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
 import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
 import { styled } from '@linaria/react';
 import { useStore } from 'jotai';
@@ -36,6 +40,17 @@ export const RecordIndexContainerGater = () => {
 
   const { recordIndexId, objectMetadataItem } =
     useRecordIndexIdFromCurrentContextStore();
+  const { currentView } = useGetCurrentViewOnly();
+  const navigationMenuItems = useAtomStateValue(navigationMenuItemsSelector);
+  const isCurrentViewApplicationOwned = navigationMenuItems.some(
+    (navigationMenuItem) =>
+      isApplicationViewNavigationMenuItem(navigationMenuItem) &&
+      navigationMenuItem.viewId === currentView?.id,
+  );
+  const pageTitle =
+    isCurrentViewApplicationOwned && currentView?.name
+      ? currentView.name
+      : objectMetadataItem.labelPlural;
 
   const handleIndexRecordsLoaded = useCallback(() => {
     // TODO: find a better way to reset this state ?
@@ -93,7 +108,7 @@ export const RecordIndexContainerGater = () => {
                 instanceId: getCommandMenuIdFromRecordIndexId(recordIndexId),
               }}
             >
-              <PageTitle title={objectMetadataItem.labelPlural} />
+              <PageTitle title={pageTitle} />
               <PageCardLayout
                 header={<RecordIndexPageHeader />}
                 secondaryBar={

@@ -5,12 +5,15 @@ import { contextStoreNumberOfSelectedRecordsComponentState } from '@/context-sto
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
 import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { isApplicationViewNavigationMenuItem } from '@/navigation-menu-item/common/utils/isApplicationViewNavigationMenuItem';
+import { navigationMenuItemsSelector } from '@/navigation-menu-item/common/states/navigationMenuItemsSelector';
 import { RecordIndexPageHeaderIcon } from '@/object-record/record-index/components/RecordIndexPageHeaderIcon';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { SidePanelToggleButton } from '@/side-panel/components/SidePanelToggleButton';
 import { PageCardHeader } from '@/ui/layout/page/components/PageCardHeader';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
@@ -47,7 +50,17 @@ export const RecordIndexPageHeader = () => {
   const objectMetadataItem =
     findObjectMetadataItemByNamePlural(objectNamePlural);
 
-  const label = objectMetadataItem?.labelPlural ?? objectNamePlural;
+  const { currentView } = useGetCurrentViewOnly();
+  const navigationMenuItems = useAtomStateValue(navigationMenuItemsSelector);
+  const isCurrentViewApplicationOwned = navigationMenuItems.some(
+    (navigationMenuItem) =>
+      isApplicationViewNavigationMenuItem(navigationMenuItem) &&
+      navigationMenuItem.viewId === currentView?.id,
+  );
+  const label =
+    isCurrentViewApplicationOwned && currentView?.name
+      ? currentView.name
+      : (objectMetadataItem?.labelPlural ?? objectNamePlural);
 
   const pageHeaderTitle =
     contextStoreNumberOfSelectedRecords > 0 ? (

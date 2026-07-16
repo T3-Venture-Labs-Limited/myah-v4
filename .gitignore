@@ -38,6 +38,8 @@ dump.rdb
 .tinyb
 
 .notes
+# Assistant-authored local planning notes belong in Linear, not this public repository.
+/docs/superpowers/
 /data/
 /.devenv/
 /.direnv/

@@ -3,6 +3,7 @@ import { type ListInstagramConversationsInput } from 'src/logic-functions/types/
 import { executeComposioInstagramTool } from 'src/logic-functions/utils/execute-composio-instagram-tool';
 import {
   extractNestedDataList,
+  hasValidInstagramPaging,
   sanitizePaging,
 } from 'src/logic-functions/utils/instagram-response-normalization';
 import {
@@ -50,12 +51,21 @@ export const listInstagramConversationsHandler = async (
     return result;
   }
 
+  const conversations = extractNestedDataList(result.data);
+
+  if (!conversations || !hasValidInstagramPaging(result.data)) {
+    return {
+      success: false,
+      error: 'Instagram conversation lookup returned an invalid response.',
+    };
+  }
+
+  const paging = sanitizePaging(result.data);
+
   return {
     success: true,
     toolSlug: INSTAGRAM_LIST_ALL_CONVERSATIONS_TOOL_SLUG,
-    conversations: extractNestedDataList(result.data),
-    ...(sanitizePaging(result.data)
-      ? { paging: sanitizePaging(result.data) }
-      : {}),
+    conversations,
+    ...(paging ? { paging } : {}),
   };
 };

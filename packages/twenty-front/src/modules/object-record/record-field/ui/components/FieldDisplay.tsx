@@ -35,6 +35,7 @@ import { ChipFieldDisplay } from '@/object-record/record-field/ui/meta-types/dis
 import { CurrencyFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/CurrencyFieldDisplay';
 import { DateFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/DateFieldDisplay';
 import { DateTimeFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/DateTimeFieldDisplay';
+import { InstagramReplyWindowCountdownFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/InstagramReplyWindowCountdownFieldDisplay';
 import { FullNameFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/FullNameFieldDisplay';
 import { JsonFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/JsonFieldDisplay';
 import { MultiSelectFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/MultiSelectFieldDisplay';
@@ -54,6 +55,7 @@ import { isFieldRawJson } from '@/object-record/record-field/ui/types/guards/isF
 import { isFieldSelect } from '@/object-record/record-field/ui/types/guards/isFieldSelect';
 import { isFieldText } from '@/object-record/record-field/ui/types/guards/isFieldText';
 import { isFieldUuid } from '@/object-record/record-field/ui/types/guards/isFieldUuid';
+import { isInstagramReplyWindowDeadline } from '@/object-record/record-field/ui/utils/isInstagramReplyWindowDeadline';
 
 export const FieldDisplay = () => {
   const {
@@ -86,6 +88,8 @@ export const FieldDisplay = () => {
     <TextFieldDisplay />
   ) : isFieldUuid(fieldDefinition) ? (
     <UuidFieldDisplay />
+  ) : isInstagramReplyWindowDeadline(fieldDefinition) ? (
+    <InstagramReplyWindowCountdownFieldDisplay />
   ) : isFieldDateTime(fieldDefinition) ? (
     <DateTimeFieldDisplay />
   ) : isFieldDate(fieldDefinition) ? (

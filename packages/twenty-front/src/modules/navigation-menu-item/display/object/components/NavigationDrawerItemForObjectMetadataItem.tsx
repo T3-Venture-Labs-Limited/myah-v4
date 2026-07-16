@@ -4,6 +4,7 @@ import { Fragment, type ReactNode, useContext } from 'react';
 
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
 import { lastClickedNavigationMenuItemIdState } from '@/navigation-menu-item/common/states/lastClickedNavigationMenuItemIdState';
+import { isApplicationViewNavigationMenuItem } from '@/navigation-menu-item/common/utils/isApplicationViewNavigationMenuItem';
 import { recordIdentifierToObjectRecordIdentifier } from '@/navigation-menu-item/common/utils/recordIdentifierToObjectRecordIdentifier';
 import { useIdentifyActiveNavigationMenuItems } from '@/navigation-menu-item/display/hooks/useIdentifyActiveNavigationMenuItems';
 import { getNavigationMenuItemComputedLink } from '@/navigation-menu-item/display/utils/getNavigationMenuItemComputedLink';
@@ -168,8 +169,12 @@ export const NavigationDrawerItemForObjectMetadataItem = ({
 
   const iconThemeColor = !isRecord ? objectNavItemColor : undefined;
 
+  const isApplicationView =
+    isViewWithResolvedView &&
+    isDefined(navigationMenuItem) &&
+    isApplicationViewNavigationMenuItem(navigationMenuItem);
   const secondaryLabel =
-    isRecord || isViewWithResolvedView
+    isRecord || (isViewWithResolvedView && !isApplicationView)
       ? objectMetadataItem.labelSingular
       : undefined;
 

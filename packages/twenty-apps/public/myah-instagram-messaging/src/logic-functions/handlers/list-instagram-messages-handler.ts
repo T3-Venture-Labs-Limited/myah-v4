@@ -3,6 +3,7 @@ import { type ListInstagramMessagesInput } from 'src/logic-functions/types/insta
 import { executeComposioInstagramTool } from 'src/logic-functions/utils/execute-composio-instagram-tool';
 import {
   extractNestedDataList,
+  hasValidInstagramPaging,
   sanitizePaging,
 } from 'src/logic-functions/utils/instagram-response-normalization';
 import {
@@ -51,12 +52,21 @@ export const listInstagramMessagesHandler = async (
     return result;
   }
 
+  const messages = extractNestedDataList(result.data);
+
+  if (!messages || !hasValidInstagramPaging(result.data)) {
+    return {
+      success: false,
+      error: 'Instagram message lookup returned an invalid response.',
+    };
+  }
+
+  const paging = sanitizePaging(result.data);
+
   return {
     success: true,
     toolSlug: INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
-    messages: extractNestedDataList(result.data),
-    ...(sanitizePaging(result.data)
-      ? { paging: sanitizePaging(result.data) }
-      : {}),
+    messages,
+    ...(paging ? { paging } : {}),
   };
 };

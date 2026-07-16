@@ -84,4 +84,58 @@ describe('listInstagramMessagesHandler', () => {
       },
     });
   });
+
+  it('fails closed when Composio returns a malformed message list', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => buildComposioResponse({ data: { unexpected: true } })),
+    );
+
+    await expect(
+      listInstagramMessagesHandler({ conversationId: 'conversation_123' }),
+    ).resolves.toEqual({
+      success: false,
+      error: 'Instagram message lookup returned an invalid response.',
+    });
+  });
+
+  it('fails closed when a next page has no usable cursor', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        buildComposioResponse({
+          data: {
+            data: [],
+            paging: {
+              cursors: { after: 123 },
+              next: 'https://graph.facebook.com/v21.0/next-page',
+            },
+          },
+        }),
+      ),
+    );
+
+    await expect(
+      listInstagramMessagesHandler({ conversationId: 'conversation_123' }),
+    ).resolves.toEqual({
+      success: false,
+      error: 'Instagram message lookup returned an invalid response.',
+    });
+  });
+
+  it('fails closed when pagination metadata is not an object', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        buildComposioResponse({ data: { data: [], paging: [] } }),
+      ),
+    );
+
+    await expect(
+      listInstagramMessagesHandler({ conversationId: 'conversation_123' }),
+    ).resolves.toEqual({
+      success: false,
+      error: 'Instagram message lookup returned an invalid response.',
+    });
+  });
 });
