@@ -56,6 +56,35 @@ describe('approval optimistic state helpers', () => {
     });
   });
 
+  it('preserves the opaque action approval binding UUID when resolving', () => {
+    const actionApprovalBindingId =
+      'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
+    const registeredMessages = [
+      {
+        ...messages[0],
+        parts: [
+          {
+            ...messages[0].parts[0],
+            output: {
+              result: { status: 'pending', actionApprovalBindingId },
+            },
+          },
+        ],
+      },
+    ] as ExtendedUIMessage[];
+
+    const updated = markApprovalResolved(
+      registeredMessages,
+      'message-id',
+      'approval-call',
+      { decision: 'approved' },
+    );
+
+    expect(updated[0].parts[0]).toMatchObject({
+      output: { result: { actionApprovalBindingId, status: 'resolved' } },
+    });
+  });
+
   it('restores the matching approval part to pending', () => {
     const resolved = markApprovalResolved(
       messages,

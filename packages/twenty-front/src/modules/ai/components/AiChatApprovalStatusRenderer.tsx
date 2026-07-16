@@ -7,6 +7,7 @@ import { IconShield } from 'twenty-ui/icon';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { ShimmeringText } from '@/ai/components/ShimmeringText';
+import { AiChatActionApprovalEvidenceRenderer } from '@/ai/components/AiChatActionApprovalEvidenceRenderer';
 
 const StyledContainer = styled.div`
   align-items: flex-start;
@@ -39,6 +40,9 @@ const StyledDetail = styled.span`
   font-size: ${themeCssVariables.font.size.sm};
 `;
 
+const ACTION_APPROVAL_BINDING_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const AiChatApprovalStatusRenderer = ({
   toolPart,
   isStreaming,
@@ -49,8 +53,15 @@ export const AiChatApprovalStatusRenderer = ({
   const { t } = useLingui();
   const { theme } = useContext(ThemeContext);
   const result = (
-    toolPart.output as { result?: RequestApprovalToolResult } | null
+    toolPart.output as {
+      result?: RequestApprovalToolResult & { actionApprovalBindingId?: unknown };
+    } | null
   )?.result;
+  const actionApprovalBindingId =
+    typeof result?.actionApprovalBindingId === 'string' &&
+    ACTION_APPROVAL_BINDING_ID_PATTERN.test(result.actionApprovalBindingId)
+      ? result.actionApprovalBindingId
+      : undefined;
   const status = result?.status ?? 'pending';
 
   if (status === 'pending') {
@@ -65,6 +76,11 @@ export const AiChatApprovalStatusRenderer = ({
           </ShimmeringText>
         ) : (
           <StyledMessage>{label}</StyledMessage>
+        )}
+        {actionApprovalBindingId && (
+          <AiChatActionApprovalEvidenceRenderer
+            bindingId={actionApprovalBindingId}
+          />
         )}
       </StyledContainer>
     );
@@ -84,6 +100,11 @@ export const AiChatApprovalStatusRenderer = ({
         <StyledMessage>{decisionLabel}</StyledMessage>
         {result?.comment && <StyledDetail>{result.comment}</StyledDetail>}
       </StyledContent>
+        {actionApprovalBindingId && (
+          <AiChatActionApprovalEvidenceRenderer
+            bindingId={actionApprovalBindingId}
+          />
+        )}
     </StyledContainer>
   );
 };

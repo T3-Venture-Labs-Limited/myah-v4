@@ -34,11 +34,12 @@ export const markApprovalResolved = (
           ? (part.output as Record<string, unknown>)
           : {};
         const previousResult = previousOutput.result as
-          | RequestApprovalToolResult
+          | (Partial<RequestApprovalToolResult> & {
+              actionApprovalBindingId?: string;
+            })
           | undefined;
-        const request = previousResult?.request;
 
-        if (!isDefined(request)) {
+        if (!isDefined(previousResult)) {
           return part;
         }
 
@@ -47,12 +48,12 @@ export const markApprovalResolved = (
           output: {
             ...previousOutput,
             result: {
-              request,
+              ...previousResult,
               status: 'resolved',
               decision: resolution.decision,
               comment: resolution.comment,
               decidedAt: new Date().toISOString(),
-            } satisfies RequestApprovalToolResult,
+            },
           },
         } as ExtendedUIMessagePart;
       }),

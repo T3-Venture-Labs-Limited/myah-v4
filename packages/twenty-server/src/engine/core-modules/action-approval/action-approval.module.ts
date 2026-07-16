@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { ActionApprovalResolver } from 'src/engine/core-modules/action-approval/action-approval.resolver';
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionApprovalBindingEvidenceLinkEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding-evidence-link.entity';
@@ -26,6 +27,7 @@ import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action
   providers: [
     ActionApprovalService,
     ActionReceiptProjectorService,
+    ActionApprovalResolver,
     ActionReceiptRedactionService,
     ActionReceiptWorkspaceProjectionWriterService,
     InstagramReplyActionDefinition,
