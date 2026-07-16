@@ -125,6 +125,9 @@ const evolveLegacyBinding = async (queryRunner: QueryRunner) => {
     ADD COLUMN IF NOT EXISTS "actionVersion" integer NOT NULL DEFAULT 1,
     ADD COLUMN IF NOT EXISTS "recipientFingerprint" varchar(64),
     ADD COLUMN IF NOT EXISTS "sendingAccountFingerprint" varchar(64)`);
+  await queryRunner.query(
+    `ALTER TABLE ${BINDING} ALTER COLUMN "id" SET DEFAULT uuid_generate_v4()`,
+  );
   await queryRunner.query(`UPDATE ${BINDING}
     SET "actionName" = 'send_instagram_reply'
     WHERE "actionName" = 'request_instagram_reply_approval'`);
@@ -138,11 +141,22 @@ const evolveLegacyBinding = async (queryRunner: QueryRunner) => {
       UPDATE core."agentMessagePart" AS part
       SET "toolOutput" = jsonb_build_object(
         'success', true,
-        'result', jsonb_build_object('status', 'expired', 'bindingId', binding.id)
+        'result', CASE WHEN (
+          SELECT count(*)
+          FROM core."actionApprovalBinding" AS binding
+          WHERE binding."approvalId"::text =
+            part."toolOutput"->'result'->>'approvalId'
+        ) = 1 THEN jsonb_build_object(
+          'status', 'expired',
+          'bindingId', (
+            SELECT binding.id
+            FROM core."actionApprovalBinding" AS binding
+            WHERE binding."approvalId"::text =
+              part."toolOutput"->'result'->>'approvalId'
+          )
+        ) ELSE jsonb_build_object('status', 'expired') END
       )
-      FROM core."actionApprovalBinding" AS binding
-      WHERE part."toolName" = 'request_instagram_reply_approval'
-        AND part."toolOutput"->'result'->>'approvalId' = binding."approvalId"::text;
+      WHERE part."toolName" = 'request_instagram_reply_approval';
     END IF;
   END $$`);
   await queryRunner.query(`ALTER TABLE ${BINDING}
@@ -184,6 +198,9 @@ const evolveLegacyReceipt = async (queryRunner: QueryRunner) => {
     ADD COLUMN IF NOT EXISTS "workspaceId" uuid,
     ADD COLUMN IF NOT EXISTS "idempotencyKey" varchar(64),
     ADD COLUMN IF NOT EXISTS "redactedOutcome" varchar`);
+  await queryRunner.query(
+    `ALTER TABLE ${RECEIPT} ALTER COLUMN "id" SET DEFAULT uuid_generate_v4()`,
+  );
   await queryRunner.query(`UPDATE ${RECEIPT} AS receipt
     SET "workspaceId" = binding."workspaceId",
         "idempotencyKey" = 'legacy:' || receipt.id::text,
@@ -246,17 +263,30 @@ export class EvolveInstagramApprovalToActionAuthorityFastInstanceCommand
     const hasLegacyBinding = await tableExists(queryRunner, LEGACY_BINDING);
     const hasLegacyReceipt = await tableExists(queryRunner, LEGACY_RECEIPT);
     const hasBinding = await tableExists(queryRunner, BINDING);
+    const hasEvidenceLink = await tableExists(queryRunner, EVIDENCE_LINK);
     const hasReceipt = await tableExists(queryRunner, RECEIPT);
 
-    await createGenericTypes(queryRunner);
-
-    if (!hasLegacyBinding && !hasLegacyReceipt && !hasBinding && !hasReceipt) {
+    if (
+      !hasLegacyBinding &&
+      !hasLegacyReceipt &&
+      !hasBinding &&
+      !hasEvidenceLink &&
+      !hasReceipt
+    ) {
+      await createGenericTypes(queryRunner);
       await createGenericTables(queryRunner);
 
       return;
     }
 
-    if (hasLegacyBinding && hasLegacyReceipt && !hasBinding && !hasReceipt) {
+    if (
+      hasLegacyBinding &&
+      hasLegacyReceipt &&
+      !hasBinding &&
+      !hasEvidenceLink &&
+      !hasReceipt
+    ) {
+      await createGenericTypes(queryRunner);
       await renameLegacyTables(queryRunner);
       await evolveLegacyBinding(queryRunner);
       await evolveLegacyReceipt(queryRunner);
@@ -266,106 +296,115 @@ export class EvolveInstagramApprovalToActionAuthorityFastInstanceCommand
       await queryRunner.query(
         'DROP TYPE IF EXISTS core."instagramReplyExecutionReceipt_state_enum"',
       );
-      await queryRunner.query(`CREATE TABLE IF NOT EXISTS ${EVIDENCE_LINK} (
-        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
-        "actionApprovalBindingId" uuid NOT NULL,
-        "objectMetadataId" uuid NOT NULL,
-        "recordId" uuid NOT NULL,
-        "role" varchar NOT NULL,
-        "createdAt" timestamptz NOT NULL DEFAULT now(),
-        CONSTRAINT "PK_ACTION_APPROVAL_BINDING_EVIDENCE_LINK" PRIMARY KEY ("id"),
-        CONSTRAINT "UQ_ACTION_APPROVAL_BINDING_EVIDENCE_LINK" UNIQUE (
-          "actionApprovalBindingId", "objectMetadataId", "recordId", "role"
-        ),
-        CONSTRAINT "FK_ACTION_APPROVAL_BINDING_EVIDENCE_LINK_BINDING"
-          FOREIGN KEY ("actionApprovalBindingId") REFERENCES ${BINDING}("id") ON DELETE CASCADE
-      )`);
+      await createGenericTables(queryRunner);
 
       return;
     }
 
-    await createGenericTables(queryRunner);
+    if (
+      !hasLegacyBinding &&
+      !hasLegacyReceipt &&
+      hasBinding &&
+      hasEvidenceLink &&
+      hasReceipt
+    ) {
+      return;
+    }
+
+    throw new Error('Unsupported action approval migration table state');
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    if (!(await tableExists(queryRunner, BINDING))) {
+    const hasBinding = await tableExists(queryRunner, BINDING);
+    const hasEvidenceLink = await tableExists(queryRunner, EVIDENCE_LINK);
+    const hasReceipt = await tableExists(queryRunner, RECEIPT);
+
+    if (!hasBinding && !hasEvidenceLink && !hasReceipt) {
       return;
     }
 
-    await queryRunner.query(`DO $$ BEGIN
-      CREATE TYPE core."instagramReplyApprovalRequest_state_enum" AS ENUM (
-        'PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED'
-      );
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END $$`);
-    await queryRunner.query(`DO $$ BEGIN
-      CREATE TYPE core."instagramReplyExecutionReceipt_state_enum" AS ENUM (
-        'PROCESSING', 'SENT', 'FAILED', 'BLOCKED', 'UNKNOWN'
-      );
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END $$`);
+    if (!hasBinding || !hasEvidenceLink || !hasReceipt) {
+      throw new Error('Unsupported action approval migration table state');
+    }
 
+    const [{ bindingRows, evidenceRows, receiptRows }] =
+      (await queryRunner.query(`SELECT
+        (SELECT count(*) FROM ${BINDING}) AS "bindingRows",
+        (SELECT count(*) FROM ${EVIDENCE_LINK}) AS "evidenceRows",
+        (SELECT count(*) FROM ${RECEIPT}) AS "receiptRows"`)) as {
+        bindingRows: string;
+        evidenceRows: string;
+        receiptRows: string;
+      }[];
+
+    if (
+      Number(bindingRows) > 0 ||
+      Number(evidenceRows) > 0 ||
+      Number(receiptRows) > 0
+    ) {
+      throw new Error(
+        'Cannot roll back populated action approval authority tables',
+      );
+    }
+
+    await queryRunner.query(`DROP TABLE ${EVIDENCE_LINK}`);
+    await queryRunner.query(`DROP TABLE ${RECEIPT}`);
+    await queryRunner.query(`DROP TABLE ${BINDING}`);
     await queryRunner.query(
-      `ALTER TABLE ${RECEIPT} DROP CONSTRAINT IF EXISTS "FK_ACTION_EXECUTION_RECEIPT_BINDING"`,
-    );
-    await queryRunner.query(`ALTER TABLE ${RECEIPT}
-      ALTER COLUMN "state" DROP DEFAULT,
-      ALTER COLUMN "state" TYPE core."instagramReplyExecutionReceipt_state_enum"
-        USING CASE "state"::text
-          WHEN 'PROCESSING' THEN 'PROCESSING'
-          WHEN 'SENT' THEN 'SENT'
-          WHEN 'FAILED' THEN 'FAILED'
-          WHEN 'BLOCKED' THEN 'BLOCKED'
-          ELSE 'UNKNOWN'
-        END::core."instagramReplyExecutionReceipt_state_enum",
-      ALTER COLUMN "state" SET DEFAULT 'PROCESSING'`);
-    await queryRunner.query(
-      `ALTER TABLE ${RECEIPT} RENAME COLUMN "actionApprovalBindingId" TO "approvalRequestId"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE ${RECEIPT} RENAME COLUMN "providerCode" TO "failureCode"`,
-    );
-    await queryRunner.query(`ALTER TABLE ${RECEIPT}
-      ADD COLUMN IF NOT EXISTS "failureReason" text,
-      DROP COLUMN IF EXISTS "workspaceId",
-      DROP COLUMN IF EXISTS "idempotencyKey",
-      DROP COLUMN IF EXISTS "redactedOutcome"`);
-    await queryRunner.query(`ALTER TABLE ${BINDING}
-      ALTER COLUMN "state" DROP DEFAULT,
-      ALTER COLUMN "state" TYPE core."instagramReplyApprovalRequest_state_enum"
-        USING CASE "state"::text
-          WHEN 'REJECTED' THEN 'REJECTED'
-          WHEN 'CHANGES_REQUESTED' THEN 'CHANGES_REQUESTED'
-          WHEN 'APPROVED' THEN 'APPROVED'
-          ELSE 'PENDING'
-        END::core."instagramReplyApprovalRequest_state_enum",
-      ALTER COLUMN "state" SET DEFAULT 'PENDING'`);
-    await queryRunner.query(
-      `ALTER TABLE ${BINDING} RENAME COLUMN "initiatorUserWorkspaceId" TO "userWorkspaceId"`,
+      'DROP TYPE IF EXISTS core."actionApprovalBinding_state_enum"',
     );
     await queryRunner.query(
-      `ALTER TABLE ${BINDING} RENAME COLUMN "actionName" TO "toolName"`,
+      'DROP TYPE IF EXISTS core."actionExecutionReceipt_state_enum"',
     );
+    await queryRunner.query(`CREATE TYPE core."instagramReplyApprovalRequest_state_enum" AS ENUM (
+      'PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED'
+    )`);
+    await queryRunner.query(`CREATE TYPE core."instagramReplyExecutionReceipt_state_enum" AS ENUM (
+      'PROCESSING', 'SENT', 'FAILED', 'BLOCKED', 'UNKNOWN'
+    )`);
+    await queryRunner.query(`CREATE TABLE ${LEGACY_BINDING} (
+      "workspaceId" uuid NOT NULL,
+      "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+      "userWorkspaceId" uuid NOT NULL,
+      "threadId" uuid NOT NULL,
+      "approvalId" uuid NOT NULL,
+      "toolName" varchar NOT NULL,
+      "connectedAccountId" varchar NOT NULL,
+      "draftId" uuid NOT NULL,
+      "conversationId" uuid NOT NULL,
+      "previewTextSha256" varchar(64) NOT NULL,
+      "state" core."instagramReplyApprovalRequest_state_enum" NOT NULL DEFAULT 'PENDING',
+      "expiresAt" timestamptz NOT NULL,
+      "decidedAt" timestamptz,
+      "createdAt" timestamptz NOT NULL DEFAULT now(),
+      "updatedAt" timestamptz NOT NULL DEFAULT now(),
+      "providerConversationId" text,
+      "recipientIgsid" text,
+      CONSTRAINT "IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_APPROVAL_ID"
+        UNIQUE ("workspaceId", "approvalId"),
+      CONSTRAINT "PK_0570e6a0a7170ee067a969dcf27" PRIMARY KEY ("id")
+    )`);
     await queryRunner.query(
-      `ALTER TABLE ${BINDING} RENAME COLUMN "contentDigest" TO "previewTextSha256"`,
+      'CREATE INDEX "IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_THREAD" ON core."instagramReplyApprovalRequest" ("workspaceId", "threadId")',
     );
-    await queryRunner.query(`ALTER TABLE ${BINDING}
-      ADD COLUMN IF NOT EXISTS "approvalId" uuid,
-      ADD COLUMN IF NOT EXISTS "connectedAccountId" varchar,
-      ADD COLUMN IF NOT EXISTS "conversationId" uuid,
-      ADD COLUMN IF NOT EXISTS "providerConversationId" text,
-      ADD COLUMN IF NOT EXISTS "recipientIgsid" text,
-      DROP COLUMN IF EXISTS "actionVersion",
-      DROP COLUMN IF EXISTS "recipientFingerprint",
-      DROP COLUMN IF EXISTS "sendingAccountFingerprint"`);
+    await queryRunner.query(`CREATE TABLE ${LEGACY_RECEIPT} (
+      "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+      "approvalRequestId" uuid NOT NULL,
+      "state" core."instagramReplyExecutionReceipt_state_enum" NOT NULL DEFAULT 'PROCESSING',
+      "providerMessageId" text,
+      "failureCode" text,
+      "failureReason" text,
+      "createdAt" timestamptz NOT NULL DEFAULT now(),
+      "updatedAt" timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT "IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_APPROVAL_REQUEST"
+        UNIQUE ("approvalRequestId"),
+      CONSTRAINT "PK_1ecd8d74d2ebde2854db62b469e" PRIMARY KEY ("id"),
+      CONSTRAINT "FK_INSTAGRAM_REPLY_RECEIPT_APPROVAL_REQUEST"
+        FOREIGN KEY ("approvalRequestId") REFERENCES ${LEGACY_BINDING}("id")
+        ON DELETE RESTRICT
+    )`);
     await queryRunner.query(
-      `DROP TABLE IF EXISTS ${EVIDENCE_LINK}`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE ${BINDING} RENAME TO "instagramReplyApprovalRequest"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE ${RECEIPT} RENAME TO "instagramReplyExecutionReceipt"`,
+      'CREATE INDEX "IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_STATE" ON core."instagramReplyExecutionReceipt" ("state")',
     );
   }
 }

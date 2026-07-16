@@ -4,7 +4,12 @@ import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src
 jest.useRealTimers();
 
 
-type LegacyFixture = 'absent' | 'original' | 'repaired' | 'populated';
+type LegacyFixture =
+  | 'absent'
+  | 'original'
+  | 'repaired'
+  | 'populated'
+  | 'missing-id-default';
 
 const workspaceId = '00000000-0000-0000-0000-000000000001';
 const bindingIds = {
@@ -85,7 +90,7 @@ const installLegacyFixture = async (
   await queryRunner.query(
     `CREATE TABLE core."instagramReplyApprovalRequest" (
       "workspaceId" uuid NOT NULL,
-      "id" uuid PRIMARY KEY,
+      "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
       "userWorkspaceId" uuid NOT NULL,
       "threadId" uuid NOT NULL,
       "approvalId" uuid NOT NULL,
@@ -94,27 +99,55 @@ const installLegacyFixture = async (
       "draftId" uuid NOT NULL,
       "conversationId" uuid NOT NULL,
       "previewTextSha256" varchar(64) NOT NULL,
-      "state" core."instagramReplyApprovalRequest_state_enum" NOT NULL,
+      "state" core."instagramReplyApprovalRequest_state_enum" NOT NULL DEFAULT 'PENDING',
       "expiresAt" timestamptz NOT NULL,
       "decidedAt" timestamptz,
       "createdAt" timestamptz NOT NULL DEFAULT now(),
       "updatedAt" timestamptz NOT NULL DEFAULT now(),
       CONSTRAINT "IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_APPROVAL_ID"
-        UNIQUE ("workspaceId", "approvalId")
+        UNIQUE ("workspaceId", "approvalId"),
+      CONSTRAINT "PK_0570e6a0a7170ee067a969dcf27" PRIMARY KEY ("id")
     )`,
   );
   await queryRunner.query(
+    'CREATE INDEX "IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_THREAD" ON core."instagramReplyApprovalRequest" ("workspaceId", "threadId")',
+  );
+  await queryRunner.query(
     `CREATE TABLE core."instagramReplyExecutionReceipt" (
-      "id" uuid PRIMARY KEY,
-      "approvalRequestId" uuid NOT NULL UNIQUE,
-      "state" core."instagramReplyExecutionReceipt_state_enum" NOT NULL,
+      "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+      "approvalRequestId" uuid NOT NULL,
+      "state" core."instagramReplyExecutionReceipt_state_enum" NOT NULL DEFAULT 'PROCESSING',
       "providerMessageId" text,
       "failureCode" text,
       "failureReason" text,
       "createdAt" timestamptz NOT NULL DEFAULT now(),
-      "updatedAt" timestamptz NOT NULL DEFAULT now()
+      "updatedAt" timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT "IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_APPROVAL_REQUEST"
+        UNIQUE ("approvalRequestId"),
+      CONSTRAINT "PK_1ecd8d74d2ebde2854db62b469e" PRIMARY KEY ("id")
     )`,
   );
+  await queryRunner.query(
+    'CREATE INDEX "IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_STATE" ON core."instagramReplyExecutionReceipt" ("state")',
+  );
+
+  if (fixture === 'original') {
+    await queryRunner.query(
+      `ALTER TABLE core."instagramReplyExecutionReceipt"
+       ADD CONSTRAINT "FK_INSTAGRAM_REPLY_RECEIPT_APPROVAL_REQUEST"
+       FOREIGN KEY ("approvalRequestId")
+       REFERENCES core."instagramReplyApprovalRequest"("id") ON DELETE RESTRICT`,
+    );
+  }
+
+  if (fixture === 'missing-id-default') {
+    await queryRunner.query(
+      'ALTER TABLE core."instagramReplyApprovalRequest" ALTER COLUMN "id" DROP DEFAULT',
+    );
+    await queryRunner.query(
+      'ALTER TABLE core."instagramReplyExecutionReceipt" ALTER COLUMN "id" DROP DEFAULT',
+    );
+  }
 
   if (fixture === 'repaired' || fixture === 'populated') {
     await queryRunner.query(
@@ -205,11 +238,22 @@ const installLegacyFixture = async (
   );
   await queryRunner.query(
     `INSERT INTO core."agentMessagePart" ("id", "toolName", "toolOutput")
-     VALUES (
-       '00000000-0000-0000-0000-000000000301',
-       'request_instagram_reply_approval',
-       '{"result":{"approvalId":"00000000-0000-0000-0000-000000000031","preview":"private reply"}}'
-     )`,
+     VALUES
+       (
+         '00000000-0000-0000-0000-000000000301',
+         'request_instagram_reply_approval',
+         '{"result":{"approvalId":"00000000-0000-0000-0000-000000000031","preview":"private reply"}}'
+       ),
+       (
+         '00000000-0000-0000-0000-000000000302',
+         'request_instagram_reply_approval',
+         '{"result":{"approvalId":"00000000-0000-0000-0000-000000000999","preview":"private orphan"}}'
+       ),
+       (
+         '00000000-0000-0000-0000-000000000303',
+         'request_instagram_reply_approval',
+         '"malformed private reply output"'
+       )`,
   );
 };
 
@@ -288,6 +332,196 @@ const assertGenericAuthoritySchema = async (queryRunner: QueryRunner) => {
   );
 };
 
+const assertGenericIdDefaults = async (queryRunner: QueryRunner) => {
+  await expect(
+    queryRunner.query(
+      `SELECT table_name, column_default
+       FROM information_schema.columns
+       WHERE table_schema = 'core'
+         AND table_name IN (
+           'actionApprovalBinding',
+           'actionApprovalBindingEvidenceLink',
+           'actionExecutionReceipt'
+         )
+         AND column_name = 'id'
+       ORDER BY table_name`,
+    ),
+  ).resolves.toStrictEqual([
+    {
+      table_name: 'actionApprovalBinding',
+      column_default: 'uuid_generate_v4()',
+    },
+    {
+      table_name: 'actionApprovalBindingEvidenceLink',
+      column_default: 'uuid_generate_v4()',
+    },
+    {
+      table_name: 'actionExecutionReceipt',
+      column_default: 'uuid_generate_v4()',
+    },
+  ]);
+};
+
+const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
+  await expect(
+    queryRunner.query(
+      `SELECT table_name, column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'core'
+         AND table_name IN (
+           'instagramReplyApprovalRequest',
+           'instagramReplyExecutionReceipt'
+         )
+       ORDER BY table_name, ordinal_position`,
+    ),
+  ).resolves.toStrictEqual([
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'workspaceId' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'id' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'userWorkspaceId' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'threadId' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'approvalId' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'toolName' },
+    {
+      table_name: 'instagramReplyApprovalRequest',
+      column_name: 'connectedAccountId',
+    },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'draftId' },
+    {
+      table_name: 'instagramReplyApprovalRequest',
+      column_name: 'conversationId',
+    },
+    {
+      table_name: 'instagramReplyApprovalRequest',
+      column_name: 'previewTextSha256',
+    },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'state' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'expiresAt' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'decidedAt' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'createdAt' },
+    { table_name: 'instagramReplyApprovalRequest', column_name: 'updatedAt' },
+    {
+      table_name: 'instagramReplyApprovalRequest',
+      column_name: 'providerConversationId',
+    },
+    {
+      table_name: 'instagramReplyApprovalRequest',
+      column_name: 'recipientIgsid',
+    },
+    { table_name: 'instagramReplyExecutionReceipt', column_name: 'id' },
+    {
+      table_name: 'instagramReplyExecutionReceipt',
+      column_name: 'approvalRequestId',
+    },
+    { table_name: 'instagramReplyExecutionReceipt', column_name: 'state' },
+    {
+      table_name: 'instagramReplyExecutionReceipt',
+      column_name: 'providerMessageId',
+    },
+    {
+      table_name: 'instagramReplyExecutionReceipt',
+      column_name: 'failureCode',
+    },
+    {
+      table_name: 'instagramReplyExecutionReceipt',
+      column_name: 'failureReason',
+    },
+    {
+      table_name: 'instagramReplyExecutionReceipt',
+      column_name: 'createdAt',
+    },
+    {
+      table_name: 'instagramReplyExecutionReceipt',
+      column_name: 'updatedAt',
+    },
+  ]);
+  await expect(
+    queryRunner.query(
+      `SELECT table_name, column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'core'
+         AND ((table_name = 'instagramReplyApprovalRequest'
+           AND column_name IN (
+             'workspaceId', 'id', 'userWorkspaceId', 'threadId', 'approvalId',
+             'toolName', 'connectedAccountId', 'draftId', 'conversationId',
+             'previewTextSha256', 'state', 'expiresAt', 'createdAt', 'updatedAt'
+           ))
+           OR (table_name = 'instagramReplyExecutionReceipt'
+             AND column_name IN (
+               'id', 'approvalRequestId', 'state', 'createdAt', 'updatedAt'
+             )))
+         AND is_nullable = 'NO'
+       ORDER BY table_name, column_name`,
+    ),
+  ).resolves.toHaveLength(19);
+  await expect(
+    queryRunner.query(
+      `SELECT table_name, column_default
+       FROM information_schema.columns
+       WHERE table_schema = 'core'
+         AND table_name IN (
+           'instagramReplyApprovalRequest',
+           'instagramReplyExecutionReceipt'
+         )
+         AND column_name = 'id'
+       ORDER BY table_name`,
+    ),
+  ).resolves.toStrictEqual([
+    {
+      table_name: 'instagramReplyApprovalRequest',
+      column_default: 'uuid_generate_v4()',
+    },
+    {
+      table_name: 'instagramReplyExecutionReceipt',
+      column_default: 'uuid_generate_v4()',
+    },
+  ]);
+  await expect(
+    queryRunner.query(
+      `SELECT conname, contype
+       FROM pg_constraint
+       WHERE conrelid IN (
+         'core."instagramReplyApprovalRequest"'::regclass,
+         'core."instagramReplyExecutionReceipt"'::regclass
+       )
+       ORDER BY conname`,
+    ),
+  ).resolves.toStrictEqual([
+    {
+      conname: 'FK_INSTAGRAM_REPLY_RECEIPT_APPROVAL_REQUEST',
+      contype: 'f',
+    },
+    {
+      conname: 'IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_APPROVAL_ID',
+      contype: 'u',
+    },
+    {
+      conname: 'IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_APPROVAL_REQUEST',
+      contype: 'u',
+    },
+    { conname: 'PK_0570e6a0a7170ee067a969dcf27', contype: 'p' },
+    { conname: 'PK_1ecd8d74d2ebde2854db62b469e', contype: 'p' },
+  ]);
+  await expect(
+    queryRunner.query(
+      `SELECT indexname
+       FROM pg_indexes
+       WHERE schemaname = 'core'
+         AND tablename IN (
+           'instagramReplyApprovalRequest',
+           'instagramReplyExecutionReceipt'
+         )
+         AND indexname IN (
+           'IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_THREAD',
+           'IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_STATE'
+         )
+       ORDER BY indexname`,
+    ),
+  ).resolves.toStrictEqual([
+    { indexname: 'IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_THREAD' },
+    { indexname: 'IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_STATE' },
+  ]);
+};
+
 describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
   const dataSource = new DataSource({
     type: 'postgres',
@@ -322,7 +556,13 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     }
   });
 
-  it.each<LegacyFixture>(['absent', 'original', 'repaired', 'populated'])(
+  it.each<LegacyFixture>([
+    'absent',
+    'original',
+    'repaired',
+    'populated',
+    'missing-id-default',
+  ])(
     'evolves the %s legacy fixture in place and is idempotent',
     async (fixture) => {
       await installLegacyFixture(queryRunner, fixture);
@@ -331,6 +571,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
 
       await command.up(queryRunner);
       await assertGenericAuthoritySchema(queryRunner);
+      await assertGenericIdDefaults(queryRunner);
 
       const beforeSecondUp = await queryRunner.query(
         `SELECT
@@ -384,10 +625,11 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       ]);
       await expect(
         queryRunner.query(
-          'SELECT "toolOutput" FROM core."agentMessagePart"',
+          'SELECT id, "toolOutput" FROM core."agentMessagePart" ORDER BY id',
         ),
       ).resolves.toStrictEqual([
         {
+          id: '00000000-0000-0000-0000-000000000301',
           toolOutput: {
             result: {
               bindingId: bindingIds.pending,
@@ -396,9 +638,68 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
             success: true,
           },
         },
+        {
+          id: '00000000-0000-0000-0000-000000000302',
+          toolOutput: {
+            result: {
+              status: 'expired',
+            },
+            success: true,
+          },
+        },
+        {
+          id: '00000000-0000-0000-0000-000000000303',
+          toolOutput: {
+            result: {
+              status: 'expired',
+            },
+            success: true,
+          },
+        },
       ]);
     },
   );
+  it.each([
+    ['partial legacy', 'instagramReplyApprovalRequest'],
+    ['partial generic', 'actionApprovalBinding'],
+  ])('rejects a %s table state', async (_name, tableName) => {
+    await installLegacyFixture(queryRunner, 'absent');
+    await queryRunner.query(`CREATE TABLE core."${tableName}" ("id" uuid)`);
+
+    const command =
+      new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand();
+
+    await expect(command.up(queryRunner)).rejects.toThrow(
+      'Unsupported action approval migration table state',
+    );
+  });
+
+  it('rejects a legacy and generic mixed table state', async () => {
+    await installLegacyFixture(queryRunner, 'original');
+    await queryRunner.query(
+      'CREATE TABLE core."actionApprovalBinding" ("id" uuid)',
+    );
+
+    const command =
+      new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand();
+
+    await expect(command.up(queryRunner)).rejects.toThrow(
+      'Unsupported action approval migration table state',
+    );
+  });
+
+  it('refuses to roll back populated generic authority tables', async () => {
+    await installLegacyFixture(queryRunner, 'populated');
+    const command =
+      new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand();
+
+    await command.up(queryRunner);
+
+    await expect(command.down(queryRunner)).rejects.toThrow(
+      'Cannot roll back populated action approval authority tables',
+    );
+    await assertGenericAuthoritySchema(queryRunner);
+  });
 
   it('restores the repaired schema only for disposable tests', async () => {
     await installLegacyFixture(queryRunner, 'repaired');
@@ -424,5 +725,6 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
         generic_receipt: null,
       },
     ]);
+    await assertRepairedLegacySchema(queryRunner);
   });
 });
