@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { type ToolSet } from 'ai';
 import { z } from 'zod';
 
+import type { RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { MyahBrandBrainStoreService } from 'src/modules/myah-brand-brain/services/myah-brand-brain-store.service';
 import {
   getBrandBrainContext,
@@ -51,7 +52,7 @@ export class MyahBrandBrainWorkspaceService {
     rolePermissionConfig,
   }: {
     workspaceId: string;
-    rolePermissionConfig: object;
+    rolePermissionConfig: RolePermissionConfig;
   }): ToolSet {
     const store = this.storeFactory.createStore({
       workspaceId,

@@ -40,7 +40,9 @@ describe('Brand Brain public tool provider journey', () => {
     const pageRepository = createRepository(pages);
     const linkRepository = createRepository(links);
     const globalWorkspaceOrmManager = {
-      executeInWorkspaceContext: jest.fn((callback: () => unknown) => callback()),
+      executeInWorkspaceContext: jest.fn((callback: () => unknown) =>
+        callback(),
+      ),
       getRepository: jest.fn(
         async (_workspaceId: string, objectMetadataName: string) =>
           objectMetadataName === 'brandBrainPage'
@@ -114,6 +116,18 @@ describe('Brand Brain public tool provider journey', () => {
     });
     expect(links).not.toHaveLength(0);
 
+    const brandContext = await executePublicTool(
+      'app_brand_brain_get_context',
+      {
+        brandNameOrSlug: 'Lash Glow',
+      },
+    );
+
+    expect(brandContext).toMatchObject({
+      brandSlug: 'lash-glow',
+      contextMarkdown: expect.stringContaining('Use a calm, expert voice.'),
+    });
+
     const updated = await executePublicTool(
       'app_brand_brain_update_page_content',
       {
@@ -135,6 +149,27 @@ describe('Brand Brain public tool provider journey', () => {
       pages.find(({ canonicalPath }) => canonicalPath === 'lash-glow/log')?.body
         ?.markdown,
     ).toContain('Updated lash-glow/content-guidelines');
+    const bodyAfterTargetedUpdate = pages.find(
+      ({ canonicalPath }) => canonicalPath === 'lash-glow/content-guidelines',
+    )?.body?.markdown;
+
+    await executePublicTool('app_brand_brain_seed_or_update_from_brief', {
+      brandName: 'Lash Glow',
+      contentGuidelines: 'Replace all prior guidance.',
+      actor: 'agent',
+      occurredAt: '2026-07-16',
+    });
+
+    expect(
+      pages.find(
+        ({ canonicalPath }) => canonicalPath === 'lash-glow/content-guidelines',
+      )?.body?.markdown,
+    ).toBe(bodyAfterTargetedUpdate);
+    expect(globalWorkspaceOrmManager.getRepository).not.toHaveBeenCalledWith(
+      'workspace-id',
+      'brandBrainProposal',
+      expect.anything(),
+    );
     expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
       'workspace-id',
       'brandBrainPage',

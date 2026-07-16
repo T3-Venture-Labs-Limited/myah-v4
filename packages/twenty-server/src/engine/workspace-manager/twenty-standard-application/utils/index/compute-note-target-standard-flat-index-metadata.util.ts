@@ -64,4 +64,40 @@ export const buildNoteTargetStandardFlatIndexMetadatas = ({
     twentyStandardApplicationId,
     now,
   }),
+  brandBrainPageIdIndex: createStandardIndexFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      indexName: 'brandBrainPageIdIndex',
+      relatedFieldNames: ['targetBrandBrainPage'],
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
+  campaignIdIndex: createStandardIndexFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      indexName: 'campaignIdIndex',
+      relatedFieldNames: ['targetCampaign'],
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
+  creatorIdIndex: createStandardIndexFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      indexName: 'creatorIdIndex',
+      relatedFieldNames: ['targetCreator'],
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
 });

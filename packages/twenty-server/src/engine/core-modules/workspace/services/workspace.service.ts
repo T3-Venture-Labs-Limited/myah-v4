@@ -852,6 +852,25 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         },
       );
 
+    const standardObjectNames = new Set(
+      Object.values(flatObjectMetadataMaps.byUniversalIdentifier)
+        .filter(isDefined)
+        .map(({ nameSingular }) => nameSingular),
+    );
+    const requiredLegacyCrmObjectNames = [
+      'company',
+      'person',
+      'opportunity',
+    ];
+
+    if (
+      !requiredLegacyCrmObjectNames.every((objectName) =>
+        standardObjectNames.has(objectName),
+      )
+    ) {
+      return;
+    }
+
     await this.prefillLogicFunctionService.ensureSeeded({
       workspaceId,
       definitions:

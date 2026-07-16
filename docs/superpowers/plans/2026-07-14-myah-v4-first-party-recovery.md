@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace Myah's published SDK-app delivery path with source-controlled standard metadata, server-native Brand Brain tools, and the retained first-party Instagram connection flow.
+**Goal:** Replace Myah's published SDK-app delivery path with source-controlled standard metadata, server-native Brand Brain tools, the retained first-party Instagram connection flow, and a hard cutover from Twenty's Person/Company/Opportunity objects to Myah's Creator/Campaign/Brand Brain data model.
 
-**Architecture:** Standard-application flat maps become the only provisioning source for Brand Brain and Creator Ops. New workspaces receive that metadata through existing initialization; existing workspaces receive it through one versioned workspace command. Brand Brain's pure fixture behavior moves into an injected Nest tool provider, while the existing Myah Composio REST/UI connection flow remains unchanged. After verified replacement, remove only the obsolete SDK publication, promotion, and backfill path.
+**Architecture:** Standard-application flat maps become the only provisioning source for Brand Brain and Creator Ops. A Myah schema-profile step removes Person, Company, Opportunity, and every dependent metadata entity from the freshly built maps, while stable morph relations keep Tasks and Notes attached to Creator, Campaign, and Brand Brain Page. New workspaces receive that metadata through existing initialization; existing workspaces receive it through one versioned workspace command that intentionally deletes the replaced CRM objects and records. Brand Brain's pure fixture behavior moves into an injected Nest tool provider, while the existing Myah Composio REST/UI connection flow remains unchanged. After verified replacement, remove only the obsolete SDK publication, promotion, and backfill path.
 
 **Tech Stack:** TypeScript ESM, NestJS, Twenty flat metadata/workspace migration APIs, Jest/Nx, React/Apollo settings UI, Composio REST integration, GitHub Actions, Railway production deployment.
 
@@ -14,7 +14,7 @@
 - Use Node `24.16.0` and Yarn `4.13.0`; use `npx nx run` targets rather than npm.
 - Preserve every existing Myah metadata universal identifier from the Brand Brain and Creator Ops source packages.
 - New metadata belongs to `TWENTY_STANDARD_APPLICATION.universalIdentifier`; do not create a second application, registry, installer, queue, cron, startup seeder, or direct-SQL metadata path.
-- Existing-workspace migration must be idempotent, support dry-run, preserve data and ownership by immutable universal identifier, and fail visibly on validation failure.
+- Existing-workspace migration must be idempotent, support dry-run, preserve Myah data and ownership by immutable universal identifier, intentionally delete Person/Company/Opportunity records and metadata, and fail visibly on validation failure.
 - Brand Brain must retain exactly four existing tool contracts and reject destructive writes; seed/fill-missing behavior must not overwrite a non-empty page body.
 - Retain the existing workspace-scoped Instagram REST/UI flow and its no-polling, no-background-send, no-bulk-message, no-auto-reply, and no-cold-DM boundaries.
 - The approved environment policy is production only. Do not restore Railway's shared source-based auto-deployment.
@@ -26,8 +26,8 @@
 
 | Area | Files | Responsibility |
 | --- | --- | --- |
-| Standard metadata | `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/**` | Build one source-controlled map for every Myah object, field, relation, index, search field, view, role, layout, navigation item, agent, skill, and command item. |
-| Existing workspaces | `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/` | Safely apply the standard-metadata change once per active/suspended workspace. |
+| Standard metadata | `packages/twenty-shared/src/metadata/constants/{standard-object,myah-standard-objects}.constant.ts`, `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/**` | Build one source-controlled map for every retained Myah object and remove Person, Company, Opportunity, their dependent metadata, and dangling references. Keep Tasks and Notes with Creator/Campaign/Brand Brain Page targets. |
+| Existing workspaces | `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/` | Apply the standard-metadata change once per active/suspended workspace, including the approved destructive CRM-object cutover. |
 | Brand Brain runtime | `packages/twenty-server/src/modules/myah-brand-brain/**` | Server-side domain rules, workspace data adapter, named tools, Nest registration, and tests. |
 | Runtime composition | `packages/twenty-server/src/modules/modules.module.ts` and established AI tool-provider composition | Make the new module available through the existing provider token. |
 | Retained Instagram flow | `packages/twenty-server/src/modules/myah-composio/**`, `packages/twenty-front/src/pages/settings/accounts/SettingsAccountsInstagram.tsx` | Preserve connection/account-listing behavior; do not widen messaging capabilities. |
@@ -558,6 +558,210 @@ git commit -m "ref(myah): Remove legacy standard app delivery path"
 Do not push this commit or create a public PR containing the internal
 specification, plan, audit, or production evidence. Obtain an approved private
 destination before publication.
+
+### Task 8: Remove replaced Twenty CRM objects from the Myah schema
+
+**Files:**
+- Create: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/remove-replaced-twenty-crm-metadata.util.ts`
+- Modify: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant.ts`
+- Test: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/compute-myah-standard-metadata.spec.ts`
+
+**Interfaces:**
+- Consumes: a freshly assembled `TwentyStandardAllFlatEntityMaps` and the immutable Person, Company, and Opportunity universal identifiers from `STANDARD_OBJECTS`.
+- Produces: `removeReplacedTwentyCrmMetadata(allFlatEntityMaps): TwentyStandardAllFlatEntityMaps`, whose result omits the three objects, metadata owned by them, metadata that targets them, and metadata that depends on removed fields, views, or layouts.
+
+- [ ] **Step 1: Add failing desired-schema assertions**
+
+```ts
+const removedObjectUniversalIdentifiers = new Set([
+  STANDARD_OBJECTS.person.universalIdentifier,
+  STANDARD_OBJECTS.company.universalIdentifier,
+  STANDARD_OBJECTS.opportunity.universalIdentifier,
+]);
+
+expect(
+  Object.keys(result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier),
+).not.toEqual(
+  expect.arrayContaining([...removedObjectUniversalIdentifiers]),
+);
+
+for (const field of Object.values(
+  result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+).filter(isDefined)) {
+  expect(removedObjectUniversalIdentifiers).not.toContain(
+    field.objectMetadataUniversalIdentifier,
+  );
+  expect(removedObjectUniversalIdentifiers).not.toContain(
+    field.relationTargetObjectMetadataUniversalIdentifier,
+  );
+}
+```
+
+Extend the assertion across every returned flat-map category that carries an
+object, field, view, layout, or relation reference. Assert the complete result
+passes the existing universal-flat-entity validation rather than checking only
+navigation labels.
+
+- [ ] **Step 2: Run the focused contract and verify red**
+
+Run:
+
+```sh
+npx jest --config packages/twenty-server/jest.config.mjs \
+  --runTestsByPath \
+  packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/compute-myah-standard-metadata.spec.ts \
+  --coverage=false
+```
+
+Expected: assertion failure showing the current map still contains Person,
+Company, and Opportunity. A resolver, type, or syntax error is not the required
+red state.
+
+- [ ] **Step 3: Implement one dependency-aware schema-profile pass**
+
+Build the full standard graph through the existing dependency-ordered builders,
+then remove the three object subgraphs from those freshly allocated maps before
+returning them. Remove entities by immutable universal identifier references;
+do not filter by display labels or add frontend hiding logic. Prune in
+dependency order and throw if any retained field or UI metadata still references
+a removed identifier.
+
+- [ ] **Step 4: Run the focused contract and existing standard-map tests**
+
+Run the Step 2 command, followed by the nearest existing standard metadata map
+tests that exercise relation, view, layout, navigation, and search references.
+
+Expected: PASS with no dangling-reference validation error.
+
+### Task 9: Retarget Tasks and Notes to Myah objects
+
+**Files:**
+- Modify: `packages/twenty-shared/src/metadata/constants/myah-standard-objects.constant.ts`
+- Modify: `packages/twenty-shared/src/metadata/constants/standard-object.constant.ts`
+- Modify: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/myah-standard-object-field-builders.util.ts`
+- Modify: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-target-standard-flat-field-metadata.util.ts`
+- Modify: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-note-target-standard-flat-field-metadata.util.ts`
+- Test: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/__tests__/compute-myah-standard-metadata.spec.ts`
+
+**Interfaces:**
+- Consumes: existing Task/TaskTarget and Note/NoteTarget morph conventions plus `MYAH_STANDARD_OBJECTS.creator`, `.campaign`, and `.brandBrainPage`.
+- Produces: fixed-ID `taskTargets` and `noteTargets` inverse fields on the three Myah objects, and `targetCreator`, `targetCampaign`, and `targetBrandBrainPage` fields on each retained junction object.
+
+- [ ] **Step 1: Add failing relation-pair assertions**
+
+```ts
+for (const targetObject of [
+  MYAH_STANDARD_OBJECTS.creator,
+  MYAH_STANDARD_OBJECTS.campaign,
+  MYAH_STANDARD_OBJECTS.brandBrainPage,
+]) {
+  expectRelationPair({
+    sourceObjectUniversalIdentifier:
+      STANDARD_OBJECTS.taskTarget.universalIdentifier,
+    targetObjectUniversalIdentifier: targetObject.universalIdentifier,
+    sourceFieldNames: ['targetCreator', 'targetCampaign', 'targetBrandBrainPage'],
+    targetFieldName: 'taskTargets',
+  });
+  expectRelationPair({
+    sourceObjectUniversalIdentifier:
+      STANDARD_OBJECTS.noteTarget.universalIdentifier,
+    targetObjectUniversalIdentifier: targetObject.universalIdentifier,
+    sourceFieldNames: ['targetCreator', 'targetCampaign', 'targetBrandBrainPage'],
+    targetFieldName: 'noteTargets',
+  });
+}
+```
+
+Assert the legacy `targetPerson`, `targetCompany`, and `targetOpportunity`
+fields are absent from both junction objects.
+
+- [ ] **Step 2: Run the focused contract and verify red**
+
+Run the Task 8 focused Jest command.
+
+Expected: assertion failure because the replacement fields are absent.
+
+- [ ] **Step 3: Register immutable identifiers and build the relation pairs**
+
+Add explicit UUIDs to the shared standard-object registries. Build the morph
+relations with the existing Task/Note target morph IDs and `CASCADE` deletion
+behavior. Build inverse one-to-many relations on Creator, Campaign, and Brand
+Brain Page. Do not replace the existing plain-text `creator.notes` field; it is
+not the reusable Note relation.
+
+- [ ] **Step 4: Run the focused contract and verify green**
+
+Run the Task 8 focused Jest command.
+
+Expected: PASS; every relation has a reciprocal target field and no removed CRM
+target remains.
+
+### Task 10: Deliver the destructive existing-workspace cutover
+
+**Files:**
+- Modify: `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.ts`
+- Modify: `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/__tests__/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts`
+- Test: recovery workspace database and visible browser at `/welcome`
+
+**Interfaces:**
+- Consumes: Tasks 8–9's desired flat maps and the existing versioned workspace command.
+- Produces: dry-run and live migration behavior that includes Person, Company, Opportunity, their records, and dependent metadata in the deletion set while preserving Myah objects, Tasks, and Notes.
+
+- [ ] **Step 1: Add failing command assertions**
+
+```ts
+expectDeletedObjectUniversalIdentifiers(migration, [
+  STANDARD_OBJECTS.person.universalIdentifier,
+  STANDARD_OBJECTS.company.universalIdentifier,
+  STANDARD_OBJECTS.opportunity.universalIdentifier,
+]);
+expectRetainedObjectUniversalIdentifiers(migration, [
+  MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier,
+  STANDARD_OBJECTS.task.universalIdentifier,
+  STANDARD_OBJECTS.note.universalIdentifier,
+]);
+```
+
+The fixture must contain legacy CRM records and verify the command does not
+exclude their objects from the explicit `from` subset.
+
+- [ ] **Step 2: Run the focused command test and verify red**
+
+Run:
+
+```sh
+npx jest --config packages/twenty-server/jest.config.mjs \
+  --runTestsByPath \
+  packages/twenty-server/src/database/commands/upgrade-version-command/2-21/__tests__/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts \
+  --coverage=false
+```
+
+Expected: assertion failure because the current command selects only
+`MYAH_STANDARD_OBJECTS` and therefore cannot delete the replaced CRM objects.
+
+- [ ] **Step 3: Expand the explicit migration subset**
+
+Include the three replaced object identifiers and their existing dependent
+metadata in `from`; leave them absent from `to`. Keep dry-run non-mutating,
+idempotency intact, and validation failure fatal. Do not broaden deletion to
+Tasks, Notes, or unrelated Twenty objects.
+
+- [ ] **Step 4: Verify focused tests and real behavior**
+
+Run both focused Jest files. On the disposable recovery environment, create
+representative Person, Company, Opportunity, Creator, Campaign, Brand Brain
+Page, Task, and Note records; run dry-run and inspect the deletion report; run
+live; confirm the legacy records/objects are gone and retained records remain.
+
+Rebuild and open the UI in a headed browser. Verify Brand Brain, Creators,
+Creator Lists, Campaigns, Tasks, and Notes remain available, while People,
+Companies, and Opportunities are absent. Create one Task and one Note linked to
+a Myah target.
+
+Expected: fresh and existing-workspace paths converge on the same schema and
+the visible product exposes only the approved Myah model.
 
 ## Final verification checklist
 

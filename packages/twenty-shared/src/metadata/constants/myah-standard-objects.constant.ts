@@ -65,6 +65,8 @@ export const MYAH_STANDARD_OBJECTS = {
       sourcePageLinks: { universalIdentifier: '776301dc-08a6-4692-b9b8-f427f040085b' },
       targetPageLinks: { universalIdentifier: '3cb59cb6-8ef0-4608-bc1a-872e888a60ed' },
       updateProposals: { universalIdentifier: '4fd149a3-b506-45f8-94c4-970a3106eccf' },
+      noteTargets: { universalIdentifier: '207812af-12b3-4953-87fb-a7b7eecd7359' },
+      taskTargets: { universalIdentifier: 'ef3cfe0a-a1c9-4e8d-bf00-c8e63a0e140e' },
     },
     indexes: {
       canonicalPath: { universalIdentifier: 'b75fa72e-7365-4da0-a910-b6ef96f306c2' },
@@ -302,6 +304,8 @@ export const MYAH_STANDARD_OBJECTS = {
       campaignCreators: { universalIdentifier: '894c80f2-a478-5680-8c20-c7a86aa24fde' },
       offers: { universalIdentifier: '1d33699f-76f3-5247-98b3-2de588543364' },
       outreachSequences: { universalIdentifier: '40b7c827-4699-5f99-bdb8-d8906dd948f5' },
+      noteTargets: { universalIdentifier: '4ee4e053-555c-431c-a440-e8a0e5725d77' },
+      taskTargets: { universalIdentifier: '0d27b024-e6c3-4b61-9d7f-f9c4c69760b7' },
     },
     indexes: {
     },
@@ -457,6 +461,8 @@ export const MYAH_STANDARD_OBJECTS = {
       listMemberships: { universalIdentifier: '32db62ac-6217-5316-89d9-f9d7290dff70' },
       campaignCreators: { universalIdentifier: '3b9494ff-0fe7-5492-8b69-c515f79ea437' },
       patreonUrl: { universalIdentifier: 'd68083f5-0db1-5c77-ac35-640a2fdb1f3f' },
+      noteTargets: { universalIdentifier: '42b8e10b-8500-4530-b148-695ed3b5092a' },
+      taskTargets: { universalIdentifier: '4dca8339-817b-4292-a55c-425d01c4ea35' },
     },
     indexes: {
     },

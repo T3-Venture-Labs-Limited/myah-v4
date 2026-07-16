@@ -2,15 +2,12 @@ import { Injectable } from '@nestjs/common';
 
 import { ILike, In } from 'typeorm';
 
+import type { RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import {
-  type BrandBrainExecutorLinkCreateInput,
   type BrandBrainExecutorLinkRecord,
-  type BrandBrainExecutorLinkUpdatePatch,
-  type BrandBrainExecutorPageCreateInput,
   type BrandBrainExecutorPageRecord,
-  type BrandBrainExecutorPageUpdatePatch,
   type BrandBrainExecutorStore,
 } from 'src/modules/myah-brand-brain/utils/brand-brain-agent-executor.util';
 
@@ -22,7 +19,7 @@ type BrandBrainRepository<T> = {
 
 type BrandBrainStoreContext = {
   workspaceId: string;
-  rolePermissionConfig: object;
+  rolePermissionConfig: RolePermissionConfig;
 };
 
 @Injectable()
@@ -34,10 +31,11 @@ export class MyahBrandBrainStoreService {
   createStore(context: BrandBrainStoreContext): BrandBrainExecutorStore {
     return {
       listPagesByBrandSlug: async ({ brandSlug }) => {
-        const repository = await this.getRepository<BrandBrainExecutorPageRecord>(
-          context,
-          'brandBrainPage',
-        );
+        const repository =
+          await this.getRepository<BrandBrainExecutorPageRecord>(
+            context,
+            'brandBrainPage',
+          );
 
         return repository.find({
           where: { canonicalPath: ILike(`${brandSlug}%`) },
@@ -45,18 +43,20 @@ export class MyahBrandBrainStoreService {
         });
       },
       createPage: async (input) => {
-        const repository = await this.getRepository<BrandBrainExecutorPageRecord>(
-          context,
-          'brandBrainPage',
-        );
+        const repository =
+          await this.getRepository<BrandBrainExecutorPageRecord>(
+            context,
+            'brandBrainPage',
+          );
 
         return repository.save(repository.create(input));
       },
       updatePage: async ({ id, patch }) => {
-        const repository = await this.getRepository<BrandBrainExecutorPageRecord>(
-          context,
-          'brandBrainPage',
-        );
+        const repository =
+          await this.getRepository<BrandBrainExecutorPageRecord>(
+            context,
+            'brandBrainPage',
+          );
 
         return repository.save({ id, ...this.stripUndefined(patch) });
       },
@@ -75,28 +75,31 @@ export class MyahBrandBrainStoreService {
           return [];
         }
 
-        const repository = await this.getRepository<BrandBrainExecutorLinkRecord>(
-          context,
-          'brandBrainLink',
-        );
+        const repository =
+          await this.getRepository<BrandBrainExecutorLinkRecord>(
+            context,
+            'brandBrainLink',
+          );
 
         return repository.find({
           where: { sourcePageId: In(pageIds), targetPageId: In(pageIds) },
         });
       },
       createLink: async (input) => {
-        const repository = await this.getRepository<BrandBrainExecutorLinkRecord>(
-          context,
-          'brandBrainLink',
-        );
+        const repository =
+          await this.getRepository<BrandBrainExecutorLinkRecord>(
+            context,
+            'brandBrainLink',
+          );
 
         return repository.save(repository.create(input));
       },
       updateLink: async ({ id, patch }) => {
-        const repository = await this.getRepository<BrandBrainExecutorLinkRecord>(
-          context,
-          'brandBrainLink',
-        );
+        const repository =
+          await this.getRepository<BrandBrainExecutorLinkRecord>(
+            context,
+            'brandBrainLink',
+          );
 
         return repository.save({ id, ...this.stripUndefined(patch) });
       },
@@ -120,7 +123,9 @@ export class MyahBrandBrainStoreService {
 
   private stripUndefined<T extends object>(value: T): T {
     return Object.fromEntries(
-      Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
+      Object.entries(value).filter(
+        ([, entryValue]) => entryValue !== undefined,
+      ),
     ) as T;
   }
 }

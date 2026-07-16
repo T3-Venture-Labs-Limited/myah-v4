@@ -1658,6 +1658,15 @@ export const STANDARD_OBJECTS = {
       targetOpportunity: {
         universalIdentifier: '20202020-4e42-417a-a705-76581c9ade79',
       },
+      targetBrandBrainPage: {
+        universalIdentifier: 'b6b45b1f-6302-40df-a230-c056c559c515',
+      },
+      targetCampaign: {
+        universalIdentifier: 'bdc3b890-e328-4362-8e19-0645f2babc85',
+      },
+      targetCreator: {
+        universalIdentifier: '148da5b4-7f81-49d6-ab0a-a5061b2ac40a',
+      },
       createdBy: {
         universalIdentifier: '820a3163-bb7d-41bc-93d9-81a464559c48',
       },
@@ -1687,6 +1696,15 @@ export const STANDARD_OBJECTS = {
       opportunityIdIndex: {
         universalIdentifier: '0d1a59b4-cc87-4b7d-804a-656e8504f371',
       },
+      brandBrainPageIdIndex: {
+        universalIdentifier: '49758b7b-9a83-4915-8069-d967c5d9c37b',
+      },
+      campaignIdIndex: {
+        universalIdentifier: '07659340-1509-47c1-8a53-a95d890d7ee4',
+      },
+      creatorIdIndex: {
+        universalIdentifier: '025e4b6b-180f-453c-b49a-3a7e9131466f',
+      },
     },
     views: {
       allNoteTargets: {
@@ -1706,6 +1724,15 @@ export const STANDARD_OBJECTS = {
           },
           targetOpportunity: {
             universalIdentifier: '3efeb162-cd03-458b-9c7b-47032d045204',
+          },
+          targetBrandBrainPage: {
+            universalIdentifier: 'fa5a0d99-8f9e-4ca6-8c7d-3ba0eb2fc946',
+          },
+          targetCampaign: {
+            universalIdentifier: 'c02eb906-32d3-4ccb-b9e0-d9397aae5238',
+          },
+          targetCreator: {
+            universalIdentifier: '48105dbe-d7ff-455c-908f-6de7dc47a0f5',
           },
         },
       },
@@ -2299,6 +2326,15 @@ export const STANDARD_OBJECTS = {
       targetOpportunity: {
         universalIdentifier: '20202020-6cb2-4c01-a9a5-aca3dbc11d41',
       },
+      targetBrandBrainPage: {
+        universalIdentifier: '8d725970-cecd-4b3f-bfa7-ca562076071a',
+      },
+      targetCampaign: {
+        universalIdentifier: '45fa8580-04fb-48e9-b279-6e770db00c7d',
+      },
+      targetCreator: {
+        universalIdentifier: '3a7353dd-8631-44ca-8932-b9519e2b345c',
+      },
       createdBy: {
         universalIdentifier: '65fe2a53-45e4-4225-9711-b827f55e51cc',
       },
@@ -2328,6 +2364,15 @@ export const STANDARD_OBJECTS = {
       opportunityIdIndex: {
         universalIdentifier: '6942e0ba-90f6-4c33-bf40-7f00b1ec35ab',
       },
+      brandBrainPageIdIndex: {
+        universalIdentifier: 'b5c4ce8b-9809-4c91-b4fd-b0bfb71fdb41',
+      },
+      campaignIdIndex: {
+        universalIdentifier: 'cf00b4cb-8046-47b1-be3b-255b9311edfa',
+      },
+      creatorIdIndex: {
+        universalIdentifier: 'e632ba37-5cb5-4f42-8a09-a9e7753b9142',
+      },
     },
     views: {
       allTaskTargets: {
@@ -2347,6 +2392,15 @@ export const STANDARD_OBJECTS = {
           },
           targetOpportunity: {
             universalIdentifier: '526f3354-34d6-4e7e-a870-5f99c28353c2',
+          },
+          targetBrandBrainPage: {
+            universalIdentifier: '15299480-7d8d-4d10-a436-7e1a5e55028e',
+          },
+          targetCampaign: {
+            universalIdentifier: 'bba23eca-764a-4150-96d6-b51a1afc4522',
+          },
+          targetCreator: {
+            universalIdentifier: '31bd451d-167a-495f-a013-e650eab6afae',
           },
         },
       },

@@ -16,6 +16,13 @@ The legacy app registry, publisher workspace, package publication, promotion
 endpoint, deployment token, and installation-backfill queue are temporary
 delivery mechanisms to remove after their first-party replacements are proven.
 
+Myah's Creator, Campaign, and Brand Brain Page objects replace Twenty's
+operator-facing Person, Opportunity, and Company abstractions. Myah workspaces
+must not contain the `person`, `opportunity`, or `company` object metadata.
+Tasks and Notes remain standard Twenty objects, but their target relations must
+point to Creator, Campaign, and Brand Brain Page instead of the removed CRM
+objects.
+
 The approved rollout policy is **production only**. This supersedes the current
 separate staging-and-production requirement recorded in
 `docs/operations/environment-isolation-audit.md`; the implementation must
@@ -26,12 +33,15 @@ update that audit so the repository has one unambiguous operational policy.
 1. Automatically provision Brand Brain and Creator Ops metadata for every new
    eligible Myah workspace through the existing standard-application sync.
 2. Safely synchronize the same metadata into existing eligible workspaces
-   without duplicate metadata or data loss.
-3. Make Brand Brain's four existing agent-tool contracts server-native while
+   without duplicates, preserving Myah-owned data while intentionally deleting
+   Person, Company, and Opportunity records with their obsolete object metadata.
+3. Keep standard Tasks and Notes and make Creator, Campaign, and Brand Brain
+   Page their supported Myah targets.
+4. Make Brand Brain's four existing agent-tool contracts server-native while
    retaining their deterministic and non-destructive behavior.
-4. Preserve the existing workspace-scoped Instagram OAuth/account-listing
+5. Preserve the existing workspace-scoped Instagram OAuth/account-listing
    behavior and its current safety limits.
-5. Remove the obsolete Myah SDK app publication, promotion, and backfill path
+6. Remove the obsolete Myah SDK app publication, promotion, and backfill path
    only after its replacements meet their observable contracts.
 
 ## Non-goals
@@ -43,8 +53,9 @@ update that audit so the repository has one unambiguous operational policy.
   metadata synchronizer, or direct-SQL metadata creation path.
 - Adding a new release environment or restoring Railway's shared source-based
   auto-deployment.
-- Deleting a legacy installation or workspace data as a shortcut for handling
-  a migration conflict.
+- Deleting unrelated workspace data as a shortcut for handling a migration
+  conflict. Deletion of Person, Company, and Opportunity records is the
+  explicitly approved schema cutover, not a general data-loss allowance.
 
 ## Architecture
 
@@ -63,6 +74,25 @@ applications after the cutover.
 
 New workspaces need no new provisioning mechanism. `WorkspaceManagerService`
 already creates and synchronizes the standard application during initialization.
+
+### Myah replaces the default CRM object model
+
+The source-controlled Myah standard-application result must exclude the
+`person`, `company`, and `opportunity` objects and all metadata owned by or
+dependent on them: fields, indexes, search fields, views, view children, page
+layouts, navigation items, and command-menu items. Retained metadata must not
+contain a relation or universal-identifier reference to any removed object.
+
+Twenty's shared object constants remain framework source definitions; this
+cutover changes the desired metadata graph for Myah workspaces rather than
+deleting generic Twenty capabilities from the codebase.
+
+The standard `task`, `taskTarget`, `note`, and `noteTarget` objects remain.
+Their Person, Company, and Opportunity morph targets are replaced with Creator,
+Campaign, and Brand Brain Page targets. Each replacement relation and inverse
+relation uses a fixed universal identifier registered in
+`MYAH_STANDARD_OBJECTS`, so fresh synchronization and existing-workspace
+migration converge on the same metadata.
 
 ### Existing workspaces use the versioned command framework
 
@@ -151,6 +181,12 @@ Retain general Twenty marketplace support and required Composio configuration.
   exceptional best-effort path.
 - No duplicate object metadata, relation metadata, views, navigation entries,
   roles, layouts, or workspace records may result from the cutover.
+- Existing Person, Company, and Opportunity records are intentionally deleted
+  with their object metadata. The migration does not archive or map these rows;
+  the user explicitly selected a hard cutover to Myah's custom data model.
+- Creator, Campaign, Brand Brain Page, Task, and Note records are preserved.
+  Their replacement target relations use immutable universal identifiers and
+  must not duplicate on rerun.
 - Compatibility redirects may remain only while active route references need
   them; remove them in the same change once no references remain.
 
@@ -183,6 +219,15 @@ Retain general Twenty marketplace support and required Composio configuration.
   migration, and legacy-installation ownership preservation.
 - Test against a disposable workspace to prove metadata owner, records, and
   navigation entries are correct without an application installation.
+- Assert that the desired flat maps contain no Person, Company, or Opportunity
+  object or dependent metadata and no retained relation targets their universal
+  identifiers.
+- Assert that Tasks and Notes can target Creator, Campaign, and Brand Brain Page
+  through paired morph and inverse relations.
+- Exercise the destructive existing-workspace cutover against a disposable
+  workspace containing legacy CRM records and prove those records and objects
+  are removed while Creator, Campaign, Brand Brain Page, Task, and Note data
+  remain.
 
 ### Brand Brain runtime
 
@@ -208,9 +253,11 @@ Retain general Twenty marketplace support and required Composio configuration.
 
 1. Complete all focused tests before production deployment.
 2. Deploy the normal server release to the single production environment.
-3. Run the versioned workspace migration with dry-run evidence, then live.
-4. Verify a new workspace, an upgraded existing workspace, Brand Brain runtime,
-   and the Instagram Settings flow.
+3. Run the versioned workspace migration with dry-run evidence, then live. The
+   dry-run must explicitly report deletion of Person, Company, Opportunity, and
+   their records and dependent metadata.
+4. Verify a new workspace, an upgraded existing workspace, Task/Note targets,
+   Brand Brain runtime, and the Instagram Settings flow.
 5. Remove the old application delivery path and unused Myah-only configuration.
 6. Update `docs/operations/environment-isolation-audit.md` to state the
    approved production-only policy and remove the superseded staging mandate.
@@ -218,9 +265,11 @@ Retain general Twenty marketplace support and required Composio configuration.
 ## Acceptance criteria
 
 The migration is complete only when every eligible new workspace receives the
-Myah metadata through standard synchronization; existing workspaces are safely
-migrated without duplicated or lost data; all four Brand Brain contracts run
-server-side; the retained Instagram flow behaves exactly as before; no Myah
-feature depends on SDK app publication or promotion; and the repository's
-operational documentation states the same production-only policy as the
-implemented rollout.
+Myah metadata through standard synchronization; Person, Company, and
+Opportunity objects are absent; Tasks and Notes target Creator, Campaign, and
+Brand Brain Page; existing workspaces are migrated without duplicate metadata
+and with the approved deletion of legacy CRM records; all four Brand Brain
+contracts run server-side; the retained Instagram flow behaves exactly as
+before; no Myah feature depends on SDK app publication or promotion; and the
+repository's operational documentation states the same production-only policy
+as the implemented rollout.
