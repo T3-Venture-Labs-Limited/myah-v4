@@ -16,6 +16,7 @@ import {
 const providerBindingName =
   '2.19.0_AddInstagramReplyApprovalProviderBindingSlowInstanceCommand_1784106536001';
 const workspaceReplayName = '2.19.0_TestWorkspaceReplay_1784113000000';
+const unrelatedMigrationName = '2.19.0_TestUnrelatedMigration_1784114000000';
 
 const dropApprovalSchema = async (context: IntegrationTestContext) => {
   await context.dataSource.query(
@@ -43,6 +44,73 @@ const restoreApprovalSchema = async (context: IntegrationTestContext) => {
     await queryRunner.release();
   }
 };
+const deleteRecoveryMigrations = async (context: IntegrationTestContext) => {
+  await context.dataSource.query(
+    'DELETE FROM core."upgradeMigration" WHERE name IN ($1, $2)',
+    [providerBindingName, workspaceReplayName],
+  );
+};
+const seedFailedProviderBindingMigration = async (
+  context: IntegrationTestContext,
+) => {
+  await seedInstanceMigration(context.dataSource, {
+    name: providerBindingName,
+    status: 'failed',
+    workspaceIds: [WS_1],
+  });
+  await context.dataSource.query(
+    `UPDATE core."upgradeMigration"
+     SET "createdAt" = NOW() - INTERVAL '1 second'
+     WHERE name = $1`,
+    [providerBindingName],
+  );
+};
+type UpgradeMigrationRecord = {
+  id: string;
+  name: string;
+  status: 'completed' | 'failed';
+  attempt: number;
+  executedByVersion: string;
+  errorMessage: string | null;
+  workspaceId: string | null;
+  isInitial: boolean;
+  createdAt: Date;
+};
+
+const getProviderBindingMigrations = async (context: IntegrationTestContext) =>
+  context.dataSource.query<UpgradeMigrationRecord[]>(
+    `SELECT id, name, status, attempt, "executedByVersion", "errorMessage",
+         "workspaceId", "isInitial", "createdAt"
+    FROM core."upgradeMigration"
+   WHERE name = $1
+   ORDER BY "createdAt", id`,
+    [providerBindingName],
+  );
+
+const restoreProviderBindingMigrations = async (
+  context: IntegrationTestContext,
+  migrations: UpgradeMigrationRecord[],
+) => {
+  for (const migration of migrations) {
+    await context.dataSource.query(
+      `INSERT INTO core."upgradeMigration"
+        (id, name, status, attempt, "executedByVersion", "errorMessage",
+         "workspaceId", "isInitial", "createdAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        migration.id,
+        migration.name,
+        migration.status,
+        migration.attempt,
+        migration.executedByVersion,
+        migration.errorMessage,
+        migration.workspaceId,
+        migration.isInitial,
+        migration.createdAt,
+      ],
+    );
+  }
+};
 
 const getApprovalTables = async (context: IntegrationTestContext) =>
   context.dataSource.query<
@@ -65,16 +133,30 @@ const getProviderColumns = async (context: IntegrationTestContext) =>
 
 describe('UpgradeSequenceRunnerService — provider-binding recovery (integration)', () => {
   let context: IntegrationTestContext;
+  let originalProviderBindingMigrations: UpgradeMigrationRecord[];
 
   beforeAll(async () => {
     context = await createUpgradeSequenceRunnerIntegrationTestModule();
+    await seedInstanceMigration(context.dataSource, {
+      name: unrelatedMigrationName,
+      status: 'completed',
+    });
+    originalProviderBindingMigrations =
+      await getProviderBindingMigrations(context);
   }, 30000);
 
   afterAll(async () => {
     try {
       await restoreApprovalSchema(context);
-      await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+      await deleteRecoveryMigrations(context);
+      await restoreProviderBindingMigrations(
+        context,
+        originalProviderBindingMigrations,
+      );
 
+      await expect(
+        getProviderBindingMigrations(context),
+      ).resolves.toStrictEqual(originalProviderBindingMigrations);
       const approvalTables = await getApprovalTables(context);
 
       expect(approvalTables).toHaveLength(1);
@@ -99,19 +181,30 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
 
   beforeEach(async () => {
     await dropApprovalSchema(context);
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await deleteRecoveryMigrations(context);
     resetSeedSequenceCounter();
     setMockActiveWorkspaceIds([WS_1]);
   });
 
   it('replays a failed provider-binding cursor after recreating its approval schema without a third attempt', async () => {
+    await expect(
+      context.dataSource.query<{ name: string }[]>(
+        'SELECT name FROM core."upgradeMigration" WHERE name = $1',
+        [unrelatedMigrationName],
+      ),
+    ).resolves.toStrictEqual([{ name: unrelatedMigrationName }]);
+    await context.dataSource.query(
+      'DELETE FROM core."upgradeMigration" WHERE name = $1',
+      [unrelatedMigrationName],
+    );
     const sequence: UpgradeStep[] = [
       {
         kind: 'slow-instance',
         name: providerBindingName,
         version: '2.19.0',
         timestamp: 1784106536001,
-        command: new AddInstagramReplyApprovalProviderBindingSlowInstanceCommand(),
+        command:
+          new AddInstagramReplyApprovalProviderBindingSlowInstanceCommand(),
       } as unknown as UpgradeStep,
       {
         kind: 'workspace',
@@ -122,11 +215,7 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
       } as unknown as UpgradeStep,
     ];
 
-    await seedInstanceMigration(context.dataSource, {
-      name: providerBindingName,
-      status: 'failed',
-      workspaceIds: [WS_1],
-    });
+    await seedFailedProviderBindingMigration(context);
 
     const report = await context.runner.run({
       sequence,
@@ -167,7 +256,13 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
 
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
-    expect(executed.map(migrationRecordToKey)).toStrictEqual([
+    const recoveryMigrationKeys = executed
+      .filter(({ name }) =>
+        [providerBindingName, workspaceReplayName].includes(name),
+      )
+      .map(migrationRecordToKey);
+
+    expect(recoveryMigrationKeys).toStrictEqual([
       `${providerBindingName}:instance:failed:1`,
       `${providerBindingName}:${WS_1}:failed:1`,
       `${providerBindingName}:instance:completed:2`,
@@ -177,10 +272,17 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
 
     await context.runner.run({ sequence, options: DEFAULT_OPTIONS });
 
-    const executedAfterSecondRun =
-      await testGetExecutedMigrationsInOrder(context.dataSource);
+    const recoveryMigrationsAfterSecondRun = (
+      await testGetExecutedMigrationsInOrder(context.dataSource)
+    )
+      .filter(({ name }) =>
+        [providerBindingName, workspaceReplayName].includes(name),
+      )
+      .map(migrationRecordToKey);
 
-    expect(executedAfterSecondRun).toStrictEqual(executed);
+    expect(recoveryMigrationsAfterSecondRun).toStrictEqual(
+      recoveryMigrationKeys,
+    );
   });
   it('restores missing approval schema during teardown after a recovery throws', async () => {
     const recoveryError = new Error('provider-binding recovery exploded');
@@ -200,11 +302,7 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
       } as unknown as UpgradeStep,
     ];
 
-    await seedInstanceMigration(context.dataSource, {
-      name: providerBindingName,
-      status: 'failed',
-      workspaceIds: [WS_1],
-    });
+    await seedFailedProviderBindingMigration(context);
 
     await expect(
       context.runner.run({
