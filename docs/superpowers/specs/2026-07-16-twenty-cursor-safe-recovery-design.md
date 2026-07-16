@@ -10,6 +10,8 @@ Keep the fail-closed entrypoint and the existing persisted cursor. Make the fail
 
 Extract the existing approval-schema creation SQL from `PendingMigrationCheckFastInstanceCommand` into a focused helper. Both the pending-check command and the provider-binding command call that helper. The provider-binding command then adds its provider columns as it does today.
 
+
+The helper must preserve the canonical `text` types for `providerConversationId` and `recipientIgsid`; it must not create a divergent `character varying` schema.
 ## Constraints
 
 - No Railway configuration, deployment, database, or cursor mutation is part of this change.
@@ -23,11 +25,10 @@ Extract the existing approval-schema creation SQL from `PendingMigrationCheckFas
 2. The provider-binding command first ensures the approval request/receipt enums, tables, indexes, and workspace foreign key exist.
 3. It adds the provider-binding columns with idempotent DDL.
 4. The command records completion; the normal sequence proceeds to workspace commands.
-5. A later invocation sees the completed cursor and skips safely.
 
 ## Tests and verification
 
-Add a regression matching the production state: provider-binding cursor failed, approval schema absent, and one active workspace. Assert the resumed flow creates the schema before provider binding and advances successfully. Run the focused Jest suite in RED then GREEN. Run a disposable PostgreSQL smoke twice and confirm both approval tables, provider columns, and the foreign key. Build the production Twenty Docker target before opening a PR.
+Add a real PostgreSQL regression using `UpgradeSequenceRunnerService`, `InstanceCommandRunnerService`, and the production provider-binding command. Seed the exact failed attempt-one rows at instance and active-workspace scope, with the approval schema absent. Assert the resumed run restores the schema, performs the provider binding, replays the eligible workspace segment, and writes completed attempt-two rows. Run it again and assert no attempt-three row or repeated work. Run the focused Jest suite in RED then GREEN, then build the production Twenty Docker target before opening a PR.
 
 ## Scope stop
 
