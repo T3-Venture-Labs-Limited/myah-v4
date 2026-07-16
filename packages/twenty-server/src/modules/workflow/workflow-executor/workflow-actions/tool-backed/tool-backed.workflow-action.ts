@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { resolveInput } from 'twenty-shared/utils';
 import { type WorkflowRunStepLog } from 'twenty-shared/workflow';
 
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { type ToolInput } from 'src/engine/core-modules/tool/types/tool-input.type';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
@@ -27,12 +28,14 @@ export abstract class ToolBackedWorkflowAction<
   protected constructor(
     loggerName: string,
     private readonly workflowRunStepLogService: WorkflowRunStepLogWorkspaceService,
+    private readonly externalWritePolicyService: ExternalWritePolicyService,
   ) {
     this.logger = new Logger(loggerName);
   }
 
   protected abstract getTool(): Tool;
 
+  protected abstract getToolName(): string;
   protected abstract assertStep(step: WorkflowAction): void;
 
   protected async preprocessInput(
@@ -69,6 +72,15 @@ export abstract class ToolBackedWorkflowAction<
       resolveInput(preprocessed, context) as TInput,
       runInfo.workspaceId,
     );
+
+    await this.externalWritePolicyService.assertExecutable({
+      toolName: this.getToolName(),
+      context: {
+        workspaceId: runInfo.workspaceId,
+        roleId: '',
+        rolePermissionConfig: {},
+      },
+    });
 
     const startedAt = Date.now();
     const toolOutput = await this.getTool().execute(resolvedInput, {

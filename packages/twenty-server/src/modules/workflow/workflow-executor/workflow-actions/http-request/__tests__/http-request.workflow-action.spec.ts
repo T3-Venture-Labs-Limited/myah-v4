@@ -1,6 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
 import { WorkflowActionType } from 'twenty-shared/workflow';
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool';
 import { HttpRequestWorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/http-request/http-request.workflow-action';
 import { type WorkflowActionSettings } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action-settings.type';
@@ -46,6 +47,10 @@ describe('HttpRequestWorkflowAction', () => {
       providers: [
         HttpRequestWorkflowAction,
         { provide: HttpTool, useValue: mockHttpTool },
+        {
+          provide: ExternalWritePolicyService,
+          useValue: { assertExecutable: jest.fn() },
+        },
         {
           provide: WorkflowRunStepLogWorkspaceService,
           useValue: { setStepLog: mockSetStepLog },

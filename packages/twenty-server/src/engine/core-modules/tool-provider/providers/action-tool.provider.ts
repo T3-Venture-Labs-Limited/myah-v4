@@ -12,6 +12,7 @@ import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { type GenerateDescriptorOptions } from 'src/engine/core-modules/tool-provider/interfaces/generate-descriptor-options.type';
 import { type ToolProvider } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider.interface';
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { type ActionToolLabel } from 'src/engine/core-modules/tool-provider/types/action-tool-label.type';
 import { translateToolLabel } from 'src/engine/core-modules/tool-provider/utils/translate-tool-label.util';
 import { humanizeToolName } from 'src/engine/core-modules/tool-provider/utils/tool-set-to-descriptors.util';
@@ -57,6 +58,7 @@ export class ActionToolProvider implements ToolProvider {
     private readonly sendInstagramReplyTool: SendInstagramReplyTool,
     private readonly permissionsService: PermissionsService,
     private readonly i18nService: I18nService,
+    private readonly externalWritePolicyService: ExternalWritePolicyService,
   ) {
     this.toolMap = new Map<string, Tool>([
       ['http_request', this.httpTool],
@@ -231,23 +233,16 @@ export class ActionToolProvider implements ToolProvider {
     args: Record<string, unknown>,
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
-    if (
-      toolName === 'send_instagram_reply' ||
-      toolName === 'prepare_instagram_reply_draft'
-    ) {
-      const hasInstagramReplyPermission =
-        await this.permissionsService.hasToolPermission(
-          context.rolePermissionConfig,
-          context.workspaceId,
-          PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
-        );
+    const approvalBindingId =
+      toolName === 'send_instagram_reply' && typeof args.approvalId === 'string'
+        ? args.approvalId
+        : undefined;
 
-      if (!hasInstagramReplyPermission) {
-        throw new Error(
-          'Missing permission to execute the Instagram reply action.',
-        );
-      }
-    }
+    await this.externalWritePolicyService.assertExecutable({
+      toolName,
+      context,
+      approvalBindingId,
+    });
 
     const tool = this.toolMap.get(toolName);
 

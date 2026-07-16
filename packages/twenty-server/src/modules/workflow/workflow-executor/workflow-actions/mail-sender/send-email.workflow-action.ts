@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { type Repository } from 'typeorm';
 
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
 import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
@@ -23,6 +24,7 @@ export class SendEmailWorkflowAction extends EmailWorkflowActionBase {
   constructor(
     private readonly sendEmailTool: SendEmailTool,
     workflowRunStepLogService: WorkflowRunStepLogWorkspaceService,
+    externalWritePolicyService: ExternalWritePolicyService,
     globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(ConnectedAccountEntity)
     connectedAccountRepository: Repository<ConnectedAccountEntity>,
@@ -32,6 +34,7 @@ export class SendEmailWorkflowAction extends EmailWorkflowActionBase {
     super(
       SendEmailWorkflowAction.name,
       workflowRunStepLogService,
+      externalWritePolicyService,
       globalWorkspaceOrmManager,
       connectedAccountRepository,
       userWorkspaceRepository,
@@ -42,6 +45,9 @@ export class SendEmailWorkflowAction extends EmailWorkflowActionBase {
     return this.sendEmailTool;
   }
 
+  protected getToolName(): string {
+    return 'send_email';
+  }
   protected getMode(): EmailStepLogMode {
     return 'SEND';
   }

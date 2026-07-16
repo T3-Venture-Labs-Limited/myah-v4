@@ -14,6 +14,7 @@ import { ViewToolProvider } from 'src/engine/core-modules/tool-provider/provider
 import { WebhookToolProvider } from 'src/engine/core-modules/tool-provider/providers/webhook-tool.provider';
 import { WorkflowToolProvider } from 'src/engine/core-modules/tool-provider/providers/workflow-tool.provider';
 import { ToolExecutorService } from 'src/engine/core-modules/tool-provider/services/tool-executor.service';
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { ToolModule } from 'src/engine/core-modules/tool/tool.module';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { AiAgentExecutionModule } from 'src/engine/metadata-modules/ai/ai-agent-execution/ai-agent-execution.module';
@@ -69,6 +70,7 @@ import { ToolRegistryService } from './services/tool-registry.service';
   providers: [
     ToolIndexResolver,
     ToolExecutorService,
+    ExternalWritePolicyService,
     ActionToolProvider,
     BrandBrainToolProvider,
     DashboardToolProvider,
@@ -123,6 +125,6 @@ import { ToolRegistryService } from './services/tool-registry.service';
     },
     ToolRegistryService,
   ],
-  exports: [ToolRegistryService],
+  exports: [ExternalWritePolicyService, ToolRegistryService],
 })
 export class ToolProviderModule {}

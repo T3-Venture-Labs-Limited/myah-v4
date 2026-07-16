@@ -3,6 +3,7 @@ import { type WorkflowRunStepLog } from 'twenty-shared/workflow';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
 import { IsNull, type Repository } from 'typeorm';
 
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -27,11 +28,16 @@ export abstract class EmailWorkflowActionBase extends ToolBackedWorkflowAction<W
   protected constructor(
     loggerName: string,
     workflowRunStepLogService: WorkflowRunStepLogWorkspaceService,
+    externalWritePolicyService: ExternalWritePolicyService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
   ) {
-    super(loggerName, workflowRunStepLogService);
+    super(
+      loggerName,
+      workflowRunStepLogService,
+      externalWritePolicyService,
+    );
   }
 
   protected abstract getMode(): EmailStepLogMode;
