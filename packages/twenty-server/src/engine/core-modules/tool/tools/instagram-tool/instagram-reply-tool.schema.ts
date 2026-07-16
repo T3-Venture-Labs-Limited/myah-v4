@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const sendInstagramReplyInputSchema = z
   .object({
-    approvalBindingId: z
+    actionApprovalBindingId: z
       .string()
       .uuid()
       .describe('Opaque immutable approval binding for this exact reply.'),

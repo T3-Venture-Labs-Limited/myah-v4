@@ -414,7 +414,6 @@ export class ActionApprovalService {
 
     const binding = await manager.findOne(ActionApprovalBindingEntity, {
       where: { id: approvalBindingId, workspaceId: input.workspaceId },
-      relations: { evidenceLinks: true },
       lock: { mode: 'pessimistic_write' },
     });
     if (
@@ -424,7 +423,11 @@ export class ActionApprovalService {
     ) {
       throw new Error('An approved action binding is required');
     }
-    this.assertBindingMatches(binding, input);
+    this.assertBindingMatches(
+      binding,
+      input,
+      await this.findEvidence(manager, binding.id),
+    );
 
     binding.state = ActionApprovalBindingState.CONSUMED;
     await manager.save(ActionApprovalBindingEntity, binding);

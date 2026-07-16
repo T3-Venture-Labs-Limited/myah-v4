@@ -53,7 +53,7 @@ export class SendInstagramReplyTool implements Tool {
     try {
       const binding = await this.actionApprovalService.getApprovedBinding({
         workspaceId: context.workspaceId,
-        approvalBindingId: parsedInput.data.approvalBindingId,
+        approvalBindingId: parsedInput.data.actionApprovalBindingId,
         initiatorUserWorkspaceId: context.userWorkspaceId,
         threadId: context.threadId,
       });
@@ -63,7 +63,7 @@ export class SendInstagramReplyTool implements Tool {
       });
       const reservation =
         await this.actionApprovalService.reserveExecutionForBinding({
-          approvalBindingId: parsedInput.data.approvalBindingId,
+          approvalBindingId: parsedInput.data.actionApprovalBindingId,
           expectedActionBinding: authority.expectedActionBinding,
         });
 

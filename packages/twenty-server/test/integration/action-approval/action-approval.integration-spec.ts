@@ -16,6 +16,16 @@ import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-m
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { SEED_EMPTY_WORKSPACE_3_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { InstagramReplyDraftService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-draft.service';
+import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
+import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
+import { createRequestApprovalTool } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
+
+jest.mock(
+  'src/engine/core-modules/code-interpreter/code-interpreter.service',
+  () => ({ CodeInterpreterService: class CodeInterpreterService {} }),
+);
 
 const workspaceId = SEED_EMPTY_WORKSPACE_3_ID;
 const bindingId = '90000000-0000-4000-8000-000000000002';
@@ -28,7 +38,13 @@ const projectionWorkspaceId = workspaceId;
 const projectionBindingId = '90000000-0000-4000-8000-000000000010';
 const projectionReceiptId = '90000000-0000-4000-8000-000000000011';
 const projectionDraftId = '90000000-0000-4000-8000-000000000012';
+const projectionConversationId = '90000000-0000-4000-8000-000000000014';
 const projectionSchemaName = getWorkspaceSchemaName(projectionWorkspaceId);
+const integrationAccountId = '90000000-0000-4000-8000-000000000013';
+const integrationConnectedAccountId = 'integration-connected-account';
+const integrationRecipientIgsid = 'integration-recipient-igsid';
+const integrationRecipientLabel = '@integration-recipient';
+const integrationProviderConversationId = 'integration-provider-conversation';
 
 const expectedBinding = {
   workspaceId,
@@ -48,6 +64,196 @@ const expectedBinding = {
 describe('ActionApprovalService (PostgreSQL)', () => {
   let dataSource: DataSource;
   let service: ActionApprovalService;
+
+  const clearIntegrationWorkspaceGraph = async () => {
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahSocialMessage"
+        WHERE "conversationId" IN (
+          SELECT "id"
+          FROM "${projectionSchemaName}"."_myahSocialConversation"
+          WHERE "instagramAccountId" = $1
+        )`,
+      [integrationAccountId],
+    );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahInstagramReplyDraft"
+        WHERE "conversationId" IN (
+          SELECT "id"
+          FROM "${projectionSchemaName}"."_myahSocialConversation"
+          WHERE "instagramAccountId" = $1
+        )`,
+      [integrationAccountId],
+    );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahSocialConversation"
+        WHERE "instagramAccountId" = $1`,
+      [integrationAccountId],
+    );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahInstagramAccount"
+        WHERE "id" = $1`,
+      [integrationAccountId],
+    );
+  };
+
+  const hasResolvedBindingPayload = (
+    value: unknown,
+  ): value is { status: string; actionApprovalBindingId: string } =>
+    Boolean(
+      value &&
+        typeof value === 'object' &&
+        'status' in value &&
+        typeof value.status === 'string' &&
+        'actionApprovalBindingId' in value &&
+        typeof value.actionApprovalBindingId === 'string',
+    );
+
+  const hasResult = (value: unknown): value is { result: unknown } =>
+    Boolean(value && typeof value === 'object' && 'result' in value);
+
+  const prepareApprovedSender = async () => {
+    const workspaceRepository = {
+      findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
+    };
+    const globalWorkspaceOrmManager = {
+      executeInWorkspaceContext: jest.fn(
+        async (callback: () => unknown) => callback(),
+      ),
+      getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
+    };
+    const actionDefinition = new InstagramReplyActionDefinition(
+      workspaceRepository as never,
+      globalWorkspaceOrmManager as never,
+    );
+    const draftService = new InstagramReplyDraftService(
+      workspaceRepository as never,
+      globalWorkspaceOrmManager as never,
+    );
+    const providerCalls = jest.fn(async ({ toolSlug }: { toolSlug: string }) =>
+      toolSlug === 'INSTAGRAM_LIST_ALL_MESSAGES'
+        ? {
+            kind: 'success' as const,
+            data: {
+              data: [
+                {
+                  direction: 'INBOUND',
+                  from: { id: integrationRecipientIgsid },
+                },
+              ],
+            },
+          }
+        : { kind: 'success' as const, data: { id: 'provider-message-id' } },
+    );
+    const sender = new SendInstagramReplyTool(
+      service,
+      actionDefinition,
+      {
+        getActiveInstagramAccount: jest.fn().mockResolvedValue({
+          connectedAccountId: integrationConnectedAccountId,
+          composioUserId: `workspace:${workspaceId}:instagram`,
+        }),
+        executeInstagramTool: providerCalls,
+      } as never,
+      new ActionReceiptProjectorService(
+        dataSource.getRepository(ActionExecutionReceiptEntity),
+        new ActionReceiptWorkspaceProjectionWriterService(dataSource),
+      ),
+    );
+
+    await dataSource.query(
+      `INSERT INTO "${projectionSchemaName}"."_myahInstagramAccount" (
+        "id", "name", "label", "connectedAccountId", "composioUserId", "status"
+      ) VALUES ($1, $2, $3, $4, $5, 'ACTIVE')`,
+      [
+        integrationAccountId,
+        'Integration account',
+        '@integration-account',
+        integrationConnectedAccountId,
+        `workspace:${workspaceId}:instagram`,
+      ],
+    );
+    const prepared = await draftService.prepare({
+      workspaceId,
+      userWorkspaceId: initiatorUserWorkspaceId,
+      connectedAccountId: integrationConnectedAccountId,
+      providerConversationId: integrationProviderConversationId,
+      recipientIgsid: integrationRecipientIgsid,
+      recipientLabel: integrationRecipientLabel,
+      body: 'A real approved reply.',
+    });
+    const pendingOutput = await createRequestApprovalTool({
+      workspaceId,
+      userWorkspaceId: initiatorUserWorkspaceId,
+      threadId,
+      actionDefinition,
+      actionApprovalService: service,
+    }).execute({
+      toolName: 'send_instagram_reply',
+      actionInput: { draftId: prepared.draftId },
+    });
+    if (!hasResolvedBindingPayload(pendingOutput.result)) {
+      throw new Error('The registered producer did not return a binding ID.');
+    }
+    const pendingBindingId = pendingOutput.result.actionApprovalBindingId;
+    const threadRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: threadId }),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const messagePartRepository = {
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const decisionRouter = new AgentChatService(
+      threadRepository as never,
+      {} as never,
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'integration-message-id',
+          turnId: 'integration-turn-id',
+          parts: [
+            {
+              id: 'integration-part-id',
+              toolName: 'request_approval',
+              toolOutput: pendingOutput,
+            },
+          ],
+        }),
+      } as never,
+      messagePartRepository as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      service,
+    );
+    await decisionRouter.resolvePendingApproval({
+      workspaceId,
+      userWorkspaceId: initiatorUserWorkspaceId,
+      threadId,
+      messageId: 'integration-message-id',
+      streamId: 'integration-stream-id',
+      decision: { decision: 'approved' },
+    });
+    const persistedOutput =
+      messagePartRepository.update.mock.calls[
+        messagePartRepository.update.mock.calls.length - 1
+      ][2].toolOutput;
+    if (!hasResult(persistedOutput)) {
+      throw new Error('The decision router did not persist a result.');
+    }
+    const senderPayload = persistedOutput.result;
+    if (!hasResolvedBindingPayload(senderPayload)) {
+      throw new Error('The decision router did not persist a binding payload.');
+    }
+
+    return {
+      actionDefinition,
+      prepared,
+      pendingBindingId,
+      providerCalls,
+      sender,
+      senderPayload,
+    };
+  };
 
   beforeAll(async () => {
     dataSource = new DataSource({
@@ -90,18 +296,68 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     );
     await dataSource.query(`CREATE SCHEMA IF NOT EXISTS "${projectionSchemaName}"`);
     await dataSource.query(`
+      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahInstagramAccount" (
+        "id" uuid PRIMARY KEY,
+        "name" varchar NOT NULL DEFAULT '',
+        "label" varchar,
+        "connectedAccountId" varchar NOT NULL,
+        "composioUserId" varchar NOT NULL,
+        "status" varchar NOT NULL DEFAULT 'ACTIVE',
+        "deletedAt" timestamptz,
+        "createdAt" timestamptz NOT NULL DEFAULT NOW(),
+        "updatedAt" timestamptz NOT NULL DEFAULT NOW()
+      )
+    `);
+    await dataSource.query(`
+      CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahSocialConversation" (
+        "id" uuid PRIMARY KEY,
+        "name" varchar NOT NULL DEFAULT '',
+        "label" varchar,
+        "providerConversationId" varchar NOT NULL,
+        "recipientIgsid" varchar NOT NULL,
+        "instagramAccountId" uuid NOT NULL,
+        "deletedAt" timestamptz,
+        "createdAt" timestamptz NOT NULL DEFAULT NOW(),
+        "updatedAt" timestamptz NOT NULL DEFAULT NOW(),
+        "createdBySource" varchar,
+        "createdByWorkspaceMemberId" uuid,
+        "createdByName" varchar,
+        "createdByContext" jsonb,
+        "updatedBySource" varchar,
+        "updatedByWorkspaceMemberId" uuid,
+        "updatedByName" varchar,
+        "updatedByContext" jsonb
+      )
+    `);
+    await dataSource.query(`
       CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahInstagramReplyDraft" (
         "id" uuid PRIMARY KEY,
+        "name" varchar,
+        "title" varchar,
         "body" text NOT NULL,
+        "conversationId" uuid,
         "status" varchar NOT NULL,
+        "source" varchar,
+        "generatedAt" timestamptz,
         "sentAt" timestamptz,
-        "updatedAt" timestamptz NOT NULL DEFAULT NOW()
+        "deletedAt" timestamptz,
+        "createdAt" timestamptz NOT NULL DEFAULT NOW(),
+        "updatedAt" timestamptz NOT NULL DEFAULT NOW(),
+        "createdBySource" varchar,
+        "createdByWorkspaceMemberId" uuid,
+        "createdByName" varchar,
+        "createdByContext" jsonb,
+        "updatedBySource" varchar,
+        "updatedByWorkspaceMemberId" uuid,
+        "updatedByName" varchar,
+        "updatedByContext" jsonb
       )
     `);
     await dataSource.query(`
       CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahSocialMessage" (
         "id" uuid PRIMARY KEY,
         "text" text NOT NULL,
+        "conversationId" uuid,
         "direction" varchar NOT NULL,
         "sentVia" varchar NOT NULL,
         "createdAt" timestamptz NOT NULL,
@@ -115,6 +371,28 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         "updatedByName" varchar NOT NULL,
         "updatedByContext" jsonb NOT NULL
       )
+    `);
+    await dataSource.query(`
+      ALTER TABLE "${projectionSchemaName}"."_myahInstagramReplyDraft"
+        ADD COLUMN IF NOT EXISTS "name" varchar,
+        ADD COLUMN IF NOT EXISTS "title" varchar,
+        ADD COLUMN IF NOT EXISTS "conversationId" uuid,
+        ADD COLUMN IF NOT EXISTS "source" varchar,
+        ADD COLUMN IF NOT EXISTS "generatedAt" timestamptz,
+        ADD COLUMN IF NOT EXISTS "deletedAt" timestamptz,
+        ADD COLUMN IF NOT EXISTS "createdAt" timestamptz NOT NULL DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS "createdBySource" varchar,
+        ADD COLUMN IF NOT EXISTS "createdByWorkspaceMemberId" uuid,
+        ADD COLUMN IF NOT EXISTS "createdByName" varchar,
+        ADD COLUMN IF NOT EXISTS "createdByContext" jsonb,
+        ADD COLUMN IF NOT EXISTS "updatedBySource" varchar,
+        ADD COLUMN IF NOT EXISTS "updatedByWorkspaceMemberId" uuid,
+        ADD COLUMN IF NOT EXISTS "updatedByName" varchar,
+        ADD COLUMN IF NOT EXISTS "updatedByContext" jsonb
+    `);
+    await dataSource.query(`
+      ALTER TABLE "${projectionSchemaName}"."_myahSocialMessage"
+        ADD COLUMN IF NOT EXISTS "conversationId" uuid
     `);
   });
 
@@ -136,6 +414,11 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       `DELETE FROM "${projectionSchemaName}"."_myahInstagramReplyDraft" WHERE "id" = $1`,
       [projectionDraftId],
     );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahSocialConversation" WHERE "id" = $1`,
+      [projectionConversationId],
+    );
+    await clearIntegrationWorkspaceGraph();
     await dataSource.destroy();
   });
 
@@ -157,6 +440,11 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       `DELETE FROM "${projectionSchemaName}"."_myahInstagramReplyDraft" WHERE "id" = $1`,
       [projectionDraftId],
     );
+    await dataSource.query(
+      `DELETE FROM "${projectionSchemaName}"."_myahSocialConversation" WHERE "id" = $1`,
+      [projectionConversationId],
+    );
+    await clearIntegrationWorkspaceGraph();
     await dataSource.getRepository(ActionApprovalBindingEntity).save({
       id: bindingId,
       workspaceId,
@@ -185,8 +473,9 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       service.reserveExecution(expectedBinding),
     ]);
 
-    expect(first).toEqual(second);
-    expect(first.state).toBe(ActionExecutionReceiptState.PROCESSING);
+    expect([first.created, second.created].sort()).toEqual([false, true]);
+    expect(first.receipt).toEqual(second.receipt);
+    expect(first.receipt.state).toBe(ActionExecutionReceiptState.PROCESSING);
     expect(
       await dataSource.getRepository(ActionExecutionReceiptEntity).count({
         where: { workspaceId },
@@ -238,7 +527,9 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       role: 'mismatched-role',
     });
 
-    await expect(service.reserveExecution(expectedBinding)).resolves.toEqual(first);
+    const replay = await service.reserveExecution(expectedBinding);
+    expect(replay).toMatchObject({ created: false });
+    expect(replay.receipt).toEqual(first.receipt);
   });
 
   it('retries a real PostgreSQL workspace projection after post-projection loss', async () => {
@@ -267,10 +558,23 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       redactedOutcome: 'accepted',
     });
     await dataSource.query(
+      `INSERT INTO "${projectionSchemaName}"."_myahSocialConversation" (
+        "id", "name", "label", "providerConversationId", "recipientIgsid", "instagramAccountId"
+      ) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        projectionConversationId,
+        'Projection recipient',
+        'Projection recipient',
+        'projection-provider-conversation',
+        'projection-recipient-igsid',
+        integrationAccountId,
+      ],
+    );
+    await dataSource.query(
       `INSERT INTO "${projectionSchemaName}"."_myahInstagramReplyDraft" (
-        "id", "body", "status"
-      ) VALUES ($1, $2, 'NEEDS_REVIEW')`,
-      [projectionDraftId, 'Projected message'],
+        "id", "body", "conversationId", "status"
+      ) VALUES ($1, $2, $3, 'NEEDS_REVIEW')`,
+      [projectionDraftId, 'Projected message', projectionConversationId],
     );
 
     const projector = new ActionReceiptProjectorService(
@@ -295,13 +599,16 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       }),
     ).resolves.toMatchObject({ state: ActionExecutionReceiptState.SENT });
     await expect(
-      dataSource.query<{ count: string }[]>(
-        `SELECT count(*)::text AS "count"
-        FROM "${projectionSchemaName}"."_myahSocialMessage"
-        WHERE "createdByContext" ->> 'actionReceiptId' = $1`,
-        [projectionReceiptId],
+      dataSource.query<{ text: string; direction: string }[]>(
+        `SELECT message."text", message."direction"
+        FROM "${projectionSchemaName}"."_myahSocialConversation" AS conversation
+        INNER JOIN "${projectionSchemaName}"."_myahSocialMessage" AS message
+          ON message."conversationId" = conversation."id"
+        WHERE conversation."id" = $1
+          AND message."createdByContext" ->> 'actionReceiptId' = $2`,
+        [projectionConversationId, projectionReceiptId],
       ),
-    ).resolves.toEqual([{ count: '1' }]);
+    ).resolves.toEqual([{ text: 'Projected message', direction: 'OUTBOUND' }]);
     await expect(
       dataSource.query(
         `SELECT "status", "sentAt" IS NOT NULL AS "sent"
@@ -357,5 +664,120 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         .getRepository(ActionExecutionReceiptEntity)
         .findOneByOrFail({ id: replay.id }),
     ).toMatchObject({ providerMessageId: null });
+  });
+  it('routes a real producer and decision binding into the strict sender while projecting through the conversation relation', async () => {
+    const {
+      actionDefinition,
+      prepared,
+      pendingBindingId,
+      providerCalls,
+      sender,
+      senderPayload,
+    } = await prepareApprovedSender();
+    const senderInput = {
+      actionApprovalBindingId: senderPayload.actionApprovalBindingId,
+    };
+
+    expect(senderPayload).toMatchObject({
+      status: 'resolved',
+      actionApprovalBindingId: pendingBindingId,
+      decision: 'approved',
+    });
+    await expect(
+      dataSource.getRepository(ActionApprovalBindingEntity).findOneByOrFail({
+        id: pendingBindingId,
+      }),
+    ).resolves.toMatchObject({ state: ActionApprovalBindingState.APPROVED });
+    await expect(
+      dataSource.getRepository(ActionApprovalBindingEvidenceLinkEntity).find({
+        where: { actionApprovalBindingId: pendingBindingId },
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ recordId: prepared.draftId, role: 'draft' }),
+        expect.objectContaining({
+          recordId: prepared.conversationId,
+          role: 'conversation',
+        }),
+        expect.objectContaining({
+          recordId: integrationAccountId,
+          role: 'sending_account',
+        }),
+      ]),
+    );
+    const binding = await service.getApprovedBinding({
+      workspaceId,
+      approvalBindingId: pendingBindingId,
+      initiatorUserWorkspaceId,
+      threadId,
+    });
+    await expect(
+      actionDefinition.rebuildExecutionAuthority({ workspaceId, binding }),
+    ).resolves.toBeDefined();
+
+    await expect(
+      sender.execute(senderInput, {
+        workspaceId,
+        userWorkspaceId: initiatorUserWorkspaceId,
+        threadId,
+      }),
+    ).resolves.toEqual({
+      success: true,
+      message: 'Instagram reply accepted.',
+    });
+    expect(
+      providerCalls.mock.calls.filter(
+        ([input]) => input.toolSlug === 'INSTAGRAM_SEND_TEXT_MESSAGE',
+      ),
+    ).toHaveLength(1);
+    await expect(
+      dataSource.getRepository(ActionExecutionReceiptEntity).findOneByOrFail({
+        actionApprovalBindingId: pendingBindingId,
+      }),
+    ).resolves.toMatchObject({ state: ActionExecutionReceiptState.SENT });
+    await expect(
+      dataSource.query<{ text: string; direction: string }[]>(
+        `SELECT message."text", message."direction"
+        FROM "${projectionSchemaName}"."_myahSocialConversation" AS conversation
+        INNER JOIN "${projectionSchemaName}"."_myahSocialMessage" AS message
+          ON message."conversationId" = conversation."id"
+        WHERE conversation."id" = $1
+          AND message."createdByContext" ->> 'actionReceiptId' IS NOT NULL`,
+        [prepared.conversationId],
+      ),
+    ).resolves.toEqual([{ text: prepared.body, direction: 'OUTBOUND' }]);
+  });
+
+  it('creates one receipt and sends once when real sender executions race for one binding', async () => {
+    const { pendingBindingId, providerCalls, sender, senderPayload } =
+      await prepareApprovedSender();
+    const senderInput = {
+      actionApprovalBindingId: senderPayload.actionApprovalBindingId,
+    };
+
+    const results = await Promise.all([
+      sender.execute(senderInput, {
+        workspaceId,
+        userWorkspaceId: initiatorUserWorkspaceId,
+        threadId,
+      }),
+      sender.execute(senderInput, {
+        workspaceId,
+        userWorkspaceId: initiatorUserWorkspaceId,
+        threadId,
+      }),
+    ]);
+
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(
+      providerCalls.mock.calls.filter(
+        ([input]) => input.toolSlug === 'INSTAGRAM_SEND_TEXT_MESSAGE',
+      ),
+    ).toHaveLength(1);
+    expect(
+      await dataSource.getRepository(ActionExecutionReceiptEntity).count({
+        where: { actionApprovalBindingId: pendingBindingId },
+      }),
+    ).toBe(1);
   });
 });

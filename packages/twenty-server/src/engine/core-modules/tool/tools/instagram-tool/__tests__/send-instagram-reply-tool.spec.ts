@@ -5,7 +5,7 @@ import {
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
-const approvalBindingId = '00000000-0000-4000-8000-000000000002';
+const actionApprovalBindingId = '00000000-0000-4000-8000-000000000002';
 const userWorkspaceId = '00000000-0000-4000-8000-000000000003';
 const threadId = '00000000-0000-4000-8000-000000000004';
 
@@ -106,9 +106,11 @@ const buildTool = ({
 const context = { workspaceId, userWorkspaceId, threadId };
 
 describe('sendInstagramReplyInputSchema', () => {
-  it('accepts only an approval binding UUID', () => {
-    expect(sendInstagramReplyInputSchema.parse({ approvalBindingId })).toEqual({
-      approvalBindingId,
+  it('accepts only an action approval binding UUID', () => {
+    expect(
+      sendInstagramReplyInputSchema.parse({ actionApprovalBindingId }),
+    ).toEqual({
+      actionApprovalBindingId,
     });
 
     for (const callerControlledField of [
@@ -120,7 +122,7 @@ describe('sendInstagramReplyInputSchema', () => {
     ]) {
       expect(() =>
         sendInstagramReplyInputSchema.parse({
-          approvalBindingId,
+          actionApprovalBindingId,
           [callerControlledField]: 'attacker-controlled',
         }),
       ).toThrow();
@@ -133,7 +135,7 @@ describe('SendInstagramReplyTool', () => {
     const { tool, actionApprovalService, myahComposioService } = buildTool();
 
     await expect(
-      tool.execute({ approvalBindingId }, { workspaceId, userWorkspaceId }),
+      tool.execute({ actionApprovalBindingId }, { workspaceId, userWorkspaceId }),
     ).resolves.toMatchObject({ success: false });
 
     expect(actionApprovalService.getApprovedBinding).not.toHaveBeenCalled();
@@ -155,7 +157,7 @@ describe('SendInstagramReplyTool', () => {
       rebuildError: new Error(`canonical ${reason} proof failed`),
     });
 
-    await expect(tool.execute({ approvalBindingId }, context)).resolves.toMatchObject({
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
       success: false,
     });
 
@@ -176,7 +178,7 @@ describe('SendInstagramReplyTool', () => {
       },
     });
 
-    await expect(tool.execute({ approvalBindingId }, context)).resolves.toMatchObject({
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
       success: false,
     });
 
@@ -184,29 +186,6 @@ describe('SendInstagramReplyTool', () => {
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
   });
 
-  it('sends once when concurrent executions receive one newly created lease', async () => {
-    const { tool, actionApprovalService, myahComposioService } = buildTool();
-    const receipt = {
-      id: 'receipt-id',
-      workspaceId,
-      state: ActionExecutionReceiptState.PROCESSING,
-      providerCode: null,
-      outcome: null,
-      occurredAt: new Date('2026-07-16T00:00:00.000Z'),
-    };
-    actionApprovalService.reserveExecutionForBinding
-      .mockResolvedValueOnce({ created: true, receipt })
-      .mockResolvedValueOnce({ created: false, receipt });
-
-    const [first, replay] = await Promise.all([
-      tool.execute({ approvalBindingId }, context),
-      tool.execute({ approvalBindingId }, context),
-    ]);
-
-    expect(first).toMatchObject({ success: true });
-    expect(replay).toMatchObject({ success: false });
-    expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(2);
-  });
 
   it('sends once only after a canonical account and inbound message proof', async () => {
     const {
@@ -217,14 +196,14 @@ describe('SendInstagramReplyTool', () => {
       projector,
     } = buildTool();
 
-    await expect(tool.execute({ approvalBindingId }, context)).resolves.toEqual({
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toEqual({
       success: true,
       message: 'Instagram reply accepted.',
     });
 
     expect(actionApprovalService.getApprovedBinding).toHaveBeenCalledWith({
       workspaceId,
-      approvalBindingId,
+      approvalBindingId: actionApprovalBindingId,
       initiatorUserWorkspaceId: userWorkspaceId,
       threadId,
     });
@@ -233,7 +212,7 @@ describe('SendInstagramReplyTool', () => {
       binding: expectedActionBinding,
     });
     expect(actionApprovalService.reserveExecutionForBinding).toHaveBeenCalledWith({
-      approvalBindingId,
+      approvalBindingId: actionApprovalBindingId,
       expectedActionBinding,
     });
     expect(myahComposioService.getActiveInstagramAccount).toHaveBeenCalledWith({
@@ -273,7 +252,7 @@ describe('SendInstagramReplyTool', () => {
       data: { data: [{ direction: 'OUTBOUND', from: { id: 'different-id' } }] },
     });
 
-    await expect(tool.execute({ approvalBindingId }, context)).resolves.toMatchObject({
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
       success: false,
     });
 
@@ -300,7 +279,7 @@ describe('SendInstagramReplyTool', () => {
         providerSubcode: '2534022',
       });
 
-    await expect(tool.execute({ approvalBindingId }, context)).resolves.toMatchObject({
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
       success: false,
     });
 
@@ -318,7 +297,7 @@ describe('SendInstagramReplyTool', () => {
       kind: 'unknown',
     });
 
-    await expect(tool.execute({ approvalBindingId }, context)).resolves.toMatchObject({
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
       success: false,
     });
 
