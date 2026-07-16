@@ -52,32 +52,45 @@ export class ManagedProviderOperationService {
       );
     }
 
-    const { expectedProductIds: inputExpectedProductIds, ...operationValues } =
-      input;
+    const operationInput = {
+      ...input,
+      maximumUsageProperties: validateSafeMetronomeEventProperties(
+        input.maximumUsageProperties,
+      ),
+    };
+
+    const {
+      expectedProductIds: inputExpectedProductIds,
+      ...operationValues
+    } = operationInput;
     const expectedProductIds = this.normalizeExpectedProductIds(
       inputExpectedProductIds,
     );
 
     const existingOperation = await this.operationRepository.findOneBy({
-      requestId: input.requestId,
-      workspaceId: input.workspaceId,
+      requestId: operationInput.requestId,
+      workspaceId: operationInput.workspaceId,
     });
 
     if (existingOperation) {
-      return this.getExactReplay(existingOperation, input, expectedProductIds);
+      return this.getExactReplay(
+        existingOperation,
+        operationInput,
+        expectedProductIds,
+      );
     }
     const customerId =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceCustomer(
-        input.workspaceId,
+        operationInput.workspaceId,
       );
     const contractId =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceContract(
-        input.workspaceId,
+        operationInput.workspaceId,
       );
     const preview = await this.metronomeClientService.previewUsage({
       customerId,
-      eventType: input.metronomeEventType,
-      properties: input.maximumUsageProperties,
+      eventType: operationInput.metronomeEventType,
+      properties: operationInput.maximumUsageProperties,
     });
     const reservedAmountCents = getValidatedMetronomeUsageAmountCents({
       contractId,
@@ -102,7 +115,7 @@ export class ManagedProviderOperationService {
         MyahWorkspaceInstallationEntity,
         {
           lock: { mode: 'pessimistic_write' },
-          where: { workspaceId: input.workspaceId },
+          where: { workspaceId: operationInput.workspaceId },
         },
       );
 
@@ -115,14 +128,14 @@ export class ManagedProviderOperationService {
       );
       const concurrentOperation =
         await transactionOperationRepository.findOneBy({
-          requestId: input.requestId,
-          workspaceId: input.workspaceId,
+          requestId: operationInput.requestId,
+          workspaceId: operationInput.workspaceId,
         });
 
       if (concurrentOperation) {
         return this.getExactReplay(
           concurrentOperation,
-          input,
+          operationInput,
           expectedProductIds,
         );
       }
@@ -142,7 +155,7 @@ export class ManagedProviderOperationService {
               ManagedProviderOperationState.USAGE_ACCEPTED,
               ManagedProviderOperationState.RECONCILIATION_REQUIRED,
             ],
-            workspaceId: input.workspaceId,
+            workspaceId: operationInput.workspaceId,
           },
         )
         .getRawOne<{ reservedAmountCents: string }>();
@@ -225,6 +238,11 @@ export class ManagedProviderOperationService {
           ...operation,
           actualUsageProperties,
           completedAt,
+          completionOutcome: input.outcome,
+          nextDeliveryAttemptAt:
+            state === ManagedProviderOperationState.USAGE_PENDING
+              ? completedAt
+              : null,
           providerCostMicrousd: input.providerCostMicrousd,
           providerExecutionId: input.providerExecutionId,
           releasedAt:
@@ -292,8 +310,19 @@ export class ManagedProviderOperationService {
     actualUsageProperties: Record<string, boolean | number | string>,
     expectedState: ManagedProviderOperationState,
   ): ManagedProviderOperationEntity {
+    const isExpectedLifecycleState =
+      expectedState === ManagedProviderOperationState.USAGE_PENDING
+        ? [
+            ManagedProviderOperationState.USAGE_PENDING,
+            ManagedProviderOperationState.USAGE_ACCEPTED,
+            ManagedProviderOperationState.USAGE_SETTLED,
+            ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+          ].includes(operation.state)
+        : operation.state === expectedState;
+
     if (
-      operation.state !== expectedState ||
+      !isExpectedLifecycleState ||
+      operation.completionOutcome !== input.outcome ||
       this.getCanonicalProperties(operation.actualUsageProperties ?? {}) !==
         this.getCanonicalProperties(actualUsageProperties) ||
       operation.providerCostMicrousd !== input.providerCostMicrousd ||

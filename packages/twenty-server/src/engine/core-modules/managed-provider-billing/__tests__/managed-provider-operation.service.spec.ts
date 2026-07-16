@@ -566,6 +566,7 @@ describe('ManagedProviderOperationService', () => {
       ...input,
       actualUsageProperties: { quantity: 3 },
       completedAt: new Date(),
+      completionOutcome: 'BILLABLE',
       id: 'operation-id',
       providerCostMicrousd: '1234',
       providerExecutionId: 'provider-execution-id',

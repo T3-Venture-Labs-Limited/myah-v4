@@ -73,11 +73,14 @@ export class ManagedProviderUsageDeliveryService {
       return;
     }
 
+    const deliveryEventAt = await this.getOrPersistDeliveryEventAt(operationId);
+
     try {
       await this.metronomeClientService.ingestUsage({
         customerId,
         eventType: operation.metronomeEventType,
         properties: operation.actualUsageProperties,
+        timestamp: deliveryEventAt.toISOString(),
         transactionId: `managed-provider-usage:${operation.id}`,
       });
     } catch (error) {
@@ -123,6 +126,32 @@ export class ManagedProviderUsageDeliveryService {
         ),
         state: ManagedProviderOperationState.USAGE_ACCEPTED,
       });
+    });
+  }
+
+  private async getOrPersistDeliveryEventAt(operationId: string): Promise<Date> {
+    return this.operationRepository.manager.transaction(async (manager) => {
+      const operation = await manager.findOne(ManagedProviderOperationEntity, {
+        lock: { mode: 'pessimistic_write' },
+        where: { id: operationId },
+      });
+
+      if (operation?.state !== ManagedProviderOperationState.USAGE_PENDING) {
+        throw new Error('Managed provider operation is no longer pending');
+      }
+
+      if (operation.deliveryEventAt) {
+        return operation.deliveryEventAt;
+      }
+
+      const deliveryEventAt = new Date();
+
+      await manager.save(ManagedProviderOperationEntity, {
+        ...operation,
+        deliveryEventAt,
+      });
+
+      return deliveryEventAt;
     });
   }
 

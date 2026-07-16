@@ -9,7 +9,8 @@ import { ManagedProviderUsageDeliveryService } from '../services/managed-provide
 import { MetronomeWorkspaceCustomerService } from '../services/metronome-workspace-customer.service';
 
 describe('ManagedProviderUsageDeliveryService', () => {
-  it('ingests one within-reservation usage event and retains its reservation until settlement', async () => {
+  it('persists one event timestamp and reuses it after an ingest retry', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
     const operation = {
       actualUsageProperties: { quantity: 3 },
       expectedProductIds: ['product-id'],
@@ -24,7 +25,11 @@ describe('ManagedProviderUsageDeliveryService', () => {
     };
     const manager = {
       findOne: jest.fn().mockResolvedValue(operation),
-      save: jest.fn().mockResolvedValue(operation),
+      save: jest.fn().mockImplementation(async (_, value) => {
+        Object.assign(operation, value);
+
+        return operation;
+      }),
     };
     const operationRepository = {
       findOneBy: jest.fn().mockResolvedValue(operation),
@@ -34,7 +39,10 @@ describe('ManagedProviderUsageDeliveryService', () => {
       'findOneBy' | 'manager'
     >;
     const metronomeClientService = {
-      ingestUsage: jest.fn().mockResolvedValue(undefined),
+      ingestUsage: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('lost ingest response'))
+        .mockResolvedValue(undefined),
       previewUsage: jest.fn().mockResolvedValue({
         invoices: [
           {
@@ -71,26 +79,40 @@ describe('ManagedProviderUsageDeliveryService', () => {
       configService as TwentyConfigService,
     );
 
+    await expect(service.deliverUsage('operation-id')).rejects.toThrow(
+      'lost ingest response',
+    );
+    expect(operation.deliveryEventAt).toEqual(
+      new Date('2026-07-16T00:00:00.000Z'),
+    );
+    jest.setSystemTime(new Date('2026-07-16T00:01:00.000Z'));
     await service.deliverUsage('operation-id');
 
-    expect(metronomeClientService.ingestUsage).toHaveBeenCalledWith({
-      customerId: 'customer-id',
-      eventType: 'managed-provider-operation',
-      properties: { quantity: 3 },
-      transactionId: 'managed-provider-usage:operation-id',
-    });
+    const firstTimestamp = (
+      metronomeClientService.ingestUsage as jest.Mock
+    ).mock.calls[0][0].timestamp;
+    const secondTimestamp = (
+      metronomeClientService.ingestUsage as jest.Mock
+    ).mock.calls[1][0].timestamp;
+
+    expect(firstTimestamp).toBe('2026-07-16T00:00:00.000Z');
+    expect(secondTimestamp).toBe(firstTimestamp);
+    expect(operation.deliveryEventAt).toEqual(
+      new Date('2026-07-16T00:00:00.000Z'),
+    );
     expect(manager.save).toHaveBeenCalledWith(
       ManagedProviderOperationEntity,
       expect.objectContaining({
-        metronomeAcceptedAt: expect.any(Date),
-        deliveryAttemptCount: 1,
+        metronomeAcceptedAt: operation.metronomeAcceptedAt,
+        deliveryAttemptCount: 2,
         lastDeliveryErrorCode: null,
         quotedActualAmountCents: '5',
         reservedAmountCents: '7',
-        settleAfter: expect.any(Date),
+        settleAfter: operation.settleAfter,
         state: ManagedProviderOperationState.USAGE_ACCEPTED,
       }),
     );
+    jest.useRealTimers();
   });
 
   it('does nothing for an operation that is no longer pending delivery', async () => {

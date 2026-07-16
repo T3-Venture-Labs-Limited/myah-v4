@@ -9,6 +9,9 @@ describe('validateSafeMetronomeEventProperties', () => {
       operation: 'chat_completion',
       tokenCount: 42,
       succeeded: true,
+      apiCallCount: 4,
+      contextWindow: 128_000,
+      drawCount: 2,
     };
 
     const result = validateSafeMetronomeEventProperties(input);
@@ -17,6 +20,9 @@ describe('validateSafeMetronomeEventProperties', () => {
       operation: 'chat_completion',
       tokenCount: 42,
       succeeded: true,
+      apiCallCount: 4,
+      contextWindow: 128_000,
+      drawCount: 2,
     } satisfies SafeMetronomeEventProperties);
     expect(result).not.toBe(input);
 
@@ -29,7 +35,18 @@ describe('validateSafeMetronomeEventProperties', () => {
     ['array', { operation: ['chat_completion'] }],
     ['non-finite number', { amount: Number.POSITIVE_INFINITY }],
     ['sensitive property name', { apiKey: 'secret' }],
+    ['bare token property name', { token: 'secret' }],
+    ['compound prompt property name', { promptText: 'secret' }],
+    ['oversized property key', { ['x'.repeat(65)]: 'value' }],
+    ['lowercase prompt property name', { userprompt: 'secret' }],
+    ['lowercase response property name', { rawresponse: 'secret' }],
     ['content-style property name', { messageContent: 'hello' }],
+    ['generated camel content property name', { generatedText: 'secret' }],
+    ['mailbox camel content property name', { mailboxContent: 'secret' }],
+    ['authorization camel credential property name', { authorizationHeader: 'secret' }],
+    ['credential token property name', { accessToken: 'secret' }],
+    ['uppercase snake content property name', { CONTENT_VALUE: 'secret' }],
+    ['uppercase snake authorization property name', { AUTHORIZATION_HEADER: 'secret' }],
     ['oversized string value', { operation: 'x'.repeat(257) }],
     [
       'too many keys',

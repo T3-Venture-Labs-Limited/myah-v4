@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, LessThanOrEqual, Repository } from 'typeorm';
+import { In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -54,10 +54,16 @@ export class ManagedProviderBillingRecoveryService {
 
     const pendingOperations = await this.operationRepository.find({
       take: RECOVERY_BATCH_SIZE,
-      where: {
-        nextDeliveryAttemptAt: LessThanOrEqual(now),
-        state: ManagedProviderOperationState.USAGE_PENDING,
-      },
+      where: [
+        {
+          nextDeliveryAttemptAt: IsNull(),
+          state: ManagedProviderOperationState.USAGE_PENDING,
+        },
+        {
+          nextDeliveryAttemptAt: LessThanOrEqual(now),
+          state: ManagedProviderOperationState.USAGE_PENDING,
+        },
+      ],
     });
 
     for (const operation of pendingOperations) {
@@ -75,8 +81,17 @@ export class ManagedProviderBillingRecoveryService {
         state: ManagedProviderOperationState.USAGE_ACCEPTED,
       },
     });
+    const operationsWithinSettlementWindow = acceptedOperations.filter(
+      (operation) => !this.isPastSettlementWindow(operation, now),
+    );
 
-    if (acceptedOperations.length === 0) {
+    await Promise.all(
+      acceptedOperations
+        .filter((operation) => this.isPastSettlementWindow(operation, now))
+        .map((operation) => this.markReconciliationRequired(operation)),
+    );
+
+    if (operationsWithinSettlementWindow.length === 0) {
       return;
     }
 
@@ -84,7 +99,7 @@ export class ManagedProviderBillingRecoveryService {
 
     try {
       events = await this.metronomeClientService.searchUsageEvents(
-        acceptedOperations.map((operation) =>
+        operationsWithinSettlementWindow.map((operation) =>
           this.getTransactionId(operation.id),
         ),
       );
@@ -94,7 +109,7 @@ export class ManagedProviderBillingRecoveryService {
         error.code === MetronomeClientExceptionCode.RATE_LIMITED;
 
       await Promise.all(
-        acceptedOperations.map((operation) =>
+        operationsWithinSettlementWindow.map((operation) =>
           this.scheduleSettlementRetry(operation, now, isRateLimited),
         ),
       );
@@ -102,7 +117,7 @@ export class ManagedProviderBillingRecoveryService {
       return;
     }
 
-    for (const operation of acceptedOperations) {
+    for (const operation of operationsWithinSettlementWindow) {
       await this.settleIfVerified(operation, events, now);
     }
   }
@@ -116,21 +131,31 @@ export class ManagedProviderBillingRecoveryService {
     const transactionEvents = events.filter(
       (event) => event.transactionId === transactionId,
     );
-    const matchingEvents = transactionEvents.filter(
+    const canonicalEvents = transactionEvents.filter(
       (event) => !event.isDuplicate,
     );
 
     if (transactionEvents.length === 0) {
-      if (this.isPastSettlementWindow(operation, now)) {
-        await this.markReconciliationRequired(operation);
-      } else {
-        await this.scheduleSettlementRetry(operation, now, false);
-      }
+      await this.scheduleSettlementRetry(operation, now, false);
 
       return;
     }
 
-    if (transactionEvents.length !== 1 || matchingEvents.length !== 1) {
+    if (canonicalEvents.length !== 1) {
+      await this.markReconciliationRequired(operation);
+
+      return;
+    }
+
+    const event = canonicalEvents[0];
+
+    if (
+      transactionEvents.some(
+        (transactionEvent) =>
+          transactionEvent !== event &&
+          !this.hasEquivalentEventEvidence(event, transactionEvent),
+      )
+    ) {
       await this.markReconciliationRequired(operation);
 
       return;
@@ -139,21 +164,28 @@ export class ManagedProviderBillingRecoveryService {
     const installation = await this.installationRepository.findOneBy({
       workspaceId: operation.workspaceId,
     });
-    const event = matchingEvents[0];
 
     if (
       !installation?.metronomeCustomerId ||
+      event.matchedCustomerId !== installation.metronomeCustomerId ||
+      event.timestamp !== operation.deliveryEventAt?.toISOString() ||
       event.customerId !== installation.metronomeCustomerId ||
       event.eventType !== operation.metronomeEventType ||
-      !event.matchedBillableMetricIds.some((metricId) =>
-        operation.expectedBillableMetricIds.includes(metricId),
+      !this.hasProcessedEvent(event, now) ||
+      !this.hasOnlyExpectedBillableMetrics(
+        event.matchedBillableMetricIds,
+        operation.expectedBillableMetricIds,
       ) ||
       !this.hasEquivalentProperties(
         operation.actualUsageProperties,
         event.properties,
       )
     ) {
-      await this.markReconciliationRequired(operation);
+      if (!this.hasProcessedEvent(event, now)) {
+        await this.scheduleSettlementRetry(operation, now, false);
+      } else {
+        await this.markReconciliationRequired(operation);
+      }
 
       return;
     }
@@ -278,18 +310,20 @@ export class ManagedProviderBillingRecoveryService {
     const staleBefore = new Date(
       now.getTime() - STALE_RESERVATION_THRESHOLD_MS,
     );
-    const [pendingCount, staleCount] = await Promise.all([
-      this.operationRepository.countBy({
-        state: ManagedProviderOperationState.USAGE_PENDING,
-      }),
-      this.operationRepository.countBy({
-        createdAt: LessThanOrEqual(staleBefore),
-        state: In([
-          ManagedProviderOperationState.RECONCILIATION_REQUIRED,
-          ManagedProviderOperationState.RESERVED,
-        ]),
-      }),
-    ]);
+    const [pendingCount, staleReservedCount, reconciliationCount] =
+      await Promise.all([
+        this.operationRepository.countBy({
+          state: ManagedProviderOperationState.USAGE_PENDING,
+        }),
+        this.operationRepository.countBy({
+          createdAt: LessThanOrEqual(staleBefore),
+          state: ManagedProviderOperationState.RESERVED,
+        }),
+        this.operationRepository.countBy({
+          state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+        }),
+      ]);
+    const staleCount = staleReservedCount + reconciliationCount;
 
     if (pendingCount > 0 || staleCount > 0) {
       this.logger.warn(
@@ -311,9 +345,7 @@ export class ManagedProviderBillingRecoveryService {
         Object.fromEntries(
           Object.entries(actualProperties).map(([key, value]) => [
             key,
-            typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value)
-              ? Number(value)
-              : value,
+            this.normalizePropertyValue(expectedProperties[key], value),
           ]),
         ),
       );
@@ -325,6 +357,73 @@ export class ManagedProviderBillingRecoveryService {
     } catch {
       return false;
     }
+  }
+
+  private hasEquivalentEventEvidence(
+    expectedEvent: MetronomeUsageEvent,
+    actualEvent: MetronomeUsageEvent,
+  ): boolean {
+    return (
+      expectedEvent.customerId === actualEvent.customerId &&
+      expectedEvent.matchedCustomerId === actualEvent.matchedCustomerId &&
+      expectedEvent.eventType === actualEvent.eventType &&
+      expectedEvent.timestamp === actualEvent.timestamp &&
+      expectedEvent.transactionId === actualEvent.transactionId &&
+      this.areEqualStringArrays(
+        expectedEvent.matchedBillableMetricIds,
+        actualEvent.matchedBillableMetricIds,
+      ) &&
+      this.hasEquivalentProperties(
+        expectedEvent.properties,
+        actualEvent.properties,
+      )
+    );
+  }
+
+  private hasOnlyExpectedBillableMetrics(
+    actualMetricIds: string[],
+    expectedMetricIds: string[],
+  ): boolean {
+    return (
+      actualMetricIds.length > 0 &&
+      this.areEqualStringArrays(actualMetricIds, expectedMetricIds)
+    );
+  }
+
+  private hasProcessedEvent(event: MetronomeUsageEvent, now: Date): boolean {
+    if (!event.processedAt) {
+      return false;
+    }
+
+    const processedAt = Date.parse(event.processedAt);
+
+    return Number.isFinite(processedAt) && processedAt <= now.getTime();
+  }
+
+  private normalizePropertyValue(
+    expectedValue: unknown,
+    actualValue: unknown,
+  ): unknown {
+    if (typeof expectedValue === 'number' && typeof actualValue === 'string') {
+      const normalizedValue = Number(actualValue);
+
+      return Number.isFinite(normalizedValue) ? normalizedValue : actualValue;
+    }
+
+    if (
+      typeof expectedValue === 'boolean' &&
+      (actualValue === 'true' || actualValue === 'false')
+    ) {
+      return actualValue === 'true';
+    }
+
+    return actualValue;
+  }
+
+  private areEqualStringArrays(first: string[], second: string[]): boolean {
+    return (
+      JSON.stringify([...first].sort()) === JSON.stringify([...second].sort())
+    );
   }
 
   private getTransactionId(operationId: string): string {

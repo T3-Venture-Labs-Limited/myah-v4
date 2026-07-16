@@ -75,8 +75,8 @@ export class MetronomeWorkspaceCustomerService {
       workspaceId,
     });
 
-    if (concurrentInstallation?.metronomeCustomerId) {
-      return concurrentInstallation.metronomeCustomerId;
+    if (concurrentInstallation?.metronomeCustomerId === customerId) {
+      return customerId;
     }
 
     throw new Error('Metronome customer could not be stored');

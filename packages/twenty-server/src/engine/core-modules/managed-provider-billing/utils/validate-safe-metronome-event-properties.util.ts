@@ -6,8 +6,55 @@ export {
 } from '../types/safe-metronome-event-properties.type';
 
 const MAX_PROPERTY_COUNT = 32;
+const MAX_PROPERTY_KEY_LENGTH = 64;
 const MAX_STRING_VALUE_LENGTH = 256;
-const UNSAFE_PROPERTY_NAME = /^(?:api_?key|authorization|body|content|cookie|credential|email|message(?:_?content)?|password|phone|prompt|secret|text|token)$/i;
+const UNSAFE_NORMALIZED_PROPERTY_NAMES = new Set([
+  'apikey',
+  'authorization',
+  'body',
+  'content',
+  'cookie',
+  'credential',
+  'email',
+  'authorizationheader',
+  'emailcontent',
+  'message',
+  'generatedtext',
+  'messagecontent',
+  'password',
+  'phone',
+  'mailboxcontent',
+  'prompt',
+  'prompttext',
+  'raw',
+  'rawresponse',
+  'response',
+  'secret',
+  'text',
+  'token',
+  'userprompt',
+]);
+
+const UNSAFE_PROPERTY_SEGMENTS = new Set([
+  'authorization',
+  'body',
+  'content',
+  'cookie',
+  'credential',
+  'email',
+  'message',
+  'password',
+  'phone',
+  'prompt',
+  'raw',
+  'response',
+  'secret',
+  'text',
+  'token',
+]);
+
+const UNSAFE_PROPERTY_TOKEN =
+  /(?:^|[_-]|(?<=[a-z0-9])(?=[A-Z]))(?:api_?key|authorization|body|content|cookie|credential|email|message|password|phone|prompt|raw|response|secret|text|token(?!Count)|(?:access|auth|refresh|id)[_-]?token)(?=$|[_-]|[A-Z])/;
 
 export const validateSafeMetronomeEventProperties = (
   properties: Record<string, unknown>,
@@ -22,7 +69,8 @@ export const validateSafeMetronomeEventProperties = (
 
   for (const [key, value] of entries) {
     if (
-      UNSAFE_PROPERTY_NAME.test(key) ||
+      key.length > MAX_PROPERTY_KEY_LENGTH ||
+      isUnsafePropertyName(key) ||
       (typeof value === 'string' && value.length > MAX_STRING_VALUE_LENGTH) ||
       (typeof value === 'number' && !Number.isFinite(value)) ||
       (typeof value !== 'boolean' &&
@@ -36,4 +84,17 @@ export const validateSafeMetronomeEventProperties = (
   }
 
   return normalizedProperties;
+};
+
+const isUnsafePropertyName = (key: string): boolean => {
+  const normalizedKey = key.replace(/[_-]/g, '').toLowerCase();
+
+  return (
+    UNSAFE_PROPERTY_TOKEN.test(key) ||
+    UNSAFE_NORMALIZED_PROPERTY_NAMES.has(normalizedKey) ||
+    key
+      .split(/[_-]/)
+      .some((segment) => UNSAFE_PROPERTY_SEGMENTS.has(segment.toLowerCase())) ||
+    /^(?:access|auth|refresh|id)token$/.test(normalizedKey)
+  );
 };

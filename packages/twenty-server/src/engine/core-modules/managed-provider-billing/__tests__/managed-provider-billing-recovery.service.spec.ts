@@ -22,6 +22,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
     expectedBillableMetricIds: ['metric-id'],
     id: 'operation-id',
     metronomeEventType: 'managed-provider-operation',
+    deliveryEventAt: new Date('2026-07-16T00:00:00.000Z'),
     settleAfter: new Date('2026-07-16T00:00:00.000Z'),
     settlementAttemptCount: 0,
     state: ManagedProviderOperationState.USAGE_ACCEPTED,
@@ -69,9 +70,11 @@ describe('ManagedProviderBillingRecoveryService', () => {
       searchUsageEvents: jest.fn().mockResolvedValue([
         {
           customerId: 'customer-id',
+          matchedCustomerId: 'customer-id',
           eventType: 'managed-provider-operation',
           isDuplicate: false,
           matchedBillableMetricIds: ['metric-id'],
+          timestamp: '2026-07-16T00:00:00.000Z',
           processedAt: '2026-07-16T00:01:00.000Z',
           properties: { quantity: '3' },
           transactionId: 'managed-provider-usage:operation-id',
@@ -119,10 +122,11 @@ describe('ManagedProviderBillingRecoveryService', () => {
     await service.recover();
     expect(operationRepository.find).toHaveBeenNthCalledWith(1, {
       take: 100,
-      where: {
-        nextDeliveryAttemptAt: expect.anything(),
-        state: ManagedProviderOperationState.USAGE_PENDING,
-      },
+      where: expect.arrayContaining([
+        expect.objectContaining({
+          state: ManagedProviderOperationState.USAGE_PENDING,
+        }),
+      ]),
     });
     expect(operationRepository.find).toHaveBeenNthCalledWith(2, {
       take: 100,
@@ -216,9 +220,11 @@ describe('ManagedProviderBillingRecoveryService', () => {
     (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue([
       {
         customerId: 'customer-id',
+        matchedCustomerId: 'customer-id',
         eventType: 'managed-provider-operation',
         isDuplicate: false,
         matchedBillableMetricIds: ['unexpected-metric-id'],
+        timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
         properties: { quantity: '3' },
         transactionId: 'managed-provider-usage:operation-id',
@@ -266,23 +272,27 @@ describe('ManagedProviderBillingRecoveryService', () => {
     );
   });
 
-  it('requires reconciliation when an event has duplicate audit evidence', async () => {
+  it('settles when one canonical event and an exact duplicate audit row agree', async () => {
     const { metronomeClientService, save, service } = createService();
     (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue([
       {
         customerId: 'customer-id',
+        matchedCustomerId: 'customer-id',
         eventType: 'managed-provider-operation',
         isDuplicate: false,
         matchedBillableMetricIds: ['metric-id'],
+        timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
         properties: { quantity: '3' },
         transactionId: 'managed-provider-usage:operation-id',
       },
       {
         customerId: 'customer-id',
+        matchedCustomerId: 'customer-id',
         eventType: 'managed-provider-operation',
         isDuplicate: true,
         matchedBillableMetricIds: ['metric-id'],
+        timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
         properties: { quantity: '3' },
         transactionId: 'managed-provider-usage:operation-id',
@@ -291,6 +301,83 @@ describe('ManagedProviderBillingRecoveryService', () => {
 
     await service.recover();
 
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        state: ManagedProviderOperationState.USAGE_SETTLED,
+      }),
+    );
+  });
+
+  it('backs off when matching usage has not been processed', async () => {
+    const { metronomeClientService, save, service } = createService();
+    (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue([
+      {
+        customerId: 'customer-id',
+        matchedCustomerId: 'customer-id',
+        eventType: 'managed-provider-operation',
+        isDuplicate: false,
+        matchedBillableMetricIds: ['metric-id'],
+        timestamp: '2026-07-16T00:00:00.000Z',
+        processedAt: null,
+        properties: { quantity: '3' },
+        transactionId: 'managed-provider-usage:operation-id',
+      },
+    ]);
+
+    await service.recover();
+
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        settlementAttemptCount: 1,
+        state: ManagedProviderOperationState.USAGE_ACCEPTED,
+      }),
+    );
+  });
+
+  it('requires reconciliation when accepted evidence has an unexpected metric', async () => {
+    const { metronomeClientService, save, service } = createService();
+    (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue([
+      {
+        customerId: 'customer-id',
+        matchedCustomerId: 'customer-id',
+        eventType: 'managed-provider-operation',
+        isDuplicate: false,
+        matchedBillableMetricIds: ['metric-id', 'unexpected-metric-id'],
+        timestamp: '2026-07-16T00:00:00.000Z',
+        processedAt: '2026-07-16T00:01:00.000Z',
+        properties: { quantity: '3' },
+        transactionId: 'managed-provider-usage:operation-id',
+      },
+    ]);
+
+    await service.recover();
+
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+      }),
+    );
+  });
+
+  it('requires reconciliation before evaluating matching evidence outside 34 days', async () => {
+    const { metronomeClientService, operationRepository, save, service } =
+      createService();
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          ...acceptedOperation,
+          metronomeAcceptedAt: new Date('2026-06-11T00:02:00.000Z'),
+        },
+      ]);
+
+    await service.recover();
+
+    expect(metronomeClientService.searchUsageEvents).not.toHaveBeenCalled();
     expect(save).toHaveBeenCalledWith(
       ManagedProviderOperationEntity,
       expect.objectContaining({
@@ -343,7 +430,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
 
     await service.recover();
 
-    expect(countBy).toHaveBeenCalledTimes(2);
+    expect(countBy).toHaveBeenCalledTimes(3);
     expect(warn).toHaveBeenCalledWith(
       'Managed-provider billing recovery has 2 pending and 3 stale operations',
     );

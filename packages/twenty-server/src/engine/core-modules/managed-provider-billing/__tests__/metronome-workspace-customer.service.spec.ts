@@ -197,18 +197,34 @@ describe('MetronomeWorkspaceCustomerService', () => {
     );
   });
 
-  it('returns a concurrent winner instead of overwriting its customer ID', async () => {
+  it('converges on an identical concurrently stored customer ID', async () => {
     const { installationRepository, service } = createService({
       customers: [recoveredCustomer],
       installations: [
         { metronomeCustomerId: null, workspaceId },
-        { metronomeCustomerId: 'concurrent-customer-id', workspaceId },
+        { metronomeCustomerId: 'metronome-customer-id', workspaceId },
       ],
       updateAffected: 0,
     });
 
     await expect(service.ensureWorkspaceCustomer(workspaceId)).resolves.toBe(
-      'concurrent-customer-id',
+      'metronome-customer-id',
+    );
+    expect(installationRepository.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a divergent concurrently stored customer ID', async () => {
+    const { installationRepository, service } = createService({
+      customers: [recoveredCustomer],
+      installations: [
+        { metronomeCustomerId: null, workspaceId },
+        { metronomeCustomerId: 'different-customer-id', workspaceId },
+      ],
+      updateAffected: 0,
+    });
+
+    await expect(service.ensureWorkspaceCustomer(workspaceId)).rejects.toThrow(
+      'Metronome customer could not be stored',
     );
     expect(installationRepository.update).toHaveBeenCalledTimes(1);
   });
@@ -262,19 +278,19 @@ describe('MetronomeWorkspaceCustomerService', () => {
     expect(metronomeClientService.createCustomer).not.toHaveBeenCalled();
   });
 
-  it('returns a concurrent winner after creating a customer', async () => {
+  it('converges after creating a customer when the stored ID matches', async () => {
     const { installationRepository, metronomeClientService, service } =
       createService({
         customers: [],
         installations: [
           { metronomeCustomerId: null, workspaceId },
-          { metronomeCustomerId: 'concurrent-customer-id', workspaceId },
+          { metronomeCustomerId: 'created-customer-id', workspaceId },
         ],
         updateAffected: 0,
       });
 
     await expect(service.ensureWorkspaceCustomer(workspaceId)).resolves.toBe(
-      'concurrent-customer-id',
+      'created-customer-id',
     );
     expect(metronomeClientService.createCustomer).toHaveBeenCalledTimes(1);
     expect(installationRepository.update).toHaveBeenCalledTimes(1);

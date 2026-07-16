@@ -72,6 +72,7 @@ export type MetronomeUsageInput = {
 };
 
 export type MetronomeIngestUsageInput = MetronomeUsageInput & {
+  timestamp: string;
   transactionId: string;
 };
 export type MetronomeUsageEvent = {
@@ -79,6 +80,8 @@ export type MetronomeUsageEvent = {
   eventType: string;
   isDuplicate: boolean;
   matchedBillableMetricIds: string[];
+  matchedCustomerId: string | null;
+  timestamp: string;
   processedAt: string | null;
   properties: Record<string, unknown>;
   transactionId: string;
@@ -265,13 +268,26 @@ export class MetronomeClientService {
       }),
     );
 
-    return { balance: response.data.balance };
+    const balance = response.data.balance;
+
+    if (
+      !Number.isSafeInteger(balance) ||
+      !Number.isFinite(balance) ||
+      balance < 0
+    ) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+
+    return { balance };
   }
 
   async ingestUsage({
     customerId,
     eventType,
     properties,
+    timestamp,
     transactionId,
   }: MetronomeIngestUsageInput) {
     let safeProperties;
@@ -293,7 +309,7 @@ export class MetronomeClientService {
             customer_id: customerId,
             event_type: eventType,
             properties: safeProperties,
-            timestamp: new Date().toISOString(),
+            timestamp,
             transaction_id: transactionId,
           },
         ],
@@ -322,6 +338,10 @@ export class MetronomeClientService {
         event.matched_billable_metrics ??
         []
       ).map((billableMetric) => billableMetric.id),
+      matchedCustomerId: (
+        event as typeof event & { matched_customer?: { id?: string } | null }
+      ).matched_customer?.id ?? null,
+      timestamp: event.timestamp,
       processedAt: event.processed_at ?? null,
       properties: event.properties ?? {},
       transactionId: event.transaction_id,

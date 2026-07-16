@@ -68,6 +68,9 @@ export class ManagedProviderOperationEntity extends WorkspaceRelatedEntity {
   @Column({ nullable: true, type: 'jsonb' })
   actualUsageProperties: SafeMetronomeEventProperties | null;
 
+  @Column({ nullable: true, type: 'text' })
+  completionOutcome: 'BILLABLE' | 'NON_BILLABLE_FAILURE' | 'UNKNOWN' | null;
+
   @Column({ type: 'bigint' })
   reservedAmountCents: string;
 
@@ -94,6 +97,9 @@ export class ManagedProviderOperationEntity extends WorkspaceRelatedEntity {
 
   @Column({ nullable: true, type: 'timestamptz' })
   settleAfter: Date | null;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  deliveryEventAt: Date | null;
 
   @Column({ nullable: true, type: 'text' })
   lastDeliveryErrorCode: string | null;

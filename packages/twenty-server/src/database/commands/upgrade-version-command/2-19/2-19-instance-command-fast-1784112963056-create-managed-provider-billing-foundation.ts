@@ -24,6 +24,12 @@ export class CreateManagedProviderBillingFoundationFastInstanceCommand
       'ALTER TABLE "core"."managedProviderOperation" ADD "expectedBillableMetricIds" jsonb NOT NULL',
     );
     await queryRunner.query(
+      'ALTER TABLE "core"."managedProviderOperation" ADD "completionOutcome" text',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedProviderOperation" ADD "deliveryEventAt" TIMESTAMP WITH TIME ZONE',
+    );
+    await queryRunner.query(
       'CREATE UNIQUE INDEX "IDX_MANAGED_PROVIDER_OPERATION_PROVIDER_EXECUTION_UNIQUE" ON "core"."managedProviderOperation" ("providerKey", "providerConfigurationKey", "providerExecutionId") WHERE "providerExecutionId" IS NOT NULL',
     );
     await queryRunner.query(
