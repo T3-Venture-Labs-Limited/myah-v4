@@ -47,6 +47,11 @@ export type SafeActionExecutionReceipt = {
   occurredAt: Date;
 };
 
+export type ActionExecutionReservation = {
+  created: boolean;
+  receipt: SafeActionExecutionReceipt;
+};
+
 export type ActionReceiptProjectionWriter = {
   project: (input: {
     receiptId: string;

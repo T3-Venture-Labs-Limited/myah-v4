@@ -14,11 +14,14 @@ import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-ap
 import { ActionReceiptRedactionService } from 'src/engine/core-modules/action-approval/services/action-receipt-redaction.service';
 import {
   type ActionApprovalFaultHooks,
+  type ActionExecutionReservation,
   type ExpectedActionBindingWithWorkspace,
   type ProviderAcceptedOutcomeInput,
   type SafeActionExecutionReceipt,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+
+const ACTION_APPROVAL_TTL_MS = 30 * 60 * 1000;
 
 @Injectable()
 export class ActionApprovalService {
@@ -28,6 +31,115 @@ export class ActionApprovalService {
     private readonly dataSource: DataSource,
     private readonly projector: ActionReceiptProjectorService,
   ) {}
+
+  async createPendingBinding(
+    input: ExpectedActionBindingWithWorkspace,
+  ): Promise<{ id: string }> {
+    return this.dataSource.transaction(async (manager) => {
+      const binding = await manager.save(
+        ActionApprovalBindingEntity,
+        manager.create(ActionApprovalBindingEntity, {
+          workspaceId: input.workspaceId,
+          initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
+          actionName: input.actionName,
+          actionVersion: input.actionVersion,
+          draftId: input.draftId,
+          contentDigest: input.contentDigest,
+          recipientFingerprint: input.recipientFingerprint,
+          sendingAccountFingerprint: input.sendingAccountFingerprint,
+          threadId: input.threadId,
+          state: ActionApprovalBindingState.PENDING,
+          expiresAt: new Date(Date.now() + ACTION_APPROVAL_TTL_MS),
+          decidedAt: null,
+        }),
+      );
+      await manager.save(
+        ActionApprovalBindingEvidenceLinkEntity,
+        input.evidenceLinks.map((evidence) =>
+          manager.create(ActionApprovalBindingEvidenceLinkEntity, {
+            actionApprovalBindingId: binding.id,
+            ...evidence,
+          }),
+        ),
+      );
+
+      return { id: binding.id };
+    });
+  }
+
+  async decidePendingBinding({
+    workspaceId,
+    userWorkspaceId,
+    threadId,
+    approvalBindingId,
+    decision,
+  }: {
+    workspaceId: string;
+    userWorkspaceId: string;
+    threadId: string;
+    approvalBindingId: string;
+    decision: 'approved' | 'rejected' | 'changes_requested';
+  }): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const binding = await manager.findOne(ActionApprovalBindingEntity, {
+        where: { id: approvalBindingId, workspaceId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !binding ||
+        binding.initiatorUserWorkspaceId !== userWorkspaceId ||
+        binding.threadId !== threadId ||
+        binding.state !== ActionApprovalBindingState.PENDING ||
+        binding.expiresAt <= new Date()
+      ) {
+        throw new Error('An action approval binding is not pending');
+      }
+
+      binding.state =
+        decision === 'approved'
+          ? ActionApprovalBindingState.APPROVED
+          : decision === 'rejected'
+            ? ActionApprovalBindingState.REJECTED
+            : ActionApprovalBindingState.CHANGES_REQUESTED;
+      binding.decidedAt = new Date();
+      await manager.save(ActionApprovalBindingEntity, binding);
+    });
+  }
+
+  async restorePendingBinding({
+    workspaceId,
+    threadId,
+    approvalBindingId,
+  }: {
+    workspaceId: string;
+    threadId: string;
+    approvalBindingId: string;
+  }): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const binding = await manager.findOne(ActionApprovalBindingEntity, {
+        where: { id: approvalBindingId, workspaceId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !binding ||
+        binding.threadId !== threadId ||
+        binding.state === ActionApprovalBindingState.PENDING ||
+        binding.state === ActionApprovalBindingState.CONSUMED
+      ) {
+        throw new Error('An action approval binding cannot be restored');
+      }
+      const receipt = await manager.findOneBy(ActionExecutionReceiptEntity, {
+        actionApprovalBindingId: binding.id,
+      });
+      if (receipt) {
+        throw new Error('An action approval binding cannot be restored');
+      }
+
+      binding.state = ActionApprovalBindingState.PENDING;
+      binding.decidedAt = null;
+      await manager.save(ActionApprovalBindingEntity, binding);
+    });
+  }
 
   async getApprovedBinding({
     workspaceId,
@@ -77,7 +189,7 @@ export class ActionApprovalService {
   }: {
     approvalBindingId: string;
     expectedActionBinding: ExpectedActionBindingWithWorkspace;
-  }): Promise<SafeActionExecutionReceipt> {
+  }): Promise<ActionExecutionReservation> {
     try {
       return await this.dataSource.transaction((manager) =>
         this.reserveBindingInTransaction(
@@ -108,7 +220,10 @@ export class ActionApprovalService {
         expectedActionBinding,
       );
 
-      return this.redactionService.toSafeReceipt(receipt);
+      return {
+        created: false,
+        receipt: this.redactionService.toSafeReceipt(receipt),
+      };
     }
   }
 
@@ -157,7 +272,7 @@ export class ActionApprovalService {
 
   async reserveExecution(
     input: ExpectedActionBindingWithWorkspace,
-  ): Promise<SafeActionExecutionReceipt> {
+  ): Promise<ActionExecutionReservation> {
     try {
       return await this.dataSource.transaction((manager) =>
         this.reserveInTransaction(manager, input),
@@ -181,7 +296,10 @@ export class ActionApprovalService {
       }
       this.assertBindingMatches(receipt.actionApprovalBinding, input);
 
-      return this.redactionService.toSafeReceipt(receipt);
+      return {
+        created: false,
+        receipt: this.redactionService.toSafeReceipt(receipt),
+      };
     }
   }
 
@@ -195,15 +313,15 @@ export class ActionApprovalService {
       'afterReservation' | 'afterProviderAccepted'
     >,
   ): Promise<SafeActionExecutionReceipt> {
-    const reservation = await this.reserveExecution(input);
-    await faultHooks?.afterReservation?.(reservation);
-    if (reservation.state !== ActionExecutionReceiptState.PROCESSING) {
-      return reservation;
+    const { created, receipt } = await this.reserveExecution(input);
+    await faultHooks?.afterReservation?.(receipt);
+    if (!created || receipt.state !== ActionExecutionReceiptState.PROCESSING) {
+      return receipt;
     }
 
     const accepted = await this.recordProviderAccepted(
-      reservation.id,
-      await submit(reservation),
+      receipt.id,
+      await submit(receipt),
     );
     await faultHooks?.afterProviderAccepted?.(accepted);
 
@@ -276,7 +394,7 @@ export class ActionApprovalService {
     manager: EntityManager,
     approvalBindingId: string,
     input: ExpectedActionBindingWithWorkspace,
-  ): Promise<SafeActionExecutionReceipt> {
+  ): Promise<ActionExecutionReservation> {
     const idempotencyKey = computeLogicalActionKey(input);
     const priorReceipt = await manager.findOne(ActionExecutionReceiptEntity, {
       where: { workspaceId: input.workspaceId, idempotencyKey },
@@ -288,7 +406,10 @@ export class ActionApprovalService {
       }
       this.assertBindingMatches(priorReceipt.actionApprovalBinding, input);
 
-      return this.redactionService.toSafeReceipt(priorReceipt);
+      return {
+        created: false,
+        receipt: this.redactionService.toSafeReceipt(priorReceipt),
+      };
     }
 
     const binding = await manager.findOne(ActionApprovalBindingEntity, {
@@ -318,15 +439,18 @@ export class ActionApprovalService {
       redactedOutcome: null,
     });
 
-    return this.redactionService.toSafeReceipt(
-      await manager.save(ActionExecutionReceiptEntity, receipt),
-    );
+    return {
+      created: true,
+      receipt: this.redactionService.toSafeReceipt(
+        await manager.save(ActionExecutionReceiptEntity, receipt),
+      ),
+    };
   }
 
   private async reserveInTransaction(
     manager: EntityManager,
     input: ExpectedActionBindingWithWorkspace,
-  ): Promise<SafeActionExecutionReceipt> {
+  ): Promise<ActionExecutionReservation> {
     const idempotencyKey = computeLogicalActionKey(input);
     const priorReceipt = await manager.findOne(ActionExecutionReceiptEntity, {
       where: {
@@ -338,7 +462,10 @@ export class ActionApprovalService {
     if (priorReceipt) {
       this.assertBindingMatches(priorReceipt.actionApprovalBinding, input);
 
-      return this.redactionService.toSafeReceipt(priorReceipt);
+      return {
+        created: false,
+        receipt: this.redactionService.toSafeReceipt(priorReceipt),
+      };
     }
 
     const candidates = await manager
@@ -395,7 +522,10 @@ export class ActionApprovalService {
       if (racedReceipt) {
         this.assertBindingMatches(racedReceipt.actionApprovalBinding, input);
 
-        return this.redactionService.toSafeReceipt(racedReceipt);
+        return {
+          created: false,
+          receipt: this.redactionService.toSafeReceipt(racedReceipt),
+        };
       }
       throw new Error(
         candidates.length > 0
@@ -417,9 +547,12 @@ export class ActionApprovalService {
       redactedOutcome: null,
     });
 
-    return this.redactionService.toSafeReceipt(
-      await manager.save(ActionExecutionReceiptEntity, receipt),
-    );
+    return {
+      created: true,
+      receipt: this.redactionService.toSafeReceipt(
+        await manager.save(ActionExecutionReceiptEntity, receipt),
+      ),
+    };
   }
 
   private async findEvidence(manager: EntityManager, bindingId: string) {

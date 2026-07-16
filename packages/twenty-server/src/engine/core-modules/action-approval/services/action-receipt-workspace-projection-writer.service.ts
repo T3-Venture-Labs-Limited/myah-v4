@@ -29,15 +29,17 @@ export class ActionReceiptWorkspaceProjectionWriterService
         return;
       }
 
-      const [drafts] = await manager.query<[{ body: string }[], number]>(
+      const [drafts] = await manager.query<
+        [{ body: string; conversationId: string | null }[], number]
+      >(
         `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
           SET "status" = 'SENT', "sentAt" = NOW(), "updatedAt" = NOW()
           WHERE "id" = $1 AND "sentAt" IS NULL
-          RETURNING "body"`,
+          RETURNING "body", "conversationId"`,
         [draftId],
       );
       const [draft] = drafts;
-      if (!draft) {
+      if (!draft || !draft.conversationId) {
         if (await this.hasProjection(manager, schemaName, receiptId)) {
           return;
         }
@@ -46,16 +48,17 @@ export class ActionReceiptWorkspaceProjectionWriterService
 
       await manager.query(
         `INSERT INTO "${schemaName}"."_myahSocialMessage" (
-          "id", "text", "direction", "sentVia", "createdAt", "updatedAt",
+          "id", "text", "conversationId", "direction", "sentVia", "createdAt", "updatedAt",
           "createdBySource", "createdByWorkspaceMemberId", "createdByName", "createdByContext",
           "updatedBySource", "updatedByWorkspaceMemberId", "updatedByName", "updatedByContext"
         ) VALUES (
-          $1, $2, 'OUTBOUND', 'UNKNOWN', NOW(), NOW(),
-          $3, NULL, 'System', $4::jsonb, $3, NULL, 'System', $4::jsonb
+          $1, $2, $3, 'OUTBOUND', 'UNKNOWN', NOW(), NOW(),
+          $4, NULL, 'System', $5::jsonb, $4, NULL, 'System', $5::jsonb
         )`,
         [
           randomUUID(),
           draft.body,
+          draft.conversationId,
           FieldActorSource.SYSTEM,
           JSON.stringify({ actionReceiptId: receiptId }),
         ],

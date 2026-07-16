@@ -56,11 +56,17 @@ const buildService = ({
 
     return [];
   });
+  const dataSource = {
+    query,
+    transaction: jest.fn(async (callback: (manager: { query: typeof query }) => unknown) =>
+      callback({ query }),
+    ),
+  };
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
       callback(),
     ),
-    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
+    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
   };
   const workspaceRepository = {
     findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
@@ -110,6 +116,36 @@ describe('InstagramReplyDraftService', () => {
     expect(query.mock.calls.map(([sql]) => sql).join('\n')).toContain(
       "'NEEDS_REVIEW', 'AI'",
     );
+  });
+
+  it('persists the prepared draft and conversation through the canonical account graph', async () => {
+    const { service, query } = buildService();
+
+    await service.prepare({
+      workspaceId,
+      userWorkspaceId,
+      connectedAccountId,
+      providerConversationId: 'provider-conversation-id',
+      recipientIgsid: 'recipient-igsid',
+      recipientLabel: '@wakozaco',
+      body: replyBody,
+    });
+
+    const statements = query.mock.calls.map(
+      ([sql, parameters]) => `${sql}\n${JSON.stringify(parameters)}`,
+    );
+    expect(
+      statements.find((statement) =>
+        statement.includes('INSERT INTO') &&
+        statement.includes('"_myahSocialConversation"'),
+      ),
+    ).toContain('"instagramAccountId"');
+    expect(
+      statements.find((statement) =>
+        statement.includes('INSERT INTO') &&
+        statement.includes('"_myahInstagramReplyDraft"'),
+      ),
+    ).toContain('"conversationId"');
   });
 
   it('does not create candidate records for a missing or ambiguous active account', async () => {

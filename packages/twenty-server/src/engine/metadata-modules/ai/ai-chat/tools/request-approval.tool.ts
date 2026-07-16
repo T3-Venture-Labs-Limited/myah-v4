@@ -6,6 +6,12 @@ import {
   type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 
+import {
+  InstagramReplyActionDefinition,
+  InstagramReplyActionProposalInputZodSchema,
+} from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+
 export { REQUEST_APPROVAL_TOOL_NAME };
 
 const approvalActionKindSchema = z.enum([
@@ -91,10 +97,17 @@ const requestApprovalInputObjectSchema = z
         code: z.ZodIssueCode.custom,
         path: ['toolName'],
         message:
-          'Use request_instagram_reply_approval for prepared Instagram replies.',
+          'Use a registered action input for prepared Instagram replies.',
       });
     }
   });
+
+const registeredInstagramReplyApprovalInputSchema = z
+  .object({
+    toolName: z.literal(INSTAGRAM_REPLY_TOOL_NAME),
+    actionInput: InstagramReplyActionProposalInputZodSchema,
+  })
+  .strict();
 
 const unwrapDirectApprovalArguments = (input: unknown): unknown => {
   if (
@@ -122,32 +135,84 @@ const unwrapDirectApprovalArguments = (input: unknown): unknown => {
 
 export const requestApprovalInputSchema = z.preprocess(
   unwrapDirectApprovalArguments,
-  requestApprovalInputObjectSchema,
+  z.union([
+    requestApprovalInputObjectSchema,
+    registeredInstagramReplyApprovalInputSchema,
+  ]),
 );
+
+type RegisteredApprovalInput = z.infer<
+  typeof registeredInstagramReplyApprovalInputSchema
+>;
+
+type RegisteredApprovalOptions = {
+  workspaceId: string;
+  userWorkspaceId: string | undefined;
+  threadId: string | undefined;
+  actionDefinition: InstagramReplyActionDefinition;
+  actionApprovalService: ActionApprovalService;
+};
 
 type RequestApprovalPendingOutput = {
   success: true;
   message: string;
-  result: RequestApprovalToolResult;
+  result:
+    | RequestApprovalToolResult
+    | {
+        status: 'pending';
+        actionApprovalBindingId: string;
+      };
 };
 
-export const createRequestApprovalTool = () => ({
+export const createRequestApprovalTool = (
+  registeredApprovalOptions?: RegisteredApprovalOptions,
+) => ({
   description:
     'Ask the user to approve, reject, or request changes before a consequential side effect. ' +
     'Use this before external writes, public posts, outbound email, destructive changes, ' +
     'financial actions, or sensitive internal record writes. Do NOT use it for read-only ' +
-    'lookups or trivial actions. Include a concrete preview and consequences. For an already-prepared Instagram reply, use request_instagram_reply_approval instead. ' +
+    'lookups or trivial actions. For a prepared Instagram reply, provide only its draft ID as the registered action input. ' +
     'Approval is not execution: after approval, call the real action tool through the normal tool pipeline. ' +
     'If rejected, stop or ask for a safer alternative. Call at most one human-input tool in a single turn.',
   inputSchema: requestApprovalInputSchema,
   execute: async (
-    input: RequestApprovalToolInput,
-  ): Promise<RequestApprovalPendingOutput> => ({
-    success: true,
-    message: 'Approval request presented to the user; awaiting their decision.',
-    result: {
-      request: input,
-      status: 'pending',
-    },
-  }),
+    input: RequestApprovalToolInput | RegisteredApprovalInput,
+  ): Promise<RequestApprovalPendingOutput> => {
+    if ('actionInput' in input) {
+      const options = registeredApprovalOptions;
+      if (!options?.userWorkspaceId || !options.threadId) {
+        throw new Error(
+          'An authenticated chat thread is required to request an Instagram reply approval.',
+        );
+      }
+
+      const proposal = await options.actionDefinition.propose({
+        workspaceId: options.workspaceId,
+        initiatorUserWorkspaceId: options.userWorkspaceId,
+        threadId: options.threadId,
+        input: input.actionInput,
+      });
+      const binding = await options.actionApprovalService.createPendingBinding(
+        proposal.expectedActionBinding,
+      );
+
+      return {
+        success: true,
+        message: 'Approval request presented to the user; awaiting their decision.',
+        result: {
+          status: 'pending',
+          actionApprovalBindingId: binding.id,
+        },
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Approval request presented to the user; awaiting their decision.',
+      result: {
+        request: input,
+        status: 'pending',
+      },
+    };
+  },
 });

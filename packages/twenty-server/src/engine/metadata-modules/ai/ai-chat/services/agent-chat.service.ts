@@ -8,7 +8,6 @@ import {
   type AskQuestionsToolResult,
   ExtendedUIMessage,
   REQUEST_APPROVAL_TOOL_NAME,
-  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
   type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 import { isDefined } from 'twenty-shared/utils';
@@ -19,7 +18,7 @@ import type { UIDataTypes, UIMessagePart, UITools } from 'ai';
 
 import { CodeInterpreterService } from 'src/engine/core-modules/code-interpreter/code-interpreter.service';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
-import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { AgentMessagePartEntity } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-message-part.entity';
 import {
   AgentMessageEntity,
@@ -47,6 +46,9 @@ const APPROVAL_DECISIONS = [
   'rejected',
   'changes_requested',
 ] as const satisfies ApprovalDecision[];
+
+const ACTION_APPROVAL_BINDING_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type AgentChatApprovalDecision = {
   decision: ApprovalDecision | string;
@@ -91,7 +93,7 @@ export class AgentChatService {
     private readonly titleGenerationService: AgentTitleGenerationService,
     private readonly workspaceEventBroadcaster: WorkspaceEventBroadcaster,
     private readonly codeInterpreterService: CodeInterpreterService,
-    private readonly instagramReplyApprovalService: InstagramReplyApprovalService,
+    private readonly actionApprovalService: ActionApprovalService,
   ) {}
 
   async createThread({
@@ -705,7 +707,7 @@ export class AgentChatService {
     rollback: {
       partId: string;
       previousOutput: Record<string, unknown>;
-      instagramReplyApprovalId?: string;
+      actionApprovalBindingId?: string;
     };
     shouldResume: boolean;
   }> {
@@ -713,6 +715,16 @@ export class AgentChatService {
       throw new AiException(
         'Invalid approval decision.',
         AiExceptionCode.INVALID_APPROVAL_DECISION,
+      );
+    }
+
+    const thread = await this.threadRepository.findOne(workspaceId, {
+      where: { id: threadId, userWorkspaceId, deletedAt: IsNull() },
+    });
+    if (!thread) {
+      throw new AiException(
+        'No pending approval request to resolve.',
+        AiExceptionCode.APPROVAL_NOT_PENDING,
       );
     }
 
@@ -731,8 +743,7 @@ export class AgentChatService {
     const pendingHumanInputParts = (message.parts ?? []).filter((part) => {
       if (
         part.toolName !== ASK_QUESTIONS_TOOL_NAME &&
-        part.toolName !== REQUEST_APPROVAL_TOOL_NAME &&
-        part.toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
+        part.toolName !== REQUEST_APPROVAL_TOOL_NAME
       ) {
         return false;
       }
@@ -753,10 +764,7 @@ export class AgentChatService {
 
     const pendingPart = pendingHumanInputParts[0];
 
-    if (
-      pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME &&
-      pendingPart.toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
-    ) {
+    if (pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME) {
       throw new AiException(
         'No pending approval request to resolve.',
         AiExceptionCode.APPROVAL_NOT_PENDING,
@@ -766,7 +774,7 @@ export class AgentChatService {
     const previousOutput =
       (pendingPart.toolOutput as Record<string, unknown> | null) ?? {};
     const previousResult = previousOutput.result as
-      | RequestApprovalToolResult
+      | (RequestApprovalToolResult & { actionApprovalBindingId?: string })
       | undefined;
 
     if (previousResult?.status !== 'pending') {
@@ -776,10 +784,16 @@ export class AgentChatService {
       );
     }
 
-    const instagramReplyApprovalId =
-      pendingPart.toolName === REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
-        ? previousResult.approvalId
-        : undefined;
+    const actionApprovalBindingId = previousResult.actionApprovalBindingId;
+    if (
+      actionApprovalBindingId !== undefined &&
+      !ACTION_APPROVAL_BINDING_ID_PATTERN.test(actionApprovalBindingId)
+    ) {
+      throw new AiException(
+        'No pending approval request to resolve.',
+        AiExceptionCode.APPROVAL_NOT_PENDING,
+      );
+    }
 
     const shouldResume = decision.decision === 'approved';
 
@@ -799,28 +813,21 @@ export class AgentChatService {
       );
     }
 
-    let hasResolvedNativeApproval = false;
+    let hasResolvedActionBinding = false;
 
     try {
-      if (pendingPart.toolName === REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME) {
-        if (!instagramReplyApprovalId) {
-          throw new AiException(
-            'Instagram reply approval binding is invalid.',
-            AiExceptionCode.APPROVAL_NOT_PENDING,
-          );
-        }
-
-        await this.instagramReplyApprovalService.resolveApproval({
+      if (actionApprovalBindingId) {
+        await this.actionApprovalService.decidePendingBinding({
           workspaceId,
           userWorkspaceId,
           threadId,
-          approvalId: instagramReplyApprovalId,
+          approvalBindingId: actionApprovalBindingId,
           decision: decision.decision as
             | 'approved'
             | 'rejected'
             | 'changes_requested',
         });
-        hasResolvedNativeApproval = true;
+        hasResolvedActionBinding = true;
       }
 
       await this.messagePartRepository.update(
@@ -831,23 +838,30 @@ export class AgentChatService {
             ...previousOutput,
             success: true,
             message: 'User resolved the approval request.',
-            result: {
-              request: previousResult.request,
-              approvalId: previousResult.approvalId,
-              status: 'resolved',
-              decision: decision.decision as ApprovalDecision,
-              comment: decision.comment,
-              decidedAt: new Date().toISOString(),
-            } satisfies RequestApprovalToolResult,
+            result: actionApprovalBindingId
+              ? {
+                  status: 'resolved',
+                  actionApprovalBindingId,
+                  decision: decision.decision as ApprovalDecision,
+                  comment: decision.comment,
+                  decidedAt: new Date().toISOString(),
+                }
+              : {
+                  request: previousResult.request,
+                  status: 'resolved',
+                  decision: decision.decision as ApprovalDecision,
+                  comment: decision.comment,
+                  decidedAt: new Date().toISOString(),
+                },
           },
         },
       );
     } catch (error) {
-      if (hasResolvedNativeApproval && instagramReplyApprovalId) {
-        await this.instagramReplyApprovalService.restorePendingApproval({
+      if (hasResolvedActionBinding && actionApprovalBindingId) {
+        await this.actionApprovalService.restorePendingBinding({
           workspaceId,
           threadId,
-          approvalId: instagramReplyApprovalId,
+          approvalBindingId: actionApprovalBindingId,
         });
       }
       await this.threadRepository
@@ -865,7 +879,7 @@ export class AgentChatService {
       rollback: {
         partId: pendingPart.id,
         previousOutput,
-        ...(instagramReplyApprovalId ? { instagramReplyApprovalId } : {}),
+        ...(actionApprovalBindingId ? { actionApprovalBindingId } : {}),
       },
       shouldResume,
     };
@@ -885,14 +899,14 @@ export class AgentChatService {
     rollback: {
       partId: string;
       previousOutput: Record<string, unknown>;
-      instagramReplyApprovalId?: string;
+      actionApprovalBindingId?: string;
     };
   }): Promise<void> {
-    if (rollback.instagramReplyApprovalId) {
-      await this.instagramReplyApprovalService.restorePendingApproval({
+    if (rollback.actionApprovalBindingId) {
+      await this.actionApprovalService.restorePendingBinding({
         workspaceId,
         threadId,
-        approvalId: rollback.instagramReplyApprovalId,
+        approvalBindingId: rollback.actionApprovalBindingId,
       });
     }
 

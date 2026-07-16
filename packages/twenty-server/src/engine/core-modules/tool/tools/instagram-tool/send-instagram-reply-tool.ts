@@ -67,7 +67,10 @@ export class SendInstagramReplyTool implements Tool {
           expectedActionBinding: authority.expectedActionBinding,
         });
 
-      if (reservation.state !== ActionExecutionReceiptState.PROCESSING) {
+      if (
+        !reservation.created ||
+        reservation.receipt.state !== ActionExecutionReceiptState.PROCESSING
+      ) {
         return {
           success: false,
           message:
@@ -89,7 +92,7 @@ export class SendInstagramReplyTool implements Tool {
             authority.canonicalGraph.account.composioUserId
         ) {
           return this.recordTerminalState(
-            reservation.id,
+            reservation.receipt.id,
             ActionExecutionReceiptState.FAILED,
             'failed',
           );
@@ -106,7 +109,7 @@ export class SendInstagramReplyTool implements Tool {
           },
         });
         if (proof.kind !== 'success') {
-          return this.recordProviderResult(reservation.id, proof);
+          return this.recordProviderResult(reservation.receipt.id, proof);
         }
         if (
           !this.hasInboundMessageFromRecipient(
@@ -115,7 +118,7 @@ export class SendInstagramReplyTool implements Tool {
           )
         ) {
           return this.recordTerminalState(
-            reservation.id,
+            reservation.receipt.id,
             ActionExecutionReceiptState.FAILED,
             'failed',
           );
@@ -133,15 +136,18 @@ export class SendInstagramReplyTool implements Tool {
             },
           });
         if (sendResult.kind !== 'success') {
-          return this.recordProviderResult(reservation.id, sendResult);
+          return this.recordProviderResult(reservation.receipt.id, sendResult);
         }
 
-        await this.actionApprovalService.recordProviderAccepted(reservation.id, {
-          code: 'accepted',
-          acceptedAt: new Date(),
-        });
+        await this.actionApprovalService.recordProviderAccepted(
+          reservation.receipt.id,
+          {
+            code: 'accepted',
+            acceptedAt: new Date(),
+          },
+        );
         try {
-          await this.projector.projectReceipt(reservation.id);
+          await this.projector.projectReceipt(reservation.receipt.id);
         } catch {
           // Reconciliation can replay this provider-free projection.
         }
@@ -149,7 +155,7 @@ export class SendInstagramReplyTool implements Tool {
         return { success: true, message: 'Instagram reply accepted.' };
       } catch {
         return this.recordTerminalState(
-          reservation.id,
+          reservation.receipt.id,
           ActionExecutionReceiptState.UNKNOWN,
           'unknown',
         );

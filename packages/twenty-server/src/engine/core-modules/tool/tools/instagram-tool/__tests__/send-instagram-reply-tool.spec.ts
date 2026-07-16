@@ -44,12 +44,15 @@ const buildTool = ({
   const actionApprovalService = {
     getApprovedBinding: jest.fn().mockResolvedValue(expectedActionBinding),
     reserveExecutionForBinding: jest.fn().mockResolvedValue({
-      id: 'receipt-id',
-      workspaceId,
-      state: receiptState,
-      providerCode: null,
-      outcome: null,
-      occurredAt: new Date('2026-07-16T00:00:00.000Z'),
+      created: true,
+      receipt: {
+        id: 'receipt-id',
+        workspaceId,
+        state: receiptState,
+        providerCode: null,
+        outcome: null,
+        occurredAt: new Date('2026-07-16T00:00:00.000Z'),
+      },
     }),
     recordProviderAccepted: jest.fn().mockResolvedValue(undefined),
     recordProviderTerminalState: jest.fn().mockResolvedValue(undefined),
@@ -158,6 +161,51 @@ describe('SendInstagramReplyTool', () => {
 
     expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
+  });
+  it('does not call Composio when another execution already owns the lease', async () => {
+    const { tool, actionApprovalService, myahComposioService } = buildTool();
+    actionApprovalService.reserveExecutionForBinding.mockResolvedValue({
+      created: false,
+      receipt: {
+        id: 'receipt-id',
+        workspaceId,
+        state: ActionExecutionReceiptState.PROCESSING,
+        providerCode: null,
+        outcome: null,
+        occurredAt: new Date('2026-07-16T00:00:00.000Z'),
+      },
+    });
+
+    await expect(tool.execute({ approvalBindingId }, context)).resolves.toMatchObject({
+      success: false,
+    });
+
+    expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
+    expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
+  });
+
+  it('sends once when concurrent executions receive one newly created lease', async () => {
+    const { tool, actionApprovalService, myahComposioService } = buildTool();
+    const receipt = {
+      id: 'receipt-id',
+      workspaceId,
+      state: ActionExecutionReceiptState.PROCESSING,
+      providerCode: null,
+      outcome: null,
+      occurredAt: new Date('2026-07-16T00:00:00.000Z'),
+    };
+    actionApprovalService.reserveExecutionForBinding
+      .mockResolvedValueOnce({ created: true, receipt })
+      .mockResolvedValueOnce({ created: false, receipt });
+
+    const [first, replay] = await Promise.all([
+      tool.execute({ approvalBindingId }, context),
+      tool.execute({ approvalBindingId }, context),
+    ]);
+
+    expect(first).toMatchObject({ success: true });
+    expect(replay).toMatchObject({ success: false });
+    expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(2);
   });
 
   it('sends once only after a canonical account and inbound message proof', async () => {

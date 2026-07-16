@@ -1,6 +1,5 @@
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
-import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 import {
   getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
@@ -46,7 +45,6 @@ describe('approval tool availability', () => {
       getGenericApprovedResumeActiveToolNames([
         'execute_tool',
         REQUEST_APPROVAL_TOOL_NAME,
-        REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
         'ask_questions',
       ]),
     ).toEqual(['execute_tool', 'ask_questions']);
@@ -129,8 +127,15 @@ describe('approval tool availability', () => {
           role: 'assistant',
           parts: [
             {
-              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
-              output: { result: { status: 'resolved', decision: 'approved' } },
+              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+              output: {
+                result: {
+                  status: 'resolved',
+                  decision: 'approved',
+                  actionApprovalBindingId:
+                    'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
+                },
+              },
             },
           ],
         },
@@ -174,8 +179,15 @@ describe('approval tool availability', () => {
           role: 'assistant',
           parts: [
             {
-              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
-              output: { result: { status: 'resolved', decision: 'approved' } },
+              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+              output: {
+                result: {
+                  status: 'resolved',
+                  decision: 'approved',
+                  actionApprovalBindingId:
+                    'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
+                },
+              },
             },
           ],
         },

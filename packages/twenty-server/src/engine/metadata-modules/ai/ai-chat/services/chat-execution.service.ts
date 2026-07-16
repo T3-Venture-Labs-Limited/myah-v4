@@ -21,9 +21,8 @@ import { getAppPath, isDefined } from 'twenty-shared/utils';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
-import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
-import { InstagramReplyDraftService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-draft.service';
-import { PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME } from 'src/engine/core-modules/tool/tools/instagram-tool/prepare-instagram-reply-draft-tool';
+import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 
 import { type CodeExecutionStreamEmitter } from 'src/engine/core-modules/tool-provider/interfaces/code-execution-stream-emitter.type';
 
@@ -69,10 +68,6 @@ import {
   createRequestApprovalTool,
   REQUEST_APPROVAL_TOOL_NAME,
 } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
-import {
-  createRequestInstagramReplyApprovalTool,
-  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-} from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 import { MessagePruningService } from 'src/engine/metadata-modules/ai/ai-chat/services/message-pruning.service';
 import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
@@ -137,8 +132,8 @@ export class ChatExecutionService {
     private readonly brandBrainPreflightService: BrandBrainPreflightService,
     private readonly messagePruningService: MessagePruningService,
     private readonly metricsService: MetricsService,
-    private readonly instagramReplyDraftService: InstagramReplyDraftService,
-    private readonly instagramReplyApprovalService: InstagramReplyApprovalService,
+    private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
+    private readonly actionApprovalService: ActionApprovalService,
   ) {}
 
   async streamChat({
@@ -235,12 +230,7 @@ export class ChatExecutionService {
       ...Object.keys(preloadedTools),
       ...Object.keys(nativeTools),
       ASK_QUESTIONS_TOOL_NAME,
-      ...(isApprovedGenericApprovalResume
-        ? []
-        : [
-            REQUEST_APPROVAL_TOOL_NAME,
-            REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-          ]),
+      ...(isApprovedGenericApprovalResume ? [] : [REQUEST_APPROVAL_TOOL_NAME]),
     ];
 
     const preApprovalExcludedToolNames = new Set(
@@ -267,15 +257,13 @@ export class ChatExecutionService {
     const activeTools: ToolSet = {
       ...directTools,
       [ASK_QUESTIONS_TOOL_NAME]: createAskQuestionsTool(),
-      [REQUEST_APPROVAL_TOOL_NAME]: createRequestApprovalTool(),
-      [REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME]:
-        createRequestInstagramReplyApprovalTool({
-          workspaceId: workspace.id,
-          userWorkspaceId,
-          threadId,
-          instagramReplyDraftService: this.instagramReplyDraftService,
-          instagramReplyApprovalService: this.instagramReplyApprovalService,
-        }),
+      [REQUEST_APPROVAL_TOOL_NAME]: createRequestApprovalTool({
+        workspaceId: workspace.id,
+        userWorkspaceId,
+        threadId,
+        actionDefinition: this.instagramReplyActionDefinition,
+        actionApprovalService: this.actionApprovalService,
+      }),
       [LEARN_TOOLS_TOOL_NAME]: createLearnToolsTool(
         this.toolRegistry,
         toolContext,
@@ -361,40 +349,10 @@ export class ChatExecutionService {
       }),
     );
 
-    const initialActiveToolNames = Object.keys(activeTools).filter(
-      (toolName) => toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-    );
-    const hasPreparedInstagramReplyDraft = (steps: StepResult<ToolSet>[]) =>
-      steps.some((step) =>
-        step.toolResults.some(
-          (toolResult) =>
-            isToolOutputSuccessful(toolResult.output) &&
-            (toolResult.toolName === PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME ||
-              (toolResult.toolName === EXECUTE_TOOL_TOOL_NAME &&
-                isObject(toolResult.input) &&
-                'toolName' in toolResult.input &&
-                toolResult.input.toolName ===
-                  PREPARE_INSTAGRAM_REPLY_DRAFT_TOOL_NAME)),
-        ),
-      );
-    const activeToolNamesForStep = (steps: StepResult<ToolSet>[]) => {
-      if (isApprovedGenericApprovalResume) {
-        return getGenericApprovedResumeActiveToolNames(
-          Object.keys(activeTools),
-        );
-      }
-
-      if (!hasPreparedInstagramReplyDraft(steps)) {
-        return initialActiveToolNames;
-      }
-
-      return [
-        ...initialActiveToolNames.filter(
-          (toolName) => toolName !== REQUEST_APPROVAL_TOOL_NAME,
-        ),
-        REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-      ];
-    };
+    const activeToolNamesForStep = (_steps: StepResult<ToolSet>[]) =>
+      isApprovedGenericApprovalResume
+        ? getGenericApprovedResumeActiveToolNames(Object.keys(activeTools))
+        : Object.keys(activeTools);
 
     const isCodeInterpreterEnabled = this.codeInterpreterService.isEnabled();
 
@@ -631,7 +589,6 @@ export class ChatExecutionService {
         stepCountIs(AGENT_CONFIG.MAX_STEPS)(step) ||
         hasToolCall(ASK_QUESTIONS_TOOL_NAME)(step) ||
         hasToolCall(REQUEST_APPROVAL_TOOL_NAME)(step) ||
-        hasToolCall(REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME)(step) ||
         hasNoMoreAvailableCredits,
       experimental_telemetry: AI_TELEMETRY_CONFIG,
       providerOptions: getCallLevelProviderOptions({
@@ -656,8 +613,7 @@ export class ChatExecutionService {
         if (
           calls.size > 1 &&
           (calls.has(ASK_QUESTIONS_TOOL_NAME) ||
-            calls.has(REQUEST_APPROVAL_TOOL_NAME) ||
-            calls.has(REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME))
+            calls.has(REQUEST_APPROVAL_TOOL_NAME))
         ) {
           rejectedSteps.add(currentStep);
         }

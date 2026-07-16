@@ -5,6 +5,7 @@ import {
   type ApprovalActionKind,
   type ApprovalDecision,
   type ApprovalRiskLevel,
+  type RequestApprovalToolInput,
 } from 'twenty-shared/ai';
 import {
   IconAlertTriangle,
@@ -161,7 +162,17 @@ export const AiChatApprovalCard = ({
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitDecision } = useSubmitApprovalDecision();
-  const { messageId, toolCallId, request } = pendingApproval;
+  const { messageId, toolCallId } = pendingApproval;
+  const request =
+    'request' in pendingApproval
+      ? pendingApproval.request
+      : ({
+          title: t`Review Instagram reply`,
+          summary: t`Review the server-derived Instagram reply before it is sent.`,
+          actionKind: 'external_write',
+          riskLevel: 'medium',
+          consequences: [t`The reply will be sent to the existing conversation.`],
+        } satisfies RequestApprovalToolInput);
 
   const handleDecision = async (decision: ApprovalDecision) => {
     if (isSubmitting) {

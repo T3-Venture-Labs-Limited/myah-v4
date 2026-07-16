@@ -2,7 +2,6 @@ import { getToolName, isToolUIPart } from 'ai';
 import {
   ASK_QUESTIONS_TOOL_NAME,
   REQUEST_APPROVAL_TOOL_NAME,
-  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
   type AskQuestionsToolResult,
   type ExtendedUIMessagePart,
   type RequestApprovalToolResult,
@@ -23,10 +22,7 @@ const isPendingHumanInputResult = (
     return (result as AskQuestionsToolResult | undefined)?.status === 'pending';
   }
 
-  if (
-    toolName === REQUEST_APPROVAL_TOOL_NAME ||
-    toolName === REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
-  ) {
+  if (toolName === REQUEST_APPROVAL_TOOL_NAME) {
     return (
       (result as RequestApprovalToolResult | undefined)?.status === 'pending'
     );
@@ -49,8 +45,7 @@ export const findPendingHumanInputParts = (
 
     if (
       toolName !== ASK_QUESTIONS_TOOL_NAME &&
-      toolName !== REQUEST_APPROVAL_TOOL_NAME &&
-      toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
+      toolName !== REQUEST_APPROVAL_TOOL_NAME
     ) {
       continue;
     }

@@ -59,15 +59,62 @@ describe('request_approval tool', () => {
     });
   });
 
-  it('rejects an Instagram reply approval so its card is derived server-side', () => {
-    const result = requestApprovalInputSchema.safeParse({
-      ...validApprovalInput,
-      actionKind: 'external_write',
+  it('persists a registered Instagram authority and returns only its binding UUID', async () => {
+    const draftId = '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea';
+    const input = {
       toolName: 'send_instagram_reply',
-      preview: { format: 'text', content: 'Thank you for your message.' },
-    });
+      actionInput: { draftId },
+    };
+    const expectedActionBinding = {
+      workspaceId: 'workspace-id',
+      actionName: 'send_instagram_reply',
+      actionVersion: 1,
+      draftId,
+      contentDigest: 'a'.repeat(64),
+      recipientFingerprint: 'b'.repeat(64),
+      sendingAccountFingerprint: 'c'.repeat(64),
+      initiatorUserWorkspaceId: 'member-id',
+      threadId: 'thread-id',
+      evidenceLinks: [],
+    };
+    const actionDefinition = {
+      propose: jest.fn().mockResolvedValue({ expectedActionBinding }),
+    };
+    const actionApprovalService = {
+      createPendingBinding: jest
+        .fn()
+        .mockResolvedValue({ id: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b' }),
+    };
+    const factory = createRequestApprovalTool as unknown as (options: unknown) => {
+      execute: (value: unknown) => Promise<unknown>;
+    };
 
-    expect(result.success).toBe(false);
+    expect(requestApprovalInputSchema.parse(input)).toEqual(input);
+    await expect(
+      factory({
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'member-id',
+        threadId: 'thread-id',
+        actionDefinition,
+        actionApprovalService,
+      }).execute(input),
+    ).resolves.toEqual({
+      success: true,
+      message: expect.any(String),
+      result: {
+        status: 'pending',
+        actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
+      },
+    });
+    expect(actionDefinition.propose).toHaveBeenCalledWith({
+      workspaceId: 'workspace-id',
+      initiatorUserWorkspaceId: 'member-id',
+      threadId: 'thread-id',
+      input: { draftId },
+    });
+    expect(actionApprovalService.createPendingBinding).toHaveBeenCalledWith(
+      expectedActionBinding,
+    );
   });
 
   it('rejects Instagram reply identifiers on the generic approval tool', () => {

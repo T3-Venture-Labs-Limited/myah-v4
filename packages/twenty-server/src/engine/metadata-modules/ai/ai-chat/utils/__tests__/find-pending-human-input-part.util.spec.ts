@@ -50,30 +50,6 @@ const requestApprovalPart = (
     },
   }) as unknown as ExtendedUIMessagePart;
 
-const requestInstagramReplyApprovalPart = (
-  status: 'pending' | 'resolved',
-  toolCallId = 'instagram-approval-call',
-): ExtendedUIMessagePart =>
-  ({
-    type: 'tool-request_instagram_reply_approval',
-    toolCallId,
-    state: 'output-available',
-    input: {},
-    output: {
-      success: true,
-      message: 'x',
-      result: {
-        request: {
-          title: 'Review Instagram reply',
-          summary: 'Review the local draft.',
-          actionKind: 'external_write',
-          riskLevel: 'medium',
-          consequences: ['The message will be sent.'],
-        },
-        status,
-      },
-    },
-  }) as unknown as ExtendedUIMessagePart;
 
 const textPart = (text: string): ExtendedUIMessagePart =>
   ({ type: 'text', text }) as ExtendedUIMessagePart;
@@ -89,14 +65,6 @@ describe('findPendingHumanInputPart', () => {
     expect(part?.toolCallId).toBe('approval-call');
   });
 
-  it('returns a pending server-owned Instagram reply approval part', () => {
-    const part = findPendingHumanInputPart([
-      textPart('hello'),
-      requestInstagramReplyApprovalPart('pending'),
-    ]);
-
-    expect(part?.toolCallId).toBe('instagram-approval-call');
-  });
 
   it('returns a pending question part through the compatibility wrapper', () => {
     const part = findPendingQuestionPart([

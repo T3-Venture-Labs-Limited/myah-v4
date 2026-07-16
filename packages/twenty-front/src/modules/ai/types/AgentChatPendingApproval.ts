@@ -1,7 +1,10 @@
 import { type RequestApprovalToolInput } from 'twenty-shared/ai';
 
-export type AgentChatPendingApproval = {
+type PendingApprovalBase = {
   messageId: string;
   toolCallId: string;
-  request: RequestApprovalToolInput;
 };
+
+export type AgentChatPendingApproval =
+  | (PendingApprovalBase & { request: RequestApprovalToolInput })
+  | (PendingApprovalBase & { actionApprovalBindingId: string });

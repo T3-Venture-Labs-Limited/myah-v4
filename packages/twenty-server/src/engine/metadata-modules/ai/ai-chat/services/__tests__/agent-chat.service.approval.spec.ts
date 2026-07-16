@@ -1,7 +1,4 @@
-import {
-  REQUEST_APPROVAL_TOOL_NAME,
-  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-} from 'twenty-shared/ai';
+import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
 
 import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
 import { AiExceptionCode } from 'src/engine/metadata-modules/ai/ai.exception';
@@ -30,11 +27,16 @@ const buildService = ({
     },
   ],
   claimAffected = 1,
+  threadOwned = true,
 }: {
   messageParts?: Array<Record<string, unknown>>;
   claimAffected?: number;
+  threadOwned?: boolean;
 } = {}) => {
   const threadRepository = {
+    findOne: jest.fn().mockResolvedValue(
+      threadOwned ? { id: 'thread-id', userWorkspaceId: 'user-workspace-id' } : null,
+    ),
     update: jest.fn().mockResolvedValue({ affected: claimAffected }),
   };
   const messageRepository = {
@@ -48,10 +50,9 @@ const buildService = ({
   const messagePartRepository = {
     update: jest.fn().mockResolvedValue({ affected: 1 }),
   };
-  const instagramReplyApprovalService = {
-    createPendingApproval: jest.fn().mockResolvedValue(undefined),
-    resolveApproval: jest.fn().mockResolvedValue(undefined),
-    restorePendingApproval: jest.fn().mockResolvedValue(undefined),
+  const actionApprovalService = {
+    decidePendingBinding: jest.fn().mockResolvedValue(undefined),
+    restorePendingBinding: jest.fn().mockResolvedValue(undefined),
   };
 
   const service = new AgentChatService(
@@ -63,14 +64,14 @@ const buildService = ({
     {} as never,
     {} as never,
     {} as never,
-    instagramReplyApprovalService as never,
+    actionApprovalService as never,
   );
 
   return {
     service,
     threadRepository,
     messagePartRepository,
-    instagramReplyApprovalService,
+    actionApprovalService,
   };
 };
 
@@ -116,28 +117,25 @@ describe('AgentChatService.resolvePendingApproval', () => {
     });
   });
 
-  it('resolves the server-created Instagram approval without recreating it', async () => {
-    const instagramPendingOutput = {
-      ...pendingApprovalOutput,
-      result: {
-        ...pendingApprovalOutput.result,
-        request: {
-          ...pendingApprovalOutput.result.request,
-          actionKind: 'external_write',
-          toolName: 'send_instagram_reply',
-        },
-        approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
-      },
-    };
-    const { service, instagramReplyApprovalService } = buildService({
-      messageParts: [
-        {
-          id: 'part-id',
-          toolName: REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-          toolOutput: instagramPendingOutput,
-        },
-      ],
-    });
+  it('resolves an opaque registered binding and preserves only its UUID in chat state', async () => {
+    const actionApprovalBindingId =
+      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const { service, actionApprovalService, messagePartRepository } =
+      buildService({
+        messageParts: [
+          {
+            id: 'part-id',
+            toolName: REQUEST_APPROVAL_TOOL_NAME,
+            toolOutput: {
+              success: true,
+              result: {
+                status: 'pending',
+                actionApprovalBindingId,
+              },
+            },
+          },
+        ],
+      });
 
     await service.resolvePendingApproval({
       threadId: 'thread-id',
@@ -148,32 +146,42 @@ describe('AgentChatService.resolvePendingApproval', () => {
       userWorkspaceId: 'user-workspace-id',
     });
 
-    expect(
-      instagramReplyApprovalService.createPendingApproval,
-    ).not.toHaveBeenCalled();
-    expect(instagramReplyApprovalService.resolveApproval).toHaveBeenCalledWith({
+    expect(actionApprovalService.decidePendingBinding).toHaveBeenCalledWith({
       workspaceId: 'workspace-id',
       userWorkspaceId: 'user-workspace-id',
       threadId: 'thread-id',
-      approvalId: 'f79694a7-24af-4f37-bfad-4d529e53d1d9',
+      approvalBindingId: actionApprovalBindingId,
       decision: 'approved',
     });
+    expect(messagePartRepository.update).toHaveBeenCalledWith(
+      'workspace-id',
+      { id: 'part-id' },
+      {
+        toolOutput: expect.objectContaining({
+          result: {
+            status: 'resolved',
+            actionApprovalBindingId,
+            decision: 'approved',
+            comment: undefined,
+            decidedAt: expect.any(String),
+          },
+        }),
+      },
+    );
   });
 
-  it('restores a native approval when persisting the chat decision fails', async () => {
-    const approvalId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
-    const { service, messagePartRepository, instagramReplyApprovalService } =
+  it('restores a registered binding when persisting the chat decision fails', async () => {
+    const actionApprovalBindingId =
+      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const { service, messagePartRepository, actionApprovalService } =
       buildService({
         messageParts: [
           {
             id: 'part-id',
-            toolName: REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+            toolName: REQUEST_APPROVAL_TOOL_NAME,
             toolOutput: {
-              ...pendingApprovalOutput,
-              result: {
-                ...pendingApprovalOutput.result,
-                approvalId,
-              },
+              success: true,
+              result: { status: 'pending', actionApprovalBindingId },
             },
           },
         ],
@@ -193,28 +201,24 @@ describe('AgentChatService.resolvePendingApproval', () => {
       }),
     ).rejects.toThrow('message-part persistence failed');
 
-    expect(
-      instagramReplyApprovalService.restorePendingApproval,
-    ).toHaveBeenCalledWith({
-      approvalId,
+    expect(actionApprovalService.restorePendingBinding).toHaveBeenCalledWith({
+      approvalBindingId: actionApprovalBindingId,
       threadId: 'thread-id',
       workspaceId: 'workspace-id',
     });
   });
 
-  it('restores the native Instagram approval when resume setup fails', async () => {
-    const approvalId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
-    const { service, instagramReplyApprovalService } = buildService({
+  it('restores a registered binding when resume setup fails', async () => {
+    const actionApprovalBindingId =
+      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const { service, actionApprovalService } = buildService({
       messageParts: [
         {
           id: 'part-id',
-          toolName: REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
           toolOutput: {
-            ...pendingApprovalOutput,
-            result: {
-              ...pendingApprovalOutput.result,
-              approvalId,
-            },
+            success: true,
+            result: { status: 'pending', actionApprovalBindingId },
           },
         },
       ],
@@ -237,10 +241,8 @@ describe('AgentChatService.resolvePendingApproval', () => {
       rollback: resolution.rollback,
     });
 
-    expect(
-      instagramReplyApprovalService.restorePendingApproval,
-    ).toHaveBeenCalledWith({
-      approvalId,
+    expect(actionApprovalService.restorePendingBinding).toHaveBeenCalledWith({
+      approvalBindingId: actionApprovalBindingId,
       threadId: 'thread-id',
       workspaceId: 'workspace-id',
     });
@@ -264,6 +266,57 @@ describe('AgentChatService.resolvePendingApproval', () => {
       { pendingQuestionMessageId: null, activeStreamId: null },
     );
     expect(result.shouldResume).toBe(false);
+  });
+
+  it('rejects a decision from a workspace member who does not own the thread', async () => {
+    const { service, messagePartRepository, actionApprovalService } =
+      buildService({ threadOwned: false });
+
+    await expect(
+      service.resolvePendingApproval({
+        threadId: 'thread-id',
+        messageId: 'message-id',
+        decision: { decision: 'approved' },
+        streamId: 'stream-id',
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+      }),
+    ).rejects.toMatchObject({ code: AiExceptionCode.APPROVAL_NOT_PENDING });
+
+    expect(messagePartRepository.update).not.toHaveBeenCalled();
+    expect(actionApprovalService.decidePendingBinding).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed registered binding ID before claiming or deciding it', async () => {
+    const { service, threadRepository, actionApprovalService } = buildService({
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolOutput: {
+            success: true,
+            result: {
+              status: 'pending',
+              actionApprovalBindingId: 'attacker-controlled',
+            },
+          },
+        },
+      ],
+    });
+
+    await expect(
+      service.resolvePendingApproval({
+        threadId: 'thread-id',
+        messageId: 'message-id',
+        decision: { decision: 'approved' },
+        streamId: 'stream-id',
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+      }),
+    ).rejects.toMatchObject({ code: AiExceptionCode.APPROVAL_NOT_PENDING });
+
+    expect(threadRepository.update).not.toHaveBeenCalled();
+    expect(actionApprovalService.decidePendingBinding).not.toHaveBeenCalled();
   });
 
   it('rejects when multiple human-input parts are pending on the message', async () => {
