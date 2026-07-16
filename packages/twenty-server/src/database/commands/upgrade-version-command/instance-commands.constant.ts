@@ -104,6 +104,8 @@ import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src
 import { RepairInstagramReplyApprovalSchemaFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963055-repair-instagram-reply-approval-schema';
 import { PendingMigrationCheckFastInstanceCommand } from './2-19/2-19-instance-command-fast-1784112688976-pending-migration-check';
 
+import { CreateManagedProviderBillingFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-create-managed-provider-billing-foundation';
+
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
   MigrateMessagingCalendarToCoreFastInstanceCommand,
@@ -208,4 +210,5 @@ export const INSTANCE_COMMANDS = [
   AddInstagramReplyApprovalProviderBindingSlowInstanceCommand,
   PendingMigrationCheckFastInstanceCommand,
   RepairInstagramReplyApprovalSchemaFastInstanceCommand,
+  CreateManagedProviderBillingFoundationFastInstanceCommand,
 ];

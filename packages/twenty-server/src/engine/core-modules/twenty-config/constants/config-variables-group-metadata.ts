@@ -140,4 +140,11 @@ export const CONFIG_VARIABLES_GROUP_METADATA: Record<
     isHiddenOnLoad: true,
     isHiddenInAdminPanel: true,
   },
+  [ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG]: {
+    position: 2200,
+    description:
+      'Configure Myah managed-provider billing through Metronome. This is separate from Twenty Enterprise billing.',
+    isHiddenOnLoad: true,
+    isHiddenInAdminPanel: true,
+  },
 };
