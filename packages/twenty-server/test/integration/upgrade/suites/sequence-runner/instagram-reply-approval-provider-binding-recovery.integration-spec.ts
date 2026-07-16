@@ -182,7 +182,7 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
 
     expect(executedAfterSecondRun).toStrictEqual(executed);
   });
-  it('leaves missing approval schema for teardown after a recovery throws', async () => {
+  it('restores missing approval schema during teardown after a recovery throws', async () => {
     const recoveryError = new Error('provider-binding recovery exploded');
     const sequence: UpgradeStep[] = [
       {
