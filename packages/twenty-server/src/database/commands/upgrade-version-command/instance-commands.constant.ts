@@ -102,6 +102,7 @@ import { CreateInstagramReplyAuditFastInstanceCommand } from 'src/database/comma
 import { RebrandEmailSenderToMyahSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784005792206-rebrand-email-sender-to-myah';
 import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784106536001-add-instagram-reply-approval-provider-binding';
 import { RepairInstagramReplyApprovalSchemaFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963055-repair-instagram-reply-approval-schema';
+import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-evolve-instagram-approval-to-action-authority';
 import { PendingMigrationCheckFastInstanceCommand } from './2-19/2-19-instance-command-fast-1784112688976-pending-migration-check';
 
 import { CreateManagedProviderBillingFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-create-managed-provider-billing-foundation';
@@ -211,4 +212,5 @@ export const INSTANCE_COMMANDS = [
   PendingMigrationCheckFastInstanceCommand,
   RepairInstagramReplyApprovalSchemaFastInstanceCommand,
   CreateManagedProviderBillingFoundationFastInstanceCommand,
+  EvolveInstagramApprovalToActionAuthorityFastInstanceCommand,
 ];
