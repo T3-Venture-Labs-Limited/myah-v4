@@ -24,10 +24,6 @@ const createMyahStandardFieldFlatMetadata = (
     ...args,
     context: {
       ...args.context,
-      defaultValue:
-        typeof args.context.defaultValue === 'string'
-          ? args.context.defaultValue.replace(/^'(.*)'$/, '$1')
-          : args.context.defaultValue,
       options: args.context.options?.map((option, position) => ({
         ...option,
         position,

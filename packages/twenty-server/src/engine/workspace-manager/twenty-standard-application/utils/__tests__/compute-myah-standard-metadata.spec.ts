@@ -96,6 +96,22 @@ describe('Myah standard metadata contract', () => {
     );
 
     expect(fields).not.toHaveLength(0);
+    const defaultValueByUniversalIdentifier = Object.fromEntries(
+      fields.map(({ universalIdentifier, defaultValue }) => [
+        universalIdentifier,
+        defaultValue,
+      ]),
+    );
+
+    expect(defaultValueByUniversalIdentifier).toMatchObject({
+      '806a4b82-1fc8-43c4-b965-e5271c73b7bb': "'RELATED'",
+      'b044e1f3-94f4-4d65-93a3-5082e317f5e1': "'PAGE'",
+      '531d9732-7614-472c-ae02-8fc806d92c0a': "'DRAFT'",
+      '5601c017-6a85-4211-b2b2-9fda0bf9f0c6': "'UPDATE_PAGE'",
+      '5d00b029-7a0d-4320-acf4-036a634a44ab': "'PENDING'",
+      'ec240f13-8462-54ad-be55-b27275f0f58a': "'CREATOR'",
+      'b887feac-6623-5e8f-b84e-bd502abb8972': "'NEW'",
+    });
 
     for (const field of fields) {
       const options = field.options ?? [];
@@ -105,8 +121,11 @@ describe('Myah standard metadata contract', () => {
       );
 
       if (field.defaultValue !== null) {
+        const defaultValue = field.defaultValue as string;
+
+        expect(defaultValue).toMatch(/^'.*'$/);
         expect(options.map((option) => option.value)).toContain(
-          field.defaultValue,
+          defaultValue.slice(1, -1),
         );
       }
     }
