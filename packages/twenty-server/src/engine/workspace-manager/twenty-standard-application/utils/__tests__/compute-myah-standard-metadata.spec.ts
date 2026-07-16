@@ -52,4 +52,34 @@ describe('Myah standard metadata contract', () => {
       universalFlatIndexFieldMetadatas: [{ indexMetadataUniversalIdentifier: index, fieldMetadataUniversalIdentifier: field }],
     });
   });
+
+  it('includes the required system fields on every Myah object', () => {
+    const myahObjectIds = new Set(contract.flatObjectMetadataMaps);
+    const fields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    );
+
+    for (const objectId of myahObjectIds) {
+      const fieldNames = fields
+        .filter(
+          (field) =>
+            field.objectMetadataUniversalIdentifier === objectId &&
+            field.isSystem,
+        )
+        .map((field) => field.name);
+
+      expect(fieldNames).toEqual(
+        expect.arrayContaining([
+          'id',
+          'createdAt',
+          'updatedAt',
+          'deletedAt',
+          'createdBy',
+          'updatedBy',
+          'position',
+          'searchVector',
+        ]),
+      );
+    }
+  });
 });

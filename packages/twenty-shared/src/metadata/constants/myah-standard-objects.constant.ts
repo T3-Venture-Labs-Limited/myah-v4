@@ -14,10 +14,19 @@ type StandardObjectDefinition = {
   >;
 };
 
+
 export const MYAH_STANDARD_OBJECTS = {
   brandBrainLink: {
     universalIdentifier: 'f99ff6bc-3b56-4600-beb3-cfc2c23364f6',
     fields: {
+      id: { universalIdentifier: '04023146-c615-4867-99ee-3c6ca8fa6a26' },
+      createdAt: { universalIdentifier: '6adda678-1b61-4bf0-ab2c-1a04e4e75d35' },
+      updatedAt: { universalIdentifier: '737b32e1-db46-422f-905f-25ab4f13340c' },
+      deletedAt: { universalIdentifier: 'e1bd519d-820a-4892-8122-6471f24b6701' },
+      position: { universalIdentifier: '208de3b6-5b73-4cfc-89f3-a7346c875740' },
+      createdBy: { universalIdentifier: '96f50494-f01a-4c36-ad19-57849f443986' },
+      updatedBy: { universalIdentifier: '9cc33de6-6c97-435e-98a8-473f1ed85e28' },
+      searchVector: { universalIdentifier: 'd4657984-fbd2-4226-9ac9-f06624388fdf' },
       name: { universalIdentifier: '56a8c222-bc15-48e2-a608-4c40a791ac4b' },
       linkType: { universalIdentifier: '806a4b82-1fc8-43c4-b965-e5271c73b7bb' },
       description: { universalIdentifier: '9688a814-290f-460f-9604-d5ffea3c78ac' },
@@ -32,6 +41,14 @@ export const MYAH_STANDARD_OBJECTS = {
   brandBrainPage: {
     universalIdentifier: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
     fields: {
+      id: { universalIdentifier: '400c31ba-d88a-4c05-9526-c0513f64269a' },
+      createdAt: { universalIdentifier: '06688838-ecd1-4d3f-912e-40094f006eab' },
+      updatedAt: { universalIdentifier: '92d77bb3-0ea1-46c8-b4df-c8f42518d121' },
+      deletedAt: { universalIdentifier: '39da9374-809c-4b08-9d4c-c0bd720e8af6' },
+      position: { universalIdentifier: '493ca2bb-ece0-4915-a186-d748a27ef019' },
+      createdBy: { universalIdentifier: 'a5c7a0ad-ab7e-459d-b3a1-664a5fac9d09' },
+      updatedBy: { universalIdentifier: 'e789d775-899c-4ba0-98a9-6399ce900739' },
+      searchVector: { universalIdentifier: '003d2590-4073-4cbe-af9f-d74d7365c68c' },
       title: { universalIdentifier: 'e6b1d0d8-99b9-4b74-b6cc-21a31a3baf8d' },
       slug: { universalIdentifier: '8e9bbffa-807a-4e0d-9fb1-f3deec6183cf' },
       canonicalPath: { universalIdentifier: '4452d201-44a5-46fc-bf11-e26fa85cc3b2' },
@@ -83,6 +100,14 @@ export const MYAH_STANDARD_OBJECTS = {
   brandBrainUpdateProposal: {
     universalIdentifier: 'facac4a1-0a2f-469f-9f1f-81ef01f06578',
     fields: {
+      id: { universalIdentifier: '94bb2f6f-cb77-423d-a1a9-a7a87df3be4c' },
+      createdAt: { universalIdentifier: '3032e66a-d88e-4b11-b3d1-a5bdb3bc90a7' },
+      updatedAt: { universalIdentifier: '6c51273c-f855-4da0-9af9-aaeb4743027a' },
+      deletedAt: { universalIdentifier: '427ce27d-07da-4473-854a-138d062278f6' },
+      position: { universalIdentifier: 'c153e21f-0746-4923-8d96-e39d3581594d' },
+      createdBy: { universalIdentifier: 'baef9a83-923f-46d4-a473-38b5400da2b0' },
+      updatedBy: { universalIdentifier: '30e3ab42-97e1-47dc-9221-e0b866df4d08' },
+      searchVector: { universalIdentifier: 'a15bb3fc-fd9a-4938-abc6-f0524cf634a0' },
       title: { universalIdentifier: 'e4418f8c-6f74-4d03-8c61-93c17848c2dc' },
       proposalType: { universalIdentifier: '5601c017-6a85-4211-b2b2-9fda0bf9f0c6' },
       status: { universalIdentifier: '5d00b029-7a0d-4320-acf4-036a634a44ab' },
@@ -112,6 +137,14 @@ export const MYAH_STANDARD_OBJECTS = {
   offer: {
     universalIdentifier: 'fd8a37b8-72db-5069-902a-a1763ddc63f7',
     fields: {
+      id: { universalIdentifier: '6a7a3264-e5d7-4e41-bcf4-1f58cf9b55cf' },
+      createdAt: { universalIdentifier: 'c299bd81-c6fb-44b2-9c9f-4400fe9ddc53' },
+      updatedAt: { universalIdentifier: '843a5f90-2bd3-4bbc-a179-18f85be26d81' },
+      deletedAt: { universalIdentifier: '0d166b8b-c3f3-4bef-9834-eb2b99eead13' },
+      position: { universalIdentifier: 'efe17aca-6bc1-443a-a3e3-23f16348813d' },
+      createdBy: { universalIdentifier: '7d1af2e5-13ac-47b6-884c-e3964d267acb' },
+      updatedBy: { universalIdentifier: '2143beab-ba62-47ef-80eb-3de685c14dbb' },
+      searchVector: { universalIdentifier: '63736552-d1f9-4851-abf5-fa8ea1520738' },
       name: { universalIdentifier: 'b7706308-8a6a-5613-ac37-d5e8ce848be2' },
       campaign: { universalIdentifier: 'f8ea43b0-33f8-5071-9e6d-5b787fb4e043' },
       promotedAsset: { universalIdentifier: '00c95791-84b2-50cc-89aa-68faf18011eb' },
@@ -130,6 +163,14 @@ export const MYAH_STANDARD_OBJECTS = {
   outreachAction: {
     universalIdentifier: 'b4459926-2c01-560a-8432-fa1974168439',
     fields: {
+      id: { universalIdentifier: 'd073f527-cb35-4189-b63d-c158eaed9a0b' },
+      createdAt: { universalIdentifier: 'efe63d78-15a1-4b8d-9715-a4fdcafe3425' },
+      updatedAt: { universalIdentifier: 'aa5b957a-9b31-47e5-af5d-14f0e10fd455' },
+      deletedAt: { universalIdentifier: '4ebe16db-8e61-47c3-b914-847150ad6e88' },
+      position: { universalIdentifier: 'a80e86ce-f57f-4f92-8016-b78ae72ec09c' },
+      createdBy: { universalIdentifier: 'be0f6404-a210-495c-b7a5-97451dbb45d9' },
+      updatedBy: { universalIdentifier: '04ad258c-a533-47b3-8d45-6ab6ca0e9442' },
+      searchVector: { universalIdentifier: '343f4120-4f63-494d-83e9-7f475433b379' },
       name: { universalIdentifier: 'e3165e19-e1b8-51d2-9451-5caa4c398bd6' },
       campaignCreator: { universalIdentifier: '64617f40-1f95-54cf-be64-ff57c72df280' },
       outreachStep: { universalIdentifier: '09c835f8-9137-5b97-bc2c-a76139fd270c' },
@@ -147,6 +188,14 @@ export const MYAH_STANDARD_OBJECTS = {
   outreachSequence: {
     universalIdentifier: '0446497e-3240-5a78-a02f-e08594e5c2af',
     fields: {
+      id: { universalIdentifier: '7f68baf4-e4c8-4b0f-83f7-676986d2f331' },
+      createdAt: { universalIdentifier: 'b11a5db0-c8f1-42cb-814b-69c0f4c7aceb' },
+      updatedAt: { universalIdentifier: '994204ab-b57c-469d-b449-1b0b95c51e2b' },
+      deletedAt: { universalIdentifier: '176787b5-10e5-474c-8c90-3877069bca77' },
+      position: { universalIdentifier: '887af7f3-7d82-494c-bdb7-7693f06d3b27' },
+      createdBy: { universalIdentifier: 'cf36f26a-5572-45f2-b84f-88e1e45e4aea' },
+      updatedBy: { universalIdentifier: 'afc124e1-ed64-4d99-8c73-5e4d5135c482' },
+      searchVector: { universalIdentifier: 'ea083f84-3873-4049-a1e6-6c4f785fe449' },
       name: { universalIdentifier: '3f5fd643-d5ba-5db2-8cad-528b51189994' },
       campaign: { universalIdentifier: '75b56b0d-b69d-50fd-8f36-bfd3fa8d9237' },
       status: { universalIdentifier: '4298980f-fa5b-5e2a-8f80-1790cc7ec1da' },
@@ -161,6 +210,14 @@ export const MYAH_STANDARD_OBJECTS = {
   outreachStep: {
     universalIdentifier: 'c25bfef3-4636-5864-a777-705238c91326',
     fields: {
+      id: { universalIdentifier: '2f66be74-da02-40e4-8bdf-a6936ef66f36' },
+      createdAt: { universalIdentifier: '9e0aef9e-58ae-4580-9a24-f1c80f0a29d8' },
+      updatedAt: { universalIdentifier: 'b7096120-cb60-4cd6-81cc-1a5ed8aca0a6' },
+      deletedAt: { universalIdentifier: 'edd38181-2da8-4767-af5b-d1b231d1f02f' },
+      position: { universalIdentifier: '7c62e01a-b62f-4fc8-94e8-d76d9dbc39f9' },
+      createdBy: { universalIdentifier: 'b5aa004b-e083-4c90-a406-ee8634775ee6' },
+      updatedBy: { universalIdentifier: '02eb7f64-494b-4513-9903-708c76231b9b' },
+      searchVector: { universalIdentifier: 'ae13d941-4bc4-4e8b-826c-d9e74c1b025b' },
       name: { universalIdentifier: 'f9a7ec56-5aa0-5341-830a-5ab108c6b73c' },
       outreachSequence: { universalIdentifier: '9fd2575c-ca82-59bb-8f10-4907b104e6cb' },
       stepPosition: { universalIdentifier: 'a9469f6f-7cb8-5ed9-b171-15d65d7a47ea' },
@@ -178,6 +235,14 @@ export const MYAH_STANDARD_OBJECTS = {
   promotedAsset: {
     universalIdentifier: '843aa6c8-36af-5906-8241-4017c4188df7',
     fields: {
+      id: { universalIdentifier: 'a06cfc17-3518-4917-8a2a-ee774a2d1672' },
+      createdAt: { universalIdentifier: '5bfbb5a8-ab5f-4bc7-8d76-6cabc39b842f' },
+      updatedAt: { universalIdentifier: 'bbe18fbb-366f-4924-8b1e-fc11ccfbb301' },
+      deletedAt: { universalIdentifier: '1ecce2cc-6089-4452-9006-5bea940ef8e4' },
+      position: { universalIdentifier: '256b2670-17a6-44da-a028-45ca47ff3297' },
+      createdBy: { universalIdentifier: 'b643c7d8-3eed-45d1-9826-06ee83872ea5' },
+      updatedBy: { universalIdentifier: 'dfd1adb7-a543-4564-a561-b2a11cc62b11' },
+      searchVector: { universalIdentifier: '7e14bd88-bb9d-44cb-bf6b-22d0c6b265ce' },
       name: { universalIdentifier: '3891a76c-3119-52cc-84cd-abce75920db7' },
       assetType: { universalIdentifier: '3c7bb78a-3a42-590a-aca9-f4d966fd691f' },
       url: { universalIdentifier: 'f90326b9-e045-578b-8d76-c513bb3c1890' },
@@ -192,6 +257,14 @@ export const MYAH_STANDARD_OBJECTS = {
   campaignCreator: {
     universalIdentifier: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
     fields: {
+      id: { universalIdentifier: '12a47afe-9cc2-4a05-8ff6-6a269e4367c2' },
+      createdAt: { universalIdentifier: 'd1bd77e6-f7ff-4b5e-b5be-015d667a4de7' },
+      updatedAt: { universalIdentifier: 'f0641751-97ea-4a04-bc52-fb69bd3ec020' },
+      deletedAt: { universalIdentifier: 'f786daca-ca2c-4394-b03b-657575dea2d3' },
+      position: { universalIdentifier: 'fbf2adca-5ee3-4441-a54c-a4a8a0777b05' },
+      createdBy: { universalIdentifier: 'ce7cdca9-b83f-45ed-9de1-750b3b0dc622' },
+      updatedBy: { universalIdentifier: '2428e4e5-594a-43c7-82c5-f4647e3fcf07' },
+      searchVector: { universalIdentifier: '7ba746a4-b891-4e6d-b825-65875d7d2505' },
       name: { universalIdentifier: '31b163a4-99d9-5015-bcee-dc8ae5229ee3' },
       creator: { universalIdentifier: '730b323f-fae3-57e2-8e2e-62963106850a' },
       campaign: { universalIdentifier: '27ecf86e-08a4-5084-91d7-d305ab3363e1' },
@@ -211,6 +284,14 @@ export const MYAH_STANDARD_OBJECTS = {
   campaign: {
     universalIdentifier: '9a09d54a-d464-5692-ac74-70527fb00ddd',
     fields: {
+      id: { universalIdentifier: 'eed0f58d-3a0f-4f29-8746-01507e6a0fe2' },
+      createdAt: { universalIdentifier: '524dbf41-8e81-42bb-98d4-c10cc3f3e9b8' },
+      updatedAt: { universalIdentifier: 'ca14d8c5-1638-48a5-af2d-0a6829cf4664' },
+      deletedAt: { universalIdentifier: 'f228a750-5c65-4ad5-9b92-2a42d4a2d2c4' },
+      position: { universalIdentifier: '07cfea7f-bd1e-4b5d-bdab-279fff63b02e' },
+      createdBy: { universalIdentifier: 'fc5af07b-c053-4094-aeeb-5a5b4134d68e' },
+      updatedBy: { universalIdentifier: '1a0d5cad-42a2-458e-87b6-fad0afdf8b13' },
+      searchVector: { universalIdentifier: '5cbc6517-bc12-46b3-8d52-8eae1bb07ad4' },
       name: { universalIdentifier: '63c56aea-35db-5733-9d3a-d062544ac897' },
       status: { universalIdentifier: '9d3c6d96-896d-51d1-b6d2-5d6b2e333e87' },
       objective: { universalIdentifier: 'e22687bb-2633-573f-bd80-c4b13e80d966' },
@@ -240,6 +321,14 @@ export const MYAH_STANDARD_OBJECTS = {
   creatorListMember: {
     universalIdentifier: 'e004c4b4-b1e1-59d9-b096-9fc57875d47f',
     fields: {
+      id: { universalIdentifier: 'e3e78195-2ccd-4b9d-8fad-7dd4f267f666' },
+      createdAt: { universalIdentifier: '7c8199ef-53f7-439f-8509-412e37b08a38' },
+      updatedAt: { universalIdentifier: 'db0a9c67-4a4a-4a04-a23b-b044fa2dce27' },
+      deletedAt: { universalIdentifier: '0393d154-5cd6-4d48-8ca7-c98815d967c4' },
+      position: { universalIdentifier: '0a0c9748-943e-4468-be40-a44892ab0cf2' },
+      createdBy: { universalIdentifier: '2aac354a-124f-4341-9840-9997e63dd4b4' },
+      updatedBy: { universalIdentifier: '4ece6e13-703b-41ad-b3f4-14e2f9c304c8' },
+      searchVector: { universalIdentifier: '404d09cb-2fdd-471c-8dfc-6d37ca437354' },
       name: { universalIdentifier: '7924764c-9378-5299-8b68-7757e6af35c2' },
       creator: { universalIdentifier: 'a8014e8c-e50a-547a-9f01-973d685314ec' },
       creatorList: { universalIdentifier: 'c84e31a5-ba66-5773-a2da-2b1c357257c5' },
@@ -254,6 +343,14 @@ export const MYAH_STANDARD_OBJECTS = {
   creatorList: {
     universalIdentifier: 'd51f2758-055b-5367-8250-859cb3f58631',
     fields: {
+      id: { universalIdentifier: 'a4d3f96b-23aa-41a6-afc9-f031dca9daff' },
+      createdAt: { universalIdentifier: '44741ab3-3321-4ee1-826b-eb1cf6aec05b' },
+      updatedAt: { universalIdentifier: '3ab06e08-4011-4e2c-b0c0-914db800eb64' },
+      deletedAt: { universalIdentifier: '40698413-80fb-41de-bcbd-7a79d48a2330' },
+      position: { universalIdentifier: '719e6b70-2f8a-4a78-addc-d82093b7c9ed' },
+      createdBy: { universalIdentifier: 'b79a32fd-200a-4a86-92cd-814ed208af11' },
+      updatedBy: { universalIdentifier: '51baf29e-2aa9-4221-a17b-bab7ea27e5dd' },
+      searchVector: { universalIdentifier: 'c9f5ee65-7c27-413d-9b7d-087bfa9e5980' },
       name: { universalIdentifier: 'e19694f0-0c78-566e-ab95-63f0488848f3' },
       source: { universalIdentifier: '1b27dc7c-0f11-5b2a-b81f-708dc785b6fa' },
       description: { universalIdentifier: '1a4485a2-1e44-51af-bfdc-666cdcf17223' },
@@ -275,6 +372,14 @@ export const MYAH_STANDARD_OBJECTS = {
   creator: {
     universalIdentifier: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
     fields: {
+      id: { universalIdentifier: 'd2dbbc0d-4da8-4aa5-901b-8515f62513ae' },
+      createdAt: { universalIdentifier: '78ea755c-d220-4955-8756-87873f33f67a' },
+      updatedAt: { universalIdentifier: 'c8078ddd-8399-4aba-a38b-63bcd5b48e50' },
+      deletedAt: { universalIdentifier: '701fc80b-0101-4677-8b21-548b67b6dcf7' },
+      position: { universalIdentifier: 'cb75cfdd-6a07-4d99-971b-8171c156823c' },
+      createdBy: { universalIdentifier: 'd30140d9-88a9-4a0e-9780-c9409293d809' },
+      updatedBy: { universalIdentifier: '01a0efa7-6cfb-4dec-92bc-0ff58991537f' },
+      searchVector: { universalIdentifier: '8536e00a-693b-4071-a926-c302b42709f9' },
       name: { universalIdentifier: 'c3d4cafc-73ec-5d13-8fe9-cbcbd0eca899' },
       email: { universalIdentifier: 'c4bccf25-cfd1-5648-918e-bf20b32ed375' },
       phone: { universalIdentifier: 'ccdc5be6-6c2b-5920-acd8-fa0ad52eeb29' },
