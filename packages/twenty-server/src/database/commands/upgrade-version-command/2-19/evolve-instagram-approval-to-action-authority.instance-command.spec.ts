@@ -26,14 +26,42 @@ const receiptIds = {
   unknown: '00000000-0000-0000-0000-000000000204',
 };
 
-const getColumns = async (queryRunner: QueryRunner, tableName: string) =>
-  queryRunner.query<{ column_name: string }[]>(
+const queryRaw = async (
+  queryRunner: QueryRunner,
+  query: string,
+  parameters?: unknown[],
+): Promise<unknown> => queryRunner.query(query, parameters);
+
+const getColumns = async (queryRunner: QueryRunner, tableName: string) => {
+  const rows: unknown = await queryRunner.query(
     `SELECT column_name
      FROM information_schema.columns
      WHERE table_schema = 'core' AND table_name = $1
      ORDER BY ordinal_position`,
     [tableName],
   );
+
+  if (!Array.isArray(rows)) {
+    throw new Error('Unexpected column query result');
+  }
+
+  const columns: { column_name: string }[] = [];
+
+  for (const row of rows) {
+    if (
+      !row ||
+      typeof row !== 'object' ||
+      !('column_name' in row) ||
+      typeof row.column_name !== 'string'
+    ) {
+      throw new Error('Unexpected column query result');
+    }
+
+    columns.push({ column_name: row.column_name });
+  }
+
+  return columns;
+};
 
 const dropFixtureSchema = async (queryRunner: QueryRunner) => {
   await queryRunner.query('DROP TABLE IF EXISTS core."agentMessagePart" CASCADE');
@@ -259,9 +287,7 @@ const installLegacyFixture = async (
 
 const assertGenericAuthoritySchema = async (queryRunner: QueryRunner) => {
   await expect(
-    queryRunner.query<
-      { binding: string | null; link: string | null; receipt: string | null }[]
-    >(
+    queryRaw(queryRunner,
       `SELECT
         to_regclass('core."actionApprovalBinding"') AS binding,
         to_regclass('core."actionApprovalBindingEvidenceLink"') AS link,
@@ -275,7 +301,7 @@ const assertGenericAuthoritySchema = async (queryRunner: QueryRunner) => {
     },
   ]);
   await expect(
-    queryRunner.query(
+    queryRaw(queryRunner,
       `SELECT to_regclass('core."instagramReplyApprovalRequest"') AS binding,
               to_regclass('core."instagramReplyExecutionReceipt"') AS receipt`,
     ),
@@ -334,7 +360,7 @@ const assertGenericAuthoritySchema = async (queryRunner: QueryRunner) => {
 
 const assertGenericIdDefaults = async (queryRunner: QueryRunner) => {
   await expect(
-    queryRunner.query(
+    queryRaw(queryRunner,
       `SELECT table_name, column_default
        FROM information_schema.columns
        WHERE table_schema = 'core'
@@ -364,7 +390,7 @@ const assertGenericIdDefaults = async (queryRunner: QueryRunner) => {
 
 const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
   await expect(
-    queryRunner.query(
+    queryRaw(queryRunner,
       `SELECT table_name, column_name
        FROM information_schema.columns
        WHERE table_schema = 'core'
@@ -435,7 +461,7 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
     },
   ]);
   await expect(
-    queryRunner.query(
+    queryRaw(queryRunner,
       `SELECT table_name, column_name
        FROM information_schema.columns
        WHERE table_schema = 'core'
@@ -454,7 +480,7 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
     ),
   ).resolves.toHaveLength(19);
   await expect(
-    queryRunner.query(
+    queryRaw(queryRunner,
       `SELECT table_name, column_default
        FROM information_schema.columns
        WHERE table_schema = 'core'
@@ -476,7 +502,7 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
     },
   ]);
   await expect(
-    queryRunner.query(
+    queryRaw(queryRunner,
       `SELECT conname, contype
        FROM pg_constraint
        WHERE conrelid IN (
@@ -502,7 +528,7 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
     { conname: 'PK_1ecd8d74d2ebde2854db62b469e', contype: 'p' },
   ]);
   await expect(
-    queryRunner.query(
+    queryRaw(queryRunner,
       `SELECT indexname
        FROM pg_indexes
        WHERE schemaname = 'core'
@@ -573,7 +599,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       await assertGenericAuthoritySchema(queryRunner);
       await assertGenericIdDefaults(queryRunner);
 
-      const beforeSecondUp = await queryRunner.query(
+      const beforeSecondUp = await queryRaw(queryRunner,
         `SELECT
           (SELECT count(*) FROM core."actionApprovalBinding") AS bindings,
           (SELECT count(*) FROM core."actionExecutionReceipt") AS receipts`,
@@ -588,7 +614,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       await assertGenericAuthoritySchema(queryRunner);
 
       await expect(
-        queryRunner.query(
+        queryRaw(queryRunner,
           `SELECT
             (SELECT count(*) FROM core."actionApprovalBinding") AS bindings,
             (SELECT count(*) FROM core."actionExecutionReceipt") AS receipts`,
@@ -600,7 +626,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       }
 
       await expect(
-        queryRunner.query(
+        queryRaw(queryRunner,
           `SELECT id, state
            FROM core."actionApprovalBinding"
            WHERE id IN ($1, $2)
@@ -612,7 +638,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
         { id: bindingIds.approved, state: 'EXPIRED' },
       ]);
       await expect(
-        queryRunner.query(
+        queryRaw(queryRunner,
           `SELECT id, state
            FROM core."actionExecutionReceipt"
            ORDER BY id`,
@@ -624,7 +650,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
         { id: receiptIds.unknown, state: 'UNKNOWN' },
       ]);
       await expect(
-        queryRunner.query(
+        queryRaw(queryRunner,
           'SELECT id, "toolOutput" FROM core."agentMessagePart" ORDER BY id',
         ),
       ).resolves.toStrictEqual([
@@ -710,7 +736,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     await command.down(queryRunner);
 
     await expect(
-      queryRunner.query(
+      queryRaw(queryRunner,
         `SELECT
           to_regclass('core."instagramReplyApprovalRequest"') AS binding,
           to_regclass('core."instagramReplyExecutionReceipt"') AS receipt,

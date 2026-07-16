@@ -14,17 +14,22 @@ const SAFE_PROVIDER_OUTCOME_CODES: Record<
   queued: true,
 };
 
+const isAcceptedProviderOutcomeCode = (
+  code: string,
+): code is AcceptedProviderOutcome['code'] =>
+  Object.prototype.hasOwnProperty.call(SAFE_PROVIDER_OUTCOME_CODES, code);
+
 @Injectable()
 export class ActionReceiptRedactionService {
   toAcceptedProviderOutcome(
     input: ProviderAcceptedOutcomeInput,
   ): AcceptedProviderOutcome {
-    if (!Object.hasOwn(SAFE_PROVIDER_OUTCOME_CODES, input.code)) {
+    if (!isAcceptedProviderOutcomeCode(input.code)) {
       throw new Error('Unsafe provider outcome');
     }
 
     return {
-      code: input.code as AcceptedProviderOutcome['code'],
+      code: input.code,
       acceptedAt: input.acceptedAt,
     };
   }

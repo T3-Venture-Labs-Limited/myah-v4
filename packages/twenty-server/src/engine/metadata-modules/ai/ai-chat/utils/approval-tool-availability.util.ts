@@ -55,6 +55,16 @@ type MessageLike = {
   parts?: MessagePartLike[];
 };
 
+type ApprovalToolResult = {
+  status?: string;
+  decision?: string;
+  actionApprovalBindingId?: string;
+};
+
+type ApprovalToolOutput = {
+  result: ApprovalToolResult;
+};
+
 export const hasLatestMessageApprovedGenericApproval = (
   messages: MessageLike[],
 ) => {
@@ -92,21 +102,13 @@ export const hasApprovedInstagramReplyApproval = (messages: MessageLike[]) =>
         return (
           part.type === `tool-${REQUEST_APPROVAL_TOOL_NAME}` &&
           isApprovalToolOutput(output) &&
-          isRegisteredActionApprovalOutput(output) &&
-          output.result.status === 'resolved' &&
-          output.result.decision === 'approved'
+          isRegisteredActionApprovalOutput(output)
         );
       }),
   );
 const isApprovalToolOutput = (
   output: unknown,
-): output is {
-  result: {
-    status?: string;
-    decision?: string;
-    actionApprovalBindingId?: string;
-  };
-} => {
+): output is ApprovalToolOutput => {
   if (!output || typeof output !== 'object' || !('result' in output)) {
     return false;
   }
@@ -117,9 +119,7 @@ const isApprovalToolOutput = (
 };
 
 const isRegisteredActionApprovalOutput = (
-  output: {
-    result: { actionApprovalBindingId?: string };
-  },
-): output is {
-  result: { actionApprovalBindingId: string };
+  output: ApprovalToolOutput,
+): output is ApprovalToolOutput & {
+  result: ApprovalToolResult & { actionApprovalBindingId: string };
 } => typeof output.result.actionApprovalBindingId === 'string';

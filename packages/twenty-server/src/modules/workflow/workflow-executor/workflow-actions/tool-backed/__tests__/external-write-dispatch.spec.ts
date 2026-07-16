@@ -10,7 +10,7 @@ import { HttpRequestWorkflowAction } from 'src/modules/workflow/workflow-executo
 import { DraftEmailWorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/mail-sender/draft-email.workflow-action';
 import { SendEmailWorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/mail-sender/send-email.workflow-action';
 import { ToolBackedWorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/tool-backed/tool-backed.workflow-action';
-import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
+import { type WorkflowActionInput } from 'src/modules/workflow/workflow-executor/types/workflow-action-input';
 import { WorkflowRunStepLogWorkspaceService } from 'src/modules/workflow/workflow-runner/workflow-run/workflow-run-step-log.workspace-service';
 
 const createTool = () => ({
@@ -21,32 +21,97 @@ const workflowRunStepLogService = {
   setStepLog: jest.fn(),
 } as never;
 
-const buildInput = (type: WorkflowActionType) => ({
-  currentStepId: 'step-1',
-  steps: [
-    {
-      id: 'step-1',
-      type,
-      name: 'External write',
-      valid: true,
-      settings: {
-        input: {
-          url: 'https://example.com',
-          method: 'POST',
-          recipients: { to: 'person@example.com' },
-          subject: 'Subject',
-        },
-        outputSchema: {},
-        errorHandlingOptions: {
-          retryOnFailure: { value: false },
-          continueOnFailure: { value: false },
-        },
-      },
-    } as WorkflowAction,
-  ],
-  context: {},
-  runInfo: { workspaceId: 'workspace-id', workflowRunId: 'run-id' },
-});
+const externalWriteActionTypes = [
+  WorkflowActionType.SEND_EMAIL,
+  WorkflowActionType.DRAFT_EMAIL,
+  WorkflowActionType.CREATE_CALENDAR_EVENT,
+  WorkflowActionType.HTTP_REQUEST,
+] as const;
+
+type ExternalWriteActionType = (typeof externalWriteActionTypes)[number];
+
+const buildInput = (type: ExternalWriteActionType): WorkflowActionInput => {
+  const step = {
+    id: 'step-1',
+    name: 'External write',
+    valid: true,
+  };
+  const baseSettings = {
+    outputSchema: {},
+    errorHandlingOptions: {
+      retryOnFailure: { value: false },
+      continueOnFailure: { value: false },
+    },
+  };
+
+  switch (type) {
+    case WorkflowActionType.SEND_EMAIL:
+    case WorkflowActionType.DRAFT_EMAIL:
+      return {
+        currentStepId: 'step-1',
+        steps: [
+          {
+            ...step,
+            type,
+            settings: {
+              ...baseSettings,
+              input: {
+                connectedAccountId: 'account-id',
+                recipients: { to: 'person@example.com' },
+                subject: 'Subject',
+              },
+            },
+          },
+        ],
+        context: {},
+        runInfo: { workspaceId: 'workspace-id', workflowRunId: 'run-id' },
+      };
+    case WorkflowActionType.CREATE_CALENDAR_EVENT:
+      return {
+        currentStepId: 'step-1',
+        steps: [
+          {
+            ...step,
+            type,
+            settings: {
+              ...baseSettings,
+              input: {
+                connectedAccountId: 'account-id',
+                title: 'Event',
+                startsAt: '2026-07-16T12:00:00.000Z',
+                endsAt: '2026-07-16T13:00:00.000Z',
+                isFullDay: false,
+                sendInvitations: false,
+                addConferencing: false,
+              },
+            },
+          },
+        ],
+        context: {},
+        runInfo: { workspaceId: 'workspace-id', workflowRunId: 'run-id' },
+      };
+    case WorkflowActionType.HTTP_REQUEST:
+      return {
+        currentStepId: 'step-1',
+        steps: [
+          {
+            ...step,
+            type,
+            settings: {
+              ...baseSettings,
+              expectedOutputSchema: {},
+              input: {
+                url: 'https://example.com',
+                method: 'POST',
+              },
+            },
+          },
+        ],
+        context: {},
+        runInfo: { workspaceId: 'workspace-id', workflowRunId: 'run-id' },
+      };
+  }
+};
 
 class TestToolBackedWorkflowAction extends ToolBackedWorkflowAction<never> {
   constructor(
@@ -91,18 +156,7 @@ describe('workflow external write dispatch', () => {
     );
 
     await expect(
-      action.execute({
-        ...buildInput(WorkflowActionType.HTTP_REQUEST),
-        steps: [
-          {
-            ...buildInput(WorkflowActionType.HTTP_REQUEST).steps[0],
-            settings: {
-              ...buildInput(WorkflowActionType.HTTP_REQUEST).steps[0].settings,
-              input: {},
-            },
-          },
-        ],
-      }),
+      action.execute(buildInput(WorkflowActionType.HTTP_REQUEST)),
     ).rejects.toThrow('approval binding');
 
     expect(tool.execute).not.toHaveBeenCalled();
@@ -116,12 +170,7 @@ describe('workflow external write dispatch', () => {
     });
   });
 
-  it.each([
-    [WorkflowActionType.SEND_EMAIL],
-    [WorkflowActionType.DRAFT_EMAIL],
-    [WorkflowActionType.CREATE_CALENDAR_EVENT],
-    [WorkflowActionType.HTTP_REQUEST],
-  ])(
+  it.each(externalWriteActionTypes)(
     'denies factory-created %s before Tool.execute',
     async (type) => {
       const tool = createTool();

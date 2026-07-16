@@ -10,12 +10,23 @@ const EVIDENCE_LINK = 'core."actionApprovalBindingEvidenceLink"';
 const RECEIPT = 'core."actionExecutionReceipt"';
 
 const tableExists = async (queryRunner: QueryRunner, table: string) => {
-  const [{ exists }] = await queryRunner.query<{ exists: boolean }[]>(
+  const rows: unknown = await queryRunner.query(
     'SELECT to_regclass($1) IS NOT NULL AS "exists"',
     [table],
   );
 
-  return exists;
+  if (
+    !Array.isArray(rows) ||
+    rows.length !== 1 ||
+    !rows[0] ||
+    typeof rows[0] !== 'object' ||
+    !('exists' in rows[0]) ||
+    typeof rows[0].exists !== 'boolean'
+  ) {
+    throw new Error('Unexpected table existence query result');
+  }
+
+  return rows[0].exists;
 };
 
 const createGenericTypes = async (queryRunner: QueryRunner) => {

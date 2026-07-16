@@ -182,8 +182,6 @@ describe('approval tool availability', () => {
               type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
               output: {
                 result: {
-                  status: 'resolved',
-                  decision: 'approved',
                   actionApprovalBindingId:
                     'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
                 },

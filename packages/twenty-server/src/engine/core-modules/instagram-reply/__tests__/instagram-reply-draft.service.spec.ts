@@ -30,7 +30,7 @@ const buildService = ({
       }
     | undefined;
 } = {}) => {
-  const query = jest.fn(async (sql: string) => {
+  const query = jest.fn(async (sql: string, _parameters?: unknown[]) => {
     if (sql.includes('FROM') && sql.includes('_myahInstagramAccount')) {
       return activeAccounts;
     }

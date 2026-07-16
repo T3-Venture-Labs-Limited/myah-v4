@@ -6,7 +6,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     const workspaceId = '00000000-0000-4000-8000-000000000002';
     const draftId = '00000000-0000-4000-8000-000000000003';
     const conversationId = '00000000-0000-4000-8000-000000000004';
-    const query = jest.fn(async (sql: string) => {
+    const query = jest.fn(async (sql: string, _parameters?: unknown[]) => {
       if (sql.includes('SELECT "id"')) {
         return [];
       }
