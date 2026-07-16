@@ -40,7 +40,6 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
   }, 30000);
 
   afterAll(async () => {
-    await dropApprovalSchema(context);
     await context.dataSource.query('DELETE FROM core."upgradeMigration"');
     setMockActiveWorkspaceIds([]);
     await context.module?.close();
