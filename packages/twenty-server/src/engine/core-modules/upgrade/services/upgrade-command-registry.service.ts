@@ -33,7 +33,6 @@ export type RegisteredSlowInstanceCommand = {
   command: SlowInstanceCommand;
   version: TwentyAllVersion;
   timestamp: number;
-  runAfterWorkspace: boolean;
 };
 
 export type RegisteredWorkspaceCommand = {
@@ -47,14 +46,12 @@ type VersionBundle = {
   fastInstanceCommands: RegisteredFastInstanceCommand[];
   slowInstanceCommands: RegisteredSlowInstanceCommand[];
   workspaceCommands: RegisteredWorkspaceCommand[];
-  postWorkspaceSlowInstanceCommands: RegisteredSlowInstanceCommand[];
 };
 
 const buildEmptyVersionBundle = (): VersionBundle => ({
   fastInstanceCommands: [],
   slowInstanceCommands: [],
   workspaceCommands: [],
-  postWorkspaceSlowInstanceCommands: [],
 });
 
 @Injectable()
@@ -74,7 +71,6 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
         fastInstanceCommands: [],
         slowInstanceCommands: [],
         workspaceCommands: [],
-        postWorkspaceSlowInstanceCommands: [],
       });
     }
 
@@ -110,18 +106,10 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
         };
 
         if (instanceCommandMetadata.type === 'slow') {
-          const slowCommand = {
+          bundle.slowInstanceCommands.push({
             ...entry,
             command: instance as SlowInstanceCommand,
-            runAfterWorkspace:
-              instanceCommandMetadata.runAfterWorkspace === true,
-          };
-
-          if (instanceCommandMetadata.runAfterWorkspace) {
-            bundle.postWorkspaceSlowInstanceCommands.push(slowCommand);
-          } else {
-            bundle.slowInstanceCommands.push(slowCommand);
-          }
+          });
         } else {
           bundle.fastInstanceCommands.push({
             ...entry,
@@ -167,9 +155,6 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
       bundle.workspaceCommands.sort(
         (entryA, entryB) => entryA.timestamp - entryB.timestamp,
       );
-      bundle.postWorkspaceSlowInstanceCommands.sort(
-        (entryA, entryB) => entryA.timestamp - entryB.timestamp,
-      );
     }
 
     this.validateNoVersionDuplicatesAcrossConstants();
@@ -181,8 +166,7 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
       const totalCount =
         bundle.fastInstanceCommands.length +
         bundle.slowInstanceCommands.length +
-        bundle.workspaceCommands.length +
-        bundle.postWorkspaceSlowInstanceCommands.length;
+        bundle.workspaceCommands.length;
 
       if (totalCount > 0) {
         const crossUpgradeLabel = (
@@ -192,7 +176,7 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
           : 'pre-release';
 
         this.logger.log(
-          `Registered ${bundle.fastInstanceCommands.length} fast instance, ${bundle.slowInstanceCommands.length} slow instance, ${bundle.workspaceCommands.length} workspace, and ${bundle.postWorkspaceSlowInstanceCommands.length} post-workspace slow command(s) for ${version} (${crossUpgradeLabel})`,
+          `Registered ${bundle.fastInstanceCommands.length} fast instance, ${bundle.slowInstanceCommands.length} slow instance, and ${bundle.workspaceCommands.length} workspace command(s) for ${version} (${crossUpgradeLabel})`,
         );
       }
     }
@@ -217,14 +201,9 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
   }
 
   getCrossUpgradeSupportedSlowInstanceCommands(): RegisteredSlowInstanceCommand[] {
-    return TWENTY_CROSS_UPGRADE_SUPPORTED_VERSIONS.flatMap((version) => {
-      const bundle = this.getBundleForVersion(version);
-
-      return [
-        ...bundle.slowInstanceCommands,
-        ...bundle.postWorkspaceSlowInstanceCommands,
-      ];
-    });
+    return TWENTY_CROSS_UPGRADE_SUPPORTED_VERSIONS.flatMap(
+      (version) => this.getBundleForVersion(version).slowInstanceCommands,
+    );
   }
 
   private computeCommandName(
@@ -249,11 +228,6 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
       );
       this.validateNoTimestampDuplicatesWithinKind(
         version,
-        'post-workspace-slow-instance',
-        bundle.postWorkspaceSlowInstanceCommands,
-      );
-      this.validateNoTimestampDuplicatesWithinKind(
-        version,
         'workspace',
         bundle.workspaceCommands,
       );
@@ -264,7 +238,6 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
         ...bundle.fastInstanceCommands.map((entry) => entry.name),
         ...bundle.slowInstanceCommands.map((entry) => entry.name),
         ...bundle.workspaceCommands.map((entry) => entry.name),
-        ...bundle.postWorkspaceSlowInstanceCommands.map((entry) => entry.name),
       ];
 
       for (const name of allNames) {
@@ -299,11 +272,7 @@ export class UpgradeCommandRegistryService implements OnModuleInit {
 
   private validateNoTimestampDuplicatesWithinKind(
     version: TwentyAllVersion,
-    kind:
-      | 'fast-instance'
-      | 'slow-instance'
-      | 'post-workspace-slow-instance'
-      | 'workspace',
+    kind: 'fast-instance' | 'slow-instance' | 'workspace',
     entries:
       | RegisteredFastInstanceCommand[]
       | RegisteredSlowInstanceCommand[]

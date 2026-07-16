@@ -12,6 +12,7 @@ import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decor
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { type SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
 import { TWENTY_CURRENT_VERSION } from 'src/engine/core-modules/upgrade/constants/twenty-current-version.constant';
+import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784106536001-add-instagram-reply-approval-provider-binding';
 import { TWENTY_PREVIOUS_VERSIONS } from 'src/engine/core-modules/upgrade/constants/twenty-previous-versions.constant';
 
 const VERSION_A = TWENTY_CURRENT_VERSION;
@@ -445,27 +446,20 @@ describe('UpgradeCommandRegistryService', () => {
     ]);
   });
 
-  it('marks post-workspace slow instance commands in their registry entry', async () => {
-    @RegisteredInstanceCommand(VERSION_A, 1781000000000, {
-      type: 'slow',
-      runAfterWorkspace: true,
-    })
-    class PostWorkspaceSlowMigration implements SlowInstanceCommand {
-      async runDataMigration(_dataSource: DataSource): Promise<void> {}
-      async up(): Promise<void> {}
-      async down(): Promise<void> {}
-    }
-
+  it('keeps the Instagram reply provider binding in the pre-workspace slow segment', async () => {
     const service = await buildRegistryService([
-      new PostWorkspaceSlowMigration(),
+      new AddInstagramReplyApprovalProviderBindingSlowInstanceCommand(),
       new WorkspaceCommandA(),
     ]);
 
-    const bundle = service.getBundleForVersion(VERSION_A);
+    const bundle = service.getBundleForVersion('2.19.0');
 
-    expect(bundle.slowInstanceCommands).toHaveLength(0);
-    expect(bundle.postWorkspaceSlowInstanceCommands).toEqual([
-      expect.objectContaining({ runAfterWorkspace: true }),
+    expect(
+      bundle.slowInstanceCommands.map(
+        (entry) => entry.command.constructor.name,
+      ),
+    ).toStrictEqual([
+      'AddInstagramReplyApprovalProviderBindingSlowInstanceCommand',
     ]);
   });
 });
