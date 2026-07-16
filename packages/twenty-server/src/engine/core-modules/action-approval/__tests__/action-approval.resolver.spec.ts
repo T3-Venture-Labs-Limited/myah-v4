@@ -1,3 +1,5 @@
+import { MetadataGraphQLApiModule } from 'src/engine/api/graphql/metadata-graphql-api.module';
+import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalResolver } from 'src/engine/core-modules/action-approval/action-approval.resolver';
@@ -89,6 +91,11 @@ const createResolver = ({
 };
 
 describe('ActionApprovalResolver', () => {
+  it('registers action approval resolvers in the metadata GraphQL module', () => {
+    const imports = Reflect.getMetadata('imports', MetadataGraphQLApiModule);
+
+    expect(imports).toContain(ActionApprovalModule);
+  });
   it('rejects a foreign workspace member before mapping a proposal DTO', async () => {
     const { resolver, threadRepository } = createResolver({
       resolvedBinding: {

@@ -127,6 +127,7 @@ export const AiChatActionApprovalEvidence = ({
   receipt,
 }: AiChatActionApprovalEvidenceProps) => {
   const { t } = useLingui();
+  const evidenceLinks = receipt?.evidenceLinks ?? proposal.evidenceLinks;
 
   return (
     <StyledEvidence>
@@ -141,17 +142,17 @@ export const AiChatActionApprovalEvidence = ({
         <>
           <span>{getReceiptStatusLabel(receipt.state)}</span>
           {receipt.outcome && <span>{receipt.outcome}</span>}
-          <StyledEvidenceLinks>
-            {receipt.evidenceLinks.map((evidenceLink) => (
-              <ActionApprovalEvidenceLinkChip
-                key={`${evidenceLink.objectMetadataId}-${evidenceLink.recordId}-${evidenceLink.role}`}
-                {...evidenceLink}
-              />
-            ))}
-          </StyledEvidenceLinks>
           <span>{t`Receipt updated`} {new Date(receipt.occurredAt).toLocaleString()}</span>
         </>
       )}
+      <StyledEvidenceLinks>
+        {evidenceLinks.map((evidenceLink) => (
+          <ActionApprovalEvidenceLinkChip
+            key={`${evidenceLink.objectMetadataId}-${evidenceLink.recordId}-${evidenceLink.role}`}
+            {...evidenceLink}
+          />
+        ))}
+      </StyledEvidenceLinks>
     </StyledEvidence>
   );
 };

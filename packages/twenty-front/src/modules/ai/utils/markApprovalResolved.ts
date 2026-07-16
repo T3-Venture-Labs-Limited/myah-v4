@@ -3,14 +3,18 @@ import {
   type ApprovalDecision,
   type ExtendedUIMessage,
   type ExtendedUIMessagePart,
-  type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
-import { isDefined } from 'twenty-shared/utils';
 
 type ApprovalResolution = {
   decision: ApprovalDecision;
   comment?: string;
 };
+
+const ACTION_APPROVAL_BINDING_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
 
 export const markApprovalResolved = (
   messages: ExtendedUIMessage[],
@@ -30,28 +34,25 @@ export const markApprovalResolved = (
           return part;
         }
 
-        const previousOutput = isDefined(part.output)
-          ? (part.output as Record<string, unknown>)
-          : {};
-        const previousResult = previousOutput.result as
-          | (Partial<RequestApprovalToolResult> & {
-              actionApprovalBindingId?: string;
-            })
-          | undefined;
-
-        if (!isDefined(previousResult)) {
+        if (!isRecord(part.output) || !isRecord(part.output.result)) {
           return part;
         }
+
+        const actionApprovalBindingId = part.output.result.actionApprovalBindingId;
 
         return {
           ...part,
           output: {
-            ...previousOutput,
             result: {
-              ...previousResult,
+              ...(typeof actionApprovalBindingId === 'string' &&
+              ACTION_APPROVAL_BINDING_ID_PATTERN.test(actionApprovalBindingId)
+                ? { actionApprovalBindingId }
+                : {}),
               status: 'resolved',
               decision: resolution.decision,
-              comment: resolution.comment,
+              ...(typeof resolution.comment === 'string'
+                ? { comment: resolution.comment }
+                : {}),
               decidedAt: new Date().toISOString(),
             },
           },

@@ -109,6 +109,22 @@ describe('AiChatActionApprovalEvidence', () => {
     expect(screen.queryByText(/body|preview/i)).not.toBeInTheDocument();
   });
 
+  it('renders proposal evidence before a receipt exists', () => {
+    render(
+      <I18nProvider i18n={i18n}>
+        <ThemeProvider colorScheme="light">
+          <AiChatActionApprovalEvidence
+            proposal={proposalWithUnsafeFields}
+            receipt={null}
+          />
+        </ThemeProvider>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText('Evidence unavailable')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
   it('renders unknown or deleted evidence as a non-clickable fallback', () => {
     renderEvidence();
 
