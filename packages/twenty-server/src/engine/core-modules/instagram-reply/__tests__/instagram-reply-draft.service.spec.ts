@@ -31,6 +31,7 @@ const buildService = ({
   },
 }: {
   activeAccounts?: { id: string; igUserId: string }[];
+  conversations?: { id: string; recipientIgsid: string | null }[];
   inboundMessages?: Record<string, unknown>[];
   draft?:
     | {

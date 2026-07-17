@@ -45,6 +45,8 @@ const integrationConnectedAccountId = 'integration-connected-account';
 const integrationRecipientIgsid = 'integration-recipient-igsid';
 const integrationRecipientLabel = '@integration-recipient';
 const integrationProviderConversationId = 'integration-provider-conversation';
+const integrationInboundMessageId = 'integration-inbound-message-id';
+const integrationInboundReceivedAt = new Date(Date.now() - 60_000);
 
 const expectedBinding = {
   workspaceId,
@@ -54,11 +56,13 @@ const expectedBinding = {
   contentDigest: computeActionContentDigest('  Cafe\u0301\r\n  '),
   recipientFingerprint: 'a'.repeat(64),
   sendingAccountFingerprint: 'b'.repeat(64),
+  inboundMessageId: integrationInboundMessageId,
+  inboundSenderIgsid: integrationRecipientIgsid,
+  inboundDirection: 'INBOUND' as const,
+  inboundReceivedAt: integrationInboundReceivedAt,
   threadId,
   initiatorUserWorkspaceId,
-  evidenceLinks: [
-    { objectMetadataId, recordId, role: 'recipient' },
-  ],
+  evidenceLinks: [{ objectMetadataId, recordId, role: 'recipient' }],
 };
 
 describe('ActionApprovalService (PostgreSQL)', () => {
@@ -101,21 +105,20 @@ describe('ActionApprovalService (PostgreSQL)', () => {
   ): value is { status: string; actionApprovalBindingId: string } =>
     Boolean(
       value &&
-        typeof value === 'object' &&
-        'status' in value &&
-        typeof value.status === 'string' &&
-        'actionApprovalBindingId' in value &&
-        typeof value.actionApprovalBindingId === 'string',
+      typeof value === 'object' &&
+      'status' in value &&
+      typeof value.status === 'string' &&
+      'actionApprovalBindingId' in value &&
+      typeof value.actionApprovalBindingId === 'string',
     );
-
 
   const prepareApprovedSender = async () => {
     const workspaceRepository = {
       findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
     };
     const globalWorkspaceOrmManager = {
-      executeInWorkspaceContext: jest.fn(
-        async (callback: () => unknown) => callback(),
+      executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
+        callback(),
       ),
       getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
     };
@@ -130,20 +133,30 @@ describe('ActionApprovalService (PostgreSQL)', () => {
           universalIdentifier: '36817464-855f-42db-9fbb-f8853643f8d6',
         },
         {
+          id: '90000000-0000-4000-8000-000000000018',
+          universalIdentifier: '7241bd44-e474-4904-8636-339276b3feff',
+        },
+        {
           id: '90000000-0000-4000-8000-000000000017',
           universalIdentifier: '2d357469-831a-4629-ad4b-47335900e883',
         },
       ]),
     };
-    const actionDefinition = new InstagramReplyActionDefinition(
-      workspaceRepository as never,
-      globalWorkspaceOrmManager as never,
-      objectMetadataRepository as never,
-    );
-    const draftService = new InstagramReplyDraftService(
-      workspaceRepository as never,
-      globalWorkspaceOrmManager as never,
-    );
+    const userWorkspaceRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: initiatorUserWorkspaceId,
+        workspaceId,
+        user: { id: 'integration-user-id' },
+      }),
+    };
+    const workspaceCacheService = {
+      getOrRecompute: jest.fn().mockResolvedValue({
+        flatWorkspaceMemberMaps: {
+          idByUserId: { 'integration-user-id': 'integration-member-id' },
+          byId: { 'integration-member-id': { id: 'integration-member-id' } },
+        },
+      }),
+    };
     const providerCalls = jest.fn(async ({ toolSlug }: { toolSlug: string }) =>
       toolSlug === 'INSTAGRAM_LIST_ALL_MESSAGES'
         ? {
@@ -151,13 +164,39 @@ describe('ActionApprovalService (PostgreSQL)', () => {
             data: {
               data: [
                 {
+                  id: integrationInboundMessageId,
+                  message: 'Integration inbound message',
                   direction: 'INBOUND',
                   from: { id: integrationRecipientIgsid },
+                  to: { data: [{ id: 'integration-sending-account-igsid' }] },
+                  created_time: integrationInboundReceivedAt.toISOString(),
                 },
               ],
             },
           }
-        : { kind: 'success' as const, data: { id: 'provider-message-id' } },
+        : {
+            kind: 'success' as const,
+            data: { message_id: 'provider-message-id' },
+          },
+    );
+    const myahComposioService = {
+      getActiveInstagramAccount: jest.fn().mockResolvedValue({
+        connectedAccountId: integrationConnectedAccountId,
+        composioUserId: `workspace:${workspaceId}:instagram`,
+      }),
+      executeInstagramTool: providerCalls,
+    };
+    const actionDefinition = new InstagramReplyActionDefinition(
+      workspaceRepository as never,
+      globalWorkspaceOrmManager as never,
+      objectMetadataRepository as never,
+      userWorkspaceRepository as never,
+      workspaceCacheService as never,
+    );
+    const draftService = new InstagramReplyDraftService(
+      workspaceRepository as never,
+      globalWorkspaceOrmManager as never,
+      myahComposioService as never,
     );
     const sender = new SendInstagramReplyTool(
       service,
@@ -177,14 +216,15 @@ describe('ActionApprovalService (PostgreSQL)', () => {
 
     await dataSource.query(
       `INSERT INTO "${projectionSchemaName}"."_myahInstagramAccount" (
-        "id", "name", "label", "connectedAccountId", "composioUserId", "status"
-      ) VALUES ($1, $2, $3, $4, $5, 'ACTIVE')`,
+        "id", "name", "label", "connectedAccountId", "composioUserId", "igUserId", "status"
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE')`,
       [
         integrationAccountId,
         'Integration account',
         '@integration-account',
         integrationConnectedAccountId,
         `workspace:${workspaceId}:instagram`,
+        'integration-sending-account-igsid',
       ],
     );
     const prepared = await draftService.prepare({
@@ -195,6 +235,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       recipientIgsid: integrationRecipientIgsid,
       recipientLabel: integrationRecipientLabel,
       body: 'A real approved reply.',
+      inboundMessageId: integrationInboundMessageId,
     });
     const pendingOutput = await createRequestApprovalTool({
       workspaceId,
@@ -322,7 +363,9 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         projectionWriter,
       ),
     );
-    await dataSource.query(`CREATE SCHEMA IF NOT EXISTS "${projectionSchemaName}"`);
+    await dataSource.query(
+      `CREATE SCHEMA IF NOT EXISTS "${projectionSchemaName}"`,
+    );
     await dataSource.query(`
       CREATE TABLE IF NOT EXISTS "${projectionSchemaName}"."_myahInstagramAccount" (
         "id" uuid PRIMARY KEY,
@@ -483,16 +526,22 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       contentDigest: expectedBinding.contentDigest,
       recipientFingerprint: expectedBinding.recipientFingerprint,
       sendingAccountFingerprint: expectedBinding.sendingAccountFingerprint,
+      inboundMessageId: expectedBinding.inboundMessageId,
+      inboundSenderIgsid: expectedBinding.inboundSenderIgsid,
+      inboundDirection: expectedBinding.inboundDirection,
+      inboundReceivedAt: expectedBinding.inboundReceivedAt,
       threadId,
       state: ActionApprovalBindingState.APPROVED,
       expiresAt: new Date('2030-01-01T00:00:00.000Z'),
     });
-    await dataSource.getRepository(ActionApprovalBindingEvidenceLinkEntity).save({
-      actionApprovalBindingId: bindingId,
-      objectMetadataId,
-      recordId,
-      role: 'recipient',
-    });
+    await dataSource
+      .getRepository(ActionApprovalBindingEvidenceLinkEntity)
+      .save({
+        actionApprovalBindingId: bindingId,
+        objectMetadataId,
+        recordId,
+        role: 'recipient',
+      });
   });
 
   it('atomically consumes one approved binding and returns one receipt under concurrent reservation', async () => {
@@ -510,9 +559,11 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       }),
     ).toBe(1);
     expect(
-      await dataSource.getRepository(ActionApprovalBindingEntity).findOneByOrFail({
-        id: bindingId,
-      }),
+      await dataSource
+        .getRepository(ActionApprovalBindingEntity)
+        .findOneByOrFail({
+          id: bindingId,
+        }),
     ).toMatchObject({ state: ActionApprovalBindingState.CONSUMED });
   });
 
@@ -544,16 +595,22 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       contentDigest: expectedBinding.contentDigest,
       recipientFingerprint: expectedBinding.recipientFingerprint,
       sendingAccountFingerprint: expectedBinding.sendingAccountFingerprint,
+      inboundMessageId: expectedBinding.inboundMessageId,
+      inboundSenderIgsid: expectedBinding.inboundSenderIgsid,
+      inboundDirection: expectedBinding.inboundDirection,
+      inboundReceivedAt: expectedBinding.inboundReceivedAt,
       threadId,
       state: ActionApprovalBindingState.APPROVED,
       expiresAt: new Date('2020-01-01T00:00:00.000Z'),
     });
-    await dataSource.getRepository(ActionApprovalBindingEvidenceLinkEntity).save({
-      actionApprovalBindingId: competingBindingId,
-      objectMetadataId,
-      recordId,
-      role: 'mismatched-role',
-    });
+    await dataSource
+      .getRepository(ActionApprovalBindingEvidenceLinkEntity)
+      .save({
+        actionApprovalBindingId: competingBindingId,
+        objectMetadataId,
+        recordId,
+        role: 'mismatched-role',
+      });
 
     const replay = await service.reserveExecution(expectedBinding);
     expect(replay).toMatchObject({ created: false });
@@ -571,6 +628,10 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       contentDigest: computeActionContentDigest('Projected message'),
       recipientFingerprint: expectedBinding.recipientFingerprint,
       sendingAccountFingerprint: expectedBinding.sendingAccountFingerprint,
+      inboundMessageId: expectedBinding.inboundMessageId,
+      inboundSenderIgsid: expectedBinding.inboundSenderIgsid,
+      inboundDirection: expectedBinding.inboundDirection,
+      inboundReceivedAt: expectedBinding.inboundReceivedAt,
       threadId,
       state: ActionApprovalBindingState.CONSUMED,
       expiresAt: new Date('2030-01-01T00:00:00.000Z'),
@@ -618,7 +679,9 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       }),
     ).rejects.toThrow('lost after workspace projection');
 
-    await expect(projector.projectReceipt(projectionReceiptId)).resolves.toEqual({
+    await expect(
+      projector.projectReceipt(projectionReceiptId),
+    ).resolves.toEqual({
       projected: true,
     });
     await expect(
