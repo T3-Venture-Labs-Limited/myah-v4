@@ -1,4 +1,5 @@
 import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
+import { IsNull } from 'typeorm';
 
 import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
 import { AiExceptionCode } from 'src/engine/metadata-modules/ai/ai.exception';
@@ -150,8 +151,8 @@ describe('AgentChatService.resolvePendingApproval', () => {
       'workspace-id',
       {
         id: 'thread-id',
-        pendingQuestionMessageId: null,
-        activeStreamId: null,
+        pendingQuestionMessageId: IsNull(),
+        activeStreamId: IsNull(),
       },
       { activeStreamId: 'stream-id' },
     );
@@ -419,8 +420,8 @@ describe('AgentChatService.resolvePendingApproval', () => {
       'workspace-id',
       {
         id: 'thread-id',
-        pendingQuestionMessageId: null,
-        activeStreamId: null,
+        pendingQuestionMessageId: IsNull(),
+        activeStreamId: IsNull(),
       },
       { pendingQuestionMessageId: 'message-id' },
     );

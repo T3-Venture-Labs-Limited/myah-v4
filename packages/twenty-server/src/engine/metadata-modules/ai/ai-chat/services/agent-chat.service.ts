@@ -839,8 +839,8 @@ export class AgentChatService {
           workspaceId,
           {
             id: threadId,
-            pendingQuestionMessageId: null,
-            activeStreamId: null,
+            pendingQuestionMessageId: IsNull(),
+            activeStreamId: IsNull(),
           },
           { pendingQuestionMessageId: messageId },
         );
@@ -892,8 +892,8 @@ export class AgentChatService {
           workspaceId,
           {
             id: threadId,
-            pendingQuestionMessageId: null,
-            activeStreamId: null,
+            pendingQuestionMessageId: IsNull(),
+            activeStreamId: IsNull(),
           },
           { activeStreamId: streamId },
         );
