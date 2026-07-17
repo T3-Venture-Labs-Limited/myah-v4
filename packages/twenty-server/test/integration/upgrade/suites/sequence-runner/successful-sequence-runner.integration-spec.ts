@@ -1,9 +1,9 @@
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import { type SlowInstanceUpgradeStep } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 
-
 import {
   type IntegrationTestContext,
+  clearUpgradeSequenceRunnerTestMigrations,
   createUpgradeSequenceRunnerIntegrationTestModule,
   DEFAULT_OPTIONS,
   makeFastInstance,
@@ -27,13 +27,13 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
   }, 30000);
 
   afterAll(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
     await context.module?.close();
     await context.dataSource?.destroy();
   }, 15000);
 
   beforeEach(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
     resetSeedSequenceCounter();
     setMockActiveWorkspaceIds([]);
     jest.restoreAllMocks();
@@ -213,9 +213,7 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
   });
 
   it('should run opted-in slow data migrations when no workspaces exist', async () => {
-    const slowInstanceStep = makeSlowInstance(
-      'Ic2',
-    ) as SlowInstanceUpgradeStep;
+    const slowInstanceStep = makeSlowInstance('Ic2') as SlowInstanceUpgradeStep;
     const sequence = [makeFastInstance('Ic1'), slowInstanceStep];
     const runDataMigration = jest.fn().mockResolvedValue(undefined);
 

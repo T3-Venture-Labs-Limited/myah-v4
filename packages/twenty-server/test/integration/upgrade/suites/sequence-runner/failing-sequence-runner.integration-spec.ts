@@ -4,6 +4,7 @@ import {
 } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import {
   type IntegrationTestContext,
+  clearUpgradeSequenceRunnerTestMigrations,
   createUpgradeSequenceRunnerIntegrationTestModule,
   DEFAULT_OPTIONS,
   makeFastInstance,
@@ -68,13 +69,13 @@ describe('UpgradeSequenceRunnerService — failing sequence (integration)', () =
   }, 30000);
 
   afterAll(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
     await context.module?.close();
     await context.dataSource?.destroy();
   }, 15000);
 
   beforeEach(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
     resetSeedSequenceCounter();
     setMockActiveWorkspaceIds([]);
     jest.restoreAllMocks();

@@ -107,6 +107,16 @@ const seedEmptyWorkspaces = async (dataSource: DataSource) => {
 
 const EXECUTED_BY_VERSION = '42.42.42';
 
+export const clearUpgradeSequenceRunnerTestMigrations = async (
+  dataSource: DataSource,
+) => {
+  await dataSource.query(
+    `DELETE FROM core."upgradeMigration"
+     WHERE "executedByVersion" = $1`,
+    [EXECUTED_BY_VERSION],
+  );
+};
+
 const noopAsync = async () => {};
 
 export const makeStep = (
@@ -412,7 +422,9 @@ export const testGetExecutedMigrationsInOrder = async (
   return dataSource.query(
     `SELECT name, status, attempt, "workspaceId", "isInitial"
      FROM core."upgradeMigration"
+     WHERE "executedByVersion" = $1
      ORDER BY "createdAt" ASC, "workspaceId" ASC NULLS FIRST, attempt ASC`,
+    [EXECUTED_BY_VERSION],
   );
 };
 
