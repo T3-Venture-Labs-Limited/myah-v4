@@ -164,6 +164,10 @@ describe('ManagedProviderOperationService', () => {
     expect(metronomeClientService.getPrepaidBalance).toHaveBeenCalledWith(
       'customer-id',
     );
+    expect(manager.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      (metronomeClientService.getPrepaidBalance as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
     expect(manager.findOne).toHaveBeenCalledWith(
       MyahWorkspaceInstallationEntity,
       {
@@ -559,6 +563,44 @@ describe('ManagedProviderOperationService', () => {
       { operationId: 'operation-id' },
       { id: 'managed-provider-usage:operation-id', retryLimit: 3 },
     );
+  });
+
+  it('records billable completion when provider cost is unavailable', async () => {
+    const reservedOperation = {
+      ...input,
+      actualUsageProperties: null,
+      completedAt: null,
+      id: 'operation-id',
+      providerCostMicrousd: null,
+      providerExecutionId: null,
+      quotedActualAmountCents: null,
+      releasedAt: null,
+      state: ManagedProviderOperationState.RESERVED,
+    };
+    const { manager, service } = createService();
+
+    manager.findOne.mockImplementation((entity) =>
+      entity === ManagedProviderOperationEntity ? reservedOperation : null,
+    );
+    manager.save.mockImplementation((_, values) => values);
+
+    await expect(
+      service.completeOperation({
+        actualUsageProperties: { quantity: 3 },
+        actorUserWorkspaceId: 'user-workspace-id',
+        operationId: 'operation-id',
+        operationKey: 'reviewed-operation',
+        outcome: 'BILLABLE',
+        providerConfigurationKey: 'reviewed-configuration',
+        providerCostMicrousd: null,
+        providerExecutionId: 'provider-execution-id',
+        providerKey: 'provider',
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({
+      providerCostMicrousd: null,
+      state: ManagedProviderOperationState.USAGE_PENDING,
+    });
   });
 
   it('returns an exact billable completion replay without writing again', async () => {

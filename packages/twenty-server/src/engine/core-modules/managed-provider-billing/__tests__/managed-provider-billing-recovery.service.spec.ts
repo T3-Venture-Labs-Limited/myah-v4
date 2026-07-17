@@ -41,7 +41,14 @@ describe('ManagedProviderBillingRecoveryService', () => {
 
   const createService = () => {
     const save = jest.fn((_, value) => value);
-    const findOne = jest.fn().mockResolvedValue({ ...acceptedOperation });
+    const findOne = jest.fn().mockImplementation((entity) =>
+      entity === MyahWorkspaceInstallationEntity
+        ? {
+            metronomeCustomerId: 'customer-id',
+            workspaceId: 'workspace-id',
+          }
+        : { ...acceptedOperation },
+    );
     const countBy = jest.fn().mockResolvedValue(0);
     const operationRepository = {
       countBy,
@@ -147,6 +154,10 @@ describe('ManagedProviderBillingRecoveryService', () => {
       lock: { mode: 'pessimistic_write' },
       where: { id: 'operation-id', workspaceId: 'workspace-id' },
     });
+    expect(findOne).toHaveBeenCalledWith(MyahWorkspaceInstallationEntity, {
+      lock: { mode: 'pessimistic_write' },
+      where: { workspaceId: 'workspace-id' },
+    });
     expect(save).toHaveBeenCalledWith(
       ManagedProviderOperationEntity,
       expect.objectContaining({
@@ -159,7 +170,14 @@ describe('ManagedProviderBillingRecoveryService', () => {
   it('settles an accepted operation at most once across concurrent recovery runs', async () => {
     const { findOne, operationRepository, save, service } = createService();
     const lockedOperation = { ...acceptedOperation };
-    (findOne as jest.Mock).mockImplementation(async () => lockedOperation);
+    (findOne as jest.Mock).mockImplementation(async (entity) =>
+      entity === MyahWorkspaceInstallationEntity
+        ? {
+            metronomeCustomerId: 'customer-id',
+            workspaceId: 'workspace-id',
+          }
+        : lockedOperation,
+    );
     (save as jest.Mock).mockImplementation(async (_, operation) => {
       Object.assign(lockedOperation, operation);
 

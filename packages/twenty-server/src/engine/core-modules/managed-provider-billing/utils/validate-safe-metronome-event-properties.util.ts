@@ -39,6 +39,18 @@ const UNSAFE_NORMALIZED_PROPERTY_NAMES = new Set([
   'messages',
   'prompts',
   'tokens',
+  'authorizations',
+  'bodies',
+  'contents',
+  'cookies',
+  'credentials',
+  'emails',
+  'passwords',
+  'phones',
+  'raws',
+  'responses',
+  'secrets',
+  'texts',
 ]);
 
 const UNSAFE_PROPERTY_SEGMENTS = new Set([
@@ -62,6 +74,18 @@ const UNSAFE_PROPERTY_SEGMENTS = new Set([
   'text',
   'token',
   'tokens',
+  'authorizations',
+  'bodies',
+  'contents',
+  'cookies',
+  'credentials',
+  'emails',
+  'passwords',
+  'phones',
+  'raws',
+  'responses',
+  'secrets',
+  'texts',
 ]);
 
 const UNSAFE_PROPERTY_TOKEN =

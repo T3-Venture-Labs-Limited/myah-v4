@@ -205,6 +205,22 @@ export class ManagedProviderBillingRecoveryService {
     }
 
     await this.operationRepository.manager.transaction(async (manager) => {
+      const lockedInstallation = await manager.findOne(
+        MyahWorkspaceInstallationEntity,
+        {
+          lock: { mode: 'pessimistic_write' },
+          where: { workspaceId: operation.workspaceId },
+        },
+      );
+
+      if (
+        !lockedInstallation ||
+        lockedInstallation.metronomeCustomerId !==
+          installation.metronomeCustomerId
+      ) {
+        return;
+      }
+
       const lockedOperation = await manager.findOne(
         ManagedProviderOperationEntity,
         {

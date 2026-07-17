@@ -103,13 +103,6 @@ export class ManagedProviderOperationService {
         expectedProductIds,
       );
 
-    const { balance } =
-      await this.metronomeClientService.getPrepaidBalance(customerId);
-
-    if (!Number.isSafeInteger(balance) || balance < 0) {
-      throw new Error('Metronome prepaid balance is invalid');
-    }
-
     return this.operationRepository.manager.transaction(async (manager) => {
       const installation = await manager.findOne(
         MyahWorkspaceInstallationEntity,
@@ -121,6 +114,13 @@ export class ManagedProviderOperationService {
 
       if (!installation || installation.metronomeCustomerId !== customerId) {
         throw new Error('Metronome workspace customer mapping is unavailable');
+      }
+
+      const { balance } =
+        await this.metronomeClientService.getPrepaidBalance(customerId);
+
+      if (!Number.isSafeInteger(balance) || balance < 0) {
+        throw new Error('Metronome prepaid balance is invalid');
       }
 
       const transactionOperationRepository = manager.getRepository(
@@ -280,9 +280,7 @@ export class ManagedProviderOperationService {
         !/^(?:0|[1-9]\d*)$/.test(input.providerCostMicrousd)) ||
       (input.providerExecutionId !== null &&
         input.providerExecutionId.trim().length === 0) ||
-      (input.outcome === 'BILLABLE' &&
-        (input.providerCostMicrousd === null ||
-          input.providerExecutionId === null))
+      (input.outcome === 'BILLABLE' && input.providerExecutionId === null)
     ) {
       throw new Error('Managed provider completion facts are invalid');
     }
