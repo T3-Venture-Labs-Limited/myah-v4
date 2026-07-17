@@ -67,7 +67,7 @@ const recreateLegacyTypes = async (queryRunner: QueryRunner) => {
   END $$`);
 };
 
-@RegisteredInstanceCommand('2.19.0', 1784112963057, { type: 'slow' })
+@RegisteredInstanceCommand('2.19.0', 1784112963059, { type: 'slow' })
 export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
   implements SlowInstanceCommand
 {
