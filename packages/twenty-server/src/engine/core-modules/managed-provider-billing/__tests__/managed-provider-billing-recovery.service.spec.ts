@@ -174,6 +174,48 @@ describe('ManagedProviderBillingRecoveryService', () => {
     expect(save).toHaveBeenCalledTimes(101);
   });
 
+  it('backs off every remaining accepted operation after a balance rate limit', async () => {
+    const { metronomeClientService, operationRepository, save, service } =
+      createService();
+    const firstBatch = Array.from({ length: 100 }, (_, index) => ({
+      ...acceptedOperation,
+      id: `operation-${index.toString().padStart(3, '0')}`,
+    }));
+    const finalOperation = {
+      ...acceptedOperation,
+      id: 'operation-100',
+    };
+
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(firstBatch)
+      .mockResolvedValueOnce([finalOperation]);
+    (metronomeClientService.searchUsageEvents as jest.Mock).mockImplementation(
+      (transactionIds: string[]) =>
+        transactionIds.map((transactionId) => ({
+          customerId: 'customer-id',
+          matchedCustomerId: 'customer-id',
+          eventType: 'managed-provider-operation',
+          isDuplicate: false,
+          matchedBillableMetricIds: ['metric-id'],
+          timestamp: '2026-07-16T00:00:00.000Z',
+          processedAt: '2026-07-16T00:01:00.000Z',
+          properties: { quantity: '3' },
+          transactionId,
+        })),
+    );
+    (metronomeClientService.getPrepaidBalance as jest.Mock).mockRejectedValue(
+      new MetronomeClientException(MetronomeClientExceptionCode.RATE_LIMITED),
+    );
+
+    await service.recover();
+
+    expect(metronomeClientService.searchUsageEvents).toHaveBeenCalledTimes(1);
+    expect(metronomeClientService.getPrepaidBalance).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledTimes(101);
+  });
+
   it('settles only a matched accepted event after a fresh balance read', async () => {
     const {
       findOne,

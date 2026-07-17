@@ -100,7 +100,7 @@ export class ManagedProviderBillingRecoveryService {
 
   private async recoverAcceptedOperations(now: Date): Promise<void> {
     let cursor: string | undefined;
-    let isSearchRateLimited = false;
+    let isMetronomeRateLimited = false;
 
     while (true) {
       const acceptedOperations = await this.operationRepository.find({
@@ -123,7 +123,7 @@ export class ManagedProviderBillingRecoveryService {
       );
 
       if (operationsWithinSettlementWindow.length > 0) {
-        if (isSearchRateLimited) {
+        if (isMetronomeRateLimited) {
           await Promise.all(
             operationsWithinSettlementWindow.map((operation) =>
               this.scheduleSettlementRetry(operation, now, true),
@@ -139,7 +139,7 @@ export class ManagedProviderBillingRecoveryService {
               ),
             );
           } catch (error) {
-            isSearchRateLimited =
+            isMetronomeRateLimited =
               error instanceof MetronomeClientException &&
               error.code === MetronomeClientExceptionCode.RATE_LIMITED;
 
@@ -148,15 +148,36 @@ export class ManagedProviderBillingRecoveryService {
                 this.scheduleSettlementRetry(
                   operation,
                   now,
-                  isSearchRateLimited,
+                  isMetronomeRateLimited,
                 ),
               ),
             );
           }
 
           if (events !== null) {
-            for (const operation of operationsWithinSettlementWindow) {
-              await this.settleIfVerified(operation, events, now);
+            for (const [
+              index,
+              operation,
+            ] of operationsWithinSettlementWindow.entries()) {
+              const isBalanceRateLimited = await this.settleIfVerified(
+                operation,
+                events,
+                now,
+              );
+
+              if (!isBalanceRateLimited) {
+                continue;
+              }
+
+              isMetronomeRateLimited = true;
+              await Promise.all(
+                operationsWithinSettlementWindow
+                  .slice(index + 1)
+                  .map((remainingOperation) =>
+                    this.scheduleSettlementRetry(remainingOperation, now, true),
+                  ),
+              );
+              break;
             }
           }
         }
@@ -174,7 +195,7 @@ export class ManagedProviderBillingRecoveryService {
     operation: ManagedProviderOperationEntity,
     events: MetronomeUsageEvent[],
     now: Date,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const transactionId = this.getTransactionId(operation.id);
     const transactionEvents = events.filter(
       (event) => event.transactionId === transactionId,
@@ -186,13 +207,13 @@ export class ManagedProviderBillingRecoveryService {
     if (transactionEvents.length === 0) {
       await this.scheduleSettlementRetry(operation, now, false);
 
-      return;
+      return false;
     }
 
     if (canonicalEvents.length !== 1) {
       await this.markReconciliationRequired(operation);
 
-      return;
+      return false;
     }
 
     const event = canonicalEvents[0];
@@ -206,7 +227,7 @@ export class ManagedProviderBillingRecoveryService {
     ) {
       await this.markReconciliationRequired(operation);
 
-      return;
+      return false;
     }
 
     const installation = await this.installationRepository.findOneBy({
@@ -235,17 +256,21 @@ export class ManagedProviderBillingRecoveryService {
         await this.markReconciliationRequired(operation);
       }
 
-      return;
+      return false;
     }
 
     try {
       await this.metronomeClientService.getPrepaidBalance(
         installation.metronomeCustomerId,
       );
-    } catch {
-      await this.scheduleSettlementRetry(operation, now, false);
+    } catch (error) {
+      const isRateLimited =
+        error instanceof MetronomeClientException &&
+        error.code === MetronomeClientExceptionCode.RATE_LIMITED;
 
-      return;
+      await this.scheduleSettlementRetry(operation, now, isRateLimited);
+
+      return isRateLimited;
     }
 
     await this.operationRepository.manager.transaction(async (manager) => {
@@ -286,6 +311,8 @@ export class ManagedProviderBillingRecoveryService {
       lockedOperation.settledAt = new Date();
       await manager.save(ManagedProviderOperationEntity, lockedOperation);
     });
+
+    return false;
   }
 
   private async scheduleSettlementRetry(
