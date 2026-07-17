@@ -8,6 +8,7 @@ import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMeta
 import { RecordChip } from '@/object-record/components/RecordChip';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { buildIdentifierGqlFields } from '@/object-record/graphql/record-gql-fields/utils/buildIdentifierGqlFields';
 
 export type ActionApprovalEvidenceLink = {
   objectMetadataId: string;
@@ -86,8 +87,8 @@ const ResolvedActionApprovalEvidenceLink = ({
   const { record } = useFindOneRecord({
     objectNameSingular,
     objectRecordId: recordId,
+    recordGqlFields: buildIdentifierGqlFields(objectMetadataItem),
   });
-
   if (!record) {
     return <ActionApprovalEvidenceLinkFallback />;
   }

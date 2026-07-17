@@ -63,6 +63,7 @@ export const AiChatApprovalStatusRenderer = ({
       ? result.actionApprovalBindingId
       : undefined;
   const status = result?.status ?? 'pending';
+  const evidenceLifecycleState = `${status}:${result?.decision ?? ''}:${isStreaming ? 'streaming' : 'complete'}`;
 
   if (status === 'pending') {
     const label = t`Waiting for approval...`;
@@ -80,6 +81,7 @@ export const AiChatApprovalStatusRenderer = ({
         {actionApprovalBindingId && (
           <AiChatActionApprovalEvidenceRenderer
             bindingId={actionApprovalBindingId}
+            lifecycleState={evidenceLifecycleState}
           />
         )}
       </StyledContainer>
@@ -103,6 +105,7 @@ export const AiChatApprovalStatusRenderer = ({
         {actionApprovalBindingId && (
           <AiChatActionApprovalEvidenceRenderer
             bindingId={actionApprovalBindingId}
+            lifecycleState={evidenceLifecycleState}
           />
         )}
     </StyledContainer>

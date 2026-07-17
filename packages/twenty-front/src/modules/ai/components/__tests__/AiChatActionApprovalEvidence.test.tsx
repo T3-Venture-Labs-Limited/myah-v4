@@ -8,6 +8,7 @@ import {
   type ActionApprovalProposalEvidence,
   type ActionExecutionReceiptEvidence,
 } from '@/ai/components/AiChatActionApprovalEvidence';
+import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 
 jest.mock('@linaria/react', () => {
   const React = jest.requireActual('react');
@@ -30,7 +31,31 @@ jest.mock('@/object-metadata/states/objectMetadataItemsSelector', () => ({
 }));
 
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
-  useAtomStateValue: () => [],
+  useAtomStateValue: () => [
+    { id: 'unknown-object-metadata-id', nameSingular: 'person' },
+  ],
+}));
+
+jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
+  useObjectMetadataItem: () => ({
+    objectMetadataItem: {
+      nameSingular: 'person',
+      labelIdentifierFieldMetadataId: 'label-field-id',
+      imageIdentifierFieldMetadataId: 'image-field-id',
+      fields: [
+        { id: 'label-field-id', name: 'name' },
+        { id: 'image-field-id', name: 'avatarFile' },
+      ],
+    },
+  }),
+}));
+
+jest.mock('@/object-record/components/RecordChip', () => ({
+  RecordChip: () => null,
+}));
+
+jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
+  useFindOneRecord: jest.fn(() => ({ record: undefined })),
 }));
 
 const proposalWithUnsafeFields = {
@@ -79,6 +104,10 @@ const renderEvidence = () =>
       </ThemeProvider>
     </I18nProvider>,
   );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
 describe('AiChatActionApprovalEvidence', () => {
   it('renders provider acceptance as neutral pending projection', () => {
@@ -130,6 +159,20 @@ describe('AiChatActionApprovalEvidence', () => {
 
     expect(screen.getByText('Evidence unavailable')).toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('fetches evidence records with identifier fields only', () => {
+    renderEvidence();
+
+    expect(useFindOneRecord).toHaveBeenCalledWith({
+      objectNameSingular: 'person',
+      objectRecordId: 'deleted-record-id',
+      recordGqlFields: {
+        id: true,
+        name: true,
+        avatarFile: true,
+      },
+    });
   });
 
   it('does not render arbitrary raw approval or provider fields', () => {
