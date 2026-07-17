@@ -121,14 +121,17 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
   });
 
   it('ignores a completed command from another test process', async () => {
-    const sequence = [makeFastInstance('Ic0'), makeFastInstance('Ic1')];
+    const sequence = [
+      makeFastInstance('CrossVersionCompletedIc0'),
+      makeFastInstance('CrossVersionCompletedIc1'),
+    ];
 
     await seedInstanceMigration(context.dataSource, {
-      name: 'Ic0',
+      name: 'CrossVersionCompletedIc0',
       status: 'completed',
     });
     await seedInstanceMigration(context.dataSource, {
-      name: 'Ic1',
+      name: 'CrossVersionCompletedIc1',
       status: 'completed',
       executedByVersion: STALE_EXECUTED_BY_VERSION,
     });
@@ -141,20 +144,23 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executed.map(migrationRecordToKey)).toStrictEqual([
-      'Ic0:instance:completed:1',
-      'Ic1:instance:completed:1',
+      'CrossVersionCompletedIc0:instance:completed:1',
+      'CrossVersionCompletedIc1:instance:completed:2',
     ]);
   });
 
-  it('starts attempts at one when only another test process has attempted the command', async () => {
-    const sequence = [makeFastInstance('Ic0'), makeFastInstance('Ic1')];
+  it('keeps attempt identifiers unique across test processes', async () => {
+    const sequence = [
+      makeFastInstance('CrossVersionFailedIc0'),
+      makeFastInstance('CrossVersionFailedIc1'),
+    ];
 
     await seedInstanceMigration(context.dataSource, {
-      name: 'Ic0',
+      name: 'CrossVersionFailedIc0',
       status: 'completed',
     });
     await seedInstanceMigration(context.dataSource, {
-      name: 'Ic1',
+      name: 'CrossVersionFailedIc1',
       status: 'failed',
       attempt: 7,
       executedByVersion: STALE_EXECUTED_BY_VERSION,
@@ -168,8 +174,8 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executed.map(migrationRecordToKey)).toStrictEqual([
-      'Ic0:instance:completed:1',
-      'Ic1:instance:completed:1',
+      'CrossVersionFailedIc0:instance:completed:1',
+      'CrossVersionFailedIc1:instance:completed:2',
     ]);
   });
 

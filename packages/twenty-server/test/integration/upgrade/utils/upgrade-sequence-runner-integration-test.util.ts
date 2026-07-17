@@ -13,7 +13,6 @@ import {
   UpgradeMigrationService,
   type WorkspaceLastAttemptedCommand,
 } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
-import { formatUpgradeErrorForStorage } from 'src/engine/core-modules/upgrade/utils/format-upgrade-error-for-storage.util';
 import {
   UpgradeSequenceReaderService,
   type UpgradeStep,
@@ -148,74 +147,6 @@ class UpgradeSequenceRunnerTestMigrationService extends UpgradeMigrationService 
     });
 
     return latestAttempt?.status === 'completed';
-  }
-
-  override async recordUpgradeMigration(
-    params: Parameters<UpgradeMigrationService['recordUpgradeMigration']>[0],
-  ): Promise<void> {
-    const { name, workspaceIds, isInstance, status } = params;
-    const repository = params.queryRunner
-      ? params.queryRunner.manager.getRepository(UpgradeMigrationEntity)
-      : this.testMigrationRepository;
-    const errorMessage =
-      params.status === 'failed'
-        ? formatUpgradeErrorForStorage(params.error)
-        : null;
-
-    if (isInstance) {
-      const previousAttempts = await repository.count({
-        where: {
-          name,
-          executedByVersion: EXECUTED_BY_VERSION,
-          workspaceId: IsNull(),
-        },
-      });
-      const attempt = previousAttempts + 1;
-
-      await repository.save([
-        {
-          name,
-          status,
-          attempt,
-          executedByVersion: EXECUTED_BY_VERSION,
-          workspaceId: null,
-          errorMessage,
-        },
-        ...workspaceIds.map((workspaceId) => ({
-          name,
-          status,
-          attempt,
-          executedByVersion: EXECUTED_BY_VERSION,
-          workspaceId,
-          errorMessage,
-        })),
-      ]);
-
-      return;
-    }
-
-    const rows = [];
-
-    for (const workspaceId of workspaceIds) {
-      const previousAttempts = await repository.count({
-        where: {
-          name,
-          executedByVersion: EXECUTED_BY_VERSION,
-          workspaceId,
-        },
-      });
-
-      rows.push({
-        name,
-        status,
-        attempt: previousAttempts + 1,
-        executedByVersion: EXECUTED_BY_VERSION,
-        workspaceId,
-        errorMessage,
-      });
-    }
-
-    await repository.save(rows);
   }
 
   override async getLastAttemptedCommandNameOrThrow(
