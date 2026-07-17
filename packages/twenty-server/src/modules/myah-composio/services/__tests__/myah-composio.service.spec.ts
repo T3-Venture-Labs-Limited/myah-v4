@@ -731,6 +731,58 @@ describe('MyahComposioService', () => {
     ).rejects.toThrow(BadGatewayException);
   });
 
+  it.each([
+    {},
+    { successful: true, data: {} },
+    { successful: true, data: { id: 'generic-id' } },
+  ])(
+    'returns UNKNOWN for an ambiguous 2xx Instagram send response: %j',
+    async (body) => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => body,
+      });
+
+      const service = new MyahComposioService();
+
+      await expect(
+        service.executeInstagramTool({
+          workspaceId: 'workspace-id',
+          connectedAccountId: 'connected-account-id',
+          toolSlug: 'INSTAGRAM_SEND_TEXT_MESSAGE',
+          arguments: { recipient_id: 'recipient-id', text: 'Hello' },
+        }),
+      ).resolves.toEqual({ kind: 'unknown' });
+    },
+  );
+
+  it('accepts an Instagram send only when the documented message_id is explicit', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        successful: true,
+        data: {
+          recipient_id: 'recipient-id',
+          message_id: 'provider-message-id',
+        },
+      }),
+    });
+
+    const service = new MyahComposioService();
+
+    await expect(
+      service.executeInstagramTool({
+        workspaceId: 'workspace-id',
+        connectedAccountId: 'connected-account-id',
+        toolSlug: 'INSTAGRAM_SEND_TEXT_MESSAGE',
+        arguments: { recipient_id: 'recipient-id', text: 'Hello' },
+      }),
+    ).resolves.toEqual({
+      kind: 'success',
+      data: { recipient_id: 'recipient-id', message_id: 'provider-message-id' },
+    });
+  });
+
   it('returns a safe provider failure with the normalized subcode for a bounded Instagram tool call', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,

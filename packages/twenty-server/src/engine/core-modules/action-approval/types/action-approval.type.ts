@@ -11,6 +11,10 @@ export type ExpectedActionBinding = {
   contentDigest: string;
   recipientFingerprint: string;
   sendingAccountFingerprint: string;
+  inboundMessageId: string;
+  inboundSenderIgsid: string;
+  inboundDirection: 'INBOUND';
+  inboundReceivedAt: Date;
   threadId: string;
   initiatorUserWorkspaceId: string;
   evidenceLinks: readonly ActionEvidenceLinkInput[];

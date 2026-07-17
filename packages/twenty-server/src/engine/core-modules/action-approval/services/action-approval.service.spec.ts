@@ -41,8 +41,9 @@ describe('ActionApprovalService overdue authority', () => {
       save: jest.fn().mockImplementation(async (_entity, value) => value),
     };
     const dataSource = {
-      transaction: jest.fn(async (callback: (transactionManager: typeof manager) => unknown) =>
-        callback(manager),
+      transaction: jest.fn(
+        async (callback: (transactionManager: typeof manager) => unknown) =>
+          callback(manager),
       ),
       getRepository: jest.fn().mockReturnValue({
         findOne: jest.fn().mockResolvedValue(binding),
@@ -102,7 +103,6 @@ describe('ActionApprovalService overdue authority', () => {
     );
   });
 
-
   it('reads a consumed binding so an accepted receipt can be projected without provider replay', async () => {
     manager.findOne.mockResolvedValue({
       ...binding,
@@ -114,6 +114,10 @@ describe('ActionApprovalService overdue authority', () => {
       contentDigest: 'a'.repeat(64),
       recipientFingerprint: 'b'.repeat(64),
       sendingAccountFingerprint: 'c'.repeat(64),
+      inboundMessageId: 'provider-inbound-message-id',
+      inboundSenderIgsid: 'recipient-igsid',
+      inboundDirection: 'INBOUND',
+      inboundReceivedAt: new Date('2026-07-16T11:30:00.000Z'),
       evidenceLinks: [],
     });
 
@@ -141,6 +145,10 @@ describe('ActionApprovalService overdue authority', () => {
       contentDigest: 'a'.repeat(64),
       recipientFingerprint: 'b'.repeat(64),
       sendingAccountFingerprint: 'c'.repeat(64),
+      inboundMessageId: 'provider-inbound-message-id',
+      inboundSenderIgsid: 'recipient-igsid',
+      inboundDirection: 'INBOUND',
+      inboundReceivedAt: new Date('2026-07-16T11:30:00.000Z'),
     };
     const evidenceLinks = [{ id: 'evidence-link-id' }];
 

@@ -4,9 +4,7 @@ import {
   InstagramReplyActionDefinition,
   type InstagramReplyActionAuthority,
 } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
-import {
-  ActionExecutionReceiptState,
-} from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
+import { ActionExecutionReceiptState } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 import { type ToolExecutionContext } from 'src/engine/core-modules/tool/types/tool-execution-context.type';
@@ -58,12 +56,52 @@ export class SendInstagramReplyTool implements Tool {
         initiatorUserWorkspaceId: context.userWorkspaceId,
         threadId: context.threadId,
       });
+      const existingReceipt =
+        await this.actionApprovalService.findExecutionReceiptForBinding({
+          workspaceId: context.workspaceId,
+          approvalBindingId: parsedInput.data.actionApprovalBindingId,
+        });
+      if (existingReceipt) {
+        if (
+          existingReceipt.state ===
+          ActionExecutionReceiptState.PROVIDER_ACCEPTED
+        ) {
+          try {
+            await this.projector.projectReceipt(existingReceipt.id);
+          } catch {
+            return {
+              success: false,
+              message: 'Instagram reply could not be finalized.',
+            };
+          }
+
+          return { success: true, message: 'Instagram reply accepted.' };
+        }
+
+        return {
+          success: false,
+          message:
+            'Instagram reply has already been processed and was not retried.',
+        };
+      }
+
+      const authority = await this.actionDefinition.rebuildExecutionAuthority({
+        workspaceId: context.workspaceId,
+        binding,
+      });
+      const proof = await this.rebuildInboundProof(
+        context.workspaceId,
+        authority,
+      );
+      if (!proof) {
+        return { success: false, message: 'Instagram reply was not sent.' };
+      }
+
       const reservation =
         await this.actionApprovalService.reserveExecutionForBinding({
           approvalBindingId: parsedInput.data.actionApprovalBindingId,
           expectedActionBinding: binding,
         });
-
       if (!reservation.created) {
         if (
           reservation.receipt.state ===
@@ -87,7 +125,9 @@ export class SendInstagramReplyTool implements Tool {
             'Instagram reply has already been processed and was not retried.',
         };
       }
-      if (reservation.receipt.state !== ActionExecutionReceiptState.PROCESSING) {
+      if (
+        reservation.receipt.state !== ActionExecutionReceiptState.PROCESSING
+      ) {
         return {
           success: false,
           message:
@@ -95,77 +135,17 @@ export class SendInstagramReplyTool implements Tool {
         };
       }
 
-      let authority: InstagramReplyActionAuthority;
       try {
-        authority = await this.actionDefinition.rebuildExecutionAuthority({
-          workspaceId: context.workspaceId,
-          binding,
-        });
-      } catch {
-        return this.recordTerminalState(
-          reservation.receipt.id,
-          ActionExecutionReceiptState.FAILED,
-          'failed',
-        );
-      }
-
-      try {
-        const activeAccount =
-          await this.myahComposioService.getActiveInstagramAccount({
-            workspaceId: context.workspaceId,
-            connectedAccountId:
-              authority.canonicalGraph.account.connectedAccountId,
-          });
-        if (
-          activeAccount.connectedAccountId !==
-            authority.canonicalGraph.account.connectedAccountId ||
-          activeAccount.composioUserId !==
-            authority.canonicalGraph.account.composioUserId
-        ) {
-          return this.recordTerminalState(
-            reservation.receipt.id,
-            ActionExecutionReceiptState.FAILED,
-            'failed',
-          );
-        }
-
-        const proof = await this.myahComposioService.executeInstagramTool({
+        const sendResult = await this.myahComposioService.executeInstagramTool({
           workspaceId: context.workspaceId,
           connectedAccountId:
             authority.canonicalGraph.account.connectedAccountId,
-          toolSlug: INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
+          toolSlug: INSTAGRAM_SEND_TEXT_MESSAGE_TOOL_SLUG,
           arguments: {
-            conversation_id: authority.canonicalGraph.providerConversationId,
-            limit: 25,
+            recipient_id: authority.canonicalGraph.recipientIgsid,
+            text: authority.canonicalGraph.draftBody,
           },
         });
-        if (proof.kind !== 'success') {
-          return this.recordProviderResult(reservation.receipt.id, proof);
-        }
-        if (
-          !this.hasInboundMessageFromRecipient(
-            proof.data,
-            authority.canonicalGraph.recipientIgsid,
-          )
-        ) {
-          return this.recordTerminalState(
-            reservation.receipt.id,
-            ActionExecutionReceiptState.FAILED,
-            'failed',
-          );
-        }
-
-        const sendResult =
-          await this.myahComposioService.executeInstagramTool({
-            workspaceId: context.workspaceId,
-            connectedAccountId:
-              authority.canonicalGraph.account.connectedAccountId,
-            toolSlug: INSTAGRAM_SEND_TEXT_MESSAGE_TOOL_SLUG,
-            arguments: {
-              recipient_id: authority.canonicalGraph.recipientIgsid,
-              text: authority.canonicalGraph.draftBody,
-            },
-          });
         if (sendResult.kind !== 'success') {
           return this.recordProviderResult(reservation.receipt.id, sendResult);
         }
@@ -244,45 +224,109 @@ export class SendInstagramReplyTool implements Tool {
     };
   }
 
-  private hasInboundMessageFromRecipient(
-    data: unknown,
-    recipientIgsid: string,
-  ): boolean {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    const nestedData =
-      record.data && typeof record.data === 'object'
-        ? (record.data as Record<string, unknown>).data
-        : undefined;
-    const messages = [record.data, record.items, nestedData].find(Array.isArray);
-    if (!messages) {
-      return false;
-    }
-
-    return messages.some((message) => {
-      if (!message || typeof message !== 'object') {
+  private async rebuildInboundProof(
+    workspaceId: string,
+    authority: InstagramReplyActionAuthority,
+  ): Promise<boolean> {
+    try {
+      const activeAccount =
+        await this.myahComposioService.getActiveInstagramAccount({
+          workspaceId,
+          connectedAccountId:
+            authority.canonicalGraph.account.connectedAccountId,
+        });
+      if (
+        activeAccount.connectedAccountId !==
+          authority.canonicalGraph.account.connectedAccountId ||
+        activeAccount.composioUserId !==
+          authority.canonicalGraph.account.composioUserId
+      ) {
         return false;
       }
-      const candidate = message as Record<string, unknown>;
-      const sender =
-        candidate.from && typeof candidate.from === 'object'
-          ? candidate.from
-          : candidate.sender && typeof candidate.sender === 'object'
-            ? candidate.sender
-            : undefined;
-      const senderId =
-        sender && typeof (sender as Record<string, unknown>).id === 'string'
-          ? (sender as Record<string, unknown>).id
-          : undefined;
-      const direction =
-        typeof candidate.direction === 'string'
-          ? candidate.direction.toUpperCase()
-          : undefined;
 
-      return senderId === recipientIgsid && (!direction || direction === 'INBOUND');
-    });
+      const proof = await this.myahComposioService.executeInstagramTool({
+        workspaceId,
+        connectedAccountId: authority.canonicalGraph.account.connectedAccountId,
+        toolSlug: INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
+        arguments: {
+          conversation_id: authority.canonicalGraph.providerConversationId,
+          limit: 25,
+        },
+      });
+      if (
+        proof.kind !== 'success' ||
+        !proof.data ||
+        typeof proof.data !== 'object'
+      ) {
+        return false;
+      }
+
+      const record = proof.data as Record<string, unknown>;
+      const nestedData =
+        record.data && typeof record.data === 'object'
+          ? (record.data as Record<string, unknown>).data
+          : undefined;
+      const messages = [record.data, record.items, nestedData].find(
+        Array.isArray,
+      );
+      const inboundReceivedAt =
+        authority.canonicalGraph.inboundReceivedAt.getTime();
+      const now = Date.now();
+      if (
+        !messages ||
+        inboundReceivedAt < now - 24 * 60 * 60 * 1000 ||
+        inboundReceivedAt > now
+      ) {
+        return false;
+      }
+
+      return messages.some((message) => {
+        if (!message || typeof message !== 'object') {
+          return false;
+        }
+
+        const candidate = message as Record<string, unknown>;
+        const sender =
+          candidate.from && typeof candidate.from === 'object'
+            ? (candidate.from as Record<string, unknown>)
+            : undefined;
+        const senderId = sender?.id;
+        const recipient =
+          candidate.to && typeof candidate.to === 'object'
+            ? (candidate.to as Record<string, unknown>)
+            : undefined;
+        const recipientIds = [
+          recipient?.id,
+          ...(Array.isArray(recipient?.data)
+            ? recipient.data.map((value) =>
+                value && typeof value === 'object'
+                  ? (value as Record<string, unknown>).id
+                  : undefined,
+              )
+            : []),
+        ];
+        const direction =
+          typeof candidate.direction === 'string'
+            ? candidate.direction.toUpperCase()
+            : senderId === authority.canonicalGraph.inboundSenderIgsid &&
+                recipientIds.includes(authority.canonicalGraph.account.igUserId)
+              ? 'INBOUND'
+              : undefined;
+        const createdTime =
+          typeof candidate.created_time === 'string'
+            ? Date.parse(candidate.created_time)
+            : Number.NaN;
+
+        return (
+          candidate.id === authority.canonicalGraph.inboundMessageId &&
+          direction === authority.canonicalGraph.inboundDirection &&
+          senderId === authority.canonicalGraph.inboundSenderIgsid &&
+          recipientIds.includes(authority.canonicalGraph.account.igUserId) &&
+          createdTime === inboundReceivedAt
+        );
+      });
+    } catch {
+      return false;
+    }
   }
 }

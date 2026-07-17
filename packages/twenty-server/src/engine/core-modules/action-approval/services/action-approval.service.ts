@@ -66,6 +66,10 @@ export class ActionApprovalService {
           contentDigest: input.contentDigest,
           recipientFingerprint: input.recipientFingerprint,
           sendingAccountFingerprint: input.sendingAccountFingerprint,
+          inboundMessageId: input.inboundMessageId,
+          inboundSenderIgsid: input.inboundSenderIgsid,
+          inboundDirection: input.inboundDirection,
+          inboundReceivedAt: input.inboundReceivedAt,
           threadId: input.threadId,
           state: ActionApprovalBindingState.PENDING,
           expiresAt: new Date(Date.now() + ACTION_APPROVAL_TTL_MS),
@@ -130,7 +134,6 @@ export class ActionApprovalService {
     if (!outcome.accepted) {
       throw new Error('An action approval binding is not pending');
     }
-
   }
 
   async decidePendingBindingInTransaction(
@@ -244,7 +247,11 @@ export class ActionApprovalService {
           (binding.state !== ActionApprovalBindingState.APPROVED &&
             binding.state !== ActionApprovalBindingState.CONSUMED) ||
           binding.initiatorUserWorkspaceId !== initiatorUserWorkspaceId ||
-          binding.threadId !== threadId
+          binding.threadId !== threadId ||
+          !binding.inboundMessageId ||
+          !binding.inboundSenderIgsid ||
+          binding.inboundDirection !== 'INBOUND' ||
+          !binding.inboundReceivedAt
         ) {
           return null;
         }
@@ -258,6 +265,10 @@ export class ActionApprovalService {
           contentDigest: binding.contentDigest,
           recipientFingerprint: binding.recipientFingerprint ?? '',
           sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
+          inboundMessageId: binding.inboundMessageId,
+          inboundSenderIgsid: binding.inboundSenderIgsid,
+          inboundDirection: binding.inboundDirection,
+          inboundReceivedAt: binding.inboundReceivedAt,
           threadId: binding.threadId,
           initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
           evidenceLinks,
@@ -270,6 +281,22 @@ export class ActionApprovalService {
     }
 
     return authorizedBinding;
+  }
+
+  async findExecutionReceiptForBinding({
+    workspaceId,
+    approvalBindingId,
+  }: {
+    workspaceId: string;
+    approvalBindingId: string;
+  }): Promise<SafeActionExecutionReceipt | null> {
+    const receipt = await this.dataSource
+      .getRepository(ActionExecutionReceiptEntity)
+      .findOne({
+        where: { workspaceId, actionApprovalBindingId: approvalBindingId },
+      });
+
+    return receipt ? this.redactionService.toSafeReceipt(receipt) : null;
   }
 
   async reserveExecutionForBinding({
@@ -376,15 +403,15 @@ export class ActionApprovalService {
         throw error;
       }
 
-      const receipt = await this.dataSource.getRepository(
-        ActionExecutionReceiptEntity,
-      ).findOne({
-        where: {
-          workspaceId: input.workspaceId,
-          idempotencyKey: computeLogicalActionKey(input),
-        },
-        relations: { actionApprovalBinding: { evidenceLinks: true } },
-      });
+      const receipt = await this.dataSource
+        .getRepository(ActionExecutionReceiptEntity)
+        .findOne({
+          where: {
+            workspaceId: input.workspaceId,
+            idempotencyKey: computeLogicalActionKey(input),
+          },
+          relations: { actionApprovalBinding: { evidenceLinks: true } },
+        });
       if (!receipt) {
         throw error;
       }
@@ -426,7 +453,8 @@ export class ActionApprovalService {
     receiptId: string,
     outcome: ProviderAcceptedOutcomeInput,
   ): Promise<SafeActionExecutionReceipt> {
-    const acceptedOutcome = this.redactionService.toAcceptedProviderOutcome(outcome);
+    const acceptedOutcome =
+      this.redactionService.toAcceptedProviderOutcome(outcome);
 
     return this.dataSource.transaction(async (manager) => {
       const receipt = await manager.findOne(ActionExecutionReceiptEntity, {
@@ -440,7 +468,9 @@ export class ActionApprovalService {
         return this.redactionService.toSafeReceipt(receipt);
       }
       if (receipt.state !== ActionExecutionReceiptState.PROCESSING) {
-        throw new Error('Action execution receipt cannot accept a provider result');
+        throw new Error(
+          'Action execution receipt cannot accept a provider result',
+        );
       }
 
       receipt.state = ActionExecutionReceiptState.PROVIDER_ACCEPTED;
@@ -463,16 +493,18 @@ export class ActionApprovalService {
       .createQueryBuilder()
       .update(ActionExecutionReceiptEntity)
       .set({ state: ActionExecutionReceiptState.UNKNOWN })
-      .where('state = :state', { state: ActionExecutionReceiptState.PROCESSING })
+      .where('state = :state', {
+        state: ActionExecutionReceiptState.PROCESSING,
+      })
       .andWhere('"updatedAt" < :processingBefore', { processingBefore })
       .execute();
 
-    const acceptedReceipts = await this.dataSource.getRepository(
-      ActionExecutionReceiptEntity,
-    ).find({
-      where: { state: ActionExecutionReceiptState.PROVIDER_ACCEPTED },
-      select: { id: true },
-    });
+    const acceptedReceipts = await this.dataSource
+      .getRepository(ActionExecutionReceiptEntity)
+      .find({
+        where: { state: ActionExecutionReceiptState.PROVIDER_ACCEPTED },
+        select: { id: true },
+      });
     let projected = 0;
     for (const receipt of acceptedReceipts) {
       const result = await this.projector.projectReceipt(receipt.id);
@@ -584,14 +616,15 @@ export class ActionApprovalService {
       .andWhere('binding."actionVersion" = :actionVersion', input)
       .andWhere('binding."draftId" = :draftId', input)
       .andWhere('binding."contentDigest" = :contentDigest', input)
-      .andWhere(
-        'binding."recipientFingerprint" = :recipientFingerprint',
-        input,
-      )
+      .andWhere('binding."recipientFingerprint" = :recipientFingerprint', input)
       .andWhere(
         'binding."sendingAccountFingerprint" = :sendingAccountFingerprint',
         input,
       )
+      .andWhere('binding."inboundMessageId" = :inboundMessageId', input)
+      .andWhere('binding."inboundSenderIgsid" = :inboundSenderIgsid', input)
+      .andWhere('binding."inboundDirection" = :inboundDirection', input)
+      .andWhere('binding."inboundReceivedAt" = :inboundReceivedAt', input)
       .andWhere('binding.state = :state', {
         state: ActionApprovalBindingState.APPROVED,
       })
@@ -685,7 +718,11 @@ export class ActionApprovalService {
       binding.draftId !== input.draftId ||
       binding.contentDigest !== input.contentDigest ||
       binding.recipientFingerprint !== input.recipientFingerprint ||
-      binding.sendingAccountFingerprint !== input.sendingAccountFingerprint
+      binding.sendingAccountFingerprint !== input.sendingAccountFingerprint ||
+      binding.inboundMessageId !== input.inboundMessageId ||
+      binding.inboundSenderIgsid !== input.inboundSenderIgsid ||
+      binding.inboundDirection !== input.inboundDirection ||
+      binding.inboundReceivedAt?.getTime() !== input.inboundReceivedAt.getTime()
     ) {
       throw new Error('Action binding does not match execution request');
     }
@@ -706,7 +743,11 @@ export class ActionApprovalService {
   }
 
   private isUniqueViolation(error: unknown): error is { code: string } {
-    return typeof error === 'object' && error !== null && 'code' in error &&
-      (error as { code: string }).code === '23505';
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code: string }).code === '23505'
+    );
   }
 }

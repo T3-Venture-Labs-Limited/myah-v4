@@ -1,13 +1,13 @@
 import { ActionExecutionReceiptState } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
-import {
-  sendInstagramReplyInputSchema,
-} from 'src/engine/core-modules/tool/tools/instagram-tool/instagram-reply-tool.schema';
+import { sendInstagramReplyInputSchema } from 'src/engine/core-modules/tool/tools/instagram-tool/instagram-reply-tool.schema';
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const actionApprovalBindingId = '00000000-0000-4000-8000-000000000002';
 const userWorkspaceId = '00000000-0000-4000-8000-000000000003';
 const threadId = '00000000-0000-4000-8000-000000000004';
+
+const inboundReceivedAt = new Date(Date.now() - 60_000);
 
 const expectedActionBinding = {
   workspaceId,
@@ -17,6 +17,10 @@ const expectedActionBinding = {
   contentDigest: 'a'.repeat(64),
   recipientFingerprint: 'b'.repeat(64),
   sendingAccountFingerprint: 'c'.repeat(64),
+  inboundMessageId: 'bound-inbound-message-id',
+  inboundSenderIgsid: 'recipient-igsid',
+  inboundDirection: 'INBOUND' as const,
+  inboundReceivedAt,
   initiatorUserWorkspaceId: userWorkspaceId,
   threadId,
   evidenceLinks: [],
@@ -26,12 +30,25 @@ const canonicalGraph = {
   conversationId: '00000000-0000-4000-8000-000000000006',
   providerConversationId: 'provider-conversation-id',
   recipientIgsid: 'recipient-igsid',
+  inboundMessageId: expectedActionBinding.inboundMessageId,
+  inboundSenderIgsid: expectedActionBinding.inboundSenderIgsid,
+  inboundDirection: expectedActionBinding.inboundDirection,
+  inboundReceivedAt,
   draftBody: 'Cafe\r\nThanks!',
   account: {
     id: '00000000-0000-4000-8000-000000000007',
     connectedAccountId: 'connected-account-id',
     composioUserId: `workspace:${workspaceId}:instagram`,
+    igUserId: 'sending-account-igsid',
   },
+};
+
+const boundInboundMessage = {
+  id: canonicalGraph.inboundMessageId,
+  direction: canonicalGraph.inboundDirection,
+  from: { id: canonicalGraph.inboundSenderIgsid },
+  to: { data: [{ id: canonicalGraph.account.igUserId }] },
+  created_time: inboundReceivedAt.toISOString(),
 };
 
 const buildTool = ({
@@ -43,6 +60,7 @@ const buildTool = ({
 } = {}) => {
   const actionApprovalService = {
     getApprovedBinding: jest.fn().mockResolvedValue(expectedActionBinding),
+    findExecutionReceiptForBinding: jest.fn().mockResolvedValue(null),
     reserveExecutionForBinding: jest.fn().mockResolvedValue({
       created: true,
       receipt: {
@@ -74,16 +92,12 @@ const buildTool = ({
       .fn()
       .mockResolvedValueOnce({
         kind: 'success',
-        data: {
-          data: [
-            {
-              direction: 'INBOUND',
-              from: { id: canonicalGraph.recipientIgsid },
-            },
-          ],
-        },
+        data: { data: [boundInboundMessage] },
       })
-      .mockResolvedValueOnce({ kind: 'success', data: { id: 'provider-id' } }),
+      .mockResolvedValueOnce({
+        kind: 'success',
+        data: { message_id: 'provider-message-id' },
+      }),
   };
   const projector = {
     projectReceipt: jest.fn().mockResolvedValue({ projected: true }),
@@ -135,11 +149,16 @@ describe('SendInstagramReplyTool', () => {
     const { tool, actionApprovalService, myahComposioService } = buildTool();
 
     await expect(
-      tool.execute({ actionApprovalBindingId }, { workspaceId, userWorkspaceId }),
+      tool.execute(
+        { actionApprovalBindingId },
+        { workspaceId, userWorkspaceId },
+      ),
     ).resolves.toMatchObject({ success: false });
 
     expect(actionApprovalService.getApprovedBinding).not.toHaveBeenCalled();
-    expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
+    expect(
+      myahComposioService.getActiveInstagramAccount,
+    ).not.toHaveBeenCalled();
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
   });
 
@@ -152,66 +171,81 @@ describe('SendInstagramReplyTool', () => {
     'body mismatch',
     'recipient mismatch',
     'conversation mismatch',
-  ])('does not call the provider when the %s proof cannot be rebuilt', async (reason) => {
-    const { tool, myahComposioService } = buildTool({
-      rebuildError: new Error(`canonical ${reason} proof failed`),
-    });
+  ])(
+    'does not consume or call the provider when the %s proof cannot be rebuilt',
+    async (reason) => {
+      const { tool, actionApprovalService, myahComposioService } = buildTool({
+        rebuildError: new Error(`canonical ${reason} proof failed`),
+      });
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
-      success: false,
-    });
+      await expect(
+        tool.execute({ actionApprovalBindingId }, context),
+      ).resolves.toMatchObject({
+        success: false,
+      });
 
-    expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
-    expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
-  });
-  it('does not call Composio when another execution already owns the lease', async () => {
+      expect(
+        actionApprovalService.reserveExecutionForBinding,
+      ).not.toHaveBeenCalled();
+      expect(
+        myahComposioService.getActiveInstagramAccount,
+      ).not.toHaveBeenCalled();
+      expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not call Composio when an existing execution is still processing', async () => {
     const { tool, actionApprovalService, myahComposioService } = buildTool();
-    actionApprovalService.reserveExecutionForBinding.mockResolvedValue({
-      created: false,
-      receipt: {
-        id: 'receipt-id',
-        workspaceId,
-        state: ActionExecutionReceiptState.PROCESSING,
-        providerCode: null,
-        outcome: null,
-        occurredAt: new Date('2026-07-16T00:00:00.000Z'),
-      },
+    actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue({
+      id: 'receipt-id',
+      workspaceId,
+      state: ActionExecutionReceiptState.PROCESSING,
+      providerCode: null,
+      outcome: null,
+      occurredAt: new Date('2026-07-16T00:00:00.000Z'),
     });
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
+    await expect(
+      tool.execute({ actionApprovalBindingId }, context),
+    ).resolves.toMatchObject({
       success: false,
     });
 
-    expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
+    expect(
+      actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expect(
+      myahComposioService.getActiveInstagramAccount,
+    ).not.toHaveBeenCalled();
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
   });
 
   it('projects an accepted replay without calling the provider again', async () => {
-    const {
-      tool,
-      actionApprovalService,
-      myahComposioService,
-      projector,
-    } = buildTool();
-    actionApprovalService.reserveExecutionForBinding.mockResolvedValue({
-      created: false,
-      receipt: {
-        id: 'receipt-id',
-        workspaceId,
-        state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
-        providerCode: 'accepted',
-        outcome: 'accepted',
-        occurredAt: new Date('2026-07-16T00:00:00.000Z'),
-      },
+    const { tool, actionApprovalService, myahComposioService, projector } =
+      buildTool();
+    actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue({
+      id: 'receipt-id',
+      workspaceId,
+      state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      providerCode: 'accepted',
+      outcome: 'accepted',
+      occurredAt: new Date('2026-07-16T00:00:00.000Z'),
     });
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toEqual({
+    await expect(
+      tool.execute({ actionApprovalBindingId }, context),
+    ).resolves.toEqual({
       success: true,
       message: 'Instagram reply accepted.',
     });
 
     expect(projector.projectReceipt).toHaveBeenCalledWith('receipt-id');
-    expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
+    expect(
+      actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expect(
+      myahComposioService.getActiveInstagramAccount,
+    ).not.toHaveBeenCalled();
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
   });
 
@@ -221,30 +255,48 @@ describe('SendInstagramReplyTool', () => {
       new Error('An approved action binding is required'),
     );
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
+    await expect(
+      tool.execute({ actionApprovalBindingId }, context),
+    ).resolves.toMatchObject({
       success: false,
     });
 
-    expect(actionApprovalService.reserveExecutionForBinding).not.toHaveBeenCalled();
-    expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
+    expect(
+      actionApprovalService.reserveExecutionForBinding,
+    ).not.toHaveBeenCalled();
+    expect(
+      myahComposioService.getActiveInstagramAccount,
+    ).not.toHaveBeenCalled();
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
   });
 
-  it('revalidates the canonical graph only after reserving authority', async () => {
-    const { tool, actionApprovalService, actionDefinition } = buildTool();
+  it('revalidates immutable authority before performing a reservation', async () => {
+    const {
+      tool,
+      actionApprovalService,
+      actionDefinition,
+      myahComposioService,
+    } = buildTool();
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
+    await expect(
+      tool.execute({ actionApprovalBindingId }, context),
+    ).resolves.toMatchObject({
       success: true,
     });
 
     expect(
+      actionDefinition.rebuildExecutionAuthority.mock.invocationCallOrder[0],
+    ).toBeLessThan(
       actionApprovalService.reserveExecutionForBinding.mock
         .invocationCallOrder[0],
+    );
+    expect(
+      myahComposioService.executeInstagramTool.mock.invocationCallOrder[0],
     ).toBeLessThan(
-      actionDefinition.rebuildExecutionAuthority.mock.invocationCallOrder[0],
+      actionApprovalService.reserveExecutionForBinding.mock
+        .invocationCallOrder[0],
     );
   });
-
 
   it('sends once only after a canonical account and inbound message proof', async () => {
     const {
@@ -255,7 +307,9 @@ describe('SendInstagramReplyTool', () => {
       projector,
     } = buildTool();
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toEqual({
+    await expect(
+      tool.execute({ actionApprovalBindingId }, context),
+    ).resolves.toEqual({
       success: true,
       message: 'Instagram reply accepted.',
     });
@@ -270,7 +324,9 @@ describe('SendInstagramReplyTool', () => {
       workspaceId,
       binding: expectedActionBinding,
     });
-    expect(actionApprovalService.reserveExecutionForBinding).toHaveBeenCalledWith({
+    expect(
+      actionApprovalService.reserveExecutionForBinding,
+    ).toHaveBeenCalledWith({
       approvalBindingId: actionApprovalBindingId,
       expectedActionBinding,
     });
@@ -278,24 +334,30 @@ describe('SendInstagramReplyTool', () => {
       workspaceId,
       connectedAccountId: canonicalGraph.account.connectedAccountId,
     });
-    expect(myahComposioService.executeInstagramTool).toHaveBeenNthCalledWith(1, {
-      workspaceId,
-      connectedAccountId: canonicalGraph.account.connectedAccountId,
-      toolSlug: 'INSTAGRAM_LIST_ALL_MESSAGES',
-      arguments: {
-        conversation_id: canonicalGraph.providerConversationId,
-        limit: 25,
+    expect(myahComposioService.executeInstagramTool).toHaveBeenNthCalledWith(
+      1,
+      {
+        workspaceId,
+        connectedAccountId: canonicalGraph.account.connectedAccountId,
+        toolSlug: 'INSTAGRAM_LIST_ALL_MESSAGES',
+        arguments: {
+          conversation_id: canonicalGraph.providerConversationId,
+          limit: 25,
+        },
       },
-    });
-    expect(myahComposioService.executeInstagramTool).toHaveBeenNthCalledWith(2, {
-      workspaceId,
-      connectedAccountId: canonicalGraph.account.connectedAccountId,
-      toolSlug: 'INSTAGRAM_SEND_TEXT_MESSAGE',
-      arguments: {
-        recipient_id: canonicalGraph.recipientIgsid,
-        text: 'Cafe\r\nThanks!',
+    );
+    expect(myahComposioService.executeInstagramTool).toHaveBeenNthCalledWith(
+      2,
+      {
+        workspaceId,
+        connectedAccountId: canonicalGraph.account.connectedAccountId,
+        toolSlug: 'INSTAGRAM_SEND_TEXT_MESSAGE',
+        arguments: {
+          recipient_id: canonicalGraph.recipientIgsid,
+          text: 'Cafe\r\nThanks!',
+        },
       },
-    });
+    );
     expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(2);
     expect(actionApprovalService.recordProviderAccepted).toHaveBeenCalledWith(
       'receipt-id',
@@ -304,19 +366,46 @@ describe('SendInstagramReplyTool', () => {
     expect(projector.projectReceipt).toHaveBeenCalledWith('receipt-id');
   });
 
-  it('does not send when the bounded provider read lacks an inbound recipient message', async () => {
-    const { tool, myahComposioService } = buildTool();
-    myahComposioService.executeInstagramTool.mockReset().mockResolvedValueOnce({
-      kind: 'success',
-      data: { data: [{ direction: 'OUTBOUND', from: { id: 'different-id' } }] },
-    });
+  it.each([
+    [
+      'an unrelated message',
+      { ...boundInboundMessage, id: 'unrelated-message-id' },
+    ],
+    [
+      'a stale message timestamp',
+      { ...boundInboundMessage, created_time: '2026-07-15T11:30:00.000Z' },
+    ],
+    ['an outbound message', { ...boundInboundMessage, direction: 'OUTBOUND' }],
+    [
+      'a message with no provider id',
+      { ...boundInboundMessage, id: undefined },
+    ],
+  ])(
+    'does not consume or send when the bounded provider proof contains %s',
+    async (_reason, message) => {
+      const { tool, actionApprovalService, myahComposioService } = buildTool();
+      myahComposioService.executeInstagramTool
+        .mockReset()
+        .mockResolvedValueOnce({
+          kind: 'success',
+          data: { data: [message] },
+        });
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
-      success: false,
-    });
+      await expect(
+        tool.execute({ actionApprovalBindingId }, context),
+      ).resolves.toMatchObject({
+        success: false,
+      });
 
-    expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(1);
-  });
+      expect(
+        actionApprovalService.reserveExecutionForBinding,
+      ).not.toHaveBeenCalled();
+      expect(
+        actionApprovalService.recordProviderTerminalState,
+      ).not.toHaveBeenCalled();
+      expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('maps provider subcode 2534022 to BLOCKED without a send retry', async () => {
     const { tool, actionApprovalService, myahComposioService } = buildTool();
@@ -324,25 +413,22 @@ describe('SendInstagramReplyTool', () => {
       .mockReset()
       .mockResolvedValueOnce({
         kind: 'success',
-        data: {
-          data: [
-            {
-              direction: 'INBOUND',
-              from: { id: canonicalGraph.recipientIgsid },
-            },
-          ],
-        },
+        data: { data: [boundInboundMessage] },
       })
       .mockResolvedValueOnce({
         kind: 'provider_failure',
         providerSubcode: '2534022',
       });
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
+    await expect(
+      tool.execute({ actionApprovalBindingId }, context),
+    ).resolves.toMatchObject({
       success: false,
     });
 
-    expect(actionApprovalService.recordProviderTerminalState).toHaveBeenCalledWith({
+    expect(
+      actionApprovalService.recordProviderTerminalState,
+    ).toHaveBeenCalledWith({
       receiptId: 'receipt-id',
       state: ActionExecutionReceiptState.BLOCKED,
       code: 'blocked',
@@ -350,21 +436,34 @@ describe('SendInstagramReplyTool', () => {
     expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(2);
   });
 
-  it.each(['unknown response', 'transport failure'])('records %s as UNKNOWN without retrying', async () => {
-    const { tool, actionApprovalService, myahComposioService } = buildTool();
-    myahComposioService.executeInstagramTool.mockReset().mockResolvedValueOnce({
-      kind: 'unknown',
-    });
+  it.each(['unknown response', 'transport failure'])(
+    'records %s from sending as UNKNOWN without retrying',
+    async () => {
+      const { tool, actionApprovalService, myahComposioService } = buildTool();
+      myahComposioService.executeInstagramTool
+        .mockReset()
+        .mockResolvedValueOnce({
+          kind: 'success',
+          data: { data: [boundInboundMessage] },
+        })
+        .mockResolvedValueOnce({
+          kind: 'unknown',
+        });
 
-    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
-      success: false,
-    });
+      await expect(
+        tool.execute({ actionApprovalBindingId }, context),
+      ).resolves.toMatchObject({
+        success: false,
+      });
 
-    expect(actionApprovalService.recordProviderTerminalState).toHaveBeenCalledWith({
-      receiptId: 'receipt-id',
-      state: ActionExecutionReceiptState.UNKNOWN,
-      code: 'unknown',
-    });
-    expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(1);
-  });
+      expect(
+        actionApprovalService.recordProviderTerminalState,
+      ).toHaveBeenCalledWith({
+        receiptId: 'receipt-id',
+        state: ActionExecutionReceiptState.UNKNOWN,
+        code: 'unknown',
+      });
+      expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(2);
+    },
+  );
 });

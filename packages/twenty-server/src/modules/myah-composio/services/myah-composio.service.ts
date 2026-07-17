@@ -276,31 +276,54 @@ export class MyahComposioService {
       return { kind: 'unknown' };
     }
 
-    let body: ComposioToolExecutionResponse;
+    let body: unknown;
     try {
-      body = (await response.json()) as ComposioToolExecutionResponse;
+      body = await response.json();
     } catch {
       return { kind: 'unknown' };
     }
 
+    if (!body || typeof body !== 'object') {
+      return { kind: 'unknown' };
+    }
+
+    const executionResponse = body as ComposioToolExecutionResponse;
     if (
       !response.ok ||
-      body.error ||
-      body.successful === false ||
-      body.successfull === false
+      executionResponse.error ||
+      executionResponse.successful === false ||
+      executionResponse.successfull === false
     ) {
       const providerSubcode =
-        typeof body.error === 'object' && body.error !== null
-          ? toTrimmedString(body.error.error_subcode)?.toString() ??
-            (typeof body.error.error_subcode === 'number'
-              ? String(body.error.error_subcode)
-              : undefined)
+        typeof executionResponse.error === 'object' &&
+        executionResponse.error !== null
+          ? (toTrimmedString(
+              executionResponse.error.error_subcode,
+            )?.toString() ??
+            (typeof executionResponse.error.error_subcode === 'number'
+              ? String(executionResponse.error.error_subcode)
+              : undefined))
           : undefined;
 
       return { kind: 'provider_failure', providerSubcode };
     }
 
-    return { kind: 'success', data: body.data ?? body };
+    const isExplicitInstagramSendAcceptance =
+      toolSlug !== INSTAGRAM_SEND_TEXT_MESSAGE_TOOL_SLUG ||
+      (executionResponse.data !== null &&
+        typeof executionResponse.data === 'object' &&
+        toTrimmedString(
+          (executionResponse.data as Record<string, unknown>).message_id,
+        ) !== undefined);
+    if (
+      executionResponse.successful !== true ||
+      executionResponse.data === undefined ||
+      !isExplicitInstagramSendAcceptance
+    ) {
+      return { kind: 'unknown' };
+    }
+
+    return { kind: 'success', data: executionResponse.data };
   }
 
   private async fetchActiveInstagramAccounts(

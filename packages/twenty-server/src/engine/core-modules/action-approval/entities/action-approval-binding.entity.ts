@@ -49,6 +49,18 @@ export class ActionApprovalBindingEntity {
   @Column({ type: 'varchar', length: 64, nullable: true })
   sendingAccountFingerprint: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  inboundMessageId: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  inboundSenderIgsid: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  inboundDirection: 'INBOUND' | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  inboundReceivedAt: Date | null;
+
   @Column({ type: 'uuid' })
   threadId: string;
 

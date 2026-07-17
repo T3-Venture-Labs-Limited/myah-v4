@@ -24,5 +24,9 @@ export const computeLogicalActionKey = (
       input.contentDigest,
       input.recipientFingerprint,
       input.sendingAccountFingerprint,
+      input.inboundMessageId,
+      input.inboundSenderIgsid,
+      input.inboundDirection,
+      input.inboundReceivedAt.toISOString(),
     ]),
   );

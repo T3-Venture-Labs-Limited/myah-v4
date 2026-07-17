@@ -26,6 +26,8 @@ const SOCIAL_CONVERSATION_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
   '36817464-855f-42db-9fbb-f8853643f8d6';
 const INSTAGRAM_REPLY_DRAFT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
   '85762d24-541b-407f-9d6a-cdf89552c665';
+const SOCIAL_MESSAGE_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
+  '7241bd44-e474-4904-8636-339276b3feff';
 
 export const InstagramReplyActionProposalInputZodSchema = z
   .object({ draftId: z.string().uuid() })
@@ -54,6 +56,14 @@ type InstagramSocialConversationRecord = ObjectRecord & {
   instagramAccountId: string;
 };
 
+type InstagramSocialMessageRecord = ObjectRecord & {
+  id: string;
+  conversationId: string;
+  providerMessageId: string | null;
+  direction: string;
+  createdAt: Date;
+};
+
 type InstagramAccountRecord = ObjectRecord & {
   id: string;
   label: string | null;
@@ -61,12 +71,14 @@ type InstagramAccountRecord = ObjectRecord & {
   status: string;
   connectedAccountId: string | null;
   composioUserId: string | null;
+  igUserId: string | null;
 };
 
 type InstagramReplyEvidenceObjectMetadataIds = {
   account: string;
   conversation: string;
   draft: string;
+  inboundMessage: string;
 };
 
 export type CanonicalInstagramReplyGraph = {
@@ -75,11 +87,17 @@ export type CanonicalInstagramReplyGraph = {
   conversationId: string;
   providerConversationId: string;
   recipientIgsid: string;
+  inboundRecordId: string;
+  inboundMessageId: string;
+  inboundSenderIgsid: string;
+  inboundDirection: 'INBOUND';
+  inboundReceivedAt: Date;
   account: {
     id: string;
     label: string;
     connectedAccountId: string;
     composioUserId: string;
+    igUserId: string;
   };
 };
 
@@ -224,6 +242,13 @@ export class InstagramReplyActionDefinition {
       contentDigest: binding.contentDigest,
       recipientFingerprint: binding.recipientFingerprint ?? '',
       sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
+      inboundMessageId: binding.inboundMessageId ?? '',
+      inboundSenderIgsid: binding.inboundSenderIgsid ?? '',
+      inboundDirection:
+        binding.inboundDirection === 'INBOUND'
+          ? binding.inboundDirection
+          : 'INBOUND',
+      inboundReceivedAt: binding.inboundReceivedAt ?? new Date(0),
       threadId: binding.threadId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
       evidenceLinks: binding.evidenceLinks,
@@ -279,8 +304,13 @@ export class InstagramReplyActionDefinition {
           graph.account.id,
           graph.account.connectedAccountId,
           graph.account.composioUserId,
+          graph.account.igUserId,
         ]),
       ),
+      inboundMessageId: graph.inboundMessageId,
+      inboundSenderIgsid: graph.inboundSenderIgsid,
+      inboundDirection: graph.inboundDirection,
+      inboundReceivedAt: graph.inboundReceivedAt,
       threadId,
       initiatorUserWorkspaceId,
       evidenceLinks: [
@@ -299,6 +329,11 @@ export class InstagramReplyActionDefinition {
           recordId: graph.account.id,
           role: 'sending_account',
         },
+        {
+          objectMetadataId: evidenceObjectMetadataIds.inboundMessage,
+          recordId: graph.inboundRecordId,
+          role: 'inbound_message',
+        },
       ],
     };
   }
@@ -315,13 +350,20 @@ export class InstagramReplyActionDefinition {
       actual.contentDigest !== expected.contentDigest ||
       actual.recipientFingerprint !== expected.recipientFingerprint ||
       actual.sendingAccountFingerprint !== expected.sendingAccountFingerprint ||
+      actual.inboundMessageId !== expected.inboundMessageId ||
+      actual.inboundSenderIgsid !== expected.inboundSenderIgsid ||
+      actual.inboundDirection !== expected.inboundDirection ||
+      actual.inboundReceivedAt.getTime() !==
+        expected.inboundReceivedAt.getTime() ||
       actual.threadId !== expected.threadId ||
       actual.initiatorUserWorkspaceId !== expected.initiatorUserWorkspaceId
     ) {
       return false;
     }
 
-    const toComparableEvidence = (evidence: readonly ActionEvidenceLinkInput[]) =>
+    const toComparableEvidence = (
+      evidence: readonly ActionEvidenceLinkInput[],
+    ) =>
       evidence
         .map(({ objectMetadataId, recordId, role }) =>
           JSON.stringify([objectMetadataId, recordId, role]),
@@ -344,6 +386,7 @@ export class InstagramReplyActionDefinition {
           INSTAGRAM_REPLY_DRAFT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
           SOCIAL_CONVERSATION_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
           INSTAGRAM_ACCOUNT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+          SOCIAL_MESSAGE_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
         ]),
       },
       select: { id: true, universalIdentifier: true },
@@ -363,12 +406,17 @@ export class InstagramReplyActionDefinition {
         universalIdentifier ===
         INSTAGRAM_ACCOUNT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
     )?.id;
+    const inboundMessage = metadata.find(
+      ({ universalIdentifier }) =>
+        universalIdentifier ===
+        SOCIAL_MESSAGE_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+    )?.id;
 
-    if (!draft || !conversation || !account) {
+    if (!draft || !conversation || !account || !inboundMessage) {
       throw new Error('Instagram reply source graph is unavailable');
     }
 
-    return { draft, conversation, account };
+    return { draft, conversation, account, inboundMessage };
   }
 
   private async loadCanonicalGraph(
@@ -381,7 +429,9 @@ export class InstagramReplyActionDefinition {
       conversationLabel: string;
     }
   > {
-    const workspace = await this.workspaceRepository.findOneBy({ id: workspaceId });
+    const workspace = await this.workspaceRepository.findOneBy({
+      id: workspaceId,
+    });
     if (!workspace) {
       throw new Error('Instagram reply source graph is unavailable');
     }
@@ -389,48 +439,68 @@ export class InstagramReplyActionDefinition {
       workspace,
       initiatorUserWorkspaceId,
     );
-    const graph = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const draftRepository =
-          await this.globalWorkspaceOrmManager.getRepository<InstagramReplyDraftRecord>(
-            workspaceId,
-            'myahInstagramReplyDraft',
-          );
-        const conversationRepository =
-          await this.globalWorkspaceOrmManager.getRepository<InstagramSocialConversationRecord>(
-            workspaceId,
-            'myahSocialConversation',
-          );
-        const accountRepository =
-          await this.globalWorkspaceOrmManager.getRepository<InstagramAccountRecord>(
-            workspaceId,
-            'myahInstagramAccount',
-          );
-        const draft = await draftRepository.findOneBy({ id: draftId });
-        if (!draft) {
-          return null;
-        }
-        const conversation = await conversationRepository.findOneBy({
-          id: draft.conversationId,
-        });
-        if (!conversation) {
-          return null;
-        }
-        const [account, activeAccounts] = await Promise.all([
-          accountRepository.findOneBy({
-            id: conversation.instagramAccountId,
-            status: 'ACTIVE',
-          }),
-          accountRepository.find({ where: { status: 'ACTIVE' } }),
-        ]);
-        if (!account || activeAccounts.length !== 1) {
-          return null;
-        }
+    const graph =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const draftRepository =
+            await this.globalWorkspaceOrmManager.getRepository<InstagramReplyDraftRecord>(
+              workspaceId,
+              'myahInstagramReplyDraft',
+            );
+          const conversationRepository =
+            await this.globalWorkspaceOrmManager.getRepository<InstagramSocialConversationRecord>(
+              workspaceId,
+              'myahSocialConversation',
+            );
+          const accountRepository =
+            await this.globalWorkspaceOrmManager.getRepository<InstagramAccountRecord>(
+              workspaceId,
+              'myahInstagramAccount',
+            );
+          const socialMessageRepository =
+            await this.globalWorkspaceOrmManager.getRepository<InstagramSocialMessageRecord>(
+              workspaceId,
+              'myahSocialMessage',
+            );
+          const draft = await draftRepository.findOneBy({ id: draftId });
+          if (!draft) {
+            return null;
+          }
+          const conversation = await conversationRepository.findOneBy({
+            id: draft.conversationId,
+          });
+          if (!conversation) {
+            return null;
+          }
+          const [account, activeAccounts, inboundMessages] = await Promise.all([
+            accountRepository.findOneBy({
+              id: conversation.instagramAccountId,
+              status: 'ACTIVE',
+            }),
+            accountRepository.find({ where: { status: 'ACTIVE' } }),
+            socialMessageRepository.find({
+              where: { conversationId: conversation.id, direction: 'INBOUND' },
+              order: { createdAt: 'DESC' },
+              take: 1,
+            }),
+          ]);
+          if (
+            !account ||
+            activeAccounts.length !== 1 ||
+            inboundMessages.length !== 1
+          ) {
+            return null;
+          }
 
-        return { draft, conversation, account };
-      },
-      authContext,
-    );
+          return {
+            draft,
+            conversation,
+            account,
+            inboundMessage: inboundMessages[0],
+          };
+        },
+        authContext,
+      );
     if (!graph) {
       throw new Error('Instagram reply source graph is unavailable');
     }
@@ -446,6 +516,9 @@ export class InstagramReplyActionDefinition {
     const recipientIgsid = graph.conversation.recipientIgsid?.trim();
     const connectedAccountId = graph.account.connectedAccountId?.trim();
     const composioUserId = graph.account.composioUserId?.trim();
+    const igUserId = graph.account.igUserId?.trim();
+    const inboundMessageId = graph.inboundMessage.providerMessageId?.trim();
+    const inboundReceivedAt = graph.inboundMessage.createdAt;
     if (
       graph.draft.sentAt ||
       graph.draft.status !== 'NEEDS_REVIEW' ||
@@ -456,7 +529,12 @@ export class InstagramReplyActionDefinition {
       !providerConversationId ||
       !recipientIgsid ||
       !connectedAccountId ||
-      composioUserId !== expectedComposioUserId
+      composioUserId !== expectedComposioUserId ||
+      !igUserId ||
+      !inboundMessageId ||
+      graph.inboundMessage.direction !== 'INBOUND' ||
+      !(inboundReceivedAt instanceof Date) ||
+      Number.isNaN(inboundReceivedAt.getTime())
     ) {
       throw new Error('Instagram reply source graph is unavailable');
     }
@@ -469,11 +547,17 @@ export class InstagramReplyActionDefinition {
       conversationLabel,
       providerConversationId,
       recipientIgsid,
+      inboundRecordId: graph.inboundMessage.id,
+      inboundMessageId,
+      inboundSenderIgsid: recipientIgsid,
+      inboundDirection: 'INBOUND',
+      inboundReceivedAt,
       account: {
         id: graph.account.id,
         label: accountLabel,
         connectedAccountId,
         composioUserId,
+        igUserId,
       },
     };
   }
