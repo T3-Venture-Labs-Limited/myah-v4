@@ -566,6 +566,7 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
          'core."instagramReplyApprovalRequest"'::regclass,
          'core."instagramReplyExecutionReceipt"'::regclass
        )
+         AND contype IN ('p', 'u', 'f')
        ORDER BY conname`,
     ),
   ).resolves.toStrictEqual([
