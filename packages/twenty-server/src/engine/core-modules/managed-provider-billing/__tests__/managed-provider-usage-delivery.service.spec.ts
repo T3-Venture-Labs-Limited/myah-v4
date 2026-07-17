@@ -426,4 +426,105 @@ describe('ManagedProviderUsageDeliveryService', () => {
       }),
     );
   });
+
+  it('serializes quote validation so an ambiguous preview cannot race a valid quote into ingestion', async () => {
+    const operation = {
+      actualUsageProperties: { quantity: 3 },
+      deliveryAttemptCount: 0,
+      deliveryEventAt: null,
+      expectedProductIds: ['product-id'],
+      id: 'operation-id',
+      metronomeEventType: 'managed-provider-operation',
+      quotedActualAmountCents: null,
+      reservedAmountCents: '7',
+      state: ManagedProviderOperationState.USAGE_PENDING,
+      workspaceId: 'workspace-id',
+    };
+    const manager = {
+      findOne: jest.fn().mockImplementation(async () => operation),
+      save: jest.fn().mockImplementation(async (_, value) => {
+        Object.assign(operation, value);
+        return operation;
+      }),
+    };
+    let transactionTail = Promise.resolve();
+    const transaction = jest.fn(
+      async (callback: (transactionManager: typeof manager) => unknown) => {
+        const precedingTransaction = transactionTail;
+        let releaseTransaction = () => {};
+
+        transactionTail = new Promise<void>((resolve) => {
+          releaseTransaction = resolve;
+        });
+        await precedingTransaction;
+
+        try {
+          return await callback(manager);
+        } finally {
+          releaseTransaction();
+        }
+      },
+    );
+    const operationRepository = {
+      findOneBy: jest.fn().mockImplementation(async () => operation),
+      manager: { transaction },
+    } as unknown as Pick<
+      Repository<ManagedProviderOperationEntity>,
+      'findOneBy' | 'manager'
+    >;
+    const metronomeClientService = {
+      ingestUsage: jest.fn(),
+      previewUsage: jest
+        .fn()
+        .mockResolvedValueOnce({ invoices: [] })
+        .mockResolvedValue({
+          invoices: [
+            {
+              contractId: 'contract-id',
+              customerId: 'customer-id',
+              id: 'invoice-id',
+              lineItems: [
+                {
+                  name: 'Actual usage',
+                  productId: 'product-id',
+                  total: 5,
+                  type: 'usage',
+                },
+              ],
+              total: 0,
+            },
+          ],
+        }),
+    } as Pick<MetronomeClientService, 'ingestUsage' | 'previewUsage'>;
+    const workspaceCustomerService = {
+      ensureWorkspaceContract: jest.fn().mockResolvedValue('contract-id'),
+      ensureWorkspaceCustomer: jest.fn().mockResolvedValue('customer-id'),
+    } as Pick<
+      MetronomeWorkspaceCustomerService,
+      'ensureWorkspaceContract' | 'ensureWorkspaceCustomer'
+    >;
+    const configService = { get: jest.fn() } as unknown as Pick<
+      TwentyConfigService,
+      'get'
+    >;
+    const service = new ManagedProviderUsageDeliveryService(
+      operationRepository as Repository<ManagedProviderOperationEntity>,
+      metronomeClientService as MetronomeClientService,
+      workspaceCustomerService as MetronomeWorkspaceCustomerService,
+      configService as TwentyConfigService,
+    );
+
+    await expect(
+      Promise.all([
+        service.deliverUsage('operation-id'),
+        service.deliverUsage('operation-id'),
+      ]),
+    ).resolves.toEqual([undefined, undefined]);
+
+    expect(metronomeClientService.previewUsage).toHaveBeenCalledTimes(1);
+    expect(metronomeClientService.ingestUsage).not.toHaveBeenCalled();
+    expect(operation.state).toBe(
+      ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+    );
+  });
 });

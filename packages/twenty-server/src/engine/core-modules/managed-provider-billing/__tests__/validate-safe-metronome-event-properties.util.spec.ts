@@ -76,6 +76,10 @@ describe('validateSafeMetronomeEventProperties', () => {
     'api_keys',
     'api-keys',
     'api keys',
+    'requestApiKeys',
+    'request_api_keys',
+    'request-api-keys',
+    'request api keys',
     'request headers',
     'Authorization Headers',
   ])('rejects sensitive plural or compound property name %s', (key) => {

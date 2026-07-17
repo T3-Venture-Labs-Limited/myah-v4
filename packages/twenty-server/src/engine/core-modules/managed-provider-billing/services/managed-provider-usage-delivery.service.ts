@@ -53,98 +53,84 @@ export class ManagedProviderUsageDeliveryService {
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceContract(
         operation.workspaceId,
       );
-    let quotedActualAmountCents: bigint;
+    const quotedActualAmountCents = await this.getOrPersistValidatedQuote({
+      contractId,
+      customerId,
+      deliveryEventAt,
+      operationId,
+    });
 
-    if (operation.quotedActualAmountCents != null) {
-      quotedActualAmountCents = BigInt(operation.quotedActualAmountCents);
-    } else {
-      const preview = await this.metronomeClientService.previewUsage({
-        customerId,
-        eventType: operation.metronomeEventType,
-        properties: operation.actualUsageProperties,
-        timestamp: deliveryEventAt.toISOString(),
-      });
-
-      try {
-        quotedActualAmountCents = getValidatedMetronomeUsageAmountCents({
-          contractId,
-          customerId,
-          expectedProductIds: operation.expectedProductIds,
-          preview,
-        });
-      } catch {
-        await this.markReconciliationRequired(operationId, null);
-
-        return;
-      }
-
-      quotedActualAmountCents = await this.getOrPersistQuotedActualAmountCents(
-        operationId,
-        quotedActualAmountCents,
-      );
-    }
-
-    if (quotedActualAmountCents > BigInt(operation.reservedAmountCents)) {
-      await this.markReconciliationRequired(
-        operationId,
-        quotedActualAmountCents,
-      );
-
+    if (quotedActualAmountCents === null) {
       return;
     }
 
-    try {
-      await this.metronomeClientService.ingestUsage({
-        customerId,
-        eventType: operation.metronomeEventType,
-        properties: operation.actualUsageProperties,
-        timestamp: deliveryEventAt.toISOString(),
-        transactionId: `managed-provider-usage:${operation.id}`,
-      });
-    } catch (error) {
-      await this.markDeliveryFailure(
-        operationId,
-        error instanceof MetronomeClientException
-          ? error.code
-          : MetronomeClientExceptionCode.REQUEST_FAILED,
-      );
+    const ingestionResult = await this.operationRepository.manager.transaction(
+      async (manager) => {
+        const lockedOperation = await manager.findOne(
+          ManagedProviderOperationEntity,
+          {
+            lock: { mode: 'pessimistic_write' },
+            where: { id: operationId },
+          },
+        );
 
-      throw error;
+        if (
+          lockedOperation?.state !== ManagedProviderOperationState.USAGE_PENDING
+        ) {
+          return { status: 'NOT_PENDING' } as const;
+        }
+
+        if (!lockedOperation.actualUsageProperties) {
+          throw new Error('Managed provider usage facts are unavailable');
+        }
+
+        try {
+          await this.metronomeClientService.ingestUsage({
+            customerId,
+            eventType: lockedOperation.metronomeEventType,
+            properties: lockedOperation.actualUsageProperties,
+            timestamp: deliveryEventAt.toISOString(),
+            transactionId: `managed-provider-usage:${lockedOperation.id}`,
+          });
+        } catch (error) {
+          await manager.save(ManagedProviderOperationEntity, {
+            ...lockedOperation,
+            deliveryAttemptCount: lockedOperation.deliveryAttemptCount + 1,
+            lastDeliveryErrorCode:
+              error instanceof MetronomeClientException
+                ? error.code
+                : MetronomeClientExceptionCode.REQUEST_FAILED,
+            nextDeliveryAttemptAt: new Date(),
+          });
+
+          return { error, status: 'FAILED' } as const;
+        }
+
+        const metronomeAcceptedAt = new Date();
+        const settlementDelayMilliseconds = this.twentyConfigService.get(
+          'METRONOME_USAGE_SETTLEMENT_DELAY_MS',
+        );
+
+        await manager.save(ManagedProviderOperationEntity, {
+          ...lockedOperation,
+          metronomeAcceptedAt,
+          nextDeliveryAttemptAt: null,
+          deliveryAttemptCount: lockedOperation.deliveryAttemptCount + 1,
+          lastDeliveryErrorCode: null,
+          quotedActualAmountCents: quotedActualAmountCents.toString(),
+          settleAfter: new Date(
+            metronomeAcceptedAt.getTime() + settlementDelayMilliseconds,
+          ),
+          state: ManagedProviderOperationState.USAGE_ACCEPTED,
+        });
+
+        return { status: 'ACCEPTED' } as const;
+      },
+    );
+
+    if (ingestionResult.status === 'FAILED') {
+      throw ingestionResult.error;
     }
-
-    await this.operationRepository.manager.transaction(async (manager) => {
-      const lockedOperation = await manager.findOne(
-        ManagedProviderOperationEntity,
-        {
-          lock: { mode: 'pessimistic_write' },
-          where: { id: operationId },
-        },
-      );
-
-      if (
-        lockedOperation?.state !== ManagedProviderOperationState.USAGE_PENDING
-      ) {
-        return;
-      }
-
-      const metronomeAcceptedAt = new Date();
-      const settlementDelayMilliseconds = this.twentyConfigService.get(
-        'METRONOME_USAGE_SETTLEMENT_DELAY_MS',
-      );
-
-      await manager.save(ManagedProviderOperationEntity, {
-        ...lockedOperation,
-        metronomeAcceptedAt,
-        nextDeliveryAttemptAt: null,
-        deliveryAttemptCount: lockedOperation.deliveryAttemptCount + 1,
-        lastDeliveryErrorCode: null,
-        quotedActualAmountCents: quotedActualAmountCents.toString(),
-        settleAfter: new Date(
-          metronomeAcceptedAt.getTime() + settlementDelayMilliseconds,
-        ),
-        state: ManagedProviderOperationState.USAGE_ACCEPTED,
-      });
-    });
   }
 
   private async getOrPersistDeliveryEventAt(
@@ -175,10 +161,17 @@ export class ManagedProviderUsageDeliveryService {
     });
   }
 
-  private async getOrPersistQuotedActualAmountCents(
-    operationId: string,
-    quotedActualAmountCents: bigint,
-  ): Promise<bigint> {
+  private async getOrPersistValidatedQuote({
+    contractId,
+    customerId,
+    deliveryEventAt,
+    operationId,
+  }: {
+    contractId: string;
+    customerId: string;
+    deliveryEventAt: Date;
+    operationId: string;
+  }): Promise<bigint | null> {
     return this.operationRepository.manager.transaction(async (manager) => {
       const operation = await manager.findOne(ManagedProviderOperationEntity, {
         lock: { mode: 'pessimistic_write' },
@@ -186,17 +179,60 @@ export class ManagedProviderUsageDeliveryService {
       });
 
       if (operation?.state !== ManagedProviderOperationState.USAGE_PENDING) {
-        throw new Error('Managed provider operation is no longer pending');
+        return null;
       }
 
-      if (operation.quotedActualAmountCents != null) {
-        return BigInt(operation.quotedActualAmountCents);
+      let quotedActualAmountCents: bigint;
+      const persistedQuote = operation.quotedActualAmountCents;
+      const hasPersistedQuote = persistedQuote != null;
+
+      if (persistedQuote != null) {
+        quotedActualAmountCents = BigInt(persistedQuote);
+      } else {
+        if (!operation.actualUsageProperties) {
+          throw new Error('Managed provider usage facts are unavailable');
+        }
+
+        const preview = await this.metronomeClientService.previewUsage({
+          customerId,
+          eventType: operation.metronomeEventType,
+          properties: operation.actualUsageProperties,
+          timestamp: deliveryEventAt.toISOString(),
+        });
+
+        try {
+          quotedActualAmountCents = getValidatedMetronomeUsageAmountCents({
+            contractId,
+            customerId,
+            expectedProductIds: operation.expectedProductIds,
+            preview,
+          });
+        } catch {
+          await manager.save(ManagedProviderOperationEntity, {
+            ...operation,
+            state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+          });
+
+          return null;
+        }
       }
 
-      await manager.save(ManagedProviderOperationEntity, {
-        ...operation,
-        quotedActualAmountCents: quotedActualAmountCents.toString(),
-      });
+      if (quotedActualAmountCents > BigInt(operation.reservedAmountCents)) {
+        await manager.save(ManagedProviderOperationEntity, {
+          ...operation,
+          quotedActualAmountCents: quotedActualAmountCents.toString(),
+          state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+        });
+
+        return null;
+      }
+
+      if (!hasPersistedQuote) {
+        await manager.save(ManagedProviderOperationEntity, {
+          ...operation,
+          quotedActualAmountCents: quotedActualAmountCents.toString(),
+        });
+      }
 
       return quotedActualAmountCents;
     });
@@ -211,29 +247,6 @@ export class ManagedProviderUsageDeliveryService {
       firstDeliveryAt instanceof Date &&
       Date.now() - firstDeliveryAt.getTime() > 34 * 24 * 60 * 60 * 1_000
     );
-  }
-
-  private async markDeliveryFailure(
-    operationId: string,
-    errorCode: MetronomeClientExceptionCode,
-  ): Promise<void> {
-    await this.operationRepository.manager.transaction(async (manager) => {
-      const operation = await manager.findOne(ManagedProviderOperationEntity, {
-        lock: { mode: 'pessimistic_write' },
-        where: { id: operationId },
-      });
-
-      if (operation?.state !== ManagedProviderOperationState.USAGE_PENDING) {
-        return;
-      }
-
-      await manager.save(ManagedProviderOperationEntity, {
-        ...operation,
-        deliveryAttemptCount: operation.deliveryAttemptCount + 1,
-        lastDeliveryErrorCode: errorCode,
-        nextDeliveryAttemptAt: new Date(),
-      });
-    });
   }
 
   private async markReconciliationRequired(

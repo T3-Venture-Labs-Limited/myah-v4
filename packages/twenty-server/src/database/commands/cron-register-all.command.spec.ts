@@ -19,22 +19,14 @@ const runAggregate = async (metronomeEnabled: boolean) => {
       return undefined;
     }),
   };
-  const aggregate = new Proxy(
-    {},
-    {
-      get: (_, property) => {
-        if (property === 'logger') return silentLogger;
-        if (property === 'twentyConfigService') return twentyConfigService;
-        if (property === 'managedProviderBillingRecoveryCronCommand') {
-          return managedProviderBillingRecoveryCronCommand;
-        }
+  const aggregate = Reflect.construct(CronRegisterAllCommand, [
+    ...Array.from({ length: 25 }, () => otherCronCommand),
+    managedProviderBillingRecoveryCronCommand,
+    twentyConfigService,
+  ]) as CronRegisterAllCommand;
 
-        return otherCronCommand;
-      },
-    },
-  );
-
-  await CronRegisterAllCommand.prototype.run.call(aggregate);
+  Object.assign(aggregate, { logger: silentLogger });
+  await aggregate.run();
 
   return { managedProviderBillingRecoveryCronCommand };
 };

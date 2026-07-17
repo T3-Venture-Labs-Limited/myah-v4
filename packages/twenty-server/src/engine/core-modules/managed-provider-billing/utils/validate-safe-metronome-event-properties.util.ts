@@ -105,6 +105,7 @@ const isUnsafePropertyName = (key: string): boolean => {
     .map((segment) => segment.toLowerCase());
 
   return (
+    normalizedKey.includes('apikey') ||
     UNSAFE_PROPERTY_TOKEN.test(key) ||
     UNSAFE_NORMALIZED_PROPERTY_NAMES.has(normalizedKey) ||
     (normalizedKey !== 'tokencount' &&
