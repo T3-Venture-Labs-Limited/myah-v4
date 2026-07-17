@@ -170,7 +170,11 @@ const buildMyahBaseSystemFields = ({
       isSystem: true,
       isNullable: false,
       isUIEditable: false,
-      defaultValue: 'currentWorkspaceMember' as const,
+      defaultValue: {
+        source: "'MANUAL'",
+        name: "'System'",
+        workspaceMemberId: null,
+      },
     },
     standardObjectMetadataRelatedEntityIds:
       args.standardObjectMetadataRelatedEntityIds,
@@ -193,7 +197,11 @@ const buildMyahBaseSystemFields = ({
       isSystem: true,
       isNullable: false,
       isUIEditable: false,
-      defaultValue: 'currentWorkspaceMember' as const,
+      defaultValue: {
+        source: "'MANUAL'",
+        name: "'System'",
+        workspaceMemberId: null,
+      },
     },
     standardObjectMetadataRelatedEntityIds:
       args.standardObjectMetadataRelatedEntityIds,
