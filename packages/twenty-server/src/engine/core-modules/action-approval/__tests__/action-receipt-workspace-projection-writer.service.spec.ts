@@ -18,8 +18,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       return [];
     });
     const dataSource = {
-      transaction: jest.fn(async (callback: (manager: { query: typeof query }) => unknown) =>
-        callback({ query }),
+      transaction: jest.fn(
+        async (callback: (manager: { query: typeof query }) => unknown) =>
+          callback({ query }),
       ),
     };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(
@@ -33,8 +34,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       contentDigest: computeActionContentDigest('Bound reply'),
     } as never);
 
-    const insert = query.mock.calls.find(([sql]) =>
-      sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage'),
+    const insert = query.mock.calls.find(
+      ([sql]) =>
+        sql.includes('INSERT INTO') && sql.includes('_myahSocialMessage'),
     );
     expect(insert?.[0]).toContain('"conversationId"');
     expect(insert?.[1]).toContain(conversationId);
@@ -56,8 +58,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       return [];
     });
     const dataSource = {
-      transaction: jest.fn(async (callback: (manager: { query: typeof query }) => unknown) =>
-        callback({ query }),
+      transaction: jest.fn(
+        async (callback: (manager: { query: typeof query }) => unknown) =>
+          callback({ query }),
       ),
     };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(
@@ -74,15 +77,17 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     ).rejects.toThrow('The approved draft is unavailable for projection');
 
     expect(
-      query.mock.calls.some(([sql]) =>
-        String(sql).trimStart().startsWith('UPDATE ') &&
-        String(sql).includes('_myahInstagramReplyDraft'),
+      query.mock.calls.some(
+        ([sql]) =>
+          String(sql).trimStart().startsWith('UPDATE ') &&
+          String(sql).includes('_myahInstagramReplyDraft'),
       ),
     ).toBe(false);
     expect(
-      query.mock.calls.some(([sql]) =>
-        String(sql).includes('INSERT INTO') &&
-        String(sql).includes('_myahSocialMessage'),
+      query.mock.calls.some(
+        ([sql]) =>
+          String(sql).includes('INSERT INTO') &&
+          String(sql).includes('_myahSocialMessage'),
       ),
     ).toBe(false);
   });

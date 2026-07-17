@@ -26,7 +26,10 @@ describe('ActionReceiptProjectorService', () => {
         return { affected: 1 };
       }),
     };
-    const service = new ActionReceiptProjectorService(repository as never, writer);
+    const service = new ActionReceiptProjectorService(
+      repository as never,
+      writer,
+    );
 
     await expect(
       service.projectReceipt(receipt.id, {
@@ -53,7 +56,10 @@ describe('ActionReceiptProjectorService', () => {
       findOne: jest.fn(async () => ({ ...receipt, state: 'UNKNOWN' })),
       update: jest.fn(),
     };
-    const service = new ActionReceiptProjectorService(repository as never, writer);
+    const service = new ActionReceiptProjectorService(
+      repository as never,
+      writer,
+    );
 
     await expect(service.projectReceipt(receipt.id)).resolves.toEqual({
       projected: false,

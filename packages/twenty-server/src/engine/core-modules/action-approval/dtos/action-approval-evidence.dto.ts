@@ -60,8 +60,6 @@ export class ActionExecutionReceiptDTO {
   evidenceLinks: ActionApprovalEvidenceLinkDTO[];
 }
 
-
-
 export const toActionExecutionReceiptDTO = ({
   receipt,
   binding,

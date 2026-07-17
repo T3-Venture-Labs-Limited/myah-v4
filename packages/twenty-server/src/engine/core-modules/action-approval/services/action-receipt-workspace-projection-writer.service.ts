@@ -10,9 +10,7 @@ import { computeActionContentDigest } from 'src/engine/core-modules/action-appro
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 @Injectable()
-export class ActionReceiptWorkspaceProjectionWriterService
-  implements ActionReceiptProjectionWriter
-{
+export class ActionReceiptWorkspaceProjectionWriterService implements ActionReceiptProjectionWriter {
   constructor(
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -31,10 +29,12 @@ export class ActionReceiptWorkspaceProjectionWriterService
         return;
       }
 
-      const [draft] = await manager.query<{
-        body: string;
-        conversationId: string | null;
-      }[]>(
+      const [draft] = await manager.query<
+        {
+          body: string;
+          conversationId: string | null;
+        }[]
+      >(
         `SELECT "body", "conversationId"
           FROM "${schemaName}"."_myahInstagramReplyDraft"
           WHERE "id" = $1

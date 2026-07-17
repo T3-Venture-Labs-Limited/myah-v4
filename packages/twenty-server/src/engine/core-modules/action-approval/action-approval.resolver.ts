@@ -88,5 +88,4 @@ export class ActionApprovalResolver {
 
     return receipt ? toActionExecutionReceiptDTO({ receipt, binding }) : null;
   }
-
 }

@@ -21,10 +21,7 @@ describe('assertHumanInputToolCallIsExclusive', () => {
     ).not.toThrow();
   });
 
-  it.each([
-    ASK_QUESTIONS_TOOL_NAME,
-    REQUEST_APPROVAL_TOOL_NAME,
-  ])(
+  it.each([ASK_QUESTIONS_TOOL_NAME, REQUEST_APPROVAL_TOOL_NAME])(
     'rejects %s when mixed with another tool call in the same step',
     (toolName) => {
       expect(() =>

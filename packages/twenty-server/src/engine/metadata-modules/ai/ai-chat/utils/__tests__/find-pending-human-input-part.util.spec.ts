@@ -50,7 +50,6 @@ const requestApprovalPart = (
     },
   }) as unknown as ExtendedUIMessagePart;
 
-
 const textPart = (text: string): ExtendedUIMessagePart =>
   ({ type: 'text', text }) as ExtendedUIMessagePart;
 
@@ -64,7 +63,6 @@ describe('findPendingHumanInputPart', () => {
     expect(part).toBeDefined();
     expect(part?.toolCallId).toBe('approval-call');
   });
-
 
   it('returns a pending question part through the compatibility wrapper', () => {
     const part = findPendingQuestionPart([

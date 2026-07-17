@@ -33,11 +33,7 @@ export abstract class EmailWorkflowActionBase extends ToolBackedWorkflowAction<W
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
   ) {
-    super(
-      loggerName,
-      workflowRunStepLogService,
-      externalWritePolicyService,
-    );
+    super(loggerName, workflowRunStepLogService, externalWritePolicyService);
   }
 
   protected abstract getMode(): EmailStepLogMode;

@@ -198,7 +198,8 @@ export const createRequestApprovalTool = (
 
       return {
         success: true,
-        message: 'Approval request presented to the user; awaiting their decision.',
+        message:
+          'Approval request presented to the user; awaiting their decision.',
         result: {
           status: 'pending',
           actionApprovalBindingId: binding.id,
@@ -208,7 +209,8 @@ export const createRequestApprovalTool = (
 
     return {
       success: true,
-      message: 'Approval request presented to the user; awaiting their decision.',
+      message:
+        'Approval request presented to the user; awaiting their decision.',
       result: {
         request: input,
         status: 'pending',

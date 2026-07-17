@@ -75,7 +75,11 @@ const createResolver = ({
   resolvedProposal = serverDerivedProposal,
 }: {
   resolvedBinding?: typeof binding | null;
-  resolvedThread?: { id: string; workspaceId: string; userWorkspaceId: string } | null;
+  resolvedThread?: {
+    id: string;
+    workspaceId: string;
+    userWorkspaceId: string;
+  } | null;
   resolvedReceipt?: typeof receipt | null;
   resolvedProposal?: typeof serverDerivedProposal | Error;
 } = {}) => {
@@ -127,11 +131,7 @@ const createResolver = ({
   ) => ActionApprovalResolver;
 
   return {
-    resolver: new Resolver(
-      dataSource,
-      actionApprovalService,
-      actionDefinition,
-    ),
+    resolver: new Resolver(dataSource, actionApprovalService, actionDefinition),
     actionApprovalService,
     actionDefinition,
     bindingRepository,
@@ -147,15 +147,20 @@ describe('ActionApprovalResolver', () => {
     expect(imports).toContain(ActionApprovalModule);
   });
   it('rejects a foreign workspace member before loading a proposal graph', async () => {
-    const { resolver, actionApprovalService, threadRepository } = createResolver({
-      resolvedBinding: {
-        ...binding,
-        initiatorUserWorkspaceId: 'foreign-user-workspace-id',
-      },
-    });
+    const { resolver, actionApprovalService, threadRepository } =
+      createResolver({
+        resolvedBinding: {
+          ...binding,
+          initiatorUserWorkspaceId: 'foreign-user-workspace-id',
+        },
+      });
 
     await expect(
-      resolver.getActionApprovalProposal(bindingId, { id: workspaceId } as never, userWorkspaceId),
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
     ).rejects.toThrow('Action approval evidence was not found');
     expect(actionApprovalService.getBindingForViewer).toHaveBeenCalledWith({
       bindingId,
@@ -171,7 +176,11 @@ describe('ActionApprovalResolver', () => {
     });
 
     await expect(
-      resolver.getActionExecutionReceipt(bindingId, { id: workspaceId } as never, userWorkspaceId),
+      resolver.getActionExecutionReceipt(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
     ).rejects.toThrow('Action approval evidence was not found');
     expect(receiptRepository.findOne).not.toHaveBeenCalled();
   });
@@ -180,14 +189,22 @@ describe('ActionApprovalResolver', () => {
     const { resolver, actionDefinition } = createResolver();
 
     await expect(
-      resolver.getActionApprovalProposal(bindingId, { id: workspaceId } as never, userWorkspaceId),
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
     ).resolves.toEqual(serverDerivedProposal);
     expect(actionDefinition.getProposal).toHaveBeenCalledWith({
       workspaceId,
       binding,
     });
     await expect(
-      resolver.getActionExecutionReceipt(bindingId, { id: workspaceId } as never, userWorkspaceId),
+      resolver.getActionExecutionReceipt(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
     ).resolves.toEqual({
       state: 'PROVIDER_ACCEPTED',
       occurredAt: receipt.updatedAt,
@@ -225,11 +242,17 @@ describe('ActionApprovalResolver', () => {
   it('rejects a mismatched graph instead of returning an approvable proposal', async () => {
     const { resolver } = createResolver({
       resolvedBinding: { ...binding, state: 'PENDING' },
-      resolvedProposal: new Error('Instagram reply source graph is unavailable'),
+      resolvedProposal: new Error(
+        'Instagram reply source graph is unavailable',
+      ),
     });
 
     await expect(
-      resolver.getActionApprovalProposal(bindingId, { id: workspaceId } as never, userWorkspaceId),
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
     ).rejects.toThrow('Instagram reply source graph is unavailable');
   });
 
@@ -240,7 +263,9 @@ describe('ActionApprovalResolver', () => {
     };
     const { resolver } = createResolver({
       resolvedBinding: terminalBinding,
-      resolvedProposal: new Error('Instagram reply source graph is unavailable'),
+      resolvedProposal: new Error(
+        'Instagram reply source graph is unavailable',
+      ),
     });
 
     await expect(

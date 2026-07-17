@@ -56,11 +56,9 @@ export class ActionExecutionReceiptEntity {
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
-  @ManyToOne(
-    () => ActionApprovalBindingEntity,
-    (binding) => binding.receipts,
-    { onDelete: 'RESTRICT' },
-  )
+  @ManyToOne(() => ActionApprovalBindingEntity, (binding) => binding.receipts, {
+    onDelete: 'RESTRICT',
+  })
   @JoinColumn({ name: 'actionApprovalBindingId' })
   actionApprovalBinding: Relation<ActionApprovalBindingEntity>;
 }

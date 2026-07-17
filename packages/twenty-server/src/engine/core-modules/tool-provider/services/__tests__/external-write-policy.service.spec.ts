@@ -170,8 +170,8 @@ describe('external write policy static dispatch', () => {
       provider.executeStaticTool('unknown_action', {}, context),
     ).rejects.toThrow('No policy registered');
 
-    expect(Object.values(tools).every((tool) => !tool.execute.mock.calls.length)).toBe(
-      true,
-    );
+    expect(
+      Object.values(tools).every((tool) => !tool.execute.mock.calls.length),
+    ).toBe(true);
   });
 });

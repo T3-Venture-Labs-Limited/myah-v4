@@ -90,7 +90,9 @@ export class ExternalWritePolicyService {
     );
 
     if (!hasPermission) {
-      throw new Error(`Missing permission to execute action tool "${toolName}".`);
+      throw new Error(
+        `Missing permission to execute action tool "${toolName}".`,
+      );
     }
   }
 }
