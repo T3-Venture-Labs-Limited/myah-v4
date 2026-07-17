@@ -27,18 +27,36 @@ const buildService = ({
     },
   ],
   claimAffected = 1,
+  partAffected = 1,
   threadOwned = true,
 }: {
   messageParts?: Array<Record<string, unknown>>;
   claimAffected?: number;
+  partAffected?: number;
   threadOwned?: boolean;
 } = {}) => {
+  const persistedState = {
+    threadClaimed: false,
+    bindingDecided: false,
+    partResolved: false,
+  };
+  let transactionState: typeof persistedState | null = null;
+
   const threadRepository = {
     findOne: jest.fn().mockResolvedValue(
       threadOwned ? { id: 'thread-id', userWorkspaceId: 'user-workspace-id' } : null,
     ),
-    update: jest.fn().mockResolvedValue({ affected: claimAffected }),
+    update: jest.fn().mockImplementation(() => {
+      if (claimAffected > 0) {
+        (transactionState ?? persistedState).threadClaimed = true;
+      }
+
+      return Promise.resolve({ affected: claimAffected });
+    }),
+    withManager: jest.fn(),
   };
+  threadRepository.withManager.mockReturnValue(threadRepository);
+
   const messageRepository = {
     findOne: jest.fn().mockResolvedValue({
       id: 'message-id',
@@ -46,12 +64,44 @@ const buildService = ({
       turnId: 'turn-id',
       parts: messageParts,
     }),
+    withManager: jest.fn(),
   };
+  messageRepository.withManager.mockReturnValue(messageRepository);
+
   const messagePartRepository = {
-    update: jest.fn().mockResolvedValue({ affected: 1 }),
+    update: jest.fn().mockImplementation(() => {
+      if (partAffected > 0) {
+        (transactionState ?? persistedState).partResolved = true;
+      }
+
+      return Promise.resolve({ affected: partAffected });
+    }),
+    withManager: jest.fn(),
   };
+  messagePartRepository.withManager.mockReturnValue(messagePartRepository);
+
   const actionApprovalService = {
+    executeInTransaction: jest.fn(
+      async (callback: (manager: object) => Promise<unknown>) => {
+        const stateBeforeTransaction = { ...persistedState };
+
+        transactionState = persistedState;
+        try {
+          return await callback({});
+        } catch (error) {
+          Object.assign(persistedState, stateBeforeTransaction);
+          throw error;
+        } finally {
+          transactionState = null;
+        }
+      },
+    ),
     decidePendingBinding: jest.fn().mockResolvedValue(undefined),
+    decidePendingBindingInTransaction: jest.fn().mockImplementation(() => {
+      (transactionState ?? persistedState).bindingDecided = true;
+
+      return Promise.resolve({ accepted: true });
+    }),
     restorePendingBinding: jest.fn().mockResolvedValue(undefined),
   };
 
@@ -69,6 +119,7 @@ const buildService = ({
 
   return {
     service,
+    persistedState,
     threadRepository,
     messagePartRepository,
     actionApprovalService,
@@ -88,14 +139,25 @@ describe('AgentChatService.resolvePendingApproval', () => {
       userWorkspaceId: 'user-workspace-id',
     });
 
-    expect(threadRepository.update).toHaveBeenCalledWith(
+    expect(threadRepository.update).toHaveBeenNthCalledWith(
+      1,
       'workspace-id',
       { id: 'thread-id', pendingQuestionMessageId: 'message-id' },
-      { pendingQuestionMessageId: null, activeStreamId: 'stream-id' },
+      { pendingQuestionMessageId: null, activeStreamId: null },
+    );
+    expect(threadRepository.update).toHaveBeenNthCalledWith(
+      2,
+      'workspace-id',
+      {
+        id: 'thread-id',
+        pendingQuestionMessageId: null,
+        activeStreamId: null,
+      },
+      { activeStreamId: 'stream-id' },
     );
     expect(messagePartRepository.update).toHaveBeenCalledWith(
       'workspace-id',
-      { id: 'part-id' },
+      { id: 'part-id', toolName: REQUEST_APPROVAL_TOOL_NAME },
       {
         toolOutput: expect.objectContaining({
           success: true,
@@ -117,7 +179,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
     });
   });
 
-  it('resolves an opaque registered binding and preserves only its UUID in chat state', async () => {
+  it('strips comment, timestamps, and unsafe fields from registered chat output', async () => {
     const actionApprovalBindingId =
       'f79694a7-24af-4f37-bfad-4d529e53d1d9';
     const { service, actionApprovalService, messagePartRepository } =
@@ -128,9 +190,14 @@ describe('AgentChatService.resolvePendingApproval', () => {
             toolName: REQUEST_APPROVAL_TOOL_NAME,
             toolOutput: {
               success: true,
+              message: 'unsafe persisted text',
+              unsafeTopLevelField: 'do not retain',
               result: {
                 status: 'pending',
                 actionApprovalBindingId,
+                comment: 'unsafe persisted comment',
+                decidedAt: '2026-07-17T00:00:00.000Z',
+                unsafeResultField: 'do not retain',
               },
             },
           },
@@ -140,52 +207,58 @@ describe('AgentChatService.resolvePendingApproval', () => {
     await service.resolvePendingApproval({
       threadId: 'thread-id',
       messageId: 'message-id',
-      decision: { decision: 'approved' },
+      decision: { decision: 'approved', comment: 'do not retain this either' },
       streamId: 'stream-id',
       workspaceId: 'workspace-id',
       userWorkspaceId: 'user-workspace-id',
     });
 
-    expect(actionApprovalService.decidePendingBinding).toHaveBeenCalledWith({
-      workspaceId: 'workspace-id',
-      userWorkspaceId: 'user-workspace-id',
-      threadId: 'thread-id',
-      approvalBindingId: actionApprovalBindingId,
-      decision: 'approved',
-    });
+    expect(
+      actionApprovalService.decidePendingBindingInTransaction,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+        threadId: 'thread-id',
+        approvalBindingId: actionApprovalBindingId,
+        decision: 'approved',
+      },
+    );
     expect(messagePartRepository.update).toHaveBeenCalledWith(
       'workspace-id',
-      { id: 'part-id' },
+      { id: 'part-id', toolName: REQUEST_APPROVAL_TOOL_NAME },
       {
-        toolOutput: expect.objectContaining({
+        toolOutput: {
           result: {
             status: 'resolved',
             actionApprovalBindingId,
-            decision: 'approved',
-            comment: undefined,
-            decidedAt: expect.any(String),
           },
-        }),
+        },
       },
     );
   });
 
-  it('restores a registered binding when persisting the chat decision fails', async () => {
+  it('rolls back the registered decision when persisting its chat state fails', async () => {
     const actionApprovalBindingId =
       'f79694a7-24af-4f37-bfad-4d529e53d1d9';
-    const { service, messagePartRepository, actionApprovalService } =
-      buildService({
-        messageParts: [
-          {
-            id: 'part-id',
-            toolName: REQUEST_APPROVAL_TOOL_NAME,
-            toolOutput: {
-              success: true,
-              result: { status: 'pending', actionApprovalBindingId },
-            },
+    const {
+      service,
+      persistedState,
+      messagePartRepository,
+      actionApprovalService,
+    } = buildService({
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolOutput: {
+            success: true,
+            result: { status: 'pending', actionApprovalBindingId },
           },
-        ],
-      });
+        },
+      ],
+    });
     messagePartRepository.update.mockRejectedValue(
       new Error('message-part persistence failed'),
     );
@@ -201,10 +274,193 @@ describe('AgentChatService.resolvePendingApproval', () => {
       }),
     ).rejects.toThrow('message-part persistence failed');
 
-    expect(actionApprovalService.restorePendingBinding).toHaveBeenCalledWith({
-      approvalBindingId: actionApprovalBindingId,
+    expect(actionApprovalService.executeInTransaction).toHaveBeenCalledTimes(1);
+    expect(
+      actionApprovalService.decidePendingBindingInTransaction,
+    ).toHaveBeenCalledTimes(1);
+    expect(actionApprovalService.restorePendingBinding).not.toHaveBeenCalled();
+    expect(persistedState).toEqual({
+      threadClaimed: false,
+      bindingDecided: false,
+      partResolved: false,
+    });
+  });
+
+  it('does not decide or resolve when the pending thread claim affects no rows', async () => {
+    const actionApprovalBindingId =
+      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const {
+      service,
+      persistedState,
+      messagePartRepository,
+      actionApprovalService,
+    } = buildService({
+      claimAffected: 0,
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolOutput: {
+            result: { status: 'pending', actionApprovalBindingId },
+          },
+        },
+      ],
+    });
+
+    await expect(
+      service.resolvePendingApproval({
+        threadId: 'thread-id',
+        messageId: 'message-id',
+        decision: { decision: 'approved' },
+        streamId: 'stream-id',
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+      }),
+    ).rejects.toMatchObject({ code: AiExceptionCode.APPROVAL_NOT_PENDING });
+
+    expect(actionApprovalService.executeInTransaction).toHaveBeenCalledTimes(1);
+    expect(
+      actionApprovalService.decidePendingBindingInTransaction,
+    ).not.toHaveBeenCalled();
+    expect(messagePartRepository.update).not.toHaveBeenCalled();
+    expect(persistedState).toEqual({
+      threadClaimed: false,
+      bindingDecided: false,
+      partResolved: false,
+    });
+  });
+
+  it('does not resolve chat state when the registered decision fails', async () => {
+    const actionApprovalBindingId =
+      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const {
+      service,
+      persistedState,
+      messagePartRepository,
+      actionApprovalService,
+    } = buildService({
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolOutput: {
+            result: { status: 'pending', actionApprovalBindingId },
+          },
+        },
+      ],
+    });
+    actionApprovalService.decidePendingBindingInTransaction.mockRejectedValue(
+      new Error('binding decision failed'),
+    );
+
+    await expect(
+      service.resolvePendingApproval({
+        threadId: 'thread-id',
+        messageId: 'message-id',
+        decision: { decision: 'approved' },
+        streamId: 'stream-id',
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+      }),
+    ).rejects.toThrow('binding decision failed');
+
+    expect(actionApprovalService.executeInTransaction).toHaveBeenCalledTimes(1);
+    expect(messagePartRepository.update).not.toHaveBeenCalled();
+    expect(persistedState).toEqual({
+      threadClaimed: false,
+      bindingDecided: false,
+      partResolved: false,
+    });
+  });
+
+  it('commits an expired binding outcome without resuming the action', async () => {
+    const actionApprovalBindingId =
+      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const {
+      service,
+      threadRepository,
+      messagePartRepository,
+      actionApprovalService,
+    } = buildService({
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolOutput: {
+            result: { status: 'pending', actionApprovalBindingId },
+          },
+        },
+      ],
+    });
+    actionApprovalService.decidePendingBindingInTransaction.mockResolvedValue({
+      accepted: false,
+      state: 'EXPIRED',
+    });
+
+    const result = await service.resolvePendingApproval({
       threadId: 'thread-id',
+      messageId: 'message-id',
+      decision: { decision: 'approved' },
+      streamId: 'stream-id',
       workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
+    });
+
+    expect(result.shouldResume).toBe(false);
+    expect(messagePartRepository.update).not.toHaveBeenCalled();
+    expect(threadRepository.update).toHaveBeenNthCalledWith(
+      1,
+      'workspace-id',
+      { id: 'thread-id', pendingQuestionMessageId: 'message-id' },
+      { pendingQuestionMessageId: null, activeStreamId: null },
+    );
+    expect(threadRepository.update).toHaveBeenNthCalledWith(
+      2,
+      'workspace-id',
+      {
+        id: 'thread-id',
+        pendingQuestionMessageId: null,
+        activeStreamId: null,
+      },
+      { pendingQuestionMessageId: 'message-id' },
+    );
+  });
+
+  it('does not resume when the pending message part update affects no rows', async () => {
+    const actionApprovalBindingId =
+      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const { service, persistedState, actionApprovalService } = buildService({
+      partAffected: 0,
+      messageParts: [
+        {
+          id: 'part-id',
+          toolName: REQUEST_APPROVAL_TOOL_NAME,
+          toolOutput: {
+            result: { status: 'pending', actionApprovalBindingId },
+          },
+        },
+      ],
+    });
+
+    await expect(
+      service.resolvePendingApproval({
+        threadId: 'thread-id',
+        messageId: 'message-id',
+        decision: { decision: 'approved' },
+        streamId: 'stream-id',
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'user-workspace-id',
+      }),
+    ).rejects.toMatchObject({ code: AiExceptionCode.APPROVAL_NOT_PENDING });
+
+    expect(actionApprovalService.executeInTransaction).toHaveBeenCalledTimes(1);
+    expect(
+      actionApprovalService.decidePendingBindingInTransaction,
+    ).toHaveBeenCalledTimes(1);
+    expect(persistedState).toEqual({
+      threadClaimed: false,
+      bindingDecided: false,
+      partResolved: false,
     });
   });
 

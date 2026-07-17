@@ -23,6 +23,18 @@ import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval
 
 const ACTION_APPROVAL_TTL_MS = 30 * 60 * 1000;
 
+type PendingBindingDecisionInput = {
+  workspaceId: string;
+  userWorkspaceId: string;
+  threadId: string;
+  approvalBindingId: string;
+  decision: 'approved' | 'rejected' | 'changes_requested';
+};
+
+type PendingBindingDecisionOutcome =
+  | { accepted: true }
+  | { accepted: false; state: ActionApprovalBindingState.EXPIRED };
+
 @Injectable()
 export class ActionApprovalService {
   private readonly redactionService = new ActionReceiptRedactionService();
@@ -31,6 +43,12 @@ export class ActionApprovalService {
     private readonly dataSource: DataSource,
     private readonly projector: ActionReceiptProjectorService,
   ) {}
+
+  async executeInTransaction<T>(
+    operation: (manager: EntityManager) => Promise<T>,
+  ): Promise<T> {
+    return this.dataSource.transaction(operation);
+  }
 
   async createPendingBinding(
     input: ExpectedActionBindingWithWorkspace,
@@ -67,43 +85,62 @@ export class ActionApprovalService {
     });
   }
 
-  async decidePendingBinding({
-    workspaceId,
-    userWorkspaceId,
-    threadId,
-    approvalBindingId,
-    decision,
-  }: {
-    workspaceId: string;
-    userWorkspaceId: string;
-    threadId: string;
-    approvalBindingId: string;
-    decision: 'approved' | 'rejected' | 'changes_requested';
-  }): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
-      const binding = await manager.findOne(ActionApprovalBindingEntity, {
-        where: { id: approvalBindingId, workspaceId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (
-        !binding ||
-        binding.initiatorUserWorkspaceId !== userWorkspaceId ||
-        binding.threadId !== threadId ||
-        binding.state !== ActionApprovalBindingState.PENDING ||
-        binding.expiresAt <= new Date()
-      ) {
-        throw new Error('An action approval binding is not pending');
-      }
+  async decidePendingBinding(
+    input: PendingBindingDecisionInput,
+  ): Promise<void> {
+    const outcome = await this.executeInTransaction((manager) =>
+      this.decidePendingBindingInTransaction(manager, input),
+    );
 
-      binding.state =
-        decision === 'approved'
-          ? ActionApprovalBindingState.APPROVED
-          : decision === 'rejected'
-            ? ActionApprovalBindingState.REJECTED
-            : ActionApprovalBindingState.CHANGES_REQUESTED;
-      binding.decidedAt = new Date();
-      await manager.save(ActionApprovalBindingEntity, binding);
+    if (!outcome.accepted) {
+      throw new Error('An action approval binding is not pending');
+    }
+
+  }
+
+  async decidePendingBindingInTransaction(
+    manager: EntityManager,
+    {
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalBindingId,
+      decision,
+    }: PendingBindingDecisionInput,
+  ): Promise<PendingBindingDecisionOutcome> {
+    const binding = await manager.findOne(ActionApprovalBindingEntity, {
+      where: { id: approvalBindingId, workspaceId },
+      lock: { mode: 'pessimistic_write' },
     });
+    if (
+      binding &&
+      binding.state === ActionApprovalBindingState.PENDING &&
+      binding.expiresAt <= new Date()
+    ) {
+      binding.state = ActionApprovalBindingState.EXPIRED;
+      await manager.save(ActionApprovalBindingEntity, binding);
+
+      return { accepted: false, state: ActionApprovalBindingState.EXPIRED };
+    }
+    if (
+      !binding ||
+      binding.initiatorUserWorkspaceId !== userWorkspaceId ||
+      binding.threadId !== threadId ||
+      binding.state !== ActionApprovalBindingState.PENDING
+    ) {
+      throw new Error('An action approval binding is not pending');
+    }
+
+    binding.state =
+      decision === 'approved'
+        ? ActionApprovalBindingState.APPROVED
+        : decision === 'rejected'
+          ? ActionApprovalBindingState.REJECTED
+          : ActionApprovalBindingState.CHANGES_REQUESTED;
+    binding.decidedAt = new Date();
+    await manager.save(ActionApprovalBindingEntity, binding);
+
+    return { accepted: true };
   }
 
   async restorePendingBinding({

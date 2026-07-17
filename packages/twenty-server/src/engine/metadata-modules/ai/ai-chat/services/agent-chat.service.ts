@@ -718,171 +718,204 @@ export class AgentChatService {
       );
     }
 
-    const thread = await this.threadRepository.findOne(workspaceId, {
-      where: { id: threadId, userWorkspaceId, deletedAt: IsNull() },
-    });
-    if (!thread) {
-      throw new AiException(
-        'No pending approval request to resolve.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
-      );
-    }
+    return this.actionApprovalService.executeInTransaction(async (manager) => {
+      const threadRepository = this.threadRepository.withManager(manager);
+      const messageRepository = this.messageRepository.withManager(manager);
+      const messagePartRepository =
+        this.messagePartRepository.withManager(manager);
+      const thread = await threadRepository.findOne(workspaceId, {
+        where: { id: threadId, userWorkspaceId, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!thread) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
 
-    const message = await this.messageRepository.findOne(workspaceId, {
-      where: { id: messageId, threadId },
-      relations: ['parts'],
-    });
+      const message = await messageRepository.findOne(workspaceId, {
+        where: { id: messageId, threadId },
+        relations: ['parts'],
+        lock: { mode: 'pessimistic_write' },
+      });
 
-    if (!message) {
-      throw new AiException(
-        'Approval message not found',
-        AiExceptionCode.MESSAGE_NOT_FOUND,
-      );
-    }
+      if (!message) {
+        throw new AiException(
+          'Approval message not found',
+          AiExceptionCode.MESSAGE_NOT_FOUND,
+        );
+      }
 
-    const pendingHumanInputParts = (message.parts ?? []).filter((part) => {
+      const pendingHumanInputParts = (message.parts ?? []).filter((part) => {
+        if (
+          part.toolName !== ASK_QUESTIONS_TOOL_NAME &&
+          part.toolName !== REQUEST_APPROVAL_TOOL_NAME
+        ) {
+          return false;
+        }
+
+        const result = (
+          part.toolOutput as { result?: { status?: string } } | null
+        )?.result;
+
+        return result?.status === 'pending';
+      });
+
+      if (pendingHumanInputParts.length !== 1) {
+        throw new AiException(
+          'Expected exactly one pending approval request.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      const pendingPart = pendingHumanInputParts[0];
+
+      if (pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      const previousOutput =
+        (pendingPart.toolOutput as Record<string, unknown> | null) ?? {};
+      const previousResult = previousOutput.result as
+        | (RequestApprovalToolResult & { actionApprovalBindingId?: string })
+        | undefined;
+
+      if (previousResult?.status !== 'pending') {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      const actionApprovalBindingId = previousResult.actionApprovalBindingId;
       if (
-        part.toolName !== ASK_QUESTIONS_TOOL_NAME &&
-        part.toolName !== REQUEST_APPROVAL_TOOL_NAME
+        actionApprovalBindingId !== undefined &&
+        !ACTION_APPROVAL_BINDING_ID_PATTERN.test(actionApprovalBindingId)
       ) {
-        return false;
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
       }
 
-      const result = (
-        part.toolOutput as { result?: { status?: string } } | null
-      )?.result;
-
-      return result?.status === 'pending';
-    });
-
-    if (pendingHumanInputParts.length !== 1) {
-      throw new AiException(
-        'Expected exactly one pending approval request.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
-      );
-    }
-
-    const pendingPart = pendingHumanInputParts[0];
-
-    if (pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME) {
-      throw new AiException(
-        'No pending approval request to resolve.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
-      );
-    }
-
-    const previousOutput =
-      (pendingPart.toolOutput as Record<string, unknown> | null) ?? {};
-    const previousResult = previousOutput.result as
-      | (RequestApprovalToolResult & { actionApprovalBindingId?: string })
-      | undefined;
-
-    if (previousResult?.status !== 'pending') {
-      throw new AiException(
-        'No pending approval request to resolve.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
-      );
-    }
-
-    const actionApprovalBindingId = previousResult.actionApprovalBindingId;
-    if (
-      actionApprovalBindingId !== undefined &&
-      !ACTION_APPROVAL_BINDING_ID_PATTERN.test(actionApprovalBindingId)
-    ) {
-      throw new AiException(
-        'No pending approval request to resolve.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
-      );
-    }
-
-    const shouldResume = decision.decision === 'approved';
-
-    const claim = await this.threadRepository.update(
-      workspaceId,
-      { id: threadId, pendingQuestionMessageId: messageId },
-      {
-        pendingQuestionMessageId: null,
-        activeStreamId: shouldResume ? streamId : null,
-      },
-    );
-
-    if ((claim.affected ?? 0) === 0) {
-      throw new AiException(
-        'No pending approval request to resolve.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
-      );
-    }
-
-    let hasResolvedActionBinding = false;
-
-    try {
-      if (actionApprovalBindingId) {
-        await this.actionApprovalService.decidePendingBinding({
-          workspaceId,
-          userWorkspaceId,
-          threadId,
-          approvalBindingId: actionApprovalBindingId,
-          decision: decision.decision as
-            | 'approved'
-            | 'rejected'
-            | 'changes_requested',
-        });
-        hasResolvedActionBinding = true;
-      }
-
-      await this.messagePartRepository.update(
+      const claim = await threadRepository.update(
         workspaceId,
-        { id: pendingPart.id },
+        { id: threadId, pendingQuestionMessageId: messageId },
         {
-          toolOutput: {
-            ...previousOutput,
-            success: true,
-            message: 'User resolved the approval request.',
-            result: actionApprovalBindingId
-              ? {
+          pendingQuestionMessageId: null,
+          activeStreamId: null,
+        },
+      );
+
+      if ((claim.affected ?? 0) === 0) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      const bindingDecision = actionApprovalBindingId
+        ? await this.actionApprovalService.decidePendingBindingInTransaction(
+            manager,
+            {
+              workspaceId,
+              userWorkspaceId,
+              threadId,
+              approvalBindingId: actionApprovalBindingId,
+              decision: decision.decision as
+                | 'approved'
+                | 'rejected'
+                | 'changes_requested',
+            },
+          )
+        : null;
+
+      if (bindingDecision && !bindingDecision.accepted) {
+        await threadRepository.update(
+          workspaceId,
+          {
+            id: threadId,
+            pendingQuestionMessageId: null,
+            activeStreamId: null,
+          },
+          { pendingQuestionMessageId: messageId },
+        );
+
+        return {
+          turnId: message.turnId,
+          rollback: { partId: pendingPart.id, previousOutput },
+          shouldResume: false,
+        };
+      }
+
+      const shouldResume = decision.decision === 'approved';
+
+      const partUpdate = await messagePartRepository.update(
+        workspaceId,
+        { id: pendingPart.id, toolName: REQUEST_APPROVAL_TOOL_NAME },
+        {
+          toolOutput: actionApprovalBindingId
+            ? {
+                result: {
                   status: 'resolved',
                   actionApprovalBindingId,
-                  decision: decision.decision as ApprovalDecision,
-                  comment: decision.comment,
-                  decidedAt: new Date().toISOString(),
-                }
-              : {
+                },
+              }
+            : {
+                ...previousOutput,
+                success: true,
+                message: 'User resolved the approval request.',
+                result: {
                   request: previousResult.request,
                   status: 'resolved',
                   decision: decision.decision as ApprovalDecision,
                   comment: decision.comment,
                   decidedAt: new Date().toISOString(),
                 },
-          },
+              },
         },
       );
-    } catch (error) {
-      if (hasResolvedActionBinding && actionApprovalBindingId) {
-        await this.actionApprovalService.restorePendingBinding({
-          workspaceId,
-          threadId,
-          approvalBindingId: actionApprovalBindingId,
-        });
-      }
-      await this.threadRepository
-        .update(
-          workspaceId,
-          { id: threadId, activeStreamId: streamId },
-          { pendingQuestionMessageId: messageId, activeStreamId: null },
-        )
-        .catch(() => {});
-      throw error;
-    }
 
-    return {
-      turnId: message.turnId,
-      rollback: {
-        partId: pendingPart.id,
-        previousOutput,
-        ...(actionApprovalBindingId ? { actionApprovalBindingId } : {}),
-      },
-      shouldResume,
-    };
+      if ((partUpdate.affected ?? 0) === 0) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      if (shouldResume) {
+        const resumeClaim = await threadRepository.update(
+          workspaceId,
+          {
+            id: threadId,
+            pendingQuestionMessageId: null,
+            activeStreamId: null,
+          },
+          { activeStreamId: streamId },
+        );
+
+        if ((resumeClaim.affected ?? 0) === 0) {
+          throw new AiException(
+            'No pending approval request to resolve.',
+            AiExceptionCode.APPROVAL_NOT_PENDING,
+          );
+        }
+      }
+
+      return {
+        turnId: message.turnId,
+        rollback: {
+          partId: pendingPart.id,
+          previousOutput,
+          ...(actionApprovalBindingId ? { actionApprovalBindingId } : {}),
+        },
+        shouldResume,
+      };
+    });
   }
 
   async restorePendingApproval({
