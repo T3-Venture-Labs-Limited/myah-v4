@@ -568,7 +568,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       actionName: expectedBinding.actionName,
       actionVersion: expectedBinding.actionVersion,
       draftId: projectionDraftId,
-      contentDigest: expectedBinding.contentDigest,
+      contentDigest: computeActionContentDigest('Projected message'),
       recipientFingerprint: expectedBinding.recipientFingerprint,
       sendingAccountFingerprint: expectedBinding.sendingAccountFingerprint,
       threadId,
