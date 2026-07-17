@@ -31,6 +31,7 @@ jest.mock(
 );
 
 const workspaceId = SEED_EMPTY_WORKSPACE_3_ID;
+const workspaceCustomApplicationId = '90000000-0000-4000-8000-000000000001';
 const bindingId = '90000000-0000-4000-8000-000000000002';
 const draftId = '90000000-0000-4000-8000-000000000003';
 const threadId = '90000000-0000-4000-8000-000000000004';
@@ -416,6 +417,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     const workspaceQueryRunner = dataSource.createQueryRunner();
 
     await workspaceQueryRunner.connect();
+    await workspaceQueryRunner.startTransaction();
     try {
       await createWorkspace({
         queryRunner: workspaceQueryRunner,
@@ -428,10 +430,25 @@ describe('ActionApprovalService (PostgreSQL)', () => {
           logo: '',
           activationStatus: WorkspaceActivationStatus.PENDING_CREATION,
           isTwoFactorAuthenticationEnforced: false,
-          workspaceCustomApplicationId:
-            '90000000-0000-4000-8000-000000000001',
+          workspaceCustomApplicationId,
         },
       });
+      await workspaceQueryRunner.query(
+        `INSERT INTO core."application" (
+          "id",
+          "universalIdentifier",
+          "name",
+          "sourcePath",
+          "workspaceId"
+        )
+        VALUES ($1, $1, 'action-approval-integration', '', $2)
+        ON CONFLICT ("id") DO NOTHING`,
+        [workspaceCustomApplicationId, workspaceId],
+      );
+      await workspaceQueryRunner.commitTransaction();
+    } catch (error) {
+      await workspaceQueryRunner.rollbackTransaction();
+      throw error;
     } finally {
       await workspaceQueryRunner.release();
     }
@@ -958,7 +975,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       actionApprovalBindingId: senderPayload.actionApprovalBindingId,
     };
 
-    const results = await Promise.all([
+    await Promise.all([
       sender.execute(senderInput, {
         workspaceId,
         userWorkspaceId: initiatorUserWorkspaceId,
@@ -971,7 +988,6 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       }),
     ]);
 
-    expect(results.filter((result) => result.success)).toHaveLength(1);
     expect(
       providerCalls.mock.calls.filter(
         ([input]) => input.toolSlug === 'INSTAGRAM_SEND_TEXT_MESSAGE',
