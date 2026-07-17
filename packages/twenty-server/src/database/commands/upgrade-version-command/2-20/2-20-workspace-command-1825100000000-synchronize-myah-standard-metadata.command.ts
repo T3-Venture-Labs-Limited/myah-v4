@@ -1,4 +1,7 @@
 import { Command } from 'nest-commander';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { In, type DataSource } from 'typeorm';
+
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
@@ -14,11 +17,14 @@ import type { SyncableFlatEntity } from 'src/engine/metadata-modules/flat-entity
 import type { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { getSubFlatEntityMapsByUniversalIdentifiersOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/get-sub-flat-entity-maps-by-universal-identifiers-or-throw.util';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
+import { ALL_METADATA_ENTITY_BY_METADATA_NAME } from 'src/engine/metadata-modules/flat-entity/constant/all-metadata-entity-by-metadata-name.constant';
 import { TWENTY_STANDARD_ALL_METADATA_NAME } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-all-metadata-name.constant';
+import { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/workspace-metadata-version/services/workspace-metadata-version.service';
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { getReplacedTwentyCrmMetadataUniversalIdentifiers } from 'src/engine/workspace-manager/twenty-standard-application/utils/remove-replaced-twenty-crm-metadata.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import type { AdditionalCacheDataMaps } from 'src/engine/workspace-cache/types/workspace-cache-key.type';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
 const MYAH_ROLE_UNIVERSAL_IDENTIFIERS = new Set<string>([
@@ -70,8 +76,11 @@ type SyncableFlatEntityMaps = FlatEntityMaps<SyncableFlatEntity>;
 export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
+    @InjectDataSource()
+    private readonly coreDataSource: DataSource,
     private readonly applicationService: ApplicationService,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly workspaceMetadataVersionService: WorkspaceMetadataVersionService,
     private readonly workspaceMigrationValidateBuildAndRunService: WorkspaceMigrationValidateBuildAndRunService,
   ) {
     super(workspaceIteratorService);
@@ -81,18 +90,27 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     workspaceId,
     options,
   }: RunOnWorkspaceArgs): Promise<void> {
-    if (options.dryRun) {
-      this.logger.log(
-        `[DRY RUN] Would synchronize Myah standard metadata for workspace ${workspaceId}`,
-      );
-
-      return;
-    }
 
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow({
         workspaceId,
       });
+
+    const legacyMyahApplications = (
+      await Promise.all(
+        LEGACY_MYAH_APPLICATION_UNIVERSAL_IDENTIFIERS.map(
+          async (universalIdentifier) =>
+            await this.applicationService.findByUniversalIdentifier({
+              universalIdentifier,
+              workspaceId,
+            }),
+        ),
+      )
+    ).filter(isDefined);
+    const legacyMyahApplicationIds = legacyMyahApplications.map(
+      ({ id }) => id,
+    );
+    const hasLegacyMyahApplication = legacyMyahApplicationIds.length > 0;
     const metadataCacheKeys = [
       ...TWENTY_STANDARD_ALL_METADATA_NAME.map(
         (metadataName) => `flat${metadataName.charAt(0).toUpperCase()}${metadataName.slice(1)}Maps`,
@@ -115,6 +133,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       now: new Date().toISOString(),
       workspaceId,
       twentyStandardApplicationId: twentyStandardFlatApplication.id,
+      removeReplacedTwentyCrmMetadata: hasLegacyMyahApplication,
     });
 
     const objectUniversalIdentifiers = new Set<string>(
@@ -287,17 +306,6 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       navigationMenuItemUniversalIdentifiers,
     );
 
-    const hasLegacyMyahApplication = (
-      await Promise.all(
-        LEGACY_MYAH_APPLICATION_UNIVERSAL_IDENTIFIERS.map(
-          async (universalIdentifier) =>
-            await this.applicationService.findByUniversalIdentifier({
-              universalIdentifier,
-              workspaceId,
-            }),
-        ),
-      )
-    ).some(isDefined);
 
 
     const obsoleteUniversalIdentifiersByMetadataName =
@@ -351,6 +359,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
           }),
           additionalCacheDataMaps: { featureFlagsMap },
           idByUniversalIdentifierByMetadataName,
+          dryRun: options.dryRun,
         },
       );
 
@@ -362,5 +371,61 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         `Failed to synchronize Myah standard metadata for workspace ${workspaceId}`,
       );
     }
+
+    if (options.dryRun || legacyMyahApplicationIds.length === 0) {
+      return;
+    }
+
+    const queryRunner = this.coreDataSource.createQueryRunner();
+
+    await queryRunner.connect();
+
+    try {
+      await queryRunner.startTransaction();
+
+      for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
+        const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
+        const targetUniversalIdentifiers = Object.keys(
+          (
+            toAllFlatEntityMaps as unknown as Record<
+              string,
+              SyncableFlatEntityMaps
+            >
+          )[flatEntityMapsKey].byUniversalIdentifier,
+        );
+
+        if (targetUniversalIdentifiers.length === 0) {
+          continue;
+        }
+
+        await queryRunner.manager.update(
+          ALL_METADATA_ENTITY_BY_METADATA_NAME[metadataName],
+          {
+            workspaceId,
+            applicationId: In(legacyMyahApplicationIds),
+            universalIdentifier: In(targetUniversalIdentifiers),
+          },
+          { applicationId: twentyStandardFlatApplication.id },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    await this.workspaceCacheService.flush(
+      workspaceId,
+      TWENTY_STANDARD_ALL_METADATA_NAME.map(getMetadataFlatEntityMapsKey),
+    );
+    await this.workspaceMetadataVersionService.incrementMetadataVersion(
+      workspaceId,
+    );
   }
 }

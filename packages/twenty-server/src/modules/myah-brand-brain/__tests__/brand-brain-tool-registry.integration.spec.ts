@@ -34,6 +34,10 @@ const createRepository = (records: StoredRecord[]) => ({
 });
 
 describe('Brand Brain public tool provider journey', () => {
+  it('registers Brand Brain under its own tool category', () => {
+    expect(new BrandBrainToolProvider(null).category).toBe('BRAND_BRAIN');
+  });
+
   it('seeds and non-destructively updates Brand Brain through public descriptors', async () => {
     const pages: StoredRecord[] = [];
     const links: StoredRecord[] = [];

@@ -112,11 +112,11 @@ export class MyahBrandBrainStoreService {
   ): Promise<BrandBrainRepository<T>> {
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       () =>
-        this.globalWorkspaceOrmManager.getRepository(
+        this.globalWorkspaceOrmManager.getRepository<T>(
           context.workspaceId,
           objectMetadataName,
           context.rolePermissionConfig,
-        ) as Promise<BrandBrainRepository<T>>,
+        ),
       buildSystemAuthContext(context.workspaceId),
     );
   }

@@ -19,7 +19,7 @@ import { buildStandardFlatPageLayoutWidgetMetadataMaps } from 'src/engine/worksp
 import { buildStandardFlatPageLayoutMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/build-standard-flat-page-layout-metadata-maps.util';
 import { buildStandardFlatPermissionFlagMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/permission-flag/build-standard-flat-permission-flag-metadata-maps.util';
 import { buildStandardFlatRoleMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/build-standard-flat-role-metadata-maps.util';
-import { removeReplacedTwentyCrmMetadata } from 'src/engine/workspace-manager/twenty-standard-application/utils/remove-replaced-twenty-crm-metadata.util';
+import { removeReplacedTwentyCrmMetadata as removeReplacedTwentyCrmMetadataFromMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/remove-replaced-twenty-crm-metadata.util';
 import { buildStandardFlatSearchFieldMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/search-field-metadata/build-standard-flat-search-field-metadata-maps.util';
 import { buildStandardFlatSkillMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/skill-metadata/build-standard-flat-skill-metadata-maps.util';
 import { buildStandardFlatViewFieldMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/build-standard-flat-view-field-metadata-maps.util';
@@ -33,12 +33,14 @@ export type ComputeTwentyStandardApplicationAllFlatEntityMapsArgs = {
   now: string;
   workspaceId: string;
   twentyStandardApplicationId: string;
+  removeReplacedTwentyCrmMetadata?: boolean;
 };
 
 export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
   now,
   workspaceId,
   twentyStandardApplicationId,
+  removeReplacedTwentyCrmMetadata = false,
 }: ComputeTwentyStandardApplicationAllFlatEntityMapsArgs): {
   allFlatEntityMaps: TwentyStandardAllFlatEntityMaps;
   // TODO remove once all metadatas has fully been universal migrated
@@ -270,7 +272,9 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
     flatCommandMenuItemMaps,
   };
 
-  removeReplacedTwentyCrmMetadata(allFlatEntityMaps);
+  if (removeReplacedTwentyCrmMetadata) {
+    removeReplacedTwentyCrmMetadataFromMaps(allFlatEntityMaps);
+  }
 
   const idByUniversalIdentifierByMetadataName: IdByUniversalIdentifierByMetadataName =
     {};

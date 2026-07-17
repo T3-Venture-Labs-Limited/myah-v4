@@ -72,8 +72,8 @@ describe('Myah standard metadata contract', () => {
     }
   });
 
-  it('removes the replaced Twenty CRM objects and their relations', () => {
-    const removedObjectUniversalIdentifiers = [
+  it('retains CRM metadata in the generic standard map', () => {
+    const crmObjectUniversalIdentifiers = [
       STANDARD_OBJECTS.person.universalIdentifier,
       STANDARD_OBJECTS.company.universalIdentifier,
       STANDARD_OBJECTS.opportunity.universalIdentifier,
@@ -83,20 +83,28 @@ describe('Myah standard metadata contract', () => {
       Object.keys(
         result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
       ),
-    ).not.toEqual(
-      expect.arrayContaining(removedObjectUniversalIdentifiers),
-    );
+    ).toEqual(expect.arrayContaining(crmObjectUniversalIdentifiers));
+  });
 
-    for (const field of Object.values(
-      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
-    ).filter(isDefined)) {
-      expect(removedObjectUniversalIdentifiers).not.toContain(
-        field.objectMetadataUniversalIdentifier,
-      );
-      expect(removedObjectUniversalIdentifiers).not.toContain(
-        field.relationTargetObjectMetadataUniversalIdentifier,
-      );
-    }
+  it('removes replaced CRM metadata only for the recovery profile', () => {
+    const recoveryResult = computeTwentyStandardApplicationAllFlatEntityMaps({
+      now: '2026-07-14T00:00:00.000Z',
+      workspaceId: '00000000-0000-4000-8000-000000000001',
+      twentyStandardApplicationId: '00000000-0000-4000-8000-000000000002',
+      removeReplacedTwentyCrmMetadata: true,
+    });
+    const removedObjectUniversalIdentifiers = [
+      STANDARD_OBJECTS.person.universalIdentifier,
+      STANDARD_OBJECTS.company.universalIdentifier,
+      STANDARD_OBJECTS.opportunity.universalIdentifier,
+    ];
+
+    expect(
+      Object.keys(
+        recoveryResult.allFlatEntityMaps.flatObjectMetadataMaps
+          .byUniversalIdentifier,
+      ),
+    ).not.toEqual(expect.arrayContaining(removedObjectUniversalIdentifiers));
   });
 
   it('does not retain fields with dangling relation dependencies', () => {

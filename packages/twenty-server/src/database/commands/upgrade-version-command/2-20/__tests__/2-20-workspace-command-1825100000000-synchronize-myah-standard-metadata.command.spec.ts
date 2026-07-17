@@ -2,6 +2,8 @@ import {
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
+import type { DataSource } from 'typeorm';
+
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -10,6 +12,7 @@ import type { ApplicationService } from 'src/engine/core-modules/application/app
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
+import type { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/workspace-metadata-version/services/workspace-metadata-version.service';
 import type { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
 const WORKSPACE_ID = '20202020-0000-0000-0000-000000000001';
@@ -34,6 +37,8 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
   let update: jest.Mock;
   let flush: jest.Mock;
   let findByUniversalIdentifier: jest.Mock;
+  let createQueryRunner: jest.Mock;
+  let incrementMetadataVersion: jest.Mock;
 
   beforeEach(() => {
     update = jest.fn().mockResolvedValue({ affected: 1 });
@@ -43,6 +48,15 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       featureFlagsMap: {},
     });
     findByUniversalIdentifier = jest.fn().mockResolvedValue(null);
+    incrementMetadataVersion = jest.fn().mockResolvedValue(undefined);
+    createQueryRunner = jest.fn().mockReturnValue({
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      manager: { update },
+    });
     validateBuildAndRunWorkspaceMigrationFromTo = jest.fn().mockResolvedValue({
       status: 'success',
     });
@@ -50,18 +64,26 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     command = new SynchronizeMyahStandardMetadataCommand(
       {} as WorkspaceIteratorService,
       {
-        findWorkspaceTwentyStandardAndCustomApplicationOrThrow: jest.fn().mockResolvedValue({
-          twentyStandardFlatApplication: {
-            id: STANDARD_APPLICATION_ID,
-            universalIdentifier: STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
-          },
-        }),
+        createQueryRunner,
+      } as unknown as DataSource,
+      {
+        findWorkspaceTwentyStandardAndCustomApplicationOrThrow: jest
+          .fn()
+          .mockResolvedValue({
+            twentyStandardFlatApplication: {
+              id: STANDARD_APPLICATION_ID,
+              universalIdentifier: STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
+            },
+          }),
         findByUniversalIdentifier,
       } as unknown as ApplicationService,
       {
         getOrRecompute,
         flush,
       } as unknown as WorkspaceCacheService,
+      {
+        incrementMetadataVersion,
+      } as unknown as WorkspaceMetadataVersionService,
       {
         validateBuildAndRunWorkspaceMigrationFromTo,
       } as unknown as WorkspaceMigrationValidateBuildAndRunService,
@@ -79,10 +101,12 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       total: 1,
     });
 
-  it('does not build or run a migration in dry-run mode', async () => {
+  it('builds the migration plan without mutating in dry-run mode', async () => {
     await runOnWorkspace(true);
 
-    expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).toHaveBeenCalledWith(
+      expect.objectContaining({ dryRun: true }),
+    );
   });
 
   it('registers the migration in the next dispatchable version', () => {
@@ -278,6 +302,38 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     expect(fromObject.applicationId).toBe(STANDARD_APPLICATION_ID);
   });
 
+
+  it('transfers selected Myah metadata ownership after a successful migration', async () => {
+    findByUniversalIdentifier.mockResolvedValue({
+      id: 'legacy-myah-application-id',
+    });
+
+    await runOnWorkspace();
+
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        workspaceId: WORKSPACE_ID,
+        applicationId: expect.anything(),
+        universalIdentifier: expect.anything(),
+      }),
+      { applicationId: STANDARD_APPLICATION_ID },
+    );
+    expect(flush).toHaveBeenCalled();
+    expect(incrementMetadataVersion).toHaveBeenCalledWith(WORKSPACE_ID);
+  });
+
+  it('does not transfer ownership in dry-run mode', async () => {
+    findByUniversalIdentifier.mockResolvedValue({
+      id: 'legacy-myah-application-id',
+    });
+
+    await runOnWorkspace(true);
+
+    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
   it('does not persist ownership changes before a failed migration', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({
@@ -308,6 +364,9 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       },
       featureFlagsMap: {},
     });
+    findByUniversalIdentifier.mockResolvedValue({
+      id: 'legacy-myah-application-id',
+    });
     validateBuildAndRunWorkspaceMigrationFromTo.mockResolvedValue({
       status: 'fail',
       errors: ['migration rejected'],
@@ -318,6 +377,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     );
 
     expect(update).not.toHaveBeenCalled();
+    expect(createQueryRunner).not.toHaveBeenCalled();
   });
 
   it('throws when Myah metadata migration validation fails', async () => {

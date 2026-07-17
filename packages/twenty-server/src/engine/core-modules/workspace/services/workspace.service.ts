@@ -893,12 +893,6 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
 
         await prefillOpportunities(queryRunner.manager, schemaName);
 
-        await prefillDashboards(
-          queryRunner.manager,
-          schemaName,
-          flatPageLayoutMaps,
-        );
-
         await queryRunner.commitTransaction();
       } catch (error) {
         if (queryRunner.isTransactionActive) {
@@ -925,6 +919,30 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         );
         this.exceptionHandlerService.captureExceptions([error as Error]);
       }
+    }
+
+    const dashboardQueryRunner = this.coreDataSource.createQueryRunner();
+
+    await dashboardQueryRunner.connect();
+
+    try {
+      await dashboardQueryRunner.startTransaction();
+
+      await prefillDashboards(
+        dashboardQueryRunner.manager,
+        schemaName,
+        flatPageLayoutMaps,
+      );
+
+      await dashboardQueryRunner.commitTransaction();
+    } catch (error) {
+      if (dashboardQueryRunner.isTransactionActive) {
+        await dashboardQueryRunner.rollbackTransaction();
+      }
+
+      throw error;
+    } finally {
+      await dashboardQueryRunner.release();
     }
 
     try {

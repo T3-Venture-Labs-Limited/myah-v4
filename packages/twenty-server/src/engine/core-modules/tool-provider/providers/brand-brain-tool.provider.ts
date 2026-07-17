@@ -67,7 +67,7 @@ export class BrandBrainToolProvider implements ToolProvider {
 
     return Object.fromEntries(
       Object.entries(sourceToolSet).map(([name, tool]) => [
-        `${BRAND_BRAIN_PUBLIC_TOOL_PREFIX}${name.replaceAll('-', '_')}`,
+        `${BRAND_BRAIN_PUBLIC_TOOL_PREFIX}${name.replace(/-/g, '_')}`,
         tool,
       ]),
     ) as ToolSet;

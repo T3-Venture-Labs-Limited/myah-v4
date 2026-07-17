@@ -1,7 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
-import { type Repository } from 'typeorm';
+import { type DataSource, type Repository } from 'typeorm';
 
 import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
 import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
@@ -30,6 +30,7 @@ import { CoreEntityCacheService } from 'src/engine/core-entity-cache/services/co
 import { WorkspaceCacheStorageService } from 'src/engine/workspace-cache-storage/workspace-cache-storage.service';
 import { WorkspaceDataSourceService } from 'src/engine/workspace-datasource/workspace-datasource.service';
 import { PrefillLogicFunctionService } from 'src/engine/workspace-manager/standard-objects-prefill-data/services/prefill-logic-function.service';
+import { STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { PreInstalledAppsService } from 'src/engine/core-modules/application/pre-installed-apps/pre-installed-apps.service';
 import { SdkClientGenerationService } from 'src/engine/core-modules/sdk-client/sdk-client-generation.service';
@@ -47,8 +48,22 @@ describe('WorkspaceService', () => {
   let billingSubscriptionService: BillingSubscriptionService;
   let userWorkspaceService: UserWorkspaceService;
   let preInstalledAppsService: PreInstalledAppsService;
+  let coreDataSource: DataSource;
 
   beforeEach(async () => {
+    const flatEntityMaps = createEmptyAllFlatEntityMaps();
+    flatEntityMaps.flatPageLayoutMaps.byUniversalIdentifier[
+      STANDARD_PAGE_LAYOUTS.myFirstDashboard.universalIdentifier
+    ] = { id: 'my-first-dashboard-layout-id' } as never;
+    const dashboardQueryBuilder = {
+      insert: jest.fn().mockReturnThis(),
+      into: jest.fn().mockReturnThis(),
+      orIgnore: jest.fn().mockReturnThis(),
+      values: jest.fn().mockReturnThis(),
+      returning: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WorkspaceService,
@@ -131,7 +146,7 @@ describe('WorkspaceService', () => {
             flushFlatEntityMaps: jest.fn(),
             getOrRecomputeManyOrAllFlatEntityMaps: jest
               .fn()
-              .mockResolvedValue(createEmptyAllFlatEntityMaps()),
+              .mockResolvedValue(flatEntityMaps),
           },
         },
         {
@@ -163,6 +178,9 @@ describe('WorkspaceService', () => {
               release: jest.fn(),
               manager: {
                 delete: jest.fn().mockResolvedValue({ affected: 0 }),
+                createQueryBuilder: jest
+                  .fn()
+                  .mockReturnValue(dashboardQueryBuilder),
               },
             }),
             getRepository: jest.fn().mockReturnValue({
@@ -199,6 +217,7 @@ describe('WorkspaceService', () => {
     preInstalledAppsService = module.get<PreInstalledAppsService>(
       PreInstalledAppsService,
     );
+    coreDataSource = module.get<DataSource>(getDataSourceToken());
   });
 
   afterEach(() => {
@@ -220,6 +239,16 @@ describe('WorkspaceService', () => {
     expect(preInstalledAppsService.installOnWorkspace).toHaveBeenCalledWith(
       'workspace-id',
     );
+  });
+
+  it('prefills the default dashboard when legacy CRM prefill is skipped', async () => {
+    preInstalledAppsService.installOnWorkspace = jest.fn();
+    await service['prefillCreatedWorkspaceRecords']({
+      workspaceId: 'workspace-id',
+      schemaName: 'workspace_schema',
+    });
+
+    expect(coreDataSource.createQueryRunner).toHaveBeenCalledTimes(1);
   });
 
   describe('handleRemoveWorkspaceMember', () => {

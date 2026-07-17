@@ -57,18 +57,20 @@ export const computeMyahNavigationMenuItems = ({
 }: Args): Record<keyof typeof MYAH_NAVIGATION_ITEMS, FlatNavigationMenuItem> =>
   Object.fromEntries(
     Object.entries(MYAH_NAVIGATION_ITEMS).map(([name, definition]) => {
-      const targetObject = definition.targetObjectUniversalIdentifier
-        ? findFlatEntityByUniversalIdentifier({
-            flatEntityMaps: flatObjectMetadataMaps,
-            universalIdentifier: definition.targetObjectUniversalIdentifier,
-          })
-        : undefined;
-      const targetView = definition.viewUniversalIdentifier
-        ? findFlatEntityByUniversalIdentifier({
-            flatEntityMaps: flatViewMaps,
-            universalIdentifier: definition.viewUniversalIdentifier,
-          })
-        : undefined;
+      const targetObject =
+        definition.type === NavigationMenuItemType.OBJECT
+          ? findFlatEntityByUniversalIdentifier({
+              flatEntityMaps: flatObjectMetadataMaps,
+              universalIdentifier: definition.targetObjectUniversalIdentifier,
+            })
+          : undefined;
+      const targetView =
+        definition.type === NavigationMenuItemType.VIEW
+          ? findFlatEntityByUniversalIdentifier({
+              flatEntityMaps: flatViewMaps,
+              universalIdentifier: definition.viewUniversalIdentifier,
+            })
+          : undefined;
 
       if (definition.type === NavigationMenuItemType.OBJECT && !targetObject) {
         throw new Error(`Object not found for navigation menu item ${name}`);
