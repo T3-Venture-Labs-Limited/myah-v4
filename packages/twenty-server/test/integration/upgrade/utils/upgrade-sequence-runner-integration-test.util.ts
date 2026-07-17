@@ -9,7 +9,10 @@ import { WorkspaceIteratorService } from 'src/database/commands/command-runners/
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
-import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
+import {
+  UpgradeMigrationService,
+  type WorkspaceLastAttemptedCommand,
+} from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import {
   UpgradeSequenceReaderService,
   type UpgradeStep,
@@ -19,7 +22,10 @@ import { UpgradeSequenceRunnerService } from 'src/engine/core-modules/upgrade/se
 import { UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade-aware/upgrade-aware-entity-metadata.adapter';
 import { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
 import { WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
-import { UpgradeMigrationEntity } from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
+import {
+  UpgradeMigrationEntity,
+  type UpgradeMigrationStatus,
+} from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
 import {
   SEED_APPLE_WORKSPACE_ID,
   SEED_EMPTY_WORKSPACE_3_ID,
@@ -105,7 +111,7 @@ const seedEmptyWorkspaces = async (dataSource: DataSource) => {
   }
 };
 
-const EXECUTED_BY_VERSION = '42.42.42';
+const EXECUTED_BY_VERSION = `42.42.42-test-${process.pid}`;
 
 export const clearUpgradeSequenceRunnerTestMigrations = async (
   dataSource: DataSource,
@@ -116,6 +122,101 @@ export const clearUpgradeSequenceRunnerTestMigrations = async (
     [EXECUTED_BY_VERSION],
   );
 };
+
+class UpgradeSequenceRunnerTestMigrationService extends UpgradeMigrationService {
+  constructor(
+    private readonly testMigrationRepository: Repository<UpgradeMigrationEntity>,
+  ) {
+    super(testMigrationRepository);
+  }
+
+  override async getLastAttemptedCommandNameOrThrow(
+    allActiveOrSuspendedWorkspaceIds: string[],
+  ): Promise<{
+    name: string;
+    status: UpgradeMigrationStatus;
+  }> {
+    const parameters: unknown[] = [EXECUTED_BY_VERSION];
+    const workspaceScope =
+      allActiveOrSuspendedWorkspaceIds.length > 0
+        ? `AND (migration."workspaceId" IS NULL OR migration."workspaceId" = ANY($2))`
+        : 'AND migration."workspaceId" IS NULL';
+
+    if (allActiveOrSuspendedWorkspaceIds.length > 0) {
+      parameters.push(allActiveOrSuspendedWorkspaceIds);
+    }
+
+    const [migration] = await this.testMigrationRepository.query<
+      Array<{ name: string; status: UpgradeMigrationStatus }>
+    >(
+      `SELECT migration.name, migration.status
+         FROM core."upgradeMigration" migration
+        WHERE migration."executedByVersion" = $1
+          AND migration."isInitial" = false
+          AND migration.attempt = (
+            SELECT MAX(sub.attempt)
+              FROM core."upgradeMigration" sub
+             WHERE sub.name = migration.name
+               AND sub."executedByVersion" = $1
+               AND (
+                 (sub."workspaceId" IS NULL AND migration."workspaceId" IS NULL)
+                 OR sub."workspaceId" = migration."workspaceId"
+               )
+          )
+          ${workspaceScope}
+        ORDER BY migration."createdAt" DESC
+        LIMIT 1`,
+      parameters,
+    );
+
+    if (!migration) {
+      throw new Error(
+        'No upgrade migration found — the database may not have been initialized',
+      );
+    }
+
+    return migration;
+  }
+
+  override async getWorkspaceLastAttemptedCommandName(
+    workspaceIds: string[],
+  ): Promise<Map<string, WorkspaceLastAttemptedCommand>> {
+    if (workspaceIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.testMigrationRepository.query<
+      WorkspaceLastAttemptedCommand[]
+    >(
+      `SELECT DISTINCT ON (latest_per_name."workspaceId")
+          latest_per_name."workspaceId",
+          latest_per_name.name,
+          latest_per_name.status,
+          latest_per_name."executedByVersion",
+          latest_per_name."errorMessage",
+          latest_per_name."createdAt",
+          latest_per_name."isInitial"
+        FROM (
+          SELECT DISTINCT ON ("workspaceId", name)
+            "workspaceId",
+            name,
+            status,
+            "executedByVersion",
+            "errorMessage",
+            "createdAt",
+            "isInitial"
+          FROM core."upgradeMigration"
+          WHERE "workspaceId" = ANY($1)
+            AND "executedByVersion" = $2
+          ORDER BY "workspaceId", name, attempt DESC
+        ) latest_per_name
+        ORDER BY latest_per_name."workspaceId", latest_per_name."createdAt" DESC`,
+      [workspaceIds, EXECUTED_BY_VERSION],
+    );
+
+    return new Map(rows.map((row) => [row.workspaceId, row]));
+  }
+}
 
 const noopAsync = async () => {};
 
@@ -206,7 +307,10 @@ export const createUpgradeSequenceRunnerIntegrationTestModule = async () => {
             key === 'APP_VERSION' ? EXECUTED_BY_VERSION : undefined,
         },
       },
-      UpgradeMigrationService,
+      {
+        provide: UpgradeMigrationService,
+        useValue: new UpgradeSequenceRunnerTestMigrationService(migrationRepo),
+      },
       {
         provide: WorkspaceVersionService,
         useValue: {
