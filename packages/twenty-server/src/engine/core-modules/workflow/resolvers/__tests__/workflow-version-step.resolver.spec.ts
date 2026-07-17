@@ -1,5 +1,4 @@
 import { WorkflowVersionStepResolver } from 'src/engine/core-modules/workflow/resolvers/workflow-version-step.resolver';
-import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 
 describe('WorkflowVersionStepResolver', () => {
   it('denies testHttpRequest before HttpTool.execute', async () => {
