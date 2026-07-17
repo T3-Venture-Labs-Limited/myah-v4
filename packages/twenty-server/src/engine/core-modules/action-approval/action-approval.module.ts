@@ -11,14 +11,17 @@ import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-ap
 import { ActionReceiptRedactionService } from 'src/engine/core-modules/action-approval/services/action-receipt-redaction.service';
 import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-modules/action-approval/services/action-receipt-workspace-projection-writer.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 
 @Module({
   imports: [
     GlobalWorkspaceDataSourceModule,
+    WorkspaceCacheModule,
     PermissionsModule,
     TypeOrmModule.forFeature([
       ActionApprovalBindingEntity,
@@ -26,6 +29,7 @@ import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action
       ActionExecutionReceiptEntity,
       WorkspaceEntity,
       ObjectMetadataEntity,
+      UserWorkspaceEntity,
     ]),
   ],
   providers: [

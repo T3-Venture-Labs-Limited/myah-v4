@@ -8,24 +8,25 @@ import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/
 import {
   ActionApprovalProposalDTO,
   ActionExecutionReceiptDTO,
-  toActionApprovalProposalDTO,
   toActionExecutionReceiptDTO,
 } from 'src/engine/core-modules/action-approval/dtos/action-approval-evidence.dto';
-import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
+import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
-import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
-
-const ACTION_APPROVAL_EVIDENCE_NOT_FOUND = 'Action approval evidence was not found';
 
 @UseGuards(WorkspaceAuthGuard, SettingsPermissionGuard(PermissionFlagType.AI))
 @MetadataResolver()
 export class ActionApprovalResolver {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly actionApprovalService: ActionApprovalService,
+    private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
+  ) {}
 
   @Query(() => ActionApprovalProposalDTO)
   async getActionApprovalProposal(
@@ -33,13 +34,16 @@ export class ActionApprovalResolver {
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<ActionApprovalProposalDTO> {
-    const binding = await this.findBindingForViewer({
+    const binding = await this.actionApprovalService.getBindingForViewer({
       bindingId,
       workspaceId,
       userWorkspaceId,
     });
 
-    return toActionApprovalProposalDTO(binding);
+    return this.instagramReplyActionDefinition.getProposal({
+      workspaceId,
+      binding,
+    });
   }
 
   @Query(() => ActionExecutionReceiptDTO, { nullable: true })
@@ -48,7 +52,7 @@ export class ActionApprovalResolver {
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<ActionExecutionReceiptDTO | null> {
-    const binding = await this.findBindingForViewer({
+    const binding = await this.actionApprovalService.getBindingForViewer({
       bindingId,
       workspaceId,
       userWorkspaceId,
@@ -60,40 +64,4 @@ export class ActionApprovalResolver {
     return receipt ? toActionExecutionReceiptDTO({ receipt, binding }) : null;
   }
 
-  private async findBindingForViewer({
-    bindingId,
-    workspaceId,
-    userWorkspaceId,
-  }: {
-    bindingId: string;
-    workspaceId: string;
-    userWorkspaceId: string;
-  }): Promise<ActionApprovalBindingEntity> {
-    const binding = await this.dataSource
-      .getRepository(ActionApprovalBindingEntity)
-      .findOne({
-        where: { id: bindingId, workspaceId },
-        relations: { evidenceLinks: true },
-      });
-
-    if (!binding || binding.initiatorUserWorkspaceId !== userWorkspaceId) {
-      throw new Error(ACTION_APPROVAL_EVIDENCE_NOT_FOUND);
-    }
-
-    const thread = await this.dataSource
-      .getRepository(AgentChatThreadEntity)
-      .findOne({
-        where: {
-          id: binding.threadId,
-          workspaceId,
-          userWorkspaceId,
-        },
-      });
-
-    if (!thread) {
-      throw new Error(ACTION_APPROVAL_EVIDENCE_NOT_FOUND);
-    }
-
-    return binding;
-  }
 }

@@ -1,18 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { type ObjectRecord } from 'twenty-shared/types';
 import { z } from 'zod';
 
-import { buildSystemAuthContext } from 'src/engine/core-modules/auth/utils/build-system-auth-context.util';
+import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
+import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import {
   type ExpectedActionBindingWithWorkspace,
   type ActionEvidenceLinkInput,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
-import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 import { In, type Repository } from 'typeorm';
 
@@ -31,18 +35,30 @@ export type InstagramReplyActionProposalInput = z.infer<
   typeof InstagramReplyActionProposalInputZodSchema
 >;
 
-type InstagramReplySourceGraphRow = {
-  draftId: string;
-  draftBody: string;
-  draftLabel: string | null;
-  draftSentAt: string | null;
-  draftStatus: string;
+type InstagramReplyDraftRecord = ObjectRecord & {
+  id: string;
+  body: string | null;
+  title: string | null;
+  name: string | null;
+  sentAt: string | null;
+  status: string;
   conversationId: string;
-  conversationLabel: string | null;
+};
+
+type InstagramSocialConversationRecord = ObjectRecord & {
+  id: string;
+  label: string | null;
+  name: string | null;
   providerConversationId: string | null;
   recipientIgsid: string | null;
-  accountId: string;
-  accountLabel: string | null;
+  instagramAccountId: string;
+};
+
+type InstagramAccountRecord = ObjectRecord & {
+  id: string;
+  label: string | null;
+  name: string | null;
+  status: string;
   connectedAccountId: string | null;
   composioUserId: string | null;
 };
@@ -61,6 +77,7 @@ export type CanonicalInstagramReplyGraph = {
   recipientIgsid: string;
   account: {
     id: string;
+    label: string;
     connectedAccountId: string;
     composioUserId: string;
   };
@@ -79,6 +96,22 @@ export type InstagramReplyActionProposal = InstagramReplyActionAuthority & {
   };
 };
 
+export type InstagramReplyActionApprovalProposal = {
+  action: string;
+  actionVersion: number;
+  body: string;
+  recipientLabel: string;
+  sendingAccountLabel: string;
+  state: string;
+  expiresAt: Date;
+  occurredAt: Date;
+  evidenceLinks: {
+    objectMetadataId: string;
+    recordId: string;
+    role: string;
+  }[];
+};
+
 @Injectable()
 export class InstagramReplyActionDefinition {
   readonly actionName = 'send_instagram_reply' as const;
@@ -91,6 +124,9 @@ export class InstagramReplyActionDefinition {
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(ObjectMetadataEntity)
     private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
+    @InjectRepository(UserWorkspaceEntity)
+    private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
+    private readonly workspaceCacheService: WorkspaceCacheService,
   ) {}
 
   async propose({
@@ -104,7 +140,11 @@ export class InstagramReplyActionDefinition {
     threadId: string;
     input: InstagramReplyActionProposalInput;
   }): Promise<InstagramReplyActionProposal> {
-    const graph = await this.loadCanonicalGraph(workspaceId, input.draftId);
+    const graph = await this.loadCanonicalGraph(
+      workspaceId,
+      input.draftId,
+      initiatorUserWorkspaceId,
+    );
     const evidenceObjectMetadataIds =
       await this.resolveEvidenceObjectMetadataIds(workspaceId);
     const expectedActionBinding = this.buildExpectedActionBinding({
@@ -133,7 +173,11 @@ export class InstagramReplyActionDefinition {
     workspaceId: string;
     binding: ExpectedActionBindingWithWorkspace;
   }): Promise<InstagramReplyActionAuthority> {
-    const graph = await this.loadCanonicalGraph(workspaceId, binding.draftId);
+    const graph = await this.loadCanonicalGraph(
+      workspaceId,
+      binding.draftId,
+      binding.initiatorUserWorkspaceId,
+    );
     const evidenceObjectMetadataIds =
       await this.resolveEvidenceObjectMetadataIds(workspaceId);
     const expectedActionBinding = this.buildExpectedActionBinding({
@@ -149,6 +193,62 @@ export class InstagramReplyActionDefinition {
     }
 
     return { expectedActionBinding, canonicalGraph: graph };
+  }
+
+  async getProposal({
+    workspaceId,
+    binding,
+  }: {
+    workspaceId: string;
+    binding: ActionApprovalBindingEntity;
+  }): Promise<InstagramReplyActionApprovalProposal> {
+    const graph = await this.loadCanonicalGraph(
+      workspaceId,
+      binding.draftId,
+      binding.initiatorUserWorkspaceId,
+    );
+    const evidenceObjectMetadataIds =
+      await this.resolveEvidenceObjectMetadataIds(workspaceId);
+    const expectedActionBinding = this.buildExpectedActionBinding({
+      workspaceId,
+      initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+      threadId: binding.threadId,
+      graph,
+      evidenceObjectMetadataIds,
+    });
+    const actualActionBinding: ExpectedActionBindingWithWorkspace = {
+      workspaceId: binding.workspaceId,
+      actionName: binding.actionName as 'send_instagram_reply',
+      actionVersion: binding.actionVersion as 1,
+      draftId: binding.draftId,
+      contentDigest: binding.contentDigest,
+      recipientFingerprint: binding.recipientFingerprint ?? '',
+      sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
+      threadId: binding.threadId,
+      initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+      evidenceLinks: binding.evidenceLinks,
+    };
+    if (!this.matchesBinding(actualActionBinding, expectedActionBinding)) {
+      throw new Error('Instagram reply source graph is unavailable');
+    }
+
+    return {
+      action: binding.actionName,
+      actionVersion: binding.actionVersion,
+      body: graph.draftBody,
+      recipientLabel: graph.conversationLabel,
+      sendingAccountLabel: graph.account.label,
+      state: binding.state,
+      expiresAt: binding.expiresAt,
+      occurredAt: binding.decidedAt ?? binding.createdAt,
+      evidenceLinks: binding.evidenceLinks.map(
+        ({ objectMetadataId, recordId, role }) => ({
+          objectMetadataId,
+          recordId,
+          role,
+        }),
+      ),
+    };
   }
 
   private buildExpectedActionBinding({
@@ -274,6 +374,7 @@ export class InstagramReplyActionDefinition {
   private async loadCanonicalGraph(
     workspaceId: string,
     draftId: string,
+    initiatorUserWorkspaceId: string,
   ): Promise<
     CanonicalInstagramReplyGraph & {
       draftLabel: string;
@@ -284,67 +385,74 @@ export class InstagramReplyActionDefinition {
     if (!workspace) {
       throw new Error('Instagram reply source graph is unavailable');
     }
-
-    const rows = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const dataSource =
-          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
-        const schemaName = getWorkspaceSchemaName(workspace.id);
-
-        return dataSource.query<InstagramReplySourceGraphRow[]>(
-          `
-            SELECT
-              draft."id" AS "draftId",
-              draft."body" AS "draftBody",
-              COALESCE(draft."title", draft."name") AS "draftLabel",
-              draft."sentAt" AS "draftSentAt",
-              draft."status" AS "draftStatus",
-              conversation."id" AS "conversationId",
-              COALESCE(conversation."label", conversation."name") AS "conversationLabel",
-              conversation."providerConversationId" AS "providerConversationId",
-              conversation."recipientIgsid" AS "recipientIgsid",
-              account."id" AS "accountId",
-              COALESCE(account."label", account."name") AS "accountLabel",
-              account."connectedAccountId" AS "connectedAccountId",
-              account."composioUserId" AS "composioUserId"
-            FROM "${schemaName}"."_myahInstagramReplyDraft" AS draft
-            INNER JOIN "${schemaName}"."_myahSocialConversation" AS conversation
-              ON conversation."id" = draft."conversationId"
-              AND conversation."deletedAt" IS NULL
-            INNER JOIN "${schemaName}"."_myahInstagramAccount" AS account
-              ON account."id" = conversation."instagramAccountId"
-              AND account."deletedAt" IS NULL
-              AND account."status" = 'ACTIVE'
-            WHERE draft."id" = $1
-              AND draft."deletedAt" IS NULL
-          `,
-          [draftId],
-          undefined,
-          { shouldBypassPermissionChecks: true },
-        );
-      },
-      buildSystemAuthContext({ workspace: workspace as unknown as FlatWorkspace }),
+    const authContext = await this.buildInitiatorAuthContext(
+      workspace,
+      initiatorUserWorkspaceId,
     );
+    const graph = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const draftRepository =
+          await this.globalWorkspaceOrmManager.getRepository<InstagramReplyDraftRecord>(
+            workspaceId,
+            'myahInstagramReplyDraft',
+          );
+        const conversationRepository =
+          await this.globalWorkspaceOrmManager.getRepository<InstagramSocialConversationRecord>(
+            workspaceId,
+            'myahSocialConversation',
+          );
+        const accountRepository =
+          await this.globalWorkspaceOrmManager.getRepository<InstagramAccountRecord>(
+            workspaceId,
+            'myahInstagramAccount',
+          );
+        const draft = await draftRepository.findOneBy({ id: draftId });
+        if (!draft) {
+          return null;
+        }
+        const conversation = await conversationRepository.findOneBy({
+          id: draft.conversationId,
+        });
+        if (!conversation) {
+          return null;
+        }
+        const [account, activeAccounts] = await Promise.all([
+          accountRepository.findOneBy({
+            id: conversation.instagramAccountId,
+            status: 'ACTIVE',
+          }),
+          accountRepository.find({ where: { status: 'ACTIVE' } }),
+        ]);
+        if (!account || activeAccounts.length !== 1) {
+          return null;
+        }
 
-    if (rows.length !== 1) {
+        return { draft, conversation, account };
+      },
+      authContext,
+    );
+    if (!graph) {
       throw new Error('Instagram reply source graph is unavailable');
     }
 
-    const [row] = rows;
     const expectedComposioUserId = `workspace:${workspaceId}:instagram`;
-    const draftLabel = row.draftLabel?.trim();
-    const conversationLabel = row.conversationLabel?.trim();
-    const providerConversationId = row.providerConversationId?.trim();
-    const recipientIgsid = row.recipientIgsid?.trim();
-    const connectedAccountId = row.connectedAccountId?.trim();
-    const composioUserId = row.composioUserId?.trim();
-
+    const draftLabel = (graph.draft.title ?? graph.draft.name)?.trim();
+    const conversationLabel = (
+      graph.conversation.label ?? graph.conversation.name
+    )?.trim();
+    const accountLabel = (graph.account.label ?? graph.account.name)?.trim();
+    const providerConversationId =
+      graph.conversation.providerConversationId?.trim();
+    const recipientIgsid = graph.conversation.recipientIgsid?.trim();
+    const connectedAccountId = graph.account.connectedAccountId?.trim();
+    const composioUserId = graph.account.composioUserId?.trim();
     if (
-      row.draftSentAt ||
-      row.draftStatus !== 'NEEDS_REVIEW' ||
-      !row.draftBody?.trim() ||
+      graph.draft.sentAt ||
+      graph.draft.status !== 'NEEDS_REVIEW' ||
+      !graph.draft.body?.trim() ||
       !draftLabel ||
       !conversationLabel ||
+      !accountLabel ||
       !providerConversationId ||
       !recipientIgsid ||
       !connectedAccountId ||
@@ -354,18 +462,52 @@ export class InstagramReplyActionDefinition {
     }
 
     return {
-      draftId: row.draftId,
-      draftBody: row.draftBody,
+      draftId: graph.draft.id,
+      draftBody: graph.draft.body,
       draftLabel,
-      conversationId: row.conversationId,
+      conversationId: graph.conversation.id,
       conversationLabel,
       providerConversationId,
       recipientIgsid,
       account: {
-        id: row.accountId,
+        id: graph.account.id,
+        label: accountLabel,
         connectedAccountId,
         composioUserId,
       },
     };
+  }
+
+  private async buildInitiatorAuthContext(
+    workspace: WorkspaceEntity,
+    userWorkspaceId: string,
+  ) {
+    const userWorkspace = await this.userWorkspaceRepository.findOne({
+      where: { id: userWorkspaceId, workspaceId: workspace.id },
+      relations: { user: true },
+    });
+    if (!userWorkspace?.user) {
+      throw new Error('Instagram reply source graph is unavailable');
+    }
+    const { flatWorkspaceMemberMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspace.id, [
+        'flatWorkspaceMemberMaps',
+      ]);
+    const workspaceMemberId =
+      flatWorkspaceMemberMaps.idByUserId[userWorkspace.user.id];
+    const workspaceMember = workspaceMemberId
+      ? flatWorkspaceMemberMaps.byId[workspaceMemberId]
+      : undefined;
+    if (!workspaceMemberId || !workspaceMember) {
+      throw new Error('Instagram reply source graph is unavailable');
+    }
+
+    return buildUserAuthContext({
+      workspace: workspace as unknown as FlatWorkspace,
+      userWorkspaceId,
+      user: userWorkspace.user as unknown as FlatUser,
+      workspaceMemberId,
+      workspaceMember,
+    });
   }
 }

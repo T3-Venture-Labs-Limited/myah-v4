@@ -20,6 +20,7 @@ import {
   type SafeActionExecutionReceipt,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
 
 const ACTION_APPROVAL_TTL_MS = 30 * 60 * 1000;
 
@@ -83,6 +84,40 @@ export class ActionApprovalService {
 
       return { id: binding.id };
     });
+  }
+
+  async getBindingForViewer({
+    bindingId,
+    workspaceId,
+    userWorkspaceId,
+  }: {
+    bindingId: string;
+    workspaceId: string;
+    userWorkspaceId: string;
+  }): Promise<ActionApprovalBindingEntity> {
+    const binding = await this.dataSource
+      .getRepository(ActionApprovalBindingEntity)
+      .findOne({
+        where: { id: bindingId, workspaceId },
+        relations: { evidenceLinks: true },
+      });
+    if (!binding || binding.initiatorUserWorkspaceId !== userWorkspaceId) {
+      throw new Error('Action approval evidence was not found');
+    }
+    const thread = await this.dataSource
+      .getRepository(AgentChatThreadEntity)
+      .findOne({
+        where: {
+          id: binding.threadId,
+          workspaceId,
+          userWorkspaceId,
+        },
+      });
+    if (!thread) {
+      throw new Error('Action approval evidence was not found');
+    }
+
+    return binding;
   }
 
   async decidePendingBinding(

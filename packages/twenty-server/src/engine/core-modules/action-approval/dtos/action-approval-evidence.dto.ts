@@ -1,4 +1,4 @@
-import { Field, GraphQLISODateTime, ObjectType } from '@nestjs/graphql';
+import { Field, GraphQLISODateTime, Int, ObjectType } from '@nestjs/graphql';
 
 import { type ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { type ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
@@ -20,8 +20,23 @@ export class ActionApprovalProposalDTO {
   @Field(() => String)
   action: string;
 
+  @Field(() => Int)
+  actionVersion: number;
+
+  @Field(() => String)
+  body: string;
+
+  @Field(() => String)
+  recipientLabel: string;
+
+  @Field(() => String)
+  sendingAccountLabel: string;
+
   @Field(() => String)
   state: string;
+
+  @Field(() => GraphQLISODateTime)
+  expiresAt: Date;
 
   @Field(() => GraphQLISODateTime)
   occurredAt: Date;
@@ -46,20 +61,6 @@ export class ActionExecutionReceiptDTO {
 }
 
 
-export const toActionApprovalProposalDTO = (
-  binding: ActionApprovalBindingEntity,
-): ActionApprovalProposalDTO => ({
-  action: binding.actionName,
-  state: binding.state,
-  occurredAt: binding.decidedAt ?? binding.createdAt,
-  evidenceLinks: binding.evidenceLinks.map(
-    ({ objectMetadataId, recordId, role }) => ({
-      objectMetadataId,
-      recordId,
-      role,
-    }),
-  ),
-});
 
 export const toActionExecutionReceiptDTO = ({
   receipt,

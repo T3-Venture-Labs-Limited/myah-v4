@@ -1,3 +1,4 @@
+import { useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -19,6 +20,7 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { LazyMarkdownRenderer } from '@/ai/components/LazyMarkdownRenderer';
 import { useSubmitApprovalDecision } from '@/ai/hooks/useSubmitApprovalDecision';
 import { type AgentChatPendingApproval } from '@/ai/types/AgentChatPendingApproval';
+import { GET_ACTION_APPROVAL_PROPOSAL } from '@/ai/graphql/queries/getActionApprovalProposal';
 
 const StyledCard = styled.div`
   background-color: ${themeCssVariables.background.transparent.lighter};
@@ -155,6 +157,18 @@ const APPROVAL_RISK_LEVEL_LABELS: Record<ApprovalRiskLevel, string> = {
   critical: 'Critical',
 };
 
+type GetActionApprovalProposalData = {
+  getActionApprovalProposal: {
+    action: string;
+    actionVersion: number;
+    body: string;
+    recipientLabel: string;
+    sendingAccountLabel: string;
+    state: string;
+    expiresAt: string;
+  };
+};
+
 export const AiChatApprovalCard = ({
   pendingApproval,
 }: AiChatApprovalCardProps) => {
@@ -163,19 +177,43 @@ export const AiChatApprovalCard = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitDecision } = useSubmitApprovalDecision();
   const { messageId, toolCallId } = pendingApproval;
+  const actionApprovalBindingId =
+    'actionApprovalBindingId' in pendingApproval
+      ? pendingApproval.actionApprovalBindingId
+      : undefined;
+  const { data: proposalData } = useQuery<GetActionApprovalProposalData>(
+    GET_ACTION_APPROVAL_PROPOSAL,
+    {
+      variables: { bindingId: actionApprovalBindingId },
+      fetchPolicy: 'cache-and-network',
+      skip: !actionApprovalBindingId,
+    },
+  );
+  const proposal = proposalData?.getActionApprovalProposal;
   const request =
     'request' in pendingApproval
       ? pendingApproval.request
-      : ({
-          title: t`Review Instagram reply`,
-          summary: t`Review the server-derived Instagram reply before it is sent.`,
-          actionKind: 'external_write',
-          riskLevel: 'medium',
-          consequences: [t`The reply will be sent to the existing conversation.`],
-        } satisfies RequestApprovalToolInput);
+      : proposal
+        ? ({
+            title: t`Review Instagram reply`,
+            summary: t`Review the exact server-derived Instagram reply before it is sent.`,
+            actionKind: 'external_write',
+            riskLevel: 'medium',
+            consequences: [t`The reply will be sent to the existing conversation.`],
+            preview: { format: 'text', content: proposal.body },
+          } satisfies RequestApprovalToolInput)
+        : ({
+            title: t`Instagram reply unavailable`,
+            summary: t`The exact server-derived Instagram reply is unavailable.`,
+            actionKind: 'external_write',
+            riskLevel: 'medium',
+            consequences: [
+              t`The reply cannot be approved until its source is available.`,
+            ],
+          } satisfies RequestApprovalToolInput);
 
   const handleDecision = async (decision: ApprovalDecision) => {
-    if (isSubmitting) {
+    if (isSubmitting || (actionApprovalBindingId && !proposal)) {
       return;
     }
 
@@ -210,7 +248,9 @@ export const AiChatApprovalCard = ({
 
       {request.preview && (
         <StyledSection>
-          <StyledSectionTitle>{t`Preview`}</StyledSectionTitle>
+          <StyledSectionTitle>
+            {actionApprovalBindingId ? t`Projected message` : t`Preview`}
+          </StyledSectionTitle>
           {request.preview.format === 'markdown' ? (
             <StyledMarkdownPreview>
               <LazyMarkdownRenderer text={request.preview.content} />
@@ -219,6 +259,13 @@ export const AiChatApprovalCard = ({
             <StyledPreview>{request.preview.content}</StyledPreview>
           )}
         </StyledSection>
+      )}
+
+      {actionApprovalBindingId && proposal && (
+        <StyledMeta>
+          <span>{t`To`}: {proposal.recipientLabel}</span>
+          <span>{t`From`}: {proposal.sendingAccountLabel}</span>
+        </StyledMeta>
       )}
 
       <StyledSection>
@@ -242,7 +289,7 @@ export const AiChatApprovalCard = ({
             title={t`Request changes`}
             variant="secondary"
             Icon={IconRefresh}
-            disabled={isSubmitting}
+            disabled={isSubmitting || Boolean(actionApprovalBindingId && !proposal)}
             onClick={() => void handleDecision('changes_requested')}
           />
         )}
@@ -250,13 +297,13 @@ export const AiChatApprovalCard = ({
           title={t`Reject`}
           variant="secondary"
           Icon={IconX}
-          disabled={isSubmitting}
+          disabled={isSubmitting || Boolean(actionApprovalBindingId && !proposal)}
           onClick={() => void handleDecision('rejected')}
         />
         <MainButton
           title={t`Approve`}
           Icon={IconCheck}
-          disabled={isSubmitting}
+          disabled={isSubmitting || Boolean(actionApprovalBindingId && !proposal)}
           onClick={() => void handleDecision('approved')}
         />
       </StyledActions>

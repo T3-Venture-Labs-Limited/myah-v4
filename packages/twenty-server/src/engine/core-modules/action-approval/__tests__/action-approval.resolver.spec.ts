@@ -45,6 +45,24 @@ const receipt = {
   rawFailureReason: 'raw-failure-must-not-leak',
 };
 
+const serverDerivedProposal = {
+  action: 'send_instagram_reply',
+  actionVersion: 1,
+  body: 'Server-derived reply body',
+  recipientLabel: '@recipient',
+  sendingAccountLabel: '@myah_business',
+  state: binding.state,
+  expiresAt: binding.expiresAt,
+  occurredAt: binding.decidedAt,
+  evidenceLinks: binding.evidenceLinks.map(
+    ({ objectMetadataId, recordId, role }) => ({
+      objectMetadataId,
+      recordId,
+      role,
+    }),
+  ),
+};
+
 const createResolver = ({
   resolvedBinding = binding,
   resolvedThread = {
@@ -53,10 +71,12 @@ const createResolver = ({
     userWorkspaceId,
   },
   resolvedReceipt = receipt,
+  resolvedProposal = serverDerivedProposal,
 }: {
   resolvedBinding?: typeof binding | null;
   resolvedThread?: { id: string; workspaceId: string; userWorkspaceId: string } | null;
   resolvedReceipt?: typeof receipt | null;
+  resolvedProposal?: typeof serverDerivedProposal | Error;
 } = {}) => {
   const bindingRepository = {
     findOne: jest.fn().mockResolvedValue(resolvedBinding),
@@ -81,9 +101,38 @@ const createResolver = ({
       throw new Error('Unexpected repository');
     }),
   };
+  const actionApprovalService = {
+    getBindingForViewer: jest.fn().mockImplementation(async () => {
+      if (
+        !resolvedBinding ||
+        resolvedBinding.initiatorUserWorkspaceId !== userWorkspaceId ||
+        !resolvedThread
+      ) {
+        throw new Error('Action approval evidence was not found');
+      }
+      return resolvedBinding;
+    }),
+  };
+  const actionDefinition = {
+    getProposal: jest.fn().mockImplementation(async () => {
+      if (resolvedProposal instanceof Error) {
+        throw resolvedProposal;
+      }
+      return resolvedProposal;
+    }),
+  };
+  const Resolver = ActionApprovalResolver as unknown as new (
+    ...args: unknown[]
+  ) => ActionApprovalResolver;
 
   return {
-    resolver: new ActionApprovalResolver(dataSource as never),
+    resolver: new Resolver(
+      dataSource,
+      actionApprovalService,
+      actionDefinition,
+    ),
+    actionApprovalService,
+    actionDefinition,
     bindingRepository,
     threadRepository,
     receiptRepository,
@@ -96,8 +145,8 @@ describe('ActionApprovalResolver', () => {
 
     expect(imports).toContain(ActionApprovalModule);
   });
-  it('rejects a foreign workspace member before mapping a proposal DTO', async () => {
-    const { resolver, threadRepository } = createResolver({
+  it('rejects a foreign workspace member before loading a proposal graph', async () => {
+    const { resolver, actionApprovalService, threadRepository } = createResolver({
       resolvedBinding: {
         ...binding,
         initiatorUserWorkspaceId: 'foreign-user-workspace-id',
@@ -107,6 +156,11 @@ describe('ActionApprovalResolver', () => {
     await expect(
       resolver.getActionApprovalProposal(bindingId, { id: workspaceId } as never, userWorkspaceId),
     ).rejects.toThrow('Action approval evidence was not found');
+    expect(actionApprovalService.getBindingForViewer).toHaveBeenCalledWith({
+      bindingId,
+      workspaceId,
+      userWorkspaceId,
+    });
     expect(threadRepository.findOne).not.toHaveBeenCalled();
   });
 
@@ -121,22 +175,15 @@ describe('ActionApprovalResolver', () => {
     expect(receiptRepository.findOne).not.toHaveBeenCalled();
   });
 
-  it('allows only redacted proposal and receipt fields to serialize', async () => {
-    const { resolver } = createResolver();
+  it('returns the exact guarded server-derived proposal and preserves redacted evidence', async () => {
+    const { resolver, actionDefinition } = createResolver();
 
     await expect(
       resolver.getActionApprovalProposal(bindingId, { id: workspaceId } as never, userWorkspaceId),
-    ).resolves.toEqual({
-      action: 'send_instagram_reply',
-      state: 'CONSUMED',
-      occurredAt: binding.decidedAt,
-      evidenceLinks: [
-        {
-          objectMetadataId: 'object-metadata-id',
-          recordId: 'record-id',
-          role: 'recipient',
-        },
-      ],
+    ).resolves.toEqual(serverDerivedProposal);
+    expect(actionDefinition.getProposal).toHaveBeenCalledWith({
+      workspaceId,
+      binding,
     });
     await expect(
       resolver.getActionExecutionReceipt(bindingId, { id: workspaceId } as never, userWorkspaceId),
@@ -153,10 +200,13 @@ describe('ActionApprovalResolver', () => {
       ],
     });
 
-    const serialized = JSON.stringify({
-      proposal: await resolver.getActionApprovalProposal(bindingId, { id: workspaceId } as never, userWorkspaceId),
-      receipt: await resolver.getActionExecutionReceipt(bindingId, { id: workspaceId } as never, userWorkspaceId),
-    });
+    const serialized = JSON.stringify(
+      await resolver.getActionExecutionReceipt(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
+    );
     for (const unsafeValue of [
       'draft-body-must-not-leak',
       'digest-must-not-leak',
@@ -169,5 +219,15 @@ describe('ActionApprovalResolver', () => {
     ]) {
       expect(serialized).not.toContain(unsafeValue);
     }
+  });
+
+  it('rejects a mismatched graph instead of returning an approvable proposal', async () => {
+    const { resolver } = createResolver({
+      resolvedProposal: new Error('Instagram reply source graph is unavailable'),
+    });
+
+    await expect(
+      resolver.getActionApprovalProposal(bindingId, { id: workspaceId } as never, userWorkspaceId),
+    ).rejects.toThrow('Instagram reply source graph is unavailable');
   });
 });

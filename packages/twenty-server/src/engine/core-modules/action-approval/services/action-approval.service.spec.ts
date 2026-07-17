@@ -55,6 +55,36 @@ describe('ActionApprovalService overdue authority', () => {
     );
   });
 
+  it('denies a foreign initiator before resolving a binding graph', async () => {
+    const bindingRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        ...binding,
+        initiatorUserWorkspaceId: 'foreign-user-workspace-id',
+        evidenceLinks: [],
+      }),
+    };
+    const threadRepository = { findOne: jest.fn() };
+    const guardedService = new ActionApprovalService(
+      {
+        getRepository: jest.fn((entity) =>
+          entity === ActionApprovalBindingEntity
+            ? bindingRepository
+            : threadRepository,
+        ),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      guardedService.getBindingForViewer({
+        bindingId: approvalBindingId,
+        workspaceId,
+        userWorkspaceId,
+      }),
+    ).rejects.toThrow('Action approval evidence was not found');
+    expect(threadRepository.findOne).not.toHaveBeenCalled();
+  });
+
   it('persists EXPIRED before an overdue approval read is rejected', async () => {
     await expect(
       service.getApprovedBinding({

@@ -24,16 +24,90 @@ const sourceGraph = {
   composioUserId: 'workspace:00000000-0000-4000-8000-000000000001:instagram',
 };
 
-const buildDefinition = (rows: unknown[] = [sourceGraph]) => {
-  const query = jest.fn().mockResolvedValue(rows);
+const buildDefinition = ({
+  draft = sourceGraph,
+  conversation = sourceGraph,
+  account = sourceGraph,
+  activeAccounts = [sourceGraph],
+}: {
+  draft?: typeof sourceGraph | null;
+  conversation?: typeof sourceGraph | null;
+  account?: typeof sourceGraph | null;
+  activeAccounts?: (typeof sourceGraph)[];
+} = {}) => {
+  const query = jest.fn().mockResolvedValue([sourceGraph]);
+  const repositories = {
+    myahInstagramReplyDraft: {
+      findOneBy: jest.fn().mockResolvedValue(
+        draft && {
+          id: draft.draftId,
+          body: draft.draftBody,
+          title: draft.draftLabel,
+          name: null,
+          sentAt: draft.draftSentAt,
+          status: draft.draftStatus,
+          conversationId: draft.conversationId,
+        },
+      ),
+    },
+    myahSocialConversation: {
+      findOneBy: jest.fn().mockResolvedValue(
+        conversation && {
+          id: conversation.conversationId,
+          label: conversation.conversationLabel,
+          name: null,
+          providerConversationId: conversation.providerConversationId,
+          recipientIgsid: conversation.recipientIgsid,
+          instagramAccountId: conversation.accountId,
+        },
+      ),
+    },
+    myahInstagramAccount: {
+      findOneBy: jest.fn().mockResolvedValue(
+        account && {
+          id: account.accountId,
+          label: account.accountLabel,
+          name: null,
+          status: 'ACTIVE',
+          connectedAccountId: account.connectedAccountId,
+          composioUserId: account.composioUserId,
+        },
+      ),
+      find: jest.fn().mockResolvedValue(
+        activeAccounts.map((activeAccount) => ({
+          id: activeAccount.accountId,
+          status: 'ACTIVE',
+        })),
+      ),
+    },
+  };
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
       callback(),
     ),
     getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
+    getRepository: jest.fn(
+      async (_workspaceId: string, objectName: keyof typeof repositories) =>
+        repositories[objectName],
+    ),
   };
   const workspaceRepository = {
     findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
+  };
+  const userWorkspaceRepository = {
+    findOne: jest.fn().mockResolvedValue({
+      id: userWorkspaceId,
+      workspaceId,
+      user: { id: 'user-id' },
+    }),
+  };
+  const workspaceCacheService = {
+    getOrRecompute: jest.fn().mockResolvedValue({
+      flatWorkspaceMemberMaps: {
+        idByUserId: { 'user-id': 'workspace-member-id' },
+        byId: { 'workspace-member-id': { id: 'workspace-member-id' } },
+      },
+    }),
   };
 
   const objectMetadataRepository = {
@@ -58,11 +132,13 @@ const buildDefinition = (rows: unknown[] = [sourceGraph]) => {
 
   return {
     query,
-    objectMetadataRepository,
+    globalWorkspaceOrmManager,
     definition: new Definition(
       workspaceRepository,
       globalWorkspaceOrmManager,
       objectMetadataRepository,
+      userWorkspaceRepository,
+      workspaceCacheService,
     ),
   };
 };
@@ -86,7 +162,7 @@ describe('InstagramReplyActionDefinition', () => {
   });
 
   it('derives normalized immutable authority and source evidence from the visible graph', async () => {
-    const { definition, query } = buildDefinition();
+    const { definition, globalWorkspaceOrmManager } = buildDefinition();
 
     await expect(
       definition.propose({
@@ -130,22 +206,71 @@ describe('InstagramReplyActionDefinition', () => {
       },
     });
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('"conversationId"'),
-      [draftId],
-      undefined,
-      { shouldBypassPermissionChecks: true },
+    expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
+      workspaceId,
+      'myahInstagramReplyDraft',
     );
+    expect(globalWorkspaceOrmManager.getGlobalWorkspaceDataSource).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['zero', []],
-    ['two', [sourceGraph, sourceGraph]],
-    ['malformed', [{ ...sourceGraph, recipientIgsid: '  ' }]],
-    ['stale', [{ ...sourceGraph, draftSentAt: '2026-07-16T00:00:00.000Z' }]],
-    ['invalid draft status', [{ ...sourceGraph, draftStatus: 'SENT' }]],
-  ])('rejects a %s canonical account projection', async (_case, rows) => {
-    const { definition } = buildDefinition(rows);
+  it('returns an exact guarded preview only while the canonical graph matches the binding', async () => {
+    const { definition } = buildDefinition();
+    const expected = await definition.propose({
+      workspaceId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      threadId,
+      input: { draftId },
+    });
+    const binding = {
+      ...expected.expectedActionBinding,
+      state: 'PENDING',
+      expiresAt: new Date('2026-07-17T10:30:00.000Z'),
+      createdAt: new Date('2026-07-17T10:00:00.000Z'),
+      decidedAt: null,
+    };
+
+    await expect(
+      definition.getProposal({ workspaceId, binding: binding as never }),
+    ).resolves.toEqual({
+      action: 'send_instagram_reply',
+      actionVersion: 1,
+      body: 'Cafe\r\nThanks!',
+      recipientLabel: '@myah',
+      sendingAccountLabel: '@myah_business',
+      state: 'PENDING',
+      expiresAt: binding.expiresAt,
+      occurredAt: binding.createdAt,
+      evidenceLinks: binding.evidenceLinks,
+    });
+
+    await expect(
+      definition.getProposal({
+        workspaceId,
+        binding: { ...binding, contentDigest: 'mismatched' } as never,
+      }),
+    ).rejects.toThrow('Instagram reply source graph is unavailable');
+  });
+
+  it('rejects a graph hidden from the initiator before creating a binding', async () => {
+    const { definition } = buildDefinition({ draft: null });
+
+    await expect(
+      definition.propose({
+        workspaceId,
+        initiatorUserWorkspaceId: userWorkspaceId,
+        threadId,
+        input: { draftId },
+      }),
+    ).rejects.toThrow('Instagram reply source graph is unavailable');
+  });
+
+  it('rejects multiple active local Instagram accounts before creating a binding', async () => {
+    const { definition } = buildDefinition({
+      activeAccounts: [
+        sourceGraph,
+        { ...sourceGraph, accountId: '00000000-0000-4000-8000-000000000007' },
+      ],
+    });
 
     await expect(
       definition.propose({
