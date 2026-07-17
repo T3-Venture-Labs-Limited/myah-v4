@@ -3,6 +3,7 @@ import {
   RelationOnDeleteAction,
   RelationType,
 } from 'twenty-shared/types';
+import { type MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
@@ -16,17 +17,22 @@ import {
   type CreateStandardObjectArgs,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/object-metadata/create-standard-object-flat-metadata.util';
 
+type MyahStandardObjectName = keyof typeof MYAH_STANDARD_OBJECTS;
+
 type Args = Omit<
-  CreateStandardFieldArgs<AllStandardObjectName, FieldMetadataType>,
+  CreateStandardFieldArgs<MyahStandardObjectName, FieldMetadataType>,
   'context'
 >;
 type ObjectArgs = Omit<
-  CreateStandardObjectArgs<AllStandardObjectName>,
+  CreateStandardObjectArgs<MyahStandardObjectName>,
   'context' | 'objectName'
 >;
 
-const createMyahStandardFieldFlatMetadata = (
-  args: CreateStandardFieldArgs<AllStandardObjectName, FieldMetadataType>,
+const createMyahStandardFieldFlatMetadata = <
+  O extends MyahStandardObjectName,
+  T extends FieldMetadataType,
+>(
+  args: CreateStandardFieldArgs<O, T>,
 ): FlatFieldMetadata => {
   if (args.context.type !== FieldMetadataType.SELECT) {
     return createStandardFieldFlatMetadata(args);
@@ -47,7 +53,10 @@ const createMyahStandardFieldFlatMetadata = (
 const buildMyahBaseSystemFields = ({
   objectName,
   ...args
-}: Args): Record<string, FlatFieldMetadata> => ({
+}: Omit<
+  CreateStandardFieldArgs<MyahStandardObjectName, FieldMetadataType>,
+  'context'
+>): Record<string, FlatFieldMetadata> => ({
   id: createMyahStandardFieldFlatMetadata({
     objectName,
     workspaceId: args.workspaceId,

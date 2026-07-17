@@ -276,6 +276,25 @@ describe('Myah standard metadata contract', () => {
     }
   });
 
+  it('includes declared Creator custom fields', () => {
+    const creatorFields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+        MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+    );
+
+    expect(creatorFields).toContainEqual(
+      expect.objectContaining({
+        name: 'instagramReelsAvgViewCount',
+        universalIdentifier:
+          MYAH_STANDARD_OBJECTS.creator.fields.instagramReelsAvgViewCount
+            .universalIdentifier,
+      }),
+    );
+  });
+
   it('normalizes select option positions and defaults', () => {
     const myahObjectIds = new Set(contract.flatObjectMetadataMaps);
     const fields = Object.values(
