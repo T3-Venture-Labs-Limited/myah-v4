@@ -32,6 +32,8 @@ import { MetronomeWorkspaceCustomerService } from './metronome-workspace-custome
 @Injectable()
 export class ManagedProviderOperationService {
   constructor(
+    // The journal accepts an explicit workspaceId before request context exists and enforces it on every lookup.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(ManagedProviderOperationEntity)
     private readonly operationRepository: Repository<ManagedProviderOperationEntity>,
 
@@ -59,10 +61,8 @@ export class ManagedProviderOperationService {
       ),
     };
 
-    const {
-      expectedProductIds: inputExpectedProductIds,
-      ...operationValues
-    } = operationInput;
+    const { expectedProductIds: inputExpectedProductIds, ...operationValues } =
+      operationInput;
     const expectedProductIds = this.normalizeExpectedProductIds(
       inputExpectedProductIds,
     );

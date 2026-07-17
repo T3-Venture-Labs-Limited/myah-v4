@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
+import { IsNull, LessThanOrEqual, Repository } from 'typeorm';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -33,8 +33,12 @@ export class ManagedProviderBillingRecoveryService {
   );
 
   constructor(
+    // Recovery is a control-plane cron that must scan and lock operations across every workspace.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(ManagedProviderOperationEntity)
     private readonly operationRepository: Repository<ManagedProviderOperationEntity>,
+    // Customer mappings are resolved across workspaces before any tenant context exists.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(MyahWorkspaceInstallationEntity)
     private readonly installationRepository: Repository<MyahWorkspaceInstallationEntity>,
     private readonly metronomeClientService: MetronomeClientService,

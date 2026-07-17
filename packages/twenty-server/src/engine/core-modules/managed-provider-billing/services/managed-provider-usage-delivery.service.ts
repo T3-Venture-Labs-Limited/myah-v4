@@ -18,6 +18,8 @@ import { MetronomeWorkspaceCustomerService } from './metronome-workspace-custome
 @Injectable()
 export class ManagedProviderUsageDeliveryService {
   constructor(
+    // Queue delivery starts from a globally unique operationId before tenant request context exists.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(ManagedProviderOperationEntity)
     private readonly operationRepository: Repository<ManagedProviderOperationEntity>,
     private readonly metronomeClientService: MetronomeClientService,

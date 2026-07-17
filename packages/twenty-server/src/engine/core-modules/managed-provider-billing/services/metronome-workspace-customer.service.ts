@@ -25,6 +25,8 @@ type InstallationRepository = Pick<
 @Injectable()
 export class MetronomeWorkspaceCustomerService {
   constructor(
+    // Installation mappings are control-plane records resolved before tenant request context exists.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(MyahWorkspaceInstallationEntity)
     private readonly installationRepository: InstallationRepository,
     private readonly metronomeClientService: MetronomeClientService,

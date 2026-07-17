@@ -25,83 +25,83 @@ describe('ConfigVariables', () => {
   });
 });
 
-  describe('managed provider billing configuration', () => {
-    it('requires the Metronome API key and rate-card alias when enabled', () => {
-      const errors = validateSync(
-        Object.assign(new ConfigVariables(), {
-          METRONOME_ENABLED: true,
-        }),
-        { strictGroups: true },
-      );
+describe('managed provider billing configuration', () => {
+  it('requires the Metronome API key and rate-card alias when enabled', () => {
+    const errors = validateSync(
+      Object.assign(new ConfigVariables(), {
+        METRONOME_ENABLED: true,
+      }),
+      { strictGroups: true },
+    );
 
-      expect(errors.map(({ property }) => property)).toEqual(
-        expect.arrayContaining([
-          'METRONOME_API_KEY',
-          'METRONOME_RATE_CARD_ALIAS',
-        ]),
-      );
-    });
-
-    it('rejects blank Metronome API key and rate-card alias values when enabled', () => {
-      const errors = validateSync(
-        Object.assign(new ConfigVariables(), {
-          METRONOME_ENABLED: true,
-          METRONOME_API_KEY: ' ',
-          METRONOME_RATE_CARD_ALIAS: ' ',
-        }),
-        { strictGroups: true },
-      );
-
-      expect(errors.map(({ property }) => property)).toEqual(
-        expect.arrayContaining([
-          'METRONOME_API_KEY',
-          'METRONOME_RATE_CARD_ALIAS',
-        ]),
-      );
-    });
-
-    it('rejects a settlement delay below ten seconds', () => {
-      const errors = validateSync(
-        Object.assign(new ConfigVariables(), {
-          METRONOME_USAGE_SETTLEMENT_DELAY_MS: 9_999,
-        }),
-        { strictGroups: true },
-      );
-
-      expect(errors.map(({ property }) => property)).toContain(
-        'METRONOME_USAGE_SETTLEMENT_DELAY_MS',
-      );
-    });
-
-    it('casts a valid environment settlement delay to an integer', () => {
-      const config = plainToClass(ConfigVariables, {
-        METRONOME_USAGE_SETTLEMENT_DELAY_MS: '10000',
-      });
-
-      expect(config.METRONOME_USAGE_SETTLEMENT_DELAY_MS).toBe(10_000);
-    });
-
-    it('rejects a nonnumeric environment settlement delay', () => {
-      const config = plainToClass(ConfigVariables, {
-        METRONOME_USAGE_SETTLEMENT_DELAY_MS: 'not-a-number',
-      });
-      const errors = validateSync(config, { strictGroups: true });
-
-      expect(errors.map(({ property }) => property)).toContain(
-        'METRONOME_USAGE_SETTLEMENT_DELAY_MS',
-      );
-    });
-
-    it('allows empty Metronome credentials while disabled', () => {
-      const errors = validateSync(new ConfigVariables(), {
-        strictGroups: true,
-      });
-
-      expect(errors.map(({ property }) => property)).not.toEqual(
-        expect.arrayContaining([
-          'METRONOME_API_KEY',
-          'METRONOME_RATE_CARD_ALIAS',
-        ]),
-      );
-    });
+    expect(errors.map(({ property }) => property)).toEqual(
+      expect.arrayContaining([
+        'METRONOME_API_KEY',
+        'METRONOME_RATE_CARD_ALIAS',
+      ]),
+    );
   });
+
+  it('rejects blank Metronome API key and rate-card alias values when enabled', () => {
+    const errors = validateSync(
+      Object.assign(new ConfigVariables(), {
+        METRONOME_ENABLED: true,
+        METRONOME_API_KEY: ' ',
+        METRONOME_RATE_CARD_ALIAS: ' ',
+      }),
+      { strictGroups: true },
+    );
+
+    expect(errors.map(({ property }) => property)).toEqual(
+      expect.arrayContaining([
+        'METRONOME_API_KEY',
+        'METRONOME_RATE_CARD_ALIAS',
+      ]),
+    );
+  });
+
+  it('rejects a settlement delay below ten seconds', () => {
+    const errors = validateSync(
+      Object.assign(new ConfigVariables(), {
+        METRONOME_USAGE_SETTLEMENT_DELAY_MS: 9_999,
+      }),
+      { strictGroups: true },
+    );
+
+    expect(errors.map(({ property }) => property)).toContain(
+      'METRONOME_USAGE_SETTLEMENT_DELAY_MS',
+    );
+  });
+
+  it('casts a valid environment settlement delay to an integer', () => {
+    const config = plainToClass(ConfigVariables, {
+      METRONOME_USAGE_SETTLEMENT_DELAY_MS: '10000',
+    });
+
+    expect(config.METRONOME_USAGE_SETTLEMENT_DELAY_MS).toBe(10_000);
+  });
+
+  it('rejects a nonnumeric environment settlement delay', () => {
+    const config = plainToClass(ConfigVariables, {
+      METRONOME_USAGE_SETTLEMENT_DELAY_MS: 'not-a-number',
+    });
+    const errors = validateSync(config, { strictGroups: true });
+
+    expect(errors.map(({ property }) => property)).toContain(
+      'METRONOME_USAGE_SETTLEMENT_DELAY_MS',
+    );
+  });
+
+  it('allows empty Metronome credentials while disabled', () => {
+    const errors = validateSync(new ConfigVariables(), {
+      strictGroups: true,
+    });
+
+    expect(errors.map(({ property }) => property)).not.toEqual(
+      expect.arrayContaining([
+        'METRONOME_API_KEY',
+        'METRONOME_RATE_CARD_ALIAS',
+      ]),
+    );
+  });
+});

@@ -181,13 +181,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
   });
 
   it('retries a missing accepted event without releasing its reservation', async () => {
-    const {
-      findOne,
-      metronomeClientService,
-      operationRepository,
-      save,
-      service,
-    } = createService();
+    const { findOne, metronomeClientService, save, service } = createService();
     (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue(
       [],
     );
@@ -210,13 +204,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
   });
 
   it('requires reconciliation for contradictory accepted evidence', async () => {
-    const {
-      findOne,
-      metronomeClientService,
-      operationRepository,
-      save,
-      service,
-    } = createService();
+    const { findOne, metronomeClientService, save, service } = createService();
     (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue([
       {
         customerId: 'customer-id',
@@ -387,13 +375,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
   });
 
   it('backs off after a rate-limited event search without releasing its reservation', async () => {
-    const {
-      findOne,
-      metronomeClientService,
-      operationRepository,
-      save,
-      service,
-    } = createService();
+    const { findOne, metronomeClientService, save, service } = createService();
     (metronomeClientService.searchUsageEvents as jest.Mock).mockRejectedValue(
       new MetronomeClientException(MetronomeClientExceptionCode.RATE_LIMITED),
     );

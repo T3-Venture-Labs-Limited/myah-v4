@@ -136,7 +136,8 @@ export class ConfigVariables {
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
-    description: 'Metronome USD rate-card alias for Myah managed-provider billing',
+    description:
+      'Metronome USD rate-card alias for Myah managed-provider billing',
     isEnvOnly: true,
     isHiddenInAdminPanel: true,
     type: ConfigVariableType.STRING,

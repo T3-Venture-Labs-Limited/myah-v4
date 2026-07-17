@@ -1,4 +1,4 @@
-import { type EntityManager, type Repository } from 'typeorm';
+import { type Repository } from 'typeorm';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';

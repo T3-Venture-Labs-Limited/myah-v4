@@ -37,7 +37,6 @@ export class MyahWorkspaceInstallationEntity extends WorkspaceRelatedEntity {
   @Column({ nullable: true, type: 'uuid' })
   metronomeCustomerId: string | null;
 
-
   @ManyToOne(
     () => CustomerAccountEntity,
     (customerAccount) => customerAccount.installations,
