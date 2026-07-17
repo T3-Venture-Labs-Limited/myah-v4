@@ -12,6 +12,8 @@ import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 import { FromToAllUniversalFlatEntityMaps } from 'src/engine/workspace-manager/workspace-migration/types/workspace-migration-orchestrator.type';
 
+export type TwentyStandardApplicationProfile = 'full' | 'myah';
+
 // TODO completely deprecate this file once we've created the twenty-standard twenty-app manifest
 @Injectable()
 export class TwentyStandardApplicationService {
@@ -24,8 +26,10 @@ export class TwentyStandardApplicationService {
 
   async synchronizeTwentyStandardApplicationOrThrow({
     workspaceId,
+    profile,
   }: {
     workspaceId: string;
+    profile: TwentyStandardApplicationProfile;
   }) {
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
@@ -46,7 +50,7 @@ export class TwentyStandardApplicationService {
       now: new Date().toISOString(),
       workspaceId,
       twentyStandardApplicationId: twentyStandardFlatApplication.id,
-      removeReplacedTwentyCrmMetadata: true,
+      removeReplacedTwentyCrmMetadata: profile === 'myah',
     });
 
     const fromToAllFlatEntityMaps: FromToAllUniversalFlatEntityMaps = {};

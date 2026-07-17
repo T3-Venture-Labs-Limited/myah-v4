@@ -120,6 +120,7 @@ export class DevSeederService {
     await this.twentyStandardApplicationService.synchronizeTwentyStandardApplicationOrThrow(
       {
         workspaceId,
+        profile: 'full',
       },
     );
 

@@ -11,7 +11,7 @@ const WORKSPACE_ID = '20202020-0000-0000-0000-000000000001';
 const STANDARD_APPLICATION_ID = '20202020-0000-0000-0000-000000000002';
 
 describe('TwentyStandardApplicationService', () => {
-  it('does not provision replaced CRM metadata for a fresh workspace', async () => {
+  const createService = () => {
     const validateBuildAndRunWorkspaceMigrationFromTo = jest
       .fn()
       .mockResolvedValue({ status: 'success' });
@@ -38,8 +38,16 @@ describe('TwentyStandardApplicationService', () => {
       {} as GlobalWorkspaceOrmManager,
     );
 
+    return { service, validateBuildAndRunWorkspaceMigrationFromTo };
+  };
+
+  it('does not provision replaced CRM metadata for a Myah workspace', async () => {
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService();
+
     await service.synchronizeTwentyStandardApplicationOrThrow({
       workspaceId: WORKSPACE_ID,
+      profile: 'myah',
     });
 
     const migrationInput =
@@ -49,5 +57,23 @@ describe('TwentyStandardApplicationService', () => {
       migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
         .byUniversalIdentifier[STANDARD_OBJECTS.person.universalIdentifier],
     ).toBeUndefined();
+  });
+
+  it('retains replaced CRM metadata for a full Twenty fixture workspace', async () => {
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService();
+
+    await service.synchronizeTwentyStandardApplicationOrThrow({
+      workspaceId: WORKSPACE_ID,
+      profile: 'full',
+    });
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier[STANDARD_OBJECTS.person.universalIdentifier],
+    ).toBeDefined();
   });
 });

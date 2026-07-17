@@ -68,6 +68,7 @@ export class WorkspaceManagerService {
     await this.twentyStandardApplicationService.synchronizeTwentyStandardApplicationOrThrow(
       {
         workspaceId,
+        profile: 'myah',
       },
     );
 
