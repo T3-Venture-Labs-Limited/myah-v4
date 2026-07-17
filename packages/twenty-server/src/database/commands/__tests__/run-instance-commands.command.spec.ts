@@ -66,27 +66,30 @@ describe('RunInstanceCommandsCommand', () => {
   });
 
   it('recovers the approval schema before adding provider bindings', async () => {
-    const query = jest.fn().mockResolvedValue(undefined);
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce([{ exists: false }])
+      .mockResolvedValue(undefined);
 
     await new AddInstagramReplyApprovalProviderBindingSlowInstanceCommand().up({
       query,
     } as unknown as QueryRunner);
 
     expect(query).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.stringContaining(
         'CREATE TABLE IF NOT EXISTS "core"."instagramReplyApprovalRequest"',
       ),
     );
     expect(query).toHaveBeenNthCalledWith(
-      8,
+      9,
       'ALTER TABLE "core"."instagramReplyApprovalRequest" ADD COLUMN IF NOT EXISTS "providerConversationId" text',
     );
     expect(query).toHaveBeenNthCalledWith(
-      9,
+      10,
       'ALTER TABLE "core"."instagramReplyApprovalRequest" ADD COLUMN IF NOT EXISTS "recipientIgsid" text',
     );
-    expect(query).toHaveBeenCalledTimes(9);
+    expect(query).toHaveBeenCalledTimes(10);
   });
 
   it('repairs the approval schema before a post-workspace migration can run', async () => {

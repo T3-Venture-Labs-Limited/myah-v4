@@ -4,6 +4,7 @@ import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
 import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-evolve-instagram-approval-to-action-authority';
+import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784106536001-add-instagram-reply-approval-provider-binding';
 import { FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784112963057-finalize-instagram-approval-action-authority';
 jest.useRealTimers();
 
@@ -414,7 +415,7 @@ const assertFinalizedInboundProof = async (queryRunner: QueryRunner) => {
   await expect(
     queryRaw(
       queryRunner,
-      `SELECT column_name, is_nullable
+      `SELECT column_name, data_type, is_nullable
        FROM information_schema.columns
        WHERE table_schema = 'core'
          AND table_name = 'actionApprovalBinding'
@@ -427,10 +428,38 @@ const assertFinalizedInboundProof = async (queryRunner: QueryRunner) => {
        ORDER BY column_name`,
     ),
   ).resolves.toStrictEqual([
-    { column_name: 'inboundDirection', is_nullable: 'NO' },
-    { column_name: 'inboundMessageId', is_nullable: 'NO' },
-    { column_name: 'inboundReceivedAt', is_nullable: 'NO' },
-    { column_name: 'inboundSenderIgsid', is_nullable: 'NO' },
+    {
+      column_name: 'inboundDirection',
+      data_type: 'text',
+      is_nullable: 'YES',
+    },
+    {
+      column_name: 'inboundMessageId',
+      data_type: 'text',
+      is_nullable: 'YES',
+    },
+    {
+      column_name: 'inboundReceivedAt',
+      data_type: 'timestamp with time zone',
+      is_nullable: 'YES',
+    },
+    {
+      column_name: 'inboundSenderIgsid',
+      data_type: 'text',
+      is_nullable: 'YES',
+    },
+  ]);
+  await expect(
+    queryRaw(
+      queryRunner,
+      `SELECT conname
+       FROM pg_constraint
+       WHERE conrelid = 'core."actionApprovalBinding"'::regclass
+         AND conname = 'CHK_ACTION_APPROVAL_BINDING_INBOUND_DIRECTION'
+         AND contype = 'c'`,
+    ),
+  ).resolves.toStrictEqual([
+    { conname: 'CHK_ACTION_APPROVAL_BINDING_INBOUND_DIRECTION' },
   ]);
 };
 
@@ -690,6 +719,56 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     ]);
   });
 
+  it('continues from a provider-binding cursor without recreating legacy tables', async () => {
+    await installLegacyFixture(queryRunner, 'absent');
+    const prepare =
+      new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand();
+    const providerBinding =
+      new AddInstagramReplyApprovalProviderBindingSlowInstanceCommand();
+    const finalize =
+      new FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand();
+
+    await prepare.up(queryRunner);
+    await providerBinding.up(queryRunner);
+
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT
+          to_regclass('core."instagramReplyApprovalRequest"') AS legacy_binding,
+          to_regclass('core."instagramReplyExecutionReceipt"') AS legacy_receipt,
+          to_regclass('core."actionApprovalBinding"') AS binding`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        legacy_binding: null,
+        legacy_receipt: null,
+        binding: 'core."actionApprovalBinding"',
+      },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = 'core'
+           AND table_name = 'actionApprovalBinding'
+           AND column_name IN ('providerConversationId', 'recipientIgsid')
+         ORDER BY column_name`,
+      ),
+    ).resolves.toStrictEqual([
+      { column_name: 'providerConversationId' },
+      { column_name: 'recipientIgsid' },
+    ]);
+
+    await finalize.runDataMigration({
+      query: queryRunner.query.bind(queryRunner),
+    } as unknown as DataSource);
+    await finalize.up(queryRunner);
+    await assertGenericAuthoritySchema(queryRunner);
+    await assertFinalizedInboundProof(queryRunner);
+  });
+
 
   it('only prepares nullable generic shape before legacy data backfill', async () => {
     await installLegacyFixture(queryRunner, 'populated');
@@ -863,6 +942,14 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     await queryRunner.query(`UPDATE core."agentMessagePart"
       SET "messageId" = '00000000-0000-0000-0000-000000000402'
       WHERE "id" = '00000000-0000-0000-0000-000000000301'`);
+    await queryRunner.query(`INSERT INTO core."agentMessagePart" (
+      "id", "toolName", "toolOutput", "messageId"
+    ) VALUES (
+      '00000000-0000-0000-0000-000000000304',
+      'ask_questions',
+      '{"result":{"status":"pending"}}',
+      '00000000-0000-0000-0000-000000000402'
+    )`);
 
 
     await prepare.up(queryRunner);
@@ -982,7 +1069,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     ).resolves.toStrictEqual([
       {
         id: '00000000-0000-0000-0000-000000000401',
-        pendingQuestionMessageId: null,
+        pendingQuestionMessageId: '00000000-0000-0000-0000-000000000402',
       },
       {
         id: '00000000-0000-0000-0000-000000000403',
@@ -991,9 +1078,9 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     ]);
 
 
-    await expect(finalize.up(queryRunner)).rejects.toThrow(
-      'Cannot finalize action approval inbound proof for legacy bindings',
-    );
+    await finalize.up(queryRunner);
+    await assertGenericAuthoritySchema(queryRunner);
+    await assertFinalizedInboundProof(queryRunner);
   });
 
   it.each<LegacyFixture>([

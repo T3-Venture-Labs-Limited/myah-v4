@@ -170,53 +170,41 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
             FROM core."agentMessagePart" AS part
             WHERE part."messageId" = message.id
               AND part."toolName" = 'request_instagram_reply_approval'
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM core."agentMessagePart" AS part
+            WHERE part."messageId" = message.id
+              AND part."toolName" IN ('ask_questions', 'request_approval')
+              AND part."toolOutput" #>> '{result,status}' = 'pending'
           );
       END IF;
     END $$`);
   }
 
-  private async assertInboundProofCanBeFinalized(
-    queryRunner: QueryRunner,
-  ): Promise<void> {
-    const rows: unknown = await queryRunner.query(`SELECT count(*)::int AS count
-      FROM ${BINDING}
-      WHERE "inboundMessageId" IS NULL
-        OR "inboundSenderIgsid" IS NULL
-        OR "inboundDirection" IS NULL
-        OR "inboundReceivedAt" IS NULL`);
-
-    if (
-      !Array.isArray(rows) ||
-      rows.length !== 1 ||
-      !rows[0] ||
-      typeof rows[0] !== 'object' ||
-      !('count' in rows[0]) ||
-      typeof rows[0].count !== 'number'
-    ) {
-      throw new Error('Unexpected inbound proof finalization query result');
-    }
-
-    if (rows[0].count > 0) {
-      throw new Error(
-        'Cannot finalize action approval inbound proof for legacy bindings',
-      );
-    }
-  }
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await this.assertInboundProofCanBeFinalized(queryRunner);
     await queryRunner.query(`ALTER TABLE ${BINDING}
       ALTER COLUMN "actionVersion" SET DEFAULT 1,
       ALTER COLUMN "actionVersion" SET NOT NULL,
-      ALTER COLUMN "inboundMessageId" SET NOT NULL,
-      ALTER COLUMN "inboundSenderIgsid" SET NOT NULL,
-      ALTER COLUMN "inboundDirection" SET NOT NULL,
-      ALTER COLUMN "inboundReceivedAt" SET NOT NULL,
       DROP COLUMN IF EXISTS "approvalId",
       DROP COLUMN IF EXISTS "connectedAccountId",
       DROP COLUMN IF EXISTS "conversationId",
       DROP COLUMN IF EXISTS "providerConversationId",
       DROP COLUMN IF EXISTS "recipientIgsid"`);
+    await queryRunner.query(`DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'CHK_ACTION_APPROVAL_BINDING_INBOUND_DIRECTION'
+          AND conrelid = 'core."actionApprovalBinding"'::regclass
+      ) THEN
+        ALTER TABLE core."actionApprovalBinding"
+          ADD CONSTRAINT "CHK_ACTION_APPROVAL_BINDING_INBOUND_DIRECTION"
+          CHECK (
+            "inboundDirection" IS NULL OR "inboundDirection" = 'INBOUND'
+          );
+      END IF;
+    END $$`);
     await queryRunner.query(
       `ALTER TABLE ${BINDING} DROP CONSTRAINT IF EXISTS "FK_617792f9cfed9d503e2333b2a83"`,
     );
@@ -308,6 +296,9 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
   public async down(queryRunner: QueryRunner): Promise<void> {
     await assertTablesAreEmpty(queryRunner);
     await queryRunner.query(
+      `ALTER TABLE ${BINDING} DROP CONSTRAINT IF EXISTS "CHK_ACTION_APPROVAL_BINDING_INBOUND_DIRECTION"`,
+    );
+    await queryRunner.query(
       'DROP INDEX IF EXISTS core."IDX_ACTION_APPROVAL_BINDING_WORKSPACE_THREAD"',
     );
     await queryRunner.query(
@@ -338,11 +329,7 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
       ADD COLUMN "providerConversationId" text,
       ADD COLUMN "recipientIgsid" text,
       ALTER COLUMN "actionVersion" DROP DEFAULT,
-      ALTER COLUMN "actionVersion" DROP NOT NULL,
-      ALTER COLUMN "inboundMessageId" DROP NOT NULL,
-      ALTER COLUMN "inboundSenderIgsid" DROP NOT NULL,
-      ALTER COLUMN "inboundDirection" DROP NOT NULL,
-      ALTER COLUMN "inboundReceivedAt" DROP NOT NULL`);
+      ALTER COLUMN "actionVersion" DROP NOT NULL`);
     await queryRunner.query(
       `ALTER TABLE ${BINDING} ADD CONSTRAINT "IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_APPROVAL_ID" UNIQUE ("workspaceId", "approvalId")`,
     );

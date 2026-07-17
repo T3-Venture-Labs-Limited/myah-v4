@@ -83,6 +83,10 @@ const createGenericTables = async (queryRunner: QueryRunner) => {
     "actionVersion" integer NOT NULL DEFAULT 1,
     "draftId" uuid NOT NULL,
     "contentDigest" varchar(64) NOT NULL,
+    "inboundMessageId" text,
+    "inboundSenderIgsid" text,
+    "inboundDirection" text,
+    "inboundReceivedAt" timestamptz,
     "recipientFingerprint" varchar(64),
     "sendingAccountFingerprint" varchar(64),
     "threadId" uuid NOT NULL,
@@ -93,7 +97,9 @@ const createGenericTables = async (queryRunner: QueryRunner) => {
     "updatedAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_ACTION_APPROVAL_BINDING" PRIMARY KEY ("id"),
     CONSTRAINT "FK_ACTION_APPROVAL_BINDING_WORKSPACE"
-      FOREIGN KEY ("workspaceId") REFERENCES core."workspace"("id") ON DELETE CASCADE
+      FOREIGN KEY ("workspaceId") REFERENCES core."workspace"("id") ON DELETE CASCADE,
+    CONSTRAINT "CHK_ACTION_APPROVAL_BINDING_INBOUND_DIRECTION"
+      CHECK ("inboundDirection" IS NULL OR "inboundDirection" = 'INBOUND')
   )`);
   await queryRunner.query(`CREATE TABLE IF NOT EXISTS ${EVIDENCE_LINK} (
     "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -157,6 +163,10 @@ const prepareLegacyBinding = async (queryRunner: QueryRunner) => {
   );
   await queryRunner.query(`ALTER TABLE ${BINDING}
     ADD COLUMN IF NOT EXISTS "actionVersion" integer,
+    ADD COLUMN IF NOT EXISTS "inboundMessageId" text,
+    ADD COLUMN IF NOT EXISTS "inboundSenderIgsid" text,
+    ADD COLUMN IF NOT EXISTS "inboundDirection" text,
+    ADD COLUMN IF NOT EXISTS "inboundReceivedAt" timestamptz,
     ADD COLUMN IF NOT EXISTS "recipientFingerprint" varchar(64),
     ADD COLUMN IF NOT EXISTS "sendingAccountFingerprint" varchar(64)`);
   await queryRunner.query(
@@ -211,6 +221,10 @@ const restoreLegacyShape = async (queryRunner: QueryRunner) => {
   const [newBindingFields, newReceiptFields] = await Promise.all([
     queryRunner.query(`SELECT count(*)::int AS count FROM ${BINDING}
       WHERE "actionVersion" IS NOT NULL
+        OR "inboundMessageId" IS NOT NULL
+        OR "inboundSenderIgsid" IS NOT NULL
+        OR "inboundDirection" IS NOT NULL
+        OR "inboundReceivedAt" IS NOT NULL
         OR "recipientFingerprint" IS NOT NULL
         OR "sendingAccountFingerprint" IS NOT NULL`),
     queryRunner.query(`SELECT count(*)::int AS count FROM ${RECEIPT}
@@ -244,6 +258,10 @@ const restoreLegacyShape = async (queryRunner: QueryRunner) => {
     ALTER COLUMN "state" SET DEFAULT 'PROCESSING'`);
   await queryRunner.query(`ALTER TABLE ${BINDING}
     DROP COLUMN "actionVersion",
+    DROP COLUMN "inboundMessageId",
+    DROP COLUMN "inboundSenderIgsid",
+    DROP COLUMN "inboundDirection",
+    DROP COLUMN "inboundReceivedAt",
     DROP COLUMN "recipientFingerprint",
     DROP COLUMN "sendingAccountFingerprint"`);
   await queryRunner.query(
