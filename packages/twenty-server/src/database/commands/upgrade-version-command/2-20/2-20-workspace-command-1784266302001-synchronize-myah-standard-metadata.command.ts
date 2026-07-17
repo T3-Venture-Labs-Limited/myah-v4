@@ -24,7 +24,10 @@ import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/wo
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { getReplacedTwentyCrmMetadataUniversalIdentifiers } from 'src/engine/workspace-manager/twenty-standard-application/utils/remove-replaced-twenty-crm-metadata.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import type { AdditionalCacheDataMaps } from 'src/engine/workspace-cache/types/workspace-cache-key.type';
+import type {
+  AdditionalCacheDataMaps,
+  WorkspaceCacheKeyName,
+} from 'src/engine/workspace-cache/types/workspace-cache-key.type';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
 const MYAH_ROLE_UNIVERSAL_IDENTIFIERS = new Set<string>([
@@ -111,7 +114,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       ({ id }) => id,
     );
     const hasLegacyMyahApplication = legacyMyahApplicationIds.length > 0;
-    const metadataCacheKeys = [
+    const metadataCacheKeys: WorkspaceCacheKeyName[] = [
       ...TWENTY_STANDARD_ALL_METADATA_NAME.map(
         (metadataName) => `flat${metadataName.charAt(0).toUpperCase()}${metadataName.slice(1)}Maps`,
       ),

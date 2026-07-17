@@ -46,7 +46,7 @@
       }
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["twenty-shared:build", "^build"]
     },
     "start": {
       "executor": "nx:run-commands",

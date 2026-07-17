@@ -19,7 +19,7 @@ describe('BrandBrainToolProvider', () => {
       workspaceId: 'workspace-id',
       rolePermissionConfig: { shouldBypassPermissionChecks: true },
       roleId: 'role-id',
-    };
+    } as const;
 
     await expect(provider.generateDescriptors(context)).resolves.toEqual([
       expect.objectContaining({
@@ -47,7 +47,7 @@ describe('BrandBrainToolProvider', () => {
     await expect(
       provider.isAvailable({
         workspaceId: 'workspace-id',
-        rolePermissionConfig: { shouldBypassPermissionChecks: true },
+        rolePermissionConfig: { shouldBypassPermissionChecks: true as const },
         roleId: 'role-id',
       }),
     ).resolves.toBe(false);

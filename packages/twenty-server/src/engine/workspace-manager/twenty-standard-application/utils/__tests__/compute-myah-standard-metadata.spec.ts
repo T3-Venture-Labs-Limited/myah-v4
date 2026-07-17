@@ -125,12 +125,14 @@ describe('Myah standard metadata contract', () => {
         );
       }
 
-      const junctionTargetFieldUniversalIdentifier =
-        field.universalSettings?.junctionTargetFieldUniversalIdentifier;
-
-      if (typeof junctionTargetFieldUniversalIdentifier === 'string') {
+      if (
+        field.universalSettings != null &&
+        'junctionTargetFieldUniversalIdentifier' in field.universalSettings &&
+        typeof field.universalSettings
+          .junctionTargetFieldUniversalIdentifier === 'string'
+      ) {
         expect(retainedFieldUniversalIdentifiers).toContain(
-          junctionTargetFieldUniversalIdentifier,
+          field.universalSettings.junctionTargetFieldUniversalIdentifier,
         );
       }
     }
@@ -250,7 +252,7 @@ describe('Myah standard metadata contract', () => {
     const myahObjectIds = new Set(contract.flatObjectMetadataMaps);
     const fields = Object.values(
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
-    );
+    ).filter(isDefined);
 
     for (const objectId of myahObjectIds) {
       const fieldNames = fields
@@ -279,11 +281,13 @@ describe('Myah standard metadata contract', () => {
   it('includes declared Creator custom fields', () => {
     const creatorFields = Object.values(
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
-    ).filter(
-      (field) =>
-        field.objectMetadataUniversalIdentifier ===
-        MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
-    );
+    )
+      .filter(isDefined)
+      .filter(
+        (field) =>
+          field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+      );
 
     expect(creatorFields).toContainEqual(
       expect.objectContaining({
@@ -299,11 +303,13 @@ describe('Myah standard metadata contract', () => {
     const myahObjectIds = new Set(contract.flatObjectMetadataMaps);
     const fields = Object.values(
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
-    ).filter(
-      (field) =>
-        myahObjectIds.has(field.objectMetadataUniversalIdentifier) &&
-        field.type === FieldMetadataType.SELECT,
-    );
+    )
+      .filter(isDefined)
+      .filter(
+        (field) =>
+          myahObjectIds.has(field.objectMetadataUniversalIdentifier) &&
+          field.type === FieldMetadataType.SELECT,
+      );
 
     expect(fields).not.toHaveLength(0);
     const defaultValueByUniversalIdentifier = Object.fromEntries(

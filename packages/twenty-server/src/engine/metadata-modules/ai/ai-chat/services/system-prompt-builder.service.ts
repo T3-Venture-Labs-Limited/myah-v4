@@ -393,7 +393,7 @@ ${tools
         return 'Navigation Menu Item Tools (sidebar entries, folders, and user favorites)';
       case ToolCategory.WEBHOOK:
         return 'Webhook Tools (outgoing webhooks)';
-      case 'BRAND_BRAIN' as ToolCategory:
+      case ToolCategory.BRAND_BRAIN:
         return 'Brand Brain Tools (manage brand knowledge and campaign context)';
       default:
         return assertUnreachable(category);

@@ -344,6 +344,8 @@ export const buildMyahStandardMetadataContract =
       roles.map((role) => requireId(role.universalIdentifier, 'role')),
     ),
     flatPermissionFlagMaps: [],
+    flatFieldPermissionMaps: [],
+    flatObjectPermissionMaps: [],
     flatAgentMaps: [],
     flatSkillMaps: [],
     flatPageLayoutMaps: unique(layoutIds),
