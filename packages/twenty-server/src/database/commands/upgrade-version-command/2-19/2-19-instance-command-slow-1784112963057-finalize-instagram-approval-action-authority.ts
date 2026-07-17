@@ -87,13 +87,14 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
             ELSE "actionName"
           END,
           "actionVersion" = COALESCE("actionVersion", 1),
-          "state" = CASE
-            WHEN "state" IN ('PENDING', 'APPROVED') THEN 'EXPIRED'
-            ELSE "state"
-          END
+          "state" = 'EXPIRED'
       WHERE "actionName" = 'request_instagram_reply_approval'
         OR "actionVersion" IS NULL
-        OR "state" IN ('PENDING', 'APPROVED')`);
+        OR "state" <> 'EXPIRED'
+        OR "inboundMessageId" IS NULL
+        OR "inboundSenderIgsid" IS NULL
+        OR "inboundDirection" IS NULL
+        OR "inboundReceivedAt" IS NULL`);
     await dataSource.query(`UPDATE ${RECEIPT} AS receipt
       SET "workspaceId" = COALESCE(receipt."workspaceId", binding."workspaceId"),
           "idempotencyKey" = COALESCE(
@@ -174,10 +175,43 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
     END $$`);
   }
 
+  private async assertInboundProofCanBeFinalized(
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    const rows: unknown = await queryRunner.query(`SELECT count(*)::int AS count
+      FROM ${BINDING}
+      WHERE "inboundMessageId" IS NULL
+        OR "inboundSenderIgsid" IS NULL
+        OR "inboundDirection" IS NULL
+        OR "inboundReceivedAt" IS NULL`);
+
+    if (
+      !Array.isArray(rows) ||
+      rows.length !== 1 ||
+      !rows[0] ||
+      typeof rows[0] !== 'object' ||
+      !('count' in rows[0]) ||
+      typeof rows[0].count !== 'number'
+    ) {
+      throw new Error('Unexpected inbound proof finalization query result');
+    }
+
+    if (rows[0].count > 0) {
+      throw new Error(
+        'Cannot finalize action approval inbound proof for legacy bindings',
+      );
+    }
+  }
+
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await this.assertInboundProofCanBeFinalized(queryRunner);
     await queryRunner.query(`ALTER TABLE ${BINDING}
       ALTER COLUMN "actionVersion" SET DEFAULT 1,
       ALTER COLUMN "actionVersion" SET NOT NULL,
+      ALTER COLUMN "inboundMessageId" SET NOT NULL,
+      ALTER COLUMN "inboundSenderIgsid" SET NOT NULL,
+      ALTER COLUMN "inboundDirection" SET NOT NULL,
+      ALTER COLUMN "inboundReceivedAt" SET NOT NULL,
       DROP COLUMN IF EXISTS "approvalId",
       DROP COLUMN IF EXISTS "connectedAccountId",
       DROP COLUMN IF EXISTS "conversationId",
@@ -294,13 +328,9 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
     await queryRunner.query(
       `ALTER TABLE ${RECEIPT} DROP CONSTRAINT IF EXISTS "UQ_ACTION_EXECUTION_RECEIPT_WORKSPACE_IDEMPOTENCY"`,
     );
-    await queryRunner.query(`ALTER TABLE ${RECEIPT}
-      ADD COLUMN "failureReason" text,
-      DROP COLUMN "workspaceId",
-      DROP COLUMN "idempotencyKey",
-      DROP COLUMN "redactedOutcome",
-      RENAME COLUMN "actionApprovalBindingId" TO "approvalRequestId",
-      RENAME COLUMN "providerCode" TO "failureCode"`);
+    await queryRunner.query(
+      `ALTER TABLE ${RECEIPT} ADD COLUMN "failureReason" text`,
+    );
     await queryRunner.query(`ALTER TABLE ${BINDING}
       ADD COLUMN "approvalId" uuid NOT NULL,
       ADD COLUMN "connectedAccountId" varchar NOT NULL,
@@ -309,9 +339,10 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
       ADD COLUMN "recipientIgsid" text,
       ALTER COLUMN "actionVersion" DROP DEFAULT,
       ALTER COLUMN "actionVersion" DROP NOT NULL,
-      RENAME COLUMN "initiatorUserWorkspaceId" TO "userWorkspaceId",
-      RENAME COLUMN "actionName" TO "toolName",
-      RENAME COLUMN "contentDigest" TO "previewTextSha256"`);
+      ALTER COLUMN "inboundMessageId" DROP NOT NULL,
+      ALTER COLUMN "inboundSenderIgsid" DROP NOT NULL,
+      ALTER COLUMN "inboundDirection" DROP NOT NULL,
+      ALTER COLUMN "inboundReceivedAt" DROP NOT NULL`);
     await queryRunner.query(
       `ALTER TABLE ${BINDING} ADD CONSTRAINT "IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_APPROVAL_ID" UNIQUE ("workspaceId", "approvalId")`,
     );
@@ -322,10 +353,10 @@ export class FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand
       'CREATE INDEX "IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_THREAD" ON core."actionApprovalBinding" ("workspaceId", "threadId")',
     );
     await queryRunner.query(
-      `ALTER TABLE ${RECEIPT} ADD CONSTRAINT "IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_APPROVAL_REQUEST" UNIQUE ("approvalRequestId")`,
+      `ALTER TABLE ${RECEIPT} ADD CONSTRAINT "IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_APPROVAL_REQUEST" UNIQUE ("actionApprovalBindingId")`,
     );
     await queryRunner.query(
-      `ALTER TABLE ${RECEIPT} ADD CONSTRAINT "FK_INSTAGRAM_REPLY_RECEIPT_APPROVAL_REQUEST" FOREIGN KEY ("approvalRequestId") REFERENCES ${BINDING}("id") ON DELETE RESTRICT`,
+      `ALTER TABLE ${RECEIPT} ADD CONSTRAINT "FK_INSTAGRAM_REPLY_RECEIPT_APPROVAL_REQUEST" FOREIGN KEY ("actionApprovalBindingId") REFERENCES ${BINDING}("id") ON DELETE RESTRICT`,
     );
     await queryRunner.query(
       'CREATE INDEX "IDX_INSTAGRAM_REPLY_EXECUTION_RECEIPT_STATE" ON core."actionExecutionReceipt" ("state")',

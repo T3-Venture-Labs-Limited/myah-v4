@@ -367,6 +367,10 @@ const assertGenericAuthoritySchema = async (queryRunner: QueryRunner) => {
       'actionVersion',
       'draftId',
       'contentDigest',
+      'inboundMessageId',
+      'inboundSenderIgsid',
+      'inboundDirection',
+      'inboundReceivedAt',
       'recipientFingerprint',
       'sendingAccountFingerprint',
       'threadId',
@@ -406,6 +410,30 @@ const assertGenericAuthoritySchema = async (queryRunner: QueryRunner) => {
   );
 };
 
+const assertFinalizedInboundProof = async (queryRunner: QueryRunner) => {
+  await expect(
+    queryRaw(
+      queryRunner,
+      `SELECT column_name, is_nullable
+       FROM information_schema.columns
+       WHERE table_schema = 'core'
+         AND table_name = 'actionApprovalBinding'
+         AND column_name IN (
+           'inboundMessageId',
+           'inboundSenderIgsid',
+           'inboundDirection',
+           'inboundReceivedAt'
+         )
+       ORDER BY column_name`,
+    ),
+  ).resolves.toStrictEqual([
+    { column_name: 'inboundDirection', is_nullable: 'NO' },
+    { column_name: 'inboundMessageId', is_nullable: 'NO' },
+    { column_name: 'inboundReceivedAt', is_nullable: 'NO' },
+    { column_name: 'inboundSenderIgsid', is_nullable: 'NO' },
+  ]);
+};
+
 const assertGenericIdDefaults = async (queryRunner: QueryRunner) => {
   await expect(
     queryRaw(queryRunner,
@@ -439,73 +467,26 @@ const assertGenericIdDefaults = async (queryRunner: QueryRunner) => {
 const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
   await expect(
     queryRaw(queryRunner,
-      `SELECT table_name, column_name
+      `SELECT table_name, array_agg(column_name ORDER BY column_name) AS columns
        FROM information_schema.columns
        WHERE table_schema = 'core'
          AND table_name IN (
            'instagramReplyApprovalRequest',
            'instagramReplyExecutionReceipt'
          )
-       ORDER BY table_name, ordinal_position`,
+       GROUP BY table_name
+       ORDER BY table_name`,
     ),
   ).resolves.toStrictEqual([
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'workspaceId' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'id' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'userWorkspaceId' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'threadId' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'approvalId' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'toolName' },
     {
+      columns:
+        '{approvalId,connectedAccountId,conversationId,createdAt,decidedAt,draftId,expiresAt,id,previewTextSha256,providerConversationId,recipientIgsid,state,threadId,toolName,updatedAt,userWorkspaceId,workspaceId}',
       table_name: 'instagramReplyApprovalRequest',
-      column_name: 'connectedAccountId',
-    },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'draftId' },
-    {
-      table_name: 'instagramReplyApprovalRequest',
-      column_name: 'conversationId',
     },
     {
-      table_name: 'instagramReplyApprovalRequest',
-      column_name: 'previewTextSha256',
-    },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'state' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'expiresAt' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'decidedAt' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'createdAt' },
-    { table_name: 'instagramReplyApprovalRequest', column_name: 'updatedAt' },
-    {
-      table_name: 'instagramReplyApprovalRequest',
-      column_name: 'providerConversationId',
-    },
-    {
-      table_name: 'instagramReplyApprovalRequest',
-      column_name: 'recipientIgsid',
-    },
-    { table_name: 'instagramReplyExecutionReceipt', column_name: 'id' },
-    {
+      columns:
+        '{approvalRequestId,createdAt,failureCode,failureReason,id,providerMessageId,state,updatedAt}',
       table_name: 'instagramReplyExecutionReceipt',
-      column_name: 'approvalRequestId',
-    },
-    { table_name: 'instagramReplyExecutionReceipt', column_name: 'state' },
-    {
-      table_name: 'instagramReplyExecutionReceipt',
-      column_name: 'providerMessageId',
-    },
-    {
-      table_name: 'instagramReplyExecutionReceipt',
-      column_name: 'failureCode',
-    },
-    {
-      table_name: 'instagramReplyExecutionReceipt',
-      column_name: 'failureReason',
-    },
-    {
-      table_name: 'instagramReplyExecutionReceipt',
-      column_name: 'createdAt',
-    },
-    {
-      table_name: 'instagramReplyExecutionReceipt',
-      column_name: 'updatedAt',
     },
   ]);
   await expect(
@@ -798,6 +779,27 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     await expect(
       queryRaw(
         queryRunner,
+        `SELECT column_name, is_nullable
+         FROM information_schema.columns
+         WHERE table_schema = 'core'
+           AND table_name = 'actionApprovalBinding'
+           AND column_name IN (
+             'inboundMessageId',
+             'inboundSenderIgsid',
+             'inboundDirection',
+             'inboundReceivedAt'
+           )
+         ORDER BY column_name`,
+      ),
+    ).resolves.toStrictEqual([
+      { column_name: 'inboundDirection', is_nullable: 'YES' },
+      { column_name: 'inboundMessageId', is_nullable: 'YES' },
+      { column_name: 'inboundReceivedAt', is_nullable: 'YES' },
+      { column_name: 'inboundSenderIgsid', is_nullable: 'YES' },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
         `SELECT "toolOutput"
          FROM core."agentMessagePart"
          WHERE id = '00000000-0000-0000-0000-000000000301'`,
@@ -889,12 +891,46 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       {
         actionName: 'send_instagram_reply',
         actionVersion: 1,
-        state: 'REJECTED',
+        state: 'EXPIRED',
       },
       {
         actionName: 'send_instagram_reply',
         actionVersion: 1,
-        state: 'REJECTED',
+        state: 'EXPIRED',
+      },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT "inboundMessageId", "inboundSenderIgsid",
+                "inboundDirection", "inboundReceivedAt"
+         FROM core."actionApprovalBinding"
+         ORDER BY id`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        inboundDirection: null,
+        inboundMessageId: null,
+        inboundReceivedAt: null,
+        inboundSenderIgsid: null,
+      },
+      {
+        inboundDirection: null,
+        inboundMessageId: null,
+        inboundReceivedAt: null,
+        inboundSenderIgsid: null,
+      },
+      {
+        inboundDirection: null,
+        inboundMessageId: null,
+        inboundReceivedAt: null,
+        inboundSenderIgsid: null,
+      },
+      {
+        inboundDirection: null,
+        inboundMessageId: null,
+        inboundReceivedAt: null,
+        inboundSenderIgsid: null,
       },
     ]);
     await expect(
@@ -955,47 +991,15 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     ]);
 
 
-    await finalize.up(queryRunner);
-
-    await assertGenericAuthoritySchema(queryRunner);
-    await assertGenericIdDefaults(queryRunner);
-    await expect(
-      queryRaw(
-        queryRunner,
-        `SELECT conname, contype
-         FROM pg_constraint
-         WHERE conrelid = 'core."actionExecutionReceipt"'::regclass
-         ORDER BY conname`,
-      ),
-    ).resolves.toStrictEqual([
-      {
-        conname: 'FK_ACTION_EXECUTION_RECEIPT_BINDING',
-        contype: 'f',
-      },
-      {
-        conname: 'FK_ACTION_EXECUTION_RECEIPT_WORKSPACE',
-        contype: 'f',
-      },
-      {
-        conname: 'PK_1ecd8d74d2ebde2854db62b469e',
-        contype: 'p',
-      },
-      {
-        conname: 'UQ_ACTION_EXECUTION_RECEIPT_BINDING',
-        contype: 'u',
-      },
-      {
-        conname: 'UQ_ACTION_EXECUTION_RECEIPT_WORKSPACE_IDEMPOTENCY',
-        contype: 'u',
-      },
-    ]);
+    await expect(finalize.up(queryRunner)).rejects.toThrow(
+      'Cannot finalize action approval inbound proof for legacy bindings',
+    );
   });
 
   it.each<LegacyFixture>([
     'absent',
     'original',
     'repaired',
-    'populated',
     'missing-id-default',
   ])(
     'evolves the %s legacy fixture through prepared, backfilled, and finalized boundaries',
@@ -1027,6 +1031,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       await finalize.up(queryRunner);
       await assertGenericAuthoritySchema(queryRunner);
       await assertGenericIdDefaults(queryRunner);
+      await assertFinalizedInboundProof(queryRunner);
 
       await expect(
         queryRaw(queryRunner,
@@ -1036,68 +1041,6 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
         ),
       ).resolves.toStrictEqual(beforeSecondPrepare);
 
-      if (fixture !== 'populated') {
-        return;
-      }
-
-      await expect(
-        queryRaw(queryRunner,
-          `SELECT id, state
-           FROM core."actionApprovalBinding"
-           WHERE id IN ($1, $2)
-           ORDER BY id`,
-          [bindingIds.pending, bindingIds.approved],
-        ),
-      ).resolves.toStrictEqual([
-        { id: bindingIds.pending, state: 'EXPIRED' },
-        { id: bindingIds.approved, state: 'EXPIRED' },
-      ]);
-      await expect(
-        queryRaw(queryRunner,
-          `SELECT id, state
-           FROM core."actionExecutionReceipt"
-           ORDER BY id`,
-        ),
-      ).resolves.toStrictEqual([
-        { id: receiptIds.sent, state: 'SENT' },
-        { id: receiptIds.failed, state: 'FAILED' },
-        { id: receiptIds.blocked, state: 'BLOCKED' },
-        { id: receiptIds.unknown, state: 'UNKNOWN' },
-      ]);
-      await expect(
-        queryRaw(queryRunner,
-          'SELECT id, "toolOutput" FROM core."agentMessagePart" ORDER BY id',
-        ),
-      ).resolves.toStrictEqual([
-        {
-          id: '00000000-0000-0000-0000-000000000301',
-          toolOutput: {
-            result: {
-              bindingId: bindingIds.pending,
-              status: 'expired',
-            },
-            success: true,
-          },
-        },
-        {
-          id: '00000000-0000-0000-0000-000000000302',
-          toolOutput: {
-            result: {
-              status: 'expired',
-            },
-            success: true,
-          },
-        },
-        {
-          id: '00000000-0000-0000-0000-000000000303',
-          toolOutput: {
-            result: {
-              status: 'expired',
-            },
-            success: true,
-          },
-        },
-      ]);
     },
   );
   it.each([
@@ -1142,13 +1085,43 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     await assertGenericAuthoritySchema(queryRunner);
   });
 
-  it('restores the repaired schema only for disposable tests', async () => {
+  it('rolls finalized inbound proof back through the prepared legacy shape', async () => {
     await installLegacyFixture(queryRunner, 'repaired');
-    const command =
+    const prepare =
       new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand();
+    const finalize =
+      new FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand();
 
-    await command.up(queryRunner);
-    await command.down(queryRunner);
+    await prepare.up(queryRunner);
+    await finalize.runDataMigration({
+      query: queryRunner.query.bind(queryRunner),
+    } as unknown as DataSource);
+    await finalize.up(queryRunner);
+    await assertFinalizedInboundProof(queryRunner);
+    await queryRunner.query('SET CONSTRAINTS ALL IMMEDIATE');
+    await finalize.down(queryRunner);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT column_name, is_nullable
+         FROM information_schema.columns
+         WHERE table_schema = 'core'
+           AND table_name = 'actionApprovalBinding'
+           AND column_name IN (
+             'inboundMessageId',
+             'inboundSenderIgsid',
+             'inboundDirection',
+             'inboundReceivedAt'
+           )
+         ORDER BY column_name`,
+      ),
+    ).resolves.toStrictEqual([
+      { column_name: 'inboundDirection', is_nullable: 'YES' },
+      { column_name: 'inboundMessageId', is_nullable: 'YES' },
+      { column_name: 'inboundReceivedAt', is_nullable: 'YES' },
+      { column_name: 'inboundSenderIgsid', is_nullable: 'YES' },
+    ]);
+    await prepare.down(queryRunner);
 
     await expect(
       queryRaw(queryRunner,
