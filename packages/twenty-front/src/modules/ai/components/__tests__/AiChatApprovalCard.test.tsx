@@ -84,7 +84,7 @@ const serverDerivedProposal = {
   recipientLabel: '@recipient',
   sendingAccountLabel: '@myah_business',
   state: 'PENDING',
-  expiresAt: '2026-07-17T10:30:00.000Z',
+  expiresAt: '2099-07-17T10:30:00.000Z',
 };
 
 describe('AiChatApprovalCard', () => {
@@ -138,6 +138,79 @@ describe('AiChatApprovalCard', () => {
   });
 
   it('disables approval decisions when the guarded proposal is unavailable', () => {
+    renderApprovalCard(boundApproval);
+
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Request changes' }),
+    ).toBeDisabled();
+  });
+
+  it.each([
+    [
+      'the proposal is loading',
+      { data: { getActionApprovalProposal: serverDerivedProposal }, loading: true },
+    ],
+    [
+      'the proposal query errors',
+      {
+        data: { getActionApprovalProposal: serverDerivedProposal },
+        loading: false,
+        error: new Error('unavailable'),
+      },
+    ],
+    [
+      'the proposal action is not the registered Instagram reply',
+      {
+        data: {
+          getActionApprovalProposal: {
+            ...serverDerivedProposal,
+            action: 'other_action',
+          },
+        },
+        loading: false,
+      },
+    ],
+    [
+      'the proposal version does not match',
+      {
+        data: {
+          getActionApprovalProposal: {
+            ...serverDerivedProposal,
+            actionVersion: 2,
+          },
+        },
+        loading: false,
+      },
+    ],
+    [
+      'the proposal is terminal',
+      {
+        data: {
+          getActionApprovalProposal: {
+            ...serverDerivedProposal,
+            state: 'CONSUMED',
+          },
+        },
+        loading: false,
+      },
+    ],
+    [
+      'the proposal is expired',
+      {
+        data: {
+          getActionApprovalProposal: {
+            ...serverDerivedProposal,
+            expiresAt: '2020-07-17T10:30:00.000Z',
+          },
+        },
+        loading: false,
+      },
+    ],
+  ])('disables every decision when %s', (_case, queryResult) => {
+    (useQuery as jest.Mock).mockReturnValue(queryResult);
+
     renderApprovalCard(boundApproval);
 
     expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();

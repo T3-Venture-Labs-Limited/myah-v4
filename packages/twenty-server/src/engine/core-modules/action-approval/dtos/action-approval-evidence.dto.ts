@@ -23,14 +23,14 @@ export class ActionApprovalProposalDTO {
   @Field(() => Int)
   actionVersion: number;
 
-  @Field(() => String)
-  body: string;
+  @Field(() => String, { nullable: true })
+  body: string | null;
 
-  @Field(() => String)
-  recipientLabel: string;
+  @Field(() => String, { nullable: true })
+  recipientLabel: string | null;
 
-  @Field(() => String)
-  sendingAccountLabel: string;
+  @Field(() => String, { nullable: true })
+  sendingAccountLabel: string | null;
 
   @Field(() => String)
   state: string;

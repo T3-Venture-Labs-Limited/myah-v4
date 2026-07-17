@@ -15,6 +15,7 @@ const binding = {
   initiatorUserWorkspaceId: userWorkspaceId,
   threadId: 'thread-id',
   actionName: 'send_instagram_reply',
+  actionVersion: 1,
   state: 'CONSUMED',
   createdAt: new Date('2026-07-16T10:00:00.000Z'),
   decidedAt: new Date('2026-07-16T10:01:00.000Z'),
@@ -223,11 +224,47 @@ describe('ActionApprovalResolver', () => {
 
   it('rejects a mismatched graph instead of returning an approvable proposal', async () => {
     const { resolver } = createResolver({
+      resolvedBinding: { ...binding, state: 'PENDING' },
       resolvedProposal: new Error('Instagram reply source graph is unavailable'),
     });
 
     await expect(
       resolver.getActionApprovalProposal(bindingId, { id: workspaceId } as never, userWorkspaceId),
     ).rejects.toThrow('Instagram reply source graph is unavailable');
+  });
+
+  it('preserves redacted terminal evidence after projection makes the draft non-actionable', async () => {
+    const terminalBinding = {
+      ...binding,
+      state: 'CONSUMED',
+    };
+    const { resolver } = createResolver({
+      resolvedBinding: terminalBinding,
+      resolvedProposal: new Error('Instagram reply source graph is unavailable'),
+    });
+
+    await expect(
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
+    ).resolves.toEqual({
+      action: 'send_instagram_reply',
+      actionVersion: 1,
+      body: null,
+      recipientLabel: null,
+      sendingAccountLabel: null,
+      state: 'CONSUMED',
+      expiresAt: binding.expiresAt,
+      occurredAt: binding.decidedAt,
+      evidenceLinks: [
+        {
+          objectMetadataId: 'object-metadata-id',
+          recordId: 'record-id',
+          role: 'recipient',
+        },
+      ],
+    });
   });
 });

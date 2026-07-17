@@ -11,6 +11,7 @@ import {
   toActionExecutionReceiptDTO,
 } from 'src/engine/core-modules/action-approval/dtos/action-approval-evidence.dto';
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { ActionApprovalBindingState } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -40,10 +41,34 @@ export class ActionApprovalResolver {
       userWorkspaceId,
     });
 
-    return this.instagramReplyActionDefinition.getProposal({
-      workspaceId,
-      binding,
-    });
+    try {
+      return await this.instagramReplyActionDefinition.getProposal({
+        workspaceId,
+        binding,
+      });
+    } catch (error) {
+      if (binding.state === ActionApprovalBindingState.PENDING) {
+        throw error;
+      }
+
+      return {
+        action: binding.actionName,
+        actionVersion: binding.actionVersion,
+        body: null,
+        recipientLabel: null,
+        sendingAccountLabel: null,
+        state: binding.state,
+        expiresAt: binding.expiresAt,
+        occurredAt: binding.decidedAt ?? binding.createdAt,
+        evidenceLinks: binding.evidenceLinks.map(
+          ({ objectMetadataId, recordId, role }) => ({
+            objectMetadataId,
+            recordId,
+            role,
+          }),
+        ),
+      };
+    }
   }
 
   @Query(() => ActionExecutionReceiptDTO, { nullable: true })

@@ -161,9 +161,9 @@ type GetActionApprovalProposalData = {
   getActionApprovalProposal: {
     action: string;
     actionVersion: number;
-    body: string;
-    recipientLabel: string;
-    sendingAccountLabel: string;
+    body: string | null;
+    recipientLabel: string | null;
+    sendingAccountLabel: string | null;
     state: string;
     expiresAt: string;
   };
@@ -181,19 +181,38 @@ export const AiChatApprovalCard = ({
     'actionApprovalBindingId' in pendingApproval
       ? pendingApproval.actionApprovalBindingId
       : undefined;
-  const { data: proposalData } = useQuery<GetActionApprovalProposalData>(
-    GET_ACTION_APPROVAL_PROPOSAL,
-    {
-      variables: { bindingId: actionApprovalBindingId },
-      fetchPolicy: 'cache-and-network',
-      skip: !actionApprovalBindingId,
-    },
-  );
+  const {
+    data: proposalData,
+    loading: isProposalLoading,
+    error: proposalError,
+  } = useQuery<GetActionApprovalProposalData>(GET_ACTION_APPROVAL_PROPOSAL, {
+    variables: { bindingId: actionApprovalBindingId },
+    fetchPolicy: 'cache-and-network',
+    skip: !actionApprovalBindingId,
+  });
   const proposal = proposalData?.getActionApprovalProposal;
+  const proposalExpiresAt = proposal
+    ? Date.parse(proposal.expiresAt)
+    : Number.NaN;
+  const isActionApprovalProposalDecidable =
+    Boolean(actionApprovalBindingId) &&
+    !isProposalLoading &&
+    !proposalError &&
+    proposal?.action === 'send_instagram_reply' &&
+    proposal.actionVersion === 1 &&
+    proposal.state === 'PENDING' &&
+    typeof proposal.body === 'string' &&
+    typeof proposal.recipientLabel === 'string' &&
+    typeof proposal.sendingAccountLabel === 'string' &&
+    Number.isFinite(proposalExpiresAt) &&
+    proposalExpiresAt > Date.now();
+  const isDecisionDisabled =
+    isSubmitting ||
+    (Boolean(actionApprovalBindingId) && !isActionApprovalProposalDecidable);
   const request =
     'request' in pendingApproval
       ? pendingApproval.request
-      : proposal
+      : isActionApprovalProposalDecidable && proposal
         ? ({
             title: t`Review Instagram reply`,
             summary: t`Review the exact server-derived Instagram reply before it is sent.`,
@@ -213,7 +232,7 @@ export const AiChatApprovalCard = ({
           } satisfies RequestApprovalToolInput);
 
   const handleDecision = async (decision: ApprovalDecision) => {
-    if (isSubmitting || (actionApprovalBindingId && !proposal)) {
+    if (isDecisionDisabled) {
       return;
     }
 
@@ -261,7 +280,7 @@ export const AiChatApprovalCard = ({
         </StyledSection>
       )}
 
-      {actionApprovalBindingId && proposal && (
+      {isActionApprovalProposalDecidable && proposal && (
         <StyledMeta>
           <span>{t`To`}: {proposal.recipientLabel}</span>
           <span>{t`From`}: {proposal.sendingAccountLabel}</span>
@@ -289,7 +308,7 @@ export const AiChatApprovalCard = ({
             title={t`Request changes`}
             variant="secondary"
             Icon={IconRefresh}
-            disabled={isSubmitting || Boolean(actionApprovalBindingId && !proposal)}
+            disabled={isDecisionDisabled}
             onClick={() => void handleDecision('changes_requested')}
           />
         )}
@@ -297,13 +316,13 @@ export const AiChatApprovalCard = ({
           title={t`Reject`}
           variant="secondary"
           Icon={IconX}
-          disabled={isSubmitting || Boolean(actionApprovalBindingId && !proposal)}
+          disabled={isDecisionDisabled}
           onClick={() => void handleDecision('rejected')}
         />
         <MainButton
           title={t`Approve`}
           Icon={IconCheck}
-          disabled={isSubmitting || Boolean(actionApprovalBindingId && !proposal)}
+          disabled={isDecisionDisabled}
           onClick={() => void handleDecision('approved')}
         />
       </StyledActions>
