@@ -122,6 +122,7 @@ const buildService = ({
     service,
     persistedState,
     threadRepository,
+    messageRepository,
     messagePartRepository,
     actionApprovalService,
   };
@@ -178,6 +179,36 @@ describe('AgentChatService.resolvePendingApproval', () => {
       rollback: { partId: 'part-id', previousOutput: pendingApprovalOutput },
       shouldResume: true,
     });
+  });
+
+  it('locks only the message root before loading nullable parts', async () => {
+    const { service, messageRepository } = buildService();
+
+    await service.resolvePendingApproval({
+      threadId: 'thread-id',
+      messageId: 'message-id',
+      decision: { decision: 'approved' },
+      streamId: 'stream-id',
+      workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
+    });
+
+    expect(messageRepository.findOne).toHaveBeenNthCalledWith(
+      1,
+      'workspace-id',
+      {
+        where: { id: 'message-id', threadId: 'thread-id' },
+        lock: { mode: 'pessimistic_write' },
+      },
+    );
+    expect(messageRepository.findOne).toHaveBeenNthCalledWith(
+      2,
+      'workspace-id',
+      {
+        where: { id: 'message-id', threadId: 'thread-id' },
+        relations: ['parts'],
+      },
+    );
   });
 
   it('strips comment, timestamps, and unsafe fields from registered chat output', async () => {

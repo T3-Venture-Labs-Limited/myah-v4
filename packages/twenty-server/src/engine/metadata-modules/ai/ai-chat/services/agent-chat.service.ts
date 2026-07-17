@@ -734,10 +734,21 @@ export class AgentChatService {
         );
       }
 
+      const lockedMessage = await messageRepository.findOne(workspaceId, {
+        where: { id: messageId, threadId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!lockedMessage) {
+        throw new AiException(
+          'Approval message not found',
+          AiExceptionCode.MESSAGE_NOT_FOUND,
+        );
+      }
+
       const message = await messageRepository.findOne(workspaceId, {
         where: { id: messageId, threadId },
         relations: ['parts'],
-        lock: { mode: 'pessimistic_write' },
       });
 
       if (!message) {

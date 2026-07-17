@@ -13,11 +13,13 @@ import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-m
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
+import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 
 @Module({
   imports: [
     GlobalWorkspaceDataSourceModule,
+    PermissionsModule,
     TypeOrmModule.forFeature([
       ActionApprovalBindingEntity,
       ActionApprovalBindingEvidenceLinkEntity,

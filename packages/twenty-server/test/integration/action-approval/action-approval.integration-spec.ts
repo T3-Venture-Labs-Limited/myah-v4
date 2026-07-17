@@ -108,8 +108,6 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         typeof value.actionApprovalBindingId === 'string',
     );
 
-  const hasResult = (value: unknown): value is { result: unknown } =>
-    Boolean(value && typeof value === 'object' && 'result' in value);
 
   const prepareApprovedSender = async () => {
     const workspaceRepository = {
@@ -215,26 +213,33 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     const threadRepository = {
       findOne: jest.fn().mockResolvedValue({ id: threadId }),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
+      withManager: jest.fn(),
     };
+    threadRepository.withManager.mockReturnValue(threadRepository);
     const messagePartRepository = {
-      update: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      withManager: jest.fn(),
     };
+    messagePartRepository.withManager.mockReturnValue(messagePartRepository);
+    const messageRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'integration-message-id',
+        turnId: 'integration-turn-id',
+        parts: [
+          {
+            id: 'integration-part-id',
+            toolName: 'request_approval',
+            toolOutput: pendingOutput,
+          },
+        ],
+      }),
+      withManager: jest.fn(),
+    };
+    messageRepository.withManager.mockReturnValue(messageRepository);
     const decisionRouter = new AgentChatService(
       threadRepository as never,
       {} as never,
-      {
-        findOne: jest.fn().mockResolvedValue({
-          id: 'integration-message-id',
-          turnId: 'integration-turn-id',
-          parts: [
-            {
-              id: 'integration-part-id',
-              toolName: 'request_approval',
-              toolOutput: pendingOutput,
-            },
-          ],
-        }),
-      } as never,
+      messageRepository as never,
       messagePartRepository as never,
       {} as never,
       {} as never,
@@ -250,17 +255,23 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       streamId: 'integration-stream-id',
       decision: { decision: 'approved' },
     });
+    const transactionManager = threadRepository.withManager.mock.calls[0][0];
+    expect(transactionManager).toBeDefined();
+    expect(messageRepository.withManager).toHaveBeenCalledWith(
+      transactionManager,
+    );
+    expect(messagePartRepository.withManager).toHaveBeenCalledWith(
+      transactionManager,
+    );
     const persistedOutput =
       messagePartRepository.update.mock.calls[
         messagePartRepository.update.mock.calls.length - 1
       ][2].toolOutput;
-    if (!hasResult(persistedOutput)) {
-      throw new Error('The decision router did not persist a result.');
-    }
-    const senderPayload = persistedOutput.result;
-    if (!hasResolvedBindingPayload(senderPayload)) {
-      throw new Error('The decision router did not persist a binding payload.');
-    }
+    const senderPayload = {
+      status: 'resolved' as const,
+      actionApprovalBindingId: pendingBindingId,
+    };
+    expect(persistedOutput).toEqual({ result: senderPayload });
 
     return {
       actionDefinition,
@@ -695,10 +706,9 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       actionApprovalBindingId: senderPayload.actionApprovalBindingId,
     };
 
-    expect(senderPayload).toMatchObject({
+    expect(senderPayload).toEqual({
       status: 'resolved',
       actionApprovalBindingId: pendingBindingId,
-      decision: 'approved',
     });
     await expect(
       dataSource.getRepository(ActionApprovalBindingEntity).findOneByOrFail({
