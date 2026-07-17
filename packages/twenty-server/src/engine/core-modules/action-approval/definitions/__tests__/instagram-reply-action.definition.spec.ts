@@ -22,6 +22,8 @@ const sourceGraph = {
   recipientIgsid: 'recipient-igsid',
   inboundRecordId: '00000000-0000-4000-8000-000000000008',
   inboundMessageId: 'provider-inbound-message-id',
+  draftInboundRecordId: '00000000-0000-4000-8000-000000000008',
+  draftInboundProviderMessageId: 'provider-inbound-message-id',
   inboundSenderIgsid: 'recipient-igsid',
   inboundDirection: 'INBOUND',
   inboundReceivedAt,
@@ -57,6 +59,8 @@ const buildDefinition = ({
           sentAt: draft.draftSentAt,
           status: draft.draftStatus,
           conversationId: draft.conversationId,
+          inboundMessageRecordId: draft.draftInboundRecordId,
+          inboundProviderMessageId: draft.draftInboundProviderMessageId,
         },
       ),
     },
@@ -159,6 +163,7 @@ const buildDefinition = ({
   return {
     query,
     globalWorkspaceOrmManager,
+    repositories,
     definition: new Definition(
       workspaceRepository,
       globalWorkspaceOrmManager,
@@ -190,7 +195,8 @@ describe('InstagramReplyActionDefinition', () => {
   });
 
   it('derives normalized immutable authority and source evidence from the visible graph', async () => {
-    const { definition, globalWorkspaceOrmManager } = buildDefinition();
+    const { definition, globalWorkspaceOrmManager, repositories } =
+      buildDefinition();
 
     await expect(
       definition.propose({
@@ -242,6 +248,14 @@ describe('InstagramReplyActionDefinition', () => {
         ]),
       },
     });
+    expect(repositories.myahSocialMessage.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: sourceGraph.draftInboundRecordId,
+          providerMessageId: sourceGraph.draftInboundProviderMessageId,
+        }),
+      }),
+    );
 
     expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
       workspaceId,

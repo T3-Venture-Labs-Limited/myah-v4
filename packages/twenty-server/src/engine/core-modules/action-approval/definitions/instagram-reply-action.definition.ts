@@ -45,6 +45,8 @@ type InstagramReplyDraftRecord = ObjectRecord & {
   sentAt: string | null;
   status: string;
   conversationId: string;
+  inboundMessageRecordId: string | null;
+  inboundProviderMessageId: string | null;
 };
 
 type InstagramSocialConversationRecord = ObjectRecord & {
@@ -469,6 +471,18 @@ export class InstagramReplyActionDefinition {
           if (!draft) {
             return null;
           }
+          const draftInboundMessageRecordId =
+            draft.inboundMessageRecordId?.trim();
+          const draftInboundProviderMessageId =
+            draft.inboundProviderMessageId?.trim();
+          if (
+            !draftInboundMessageRecordId ||
+            !draftInboundProviderMessageId ||
+            (boundInboundMessageId &&
+              boundInboundMessageId !== draftInboundProviderMessageId)
+          ) {
+            return null;
+          }
           const conversation = await conversationRepository.findOneBy({
             id: draft.conversationId,
           });
@@ -483,13 +497,11 @@ export class InstagramReplyActionDefinition {
             accountRepository.find({ where: { status: 'ACTIVE' } }),
             socialMessageRepository.find({
               where: {
+                id: draftInboundMessageRecordId,
                 conversationId: conversation.id,
                 direction: 'INBOUND',
-                ...(boundInboundMessageId
-                  ? { providerMessageId: boundInboundMessageId }
-                  : {}),
+                providerMessageId: draftInboundProviderMessageId,
               },
-              order: { providerCreatedAt: 'DESC' },
               take: 1,
             }),
           ]);
@@ -541,6 +553,8 @@ export class InstagramReplyActionDefinition {
       composioUserId !== expectedComposioUserId ||
       !igUserId ||
       !inboundMessageId ||
+      graph.inboundMessage.id !== graph.draft.inboundMessageRecordId ||
+      inboundMessageId !== graph.draft.inboundProviderMessageId ||
       graph.inboundMessage.direction !== 'INBOUND' ||
       !(inboundReceivedAt instanceof Date) ||
       Number.isNaN(inboundReceivedAt.getTime())

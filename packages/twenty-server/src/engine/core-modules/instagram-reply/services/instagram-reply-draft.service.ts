@@ -242,16 +242,36 @@ export class InstagramReplyDraftService {
           if (existingMessages.length > 1) {
             throw new Error('The inbound Instagram message is ambiguous.');
           }
-          if (
-            existingMessages.length === 1 &&
-            (existingMessages[0].direction !== 'INBOUND' ||
-              !existingMessages[0].providerCreatedAt ||
-              new Date(existingMessages[0].providerCreatedAt).getTime() !==
-                inboundMessage.createdAt.getTime())
-          ) {
-            throw new Error('The inbound Instagram message no longer matches.');
-          }
-          if (existingMessages.length === 0) {
+          let inboundRecordId: string;
+          if (existingMessages.length === 1) {
+            const [existingMessage] = existingMessages;
+            if (existingMessage.direction !== 'INBOUND') {
+              throw new Error(
+                'The inbound Instagram message no longer matches.',
+              );
+            }
+            inboundRecordId = existingMessage.id;
+            if (!existingMessage.providerCreatedAt) {
+              await manager.query(
+                `
+                  UPDATE "${schemaName}"."_myahSocialMessage"
+                  SET "providerCreatedAt" = $2, "updatedAt" = NOW()
+                  WHERE "id" = $1
+                    AND "direction" = 'INBOUND'
+                    AND "providerCreatedAt" IS NULL
+                `,
+                [inboundRecordId, inboundMessage.createdAt],
+              );
+            } else if (
+              new Date(existingMessage.providerCreatedAt).getTime() !==
+              inboundMessage.createdAt.getTime()
+            ) {
+              throw new Error(
+                'The inbound Instagram message no longer matches.',
+              );
+            }
+          } else {
+            inboundRecordId = randomUUID();
             await manager.query(
               `
                 INSERT INTO "${schemaName}"."_myahSocialMessage" (
@@ -265,7 +285,7 @@ export class InstagramReplyDraftService {
                 )
               `,
               [
-                randomUUID(),
+                inboundRecordId,
                 inboundMessage.text,
                 conversationId,
                 inboundMessage.id,
@@ -286,6 +306,8 @@ export class InstagramReplyDraftService {
                 "title",
                 "body",
                 "conversationId",
+                "inboundMessageRecordId",
+                "inboundProviderMessageId",
                 "status",
                 "source",
                 "generatedAt",
@@ -298,8 +320,8 @@ export class InstagramReplyDraftService {
                 "updatedByName",
                 "updatedByContext"
               ) VALUES (
-                $1, $2, $3, $4, $5, 'NEEDS_REVIEW', 'AI', NOW(),
-                $6, $7, $8, $9, $10, $11, $12, $13
+                $1, $2, $3, $4, $5, $6, $7, 'NEEDS_REVIEW', 'AI', NOW(),
+                $8, $9, $10, $11, $12, $13, $14, $15
               )
             `,
             [
@@ -308,6 +330,8 @@ export class InstagramReplyDraftService {
               `Reply to ${recipientLabel}`,
               body,
               conversationId,
+              inboundRecordId,
+              inboundMessage.id,
               FieldActorSource.AGENT,
               input.userWorkspaceId,
               'Myah Agent',
