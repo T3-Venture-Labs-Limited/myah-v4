@@ -1,6 +1,10 @@
-import { DataSource, type QueryRunner } from 'typeorm';
+import { DataSource } from 'typeorm';
+import type { QueryRunner } from 'typeorm';
+import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
+import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
 import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-evolve-instagram-approval-to-action-authority';
+import { FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784112963057-finalize-instagram-approval-action-authority';
 jest.useRealTimers();
 
 
@@ -102,6 +106,47 @@ const installLegacyFixture = async (
   await queryRunner.query(
     'CREATE TABLE IF NOT EXISTS core."workspace" ("id" uuid PRIMARY KEY)',
   );
+  await queryRunner.query(`DO $$ BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'core' AND table_name = 'workspace'
+        AND column_name = 'workspaceCustomApplicationId'
+    ) THEN
+      ALTER TABLE core."workspace"
+        ALTER COLUMN "workspaceCustomApplicationId" DROP NOT NULL;
+    END IF;
+  END $$`);
+  await queryRunner.query(`DO $$ BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'core' AND table_name = 'workspace'
+        AND column_name = 'subdomain'
+    ) AND EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'core' AND table_name = 'workspace'
+        AND column_name = 'activationStatus'
+    ) THEN
+      INSERT INTO core."workspace" ("id", "subdomain", "activationStatus")
+      VALUES (
+        '00000000-0000-0000-0000-000000000001',
+        'authority-migration-test',
+        'PENDING_CREATION'
+      )
+      ON CONFLICT ("id") DO NOTHING;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'core' AND table_name = 'workspace'
+        AND column_name = 'subdomain'
+    ) THEN
+      INSERT INTO core."workspace" ("id", "subdomain")
+      VALUES ('00000000-0000-0000-0000-000000000001', 'authority-migration-test')
+      ON CONFLICT ("id") DO NOTHING;
+    ELSE
+      INSERT INTO core."workspace" ("id")
+      VALUES ('00000000-0000-0000-0000-000000000001')
+      ON CONFLICT ("id") DO NOTHING;
+    END IF;
+  END $$`);
   await dropFixtureSchema(queryRunner);
 
   if (fixture === 'absent') {
@@ -589,6 +634,363 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     }
   });
 
+  it('registers prepare and finalizer commands in timestamp order', () => {
+    expect(INSTANCE_COMMANDS).toEqual(
+      expect.arrayContaining([
+        EvolveInstagramApprovalToActionAuthorityFastInstanceCommand,
+        FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand,
+      ]),
+    );
+    expect(
+      [
+        EvolveInstagramApprovalToActionAuthorityFastInstanceCommand,
+        FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand,
+      ].map(getRegisteredInstanceCommandMetadata),
+    ).toStrictEqual([
+      {
+        runAfterWorkspace: false,
+        timestamp: 1784112963056,
+        type: 'fast',
+        version: '2.19.0',
+      },
+      {
+        runAfterWorkspace: false,
+        timestamp: 1784112963057,
+        type: 'slow',
+        version: '2.19.0',
+      },
+    ]);
+    expect(
+      INSTANCE_COMMANDS.indexOf(
+        EvolveInstagramApprovalToActionAuthorityFastInstanceCommand,
+      ),
+    ).toBeLessThan(
+      INSTANCE_COMMANDS.indexOf(
+        FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand,
+      ),
+    );
+  });
+  it('creates authority workspace foreign keys with cascading deletes', async () => {
+    await installLegacyFixture(queryRunner, 'absent');
+    await new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand().up(
+      queryRunner,
+    );
+
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT relation.relname AS table_name, fk.conname,
+                fk.confdeltype
+         FROM pg_constraint AS fk
+         JOIN pg_class AS relation ON relation.oid = fk.conrelid
+         WHERE fk.contype = 'f'
+           AND fk.conrelid IN (
+             'core."actionApprovalBinding"'::regclass,
+             'core."actionExecutionReceipt"'::regclass
+           )
+         ORDER BY table_name, fk.conname`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        conname: 'FK_ACTION_APPROVAL_BINDING_WORKSPACE',
+        confdeltype: 'c',
+        table_name: 'actionApprovalBinding',
+      },
+      {
+        conname: 'FK_ACTION_EXECUTION_RECEIPT_BINDING',
+        confdeltype: 'r',
+        table_name: 'actionExecutionReceipt',
+      },
+      {
+        conname: 'FK_ACTION_EXECUTION_RECEIPT_WORKSPACE',
+        confdeltype: 'c',
+        table_name: 'actionExecutionReceipt',
+      },
+    ]);
+  });
+
+
+  it('only prepares nullable generic shape before legacy data backfill', async () => {
+    await installLegacyFixture(queryRunner, 'populated');
+    const command =
+      new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand();
+    const query = jest.spyOn(queryRunner, 'query');
+
+    await command.up(queryRunner);
+
+    const queries = query.mock.calls.map(([statement]) => String(statement));
+    query.mockRestore();
+
+    expect(queries).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/^\s*UPDATE\s/i)]),
+    );
+    expect(queries).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('jsonb_build_object')]),
+    );
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT "actionName", "actionVersion"
+         FROM core."actionApprovalBinding"
+         ORDER BY id`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        actionName: 'request_instagram_reply_approval',
+        actionVersion: null,
+      },
+      {
+        actionName: 'request_instagram_reply_approval',
+        actionVersion: null,
+      },
+      {
+        actionName: 'request_instagram_reply_approval',
+        actionVersion: null,
+      },
+      {
+        actionName: 'request_instagram_reply_approval',
+        actionVersion: null,
+      },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT "workspaceId", "idempotencyKey", "redactedOutcome"
+         FROM core."actionExecutionReceipt"
+         ORDER BY id`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        workspaceId: null,
+        idempotencyKey: null,
+        redactedOutcome: null,
+      },
+      {
+        workspaceId: null,
+        idempotencyKey: null,
+        redactedOutcome: null,
+      },
+      {
+        workspaceId: null,
+        idempotencyKey: null,
+        redactedOutcome: null,
+      },
+      {
+        workspaceId: null,
+        idempotencyKey: null,
+        redactedOutcome: null,
+      },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT column_name, is_nullable
+         FROM information_schema.columns
+         WHERE table_schema = 'core'
+           AND table_name = 'actionExecutionReceipt'
+           AND column_name IN ('workspaceId', 'idempotencyKey')
+         ORDER BY column_name`,
+      ),
+    ).resolves.toStrictEqual([
+      { column_name: 'idempotencyKey', is_nullable: 'YES' },
+      { column_name: 'workspaceId', is_nullable: 'YES' },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT "toolOutput"
+         FROM core."agentMessagePart"
+         WHERE id = '00000000-0000-0000-0000-000000000301'`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        toolOutput: {
+          result: {
+            approvalId: '00000000-0000-0000-0000-000000000031',
+            preview: 'private reply',
+          },
+        },
+      },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = 'core'
+           AND table_name = 'actionApprovalBinding'
+           AND column_name = 'approvalId'`,
+      ),
+    ).resolves.toStrictEqual([{ column_name: 'approvalId' }]);
+  });
+
+  it('backfills legacy data before finalizing action authority constraints', async () => {
+    await installLegacyFixture(queryRunner, 'populated');
+    await queryRunner.query('DROP TABLE IF EXISTS core."agentMessage" CASCADE');
+    await queryRunner.query(
+      'DROP TABLE IF EXISTS core."agentChatThread" CASCADE',
+    );
+    const prepare =
+      new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand();
+    const finalize =
+      new FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand();
+    await queryRunner.query(`CREATE TABLE core."agentChatThread" (
+      "id" uuid PRIMARY KEY,
+      "pendingQuestionMessageId" uuid
+    )`);
+    await queryRunner.query(`CREATE TABLE core."agentMessage" (
+      "id" uuid PRIMARY KEY,
+      "threadId" uuid NOT NULL
+    )`);
+    await queryRunner.query(
+      'ALTER TABLE core."agentMessagePart" ADD COLUMN "messageId" uuid',
+    );
+    await queryRunner.query(`INSERT INTO core."agentChatThread" (
+      "id", "pendingQuestionMessageId"
+    ) VALUES
+      ('00000000-0000-0000-0000-000000000401',
+       '00000000-0000-0000-0000-000000000402'),
+      ('00000000-0000-0000-0000-000000000403',
+       '00000000-0000-0000-0000-000000000404')`);
+    await queryRunner.query(`INSERT INTO core."agentMessage" ("id", "threadId")
+      VALUES
+        ('00000000-0000-0000-0000-000000000402',
+         '00000000-0000-0000-0000-000000000401'),
+        ('00000000-0000-0000-0000-000000000404',
+         '00000000-0000-0000-0000-000000000403')`);
+    await queryRunner.query(`UPDATE core."agentMessagePart"
+      SET "messageId" = '00000000-0000-0000-0000-000000000402'
+      WHERE "id" = '00000000-0000-0000-0000-000000000301'`);
+
+
+    await prepare.up(queryRunner);
+    await finalize.runDataMigration({
+      query: queryRunner.query.bind(queryRunner),
+    } as unknown as DataSource);
+
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT "actionName", "actionVersion", state
+         FROM core."actionApprovalBinding"
+         ORDER BY id`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        actionName: 'send_instagram_reply',
+        actionVersion: 1,
+        state: 'EXPIRED',
+      },
+      {
+        actionName: 'send_instagram_reply',
+        actionVersion: 1,
+        state: 'EXPIRED',
+      },
+      {
+        actionName: 'send_instagram_reply',
+        actionVersion: 1,
+        state: 'REJECTED',
+      },
+      {
+        actionName: 'send_instagram_reply',
+        actionVersion: 1,
+        state: 'REJECTED',
+      },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT "workspaceId", "idempotencyKey", "redactedOutcome"
+         FROM core."actionExecutionReceipt"
+         ORDER BY id`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        workspaceId,
+        idempotencyKey: `legacy:${receiptIds.sent}`,
+        redactedOutcome: 'legacy_migrated',
+      },
+      {
+        workspaceId,
+        idempotencyKey: `legacy:${receiptIds.failed}`,
+        redactedOutcome: 'legacy_migrated',
+      },
+      {
+        workspaceId,
+        idempotencyKey: `legacy:${receiptIds.blocked}`,
+        redactedOutcome: 'legacy_migrated',
+      },
+      {
+        workspaceId,
+        idempotencyKey: `legacy:${receiptIds.unknown}`,
+        redactedOutcome: 'legacy_migrated',
+      },
+    ]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = 'core'
+           AND table_name = 'actionApprovalBinding'
+           AND column_name = 'approvalId'`,
+      ),
+    ).resolves.toStrictEqual([{ column_name: 'approvalId' }]);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT "id", "pendingQuestionMessageId"
+         FROM core."agentChatThread"
+         ORDER BY "id"`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        id: '00000000-0000-0000-0000-000000000401',
+        pendingQuestionMessageId: null,
+      },
+      {
+        id: '00000000-0000-0000-0000-000000000403',
+        pendingQuestionMessageId: '00000000-0000-0000-0000-000000000404',
+      },
+    ]);
+
+
+    await finalize.up(queryRunner);
+
+    await assertGenericAuthoritySchema(queryRunner);
+    await assertGenericIdDefaults(queryRunner);
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT conname, contype
+         FROM pg_constraint
+         WHERE conrelid = 'core."actionExecutionReceipt"'::regclass
+         ORDER BY conname`,
+      ),
+    ).resolves.toStrictEqual([
+      {
+        conname: 'FK_ACTION_EXECUTION_RECEIPT_BINDING',
+        contype: 'f',
+      },
+      {
+        conname: 'FK_ACTION_EXECUTION_RECEIPT_WORKSPACE',
+        contype: 'f',
+      },
+      {
+        conname: 'PK_1ecd8d74d2ebde2854db62b469e',
+        contype: 'p',
+      },
+      {
+        conname: 'UQ_ACTION_EXECUTION_RECEIPT_BINDING',
+        contype: 'u',
+      },
+      {
+        conname: 'UQ_ACTION_EXECUTION_RECEIPT_WORKSPACE_IDEMPOTENCY',
+        contype: 'u',
+      },
+    ]);
+  });
+
   it.each<LegacyFixture>([
     'absent',
     'original',
@@ -596,29 +998,35 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     'populated',
     'missing-id-default',
   ])(
-    'evolves the %s legacy fixture in place and is idempotent',
+    'evolves the %s legacy fixture through prepared, backfilled, and finalized boundaries',
     async (fixture) => {
       await installLegacyFixture(queryRunner, fixture);
-      const command =
+      const prepare =
         new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand();
+      const finalize =
+        new FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand();
 
-      await command.up(queryRunner);
-      await assertGenericAuthoritySchema(queryRunner);
-      await assertGenericIdDefaults(queryRunner);
+      await prepare.up(queryRunner);
 
-      const beforeSecondUp = await queryRaw(queryRunner,
+      const beforeSecondPrepare = await queryRaw(queryRunner,
         `SELECT
           (SELECT count(*) FROM core."actionApprovalBinding") AS bindings,
           (SELECT count(*) FROM core."actionExecutionReceipt") AS receipts`,
       );
 
-      const secondUpQuery = jest.spyOn(queryRunner, 'query');
-      await command.up(queryRunner);
+      const secondPrepareQuery = jest.spyOn(queryRunner, 'query');
+      await prepare.up(queryRunner);
       expect(
-        secondUpQuery.mock.calls.map(([query]) => String(query)),
+        secondPrepareQuery.mock.calls.map(([query]) => String(query)),
       ).not.toEqual(expect.arrayContaining([expect.stringMatching(/^ALTER TABLE/)]));
-      secondUpQuery.mockRestore();
+      secondPrepareQuery.mockRestore();
+
+      await finalize.runDataMigration({
+        query: queryRunner.query.bind(queryRunner),
+      } as unknown as DataSource);
+      await finalize.up(queryRunner);
       await assertGenericAuthoritySchema(queryRunner);
+      await assertGenericIdDefaults(queryRunner);
 
       await expect(
         queryRaw(queryRunner,
@@ -626,7 +1034,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
             (SELECT count(*) FROM core."actionApprovalBinding") AS bindings,
             (SELECT count(*) FROM core."actionExecutionReceipt") AS receipts`,
         ),
-      ).resolves.toStrictEqual(beforeSecondUp);
+      ).resolves.toStrictEqual(beforeSecondPrepare);
 
       if (fixture !== 'populated') {
         return;
