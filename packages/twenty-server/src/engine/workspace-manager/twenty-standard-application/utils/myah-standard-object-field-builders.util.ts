@@ -155,7 +155,10 @@ const buildMyahBaseSystemFields = ({
     twentyStandardApplicationId: args.twentyStandardApplicationId,
     now: args.now,
   }),
-  createdBy: createMyahStandardFieldFlatMetadata({
+  createdBy: createMyahStandardFieldFlatMetadata<
+    MyahStandardObjectName,
+    FieldMetadataType.ACTOR
+  >({
     objectName,
     workspaceId: args.workspaceId,
     context: {
@@ -175,7 +178,10 @@ const buildMyahBaseSystemFields = ({
     twentyStandardApplicationId: args.twentyStandardApplicationId,
     now: args.now,
   }),
-  updatedBy: createMyahStandardFieldFlatMetadata({
+  updatedBy: createMyahStandardFieldFlatMetadata<
+    MyahStandardObjectName,
+    FieldMetadataType.ACTOR
+  >({
     objectName,
     workspaceId: args.workspaceId,
     context: {

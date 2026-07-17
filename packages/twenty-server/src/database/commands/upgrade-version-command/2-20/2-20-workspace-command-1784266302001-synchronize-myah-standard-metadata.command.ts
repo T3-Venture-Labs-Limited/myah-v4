@@ -114,12 +114,13 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       ({ id }) => id,
     );
     const hasLegacyMyahApplication = legacyMyahApplicationIds.length > 0;
-    const metadataCacheKeys: WorkspaceCacheKeyName[] = [
-      ...TWENTY_STANDARD_ALL_METADATA_NAME.map(
-        (metadataName) => `flat${metadataName.charAt(0).toUpperCase()}${metadataName.slice(1)}Maps`,
-      ),
+    const metadataCacheKeys = [
+      ...(TWENTY_STANDARD_ALL_METADATA_NAME.map(
+        (metadataName) =>
+          `flat${metadataName.charAt(0).toUpperCase()}${metadataName.slice(1)}Maps`,
+      ) as WorkspaceCacheKeyName[]),
       'featureFlagsMap',
-    ];
+    ] satisfies WorkspaceCacheKeyName[];
     const cachedMetadata =
       await this.workspaceCacheService.getOrRecompute(
         workspaceId,

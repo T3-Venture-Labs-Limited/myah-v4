@@ -153,6 +153,7 @@ export const getStandardObjectMetadataRelatedEntityIds =
       result[objectName] = {
         fields: fieldIds,
         id: v4(),
+        // @ts-expect-error This fails only because objectName is a generic union.
         views: viewIds,
       };
     }
