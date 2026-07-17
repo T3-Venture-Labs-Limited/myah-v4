@@ -193,7 +193,6 @@ export class ActionApprovalService {
       async (manager) => {
         const binding = await manager.findOne(ActionApprovalBindingEntity, {
           where: { id: approvalBindingId, workspaceId },
-          relations: { evidenceLinks: true },
           lock: { mode: 'pessimistic_write' },
         });
         if (
@@ -214,6 +213,7 @@ export class ActionApprovalService {
         ) {
           return null;
         }
+        const evidenceLinks = await this.findEvidence(manager, binding.id);
 
         return {
           workspaceId: binding.workspaceId,
@@ -225,7 +225,7 @@ export class ActionApprovalService {
           sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
           threadId: binding.threadId,
           initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
-          evidenceLinks: binding.evidenceLinks,
+          evidenceLinks,
         };
       },
     );
