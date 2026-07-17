@@ -112,6 +112,7 @@ const seedEmptyWorkspaces = async (dataSource: DataSource) => {
 };
 
 const EXECUTED_BY_VERSION = `42.42.42-test-${process.pid}`;
+const TEST_COMMAND_NAME_SUFFIX = `-test-${process.pid}-${Date.now()}`;
 
 export const clearUpgradeSequenceRunnerTestMigrations = async (
   dataSource: DataSource,
@@ -252,7 +253,7 @@ export const makeStep = (
 
   return {
     kind,
-    name,
+    name: `${name}${TEST_COMMAND_NAME_SUFFIX}`,
     command,
     version: '1.21.0',
     timestamp: 0,
@@ -440,14 +441,19 @@ export const seedInstanceMigration = async (
     workspaceIds = [],
     attempt = 1,
     executedByVersion = EXECUTED_BY_VERSION,
+    namespaceName = true,
   }: {
     name: string;
     status: 'completed' | 'failed';
     workspaceIds?: string[];
     attempt?: number;
     executedByVersion?: string;
+    namespaceName?: boolean;
   },
 ) => {
+  const persistedName = namespaceName
+    ? `${name}${TEST_COMMAND_NAME_SUFFIX}`
+    : name;
   // Seeds must have past timestamps so the runner's NOW()-based records
   // always sort after them in createdAt order.
   const createdAt = new Date(
@@ -463,13 +469,20 @@ export const seedInstanceMigration = async (
   values.push(
     `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, NULL, $${paramIndex++}, false)`,
   );
-  args.push(name, status, attempt, executedByVersion, createdAt);
+  args.push(persistedName, status, attempt, executedByVersion, createdAt);
 
   for (const workspaceId of workspaceIds) {
     values.push(
       `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, false)`,
     );
-    args.push(name, status, attempt, executedByVersion, workspaceId, createdAt);
+    args.push(
+      persistedName,
+      status,
+      attempt,
+      executedByVersion,
+      workspaceId,
+      createdAt,
+    );
   }
 
   await dataSource.query(
@@ -488,6 +501,7 @@ export const seedWorkspaceMigration = async (
     attempt = 1,
     isInitial = false,
     useCurrentTimestamp = false,
+    namespaceName = true,
   }: {
     name: string;
     status: 'completed' | 'failed';
@@ -495,13 +509,24 @@ export const seedWorkspaceMigration = async (
     attempt?: number;
     isInitial?: boolean;
     useCurrentTimestamp?: boolean;
+    namespaceName?: boolean;
   },
 ) => {
+  const persistedName = namespaceName
+    ? `${name}${TEST_COMMAND_NAME_SUFFIX}`
+    : name;
   if (useCurrentTimestamp) {
     await dataSource.query(
       `INSERT INTO core."upgradeMigration" (name, status, attempt, "executedByVersion", "workspaceId", "isInitial")
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [name, status, attempt, EXECUTED_BY_VERSION, workspaceId, isInitial],
+      [
+        persistedName,
+        status,
+        attempt,
+        EXECUTED_BY_VERSION,
+        workspaceId,
+        isInitial,
+      ],
     );
   } else {
     const createdAt = new Date(
@@ -514,7 +539,7 @@ export const seedWorkspaceMigration = async (
       `INSERT INTO core."upgradeMigration" (name, status, attempt, "executedByVersion", "workspaceId", "createdAt", "isInitial")
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
-        name,
+        persistedName,
         status,
         attempt,
         EXECUTED_BY_VERSION,
@@ -537,13 +562,20 @@ export type ExecutedMigrationRecord = {
 export const testGetExecutedMigrationsInOrder = async (
   dataSource: DataSource,
 ): Promise<ExecutedMigrationRecord[]> => {
-  return dataSource.query(
+  const rows = await dataSource.query<ExecutedMigrationRecord[]>(
     `SELECT name, status, attempt, "workspaceId", "isInitial"
      FROM core."upgradeMigration"
      WHERE "executedByVersion" = $1
      ORDER BY "createdAt" ASC, "workspaceId" ASC NULLS FIRST, attempt ASC`,
     [EXECUTED_BY_VERSION],
   );
+
+  return rows.map((row) => ({
+    ...row,
+    name: row.name.endsWith(TEST_COMMAND_NAME_SUFFIX)
+      ? row.name.slice(0, -TEST_COMMAND_NAME_SUFFIX.length)
+      : row.name,
+  }));
 };
 
 export const migrationRecordToKey = ({

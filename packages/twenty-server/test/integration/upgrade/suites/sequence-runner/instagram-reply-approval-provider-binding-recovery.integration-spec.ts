@@ -57,6 +57,7 @@ const seedFailedProviderBindingMigration = async (
     name: providerBindingName,
     status: 'failed',
     workspaceIds: [WS_1],
+    namespaceName: false,
   });
   await context.dataSource.query(
     `UPDATE core."upgradeMigration"
@@ -140,6 +141,7 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
     await seedInstanceMigration(context.dataSource, {
       name: unrelatedMigrationName,
       status: 'completed',
+      namespaceName: false,
     });
     originalProviderBindingMigrations =
       await getProviderBindingMigrations(context);
