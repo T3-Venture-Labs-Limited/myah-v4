@@ -3,8 +3,6 @@ import type { DataSource, QueryRunner } from 'typeorm';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import type { SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
 
-const LEGACY_BINDING = 'core."instagramReplyApprovalRequest"';
-const LEGACY_RECEIPT = 'core."instagramReplyExecutionReceipt"';
 const BINDING = 'core."actionApprovalBinding"';
 const EVIDENCE_LINK = 'core."actionApprovalBindingEvidenceLink"';
 const RECEIPT = 'core."actionExecutionReceipt"';

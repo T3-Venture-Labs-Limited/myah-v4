@@ -1,5 +1,4 @@
-import { DataSource } from 'typeorm';
-import type { QueryRunner } from 'typeorm';
+import { DataSource, type QueryRunner } from 'typeorm';
 import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
@@ -794,6 +793,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     await assertGenericAuthoritySchema(queryRunner);
     await assertFinalizedInboundProof(queryRunner);
   });
+
 
 
   it('only prepares nullable generic shape before legacy data backfill', async () => {
