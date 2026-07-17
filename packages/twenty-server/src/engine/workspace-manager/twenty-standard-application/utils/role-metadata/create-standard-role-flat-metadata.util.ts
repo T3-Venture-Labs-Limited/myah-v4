@@ -7,7 +7,8 @@ import { type AllStandardRoleName } from 'src/engine/workspace-manager/twenty-st
 import { type StandardBuilderArgs } from 'src/engine/workspace-manager/twenty-standard-application/types/metadata-standard-buillder-args.type';
 
 export type CreateStandardRoleContext = {
-  roleName: AllStandardRoleName;
+  roleName: string;
+  universalIdentifier?: string;
   label: string;
   description: string | null;
   icon: string | null;
@@ -21,6 +22,8 @@ export type CreateStandardRoleContext = {
   canBeAssignedToUsers: boolean;
   canBeAssignedToAgents: boolean;
   canBeAssignedToApiKeys: boolean;
+  objectPermissionUniversalIdentifiers?: string[];
+  fieldPermissionUniversalIdentifiers?: string[];
 };
 
 export type CreateStandardRoleArgs = StandardBuilderArgs<'role'> & {
@@ -30,6 +33,7 @@ export type CreateStandardRoleArgs = StandardBuilderArgs<'role'> & {
 export const createStandardRoleFlatMetadata = ({
   context: {
     roleName,
+    universalIdentifier: contextUniversalIdentifier,
     label,
     description,
     icon,
@@ -43,12 +47,22 @@ export const createStandardRoleFlatMetadata = ({
     canBeAssignedToUsers,
     canBeAssignedToAgents,
     canBeAssignedToApiKeys,
+    objectPermissionUniversalIdentifiers = [],
+    fieldPermissionUniversalIdentifiers = [],
   },
   workspaceId,
   twentyStandardApplicationId,
   now,
 }: CreateStandardRoleArgs): FlatRole => {
-  const universalIdentifier = STANDARD_ROLE[roleName].universalIdentifier;
+  const standardRole = Object.entries(STANDARD_ROLE).find(
+    ([standardRoleName]) => standardRoleName === roleName,
+  );
+  const universalIdentifier =
+    contextUniversalIdentifier ?? standardRole?.[1].universalIdentifier;
+
+  if (!universalIdentifier) {
+    throw new Error(`Unknown standard role: ${roleName}`);
+  }
 
   return {
     id: v4(),
@@ -74,9 +88,9 @@ export const createStandardRoleFlatMetadata = ({
     updatedAt: now,
     rolePermissionFlagIds: [],
     rolePermissionFlagUniversalIdentifiers: [],
-    objectPermissionUniversalIdentifiers: [],
+    objectPermissionUniversalIdentifiers,
     fieldPermissionIds: [],
-    fieldPermissionUniversalIdentifiers: [],
+    fieldPermissionUniversalIdentifiers,
     objectPermissionIds: [],
     roleTargetIds: [],
     roleTargetUniversalIdentifiers: [],

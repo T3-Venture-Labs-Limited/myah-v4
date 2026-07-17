@@ -4,6 +4,7 @@ import {
 } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import {
   type IntegrationTestContext,
+  clearUpgradeSequenceRunnerTestMigrations,
   createUpgradeSequenceRunnerIntegrationTestModule,
   DEFAULT_OPTIONS,
   makeFastInstance,
@@ -68,13 +69,13 @@ describe('UpgradeSequenceRunnerService — failing sequence (integration)', () =
   }, 30000);
 
   afterAll(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
     await context.module?.close();
     await context.dataSource?.destroy();
   }, 15000);
 
   beforeEach(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
     resetSeedSequenceCounter();
     setMockActiveWorkspaceIds([]);
     jest.restoreAllMocks();
@@ -106,7 +107,9 @@ describe('UpgradeSequenceRunnerService — failing sequence (integration)', () =
         sequence,
         options: DEFAULT_OPTIONS,
       }),
-    ).rejects.toThrow(/Step "RemovedCommand" not found in upgrade sequence/);
+    ).rejects.toThrow(
+      /Step "RemovedCommand-test-\d+-\d+" not found in upgrade sequence/,
+    );
   });
 
   it('should throw when workspace cursors are outside the current slice', async () => {

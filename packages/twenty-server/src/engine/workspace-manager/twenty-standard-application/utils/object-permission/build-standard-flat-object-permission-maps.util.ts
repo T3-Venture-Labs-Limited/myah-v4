@@ -1,0 +1,57 @@
+import { v4 } from 'uuid';
+
+import { createEmptyFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-flat-entity-maps.constant';
+import type { FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import type { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
+import { addFlatEntityToFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/add-flat-entity-to-flat-entity-maps-or-throw.util';
+import { findFlatEntityByUniversalIdentifierOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier-or-throw.util';
+import type { FlatObjectPermission } from 'src/engine/metadata-modules/flat-object-permission/types/flat-object-permission.type';
+import type { FlatRole } from 'src/engine/metadata-modules/flat-role/types/flat-role.type';
+import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
+import { MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
+
+export const buildStandardFlatObjectPermissionMaps = ({
+  now,
+  workspaceId,
+  twentyStandardApplicationId,
+  dependencyFlatEntityMaps,
+}: {
+  now: string;
+  workspaceId: string;
+  twentyStandardApplicationId: string;
+  dependencyFlatEntityMaps: {
+    flatRoleMaps: FlatEntityMaps<FlatRole>;
+    flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
+  };
+}): FlatEntityMaps<FlatObjectPermission> => {
+  let flatObjectPermissionMaps = createEmptyFlatEntityMaps();
+
+  for (const definition of MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS) {
+    const role = findFlatEntityByUniversalIdentifierOrThrow({
+      flatEntityMaps: dependencyFlatEntityMaps.flatRoleMaps,
+      universalIdentifier: definition.roleUniversalIdentifier,
+    });
+    const objectMetadata = findFlatEntityByUniversalIdentifierOrThrow({
+      flatEntityMaps: dependencyFlatEntityMaps.flatObjectMetadataMaps,
+      universalIdentifier: definition.objectMetadataUniversalIdentifier,
+    });
+
+    flatObjectPermissionMaps = addFlatEntityToFlatEntityMapsOrThrow({
+      flatEntity: {
+        id: v4(),
+        ...definition,
+        workspaceId,
+        applicationId: twentyStandardApplicationId,
+        applicationUniversalIdentifier:
+          TWENTY_STANDARD_APPLICATION.universalIdentifier,
+        roleId: role.id,
+        objectMetadataId: objectMetadata.id,
+        createdAt: now,
+        updatedAt: now,
+      },
+      flatEntityMaps: flatObjectPermissionMaps,
+    });
+  }
+
+  return flatObjectPermissionMaps;
+};

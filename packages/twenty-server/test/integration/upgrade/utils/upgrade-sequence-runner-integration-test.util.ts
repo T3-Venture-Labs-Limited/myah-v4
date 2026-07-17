@@ -2,14 +2,17 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
 import { config } from 'dotenv';
-import { DataSource, type Repository } from 'typeorm';
+import { DataSource, IsNull, type Repository } from 'typeorm';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
-import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
+import {
+  UpgradeMigrationService,
+  type WorkspaceLastAttemptedCommand,
+} from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import {
   UpgradeSequenceReaderService,
   type UpgradeStep,
@@ -19,7 +22,10 @@ import { UpgradeSequenceRunnerService } from 'src/engine/core-modules/upgrade/se
 import { UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade-aware/upgrade-aware-entity-metadata.adapter';
 import { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
 import { WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
-import { UpgradeMigrationEntity } from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
+import {
+  UpgradeMigrationEntity,
+  type UpgradeMigrationStatus,
+} from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
 import {
   SEED_APPLE_WORKSPACE_ID,
   SEED_EMPTY_WORKSPACE_3_ID,
@@ -105,7 +111,132 @@ const seedEmptyWorkspaces = async (dataSource: DataSource) => {
   }
 };
 
-const EXECUTED_BY_VERSION = '42.42.42';
+const EXECUTED_BY_VERSION = `42.42.42-test-${process.pid}`;
+const TEST_COMMAND_NAME_SUFFIX = `-test-${process.pid}-${Date.now()}`;
+
+export const clearUpgradeSequenceRunnerTestMigrations = async (
+  dataSource: DataSource,
+) => {
+  await dataSource.query(
+    `DELETE FROM core."upgradeMigration"
+     WHERE "executedByVersion" = $1`,
+    [EXECUTED_BY_VERSION],
+  );
+};
+
+class UpgradeSequenceRunnerTestMigrationService extends UpgradeMigrationService {
+  constructor(
+    private readonly testMigrationRepository: Repository<UpgradeMigrationEntity>,
+  ) {
+    super(testMigrationRepository);
+  }
+
+  override async isLastAttemptCompleted({
+    name,
+    workspaceId,
+  }: {
+    name: string;
+    workspaceId: string | null;
+  }): Promise<boolean> {
+    const latestAttempt = await this.testMigrationRepository.findOne({
+      where: {
+        name,
+        executedByVersion: EXECUTED_BY_VERSION,
+        workspaceId: workspaceId === null ? IsNull() : workspaceId,
+      },
+      order: { attempt: 'DESC' },
+    });
+
+    return latestAttempt?.status === 'completed';
+  }
+
+  override async getLastAttemptedCommandNameOrThrow(
+    allActiveOrSuspendedWorkspaceIds: string[],
+  ): Promise<{
+    name: string;
+    status: UpgradeMigrationStatus;
+  }> {
+    const parameters: unknown[] = [EXECUTED_BY_VERSION];
+    const workspaceScope =
+      allActiveOrSuspendedWorkspaceIds.length > 0
+        ? `AND (migration."workspaceId" IS NULL OR migration."workspaceId" = ANY($2))`
+        : 'AND migration."workspaceId" IS NULL';
+
+    if (allActiveOrSuspendedWorkspaceIds.length > 0) {
+      parameters.push(allActiveOrSuspendedWorkspaceIds);
+    }
+
+    const [migration] = await this.testMigrationRepository.query<
+      Array<{ name: string; status: UpgradeMigrationStatus }>
+    >(
+      `SELECT migration.name, migration.status
+         FROM core."upgradeMigration" migration
+        WHERE migration."executedByVersion" = $1
+          AND migration."isInitial" = false
+          AND migration.attempt = (
+            SELECT MAX(sub.attempt)
+              FROM core."upgradeMigration" sub
+             WHERE sub.name = migration.name
+               AND sub."executedByVersion" = $1
+               AND (
+                 (sub."workspaceId" IS NULL AND migration."workspaceId" IS NULL)
+                 OR sub."workspaceId" = migration."workspaceId"
+               )
+          )
+          ${workspaceScope}
+        ORDER BY migration."createdAt" DESC
+        LIMIT 1`,
+      parameters,
+    );
+
+    if (!migration) {
+      throw new Error(
+        'No upgrade migration found — the database may not have been initialized',
+      );
+    }
+
+    return migration;
+  }
+
+  override async getWorkspaceLastAttemptedCommandName(
+    workspaceIds: string[],
+  ): Promise<Map<string, WorkspaceLastAttemptedCommand>> {
+    if (workspaceIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.testMigrationRepository.query<
+      WorkspaceLastAttemptedCommand[]
+    >(
+      `SELECT DISTINCT ON (latest_per_name."workspaceId")
+          latest_per_name."workspaceId",
+          latest_per_name.name,
+          latest_per_name.status,
+          latest_per_name."executedByVersion",
+          latest_per_name."errorMessage",
+          latest_per_name."createdAt",
+          latest_per_name."isInitial"
+        FROM (
+          SELECT DISTINCT ON ("workspaceId", name)
+            "workspaceId",
+            name,
+            status,
+            "executedByVersion",
+            "errorMessage",
+            "createdAt",
+            "isInitial"
+          FROM core."upgradeMigration"
+          WHERE "workspaceId" = ANY($1)
+            AND "executedByVersion" = $2
+          ORDER BY "workspaceId", name, attempt DESC
+        ) latest_per_name
+        ORDER BY latest_per_name."workspaceId", latest_per_name."createdAt" DESC`,
+      [workspaceIds, EXECUTED_BY_VERSION],
+    );
+
+    return new Map(rows.map((row) => [row.workspaceId, row]));
+  }
+}
 
 const noopAsync = async () => {};
 
@@ -122,7 +253,7 @@ export const makeStep = (
 
   return {
     kind,
-    name,
+    name: `${name}${TEST_COMMAND_NAME_SUFFIX}`,
     command,
     version: '1.21.0',
     timestamp: 0,
@@ -196,7 +327,10 @@ export const createUpgradeSequenceRunnerIntegrationTestModule = async () => {
             key === 'APP_VERSION' ? EXECUTED_BY_VERSION : undefined,
         },
       },
-      UpgradeMigrationService,
+      {
+        provide: UpgradeMigrationService,
+        useValue: new UpgradeSequenceRunnerTestMigrationService(migrationRepo),
+      },
       {
         provide: WorkspaceVersionService,
         useValue: {
@@ -306,13 +440,20 @@ export const seedInstanceMigration = async (
     status,
     workspaceIds = [],
     attempt = 1,
+    executedByVersion = EXECUTED_BY_VERSION,
+    namespaceName = true,
   }: {
     name: string;
     status: 'completed' | 'failed';
     workspaceIds?: string[];
     attempt?: number;
+    executedByVersion?: string;
+    namespaceName?: boolean;
   },
 ) => {
+  const persistedName = namespaceName
+    ? `${name}${TEST_COMMAND_NAME_SUFFIX}`
+    : name;
   // Seeds must have past timestamps so the runner's NOW()-based records
   // always sort after them in createdAt order.
   const createdAt = new Date(
@@ -328,17 +469,17 @@ export const seedInstanceMigration = async (
   values.push(
     `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, NULL, $${paramIndex++}, false)`,
   );
-  args.push(name, status, attempt, EXECUTED_BY_VERSION, createdAt);
+  args.push(persistedName, status, attempt, executedByVersion, createdAt);
 
   for (const workspaceId of workspaceIds) {
     values.push(
       `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, false)`,
     );
     args.push(
-      name,
+      persistedName,
       status,
       attempt,
-      EXECUTED_BY_VERSION,
+      executedByVersion,
       workspaceId,
       createdAt,
     );
@@ -360,6 +501,7 @@ export const seedWorkspaceMigration = async (
     attempt = 1,
     isInitial = false,
     useCurrentTimestamp = false,
+    namespaceName = true,
   }: {
     name: string;
     status: 'completed' | 'failed';
@@ -367,13 +509,24 @@ export const seedWorkspaceMigration = async (
     attempt?: number;
     isInitial?: boolean;
     useCurrentTimestamp?: boolean;
+    namespaceName?: boolean;
   },
 ) => {
+  const persistedName = namespaceName
+    ? `${name}${TEST_COMMAND_NAME_SUFFIX}`
+    : name;
   if (useCurrentTimestamp) {
     await dataSource.query(
       `INSERT INTO core."upgradeMigration" (name, status, attempt, "executedByVersion", "workspaceId", "isInitial")
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [name, status, attempt, EXECUTED_BY_VERSION, workspaceId, isInitial],
+      [
+        persistedName,
+        status,
+        attempt,
+        EXECUTED_BY_VERSION,
+        workspaceId,
+        isInitial,
+      ],
     );
   } else {
     const createdAt = new Date(
@@ -386,7 +539,7 @@ export const seedWorkspaceMigration = async (
       `INSERT INTO core."upgradeMigration" (name, status, attempt, "executedByVersion", "workspaceId", "createdAt", "isInitial")
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
-        name,
+        persistedName,
         status,
         attempt,
         EXECUTED_BY_VERSION,
@@ -409,11 +562,20 @@ export type ExecutedMigrationRecord = {
 export const testGetExecutedMigrationsInOrder = async (
   dataSource: DataSource,
 ): Promise<ExecutedMigrationRecord[]> => {
-  return dataSource.query(
+  const rows = await dataSource.query<ExecutedMigrationRecord[]>(
     `SELECT name, status, attempt, "workspaceId", "isInitial"
      FROM core."upgradeMigration"
+     WHERE "executedByVersion" = $1
      ORDER BY "createdAt" ASC, "workspaceId" ASC NULLS FIRST, attempt ASC`,
+    [EXECUTED_BY_VERSION],
   );
+
+  return rows.map((row) => ({
+    ...row,
+    name: row.name.endsWith(TEST_COMMAND_NAME_SUFFIX)
+      ? row.name.slice(0, -TEST_COMMAND_NAME_SUFFIX.length)
+      : row.name,
+  }));
 };
 
 export const migrationRecordToKey = ({

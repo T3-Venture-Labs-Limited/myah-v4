@@ -1,9 +1,9 @@
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import { type SlowInstanceUpgradeStep } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 
-
 import {
   type IntegrationTestContext,
+  clearUpgradeSequenceRunnerTestMigrations,
   createUpgradeSequenceRunnerIntegrationTestModule,
   DEFAULT_OPTIONS,
   makeFastInstance,
@@ -19,6 +19,13 @@ import {
   WS_2,
 } from 'test/integration/upgrade/utils/upgrade-sequence-runner-integration-test.util';
 
+const TEST_RUN_TOKEN = `${process.pid}-${Date.now()}`;
+const STALE_EXECUTED_BY_VERSION = `42.42.42-stale-${process.pid}`;
+const CROSS_VERSION_COMPLETED_CURSOR = `CrossVersionCompletedIc0-${TEST_RUN_TOKEN}`;
+const CROSS_VERSION_COMPLETED_COMMAND = `CrossVersionCompletedIc1-${TEST_RUN_TOKEN}`;
+const CROSS_VERSION_FAILED_CURSOR = `CrossVersionFailedIc0-${TEST_RUN_TOKEN}`;
+const CROSS_VERSION_FAILED_COMMAND = `CrossVersionFailedIc1-${TEST_RUN_TOKEN}`;
+
 describe('UpgradeSequenceRunnerService — execution (integration)', () => {
   let context: IntegrationTestContext;
 
@@ -27,13 +34,21 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
   }, 30000);
 
   afterAll(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
+    await context.dataSource.query(
+      `DELETE FROM core."upgradeMigration" WHERE "executedByVersion" = $1`,
+      [STALE_EXECUTED_BY_VERSION],
+    );
     await context.module?.close();
     await context.dataSource?.destroy();
   }, 15000);
 
   beforeEach(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
+    await context.dataSource.query(
+      `DELETE FROM core."upgradeMigration" WHERE "executedByVersion" = $1`,
+      [STALE_EXECUTED_BY_VERSION],
+    );
     resetSeedSequenceCounter();
     setMockActiveWorkspaceIds([]);
     jest.restoreAllMocks();
@@ -107,6 +122,65 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
 
       // Runner retries Ic2
       'Ic2:instance:completed:2',
+    ]);
+  });
+
+  it('ignores a completed command from another test process', async () => {
+    const sequence = [
+      makeFastInstance(CROSS_VERSION_COMPLETED_CURSOR),
+      makeFastInstance(CROSS_VERSION_COMPLETED_COMMAND),
+    ];
+
+    await seedInstanceMigration(context.dataSource, {
+      name: CROSS_VERSION_COMPLETED_CURSOR,
+      status: 'completed',
+    });
+    await seedInstanceMigration(context.dataSource, {
+      name: CROSS_VERSION_COMPLETED_COMMAND,
+      status: 'completed',
+      executedByVersion: STALE_EXECUTED_BY_VERSION,
+    });
+
+    await context.runner.run({
+      sequence,
+      options: DEFAULT_OPTIONS,
+    });
+
+    const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
+
+    expect(executed.map(migrationRecordToKey)).toStrictEqual([
+      `${CROSS_VERSION_COMPLETED_CURSOR}:instance:completed:1`,
+      `${CROSS_VERSION_COMPLETED_COMMAND}:instance:completed:2`,
+    ]);
+  });
+
+  it('keeps attempt identifiers unique across test processes', async () => {
+    const sequence = [
+      makeFastInstance(CROSS_VERSION_FAILED_CURSOR),
+      makeFastInstance(CROSS_VERSION_FAILED_COMMAND),
+    ];
+
+    await seedInstanceMigration(context.dataSource, {
+      name: CROSS_VERSION_FAILED_CURSOR,
+      status: 'completed',
+    });
+    await seedInstanceMigration(context.dataSource, {
+      name: CROSS_VERSION_FAILED_COMMAND,
+      status: 'failed',
+      attempt: 7,
+      executedByVersion: STALE_EXECUTED_BY_VERSION,
+    });
+
+    await context.runner.run({
+      sequence,
+      options: DEFAULT_OPTIONS,
+    });
+
+    const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
+
+    expect(executed.map(migrationRecordToKey)).toStrictEqual([
+      `${CROSS_VERSION_FAILED_CURSOR}:instance:completed:1`,
+      `${CROSS_VERSION_FAILED_COMMAND}:instance:completed:2`,
     ]);
   });
 
@@ -213,9 +287,7 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
   });
 
   it('should run opted-in slow data migrations when no workspaces exist', async () => {
-    const slowInstanceStep = makeSlowInstance(
-      'Ic2',
-    ) as SlowInstanceUpgradeStep;
+    const slowInstanceStep = makeSlowInstance('Ic2') as SlowInstanceUpgradeStep;
     const sequence = [makeFastInstance('Ic1'), slowInstanceStep];
     const runDataMigration = jest.fn().mockResolvedValue(undefined);
 

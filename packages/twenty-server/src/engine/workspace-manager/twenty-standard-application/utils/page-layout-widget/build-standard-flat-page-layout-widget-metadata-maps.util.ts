@@ -9,7 +9,7 @@ import { FieldDisplayMode } from 'src/engine/metadata-modules/page-layout-widget
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
 import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
 import { type AllPageLayoutWidgetConfiguration } from 'src/engine/metadata-modules/page-layout-widget/types/all-page-layout-widget-configuration.type';
-import { STANDARD_RECORD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
 import { type StandardRecordPageLayoutConfig } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-config/standard-page-layout-config.type';
 import { computeMyFirstDashboardWidgets } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-widget/compute-my-first-dashboard-widgets.util';
@@ -84,6 +84,7 @@ const RECORD_PAGE_FIELDS_VIEW_NAME_BY_OBJECT: Partial<
   workflowAutomatedTrigger: 'workflowAutomatedTriggerRecordPageFields',
   workflowRun: 'workflowRunRecordPageFields',
   workflowVersion: 'workflowVersionRecordPageFields',
+  brandBrainPage: 'brandBrainPageRecordPageFields',
 };
 
 const buildRecordPageWidgetConfigurations = ({
@@ -175,17 +176,12 @@ const buildFieldsWidgetConfiguration = ({
 
   const viewId = views[recordPageFieldsViewName]?.id ?? null;
 
-  // @ts-expect-error ignore
-  const viewDefinition = STANDARD_OBJECTS[objectName].views?.[
-    recordPageFieldsViewName
-  ] as
-    | {
-        universalIdentifier: string;
-        viewFieldGroups?: Record<string, { universalIdentifier: string }>;
-      }
-    | undefined;
-
-  const viewUniversalIdentifier = viewDefinition?.universalIdentifier ?? null;
+  const viewUniversalIdentifier =
+    objectName === 'brandBrainPage'
+      ? '2774101b-3c0b-485b-91f5-b92d30bdcb6e'
+      : // @ts-expect-error standard object definitions are dynamically indexed
+        (STANDARD_OBJECTS[objectName].views?.[recordPageFieldsViewName]
+          ?.universalIdentifier ?? null);
 
   return {
     configuration: {
@@ -250,15 +246,12 @@ const computeRecordPageWidgets = ({
   standardPageLayoutMetadataRelatedEntityIds,
 }: BuildStandardFlatPageLayoutWidgetMetadataMapsArgs): FlatPageLayoutWidget[] => {
   const allWidgets: FlatPageLayoutWidget[] = [];
-
-  for (const layoutName of Object.keys(STANDARD_RECORD_PAGE_LAYOUTS)) {
-    const layout = STANDARD_RECORD_PAGE_LAYOUTS[
-      layoutName as keyof typeof STANDARD_RECORD_PAGE_LAYOUTS
-    ] as StandardRecordPageLayoutConfig;
-
+  for (const [layoutName, layoutConfig] of Object.entries(
+    ALL_STANDARD_PAGE_LAYOUTS,
+  ).filter(([name]) => name !== 'myFirstDashboard')) {
+    const layout = layoutConfig as StandardRecordPageLayoutConfig;
     let layoutObjectMetadataId: string | null = null;
     let layoutObjectName: AllStandardObjectName | null = null;
-
     if (layout.objectUniversalIdentifier) {
       const objectName = findObjectNameByUniversalIdentifier(
         layout.objectUniversalIdentifier,

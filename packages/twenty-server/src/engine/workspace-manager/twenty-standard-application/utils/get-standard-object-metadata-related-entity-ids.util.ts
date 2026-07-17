@@ -151,10 +151,9 @@ export const getStandardObjectMetadataRelatedEntityIds =
       });
 
       result[objectName] = {
-        // @ts-expect-error ignore this
         fields: fieldIds,
         id: v4(),
-        // @ts-expect-error ignore this
+        // @ts-expect-error This fails only because objectName is a generic union.
         views: viewIds,
       };
     }

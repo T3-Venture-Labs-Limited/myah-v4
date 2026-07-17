@@ -10,7 +10,7 @@ import { type FlatPageLayoutWidget } from 'src/engine/metadata-modules/flat-page
 import { PageLayoutType } from 'src/engine/metadata-modules/page-layout/enums/page-layout-type.enum';
 import { type WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
 import { type AllPageLayoutWidgetConfiguration } from 'src/engine/metadata-modules/page-layout-widget/types/all-page-layout-widget-configuration.type';
-import { STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 import { type StandardObjectMetadataRelatedEntityIds } from 'src/engine/workspace-manager/twenty-standard-application/utils/get-standard-object-metadata-related-entity-ids.util';
 import { type StandardPageLayoutMetadataRelatedEntityIds } from 'src/engine/workspace-manager/twenty-standard-application/utils/get-standard-page-layout-metadata-related-entity-ids.util';
@@ -67,8 +67,8 @@ export const createStandardPageLayoutWidgetFlatMetadata = ({
   objectMetadataUniversalIdentifier: string | null;
 }): FlatPageLayoutWidget => {
   const layoutIds = standardPageLayoutMetadataRelatedEntityIds[layoutName];
-  const layout = STANDARD_PAGE_LAYOUTS[
-    layoutName as keyof typeof STANDARD_PAGE_LAYOUTS
+  const layout = ALL_STANDARD_PAGE_LAYOUTS[
+    layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS
   ] as {
     type: PageLayoutType;
     tabs: Record<

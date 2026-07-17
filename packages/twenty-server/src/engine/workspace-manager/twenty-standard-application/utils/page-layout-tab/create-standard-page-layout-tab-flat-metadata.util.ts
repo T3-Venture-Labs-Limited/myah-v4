@@ -3,7 +3,7 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { type FlatPageLayoutTab } from 'src/engine/metadata-modules/flat-page-layout-tab/types/flat-page-layout-tab.type';
 import { PageLayoutType } from 'src/engine/metadata-modules/page-layout/enums/page-layout-type.enum';
-import { STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
+import { ALL_STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 import { type StandardPageLayoutMetadataRelatedEntityIds } from 'src/engine/workspace-manager/twenty-standard-application/utils/get-standard-page-layout-metadata-related-entity-ids.util';
 import { type StandardPageLayoutTabConfig } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-config';
@@ -33,8 +33,8 @@ export const createStandardPageLayoutTabFlatMetadata = ({
   now,
 }: CreateStandardPageLayoutTabArgs): FlatPageLayoutTab => {
   const layoutIds = standardPageLayoutMetadataRelatedEntityIds[layoutName];
-  const layout = STANDARD_PAGE_LAYOUTS[
-    layoutName as keyof typeof STANDARD_PAGE_LAYOUTS
+  const layout = ALL_STANDARD_PAGE_LAYOUTS[
+    layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS
   ] as {
     universalIdentifier: string;
     type: PageLayoutType;

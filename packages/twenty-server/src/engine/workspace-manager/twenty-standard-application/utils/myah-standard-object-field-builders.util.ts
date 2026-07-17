@@ -1,0 +1,4093 @@
+import {
+  FieldMetadataType,
+  RelationOnDeleteAction,
+  RelationType,
+} from 'twenty-shared/types';
+import { type MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
+import {
+  createStandardFieldFlatMetadata,
+  type CreateStandardFieldArgs,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/create-standard-field-flat-metadata.util';
+import { createStandardRelationFieldFlatMetadata } from 'src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/create-standard-relation-field-flat-metadata.util';
+import {
+  createStandardObjectFlatMetadata,
+  type CreateStandardObjectArgs,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/object-metadata/create-standard-object-flat-metadata.util';
+
+type MyahStandardObjectName = keyof typeof MYAH_STANDARD_OBJECTS;
+
+type Args = Omit<
+  CreateStandardFieldArgs<MyahStandardObjectName, FieldMetadataType>,
+  'context'
+>;
+type ObjectArgs = Omit<
+  CreateStandardObjectArgs<MyahStandardObjectName>,
+  'context' | 'objectName'
+>;
+
+const createMyahStandardFieldFlatMetadata = <
+  O extends MyahStandardObjectName,
+  T extends FieldMetadataType,
+>(
+  args: CreateStandardFieldArgs<O, T>,
+): FlatFieldMetadata => {
+  if (args.context.type !== FieldMetadataType.SELECT) {
+    return createStandardFieldFlatMetadata(args);
+  }
+
+  return createStandardFieldFlatMetadata({
+    ...args,
+    context: {
+      ...args.context,
+      options: args.context.options?.map((option, position) => ({
+        ...option,
+        position,
+      })),
+    },
+  });
+};
+
+const buildMyahBaseSystemFields = ({
+  objectName,
+  ...args
+}: Omit<
+  CreateStandardFieldArgs<MyahStandardObjectName, FieldMetadataType>,
+  'context'
+>): Record<string, FlatFieldMetadata> => ({
+  id: createMyahStandardFieldFlatMetadata({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: 'id',
+      type: FieldMetadataType.UUID,
+      label: 'Id',
+      description: 'Id',
+      icon: 'Icon123',
+      isSystem: true,
+      isNullable: false,
+      isUIEditable: false,
+      defaultValue: 'uuid',
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  }),
+  createdAt: createMyahStandardFieldFlatMetadata({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: 'createdAt',
+      type: FieldMetadataType.DATE_TIME,
+      label: 'Creation date',
+      description: 'Creation date',
+      icon: 'IconCalendar',
+      isSystem: true,
+      isNullable: false,
+      isUIEditable: false,
+      defaultValue: 'now',
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  }),
+  updatedAt: createMyahStandardFieldFlatMetadata({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: 'updatedAt',
+      type: FieldMetadataType.DATE_TIME,
+      label: 'Last update',
+      description: 'Last time the record was changed',
+      icon: 'IconCalendarClock',
+      isSystem: true,
+      isNullable: false,
+      isUIEditable: false,
+      defaultValue: 'now',
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  }),
+  deletedAt: createMyahStandardFieldFlatMetadata({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: 'deletedAt',
+      type: FieldMetadataType.DATE_TIME,
+      label: 'Deleted at',
+      description: 'Date when the record was deleted',
+      icon: 'IconCalendarMinus',
+      isSystem: true,
+      isNullable: true,
+      isUIEditable: false,
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  }),
+  position: createMyahStandardFieldFlatMetadata({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: 'position',
+      type: FieldMetadataType.POSITION,
+      label: 'Position',
+      description: 'Record position',
+      icon: 'IconHierarchy2',
+      isSystem: true,
+      isNullable: false,
+      defaultValue: 0,
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  }),
+  createdBy: createMyahStandardFieldFlatMetadata<
+    MyahStandardObjectName,
+    FieldMetadataType.ACTOR
+  >({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: 'createdBy',
+      type: FieldMetadataType.ACTOR,
+      label: 'Created by',
+      description: 'The creator of the record',
+      icon: 'IconCreativeCommons',
+      isSystem: true,
+      isNullable: false,
+      isUIEditable: false,
+      defaultValue: {
+        source: "'MANUAL'",
+        name: "'System'",
+        workspaceMemberId: null,
+      },
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  }),
+  updatedBy: createMyahStandardFieldFlatMetadata<
+    MyahStandardObjectName,
+    FieldMetadataType.ACTOR
+  >({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: 'updatedBy',
+      type: FieldMetadataType.ACTOR,
+      label: 'Updated by',
+      description: 'The last editor of the record',
+      icon: 'IconCreativeCommons',
+      isSystem: true,
+      isNullable: false,
+      isUIEditable: false,
+      defaultValue: {
+        source: "'MANUAL'",
+        name: "'System'",
+        workspaceMemberId: null,
+      },
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  }),
+  searchVector: createMyahStandardFieldFlatMetadata({
+    objectName,
+    workspaceId: args.workspaceId,
+    context: {
+      fieldName: 'searchVector',
+      type: FieldMetadataType.TS_VECTOR,
+      label: 'Search vector',
+      description: 'Field used for full-text search',
+      icon: 'IconListSearch',
+      isSystem: true,
+      isNullable: true,
+      isUIEditable: false,
+    },
+    standardObjectMetadataRelatedEntityIds:
+      args.standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+    twentyStandardApplicationId: args.twentyStandardApplicationId,
+    now: args.now,
+  }),
+});
+
+export const buildMyahBrandBrainLinkStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'brandBrainLink',
+    context: {
+      universalIdentifier: 'f99ff6bc-3b56-4600-beb3-cfc2c23364f6',
+      nameSingular: 'brandBrainLink',
+      namePlural: 'brandBrainLinks',
+      labelSingular: 'Brand Brain Link',
+      labelPlural: 'Brand Brain Links',
+      description:
+        'An explicit backlink or citation between Brand Brain pages.',
+      icon: 'IconLink',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahBrandBrainPageStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'brandBrainPage',
+    context: {
+      universalIdentifier: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      nameSingular: 'brandBrainPage',
+      namePlural: 'brandBrainPages',
+      labelSingular: 'Brand Brain Page',
+      labelPlural: 'Brand Brain',
+      description:
+        'A record-backed folder, page, Index, or Log entry for the Brand Brain.',
+      icon: 'IconNotebook',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'title',
+    },
+  });
+
+export const buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'brandBrainUpdateProposal',
+    context: {
+      universalIdentifier: 'facac4a1-0a2f-469f-9f1f-81ef01f06578',
+      nameSingular: 'brandBrainUpdateProposal',
+      namePlural: 'brandBrainUpdateProposals',
+      labelSingular: 'Brand Brain Update Proposal',
+      labelPlural: 'Brand Brain Update Proposals',
+      description:
+        'Dormant migration-safe proposal object retained for existing test workspaces; routine Brand Brain writes are direct agent updates.',
+      icon: 'IconFilePencil',
+      isSearchable: false,
+      labelIdentifierFieldMetadataName: 'title',
+    },
+  });
+
+export const buildMyahOfferStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'offer',
+    context: {
+      universalIdentifier: 'fd8a37b8-72db-5069-902a-a1763ddc63f7',
+      nameSingular: 'offer',
+      namePlural: 'offers',
+      labelSingular: 'Offer',
+      labelPlural: 'Offers',
+      description: 'Commercial terms for creator promotion',
+      icon: 'IconGift',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahOutreachActionStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'outreachAction',
+    context: {
+      universalIdentifier: 'b4459926-2c01-560a-8432-fa1974168439',
+      nameSingular: 'outreachAction',
+      namePlural: 'outreachActions',
+      labelSingular: 'Outreach Action',
+      labelPlural: 'Outreach Actions',
+      description:
+        'A scheduled or completed outreach action for a campaign creator',
+      icon: 'IconSend',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahOutreachSequenceStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'outreachSequence',
+    context: {
+      universalIdentifier: '0446497e-3240-5a78-a02f-e08594e5c2af',
+      nameSingular: 'outreachSequence',
+      namePlural: 'outreachSequences',
+      labelSingular: 'Outreach Sequence',
+      labelPlural: 'Outreach Sequences',
+      description: 'A campaign-level outreach sequence',
+      icon: 'IconRoute',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahOutreachStepStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'outreachStep',
+    context: {
+      universalIdentifier: 'c25bfef3-4636-5864-a777-705238c91326',
+      nameSingular: 'outreachStep',
+      namePlural: 'outreachSteps',
+      labelSingular: 'Outreach Step',
+      labelPlural: 'Outreach Steps',
+      description: 'A step in an outreach sequence',
+      icon: 'IconListCheck',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahPromotedAssetStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'promotedAsset',
+    context: {
+      universalIdentifier: '843aa6c8-36af-5906-8241-4017c4188df7',
+      nameSingular: 'promotedAsset',
+      namePlural: 'promotedAssets',
+      labelSingular: 'Promoted Asset',
+      labelPlural: 'Promoted Assets',
+      description: 'A product, app, offer, or asset promoted by creators',
+      icon: 'IconPackage',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahCampaignCreatorStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'campaignCreator',
+    context: {
+      universalIdentifier: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
+      nameSingular: 'campaignCreator',
+      namePlural: 'campaignCreators',
+      labelSingular: 'Campaign Creator',
+      labelPlural: 'Campaign Creators',
+      description: 'A selected creator in a campaign workflow',
+      icon: 'IconUserCheck',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahCampaignStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'campaign',
+    context: {
+      universalIdentifier: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      nameSingular: 'campaign',
+      namePlural: 'campaigns',
+      labelSingular: 'Campaign',
+      labelPlural: 'Campaigns',
+      description:
+        'A creator campaign organized by objective and target audience',
+      icon: 'IconTargetArrow',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahCreatorListMemberStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'creatorListMember',
+    context: {
+      universalIdentifier: 'e004c4b4-b1e1-59d9-b096-9fc57875d47f',
+      nameSingular: 'creatorListMember',
+      namePlural: 'creatorListMembers',
+      labelSingular: 'Creator List Member',
+      labelPlural: 'Creator List Members',
+      description: 'A creator captured inside a curated creator list',
+      icon: 'IconUserPlus',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahCreatorListStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'creatorList',
+    context: {
+      universalIdentifier: 'd51f2758-055b-5367-8250-859cb3f58631',
+      nameSingular: 'creatorList',
+      namePlural: 'creatorLists',
+      labelSingular: 'Creator List',
+      labelPlural: 'Creator Lists',
+      description: 'A reusable imported or curated creator cohort',
+      icon: 'IconListDetails',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahCreatorStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'creator',
+    context: {
+      universalIdentifier: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
+      nameSingular: 'creator',
+      namePlural: 'creators',
+      labelSingular: 'Creator',
+      labelPlural: 'Creators',
+      description:
+        'A creator profile imported from influencer discovery sources',
+      icon: 'IconUserStar',
+      isSearchable: true,
+      labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahStandardFlatFieldMetadatas = ({
+  objectName,
+  ...args
+}: Args): Record<string, FlatFieldMetadata> => {
+  switch (objectName) {
+    case 'brandBrainLink':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainLink',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        linkType: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainLink',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'linkType',
+            type: FieldMetadataType.SELECT,
+            label: 'Link Type',
+            description: 'Link Type',
+            icon: 'IconRouteAltLeft',
+            options: [
+              {
+                id: '251e1198-0de4-454f-83e7-1d6a451af3a8',
+                value: 'RELATED',
+                label: 'Related',
+                color: 'blue',
+                position: 0,
+              },
+              {
+                id: 'd885992d-2658-4410-8147-c6a7b8399f75',
+                value: 'CITES',
+                label: 'Cites',
+                color: 'sky',
+                position: 0,
+              },
+              {
+                id: 'f77b8f64-7a75-43ac-b65f-918d2db70c9f',
+                value: 'SUPPORTS',
+                label: 'Supports',
+                color: 'green',
+                position: 0,
+              },
+              {
+                id: '53b7572c-26e9-4f2b-8372-2dfcbfd560ff',
+                value: 'CONTRADICTS',
+                label: 'Contradicts',
+                color: 'red',
+                position: 0,
+              },
+              {
+                id: '3af080c7-b833-4c1e-923a-1edc70e0e93c',
+                value: 'SUPERSEDES',
+                label: 'Supersedes',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: 'ee0d2617-4de2-44fb-b56e-7e574890acdf',
+                value: 'DERIVED_FROM',
+                label: 'Derived from',
+                color: 'purple',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+            defaultValue: "'RELATED'",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        description: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainLink',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'description',
+            type: FieldMetadataType.TEXT,
+            label: 'Description',
+            description: 'Description',
+            icon: 'IconTextCaption',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        targetPage: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainLink',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'targetPage',
+            label: 'Target Page',
+            description: 'Target Page',
+            icon: 'IconTag',
+            targetObjectName: 'brandBrainPage',
+            targetFieldName: 'targetPageLinks',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.CASCADE,
+              joinColumnName: 'targetPageId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        sourcePage: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainLink',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'sourcePage',
+            label: 'Source Page',
+            description: 'Source Page',
+            icon: 'IconTag',
+            targetObjectName: 'brandBrainPage',
+            targetFieldName: 'sourcePageLinks',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.CASCADE,
+              joinColumnName: 'sourcePageId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'brandBrainPage':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        title: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'title',
+            type: FieldMetadataType.TEXT,
+            label: 'Title',
+            description: 'Title',
+            icon: 'IconHeading',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        slug: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'slug',
+            type: FieldMetadataType.TEXT,
+            label: 'Slug',
+            description: 'Slug',
+            icon: 'IconLink',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        canonicalPath: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'canonicalPath',
+            type: FieldMetadataType.TEXT,
+            label: 'Canonical Path',
+            description: 'Canonical Path',
+            icon: 'IconRoute',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        idPath: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'idPath',
+            type: FieldMetadataType.TEXT,
+            label: 'ID Path',
+            description: 'ID Path',
+            icon: 'IconBinaryTree',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        pageType: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'pageType',
+            type: FieldMetadataType.SELECT,
+            label: 'Page Type',
+            description: 'Page Type',
+            icon: 'IconCategory',
+            options: [
+              {
+                id: '1cc61a12-c3f0-43ef-904f-ed58c0a9f3c4',
+                value: 'BRAND_ROOT',
+                label: 'Brand root',
+                color: 'purple',
+                position: 0,
+              },
+              {
+                id: 'fc0ad6a2-61f9-4985-a6be-e8978f5733c3',
+                value: 'FOLDER',
+                label: 'Folder',
+                color: 'blue',
+                position: 0,
+              },
+              {
+                id: '91ca184c-5274-4e1d-b960-07fe10b4e8f4',
+                value: 'PAGE',
+                label: 'Page',
+                color: 'green',
+                position: 0,
+              },
+              {
+                id: 'f47b7f64-ee39-4896-a27f-cbc069e712fa',
+                value: 'INDEX',
+                label: 'Index',
+                color: 'sky',
+                position: 0,
+              },
+              {
+                id: 'e6c933f3-111d-4966-a7b2-7e72ee4d4d92',
+                value: 'LOG',
+                label: 'Log',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: '83e84f56-a98b-4a36-92d7-23b2ea3160f1',
+                value: 'SOURCE',
+                label: 'Source',
+                color: 'gray',
+                position: 0,
+              },
+              {
+                id: '2cf85c0b-8662-4de2-a2c4-63715358f931',
+                value: 'PROMPT',
+                label: 'Prompt',
+                color: 'pink',
+                position: 0,
+              },
+              {
+                id: '138f5749-c522-4c04-a55b-e23c29c3e188',
+                value: 'PLAYBOOK',
+                label: 'Playbook',
+                color: 'turquoise',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+            defaultValue: "'PAGE'",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        status: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'status',
+            type: FieldMetadataType.SELECT,
+            label: 'Status',
+            description: 'Status',
+            icon: 'IconProgressCheck',
+            options: [
+              {
+                id: '7eeae3ef-e85f-431a-8889-562057d78e40',
+                value: 'DRAFT',
+                label: 'Draft',
+                color: 'gray',
+                position: 0,
+              },
+              {
+                id: '47617c1b-b0d0-44b4-8b5d-6c1f3dc365a2',
+                value: 'APPROVED',
+                label: 'Approved',
+                color: 'green',
+                position: 1,
+              },
+              {
+                id: 'b366dc27-8151-4203-bc8d-55ae2013fbbe',
+                value: 'STALE',
+                label: 'Stale',
+                color: 'orange',
+                position: 2,
+              },
+              {
+                id: 'caebc76e-47f1-4498-b2ad-8a0d6d28a469',
+                value: 'ARCHIVED',
+                label: 'Archived',
+                color: 'red',
+                position: 3,
+              },
+            ],
+            isNullable: true,
+            defaultValue: "'DRAFT'",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        body: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'body',
+            type: FieldMetadataType.RICH_TEXT,
+            label: 'Body',
+            description: 'Body',
+            icon: 'IconNotes',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        summary: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'summary',
+            type: FieldMetadataType.TEXT,
+            label: 'Summary',
+            description: 'Summary',
+            icon: 'IconTextCaption',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tags: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tags',
+            type: FieldMetadataType.ARRAY,
+            label: 'Tags',
+            description: 'Tags',
+            icon: 'IconTags',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        sortOrder: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'sortOrder',
+            type: FieldMetadataType.NUMBER,
+            label: 'Sort Order',
+            description: 'Sort Order',
+            icon: 'IconSortAscending',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        aliases: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'aliases',
+            type: FieldMetadataType.ARRAY,
+            label: 'Aliases',
+            description: 'Aliases',
+            icon: 'IconArrowFork',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        targetPageLinks: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'targetPageLinks',
+            label: 'Incoming Links',
+            description: 'Incoming Links',
+            icon: 'IconTag',
+            targetObjectName: 'brandBrainLink',
+            targetFieldName: 'targetPage',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        updateProposals: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'updateProposals',
+            label: 'Update Proposals',
+            description: 'Update Proposals',
+            icon: 'IconTag',
+            targetObjectName: 'brandBrainUpdateProposal',
+            targetFieldName: 'targetPage',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        childPages: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'childPages',
+            label: 'Child Pages',
+            description: 'Child Pages',
+            icon: 'IconTag',
+            targetObjectName: 'brandBrainPage',
+            targetFieldName: 'parentPage',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        parentPage: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'parentPage',
+            label: 'Parent Page',
+            description: 'Parent Page',
+            icon: 'IconTag',
+            targetObjectName: 'brandBrainPage',
+            targetFieldName: 'childPages',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              joinColumnName: 'parentPageId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        sourcePageLinks: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'sourcePageLinks',
+            label: 'Outgoing Links',
+            description: 'Outgoing Links',
+            icon: 'IconTag',
+            targetObjectName: 'brandBrainLink',
+            targetFieldName: 'sourcePage',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        noteTargets: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'noteTargets',
+            label: 'Notes',
+            description: 'Notes tied to the Brand Brain page',
+            icon: 'IconNotes',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'noteTarget',
+            targetFieldName: 'targetBrandBrainPage',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        taskTargets: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainPage',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'taskTargets',
+            label: 'Tasks',
+            description: 'Tasks tied to the Brand Brain page',
+            icon: 'IconCheckbox',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'taskTarget',
+            targetFieldName: 'targetBrandBrainPage',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'brandBrainUpdateProposal':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        title: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainUpdateProposal',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'title',
+            type: FieldMetadataType.TEXT,
+            label: 'Title',
+            description: 'Title',
+            icon: 'IconHeading',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        proposalType: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainUpdateProposal',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'proposalType',
+            type: FieldMetadataType.SELECT,
+            label: 'Proposal Type',
+            description: 'Proposal Type',
+            icon: 'IconEdit',
+            options: [
+              {
+                id: 'dd5522a7-f3d6-4ce3-a1ea-336f4f0b772f',
+                value: 'CREATE_PAGE',
+                label: 'Create page',
+                color: 'green',
+                position: 0,
+              },
+              {
+                id: '4e61f20b-6643-4307-913c-06696947aef8',
+                value: 'UPDATE_PAGE',
+                label: 'Update page',
+                color: 'blue',
+                position: 0,
+              },
+              {
+                id: 'b5ab743d-6337-4c51-a7dc-56c28341e697',
+                value: 'APPEND_LOG',
+                label: 'Append log',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: '08137fbf-127b-472c-b3ea-2255f86a7db5',
+                value: 'UPDATE_INDEX',
+                label: 'Update index',
+                color: 'sky',
+                position: 0,
+              },
+              {
+                id: '51b3a48a-c9ed-4420-80d5-990ee5d0d4c9',
+                value: 'ADD_LINK',
+                label: 'Add link',
+                color: 'purple',
+                position: 0,
+              },
+              {
+                id: '7d4f06a5-8623-46a2-8780-7ab9cd337919',
+                value: 'ARCHIVE_PAGE',
+                label: 'Archive page',
+                color: 'red',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+            defaultValue: "'UPDATE_PAGE'",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        status: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainUpdateProposal',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'status',
+            type: FieldMetadataType.SELECT,
+            label: 'Status',
+            description: 'Status',
+            icon: 'IconProgressCheck',
+            options: [
+              {
+                id: '064cf1aa-f26e-4397-8fd8-15d24b8c0122',
+                value: 'PENDING',
+                label: 'Pending',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: '69fdb8eb-6fc3-46fc-a554-edeb13fff56b',
+                value: 'APPROVED',
+                label: 'Approved',
+                color: 'green',
+                position: 0,
+              },
+              {
+                id: 'c8de23d7-3b9e-4c63-9c7b-37b901eb5773',
+                value: 'REJECTED',
+                label: 'Rejected',
+                color: 'red',
+                position: 0,
+              },
+              {
+                id: 'ea5d03c1-d933-468a-8bc8-e3e5fc33cf23',
+                value: 'APPLIED',
+                label: 'Applied',
+                color: 'blue',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+            defaultValue: "'PENDING'",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        reason: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainUpdateProposal',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'reason',
+            type: FieldMetadataType.TEXT,
+            label: 'Reason',
+            description: 'Reason',
+            icon: 'IconMessage2Question',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        proposedPatch: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainUpdateProposal',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'proposedPatch',
+            type: FieldMetadataType.TEXT,
+            label: 'Proposed Patch',
+            description: 'Proposed Patch',
+            icon: 'IconDiff',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        sourceSummary: createMyahStandardFieldFlatMetadata({
+          objectName: 'brandBrainUpdateProposal',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'sourceSummary',
+            type: FieldMetadataType.TEXT,
+            label: 'Source Summary',
+            description: 'Source Summary',
+            icon: 'IconSourceCode',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        targetPage: createStandardRelationFieldFlatMetadata({
+          objectName: 'brandBrainUpdateProposal',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'targetPage',
+            label: 'Target Page',
+            description: 'Target Page',
+            icon: 'IconTag',
+            targetObjectName: 'brandBrainPage',
+            targetFieldName: 'updateProposals',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'targetPageId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'offer':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaign: createStandardRelationFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaign',
+            label: 'Campaign',
+            description: 'Campaign',
+            icon: 'IconTargetArrow',
+            targetObjectName: 'campaign',
+            targetFieldName: 'offers',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'campaignId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        promotedAsset: createStandardRelationFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'promotedAsset',
+            label: 'Promoted Asset',
+            description: 'Promoted Asset',
+            icon: 'IconPackage',
+            targetObjectName: 'promotedAsset',
+            targetFieldName: 'offers',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'promotedAssetId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        termsSummary: createMyahStandardFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'termsSummary',
+            type: FieldMetadataType.TEXT,
+            label: 'Terms summary',
+            description: 'Terms summary',
+            icon: 'IconFileDollar',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        commissionRate: createMyahStandardFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'commissionRate',
+            type: FieldMetadataType.NUMBER,
+            label: 'Commission rate',
+            description: 'Commission rate',
+            icon: 'IconPercentage',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        fixedFee: createMyahStandardFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'fixedFee',
+            type: FieldMetadataType.NUMBER,
+            label: 'Fixed fee',
+            description: 'Fixed fee',
+            icon: 'IconCash',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        cpaAmount: createMyahStandardFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'cpaAmount',
+            type: FieldMetadataType.NUMBER,
+            label: 'CPA amount',
+            description: 'CPA amount',
+            icon: 'IconReceipt',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        giftedProductNotes: createMyahStandardFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'giftedProductNotes',
+            type: FieldMetadataType.TEXT,
+            label: 'Gifted product notes',
+            description: 'Gifted product notes',
+            icon: 'IconPackageExport',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        usageRightsNotes: createMyahStandardFieldFlatMetadata({
+          objectName: 'offer',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'usageRightsNotes',
+            type: FieldMetadataType.TEXT,
+            label: 'Usage rights notes',
+            description: 'Usage rights notes',
+            icon: 'IconLicense',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'outreachAction':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreator: createStandardRelationFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreator',
+            label: 'Campaign Creator',
+            description: 'Campaign Creator',
+            icon: 'IconUserCheck',
+            targetObjectName: 'campaignCreator',
+            targetFieldName: 'outreachActions',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'campaignCreatorId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        outreachStep: createStandardRelationFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'outreachStep',
+            label: 'Outreach Step',
+            description: 'Outreach Step',
+            icon: 'IconListCheck',
+            targetObjectName: 'outreachStep',
+            targetFieldName: 'actions',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'outreachStepId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        channel: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'channel',
+            type: FieldMetadataType.TEXT,
+            label: 'Channel',
+            description: 'Channel',
+            icon: 'IconSend',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        status: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'status',
+            type: FieldMetadataType.SELECT,
+            label: 'Status',
+            description: 'Status',
+            icon: 'IconProgress',
+            options: [
+              {
+                id: '064cf1aa-f26e-4397-8fd8-15d24b8c0122',
+                value: 'PENDING',
+                label: 'Pending',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: '69fdb8eb-6fc3-46fc-a554-edeb13fff56b',
+                value: 'APPROVED',
+                label: 'Approved',
+                color: 'green',
+                position: 0,
+              },
+              {
+                id: 'c8de23d7-3b9e-4c63-9c7b-37b901eb5773',
+                value: 'REJECTED',
+                label: 'Rejected',
+                color: 'red',
+                position: 0,
+              },
+              {
+                id: 'ea5d03c1-d933-468a-8bc8-e3e5fc33cf23',
+                value: 'APPLIED',
+                label: 'Applied',
+                color: 'blue',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        scheduledAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'scheduledAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'Scheduled at',
+            description: 'Scheduled at',
+            icon: 'IconCalendarDue',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        completedAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'completedAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'Completed at',
+            description: 'Completed at',
+            icon: 'IconCircleCheck',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        resultSummary: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachAction',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'resultSummary',
+            type: FieldMetadataType.TEXT,
+            label: 'Result summary',
+            description: 'Result summary',
+            icon: 'IconReportAnalytics',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'outreachSequence':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachSequence',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaign: createStandardRelationFieldFlatMetadata({
+          objectName: 'outreachSequence',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaign',
+            label: 'Campaign',
+            description: 'Campaign',
+            icon: 'IconTargetArrow',
+            targetObjectName: 'campaign',
+            targetFieldName: 'outreachSequences',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'campaignId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        status: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachSequence',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'status',
+            type: FieldMetadataType.SELECT,
+            label: 'Status',
+            description: 'Status',
+            icon: 'IconProgress',
+            options: [
+              {
+                id: '064cf1aa-f26e-4397-8fd8-15d24b8c0122',
+                value: 'PENDING',
+                label: 'Pending',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: '69fdb8eb-6fc3-46fc-a554-edeb13fff56b',
+                value: 'APPROVED',
+                label: 'Approved',
+                color: 'green',
+                position: 0,
+              },
+              {
+                id: 'c8de23d7-3b9e-4c63-9c7b-37b901eb5773',
+                value: 'REJECTED',
+                label: 'Rejected',
+                color: 'red',
+                position: 0,
+              },
+              {
+                id: 'ea5d03c1-d933-468a-8bc8-e3e5fc33cf23',
+                value: 'APPLIED',
+                label: 'Applied',
+                color: 'blue',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        description: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachSequence',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'description',
+            type: FieldMetadataType.TEXT,
+            label: 'Description',
+            description: 'Description',
+            icon: 'IconFileDescription',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        steps: createStandardRelationFieldFlatMetadata({
+          objectName: 'outreachSequence',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'steps',
+            label: 'Steps',
+            description: 'Steps',
+            icon: 'IconListCheck',
+            targetObjectName: 'outreachStep',
+            targetFieldName: 'outreachSequence',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'outreachStep':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachStep',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        outreachSequence: createStandardRelationFieldFlatMetadata({
+          objectName: 'outreachStep',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'outreachSequence',
+            label: 'Outreach Sequence',
+            description: 'Outreach Sequence',
+            icon: 'IconRoute',
+            targetObjectName: 'outreachSequence',
+            targetFieldName: 'steps',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'outreachSequenceId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        stepPosition: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachStep',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'stepPosition',
+            type: FieldMetadataType.NUMBER,
+            label: 'Step position',
+            description: 'Step position',
+            icon: 'IconSortAscending',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        trigger: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachStep',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'trigger',
+            type: FieldMetadataType.TEXT,
+            label: 'Trigger',
+            description: 'Trigger',
+            icon: 'IconBolt',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        channel: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachStep',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'channel',
+            type: FieldMetadataType.TEXT,
+            label: 'Channel',
+            description: 'Channel',
+            icon: 'IconSend',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        delayDays: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachStep',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'delayDays',
+            type: FieldMetadataType.NUMBER,
+            label: 'Delay days',
+            description: 'Delay days',
+            icon: 'IconClock',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        templateSummary: createMyahStandardFieldFlatMetadata({
+          objectName: 'outreachStep',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'templateSummary',
+            type: FieldMetadataType.TEXT,
+            label: 'Template summary',
+            description: 'Template summary',
+            icon: 'IconTemplate',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        actions: createStandardRelationFieldFlatMetadata({
+          objectName: 'outreachStep',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'actions',
+            label: 'Actions',
+            description: 'Actions',
+            icon: 'IconSend',
+            targetObjectName: 'outreachAction',
+            targetFieldName: 'outreachStep',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'promotedAsset':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'promotedAsset',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        assetType: createMyahStandardFieldFlatMetadata({
+          objectName: 'promotedAsset',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'assetType',
+            type: FieldMetadataType.TEXT,
+            label: 'Asset type',
+            description: 'Asset type',
+            icon: 'IconCategory',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        url: createMyahStandardFieldFlatMetadata({
+          objectName: 'promotedAsset',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'url',
+            type: FieldMetadataType.TEXT,
+            label: 'URL',
+            description: 'URL',
+            icon: 'IconLink',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        description: createMyahStandardFieldFlatMetadata({
+          objectName: 'promotedAsset',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'description',
+            type: FieldMetadataType.TEXT,
+            label: 'Description',
+            description: 'Description',
+            icon: 'IconFileDescription',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        offers: createStandardRelationFieldFlatMetadata({
+          objectName: 'promotedAsset',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'offers',
+            label: 'Offers',
+            description: 'Offers',
+            icon: 'IconGift',
+            targetObjectName: 'offer',
+            targetFieldName: 'promotedAsset',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'campaignCreator':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        creator: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'creator',
+            label: 'Creator',
+            description: 'Creator',
+            icon: 'IconUserStar',
+            targetObjectName: 'creator',
+            targetFieldName: 'campaignCreators',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'creatorId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaign: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaign',
+            label: 'Campaign',
+            description: 'Campaign',
+            icon: 'IconTargetArrow',
+            targetObjectName: 'campaign',
+            targetFieldName: 'campaignCreators',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'campaignId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        stage: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'stage',
+            type: FieldMetadataType.TEXT,
+            label: 'Stage',
+            description: 'Stage',
+            icon: 'IconProgress',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        selectedContactMethod: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'selectedContactMethod',
+            type: FieldMetadataType.TEXT,
+            label: 'Selected contact method',
+            description: 'Selected contact method',
+            icon: 'IconSend',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        nextActionAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'nextActionAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'Next action at',
+            description: 'Next action at',
+            icon: 'IconCalendarDue',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        selectionReason: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'selectionReason',
+            type: FieldMetadataType.TEXT,
+            label: 'Selection reason',
+            description: 'Selection reason',
+            icon: 'IconMessageCircle',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        dealSummary: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'dealSummary',
+            type: FieldMetadataType.TEXT,
+            label: 'Deal summary',
+            description: 'Deal summary',
+            icon: 'IconFileDollar',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        outcomeSummary: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'outcomeSummary',
+            type: FieldMetadataType.TEXT,
+            label: 'Outcome summary',
+            description: 'Outcome summary',
+            icon: 'IconReportAnalytics',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        outreachActions: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'outreachActions',
+            label: 'Outreach actions',
+            description: 'Outreach actions',
+            icon: 'IconSend',
+            targetObjectName: 'outreachAction',
+            targetFieldName: 'campaignCreator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'campaign':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        status: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'status',
+            type: FieldMetadataType.SELECT,
+            label: 'Status',
+            description: 'Status',
+            icon: 'IconProgress',
+            options: [
+              {
+                id: '064cf1aa-f26e-4397-8fd8-15d24b8c0122',
+                value: 'PENDING',
+                label: 'Pending',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: '69fdb8eb-6fc3-46fc-a554-edeb13fff56b',
+                value: 'APPROVED',
+                label: 'Approved',
+                color: 'green',
+                position: 0,
+              },
+              {
+                id: 'c8de23d7-3b9e-4c63-9c7b-37b901eb5773',
+                value: 'REJECTED',
+                label: 'Rejected',
+                color: 'red',
+                position: 0,
+              },
+              {
+                id: 'ea5d03c1-d933-468a-8bc8-e3e5fc33cf23',
+                value: 'APPLIED',
+                label: 'Applied',
+                color: 'blue',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        objective: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'objective',
+            type: FieldMetadataType.TEXT,
+            label: 'Objective',
+            description: 'Objective',
+            icon: 'IconTarget',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        targetPlatforms: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'targetPlatforms',
+            type: FieldMetadataType.TEXT,
+            label: 'Target platforms',
+            description: 'Target platforms',
+            icon: 'IconApps',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        targetDemographics: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'targetDemographics',
+            type: FieldMetadataType.TEXT,
+            label: 'Target demographics',
+            description: 'Target demographics',
+            icon: 'IconUsersGroup',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        icpGoal: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'icpGoal',
+            type: FieldMetadataType.TEXT,
+            label: 'ICP goal',
+            description: 'ICP goal',
+            icon: 'IconSparkles',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        budgetNotes: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'budgetNotes',
+            type: FieldMetadataType.TEXT,
+            label: 'Budget notes',
+            description: 'Budget notes',
+            icon: 'IconCash',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreators: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreators',
+            label: 'Campaign creators',
+            description: 'Campaign creators',
+            icon: 'IconUsersGroup',
+            targetObjectName: 'campaignCreator',
+            targetFieldName: 'campaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        offers: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'offers',
+            label: 'Offers',
+            description: 'Offers',
+            icon: 'IconGift',
+            targetObjectName: 'offer',
+            targetFieldName: 'campaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        outreachSequences: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'outreachSequences',
+            label: 'Outreach sequences',
+            description: 'Outreach sequences',
+            icon: 'IconRoute',
+            targetObjectName: 'outreachSequence',
+            targetFieldName: 'campaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        noteTargets: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'noteTargets',
+            label: 'Notes',
+            description: 'Notes tied to the campaign',
+            icon: 'IconNotes',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'noteTarget',
+            targetFieldName: 'targetCampaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        taskTargets: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'taskTargets',
+            label: 'Tasks',
+            description: 'Tasks tied to the campaign',
+            icon: 'IconCheckbox',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'taskTarget',
+            targetFieldName: 'targetCampaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'creatorListMember':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'creatorListMember',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        creator: createStandardRelationFieldFlatMetadata({
+          objectName: 'creatorListMember',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'creator',
+            label: 'Creator',
+            description: 'Creator',
+            icon: 'IconUserStar',
+            targetObjectName: 'creator',
+            targetFieldName: 'listMemberships',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'creatorId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        creatorList: createStandardRelationFieldFlatMetadata({
+          objectName: 'creatorListMember',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'creatorList',
+            label: 'Creator List',
+            description: 'Creator List',
+            icon: 'IconListDetails',
+            targetObjectName: 'creatorList',
+            targetFieldName: 'members',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'creatorListId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        source: createMyahStandardFieldFlatMetadata({
+          objectName: 'creatorListMember',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'source',
+            type: FieldMetadataType.TEXT,
+            label: 'Source',
+            description: 'Source',
+            icon: 'IconDatabaseImport',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        notes: createMyahStandardFieldFlatMetadata({
+          objectName: 'creatorListMember',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'notes',
+            type: FieldMetadataType.TEXT,
+            label: 'Notes',
+            description: 'Notes',
+            icon: 'IconNotes',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'creatorList':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'creatorList',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconTag',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        source: createMyahStandardFieldFlatMetadata({
+          objectName: 'creatorList',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'source',
+            type: FieldMetadataType.TEXT,
+            label: 'Source',
+            description: 'Source',
+            icon: 'IconDatabaseImport',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        description: createMyahStandardFieldFlatMetadata({
+          objectName: 'creatorList',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'description',
+            type: FieldMetadataType.TEXT,
+            label: 'Description',
+            description: 'Description',
+            icon: 'IconFileDescription',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        members: createStandardRelationFieldFlatMetadata({
+          objectName: 'creatorList',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'members',
+            label: 'Members',
+            description: 'Members',
+            icon: 'IconUsersGroup',
+            targetObjectName: 'creatorListMember',
+            targetFieldName: 'creatorList',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'creator':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        name: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'name',
+            type: FieldMetadataType.TEXT,
+            label: 'Name',
+            description: 'Name',
+            icon: 'IconUser',
+            isNullable: true,
+            defaultValue: "''",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        email: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'email',
+            type: FieldMetadataType.TEXT,
+            label: 'Email',
+            description: 'Email',
+            icon: 'IconMail',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        phone: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'phone',
+            type: FieldMetadataType.TEXT,
+            label: 'Phone',
+            description: 'Phone',
+            icon: 'IconPhone',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        location: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'location',
+            type: FieldMetadataType.TEXT,
+            label: 'Location',
+            description: 'Location',
+            icon: 'IconMapPin',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        language: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'language',
+            type: FieldMetadataType.TEXT,
+            label: 'Language',
+            description: 'Language',
+            icon: 'IconLanguage',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        profileType: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'profileType',
+            type: FieldMetadataType.SELECT,
+            label: 'Profile type',
+            description: 'Profile type',
+            icon: 'IconUserCheck',
+            options: [
+              {
+                id: 'b30587ac-a851-5d1f-bbd7-3b6752bf6b06',
+                value: 'CREATOR',
+                label: 'Creator',
+                color: 'blue',
+                position: 0,
+              },
+              {
+                id: '3da75a71-bb21-584b-a20f-a21f2a9ea385',
+                value: 'BRAND',
+                label: 'Brand',
+                color: 'purple',
+                position: 0,
+              },
+              {
+                id: '1fad4603-50ec-5cf7-b3a1-91660cf401db',
+                value: 'AGENCY',
+                label: 'Agency',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: '6d675a09-a811-592e-a23d-868ff646e990',
+                value: 'MEDIA',
+                label: 'Media',
+                color: 'turquoise',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+            defaultValue: "'CREATOR'",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        creatorStatus: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'creatorStatus',
+            type: FieldMetadataType.SELECT,
+            label: 'Creator status',
+            description: 'Creator status',
+            icon: 'IconProgressCheck',
+            options: [
+              {
+                id: '802d87dc-5d1f-5980-884c-b252f1bde49d',
+                value: 'NEW',
+                label: 'New',
+                color: 'gray',
+                position: 0,
+              },
+              {
+                id: 'e88ede68-e4c7-52a6-8bfd-8503201d1b6b',
+                value: 'REVIEWING',
+                label: 'Reviewing',
+                color: 'blue',
+                position: 0,
+              },
+              {
+                id: '9cd50629-da4e-5f32-be91-74ceb77c538e',
+                value: 'QUALIFIED',
+                label: 'Qualified',
+                color: 'green',
+                position: 0,
+              },
+              {
+                id: '06d55c97-1366-59bc-a205-f679b8e6d8d9',
+                value: 'CONTACTED',
+                label: 'Contacted',
+                color: 'orange',
+                position: 0,
+              },
+              {
+                id: 'd7f5c4f0-97a2-527c-91b0-86e42bc2349b',
+                value: 'ARCHIVED',
+                label: 'Archived',
+                color: 'red',
+                position: 0,
+              },
+            ],
+            isNullable: true,
+            defaultValue: "'NEW'",
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        source: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'source',
+            type: FieldMetadataType.TEXT,
+            label: 'Source',
+            description: 'Source',
+            icon: 'IconDatabaseImport',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        sourceUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'sourceUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'Source URL',
+            description: 'Source URL',
+            icon: 'IconLink',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        importSource: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'importSource',
+            type: FieldMetadataType.TEXT,
+            label: 'Import source',
+            description: 'Import source',
+            icon: 'IconFileImport',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        lastImportedAt: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'lastImportedAt',
+            type: FieldMetadataType.DATE_TIME,
+            label: 'Last imported at',
+            description: 'Last imported at',
+            icon: 'IconCalendarImport',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        hasLinkInBio: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'hasLinkInBio',
+            type: FieldMetadataType.BOOLEAN,
+            label: 'Has link in bio',
+            description: 'Has link in bio',
+            icon: 'IconLink',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        hasBrandDeals: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'hasBrandDeals',
+            type: FieldMetadataType.BOOLEAN,
+            label: 'Has brand deals',
+            description: 'Has brand deals',
+            icon: 'IconBriefcase',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        promotesAffiliateLinks: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'promotesAffiliateLinks',
+            type: FieldMetadataType.BOOLEAN,
+            label: 'Promotes affiliate links',
+            description: 'Promotes affiliate links',
+            icon: 'IconAffiliate',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        hasMerch: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'hasMerch',
+            type: FieldMetadataType.BOOLEAN,
+            label: 'Has merch',
+            description: 'Has merch',
+            icon: 'IconShirt',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        linksInBio: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'linksInBio',
+            type: FieldMetadataType.TEXT,
+            label: 'Links in bio',
+            description: 'Links in bio',
+            icon: 'IconLinks',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        externalUrls: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'externalUrls',
+            type: FieldMetadataType.TEXT,
+            label: 'External URLs',
+            description: 'External URLs',
+            icon: 'IconExternalLink',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        hashtagsUsed: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'hashtagsUsed',
+            type: FieldMetadataType.TEXT,
+            label: 'Hashtags used',
+            description: 'Hashtags used',
+            icon: 'IconHash',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        categories: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'categories',
+            type: FieldMetadataType.TEXT,
+            label: 'Categories',
+            description: 'Categories',
+            icon: 'IconCategory',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        niches: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'niches',
+            type: FieldMetadataType.TEXT,
+            label: 'Niches',
+            description: 'Niches',
+            icon: 'IconTags',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        notes: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'notes',
+            type: FieldMetadataType.TEXT,
+            label: 'Notes',
+            description: 'Notes',
+            icon: 'IconNotes',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'Instagram URL',
+            description: 'Instagram URL',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramUsername: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramUsername',
+            type: FieldMetadataType.TEXT,
+            label: 'Instagram username',
+            description: 'Instagram username',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramBio: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramBio',
+            type: FieldMetadataType.TEXT,
+            label: 'Instagram bio',
+            description: 'Instagram bio',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramFollowerCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramFollowerCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram follower count',
+            description: 'Instagram follower count',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramEngagementPercent: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramEngagementPercent',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram engagement percent',
+            description: 'Instagram engagement percent',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramMostRecentPostDate: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramMostRecentPostDate',
+            type: FieldMetadataType.DATE,
+            label: 'Instagram most recent post date',
+            description: 'Instagram most recent post date',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramMediaCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramMediaCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram media count',
+            description: 'Instagram media count',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramAvgLikes: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramAvgLikes',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram average likes',
+            description: 'Instagram average likes',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramAvgComments: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramAvgComments',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram average comments',
+            description: 'Instagram average comments',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramReelsPercent: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramReelsPercent',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram reels percent',
+            description: 'Instagram reels percent',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramReelsAvgViewCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramReelsAvgViewCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram reels average view count',
+            description: 'Instagram reels average view count',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramPostingFrequencyRecentMonths:
+          createMyahStandardFieldFlatMetadata({
+            objectName: 'creator',
+            workspaceId: args.workspaceId,
+            context: {
+              fieldName: 'instagramPostingFrequencyRecentMonths',
+              type: FieldMetadataType.NUMBER,
+              label: 'Instagram posting frequency recent months',
+              description: 'Instagram posting frequency recent months',
+              icon: 'IconBrandInstagram',
+              isNullable: true,
+            },
+            standardObjectMetadataRelatedEntityIds:
+              args.standardObjectMetadataRelatedEntityIds,
+            dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+            twentyStandardApplicationId: args.twentyStandardApplicationId,
+            now: args.now,
+          }),
+        instagramEstimatedIncomeMin: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramEstimatedIncomeMin',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram estimated income min',
+            description: 'Instagram estimated income min',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        instagramEstimatedIncomeMax: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramEstimatedIncomeMax',
+            type: FieldMetadataType.NUMBER,
+            label: 'Instagram estimated income max',
+            description: 'Instagram estimated income max',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'TikTok URL',
+            description: 'TikTok URL',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokUsername: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokUsername',
+            type: FieldMetadataType.TEXT,
+            label: 'TikTok username',
+            description: 'TikTok username',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokBio: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokBio',
+            type: FieldMetadataType.TEXT,
+            label: 'TikTok bio',
+            description: 'TikTok bio',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokFollowerCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokFollowerCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'TikTok follower count',
+            description: 'TikTok follower count',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokMostRecentPostDate: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokMostRecentPostDate',
+            type: FieldMetadataType.DATE,
+            label: 'TikTok most recent post date',
+            description: 'TikTok most recent post date',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokEngagementPercent: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokEngagementPercent',
+            type: FieldMetadataType.NUMBER,
+            label: 'TikTok engagement percent',
+            description: 'TikTok engagement percent',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokVideoCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokVideoCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'TikTok video count',
+            description: 'TikTok video count',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokPlayCountMedian: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokPlayCountMedian',
+            type: FieldMetadataType.NUMBER,
+            label: 'TikTok median play count',
+            description: 'TikTok median play count',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokAvgLikes: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokAvgLikes',
+            type: FieldMetadataType.NUMBER,
+            label: 'TikTok average likes',
+            description: 'TikTok average likes',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokAvgComments: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokAvgComments',
+            type: FieldMetadataType.NUMBER,
+            label: 'TikTok average comments',
+            description: 'TikTok average comments',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokAvgDownloads: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokAvgDownloads',
+            type: FieldMetadataType.NUMBER,
+            label: 'TikTok average downloads',
+            description: 'TikTok average downloads',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        tiktokPostingFrequencyRecentMonths: createMyahStandardFieldFlatMetadata(
+          {
+            objectName: 'creator',
+            workspaceId: args.workspaceId,
+            context: {
+              fieldName: 'tiktokPostingFrequencyRecentMonths',
+              type: FieldMetadataType.NUMBER,
+              label: 'TikTok posting frequency recent months',
+              description: 'TikTok posting frequency recent months',
+              icon: 'IconBrandTiktok',
+              isNullable: true,
+            },
+            standardObjectMetadataRelatedEntityIds:
+              args.standardObjectMetadataRelatedEntityIds,
+            dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+            twentyStandardApplicationId: args.twentyStandardApplicationId,
+            now: args.now,
+          },
+        ),
+        youtubeUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'YouTube URL',
+            description: 'YouTube URL',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeCustomUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeCustomUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'YouTube custom URL',
+            description: 'YouTube custom URL',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeTitle: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeTitle',
+            type: FieldMetadataType.TEXT,
+            label: 'YouTube title',
+            description: 'YouTube title',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeDescription: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeDescription',
+            type: FieldMetadataType.TEXT,
+            label: 'YouTube description',
+            description: 'YouTube description',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeTopicDetails: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeTopicDetails',
+            type: FieldMetadataType.TEXT,
+            label: 'YouTube topic details',
+            description: 'YouTube topic details',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeSubscriberCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeSubscriberCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube subscriber count',
+            description: 'YouTube subscriber count',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeLastUploadDate: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeLastUploadDate',
+            type: FieldMetadataType.DATE,
+            label: 'YouTube last upload date',
+            description: 'YouTube last upload date',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeLastStreamUploadDate: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeLastStreamUploadDate',
+            type: FieldMetadataType.DATE,
+            label: 'YouTube last stream upload date',
+            description: 'YouTube last stream upload date',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeShortsPercentage: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeShortsPercentage',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube Shorts percentage',
+            description: 'YouTube Shorts percentage',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeVideoCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeVideoCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube video count',
+            description: 'YouTube video count',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeEngagementPercent: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeEngagementPercent',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube engagement percent',
+            description: 'YouTube engagement percent',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeAvgViewsLong: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeAvgViewsLong',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube average long views',
+            description: 'YouTube average long views',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeAvgViewsShorts: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeAvgViewsShorts',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube average Shorts views',
+            description: 'YouTube average Shorts views',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeAvgStreamViews: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeAvgStreamViews',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube average stream views',
+            description: 'YouTube average stream views',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeAvgStreamDuration: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeAvgStreamDuration',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube average stream duration',
+            description: 'YouTube average stream duration',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubePostingFrequencyRecentMonths:
+          createMyahStandardFieldFlatMetadata({
+            objectName: 'creator',
+            workspaceId: args.workspaceId,
+            context: {
+              fieldName: 'youtubePostingFrequencyRecentMonths',
+              type: FieldMetadataType.NUMBER,
+              label: 'YouTube posting frequency recent months',
+              description: 'YouTube posting frequency recent months',
+              icon: 'IconBrandYoutube',
+              isNullable: true,
+            },
+            standardObjectMetadataRelatedEntityIds:
+              args.standardObjectMetadataRelatedEntityIds,
+            dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+            twentyStandardApplicationId: args.twentyStandardApplicationId,
+            now: args.now,
+          }),
+        youtubeEstimatedIncomeMin: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeEstimatedIncomeMin',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube estimated income min',
+            description: 'YouTube estimated income min',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        youtubeEstimatedIncomeMax: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeEstimatedIncomeMax',
+            type: FieldMetadataType.NUMBER,
+            label: 'YouTube estimated income max',
+            description: 'YouTube estimated income max',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitterUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitterUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'Twitter URL',
+            description: 'Twitter URL',
+            icon: 'IconBrandX',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitterUsername: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitterUsername',
+            type: FieldMetadataType.TEXT,
+            label: 'Twitter username',
+            description: 'Twitter username',
+            icon: 'IconBrandX',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitterBio: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitterBio',
+            type: FieldMetadataType.TEXT,
+            label: 'Twitter bio',
+            description: 'Twitter bio',
+            icon: 'IconBrandX',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitterFollowerCount: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitterFollowerCount',
+            type: FieldMetadataType.NUMBER,
+            label: 'Twitter follower count',
+            description: 'Twitter follower count',
+            icon: 'IconBrandX',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitterEngagementPercent: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitterEngagementPercent',
+            type: FieldMetadataType.NUMBER,
+            label: 'Twitter engagement percent',
+            description: 'Twitter engagement percent',
+            icon: 'IconBrandX',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitchUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitchUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'Twitch URL',
+            description: 'Twitch URL',
+            icon: 'IconBrandTwitch',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitchUsername: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitchUsername',
+            type: FieldMetadataType.TEXT,
+            label: 'Twitch username',
+            description: 'Twitch username',
+            icon: 'IconBrandTwitch',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitchDisplayName: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitchDisplayName',
+            type: FieldMetadataType.TEXT,
+            label: 'Twitch display name',
+            description: 'Twitch display name',
+            icon: 'IconBrandTwitch',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitchTotalFollowers: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitchTotalFollowers',
+            type: FieldMetadataType.NUMBER,
+            label: 'Twitch total followers',
+            description: 'Twitch total followers',
+            icon: 'IconBrandTwitch',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        listMemberships: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'listMemberships',
+            label: 'List memberships',
+            description: 'List memberships',
+            icon: 'IconListDetails',
+            targetObjectName: 'creatorListMember',
+            targetFieldName: 'creator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreators: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreators',
+            label: 'Campaign creators',
+            description: 'Campaign creators',
+            icon: 'IconTargetArrow',
+            targetObjectName: 'campaignCreator',
+            targetFieldName: 'creator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        patreonUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'patreonUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'Patreon URL',
+            description: 'Patreon URL',
+            icon: 'IconBrandPatreon',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        noteTargets: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'noteTargets',
+            label: 'Notes',
+            description: 'Notes tied to the creator',
+            icon: 'IconNotes',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'noteTarget',
+            targetFieldName: 'targetCreator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        taskTargets: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'taskTargets',
+            label: 'Tasks',
+            description: 'Tasks tied to the creator',
+            icon: 'IconCheckbox',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'taskTarget',
+            targetFieldName: 'targetCreator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    default:
+      return {};
+  }
+};
+export const MYAH_RELATION_FIELD_COUNT = 34;

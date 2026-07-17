@@ -5,6 +5,8 @@ import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/typ
 import { type FlatNavigationMenuItemMaps } from 'src/engine/metadata-modules/flat-navigation-menu-item/types/flat-navigation-menu-item-maps.type';
 import { addFlatNavigationMenuItemToMapsAndUpdateIndex } from 'src/engine/metadata-modules/flat-navigation-menu-item/utils/add-flat-navigation-menu-item-to-maps-and-update-index.util';
 import { type FlatView } from 'src/engine/metadata-modules/flat-view/types/flat-view.type';
+import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { computeMyahNavigationMenuItems } from 'src/engine/workspace-manager/twenty-standard-application/utils/navigation-menu-item/compute-myah-navigation-menu-items.util';
 import { STANDARD_NAVIGATION_MENU_ITEMS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-navigation-menu-item.constant';
 import { createStandardNavigationMenuItemFlatMetadata } from 'src/engine/workspace-manager/twenty-standard-application/utils/navigation-menu-item/create-standard-navigation-menu-item-flat-metadata.util';
 import {
@@ -31,12 +33,13 @@ export const buildStandardFlatNavigationMenuItemMaps = ({
   now,
   workspaceId,
   twentyStandardApplicationId,
-  dependencyFlatEntityMaps: { flatViewMaps },
+  dependencyFlatEntityMaps: { flatObjectMetadataMaps, flatViewMaps },
 }: {
   now: string;
   workspaceId: string;
   twentyStandardApplicationId: string;
   dependencyFlatEntityMaps: {
+    flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
     flatViewMaps: FlatEntityMaps<FlatView>;
   };
 }): FlatNavigationMenuItemMaps => {
@@ -110,6 +113,23 @@ export const buildStandardFlatNavigationMenuItemMaps = ({
 
     addFlatNavigationMenuItemToMapsAndUpdateIndex({
       flatNavigationMenuItem: folderItem,
+      flatNavigationMenuItemMaps,
+    });
+  }
+
+  for (const flatNavigationMenuItem of Object.values(
+    computeMyahNavigationMenuItems({
+      workspaceId,
+      applicationId: twentyStandardApplicationId,
+      now,
+      dependencyFlatEntityMaps: {
+        flatObjectMetadataMaps,
+        flatViewMaps,
+      },
+    }),
+  )) {
+    addFlatNavigationMenuItemToMapsAndUpdateIndex({
+      flatNavigationMenuItem,
       flatNavigationMenuItemMaps,
     });
   }

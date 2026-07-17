@@ -1,6 +1,7 @@
 import {
   type IntegrationTestContext,
   createUpgradeSequenceRunnerIntegrationTestModule,
+  clearUpgradeSequenceRunnerTestMigrations,
   DEFAULT_OPTIONS,
   makeFastInstance,
   makeWorkspace,
@@ -25,13 +26,13 @@ describe('UpgradeSequenceRunnerService — startFromWorkspaceId (integration)', 
   }, 30000);
 
   afterAll(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
     await context.module?.close();
     await context.dataSource?.destroy();
   }, 15000);
 
   beforeEach(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
     resetSeedSequenceCounter();
     setMockActiveWorkspaceIds([]);
     jest.restoreAllMocks();

@@ -132,7 +132,7 @@ describe('WorkspaceManagerService', () => {
       expect(
         fixture.twentyStandardApplicationService
           .synchronizeTwentyStandardApplicationOrThrow,
-      ).toHaveBeenCalledWith({ workspaceId });
+      ).toHaveBeenCalledWith({ workspaceId, profile: 'myah' });
       expect(fixture.roleRepository.findOne).toHaveBeenNthCalledWith(
         1,
         workspaceId,

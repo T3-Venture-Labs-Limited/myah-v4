@@ -852,66 +852,97 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         },
       );
 
-    await this.prefillLogicFunctionService.ensureSeeded({
-      workspaceId,
-      definitions:
-        getCreateCompanyWhenAddingNewPersonCodeStepLogicFunctionDefinitions(
+    const standardObjectNames = new Set(
+      Object.values(flatObjectMetadataMaps.byUniversalIdentifier)
+        .filter(isDefined)
+        .map(({ nameSingular }) => nameSingular),
+    );
+    const requiredLegacyCrmObjectNames = ['company', 'person', 'opportunity'];
+
+    if (
+      requiredLegacyCrmObjectNames.every((objectName) =>
+        standardObjectNames.has(objectName),
+      )
+    ) {
+      await this.prefillLogicFunctionService.ensureSeeded({
+        workspaceId,
+        definitions:
+          getCreateCompanyWhenAddingNewPersonCodeStepLogicFunctionDefinitions(
+            workspaceId,
+          ),
+      });
+
+      const queryRunner = this.coreDataSource.createQueryRunner();
+
+      await queryRunner.connect();
+
+      try {
+        await queryRunner.startTransaction();
+
+        await prefillCompanies(queryRunner.manager, schemaName);
+
+        await prefillPeople(queryRunner.manager, schemaName);
+
+        await prefillWorkflows(
+          queryRunner.manager,
           workspaceId,
-        ),
-    });
+          schemaName,
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+        );
 
-    const queryRunner = this.coreDataSource.createQueryRunner();
+        await prefillOpportunities(queryRunner.manager, schemaName);
 
-    await queryRunner.connect();
+        await queryRunner.commitTransaction();
+      } catch (error) {
+        if (queryRunner.isTransactionActive) {
+          await queryRunner.rollbackTransaction();
+        }
+
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
+
+      try {
+        await prefillWorkflowCommandMenuItems({
+          workspaceId,
+          applicationService: this.applicationService,
+          flatEntityMapsCacheService: this.flatEntityMapsCacheService,
+          workspaceMigrationValidateBuildAndRunService:
+            this.workspaceMigrationValidateBuildAndRunService,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Non-critical: failed to prefill workflow command menu items for workspace ${workspaceId}`,
+          error,
+        );
+        this.exceptionHandlerService.captureExceptions([error as Error]);
+      }
+    }
+
+    const dashboardQueryRunner = this.coreDataSource.createQueryRunner();
+
+    await dashboardQueryRunner.connect();
 
     try {
-      await queryRunner.startTransaction();
-
-      await prefillCompanies(queryRunner.manager, schemaName);
-
-      await prefillPeople(queryRunner.manager, schemaName);
-
-      await prefillWorkflows(
-        queryRunner.manager,
-        workspaceId,
-        schemaName,
-        flatObjectMetadataMaps,
-        flatFieldMetadataMaps,
-      );
-
-      await prefillOpportunities(queryRunner.manager, schemaName);
+      await dashboardQueryRunner.startTransaction();
 
       await prefillDashboards(
-        queryRunner.manager,
+        dashboardQueryRunner.manager,
         schemaName,
         flatPageLayoutMaps,
       );
 
-      await queryRunner.commitTransaction();
+      await dashboardQueryRunner.commitTransaction();
     } catch (error) {
-      if (queryRunner.isTransactionActive) {
-        await queryRunner.rollbackTransaction();
+      if (dashboardQueryRunner.isTransactionActive) {
+        await dashboardQueryRunner.rollbackTransaction();
       }
 
       throw error;
     } finally {
-      await queryRunner.release();
-    }
-
-    try {
-      await prefillWorkflowCommandMenuItems({
-        workspaceId,
-        applicationService: this.applicationService,
-        flatEntityMapsCacheService: this.flatEntityMapsCacheService,
-        workspaceMigrationValidateBuildAndRunService:
-          this.workspaceMigrationValidateBuildAndRunService,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Non-critical: failed to prefill workflow command menu items for workspace ${workspaceId}`,
-        error,
-      );
-      this.exceptionHandlerService.captureExceptions([error as Error]);
+      await dashboardQueryRunner.release();
     }
 
     try {

@@ -1,5 +1,20 @@
 import { msg } from '@lingui/core/macro';
 import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import {
+  buildMyahBrandBrainLinkStandardFlatObjectMetadata,
+  buildMyahBrandBrainPageStandardFlatObjectMetadata,
+  buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata,
+  buildMyahCampaignCreatorStandardFlatObjectMetadata,
+  buildMyahCampaignStandardFlatObjectMetadata,
+  buildMyahCreatorListMemberStandardFlatObjectMetadata,
+  buildMyahCreatorListStandardFlatObjectMetadata,
+  buildMyahCreatorStandardFlatObjectMetadata,
+  buildMyahOfferStandardFlatObjectMetadata,
+  buildMyahOutreachActionStandardFlatObjectMetadata,
+  buildMyahOutreachSequenceStandardFlatObjectMetadata,
+  buildMyahOutreachStepStandardFlatObjectMetadata,
+  buildMyahPromotedAssetStandardFlatObjectMetadata,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/myah-standard-object-field-builders.util';
 
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
@@ -849,6 +864,20 @@ export const STANDARD_FLAT_OBJECT_METADATA_BUILDERS_BY_OBJECT_NAME = {
       twentyStandardApplicationId,
       now,
     }),
+  brandBrainLink: buildMyahBrandBrainLinkStandardFlatObjectMetadata,
+  brandBrainPage: buildMyahBrandBrainPageStandardFlatObjectMetadata,
+  brandBrainUpdateProposal:
+    buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata,
+  offer: buildMyahOfferStandardFlatObjectMetadata,
+  outreachAction: buildMyahOutreachActionStandardFlatObjectMetadata,
+  outreachSequence: buildMyahOutreachSequenceStandardFlatObjectMetadata,
+  outreachStep: buildMyahOutreachStepStandardFlatObjectMetadata,
+  promotedAsset: buildMyahPromotedAssetStandardFlatObjectMetadata,
+  campaignCreator: buildMyahCampaignCreatorStandardFlatObjectMetadata,
+  campaign: buildMyahCampaignStandardFlatObjectMetadata,
+  creatorListMember: buildMyahCreatorListMemberStandardFlatObjectMetadata,
+  creatorList: buildMyahCreatorListStandardFlatObjectMetadata,
+  creator: buildMyahCreatorStandardFlatObjectMetadata,
 } satisfies {
   [P in AllStandardObjectName]: (
     args: Omit<CreateStandardObjectArgs<P>, 'context' | 'objectName'>,

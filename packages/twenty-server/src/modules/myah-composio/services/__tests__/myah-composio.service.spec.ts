@@ -203,6 +203,81 @@ describe('MyahComposioService', () => {
     );
   });
 
+  it('keeps active Instagram accounts isolated by workspace-derived user ID', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'ca_workspace_a',
+              status: 'ACTIVE',
+              user_id: buildInstagramComposioUserId('workspace-a'),
+              toolkit: { slug: 'instagram' },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          successful: true,
+          data: { id: 'instagram-a', username: 'workspace_a' },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'ca_workspace_b',
+              status: 'ACTIVE',
+              user_id: buildInstagramComposioUserId('workspace-b'),
+              toolkit: { slug: 'instagram' },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          successful: true,
+          data: { id: 'instagram-b', username: 'workspace_b' },
+        }),
+      });
+
+    const service = new MyahComposioService();
+    const accountsA = await service.listInstagramAccounts({
+      userId: buildInstagramComposioUserId('workspace-a'),
+    });
+    const accountsB = await service.listInstagramAccounts({
+      userId: buildInstagramComposioUserId('workspace-b'),
+    });
+
+    expect(accountsA).toEqual([
+      expect.objectContaining({
+        connectedAccountId: 'ca_workspace_a',
+        composioUserId: buildInstagramComposioUserId('workspace-a'),
+      }),
+    ]);
+    expect(accountsB).toEqual([
+      expect.objectContaining({
+        connectedAccountId: 'ca_workspace_b',
+        composioUserId: buildInstagramComposioUserId('workspace-b'),
+      }),
+    ]);
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('user_ids=workspace%3Aworkspace-a%3Ainstagram'),
+      expect.any(Object),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('user_ids=workspace%3Aworkspace-b%3Ainstagram'),
+      expect.any(Object),
+    );
+  });
+
   it('enriches an active Instagram account with its server-fetched profile identity', async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce({

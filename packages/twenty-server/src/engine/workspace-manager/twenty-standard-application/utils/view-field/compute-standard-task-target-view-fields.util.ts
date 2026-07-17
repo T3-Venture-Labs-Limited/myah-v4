@@ -70,5 +70,41 @@ export const computeStandardTaskTargetViewFields = (
         size: 150,
       },
     }),
+    allTaskTargetsTargetBrandBrainPage: createStandardViewFieldFlatMetadata({
+      ...args,
+      objectName: 'taskTarget',
+      context: {
+        viewName: 'allTaskTargets',
+        viewFieldName: 'targetBrandBrainPage',
+        fieldName: 'targetBrandBrainPage',
+        position: 5,
+        isVisible: true,
+        size: 150,
+      },
+    }),
+    allTaskTargetsTargetCampaign: createStandardViewFieldFlatMetadata({
+      ...args,
+      objectName: 'taskTarget',
+      context: {
+        viewName: 'allTaskTargets',
+        viewFieldName: 'targetCampaign',
+        fieldName: 'targetCampaign',
+        position: 6,
+        isVisible: true,
+        size: 150,
+      },
+    }),
+    allTaskTargetsTargetCreator: createStandardViewFieldFlatMetadata({
+      ...args,
+      objectName: 'taskTarget',
+      context: {
+        viewName: 'allTaskTargets',
+        viewFieldName: 'targetCreator',
+        fieldName: 'targetCreator',
+        position: 7,
+        isVisible: true,
+        size: 150,
+      },
+    }),
   };
 };

@@ -182,6 +182,15 @@ describe('SettingsAccountsInstagram', () => {
       ),
     ).toBeVisible();
     expect(screen.getByText('Connected')).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost/rest/myah/instagram/accounts',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-token',
+        }),
+      }),
+    );
     expect(screen.getByText('@myah_test_account')).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Reconnect Instagram' }),
