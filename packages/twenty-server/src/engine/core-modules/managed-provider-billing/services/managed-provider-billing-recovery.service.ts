@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThanOrEqual, Repository } from 'typeorm';
+import { IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -56,73 +56,108 @@ export class ManagedProviderBillingRecoveryService {
       return;
     }
 
-    const pendingOperations = await this.operationRepository.find({
-      take: RECOVERY_BATCH_SIZE,
-      where: [
-        {
-          nextDeliveryAttemptAt: IsNull(),
-          state: ManagedProviderOperationState.USAGE_PENDING,
-        },
-        {
-          nextDeliveryAttemptAt: LessThanOrEqual(now),
-          state: ManagedProviderOperationState.USAGE_PENDING,
-        },
-      ],
-    });
+    await this.recoverPendingOperations(now);
+    await this.recoverAcceptedOperations(now);
+  }
 
-    for (const operation of pendingOperations) {
-      await this.messageQueueService.add(
-        DeliverManagedProviderUsageJob.name,
-        { operationId: operation.id },
-        { id: `managed-provider-usage:${operation.id}`, retryLimit: 3 },
-      );
+  private async recoverPendingOperations(now: Date): Promise<void> {
+    let cursor: string | undefined;
+
+    while (true) {
+      const cursorFilter = cursor === undefined ? {} : { id: MoreThan(cursor) };
+      const pendingOperations = await this.operationRepository.find({
+        order: { id: 'ASC' },
+        take: RECOVERY_BATCH_SIZE,
+        where: [
+          {
+            ...cursorFilter,
+            nextDeliveryAttemptAt: IsNull(),
+            state: ManagedProviderOperationState.USAGE_PENDING,
+          },
+          {
+            ...cursorFilter,
+            nextDeliveryAttemptAt: LessThanOrEqual(now),
+            state: ManagedProviderOperationState.USAGE_PENDING,
+          },
+        ],
+      });
+
+      for (const operation of pendingOperations) {
+        await this.messageQueueService.add(
+          DeliverManagedProviderUsageJob.name,
+          { operationId: operation.id },
+          { id: `managed-provider-usage:${operation.id}`, retryLimit: 3 },
+        );
+      }
+
+      if (pendingOperations.length < RECOVERY_BATCH_SIZE) {
+        return;
+      }
+
+      cursor = pendingOperations[pendingOperations.length - 1].id;
     }
+  }
 
-    const acceptedOperations = await this.operationRepository.find({
-      take: RECOVERY_BATCH_SIZE,
-      where: {
-        settleAfter: LessThanOrEqual(now),
-        state: ManagedProviderOperationState.USAGE_ACCEPTED,
-      },
-    });
-    const operationsWithinSettlementWindow = acceptedOperations.filter(
-      (operation) => !this.isPastSettlementWindow(operation, now),
-    );
+  private async recoverAcceptedOperations(now: Date): Promise<void> {
+    let cursor: string | undefined;
 
-    await Promise.all(
-      acceptedOperations
-        .filter((operation) => this.isPastSettlementWindow(operation, now))
-        .map((operation) => this.markReconciliationRequired(operation)),
-    );
-
-    if (operationsWithinSettlementWindow.length === 0) {
-      return;
-    }
-
-    let events: MetronomeUsageEvent[];
-
-    try {
-      events = await this.metronomeClientService.searchUsageEvents(
-        operationsWithinSettlementWindow.map((operation) =>
-          this.getTransactionId(operation.id),
-        ),
+    while (true) {
+      const acceptedOperations = await this.operationRepository.find({
+        order: { id: 'ASC' },
+        take: RECOVERY_BATCH_SIZE,
+        where: {
+          ...(cursor === undefined ? {} : { id: MoreThan(cursor) }),
+          settleAfter: LessThanOrEqual(now),
+          state: ManagedProviderOperationState.USAGE_ACCEPTED,
+        },
+      });
+      const operationsWithinSettlementWindow = acceptedOperations.filter(
+        (operation) => !this.isPastSettlementWindow(operation, now),
       );
-    } catch (error) {
-      const isRateLimited =
-        error instanceof MetronomeClientException &&
-        error.code === MetronomeClientExceptionCode.RATE_LIMITED;
 
       await Promise.all(
-        operationsWithinSettlementWindow.map((operation) =>
-          this.scheduleSettlementRetry(operation, now, isRateLimited),
-        ),
+        acceptedOperations
+          .filter((operation) => this.isPastSettlementWindow(operation, now))
+          .map((operation) => this.markReconciliationRequired(operation)),
       );
 
-      return;
-    }
+      if (operationsWithinSettlementWindow.length > 0) {
+        let events: MetronomeUsageEvent[] | null = null;
 
-    for (const operation of operationsWithinSettlementWindow) {
-      await this.settleIfVerified(operation, events, now);
+        try {
+          events = await this.metronomeClientService.searchUsageEvents(
+            operationsWithinSettlementWindow.map((operation) =>
+              this.getTransactionId(operation.id),
+            ),
+          );
+        } catch (error) {
+          const isRateLimited =
+            error instanceof MetronomeClientException &&
+            error.code === MetronomeClientExceptionCode.RATE_LIMITED;
+
+          await Promise.all(
+            operationsWithinSettlementWindow.map((operation) =>
+              this.scheduleSettlementRetry(operation, now, isRateLimited),
+            ),
+          );
+
+          if (isRateLimited) {
+            return;
+          }
+        }
+
+        if (events !== null) {
+          for (const operation of operationsWithinSettlementWindow) {
+            await this.settleIfVerified(operation, events, now);
+          }
+        }
+      }
+
+      if (acceptedOperations.length < RECOVERY_BATCH_SIZE) {
+        return;
+      }
+
+      cursor = acceptedOperations[acceptedOperations.length - 1].id;
     }
   }
 
@@ -315,14 +350,15 @@ export class ManagedProviderBillingRecoveryService {
     operation: ManagedProviderOperationEntity,
     now: Date,
   ): boolean {
-    const firstAcceptedAt =
+    const firstDeliveryAt =
+      operation.deliveryEventAt ??
       operation.metronomeAcceptedAt ??
       operation.completedAt ??
       operation.createdAt;
 
     return (
-      firstAcceptedAt instanceof Date &&
-      now.getTime() - firstAcceptedAt.getTime() > STALE_RESERVATION_THRESHOLD_MS
+      firstDeliveryAt instanceof Date &&
+      now.getTime() - firstDeliveryAt.getTime() > STALE_RESERVATION_THRESHOLD_MS
     );
   }
 
@@ -406,7 +442,8 @@ export class ManagedProviderBillingRecoveryService {
   ): boolean {
     return (
       actualMetricIds.length > 0 &&
-      this.areEqualStringArrays(actualMetricIds, expectedMetricIds)
+      new Set(actualMetricIds).size === actualMetricIds.length &&
+      actualMetricIds.every((metricId) => expectedMetricIds.includes(metricId))
     );
   }
 

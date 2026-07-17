@@ -117,6 +117,65 @@ describe('ManagedProviderBillingRecoveryService', () => {
     };
   };
 
+  it('pages through every due pending operation in bounded batches', async () => {
+    const { messageQueueService, operationRepository, service } =
+      createService();
+    const firstBatch = Array.from({ length: 100 }, (_, index) => ({
+      id: `operation-${index.toString().padStart(3, '0')}`,
+      state: ManagedProviderOperationState.USAGE_PENDING,
+    }));
+    const finalOperation = {
+      id: 'operation-100',
+      state: ManagedProviderOperationState.USAGE_PENDING,
+    };
+
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce(firstBatch)
+      .mockResolvedValueOnce([finalOperation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(messageQueueService.add).toHaveBeenCalledTimes(101);
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      expect.any(String),
+      { operationId: finalOperation.id },
+      expect.objectContaining({
+        id: `managed-provider-usage:${finalOperation.id}`,
+      }),
+    );
+  });
+
+  it('pages through every due accepted operation in bounded batches', async () => {
+    const { metronomeClientService, operationRepository, service } =
+      createService();
+    const firstBatch = Array.from({ length: 100 }, (_, index) => ({
+      ...acceptedOperation,
+      id: `operation-${index.toString().padStart(3, '0')}`,
+    }));
+    const finalOperation = {
+      ...acceptedOperation,
+      id: 'operation-100',
+    };
+
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(firstBatch)
+      .mockResolvedValueOnce([finalOperation]);
+    (metronomeClientService.searchUsageEvents as jest.Mock).mockRejectedValue(
+      new Error('temporary search failure'),
+    );
+
+    await service.recover();
+
+    expect(metronomeClientService.searchUsageEvents).toHaveBeenCalledTimes(2);
+    expect(metronomeClientService.searchUsageEvents).toHaveBeenLastCalledWith([
+      `managed-provider-usage:${finalOperation.id}`,
+    ]);
+  });
+
   it('settles only a matched accepted event after a fresh balance read', async () => {
     const {
       findOne,
@@ -128,6 +187,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
 
     await service.recover();
     expect(operationRepository.find).toHaveBeenNthCalledWith(1, {
+      order: { id: 'ASC' },
       take: 100,
       where: expect.arrayContaining([
         expect.objectContaining({
@@ -136,6 +196,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
       ]),
     });
     expect(operationRepository.find).toHaveBeenNthCalledWith(2, {
+      order: { id: 'ASC' },
       take: 100,
       where: {
         settleAfter: expect.anything(),
@@ -261,7 +322,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
       .mockResolvedValueOnce([
         {
           ...acceptedOperation,
-          metronomeAcceptedAt: new Date('2026-06-11T00:02:00.000Z'),
+          deliveryEventAt: new Date('2026-06-11T00:02:00.000Z'),
         },
       ]);
     (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue(
@@ -342,6 +403,45 @@ describe('ManagedProviderBillingRecoveryService', () => {
     );
   });
 
+  it('settles when an accepted event matches a nonempty subset of expected metrics', async () => {
+    const {
+      findOne,
+      metronomeClientService,
+      operationRepository,
+      save,
+      service,
+    } = createService();
+    const operation = {
+      ...acceptedOperation,
+      expectedBillableMetricIds: ['metric-id', 'second-metric-id'],
+    };
+
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation]);
+    (findOne as jest.Mock).mockImplementation(async (entity) =>
+      entity === MyahWorkspaceInstallationEntity
+        ? {
+            metronomeCustomerId: 'customer-id',
+            workspaceId: 'workspace-id',
+          }
+        : operation,
+    );
+
+    await service.recover();
+
+    expect(metronomeClientService.getPrepaidBalance).toHaveBeenCalledWith(
+      'customer-id',
+    );
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        state: ManagedProviderOperationState.USAGE_SETTLED,
+      }),
+    );
+  });
+
   it('requires reconciliation when accepted evidence has an unexpected metric', async () => {
     const { metronomeClientService, save, service } = createService();
     (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue([
@@ -368,7 +468,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
     );
   });
 
-  it('requires reconciliation before evaluating matching evidence outside 34 days', async () => {
+  it('requires reconciliation when the persisted first delivery is outside 34 days', async () => {
     const { metronomeClientService, operationRepository, save, service } =
       createService();
     (operationRepository.find as jest.Mock)
@@ -377,7 +477,8 @@ describe('ManagedProviderBillingRecoveryService', () => {
       .mockResolvedValueOnce([
         {
           ...acceptedOperation,
-          metronomeAcceptedAt: new Date('2026-06-11T00:02:00.000Z'),
+          deliveryEventAt: new Date('2026-06-11T00:02:00.000Z'),
+          metronomeAcceptedAt: new Date('2026-07-16T00:01:00.000Z'),
         },
       ]);
 

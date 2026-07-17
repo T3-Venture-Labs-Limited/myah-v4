@@ -116,13 +116,6 @@ export class ManagedProviderOperationService {
         throw new Error('Metronome workspace customer mapping is unavailable');
       }
 
-      const { balance } =
-        await this.metronomeClientService.getPrepaidBalance(customerId);
-
-      if (!Number.isSafeInteger(balance) || balance < 0) {
-        throw new Error('Metronome prepaid balance is invalid');
-      }
-
       const transactionOperationRepository = manager.getRepository(
         ManagedProviderOperationEntity,
       );
@@ -138,6 +131,13 @@ export class ManagedProviderOperationService {
           operationInput,
           expectedProductIds,
         );
+      }
+
+      const { balance } =
+        await this.metronomeClientService.getPrepaidBalance(customerId);
+
+      if (!Number.isSafeInteger(balance) || balance < 0) {
+        throw new Error('Metronome prepaid balance is invalid');
       }
 
       const activeReservation = await transactionOperationRepository

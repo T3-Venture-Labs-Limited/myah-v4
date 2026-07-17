@@ -219,6 +219,37 @@ describe('ManagedProviderOperationService', () => {
     expect(metronomeClientService.getPrepaidBalance).not.toHaveBeenCalled();
   });
 
+  it('returns a concurrent exact replay before a failure-prone balance read', async () => {
+    const concurrentOperation = {
+      ...input,
+      id: 'concurrent-operation-id',
+      reservedAmountCents: '7',
+      state: ManagedProviderOperationState.RESERVED,
+    };
+    const { manager, metronomeClientService, service } = createService();
+    const transactionOperationRepository = manager.getRepository(
+      ManagedProviderOperationEntity,
+    ) as {
+      findOneBy: jest.Mock;
+    };
+
+    transactionOperationRepository.findOneBy.mockResolvedValue(
+      concurrentOperation,
+    );
+    (metronomeClientService.getPrepaidBalance as jest.Mock).mockRejectedValue(
+      new Error('temporary Metronome failure'),
+    );
+
+    await expect(service.reserveOperation(input)).resolves.toBe(
+      concurrentOperation,
+    );
+    expect(transactionOperationRepository.findOneBy).toHaveBeenCalledWith({
+      requestId: input.requestId,
+      workspaceId,
+    });
+    expect(metronomeClientService.getPrepaidBalance).not.toHaveBeenCalled();
+  });
+
   it('rejects a request replay with a different immutable product mapping', async () => {
     const existingOperation = {
       ...input,
