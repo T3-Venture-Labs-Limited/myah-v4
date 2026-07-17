@@ -186,6 +186,65 @@ describe('SendInstagramReplyTool', () => {
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
   });
 
+  it('projects an accepted replay without calling the provider again', async () => {
+    const {
+      tool,
+      actionApprovalService,
+      myahComposioService,
+      projector,
+    } = buildTool();
+    actionApprovalService.reserveExecutionForBinding.mockResolvedValue({
+      created: false,
+      receipt: {
+        id: 'receipt-id',
+        workspaceId,
+        state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+        providerCode: 'accepted',
+        outcome: 'accepted',
+        occurredAt: new Date('2026-07-16T00:00:00.000Z'),
+      },
+    });
+
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toEqual({
+      success: true,
+      message: 'Instagram reply accepted.',
+    });
+
+    expect(projector.projectReceipt).toHaveBeenCalledWith('receipt-id');
+    expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
+    expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
+  });
+
+  it('does not reach the provider when the registered binding is rejected', async () => {
+    const { tool, actionApprovalService, myahComposioService } = buildTool();
+    actionApprovalService.getApprovedBinding.mockRejectedValue(
+      new Error('An approved action binding is required'),
+    );
+
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
+      success: false,
+    });
+
+    expect(actionApprovalService.reserveExecutionForBinding).not.toHaveBeenCalled();
+    expect(myahComposioService.getActiveInstagramAccount).not.toHaveBeenCalled();
+    expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
+  });
+
+  it('revalidates the canonical graph only after reserving authority', async () => {
+    const { tool, actionApprovalService, actionDefinition } = buildTool();
+
+    await expect(tool.execute({ actionApprovalBindingId }, context)).resolves.toMatchObject({
+      success: true,
+    });
+
+    expect(
+      actionApprovalService.reserveExecutionForBinding.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      actionDefinition.rebuildExecutionAuthority.mock.invocationCallOrder[0],
+    );
+  });
+
 
   it('sends once only after a canonical account and inbound message proof', async () => {
     const {

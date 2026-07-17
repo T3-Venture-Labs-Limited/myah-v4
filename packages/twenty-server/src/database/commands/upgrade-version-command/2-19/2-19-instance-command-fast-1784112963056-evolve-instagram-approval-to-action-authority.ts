@@ -398,6 +398,9 @@ export class EvolveInstagramApprovalToActionAuthorityFastInstanceCommand
     await queryRunner.query(
       'CREATE INDEX "IDX_INSTAGRAM_REPLY_APPROVAL_REQUEST_WORKSPACE_THREAD" ON core."instagramReplyApprovalRequest" ("workspaceId", "threadId")',
     );
+    await queryRunner.query(
+      'ALTER TABLE core."instagramReplyApprovalRequest" ADD CONSTRAINT "FK_617792f9cfed9d503e2333b2a83" FOREIGN KEY ("workspaceId") REFERENCES core."workspace"("id") ON DELETE CASCADE ON UPDATE NO ACTION',
+    );
     await queryRunner.query(`CREATE TABLE ${LEGACY_RECEIPT} (
       "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
       "approvalRequestId" uuid NOT NULL,

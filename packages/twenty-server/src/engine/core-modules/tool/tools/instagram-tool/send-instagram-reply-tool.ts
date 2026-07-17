@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import {
   InstagramReplyActionDefinition,
+  type InstagramReplyActionAuthority,
 } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import {
   ActionExecutionReceiptState,
@@ -57,25 +58,55 @@ export class SendInstagramReplyTool implements Tool {
         initiatorUserWorkspaceId: context.userWorkspaceId,
         threadId: context.threadId,
       });
-      const authority = await this.actionDefinition.rebuildExecutionAuthority({
-        workspaceId: context.workspaceId,
-        binding,
-      });
       const reservation =
         await this.actionApprovalService.reserveExecutionForBinding({
           approvalBindingId: parsedInput.data.actionApprovalBindingId,
-          expectedActionBinding: authority.expectedActionBinding,
+          expectedActionBinding: binding,
         });
 
-      if (
-        !reservation.created ||
-        reservation.receipt.state !== ActionExecutionReceiptState.PROCESSING
-      ) {
+      if (!reservation.created) {
+        if (
+          reservation.receipt.state ===
+          ActionExecutionReceiptState.PROVIDER_ACCEPTED
+        ) {
+          try {
+            await this.projector.projectReceipt(reservation.receipt.id);
+          } catch {
+            return {
+              success: false,
+              message: 'Instagram reply could not be finalized.',
+            };
+          }
+
+          return { success: true, message: 'Instagram reply accepted.' };
+        }
+
         return {
           success: false,
           message:
             'Instagram reply has already been processed and was not retried.',
         };
+      }
+      if (reservation.receipt.state !== ActionExecutionReceiptState.PROCESSING) {
+        return {
+          success: false,
+          message:
+            'Instagram reply has already been processed and was not retried.',
+        };
+      }
+
+      let authority: InstagramReplyActionAuthority;
+      try {
+        authority = await this.actionDefinition.rebuildExecutionAuthority({
+          workspaceId: context.workspaceId,
+          binding,
+        });
+      } catch {
+        return this.recordTerminalState(
+          reservation.receipt.id,
+          ActionExecutionReceiptState.FAILED,
+          'failed',
+        );
       }
 
       try {

@@ -38,6 +38,7 @@ export class ActionReceiptProjectorService {
       receiptId: receipt.id,
       workspaceId: receipt.workspaceId,
       draftId: receipt.actionApprovalBinding.draftId,
+      contentDigest: receipt.actionApprovalBinding.contentDigest,
     });
     await faultHooks?.afterWorkspaceProjection?.(receipt.id);
     await this.receiptRepository.update(

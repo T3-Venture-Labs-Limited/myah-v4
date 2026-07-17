@@ -6,6 +6,7 @@ import { FieldActorSource } from 'twenty-shared/types';
 import { type DataSource, type EntityManager } from 'typeorm';
 
 import { type ActionReceiptProjectionWriter } from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class ActionReceiptWorkspaceProjectionWriterService
     receiptId,
     workspaceId,
     draftId,
+    contentDigest,
   }: Parameters<ActionReceiptProjectionWriter['project']>[0]): Promise<void> {
     const schemaName = getWorkspaceSchemaName(workspaceId);
 
@@ -29,23 +31,37 @@ export class ActionReceiptWorkspaceProjectionWriterService
         return;
       }
 
-      const [drafts] = await manager.query<
-        [{ body: string; conversationId: string | null }[], number]
-      >(
-        `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
-          SET "status" = 'SENT', "sentAt" = NOW(), "updatedAt" = NOW()
-          WHERE "id" = $1 AND "sentAt" IS NULL
-          RETURNING "body", "conversationId"`,
+      const [draft] = await manager.query<{
+        body: string;
+        conversationId: string | null;
+      }[]>(
+        `SELECT "body", "conversationId"
+          FROM "${schemaName}"."_myahInstagramReplyDraft"
+          WHERE "id" = $1
+            AND "sentAt" IS NULL
+            AND "status" = 'NEEDS_REVIEW'
+          FOR UPDATE`,
         [draftId],
       );
-      const [draft] = drafts;
-      if (!draft || !draft.conversationId) {
+      if (
+        !draft ||
+        !draft.conversationId ||
+        computeActionContentDigest(draft.body) !== contentDigest
+      ) {
         if (await this.hasProjection(manager, schemaName, receiptId)) {
           return;
         }
         throw new Error('The approved draft is unavailable for projection');
       }
 
+      await manager.query(
+        `UPDATE "${schemaName}"."_myahInstagramReplyDraft"
+          SET "status" = 'SENT', "sentAt" = NOW(), "updatedAt" = NOW()
+          WHERE "id" = $1
+            AND "sentAt" IS NULL
+            AND "status" = 'NEEDS_REVIEW'`,
+        [draftId],
+      );
       await manager.query(
         `INSERT INTO "${schemaName}"."_myahSocialMessage" (
           "id", "text", "conversationId", "direction", "sentVia", "createdAt", "updatedAt",

@@ -11,6 +11,7 @@ import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-ap
 import { ActionReceiptRedactionService } from 'src/engine/core-modules/action-approval/services/action-receipt-redaction.service';
 import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-modules/action-approval/services/action-receipt-workspace-projection-writer.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 
@@ -22,6 +23,7 @@ import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action
       ActionApprovalBindingEvidenceLinkEntity,
       ActionExecutionReceiptEntity,
       WorkspaceEntity,
+      ObjectMetadataEntity,
     ]),
   ],
   providers: [

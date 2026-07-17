@@ -172,25 +172,46 @@ describe('approval tool availability', () => {
     ).toBe(false);
   });
 
-  it('preserves Instagram send eligibility after an approval when a follow-up user message is newer', () => {
+  it('only exposes the sender for a resolved registered approval result with a binding UUID', () => {
+    const messagesFor = (result: Record<string, unknown>) => [
+      {
+        role: 'assistant',
+        parts: [
+          {
+            type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+            output: { result },
+          },
+        ],
+      },
+      { role: 'user', parts: [] },
+    ];
+
     expect(
-      hasApprovedInstagramReplyApproval([
-        {
-          role: 'assistant',
-          parts: [
-            {
-              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
-              output: {
-                result: {
-                  actionApprovalBindingId:
-                    'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
-                },
-              },
-            },
-          ],
-        },
-        { role: 'user', parts: [] },
-      ]),
+      hasApprovedInstagramReplyApproval(
+        messagesFor({
+          status: 'pending',
+          actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      hasApprovedInstagramReplyApproval(messagesFor({ status: 'resolved' })),
+    ).toBe(false);
+    expect(
+      hasApprovedInstagramReplyApproval(
+        messagesFor({
+          status: 'resolved',
+          actionApprovalBindingId: 'not-a-uuid',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      hasApprovedInstagramReplyApproval(
+        messagesFor({
+          status: 'resolved',
+          actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
+        }),
+      ),
     ).toBe(true);
   });
 });

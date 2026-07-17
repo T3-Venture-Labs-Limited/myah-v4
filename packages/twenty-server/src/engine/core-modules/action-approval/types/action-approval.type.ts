@@ -57,6 +57,7 @@ export type ActionReceiptProjectionWriter = {
     receiptId: string;
     workspaceId: string;
     draftId: string;
+    contentDigest: string;
   }) => Promise<void>;
 };
 

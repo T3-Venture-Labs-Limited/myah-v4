@@ -99,6 +99,9 @@ const installLegacyFixture = async (
   fixture: LegacyFixture,
 ) => {
   await queryRunner.query('CREATE SCHEMA IF NOT EXISTS core');
+  await queryRunner.query(
+    'CREATE TABLE IF NOT EXISTS core."workspace" ("id" uuid PRIMARY KEY)',
+  );
   await dropFixtureSchema(queryRunner);
 
   if (fixture === 'absent') {
@@ -512,6 +515,10 @@ const assertRepairedLegacySchema = async (queryRunner: QueryRunner) => {
        ORDER BY conname`,
     ),
   ).resolves.toStrictEqual([
+    {
+      conname: 'FK_617792f9cfed9d503e2333b2a83',
+      contype: 'f',
+    },
     {
       conname: 'FK_INSTAGRAM_REPLY_RECEIPT_APPROVAL_REQUEST',
       contype: 'f',

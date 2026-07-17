@@ -1,4 +1,5 @@
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
+import { isValidUuid } from 'twenty-shared/utils';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 
 const READ_ONLY_DATABASE_OPERATIONS = new Set([
@@ -122,4 +123,7 @@ const isRegisteredActionApprovalOutput = (
   output: ApprovalToolOutput,
 ): output is ApprovalToolOutput & {
   result: ApprovalToolResult & { actionApprovalBindingId: string };
-} => typeof output.result.actionApprovalBindingId === 'string';
+} =>
+  output.result.status === 'resolved' &&
+  typeof output.result.actionApprovalBindingId === 'string' &&
+  isValidUuid(output.result.actionApprovalBindingId);

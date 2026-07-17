@@ -9,17 +9,18 @@ import {
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
-import { type Repository } from 'typeorm';
+import { In, type Repository } from 'typeorm';
 
-const INSTAGRAM_ACCOUNT_OBJECT_METADATA_ID =
+const INSTAGRAM_ACCOUNT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
   '2d357469-831a-4629-ad4b-47335900e883';
-const SOCIAL_CONVERSATION_OBJECT_METADATA_ID =
+const SOCIAL_CONVERSATION_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
   '36817464-855f-42db-9fbb-f8853643f8d6';
-const INSTAGRAM_REPLY_DRAFT_OBJECT_METADATA_ID =
+const INSTAGRAM_REPLY_DRAFT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER =
   '85762d24-541b-407f-9d6a-cdf89552c665';
 
 export const InstagramReplyActionProposalInputZodSchema = z
@@ -35,6 +36,7 @@ type InstagramReplySourceGraphRow = {
   draftBody: string;
   draftLabel: string | null;
   draftSentAt: string | null;
+  draftStatus: string;
   conversationId: string;
   conversationLabel: string | null;
   providerConversationId: string | null;
@@ -43,6 +45,12 @@ type InstagramReplySourceGraphRow = {
   accountLabel: string | null;
   connectedAccountId: string | null;
   composioUserId: string | null;
+};
+
+type InstagramReplyEvidenceObjectMetadataIds = {
+  account: string;
+  conversation: string;
+  draft: string;
 };
 
 export type CanonicalInstagramReplyGraph = {
@@ -81,6 +89,8 @@ export class InstagramReplyActionDefinition {
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    @InjectRepository(ObjectMetadataEntity)
+    private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
   ) {}
 
   async propose({
@@ -95,11 +105,14 @@ export class InstagramReplyActionDefinition {
     input: InstagramReplyActionProposalInput;
   }): Promise<InstagramReplyActionProposal> {
     const graph = await this.loadCanonicalGraph(workspaceId, input.draftId);
+    const evidenceObjectMetadataIds =
+      await this.resolveEvidenceObjectMetadataIds(workspaceId);
     const expectedActionBinding = this.buildExpectedActionBinding({
       workspaceId,
       initiatorUserWorkspaceId,
       threadId,
       graph,
+      evidenceObjectMetadataIds,
     });
 
     return {
@@ -121,11 +134,14 @@ export class InstagramReplyActionDefinition {
     binding: ExpectedActionBindingWithWorkspace;
   }): Promise<InstagramReplyActionAuthority> {
     const graph = await this.loadCanonicalGraph(workspaceId, binding.draftId);
+    const evidenceObjectMetadataIds =
+      await this.resolveEvidenceObjectMetadataIds(workspaceId);
     const expectedActionBinding = this.buildExpectedActionBinding({
       workspaceId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
       threadId: binding.threadId,
       graph,
+      evidenceObjectMetadataIds,
     });
 
     if (!this.matchesBinding(binding, expectedActionBinding)) {
@@ -140,6 +156,7 @@ export class InstagramReplyActionDefinition {
     initiatorUserWorkspaceId,
     threadId,
     graph,
+    evidenceObjectMetadataIds,
   }: {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
@@ -148,6 +165,7 @@ export class InstagramReplyActionDefinition {
       draftLabel: string;
       conversationLabel: string;
     };
+    evidenceObjectMetadataIds: InstagramReplyEvidenceObjectMetadataIds;
   }): ExpectedActionBindingWithWorkspace {
     return {
       workspaceId,
@@ -167,17 +185,17 @@ export class InstagramReplyActionDefinition {
       initiatorUserWorkspaceId,
       evidenceLinks: [
         {
-          objectMetadataId: INSTAGRAM_REPLY_DRAFT_OBJECT_METADATA_ID,
+          objectMetadataId: evidenceObjectMetadataIds.draft,
           recordId: graph.draftId,
           role: 'draft',
         },
         {
-          objectMetadataId: SOCIAL_CONVERSATION_OBJECT_METADATA_ID,
+          objectMetadataId: evidenceObjectMetadataIds.conversation,
           recordId: graph.conversationId,
           role: 'conversation',
         },
         {
-          objectMetadataId: INSTAGRAM_ACCOUNT_OBJECT_METADATA_ID,
+          objectMetadataId: evidenceObjectMetadataIds.account,
           recordId: graph.account.id,
           role: 'sending_account',
         },
@@ -216,6 +234,43 @@ export class InstagramReplyActionDefinition {
     );
   }
 
+  private async resolveEvidenceObjectMetadataIds(
+    workspaceId: string,
+  ): Promise<InstagramReplyEvidenceObjectMetadataIds> {
+    const metadata = await this.objectMetadataRepository.find({
+      where: {
+        workspaceId,
+        universalIdentifier: In([
+          INSTAGRAM_REPLY_DRAFT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+          SOCIAL_CONVERSATION_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+          INSTAGRAM_ACCOUNT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+        ]),
+      },
+      select: { id: true, universalIdentifier: true },
+    });
+    const draft = metadata.find(
+      ({ universalIdentifier }) =>
+        universalIdentifier ===
+        INSTAGRAM_REPLY_DRAFT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+    )?.id;
+    const conversation = metadata.find(
+      ({ universalIdentifier }) =>
+        universalIdentifier ===
+        SOCIAL_CONVERSATION_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+    )?.id;
+    const account = metadata.find(
+      ({ universalIdentifier }) =>
+        universalIdentifier ===
+        INSTAGRAM_ACCOUNT_OBJECT_METADATA_UNIVERSAL_IDENTIFIER,
+    )?.id;
+
+    if (!draft || !conversation || !account) {
+      throw new Error('Instagram reply source graph is unavailable');
+    }
+
+    return { draft, conversation, account };
+  }
+
   private async loadCanonicalGraph(
     workspaceId: string,
     draftId: string,
@@ -243,6 +298,7 @@ export class InstagramReplyActionDefinition {
               draft."body" AS "draftBody",
               COALESCE(draft."title", draft."name") AS "draftLabel",
               draft."sentAt" AS "draftSentAt",
+              draft."status" AS "draftStatus",
               conversation."id" AS "conversationId",
               COALESCE(conversation."label", conversation."name") AS "conversationLabel",
               conversation."providerConversationId" AS "providerConversationId",
@@ -285,6 +341,7 @@ export class InstagramReplyActionDefinition {
 
     if (
       row.draftSentAt ||
+      row.draftStatus !== 'NEEDS_REVIEW' ||
       !row.draftBody?.trim() ||
       !draftLabel ||
       !conversationLabel ||

@@ -189,35 +189,52 @@ export class ActionApprovalService {
     initiatorUserWorkspaceId: string;
     threadId: string;
   }): Promise<ExpectedActionBindingWithWorkspace> {
-    const binding = await this.dataSource
-      .getRepository(ActionApprovalBindingEntity)
-      .findOne({
-        where: { id: approvalBindingId, workspaceId },
-        relations: { evidenceLinks: true },
-      });
+    const authorizedBinding = await this.dataSource.transaction(
+      async (manager) => {
+        const binding = await manager.findOne(ActionApprovalBindingEntity, {
+          where: { id: approvalBindingId, workspaceId },
+          relations: { evidenceLinks: true },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (
+          binding &&
+          binding.expiresAt <= new Date() &&
+          (binding.state === ActionApprovalBindingState.PENDING ||
+            binding.state === ActionApprovalBindingState.APPROVED)
+        ) {
+          binding.state = ActionApprovalBindingState.EXPIRED;
+          await manager.save(ActionApprovalBindingEntity, binding);
+        }
+        if (
+          !binding ||
+          (binding.state !== ActionApprovalBindingState.APPROVED &&
+            binding.state !== ActionApprovalBindingState.CONSUMED) ||
+          binding.initiatorUserWorkspaceId !== initiatorUserWorkspaceId ||
+          binding.threadId !== threadId
+        ) {
+          return null;
+        }
 
-    if (
-      !binding ||
-      binding.state !== ActionApprovalBindingState.APPROVED ||
-      binding.expiresAt <= new Date() ||
-      binding.initiatorUserWorkspaceId !== initiatorUserWorkspaceId ||
-      binding.threadId !== threadId
-    ) {
+        return {
+          workspaceId: binding.workspaceId,
+          actionName: binding.actionName as 'send_instagram_reply',
+          actionVersion: binding.actionVersion as 1,
+          draftId: binding.draftId,
+          contentDigest: binding.contentDigest,
+          recipientFingerprint: binding.recipientFingerprint ?? '',
+          sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
+          threadId: binding.threadId,
+          initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
+          evidenceLinks: binding.evidenceLinks,
+        };
+      },
+    );
+
+    if (!authorizedBinding) {
       throw new Error('An approved action binding is required');
     }
 
-    return {
-      workspaceId: binding.workspaceId,
-      actionName: binding.actionName as 'send_instagram_reply',
-      actionVersion: binding.actionVersion as 1,
-      draftId: binding.draftId,
-      contentDigest: binding.contentDigest,
-      recipientFingerprint: binding.recipientFingerprint ?? '',
-      sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
-      threadId: binding.threadId,
-      initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
-      evidenceLinks: binding.evidenceLinks,
-    };
+    return authorizedBinding;
   }
 
   async reserveExecutionForBinding({
@@ -228,13 +245,18 @@ export class ActionApprovalService {
     expectedActionBinding: ExpectedActionBindingWithWorkspace;
   }): Promise<ActionExecutionReservation> {
     try {
-      return await this.dataSource.transaction((manager) =>
+      const reservation = await this.dataSource.transaction((manager) =>
         this.reserveBindingInTransaction(
           manager,
           approvalBindingId,
           expectedActionBinding,
         ),
       );
+      if (!reservation) {
+        throw new Error('An approved action binding is required');
+      }
+
+      return reservation;
     } catch (error) {
       if (!this.isUniqueViolation(error)) {
         throw error;
@@ -431,7 +453,7 @@ export class ActionApprovalService {
     manager: EntityManager,
     approvalBindingId: string,
     input: ExpectedActionBindingWithWorkspace,
-  ): Promise<ActionExecutionReservation> {
+  ): Promise<ActionExecutionReservation | null> {
     const idempotencyKey = computeLogicalActionKey(input);
     const priorReceipt = await manager.findOne(ActionExecutionReceiptEntity, {
       where: { workspaceId: input.workspaceId, idempotencyKey },
@@ -453,6 +475,16 @@ export class ActionApprovalService {
       where: { id: approvalBindingId, workspaceId: input.workspaceId },
       lock: { mode: 'pessimistic_write' },
     });
+    if (
+      binding &&
+      binding.expiresAt <= new Date() &&
+      (binding.state === ActionApprovalBindingState.PENDING ||
+        binding.state === ActionApprovalBindingState.APPROVED)
+    ) {
+      binding.state = ActionApprovalBindingState.EXPIRED;
+      await manager.save(ActionApprovalBindingEntity, binding);
+      return null;
+    }
     if (
       !binding ||
       binding.state !== ActionApprovalBindingState.APPROVED ||
