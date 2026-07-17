@@ -26,8 +26,8 @@
 
 | Area | Files | Responsibility |
 | --- | --- | --- |
-| Standard metadata | `packages/twenty-shared/src/metadata/constants/{standard-object,myah-standard-objects}.constant.ts`, `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/**` | Build one source-controlled map for every retained Myah object and remove Person, Company, Opportunity, their dependent metadata, and dangling references. Keep Tasks and Notes with Creator/Campaign/Brand Brain Page targets. |
-| Existing workspaces | `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/` | Apply the standard-metadata change once per active/suspended workspace, including the approved destructive CRM-object cutover. |
+| Standard metadata | `packages/twenty-shared/src/metadata/constants/{standard-object,myah-standard-objects}.constant.ts`, `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/utils/**` | Build one source-controlled map for every retained Myah object. Remove Person, Company, Opportunity, their dependent metadata, and dangling references only for verified legacy Myah installations; retain normal CRM workspaces. Keep Tasks and Notes with Creator/Campaign/Brand Brain Page targets. |
+| Existing workspaces | `packages/twenty-server/src/database/commands/upgrade-version-command/2-20/` | Apply the standard-metadata change once per active/suspended workspace. Remove replaced CRM metadata only after the legacy Myah installation preflight succeeds. |
 | Brand Brain runtime | `packages/twenty-server/src/modules/myah-brand-brain/**` | Server-side domain rules, workspace data adapter, named tools, Nest registration, and tests. |
 | Runtime composition | `packages/twenty-server/src/modules/modules.module.ts` and established AI tool-provider composition | Make the new module available through the existing provider token. |
 | Retained Instagram flow | `packages/twenty-server/src/modules/myah-composio/**`, `packages/twenty-front/src/pages/settings/accounts/SettingsAccountsInstagram.tsx` | Preserve connection/account-listing behavior; do not widen messaging capabilities. |
@@ -170,8 +170,8 @@ git commit -m "feat(myah): Add standard Brand Brain and Creator Ops metadata"
 ### Task 3: Add the safe existing-workspace standard-metadata migration command
 
 **Files:**
-- Create: `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.ts`
-- Create: `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/__tests__/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts`
+- Create: `packages/twenty-server/src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.ts`
+- Create: `packages/twenty-server/src/database/commands/upgrade-version-command/2-20/__tests__/2-20-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts`
 - Read pattern: `packages/twenty-server/src/database/commands/upgrade-version-command/1-21/1-21-workspace-command-1775500001000-add-compose-email-command-menu-item.command.ts`
 - Read registration: `packages/twenty-server/src/engine/core-modules/upgrade/services/upgrade-command-registry.service.ts`
 - Read full synchronization behavior: `packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/services/twenty-standard-application.service.ts`
@@ -202,11 +202,11 @@ expect(await runForWorkspaceWithLegacyInstallation()).toEqual(
 );
 ```
 
-For the legacy-installation fixture, make the test assert that records with
-matching immutable universal identifiers are ownership-transferred before a
-create action can run. Add a failure fixture where the transfer/migration
-validation reports failure and assert the command throws rather than skipping
-that workspace.
+For the legacy-installation fixture, assert that a verified legacy Brand Brain
+or Creator Ops application allows replacement CRM metadata in the migration
+source. Add a no-installation fixture that retains ordinary CRM metadata. Add a
+failure fixture where migration validation reports failure and assert the
+command throws without persisting ownership changes.
 
 - [ ] **Step 2: Run the new command test and confirm it fails before the command exists**
 
@@ -214,7 +214,7 @@ Run:
 
 ```sh
 npx nx run twenty-server:test --runTestsByPath \
-  packages/twenty-server/src/database/commands/upgrade-version-command/2-21/__tests__/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts \
+  packages/twenty-server/src/database/commands/upgrade-version-command/2-20/__tests__/2-20-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts \
   --coverage=false
 ```
 
@@ -225,13 +225,13 @@ Expected: failure because the command module cannot be resolved.
 Use the current command pattern directly:
 
 ```ts
-@RegisteredWorkspaceCommand('2.21.0', 1825100000000)
-@Command({ name: 'upgrade:2-21:synchronize-myah-standard-metadata' })
+@RegisteredWorkspaceCommand('2.20.0', 1825100000000)
+@Command({ name: 'upgrade:2-20:synchronize-myah-standard-metadata' })
 export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   async runOnWorkspace({ workspaceId, options }: RunOnWorkspaceArgs) {
     if (options.dryRun) return success({ workspaceId, dryRun: true });
-    // Preflight ownership by universal identifier; build and validate only
-    // the Myah subset migration; throw when validation reports failure.
+    // Preflight legacy installation by universal identifier; build and validate
+    // only the Myah subset migration; include permissions and throw on failure.
   }
 }
 ```
@@ -258,7 +258,7 @@ Expected: both PASS; the new decorator is discoverable by the existing registry.
 - [ ] **Step 5: Commit the existing-workspace migration slice**
 
 ```sh
-git add packages/twenty-server/src/database/commands/upgrade-version-command/2-21
+git add packages/twenty-server/src/database/commands/upgrade-version-command/2-20
 git commit -m "feat(myah): Synchronize standard metadata for existing workspaces"
 ```
 
@@ -699,13 +699,13 @@ target remains.
 ### Task 10: Deliver the destructive existing-workspace cutover
 
 **Files:**
-- Modify: `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.ts`
-- Modify: `packages/twenty-server/src/database/commands/upgrade-version-command/2-21/__tests__/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts`
+- Modify: `packages/twenty-server/src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.ts`
+- Modify: `packages/twenty-server/src/database/commands/upgrade-version-command/2-20/__tests__/2-20-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts`
 - Test: recovery workspace database and visible browser at `/welcome`
 
 **Interfaces:**
 - Consumes: Tasks 8–9's desired flat maps and the existing versioned workspace command.
-- Produces: dry-run and live migration behavior that includes Person, Company, Opportunity, their records, and dependent metadata in the deletion set while preserving Myah objects, Tasks, and Notes.
+- Produces: dry-run and live migration behavior that includes Person, Company, Opportunity, their records, and dependent metadata in the deletion set only when the workspace has a verified legacy Myah installation; all other workspaces retain their CRM metadata.
 
 - [ ] **Step 1: Add failing command assertions**
 
@@ -724,8 +724,8 @@ expectRetainedObjectUniversalIdentifiers(migration, [
 ]);
 ```
 
-The fixture must contain legacy CRM records and verify the command does not
-exclude their objects from the explicit `from` subset.
+The fixture must contain a verified legacy Myah installation plus legacy CRM
+records, and a no-installation fixture must prove those CRM objects are retained.
 
 - [ ] **Step 2: Run the focused command test and verify red**
 
@@ -734,7 +734,7 @@ Run:
 ```sh
 npx jest --config packages/twenty-server/jest.config.mjs \
   --runTestsByPath \
-  packages/twenty-server/src/database/commands/upgrade-version-command/2-21/__tests__/2-21-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts \
+  packages/twenty-server/src/database/commands/upgrade-version-command/2-20/__tests__/2-20-workspace-command-1825100000000-synchronize-myah-standard-metadata.command.spec.ts \
   --coverage=false
 ```
 

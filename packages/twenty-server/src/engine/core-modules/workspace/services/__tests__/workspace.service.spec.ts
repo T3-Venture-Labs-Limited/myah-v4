@@ -46,6 +46,7 @@ describe('WorkspaceService', () => {
   let dnsManagerService: DnsManagerService;
   let billingSubscriptionService: BillingSubscriptionService;
   let userWorkspaceService: UserWorkspaceService;
+  let preInstalledAppsService: PreInstalledAppsService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -195,6 +196,9 @@ describe('WorkspaceService', () => {
     );
     userWorkspaceService =
       module.get<UserWorkspaceService>(UserWorkspaceService);
+    preInstalledAppsService = module.get<PreInstalledAppsService>(
+      PreInstalledAppsService,
+    );
   });
 
   afterEach(() => {
@@ -203,6 +207,19 @@ describe('WorkspaceService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('installs pre-installed apps when legacy CRM prefill is skipped', async () => {
+    preInstalledAppsService.installOnWorkspace = jest.fn();
+
+    await service['prefillCreatedWorkspaceRecords']({
+      workspaceId: 'workspace-id',
+      schemaName: 'workspace_schema',
+    });
+
+    expect(preInstalledAppsService.installOnWorkspace).toHaveBeenCalledWith(
+      'workspace-id',
+    );
   });
 
   describe('handleRemoveWorkspaceMember', () => {

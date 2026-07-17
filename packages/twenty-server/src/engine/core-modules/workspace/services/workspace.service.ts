@@ -857,80 +857,74 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
         .filter(isDefined)
         .map(({ nameSingular }) => nameSingular),
     );
-    const requiredLegacyCrmObjectNames = [
-      'company',
-      'person',
-      'opportunity',
-    ];
+    const requiredLegacyCrmObjectNames = ['company', 'person', 'opportunity'];
 
     if (
-      !requiredLegacyCrmObjectNames.every((objectName) =>
+      requiredLegacyCrmObjectNames.every((objectName) =>
         standardObjectNames.has(objectName),
       )
     ) {
-      return;
-    }
-
-    await this.prefillLogicFunctionService.ensureSeeded({
-      workspaceId,
-      definitions:
-        getCreateCompanyWhenAddingNewPersonCodeStepLogicFunctionDefinitions(
-          workspaceId,
-        ),
-    });
-
-    const queryRunner = this.coreDataSource.createQueryRunner();
-
-    await queryRunner.connect();
-
-    try {
-      await queryRunner.startTransaction();
-
-      await prefillCompanies(queryRunner.manager, schemaName);
-
-      await prefillPeople(queryRunner.manager, schemaName);
-
-      await prefillWorkflows(
-        queryRunner.manager,
+      await this.prefillLogicFunctionService.ensureSeeded({
         workspaceId,
-        schemaName,
-        flatObjectMetadataMaps,
-        flatFieldMetadataMaps,
-      );
+        definitions:
+          getCreateCompanyWhenAddingNewPersonCodeStepLogicFunctionDefinitions(
+            workspaceId,
+          ),
+      });
 
-      await prefillOpportunities(queryRunner.manager, schemaName);
+      const queryRunner = this.coreDataSource.createQueryRunner();
 
-      await prefillDashboards(
-        queryRunner.manager,
-        schemaName,
-        flatPageLayoutMaps,
-      );
+      await queryRunner.connect();
 
-      await queryRunner.commitTransaction();
-    } catch (error) {
-      if (queryRunner.isTransactionActive) {
-        await queryRunner.rollbackTransaction();
+      try {
+        await queryRunner.startTransaction();
+
+        await prefillCompanies(queryRunner.manager, schemaName);
+
+        await prefillPeople(queryRunner.manager, schemaName);
+
+        await prefillWorkflows(
+          queryRunner.manager,
+          workspaceId,
+          schemaName,
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+        );
+
+        await prefillOpportunities(queryRunner.manager, schemaName);
+
+        await prefillDashboards(
+          queryRunner.manager,
+          schemaName,
+          flatPageLayoutMaps,
+        );
+
+        await queryRunner.commitTransaction();
+      } catch (error) {
+        if (queryRunner.isTransactionActive) {
+          await queryRunner.rollbackTransaction();
+        }
+
+        throw error;
+      } finally {
+        await queryRunner.release();
       }
 
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
-
-    try {
-      await prefillWorkflowCommandMenuItems({
-        workspaceId,
-        applicationService: this.applicationService,
-        flatEntityMapsCacheService: this.flatEntityMapsCacheService,
-        workspaceMigrationValidateBuildAndRunService:
-          this.workspaceMigrationValidateBuildAndRunService,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Non-critical: failed to prefill workflow command menu items for workspace ${workspaceId}`,
-        error,
-      );
-      this.exceptionHandlerService.captureExceptions([error as Error]);
+      try {
+        await prefillWorkflowCommandMenuItems({
+          workspaceId,
+          applicationService: this.applicationService,
+          flatEntityMapsCacheService: this.flatEntityMapsCacheService,
+          workspaceMigrationValidateBuildAndRunService:
+            this.workspaceMigrationValidateBuildAndRunService,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Non-critical: failed to prefill workflow command menu items for workspace ${workspaceId}`,
+          error,
+        );
+        this.exceptionHandlerService.captureExceptions([error as Error]);
+      }
     }
 
     try {

@@ -1,9 +1,6 @@
-import { InjectDataSource } from '@nestjs/typeorm';
-
 import { Command } from 'nest-commander';
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
-import type { DataSource } from 'typeorm';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 
 import { buildFromToAllUniversalFlatEntityMaps } from 'src/engine/core-modules/application/application-manifest/utils/build-from-to-all-universal-flat-entity-maps.util';
@@ -13,24 +10,26 @@ import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/c
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
-import { ALL_METADATA_ENTITY_BY_METADATA_NAME } from 'src/engine/metadata-modules/flat-entity/constant/all-metadata-entity-by-metadata-name.constant';
 import type { SyncableFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-from.type';
 import type { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { getSubFlatEntityMapsByUniversalIdentifiersOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/get-sub-flat-entity-maps-by-universal-identifiers-or-throw.util';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
-import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import type { AdditionalCacheDataMaps } from 'src/engine/workspace-cache/types/workspace-cache-key.type';
-import { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/workspace-metadata-version/services/workspace-metadata-version.service';
 import { TWENTY_STANDARD_ALL_METADATA_NAME } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-all-metadata-name.constant';
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { getReplacedTwentyCrmMetadataUniversalIdentifiers } from 'src/engine/workspace-manager/twenty-standard-application/utils/remove-replaced-twenty-crm-metadata.util';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
 const MYAH_ROLE_UNIVERSAL_IDENTIFIERS = new Set<string>([
   STANDARD_ROLE.brandBrainAdmin.universalIdentifier,
   STANDARD_ROLE.creatorOpsDefault.universalIdentifier,
 ]);
+
+const LEGACY_MYAH_APPLICATION_UNIVERSAL_IDENTIFIERS = [
+  '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991',
+  '72f2fd16-880c-4c63-852f-dbf63f51c152',
+] as const;
 
 type UniversalMetadataEntity = {
   universalIdentifier: string;
@@ -62,20 +61,17 @@ const toUniversalIdentifiers = (
 type SyncableFlatEntityMaps = FlatEntityMaps<SyncableFlatEntity>;
 
 
-@RegisteredWorkspaceCommand('2.21.0', 1825100000000)
+@RegisteredWorkspaceCommand('2.20.0', 1825100000000)
 @Command({
-  name: 'upgrade:2-21:synchronize-myah-standard-metadata',
+  name: 'upgrade:2-20:synchronize-myah-standard-metadata',
   description:
     'Synchronize source-controlled Myah standard metadata for existing workspaces',
 })
 export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
-    @InjectDataSource()
-    private readonly coreDataSource: DataSource,
     private readonly applicationService: ApplicationService,
     private readonly workspaceCacheService: WorkspaceCacheService,
-    private readonly workspaceMetadataVersionService: WorkspaceMetadataVersionService,
     private readonly workspaceMigrationValidateBuildAndRunService: WorkspaceMigrationValidateBuildAndRunService,
   ) {
     super(workspaceIteratorService);
@@ -103,14 +99,14 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       ),
       'featureFlagsMap',
     ];
-    let cachedMetadata =
+    const cachedMetadata =
       await this.workspaceCacheService.getOrRecompute(
         workspaceId,
         metadataCacheKeys,
       );
-    let featureFlagsMap =
+    const featureFlagsMap =
       cachedMetadata.featureFlagsMap as AdditionalCacheDataMaps['featureFlagsMap'];
-    let fromAllFlatEntityMaps =
+    const fromAllFlatEntityMaps =
       cachedMetadata as unknown as TwentyStandardAllFlatEntityMaps;
     const {
       allFlatEntityMaps: standardAllFlatEntityMaps,
@@ -266,6 +262,23 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     selectMetadata('viewFilter', viewFilterUniversalIdentifiers);
     selectMetadata('viewField', viewFieldUniversalIdentifiers);
     selectMetadata('role', MYAH_ROLE_UNIVERSAL_IDENTIFIERS);
+    selectMetadata(
+      'objectPermission',
+      toUniversalIdentifiers(
+        getUniversalMetadataEntities(
+          standardAllFlatEntityMaps.flatObjectPermissionMaps
+            .byUniversalIdentifier,
+        ),
+      ),
+    );
+    selectMetadata(
+      'fieldPermission',
+      toUniversalIdentifiers(
+        getUniversalMetadataEntities(
+          standardAllFlatEntityMaps.flatFieldPermissionMaps.byUniversalIdentifier,
+        ),
+      ),
+    );
     selectMetadata('pageLayout', pageLayoutUniversalIdentifiers);
     selectMetadata('pageLayoutTab', pageLayoutTabUniversalIdentifiers);
     selectMetadata('pageLayoutWidget', pageLayoutWidgetUniversalIdentifiers);
@@ -274,65 +287,25 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       navigationMenuItemUniversalIdentifiers,
     );
 
-    const metadataCacheKeysToFlush: string[] = [];
-
-    for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
-      const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
-      const desiredFlatEntityMaps = toAllFlatEntityMaps[
-        flatEntityMapsKey
-      ] as unknown as SyncableFlatEntityMaps;
-      const currentFlatEntityMaps = fromAllFlatEntityMaps[
-        flatEntityMapsKey
-      ] as unknown as SyncableFlatEntityMaps;
-      const legacyOwnedEntityIds = Object.keys(
-        desiredFlatEntityMaps.byUniversalIdentifier,
+    const hasLegacyMyahApplication = (
+      await Promise.all(
+        LEGACY_MYAH_APPLICATION_UNIVERSAL_IDENTIFIERS.map(
+          async (universalIdentifier) =>
+            await this.applicationService.findByUniversalIdentifier({
+              universalIdentifier,
+              workspaceId,
+            }),
+        ),
       )
-        .map(
-          (universalIdentifier) =>
-            currentFlatEntityMaps.byUniversalIdentifier[universalIdentifier],
-        )
-        .filter(isDefined)
-        .filter(
-          (flatEntity) =>
-            flatEntity.applicationId !== twentyStandardFlatApplication.id,
-        )
-        .map(({ id }) => id);
+    ).some(isDefined);
 
-      if (legacyOwnedEntityIds.length === 0) {
-        continue;
-      }
-
-      await this.coreDataSource.manager.update(
-        ALL_METADATA_ENTITY_BY_METADATA_NAME[metadataName],
-        legacyOwnedEntityIds,
-        { applicationId: twentyStandardFlatApplication.id },
-      );
-      metadataCacheKeysToFlush.push(flatEntityMapsKey);
-    }
-
-    if (metadataCacheKeysToFlush.length > 0) {
-      await this.workspaceCacheService.flush(
-        workspaceId,
-        metadataCacheKeysToFlush,
-      );
-      await this.workspaceMetadataVersionService.incrementMetadataVersion(
-        workspaceId,
-      );
-
-      cachedMetadata = await this.workspaceCacheService.getOrRecompute(
-        workspaceId,
-        metadataCacheKeys,
-      );
-      featureFlagsMap =
-        cachedMetadata.featureFlagsMap as AdditionalCacheDataMaps['featureFlagsMap'];
-      fromAllFlatEntityMaps =
-        cachedMetadata as unknown as TwentyStandardAllFlatEntityMaps;
-    }
 
     const obsoleteUniversalIdentifiersByMetadataName =
-      getReplacedTwentyCrmMetadataUniversalIdentifiers(
-        fromAllFlatEntityMaps as TwentyStandardAllFlatEntityMaps,
-      );
+      hasLegacyMyahApplication
+        ? getReplacedTwentyCrmMetadataUniversalIdentifiers(
+            fromAllFlatEntityMaps as TwentyStandardAllFlatEntityMaps,
+          )
+        : {};
 
     const fromMyahFlatEntityMaps = createEmptyAllFlatEntityMaps();
     for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
