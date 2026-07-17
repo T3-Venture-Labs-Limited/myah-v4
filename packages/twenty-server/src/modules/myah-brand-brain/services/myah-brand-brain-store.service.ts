@@ -30,93 +30,89 @@ export class MyahBrandBrainStoreService {
 
   createStore(context: BrandBrainStoreContext): BrandBrainExecutorStore {
     return {
-      listPagesByBrandSlug: async ({ brandSlug }) => {
-        const repository =
-          await this.getRepository<BrandBrainExecutorPageRecord>(
-            context,
-            'brandBrainPage',
-          );
-
-        return repository.find({
-          where: { canonicalPath: ILike(`${brandSlug}%`) },
-          order: { canonicalPath: 'ASC' },
-        });
-      },
-      createPage: async (input) => {
-        const repository =
-          await this.getRepository<BrandBrainExecutorPageRecord>(
-            context,
-            'brandBrainPage',
-          );
-
-        return repository.save(repository.create(input));
-      },
-      updatePage: async ({ id, patch }) => {
-        const repository =
-          await this.getRepository<BrandBrainExecutorPageRecord>(
-            context,
-            'brandBrainPage',
-          );
-
-        return repository.save({ id, ...this.stripUndefined(patch) });
-      },
+      listPagesByBrandSlug: async ({ brandSlug }) =>
+        this.withRepository<
+          BrandBrainExecutorPageRecord,
+          BrandBrainExecutorPageRecord[]
+        >(context, 'brandBrainPage', (repository) =>
+          repository.find({
+            where: { canonicalPath: ILike(`${brandSlug}%`) },
+            order: { canonicalPath: 'ASC' },
+          }),
+        ),
+      createPage: async (input) =>
+        this.withRepository<
+          BrandBrainExecutorPageRecord,
+          BrandBrainExecutorPageRecord
+        >(context, 'brandBrainPage', (repository) =>
+          repository.save(repository.create(input)),
+        ),
+      updatePage: async ({ id, patch }) =>
+        this.withRepository<
+          BrandBrainExecutorPageRecord,
+          BrandBrainExecutorPageRecord
+        >(context, 'brandBrainPage', (repository) =>
+          repository.save({ id, ...this.stripUndefined(patch) }),
+        ),
       listLinksByBrandSlug: async ({ brandSlug }) => {
-        const pageRepository =
-          await this.getRepository<BrandBrainExecutorPageRecord>(
-            context,
-            'brandBrainPage',
-          );
-        const pages = await pageRepository.find({
-          where: { canonicalPath: ILike(`${brandSlug}%`) },
-        });
+        const pages = await this.withRepository<
+          BrandBrainExecutorPageRecord,
+          BrandBrainExecutorPageRecord[]
+        >(context, 'brandBrainPage', (repository) =>
+          repository.find({
+            where: { canonicalPath: ILike(`${brandSlug}%`) },
+          }),
+        );
         const pageIds = pages.map(({ id }) => id);
 
         if (pageIds.length === 0) {
           return [];
         }
 
-        const repository =
-          await this.getRepository<BrandBrainExecutorLinkRecord>(
-            context,
-            'brandBrainLink',
-          );
-
-        return repository.find({
-          where: { sourcePageId: In(pageIds), targetPageId: In(pageIds) },
-        });
+        return this.withRepository<
+          BrandBrainExecutorLinkRecord,
+          BrandBrainExecutorLinkRecord[]
+        >(context, 'brandBrainLink', (repository) =>
+          repository.find({
+            where: { sourcePageId: In(pageIds), targetPageId: In(pageIds) },
+          }),
+        );
       },
-      createLink: async (input) => {
-        const repository =
-          await this.getRepository<BrandBrainExecutorLinkRecord>(
-            context,
-            'brandBrainLink',
-          );
-
-        return repository.save(repository.create(input));
-      },
-      updateLink: async ({ id, patch }) => {
-        const repository =
-          await this.getRepository<BrandBrainExecutorLinkRecord>(
-            context,
-            'brandBrainLink',
-          );
-
-        return repository.save({ id, ...this.stripUndefined(patch) });
-      },
+      createLink: async (input) =>
+        this.withRepository<
+          BrandBrainExecutorLinkRecord,
+          BrandBrainExecutorLinkRecord
+        >(context, 'brandBrainLink', (repository) =>
+          repository.save(repository.create(input)),
+        ),
+      updateLink: async ({ id, patch }) =>
+        this.withRepository<
+          BrandBrainExecutorLinkRecord,
+          BrandBrainExecutorLinkRecord
+        >(context, 'brandBrainLink', (repository) =>
+          repository.save({ id, ...this.stripUndefined(patch) }),
+        ),
     };
   }
 
-  private async getRepository<T extends { id: string }>(
+  private async withRepository<T extends { id: string }, TResult>(
     context: BrandBrainStoreContext,
     objectMetadataName: 'brandBrainPage' | 'brandBrainLink',
-  ): Promise<BrandBrainRepository<T>> {
+    callback: (
+      repository: BrandBrainRepository<T>,
+    ) => Promise<TResult> | TResult,
+  ): Promise<TResult> {
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      () =>
-        this.globalWorkspaceOrmManager.getRepository<T>(
-          context.workspaceId,
-          objectMetadataName,
-          context.rolePermissionConfig,
-        ),
+      async () => {
+        const repository =
+          (await this.globalWorkspaceOrmManager.getRepository<T>(
+            context.workspaceId,
+            objectMetadataName,
+            context.rolePermissionConfig,
+          )) as unknown as BrandBrainRepository<T>;
+
+        return callback(repository);
+      },
       buildSystemAuthContext(context.workspaceId),
     );
   }

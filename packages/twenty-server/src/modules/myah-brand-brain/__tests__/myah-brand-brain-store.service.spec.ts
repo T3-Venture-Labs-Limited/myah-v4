@@ -39,4 +39,49 @@ describe('MyahBrandBrainStoreService', () => {
       { shouldBypassPermissionChecks: true },
     );
   });
+  it('runs page queries inside the workspace context', async () => {
+    let isWorkspaceContextActive = false;
+    const pageRepository = {
+      find: jest.fn().mockImplementation(async () => {
+        if (!isWorkspaceContextActive) {
+          throw new Error('workspace context is not active');
+        }
+
+        return [
+          {
+            id: 'page-id',
+            title: 'Acme',
+            slug: 'acme',
+            canonicalPath: 'acme',
+            pageType: 'BRAND_ROOT',
+            status: 'APPROVED',
+          },
+        ];
+      }),
+    };
+    const globalWorkspaceOrmManager = {
+      executeInWorkspaceContext: jest.fn(
+        async (callback: () => Promise<unknown> | unknown) => {
+          isWorkspaceContextActive = true;
+          try {
+            return await callback();
+          } finally {
+            isWorkspaceContextActive = false;
+          }
+        },
+      ),
+      getRepository: jest.fn().mockResolvedValue(pageRepository),
+    } as unknown as GlobalWorkspaceOrmManager;
+    const service = new MyahBrandBrainStoreService(globalWorkspaceOrmManager);
+    const store = service.createStore({
+      workspaceId: 'workspace-id',
+      rolePermissionConfig: { shouldBypassPermissionChecks: true },
+    });
+
+    await expect(
+      store.listPagesByBrandSlug({ brandSlug: 'acme' }),
+    ).resolves.toEqual([
+      expect.objectContaining({ id: 'page-id', canonicalPath: 'acme' }),
+    ]);
+  });
 });

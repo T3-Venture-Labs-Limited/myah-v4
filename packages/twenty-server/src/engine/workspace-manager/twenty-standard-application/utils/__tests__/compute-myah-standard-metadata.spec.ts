@@ -20,6 +20,12 @@ const result = computeTwentyStandardApplicationAllFlatEntityMaps({
   workspaceId: '00000000-0000-4000-8000-000000000001',
   twentyStandardApplicationId: '00000000-0000-4000-8000-000000000002',
 });
+const recoveryResult = computeTwentyStandardApplicationAllFlatEntityMaps({
+  now: '2026-07-14T00:00:00.000Z',
+  workspaceId: '00000000-0000-4000-8000-000000000001',
+  twentyStandardApplicationId: '00000000-0000-4000-8000-000000000002',
+  removeReplacedTwentyCrmMetadata: true,
+});
 
 const BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER =
   '8563f1a9-4e02-408a-a5d7-45f68779023a';
@@ -93,12 +99,6 @@ describe('Myah standard metadata contract', () => {
   });
 
   it('removes replaced CRM metadata only for the recovery profile', () => {
-    const recoveryResult = computeTwentyStandardApplicationAllFlatEntityMaps({
-      now: '2026-07-14T00:00:00.000Z',
-      workspaceId: '00000000-0000-4000-8000-000000000001',
-      twentyStandardApplicationId: '00000000-0000-4000-8000-000000000002',
-      removeReplacedTwentyCrmMetadata: true,
-    });
     const removedObjectUniversalIdentifiers = [
       STANDARD_OBJECTS.person.universalIdentifier,
       STANDARD_OBJECTS.company.universalIdentifier,
@@ -115,7 +115,8 @@ describe('Myah standard metadata contract', () => {
 
   it('does not retain fields with dangling relation dependencies', () => {
     const fields =
-      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier;
+      recoveryResult.allFlatEntityMaps.flatFieldMetadataMaps
+        .byUniversalIdentifier;
     const retainedFieldUniversalIdentifiers = new Set(Object.keys(fields));
 
     for (const field of Object.values(fields).filter(isDefined)) {
@@ -140,9 +141,11 @@ describe('Myah standard metadata contract', () => {
 
   it('does not retain field widgets for removed fields', () => {
     const fields =
-      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier;
+      recoveryResult.allFlatEntityMaps.flatFieldMetadataMaps
+        .byUniversalIdentifier;
     const widgets =
-      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier;
+      recoveryResult.allFlatEntityMaps.flatPageLayoutWidgetMaps
+        .byUniversalIdentifier;
 
     for (const widget of Object.values(widgets).filter(isDefined)) {
       if (widget.universalConfiguration.configurationType !== 'FIELD') {
