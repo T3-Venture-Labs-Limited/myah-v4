@@ -18,7 +18,12 @@ describe('ActionApprovalService.reconcile', () => {
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([{ id: 'accepted-receipt-id' }]),
+      getRawMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'failed-receipt-id' },
+          { id: 'accepted-receipt-id' },
+        ]),
     };
     const staleUpdate = {
       update: jest.fn().mockReturnThis(),
@@ -28,7 +33,10 @@ describe('ActionApprovalService.reconcile', () => {
       execute: jest.fn().mockResolvedValue({ affected: 1 }),
     };
     const projector = {
-      projectReceipt: jest.fn().mockResolvedValue({ projected: true }),
+      projectReceipt: jest
+        .fn()
+        .mockRejectedValueOnce(new Error('permanent projection failure'))
+        .mockResolvedValueOnce({ projected: true }),
     };
     const service = new ActionApprovalService(
       {
@@ -45,7 +53,7 @@ describe('ActionApprovalService.reconcile', () => {
 
     await expect(
       service.reconcile({ processingBefore: new Date('2026-07-17T00:00:00Z') }),
-    ).resolves.toEqual({ unknown: 1, projected: 1 });
+    ).resolves.toEqual({ unknown: 1, projected: 1, failed: 1 });
 
     expect(staleSelect.orderBy).toHaveBeenCalledWith(
       'receipt.updatedAt',
@@ -68,5 +76,6 @@ describe('ActionApprovalService.reconcile', () => {
     expect(projector.projectReceipt).toHaveBeenCalledWith(
       'accepted-receipt-id',
     );
+    expect(projector.projectReceipt).toHaveBeenCalledWith('failed-receipt-id');
   });
 });

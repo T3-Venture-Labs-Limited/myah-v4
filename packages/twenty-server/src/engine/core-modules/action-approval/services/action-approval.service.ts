@@ -489,7 +489,7 @@ export class ActionApprovalService {
     processingBefore,
   }: {
     processingBefore: Date;
-  }): Promise<{ unknown: number; projected: number }> {
+  }): Promise<{ unknown: number; projected: number; failed: number }> {
     const receiptRepository = this.dataSource.getRepository(
       ActionExecutionReceiptEntity,
     );
@@ -530,14 +530,19 @@ export class ActionApprovalService {
       .take(RECONCILIATION_BATCH_SIZE)
       .getRawMany<{ id: string }>();
     let projected = 0;
+    let failed = 0;
     for (const { id } of acceptedReceiptIds) {
-      const result = await this.projector.projectReceipt(id);
-      if (result.projected) {
-        projected += 1;
+      try {
+        const result = await this.projector.projectReceipt(id);
+        if (result.projected) {
+          projected += 1;
+        }
+      } catch {
+        failed += 1;
       }
     }
 
-    return { unknown: staleProcessing.affected ?? 0, projected };
+    return { unknown: staleProcessing.affected ?? 0, projected, failed };
   }
 
   private async reserveBindingInTransaction(

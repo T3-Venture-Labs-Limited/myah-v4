@@ -5,12 +5,20 @@ describe('ActionApprovalReconciliationCronJob', () => {
     const actionApprovalService = {
       reconcile: jest.fn().mockResolvedValue({ unknown: 1, projected: 1 }),
     };
-    const cacheLockService = {
-      withLock: jest.fn(async (fn: () => Promise<void>) => await fn()),
+    const queryRunner = {
+      connect: jest.fn(),
+      release: jest.fn(),
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([{ locked: true }])
+        .mockResolvedValueOnce(undefined),
+    };
+    const dataSource = {
+      createQueryRunner: jest.fn().mockReturnValue(queryRunner),
     };
     const job = new ActionApprovalReconciliationCronJob(
       actionApprovalService as never,
-      cacheLockService as never,
+      dataSource as never,
     );
 
     const before = Date.now();
@@ -22,10 +30,16 @@ describe('ActionApprovalReconciliationCronJob', () => {
     expect(
       actionApprovalService.reconcile.mock.calls[0][0].processingBefore.getTime(),
     ).toBeLessThanOrEqual(before - 60_000);
-    expect(cacheLockService.withLock).toHaveBeenCalledWith(
-      expect.any(Function),
-      'action-approval-reconciliation',
-      expect.objectContaining({ ttl: expect.any(Number) }),
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT pg_try_advisory_lock(hashtext($1)) AS locked',
+      ['action-approval-reconciliation'],
     );
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      2,
+      'SELECT pg_advisory_unlock(hashtext($1))',
+      ['action-approval-reconciliation'],
+    );
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
   });
 });
