@@ -501,6 +501,7 @@ describe('MetronomeClientService', () => {
         customerId: 'customer-id',
         eventType: 'managed_provider_operation',
         properties: { operation: 'test' },
+        timestamp: '2026-07-16T12:00:00.000Z',
       }),
     ).resolves.toEqual({
       invoices: [
@@ -526,6 +527,7 @@ describe('MetronomeClientService', () => {
         {
           event_type: 'managed_provider_operation',
           properties: { operation: 'test' },
+          timestamp: '2026-07-16T12:00:00.000Z',
         },
       ],
       mode: 'replace',
@@ -674,6 +676,7 @@ describe('MetronomeClientService', () => {
           eventType: 'managed_provider_operation',
           properties: { apiKey: 'secret' },
           transactionId: 'operation-id',
+          timestamp: '2026-07-17T00:00:00.000Z',
         }),
     ],
   ])(

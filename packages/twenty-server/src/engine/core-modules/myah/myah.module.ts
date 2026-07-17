@@ -8,6 +8,6 @@ import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty
 @Module({
   imports: [TwentyConfigModule, ManagedProviderBillingModule],
   providers: [MyahTeamAuthorizationService],
-  exports: [MyahTeamAuthorizationService],
+  exports: [MyahTeamAuthorizationService, ManagedProviderBillingModule],
 })
 export class MyahModule {}

@@ -43,10 +43,16 @@ describe('validateSafeMetronomeEventProperties', () => {
     ['content-style property name', { messageContent: 'hello' }],
     ['generated camel content property name', { generatedText: 'secret' }],
     ['mailbox camel content property name', { mailboxContent: 'secret' }],
-    ['authorization camel credential property name', { authorizationHeader: 'secret' }],
+    [
+      'authorization camel credential property name',
+      { authorizationHeader: 'secret' },
+    ],
     ['credential token property name', { accessToken: 'secret' }],
     ['uppercase snake content property name', { CONTENT_VALUE: 'secret' }],
-    ['uppercase snake authorization property name', { AUTHORIZATION_HEADER: 'secret' }],
+    [
+      'uppercase snake authorization property name',
+      { AUTHORIZATION_HEADER: 'secret' },
+    ],
     ['oversized string value', { operation: 'x'.repeat(257) }],
     [
       'too many keys',
@@ -58,5 +64,23 @@ describe('validateSafeMetronomeEventProperties', () => {
     expect(() => validateSafeMetronomeEventProperties(properties)).toThrow(
       'Unsafe Metronome event properties',
     );
+  });
+
+  it.each([
+    'apiKeys',
+    'tokens',
+    'messages',
+    'prompts',
+    'header',
+    'headers',
+    'api_keys',
+    'api-keys',
+    'api keys',
+    'request headers',
+    'Authorization Headers',
+  ])('rejects sensitive plural or compound property name %s', (key) => {
+    expect(() =>
+      validateSafeMetronomeEventProperties({ [key]: 'secret' }),
+    ).toThrow('Unsafe Metronome event properties');
   });
 });

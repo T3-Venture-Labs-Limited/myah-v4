@@ -69,6 +69,7 @@ export type MetronomeUsageInput = {
   customerId: string;
   eventType: string;
   properties: Record<string, boolean | number | string>;
+  timestamp?: string;
 };
 
 export type MetronomeIngestUsageInput = MetronomeUsageInput & {
@@ -222,6 +223,7 @@ export class MetronomeClientService {
     customerId,
     eventType,
     properties,
+    timestamp,
   }: MetronomeUsageInput): Promise<MetronomeUsagePreview> {
     let safeProperties;
 
@@ -237,7 +239,13 @@ export class MetronomeClientService {
     const response = await this.execute(() =>
       client.v1.customers.previewEvents({
         customer_id: customerId,
-        events: [{ event_type: eventType, properties: safeProperties }],
+        events: [
+          {
+            event_type: eventType,
+            properties: safeProperties,
+            ...(timestamp === undefined ? {} : { timestamp }),
+          },
+        ],
         mode: 'replace',
       }),
     );
@@ -338,9 +346,9 @@ export class MetronomeClientService {
         event.matched_billable_metrics ??
         []
       ).map((billableMetric) => billableMetric.id),
-      matchedCustomerId: (
-        event as typeof event & { matched_customer?: { id?: string } | null }
-      ).matched_customer?.id ?? null,
+      matchedCustomerId:
+        (event as typeof event & { matched_customer?: { id?: string } | null })
+          .matched_customer?.id ?? null,
       timestamp: event.timestamp,
       processedAt: event.processed_at ?? null,
       properties: event.properties ?? {},

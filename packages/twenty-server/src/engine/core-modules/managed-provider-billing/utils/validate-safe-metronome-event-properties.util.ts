@@ -33,6 +33,12 @@ const UNSAFE_NORMALIZED_PROPERTY_NAMES = new Set([
   'text',
   'token',
   'userprompt',
+  'apikeys',
+  'headers',
+  'header',
+  'messages',
+  'prompts',
+  'tokens',
 ]);
 
 const UNSAFE_PROPERTY_SEGMENTS = new Set([
@@ -42,15 +48,20 @@ const UNSAFE_PROPERTY_SEGMENTS = new Set([
   'cookie',
   'credential',
   'email',
+  'header',
+  'headers',
   'message',
+  'messages',
   'password',
   'phone',
   'prompt',
+  'prompts',
   'raw',
   'response',
   'secret',
   'text',
   'token',
+  'tokens',
 ]);
 
 const UNSAFE_PROPERTY_TOKEN =
@@ -87,14 +98,19 @@ export const validateSafeMetronomeEventProperties = (
 };
 
 const isUnsafePropertyName = (key: string): boolean => {
-  const normalizedKey = key.replace(/[_-]/g, '').toLowerCase();
+  const normalizedKey = key.replace(/[\s_-]/g, '').toLowerCase();
+  const propertyNameSegments = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_-]+/)
+    .map((segment) => segment.toLowerCase());
 
   return (
     UNSAFE_PROPERTY_TOKEN.test(key) ||
     UNSAFE_NORMALIZED_PROPERTY_NAMES.has(normalizedKey) ||
-    key
-      .split(/[_-]/)
-      .some((segment) => UNSAFE_PROPERTY_SEGMENTS.has(segment.toLowerCase())) ||
+    (normalizedKey !== 'tokencount' &&
+      propertyNameSegments.some((segment) =>
+        UNSAFE_PROPERTY_SEGMENTS.has(segment),
+      )) ||
     /^(?:access|auth|refresh|id)token$/.test(normalizedKey)
   );
 };

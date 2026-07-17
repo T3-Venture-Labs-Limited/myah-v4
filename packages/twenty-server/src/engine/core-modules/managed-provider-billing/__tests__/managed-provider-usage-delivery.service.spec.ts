@@ -17,6 +17,7 @@ describe('ManagedProviderUsageDeliveryService', () => {
       id: 'operation-id',
       metronomeEventType: 'managed-provider-operation',
       deliveryAttemptCount: 0,
+      deliveryEventAt: null,
       metronomeAcceptedAt: null,
       reservedAmountCents: '7',
       settleAfter: null,
@@ -88,18 +89,23 @@ describe('ManagedProviderUsageDeliveryService', () => {
     jest.setSystemTime(new Date('2026-07-16T00:01:00.000Z'));
     await service.deliverUsage('operation-id');
 
-    const firstTimestamp = (
-      metronomeClientService.ingestUsage as jest.Mock
-    ).mock.calls[0][0].timestamp;
-    const secondTimestamp = (
-      metronomeClientService.ingestUsage as jest.Mock
-    ).mock.calls[1][0].timestamp;
+    const firstTimestamp = (metronomeClientService.ingestUsage as jest.Mock)
+      .mock.calls[0][0].timestamp;
+    const secondTimestamp = (metronomeClientService.ingestUsage as jest.Mock)
+      .mock.calls[1][0].timestamp;
 
     expect(firstTimestamp).toBe('2026-07-16T00:00:00.000Z');
     expect(secondTimestamp).toBe(firstTimestamp);
     expect(operation.deliveryEventAt).toEqual(
       new Date('2026-07-16T00:00:00.000Z'),
     );
+    expect(metronomeClientService.previewUsage).toHaveBeenCalledTimes(1);
+    expect(metronomeClientService.previewUsage).toHaveBeenCalledWith({
+      customerId: 'customer-id',
+      eventType: 'managed-provider-operation',
+      properties: { quantity: 3 },
+      timestamp: firstTimestamp,
+    });
     expect(manager.save).toHaveBeenCalledWith(
       ManagedProviderOperationEntity,
       expect.objectContaining({
@@ -359,6 +365,64 @@ describe('ManagedProviderUsageDeliveryService', () => {
         nextDeliveryAttemptAt: expect.any(Date),
         reservedAmountCents: '7',
         state: ManagedProviderOperationState.USAGE_PENDING,
+      }),
+    );
+  });
+
+  it('requires reconciliation immediately when the actual usage quote is ambiguous', async () => {
+    const operation = {
+      actualUsageProperties: { quantity: 3 },
+      deliveryAttemptCount: 0,
+      expectedProductIds: ['product-id'],
+      id: 'operation-id',
+      metronomeEventType: 'managed-provider-operation',
+      reservedAmountCents: '7',
+      state: ManagedProviderOperationState.USAGE_PENDING,
+      workspaceId: 'workspace-id',
+    };
+    const manager = {
+      findOne: jest.fn().mockResolvedValue(operation),
+      save: jest.fn().mockImplementation(async (_, value) => {
+        Object.assign(operation, value);
+        return operation;
+      }),
+    };
+    const operationRepository = {
+      findOneBy: jest.fn().mockResolvedValue(operation),
+      manager: { transaction: jest.fn((callback) => callback(manager)) },
+    } as unknown as Pick<
+      Repository<ManagedProviderOperationEntity>,
+      'findOneBy' | 'manager'
+    >;
+    const metronomeClientService = {
+      ingestUsage: jest.fn(),
+      previewUsage: jest.fn().mockResolvedValue({ invoices: [] }),
+    } as Pick<MetronomeClientService, 'ingestUsage' | 'previewUsage'>;
+    const workspaceCustomerService = {
+      ensureWorkspaceContract: jest.fn().mockResolvedValue('contract-id'),
+      ensureWorkspaceCustomer: jest.fn().mockResolvedValue('customer-id'),
+    } as Pick<
+      MetronomeWorkspaceCustomerService,
+      'ensureWorkspaceContract' | 'ensureWorkspaceCustomer'
+    >;
+    const configService = { get: jest.fn() } as unknown as Pick<
+      TwentyConfigService,
+      'get'
+    >;
+    const service = new ManagedProviderUsageDeliveryService(
+      operationRepository as Repository<ManagedProviderOperationEntity>,
+      metronomeClientService as MetronomeClientService,
+      workspaceCustomerService as MetronomeWorkspaceCustomerService,
+      configService as TwentyConfigService,
+    );
+
+    await service.deliverUsage('operation-id');
+
+    expect(metronomeClientService.ingestUsage).not.toHaveBeenCalled();
+    expect(manager.save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
       }),
     );
   });

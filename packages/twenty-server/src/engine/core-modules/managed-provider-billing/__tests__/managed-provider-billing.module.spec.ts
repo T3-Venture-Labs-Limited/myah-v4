@@ -8,6 +8,7 @@ import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.ent
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 
 import { ManagedProviderOperationEntity } from '../entities/managed-provider-operation.entity';
+import { ManagedProviderBillingRecoveryCronCommand } from '../crons/commands/managed-provider-billing-recovery.cron.command';
 import { MetronomeWorkspaceCustomerService } from '../services/metronome-workspace-customer.service';
 import { ManagedProviderOperationService } from '../services/managed-provider-operation.service';
 
@@ -64,6 +65,7 @@ describe('ManagedProviderBillingModule', () => {
     expect(exports).toContain(MetronomeWorkspaceCustomerService);
     expect(providers).toContain(ManagedProviderOperationService);
     expect(exports).toContain(ManagedProviderOperationService);
+    expect(exports).toContain(ManagedProviderBillingRecoveryCronCommand);
   });
   it('keeps the billing foundation Community-safe and reachable only through Myah', () => {
     const billingImports = Reflect.getMetadata(
@@ -84,7 +86,7 @@ describe('ManagedProviderBillingModule', () => {
       recursive: true,
     })
       .filter(
-        (path) =>
+        (path): path is string =>
           typeof path === 'string' &&
           path.endsWith('.ts') &&
           !path.includes('__tests__'),
@@ -95,7 +97,7 @@ describe('ManagedProviderBillingModule', () => {
       recursive: true,
     })
       .filter(
-        (path) =>
+        (path): path is string =>
           typeof path === 'string' &&
           path.endsWith('.ts') &&
           !path.includes('__tests__'),

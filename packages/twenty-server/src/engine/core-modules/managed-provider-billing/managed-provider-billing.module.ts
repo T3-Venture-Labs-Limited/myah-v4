@@ -42,6 +42,7 @@ import { MetronomeWorkspaceCustomerService } from './services/metronome-workspac
     ManagedProviderUsageDeliveryService,
     MetronomeClientService,
     MetronomeWorkspaceCustomerService,
+    ManagedProviderBillingRecoveryCronCommand,
   ],
 })
 export class ManagedProviderBillingModule {}

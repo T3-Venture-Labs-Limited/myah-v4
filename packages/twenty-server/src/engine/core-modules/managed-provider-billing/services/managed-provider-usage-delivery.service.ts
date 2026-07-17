@@ -44,6 +44,7 @@ export class ManagedProviderUsageDeliveryService {
       throw new Error('Managed provider usage facts are unavailable');
     }
 
+    const deliveryEventAt = await this.getOrPersistDeliveryEventAt(operationId);
     const customerId =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceCustomer(
         operation.workspaceId,
@@ -52,17 +53,36 @@ export class ManagedProviderUsageDeliveryService {
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceContract(
         operation.workspaceId,
       );
-    const preview = await this.metronomeClientService.previewUsage({
-      customerId,
-      eventType: operation.metronomeEventType,
-      properties: operation.actualUsageProperties,
-    });
-    const quotedActualAmountCents = getValidatedMetronomeUsageAmountCents({
-      contractId,
-      customerId,
-      expectedProductIds: operation.expectedProductIds,
-      preview,
-    });
+    let quotedActualAmountCents: bigint;
+
+    if (operation.quotedActualAmountCents != null) {
+      quotedActualAmountCents = BigInt(operation.quotedActualAmountCents);
+    } else {
+      const preview = await this.metronomeClientService.previewUsage({
+        customerId,
+        eventType: operation.metronomeEventType,
+        properties: operation.actualUsageProperties,
+        timestamp: deliveryEventAt.toISOString(),
+      });
+
+      try {
+        quotedActualAmountCents = getValidatedMetronomeUsageAmountCents({
+          contractId,
+          customerId,
+          expectedProductIds: operation.expectedProductIds,
+          preview,
+        });
+      } catch {
+        await this.markReconciliationRequired(operationId, null);
+
+        return;
+      }
+
+      quotedActualAmountCents = await this.getOrPersistQuotedActualAmountCents(
+        operationId,
+        quotedActualAmountCents,
+      );
+    }
 
     if (quotedActualAmountCents > BigInt(operation.reservedAmountCents)) {
       await this.markReconciliationRequired(
@@ -72,8 +92,6 @@ export class ManagedProviderUsageDeliveryService {
 
       return;
     }
-
-    const deliveryEventAt = await this.getOrPersistDeliveryEventAt(operationId);
 
     try {
       await this.metronomeClientService.ingestUsage({
@@ -129,7 +147,9 @@ export class ManagedProviderUsageDeliveryService {
     });
   }
 
-  private async getOrPersistDeliveryEventAt(operationId: string): Promise<Date> {
+  private async getOrPersistDeliveryEventAt(
+    operationId: string,
+  ): Promise<Date> {
     return this.operationRepository.manager.transaction(async (manager) => {
       const operation = await manager.findOne(ManagedProviderOperationEntity, {
         lock: { mode: 'pessimistic_write' },
@@ -152,6 +172,33 @@ export class ManagedProviderUsageDeliveryService {
       });
 
       return deliveryEventAt;
+    });
+  }
+
+  private async getOrPersistQuotedActualAmountCents(
+    operationId: string,
+    quotedActualAmountCents: bigint,
+  ): Promise<bigint> {
+    return this.operationRepository.manager.transaction(async (manager) => {
+      const operation = await manager.findOne(ManagedProviderOperationEntity, {
+        lock: { mode: 'pessimistic_write' },
+        where: { id: operationId },
+      });
+
+      if (operation?.state !== ManagedProviderOperationState.USAGE_PENDING) {
+        throw new Error('Managed provider operation is no longer pending');
+      }
+
+      if (operation.quotedActualAmountCents != null) {
+        return BigInt(operation.quotedActualAmountCents);
+      }
+
+      await manager.save(ManagedProviderOperationEntity, {
+        ...operation,
+        quotedActualAmountCents: quotedActualAmountCents.toString(),
+      });
+
+      return quotedActualAmountCents;
     });
   }
 
