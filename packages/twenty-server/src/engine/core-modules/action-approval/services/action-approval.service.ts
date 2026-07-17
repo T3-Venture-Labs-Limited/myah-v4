@@ -538,6 +538,15 @@ export class ActionApprovalService {
           projected += 1;
         }
       } catch {
+        await this.dataSource
+          .createQueryBuilder()
+          .update(ActionExecutionReceiptEntity)
+          .set({ updatedAt: new Date() })
+          .where('id = :id', { id })
+          .andWhere('state = :state', {
+            state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+          })
+          .execute();
         failed += 1;
       }
     }
