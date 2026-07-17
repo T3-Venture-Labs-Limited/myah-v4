@@ -147,8 +147,8 @@ describe('ManagedProviderBillingRecoveryService', () => {
     );
   });
 
-  it('pages through every due accepted operation in bounded batches', async () => {
-    const { metronomeClientService, operationRepository, service } =
+  it('pages through every due accepted operation after a rate limit', async () => {
+    const { metronomeClientService, operationRepository, save, service } =
       createService();
     const firstBatch = Array.from({ length: 100 }, (_, index) => ({
       ...acceptedOperation,
@@ -165,15 +165,13 @@ describe('ManagedProviderBillingRecoveryService', () => {
       .mockResolvedValueOnce(firstBatch)
       .mockResolvedValueOnce([finalOperation]);
     (metronomeClientService.searchUsageEvents as jest.Mock).mockRejectedValue(
-      new Error('temporary search failure'),
+      new MetronomeClientException(MetronomeClientExceptionCode.RATE_LIMITED),
     );
 
     await service.recover();
 
-    expect(metronomeClientService.searchUsageEvents).toHaveBeenCalledTimes(2);
-    expect(metronomeClientService.searchUsageEvents).toHaveBeenLastCalledWith([
-      `managed-provider-usage:${finalOperation.id}`,
-    ]);
+    expect(metronomeClientService.searchUsageEvents).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledTimes(101);
   });
 
   it('settles only a matched accepted event after a fresh balance read', async () => {

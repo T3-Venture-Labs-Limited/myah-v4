@@ -100,6 +100,7 @@ export class ManagedProviderBillingRecoveryService {
 
   private async recoverAcceptedOperations(now: Date): Promise<void> {
     let cursor: string | undefined;
+    let isSearchRateLimited = false;
 
     while (true) {
       const acceptedOperations = await this.operationRepository.find({
@@ -122,33 +123,41 @@ export class ManagedProviderBillingRecoveryService {
       );
 
       if (operationsWithinSettlementWindow.length > 0) {
-        let events: MetronomeUsageEvent[] | null = null;
-
-        try {
-          events = await this.metronomeClientService.searchUsageEvents(
-            operationsWithinSettlementWindow.map((operation) =>
-              this.getTransactionId(operation.id),
-            ),
-          );
-        } catch (error) {
-          const isRateLimited =
-            error instanceof MetronomeClientException &&
-            error.code === MetronomeClientExceptionCode.RATE_LIMITED;
-
+        if (isSearchRateLimited) {
           await Promise.all(
             operationsWithinSettlementWindow.map((operation) =>
-              this.scheduleSettlementRetry(operation, now, isRateLimited),
+              this.scheduleSettlementRetry(operation, now, true),
             ),
           );
+        } else {
+          let events: MetronomeUsageEvent[] | null = null;
 
-          if (isRateLimited) {
-            return;
+          try {
+            events = await this.metronomeClientService.searchUsageEvents(
+              operationsWithinSettlementWindow.map((operation) =>
+                this.getTransactionId(operation.id),
+              ),
+            );
+          } catch (error) {
+            isSearchRateLimited =
+              error instanceof MetronomeClientException &&
+              error.code === MetronomeClientExceptionCode.RATE_LIMITED;
+
+            await Promise.all(
+              operationsWithinSettlementWindow.map((operation) =>
+                this.scheduleSettlementRetry(
+                  operation,
+                  now,
+                  isSearchRateLimited,
+                ),
+              ),
+            );
           }
-        }
 
-        if (events !== null) {
-          for (const operation of operationsWithinSettlementWindow) {
-            await this.settleIfVerified(operation, events, now);
+          if (events !== null) {
+            for (const operation of operationsWithinSettlementWindow) {
+              await this.settleIfVerified(operation, events, now);
+            }
           }
         }
       }
