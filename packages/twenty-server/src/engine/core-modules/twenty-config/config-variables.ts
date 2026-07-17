@@ -10,6 +10,8 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
+  Min,
   ValidateIf,
   type ValidationError,
   validateSync,
@@ -107,6 +109,56 @@ export class ConfigVariables {
   })
   @IsOptional()
   MYAH_TEAM_ALLOWED_EMAILS?: string;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Enable Myah managed-provider billing through Metronome',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  METRONOME_ENABLED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    isSensitive: true,
+    description: 'API key for Myah managed-provider billing through Metronome',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.METRONOME_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  METRONOME_API_KEY = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Metronome USD rate-card alias for Myah managed-provider billing',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.METRONOME_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  METRONOME_RATE_CARD_ALIAS = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Milliseconds to wait before verifying Metronome usage settlement',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.NUMBER,
+  })
+  @IsOptional()
+  @Min(10_000)
+  METRONOME_USAGE_SETTLEMENT_DELAY_MS = 30_000;
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,
