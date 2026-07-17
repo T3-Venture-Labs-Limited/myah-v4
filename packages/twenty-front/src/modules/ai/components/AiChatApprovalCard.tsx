@@ -169,6 +169,25 @@ type GetActionApprovalProposalData = {
   };
 };
 
+type ExactActionApprovalProposal = GetActionApprovalProposalData['getActionApprovalProposal'] & {
+  action: 'send_instagram_reply';
+  actionVersion: 1;
+  body: string;
+  recipientLabel: string;
+  sendingAccountLabel: string;
+  state: 'PENDING';
+};
+
+const isExactActionApprovalProposal = (
+  proposal: GetActionApprovalProposalData['getActionApprovalProposal'] | undefined,
+): proposal is ExactActionApprovalProposal =>
+  proposal?.action === 'send_instagram_reply' &&
+  proposal.actionVersion === 1 &&
+  proposal.state === 'PENDING' &&
+  typeof proposal.body === 'string' &&
+  typeof proposal.recipientLabel === 'string' &&
+  typeof proposal.sendingAccountLabel === 'string';
+
 export const AiChatApprovalCard = ({
   pendingApproval,
 }: AiChatApprovalCardProps) => {
@@ -191,37 +210,36 @@ export const AiChatApprovalCard = ({
     skip: !actionApprovalBindingId,
   });
   const proposal = proposalData?.getActionApprovalProposal;
-  const proposalExpiresAt = proposal
-    ? Date.parse(proposal.expiresAt)
+  const exactProposal = isExactActionApprovalProposal(proposal)
+    ? proposal
+    : undefined;
+  const proposalExpiresAt = exactProposal
+    ? Date.parse(exactProposal.expiresAt)
     : Number.NaN;
   const isActionApprovalProposalDecidable =
-    Boolean(actionApprovalBindingId) &&
+    actionApprovalBindingId !== undefined &&
     !isProposalLoading &&
     !proposalError &&
-    proposal?.action === 'send_instagram_reply' &&
-    proposal.actionVersion === 1 &&
-    proposal.state === 'PENDING' &&
-    typeof proposal.body === 'string' &&
-    typeof proposal.recipientLabel === 'string' &&
-    typeof proposal.sendingAccountLabel === 'string' &&
+    exactProposal !== undefined &&
     Number.isFinite(proposalExpiresAt) &&
     proposalExpiresAt > Date.now();
   const isDecisionDisabled =
     isSubmitting ||
-    (Boolean(actionApprovalBindingId) && !isActionApprovalProposalDecidable);
-  const request =
+    (actionApprovalBindingId !== undefined &&
+      !isActionApprovalProposalDecidable);
+  const request: RequestApprovalToolInput =
     'request' in pendingApproval
       ? pendingApproval.request
-      : isActionApprovalProposalDecidable && proposal
-        ? ({
+      : isActionApprovalProposalDecidable && exactProposal
+        ? {
             title: t`Review Instagram reply`,
             summary: t`Review the exact server-derived Instagram reply before it is sent.`,
             actionKind: 'external_write',
             riskLevel: 'medium',
             consequences: [t`The reply will be sent to the existing conversation.`],
-            preview: { format: 'text', content: proposal.body },
-          } satisfies RequestApprovalToolInput)
-        : ({
+            preview: { format: 'text', content: exactProposal.body },
+          }
+        : {
             title: t`Instagram reply unavailable`,
             summary: t`The exact server-derived Instagram reply is unavailable.`,
             actionKind: 'external_write',
@@ -229,7 +247,7 @@ export const AiChatApprovalCard = ({
             consequences: [
               t`The reply cannot be approved until its source is available.`,
             ],
-          } satisfies RequestApprovalToolInput);
+          };
 
   const handleDecision = async (decision: ApprovalDecision) => {
     if (isDecisionDisabled) {
@@ -280,10 +298,10 @@ export const AiChatApprovalCard = ({
         </StyledSection>
       )}
 
-      {isActionApprovalProposalDecidable && proposal && (
+      {isActionApprovalProposalDecidable && exactProposal && (
         <StyledMeta>
-          <span>{t`To`}: {proposal.recipientLabel}</span>
-          <span>{t`From`}: {proposal.sendingAccountLabel}</span>
+          <span>{t`To`}: {exactProposal.recipientLabel}</span>
+          <span>{t`From`}: {exactProposal.sendingAccountLabel}</span>
         </StyledMeta>
       )}
 

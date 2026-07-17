@@ -35,13 +35,15 @@ describe('AiChatActionApprovalEvidenceRenderer', () => {
 
     const { rerender } = render(
       <AiChatActionApprovalEvidenceRenderer
-        {...({ bindingId, lifecycleState: 'streaming' } as never)}
+        bindingId={bindingId}
+        lifecycleState="streaming"
       />,
     );
 
     rerender(
       <AiChatActionApprovalEvidenceRenderer
-        {...({ bindingId, lifecycleState: 'complete' } as never)}
+        bindingId={bindingId}
+        lifecycleState="complete"
       />,
     );
 

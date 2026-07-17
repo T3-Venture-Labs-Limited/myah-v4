@@ -61,7 +61,7 @@ const pendingApproval: AgentChatPendingApproval = {
   },
 };
 
-const renderApprovalCard = (approval = pendingApproval) =>
+const renderApprovalCard = (approval: AgentChatPendingApproval = pendingApproval) =>
   render(
     <I18nProvider i18n={i18n}>
       <ThemeProvider colorScheme="light">
@@ -87,9 +87,11 @@ const serverDerivedProposal = {
   expiresAt: '2099-07-17T10:30:00.000Z',
 };
 
+const mockUseQuery = useQuery as unknown as jest.Mock;
+
 describe('AiChatApprovalCard', () => {
   beforeEach(() => {
-    (useQuery as jest.Mock).mockReturnValue({
+    mockUseQuery.mockReturnValue({
       data: undefined,
       loading: false,
       error: undefined,
@@ -116,7 +118,7 @@ describe('AiChatApprovalCard', () => {
   });
 
   it('renders the exact guarded server proposal instead of a generic fallback', () => {
-    (useQuery as jest.Mock).mockReturnValue({
+    mockUseQuery.mockReturnValue({
       data: { getActionApprovalProposal: serverDerivedProposal },
       loading: false,
       error: undefined,
@@ -209,7 +211,7 @@ describe('AiChatApprovalCard', () => {
       },
     ],
   ])('disables every decision when %s', (_case, queryResult) => {
-    (useQuery as jest.Mock).mockReturnValue(queryResult);
+    mockUseQuery.mockReturnValue(queryResult);
 
     renderApprovalCard(boundApproval);
 
