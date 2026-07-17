@@ -620,6 +620,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
 
   beforeAll(async () => {
     await dataSource.initialize();
+    await dataSource.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
   });
 
   beforeEach(async () => {

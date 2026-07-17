@@ -21,6 +21,9 @@ import { InstagramReplyDraftService } from 'src/engine/core-modules/instagram-re
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
 import { createRequestApprovalTool } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
+import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
+
+import { createWorkspace } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-workspace.util';
 
 jest.mock(
   'src/engine/core-modules/code-interpreter/code-interpreter.service',
@@ -116,11 +119,84 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     const workspaceRepository = {
       findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
     };
+    const draftRepository = {
+      findOneBy: async ({ id }: { id: string }) => {
+        const [draft] = await dataSource.query(
+          `SELECT * FROM "${projectionSchemaName}"."_myahInstagramReplyDraft"
+           WHERE "id" = $1`,
+          [id],
+        );
+
+        return draft ?? null;
+      },
+    };
+    const conversationRepository = {
+      findOneBy: async ({ id }: { id: string }) => {
+        const [conversation] = await dataSource.query(
+          `SELECT * FROM "${projectionSchemaName}"."_myahSocialConversation"
+           WHERE "id" = $1`,
+          [id],
+        );
+
+        return conversation ?? null;
+      },
+    };
+    const accountRepository = {
+      findOneBy: async ({ id }: { id: string }) => {
+        const [account] = await dataSource.query(
+          `SELECT * FROM "${projectionSchemaName}"."_myahInstagramAccount"
+           WHERE "id" = $1`,
+          [id],
+        );
+
+        return account ?? null;
+      },
+      find: async () =>
+        dataSource.query(
+          `SELECT * FROM "${projectionSchemaName}"."_myahInstagramAccount"
+           WHERE "status" = 'ACTIVE'`,
+        ),
+    };
+    const socialMessageRepository = {
+      find: async ({
+        where: { id, conversationId, providerMessageId },
+      }: {
+        where: {
+          id: string;
+          conversationId: string;
+          providerMessageId: string;
+        };
+      }) =>
+        dataSource.query(
+          `SELECT * FROM "${projectionSchemaName}"."_myahSocialMessage"
+           WHERE "id" = $1
+             AND "conversationId" = $2
+             AND "providerMessageId" = $3
+             AND "direction" = 'INBOUND'`,
+          [id, conversationId, providerMessageId],
+        ),
+    };
     const globalWorkspaceOrmManager = {
       executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
         callback(),
       ),
       getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
+      getRepository: jest.fn(
+        async (_workspaceId: string, objectName: string) => {
+          switch (objectName) {
+            case 'myahInstagramReplyDraft':
+              return draftRepository;
+            case 'myahSocialConversation':
+              return conversationRepository;
+            case 'myahInstagramAccount':
+              return accountRepository;
+            case 'myahSocialMessage':
+              return socialMessageRepository;
+            default:
+              throw new Error(`Unexpected workspace repository: ${objectName}`);
+          }
+        },
+      ),
     };
     const objectMetadataRepository = {
       find: jest.fn().mockResolvedValue([
@@ -337,6 +413,28 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       synchronize: false,
     });
     await dataSource.initialize();
+    const workspaceQueryRunner = dataSource.createQueryRunner();
+
+    await workspaceQueryRunner.connect();
+    try {
+      await createWorkspace({
+        queryRunner: workspaceQueryRunner,
+        schemaName: 'core',
+        createWorkspaceInput: {
+          id: workspaceId,
+          displayName: 'Action approval integration',
+          subdomain: 'action-approval-integration',
+          inviteHash: 'action-approval-integration.dev-invite-hash',
+          logo: '',
+          activationStatus: WorkspaceActivationStatus.PENDING_CREATION,
+          isTwoFactorAuthenticationEnforced: false,
+          workspaceCustomApplicationId:
+            '90000000-0000-4000-8000-000000000001',
+        },
+      });
+    } finally {
+      await workspaceQueryRunner.release();
+    }
 
     const [{ exists }] = await dataSource.query<{ exists: boolean }[]>(
       `SELECT to_regclass('core."actionApprovalBinding"') IS NOT NULL AS "exists"`,
@@ -373,6 +471,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         "label" varchar,
         "connectedAccountId" varchar NOT NULL,
         "composioUserId" varchar NOT NULL,
+        "igUserId" varchar,
         "status" varchar NOT NULL DEFAULT 'ACTIVE',
         "deletedAt" timestamptz,
         "createdAt" timestamptz NOT NULL DEFAULT NOW(),
@@ -407,6 +506,8 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         "title" varchar,
         "body" text NOT NULL,
         "conversationId" uuid,
+        "inboundMessageRecordId" uuid,
+        "inboundProviderMessageId" varchar,
         "status" varchar NOT NULL,
         "source" varchar,
         "generatedAt" timestamptz,
@@ -431,6 +532,9 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         "conversationId" uuid,
         "direction" varchar NOT NULL,
         "sentVia" varchar NOT NULL,
+        "providerMessageId" varchar,
+        "providerCreatedAt" timestamptz,
+        "deletedAt" timestamptz,
         "createdAt" timestamptz NOT NULL,
         "updatedAt" timestamptz NOT NULL,
         "createdBySource" varchar NOT NULL,
@@ -453,6 +557,8 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         ADD COLUMN IF NOT EXISTS "deletedAt" timestamptz,
         ADD COLUMN IF NOT EXISTS "createdAt" timestamptz NOT NULL DEFAULT NOW(),
         ADD COLUMN IF NOT EXISTS "createdBySource" varchar,
+        ADD COLUMN IF NOT EXISTS "inboundMessageRecordId" uuid,
+        ADD COLUMN IF NOT EXISTS "inboundProviderMessageId" varchar,
         ADD COLUMN IF NOT EXISTS "createdByWorkspaceMemberId" uuid,
         ADD COLUMN IF NOT EXISTS "createdByName" varchar,
         ADD COLUMN IF NOT EXISTS "createdByContext" jsonb,
@@ -462,8 +568,15 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         ADD COLUMN IF NOT EXISTS "updatedByContext" jsonb
     `);
     await dataSource.query(`
+      ALTER TABLE "${projectionSchemaName}"."_myahInstagramAccount"
+        ADD COLUMN IF NOT EXISTS "igUserId" varchar
+    `);
+    await dataSource.query(`
       ALTER TABLE "${projectionSchemaName}"."_myahSocialMessage"
-        ADD COLUMN IF NOT EXISTS "conversationId" uuid
+        ADD COLUMN IF NOT EXISTS "conversationId" uuid,
+        ADD COLUMN IF NOT EXISTS "providerMessageId" varchar,
+        ADD COLUMN IF NOT EXISTS "providerCreatedAt" timestamptz,
+        ADD COLUMN IF NOT EXISTS "deletedAt" timestamptz
     `);
   });
 
@@ -725,7 +838,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
     const reconciled = await service.reconcile({
       processingBefore: new Date('2031-01-01T00:00:00.000Z'),
     });
-    expect(reconciled).toEqual({ unknown: 1, projected: 0 });
+    expect(reconciled).toEqual({ unknown: 1, projected: 0, failed: 0 });
   });
 
   it('preserves PROVIDER_ACCEPTED after injected post-response loss and replays with zero provider calls', async () => {

@@ -1,5 +1,7 @@
 import { type UpgradeStep } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
 import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784106536001-add-instagram-reply-approval-provider-binding';
+import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-evolve-instagram-approval-to-action-authority';
+import { FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784112963057-finalize-instagram-approval-action-authority';
 
 import {
   type IntegrationTestContext,
@@ -20,6 +22,15 @@ const unrelatedMigrationName = '2.19.0_TestUnrelatedMigration_1784114000000';
 
 const dropApprovalSchema = async (context: IntegrationTestContext) => {
   await context.dataSource.query(
+    'DROP TABLE IF EXISTS core."actionExecutionReceipt" CASCADE',
+  );
+  await context.dataSource.query(
+    'DROP TABLE IF EXISTS core."actionApprovalBindingEvidenceLink" CASCADE',
+  );
+  await context.dataSource.query(
+    'DROP TABLE IF EXISTS core."actionApprovalBinding" CASCADE',
+  );
+  await context.dataSource.query(
     'DROP TABLE IF EXISTS core."instagramReplyExecutionReceipt" CASCADE',
   );
   await context.dataSource.query(
@@ -37,7 +48,10 @@ const restoreApprovalSchema = async (context: IntegrationTestContext) => {
   const queryRunner = context.dataSource.createQueryRunner();
 
   try {
-    await new AddInstagramReplyApprovalProviderBindingSlowInstanceCommand().up(
+    await new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand().up(
+      queryRunner,
+    );
+    await new FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand().up(
       queryRunner,
     );
   } finally {
@@ -122,6 +136,15 @@ const getApprovalTables = async (context: IntegrationTestContext) =>
       to_regclass('core."instagramReplyExecutionReceipt"') AS "executionReceipt"`,
   );
 
+const getActionAuthorityTables = async (context: IntegrationTestContext) =>
+  context.dataSource.query<
+    { binding: string | null; receipt: string | null }[]
+  >(
+    `SELECT
+      to_regclass('core."actionApprovalBinding"') AS "binding",
+      to_regclass('core."actionExecutionReceipt"') AS "receipt"`,
+  );
+
 const getProviderColumns = async (context: IntegrationTestContext) =>
   context.dataSource.query<{ column_name: string; data_type: string }[]>(
     `SELECT column_name, data_type
@@ -159,16 +182,13 @@ describe('UpgradeSequenceRunnerService — provider-binding recovery (integratio
       await expect(
         getProviderBindingMigrations(context),
       ).resolves.toStrictEqual(originalProviderBindingMigrations);
-      const approvalTables = await getApprovalTables(context);
+      const actionAuthorityTables = await getActionAuthorityTables(context);
 
-      expect(approvalTables).toHaveLength(1);
-      expect(approvalTables[0]).toMatchObject({
-        approvalRequest: expect.any(String),
-        executionReceipt: expect.any(String),
-      });
-      await expect(getProviderColumns(context)).resolves.toStrictEqual([
-        { column_name: 'providerConversationId', data_type: 'text' },
-        { column_name: 'recipientIgsid', data_type: 'text' },
+      expect(actionAuthorityTables).toStrictEqual([
+        {
+          binding: 'core."actionApprovalBinding"',
+          receipt: 'core."actionExecutionReceipt"',
+        },
       ]);
     } finally {
       setMockActiveWorkspaceIds([]);
