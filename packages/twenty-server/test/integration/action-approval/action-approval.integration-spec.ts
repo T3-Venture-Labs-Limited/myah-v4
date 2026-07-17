@@ -121,9 +121,26 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       ),
       getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
     };
+    const objectMetadataRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: '90000000-0000-4000-8000-000000000015',
+          universalIdentifier: '85762d24-541b-407f-9d6a-cdf89552c665',
+        },
+        {
+          id: '90000000-0000-4000-8000-000000000016',
+          universalIdentifier: '36817464-855f-42db-9fbb-f8853643f8d6',
+        },
+        {
+          id: '90000000-0000-4000-8000-000000000017',
+          universalIdentifier: '2d357469-831a-4629-ad4b-47335900e883',
+        },
+      ]),
+    };
     const actionDefinition = new InstagramReplyActionDefinition(
       workspaceRepository as never,
       globalWorkspaceOrmManager as never,
+      objectMetadataRepository as never,
     );
     const draftService = new InstagramReplyDraftService(
       workspaceRepository as never,
