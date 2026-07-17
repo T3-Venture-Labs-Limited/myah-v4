@@ -73,6 +73,10 @@ describe('request_approval tool', () => {
       contentDigest: 'a'.repeat(64),
       recipientFingerprint: 'b'.repeat(64),
       sendingAccountFingerprint: 'c'.repeat(64),
+      inboundMessageId: 'provider-inbound-message-id',
+      inboundSenderIgsid: 'recipient-igsid',
+      inboundDirection: 'INBOUND',
+      inboundReceivedAt: new Date('2026-07-17T11:30:00.000Z'),
       initiatorUserWorkspaceId: 'member-id',
       threadId: 'thread-id',
       evidenceLinks: [],
@@ -85,7 +89,9 @@ describe('request_approval tool', () => {
         .fn()
         .mockResolvedValue({ id: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b' }),
     };
-    const factory = createRequestApprovalTool as unknown as (options: unknown) => {
+    const factory = createRequestApprovalTool as unknown as (
+      options: unknown,
+    ) => {
       execute: (value: unknown) => Promise<unknown>;
     };
 

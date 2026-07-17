@@ -79,7 +79,7 @@ const buildDefinition = ({
           conversationId: message.conversationId,
           providerMessageId: message.inboundMessageId,
           direction: message.inboundDirection,
-          createdAt: message.inboundReceivedAt,
+          providerCreatedAt: message.inboundReceivedAt,
         })),
       ),
     },

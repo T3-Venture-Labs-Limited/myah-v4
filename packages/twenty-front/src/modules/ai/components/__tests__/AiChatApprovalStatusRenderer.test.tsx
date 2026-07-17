@@ -11,7 +11,11 @@ jest.mock('@apollo/client/react', () => ({
 }));
 
 jest.mock('@/ai/components/AiChatActionApprovalEvidenceRenderer', () => ({
-  AiChatActionApprovalEvidenceRenderer: () => null,
+  AiChatActionApprovalEvidenceRenderer: ({
+    lifecycleState,
+  }: {
+    lifecycleState: string;
+  }) => <span data-testid="approval-evidence">{lifecycleState}</span>,
 }));
 
 const bindingId = 'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
@@ -48,5 +52,56 @@ describe('AiChatApprovalStatusRenderer', () => {
     expect(screen.getByText('Expired')).toBeInTheDocument();
     expect(screen.queryByText('Approved')).not.toBeInTheDocument();
     expect(screen.queryByText('untrusted')).not.toBeInTheDocument();
+  });
+
+  it('refetches guarded state when opaque result status changes', () => {
+    mockUseQuery.mockReturnValue({
+      data: { getActionApprovalProposal: { state: 'PENDING' } },
+    } as never);
+    const { rerender } = render(
+      <I18nProvider i18n={i18n}>
+        <ThemeProvider colorScheme="light">
+          <AiChatApprovalStatusRenderer
+            toolPart={
+              {
+                output: {
+                  result: {
+                    status: 'pending',
+                    actionApprovalBindingId: bindingId,
+                  },
+                },
+              } as never
+            }
+            isStreaming={false}
+          />
+        </ThemeProvider>
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId('approval-evidence')).toHaveTextContent(
+      'pending:PENDING:complete',
+    );
+
+    rerender(
+      <I18nProvider i18n={i18n}>
+        <ThemeProvider colorScheme="light">
+          <AiChatApprovalStatusRenderer
+            toolPart={
+              {
+                output: {
+                  result: {
+                    status: 'resolved',
+                    actionApprovalBindingId: bindingId,
+                  },
+                },
+              } as never
+            }
+            isStreaming={false}
+          />
+        </ThemeProvider>
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId('approval-evidence')).toHaveTextContent(
+      'resolved:PENDING:complete',
+    );
   });
 });

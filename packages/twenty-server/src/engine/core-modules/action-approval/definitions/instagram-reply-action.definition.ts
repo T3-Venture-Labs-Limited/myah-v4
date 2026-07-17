@@ -61,7 +61,7 @@ type InstagramSocialMessageRecord = ObjectRecord & {
   conversationId: string;
   providerMessageId: string | null;
   direction: string;
-  createdAt: Date;
+  providerCreatedAt: Date;
 };
 
 type InstagramAccountRecord = ObjectRecord & {
@@ -195,6 +195,7 @@ export class InstagramReplyActionDefinition {
       workspaceId,
       binding.draftId,
       binding.initiatorUserWorkspaceId,
+      binding.inboundMessageId,
     );
     const evidenceObjectMetadataIds =
       await this.resolveEvidenceObjectMetadataIds(workspaceId);
@@ -224,6 +225,7 @@ export class InstagramReplyActionDefinition {
       workspaceId,
       binding.draftId,
       binding.initiatorUserWorkspaceId,
+      binding.inboundMessageId ?? undefined,
     );
     const evidenceObjectMetadataIds =
       await this.resolveEvidenceObjectMetadataIds(workspaceId);
@@ -423,6 +425,7 @@ export class InstagramReplyActionDefinition {
     workspaceId: string,
     draftId: string,
     initiatorUserWorkspaceId: string,
+    boundInboundMessageId?: string,
   ): Promise<
     CanonicalInstagramReplyGraph & {
       draftLabel: string;
@@ -479,8 +482,14 @@ export class InstagramReplyActionDefinition {
             }),
             accountRepository.find({ where: { status: 'ACTIVE' } }),
             socialMessageRepository.find({
-              where: { conversationId: conversation.id, direction: 'INBOUND' },
-              order: { createdAt: 'DESC' },
+              where: {
+                conversationId: conversation.id,
+                direction: 'INBOUND',
+                ...(boundInboundMessageId
+                  ? { providerMessageId: boundInboundMessageId }
+                  : {}),
+              },
+              order: { providerCreatedAt: 'DESC' },
               take: 1,
             }),
           ]);
@@ -518,7 +527,7 @@ export class InstagramReplyActionDefinition {
     const composioUserId = graph.account.composioUserId?.trim();
     const igUserId = graph.account.igUserId?.trim();
     const inboundMessageId = graph.inboundMessage.providerMessageId?.trim();
-    const inboundReceivedAt = graph.inboundMessage.createdAt;
+    const inboundReceivedAt = graph.inboundMessage.providerCreatedAt;
     if (
       graph.draft.sentAt ||
       graph.draft.status !== 'NEEDS_REVIEW' ||

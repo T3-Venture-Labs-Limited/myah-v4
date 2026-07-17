@@ -30,6 +30,7 @@ const canonicalGraph = {
   conversationId: '00000000-0000-4000-8000-000000000006',
   providerConversationId: 'provider-conversation-id',
   recipientIgsid: 'recipient-igsid',
+  inboundRecordId: '00000000-0000-4000-8000-000000000008',
   inboundMessageId: expectedActionBinding.inboundMessageId,
   inboundSenderIgsid: expectedActionBinding.inboundSenderIgsid,
   inboundDirection: expectedActionBinding.inboundDirection,

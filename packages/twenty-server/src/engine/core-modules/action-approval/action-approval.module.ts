@@ -12,6 +12,7 @@ import { ActionApprovalService } from 'src/engine/core-modules/action-approval/s
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
 import { ActionReceiptRedactionService } from 'src/engine/core-modules/action-approval/services/action-receipt-redaction.service';
 import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-modules/action-approval/services/action-receipt-workspace-projection-writer.service';
+import { CacheLockModule } from 'src/engine/core-modules/cache-lock/cache-lock.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
@@ -25,6 +26,7 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     GlobalWorkspaceDataSourceModule,
     WorkspaceCacheModule,
     PermissionsModule,
+    CacheLockModule,
     TypeOrmModule.forFeature([
       ActionApprovalBindingEntity,
       ActionApprovalBindingEvidenceLinkEntity,
@@ -53,6 +55,7 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ActionReceiptProjectorService,
     ActionReceiptRedactionService,
     InstagramReplyActionDefinition,
+    ActionApprovalReconciliationCronCommand,
   ],
 })
 export class ActionApprovalModule {}

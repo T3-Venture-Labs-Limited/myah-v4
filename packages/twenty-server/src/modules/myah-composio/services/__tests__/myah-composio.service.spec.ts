@@ -783,6 +783,32 @@ describe('MyahComposioService', () => {
     });
   });
 
+  it('bounds provider fetches below the receipt reconciliation grace period', async () => {
+    const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        successful: true,
+        data: { message_id: 'provider-message-id' },
+      }),
+    });
+
+    const service = new MyahComposioService();
+
+    await service.executeInstagramTool({
+      workspaceId: 'workspace-id',
+      connectedAccountId: 'connected-account-id',
+      toolSlug: 'INSTAGRAM_SEND_TEXT_MESSAGE',
+      arguments: { recipient_id: 'recipient-id', text: 'Hello' },
+    });
+
+    expect(timeoutSpy).toHaveBeenCalledWith(30_000);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it('returns a safe provider failure with the normalized subcode for a bounded Instagram tool call', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,

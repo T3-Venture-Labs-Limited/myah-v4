@@ -11,6 +11,7 @@ import {
   SOCIAL_MESSAGE_DIRECTION_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_MESSAGE_OBJECT_UNIVERSAL_IDENTIFIER,
   SOCIAL_MESSAGE_PROVIDER_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_MESSAGE_PROVIDER_CREATED_AT_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_MESSAGE_SENT_VIA_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_MESSAGE_TEXT_FIELD_UNIVERSAL_IDENTIFIER,
   SOCIAL_MESSAGE_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
@@ -109,6 +110,16 @@ export default defineObject({
       defaultValue: null,
       description:
         'Instagram message id when known. Manual first-DM rows may not have one before reconciliation.',
+    },
+    {
+      universalIdentifier:
+        SOCIAL_MESSAGE_PROVIDER_CREATED_AT_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.DATE_TIME,
+      label: 'Provider created at',
+      name: 'providerCreatedAt',
+      isNullable: true,
+      defaultValue: null,
+      description: 'Timestamp reported by Instagram for this message.',
     },
     {
       universalIdentifier:

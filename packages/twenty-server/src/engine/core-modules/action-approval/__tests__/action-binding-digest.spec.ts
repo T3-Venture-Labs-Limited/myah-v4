@@ -12,6 +12,10 @@ describe('action binding digest', () => {
     contentDigest: 'a'.repeat(64),
     recipientFingerprint: 'b'.repeat(64),
     sendingAccountFingerprint: 'c'.repeat(64),
+    inboundMessageId: 'provider-inbound-message-id',
+    inboundSenderIgsid: 'recipient-igsid',
+    inboundDirection: 'INBOUND' as const,
+    inboundReceivedAt: new Date('2026-07-17T11:30:00.000Z'),
     threadId: '00000000-0000-4000-8000-000000000003',
     initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000004',
     evidenceLinks: [],
@@ -34,6 +38,10 @@ describe('action binding digest', () => {
     ['contentDigest', 'd'.repeat(64)],
     ['recipientFingerprint', 'e'.repeat(64)],
     ['sendingAccountFingerprint', 'f'.repeat(64)],
+    ['inboundMessageId', 'other-provider-inbound-message-id'],
+    ['inboundSenderIgsid', 'other-recipient-igsid'],
+    ['inboundDirection', 'OUTBOUND'],
+    ['inboundReceivedAt', new Date('2026-07-17T11:31:00.000Z')],
   ])('changes the logical key when %s changes', (field, value) => {
     expect(
       computeLogicalActionKey({ ...base, [field]: value } as typeof base),

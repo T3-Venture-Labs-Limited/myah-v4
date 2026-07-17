@@ -85,7 +85,7 @@ export const AiChatApprovalStatusRenderer = ({
     ? (proposalData?.getActionApprovalProposal?.state ??
       (resultStatus === 'pending' ? 'PENDING' : 'RESOLVED'))
     : (resultStatus ?? 'pending');
-  const evidenceLifecycleState = `${status}:${isStreaming ? 'streaming' : 'complete'}`;
+  const evidenceLifecycleState = `${resultStatus ?? 'unknown'}:${status}:${isStreaming ? 'streaming' : 'complete'}`;
 
   if (status === 'pending' || status === 'PENDING') {
     const label = t`Waiting for approval...`;

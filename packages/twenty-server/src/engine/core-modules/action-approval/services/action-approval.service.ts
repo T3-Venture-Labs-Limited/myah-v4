@@ -23,6 +23,7 @@ import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval
 import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
 
 const ACTION_APPROVAL_TTL_MS = 30 * 60 * 1000;
+const RECONCILIATION_BATCH_SIZE = 25;
 
 type PendingBindingDecisionInput = {
   workspaceId: string;
@@ -489,25 +490,48 @@ export class ActionApprovalService {
   }: {
     processingBefore: Date;
   }): Promise<{ unknown: number; projected: number }> {
-    const staleProcessing = await this.dataSource
-      .createQueryBuilder()
-      .update(ActionExecutionReceiptEntity)
-      .set({ state: ActionExecutionReceiptState.UNKNOWN })
-      .where('state = :state', {
+    const receiptRepository = this.dataSource.getRepository(
+      ActionExecutionReceiptEntity,
+    );
+    const staleReceiptIds = await receiptRepository
+      .createQueryBuilder('receipt')
+      .select('receipt.id', 'id')
+      .where('receipt.state = :state', {
         state: ActionExecutionReceiptState.PROCESSING,
       })
-      .andWhere('"updatedAt" < :processingBefore', { processingBefore })
-      .execute();
+      .andWhere('receipt."updatedAt" < :processingBefore', { processingBefore })
+      .orderBy('receipt.updatedAt', 'ASC')
+      .addOrderBy('receipt.id', 'ASC')
+      .take(RECONCILIATION_BATCH_SIZE)
+      .getRawMany<{ id: string }>();
+    const staleProcessing =
+      staleReceiptIds.length === 0
+        ? { affected: 0 }
+        : await this.dataSource
+            .createQueryBuilder()
+            .update(ActionExecutionReceiptEntity)
+            .set({ state: ActionExecutionReceiptState.UNKNOWN })
+            .where('id IN (:...ids)', {
+              ids: staleReceiptIds.map(({ id }) => id),
+            })
+            .andWhere('state = :state', {
+              state: ActionExecutionReceiptState.PROCESSING,
+            })
+            .execute();
 
-    const acceptedReceipts = await this.dataSource
-      .getRepository(ActionExecutionReceiptEntity)
-      .find({
-        where: { state: ActionExecutionReceiptState.PROVIDER_ACCEPTED },
-        select: { id: true },
-      });
+    const acceptedReceiptIds = await receiptRepository
+      .createQueryBuilder('receipt')
+      .select('receipt.id', 'id')
+      .where('receipt.state = :state', {
+        state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      })
+      .orderBy('receipt.updatedAt', 'ASC')
+      .addOrderBy('receipt.id', 'ASC')
+      .take(RECONCILIATION_BATCH_SIZE)
+      .getRawMany<{ id: string }>();
     let projected = 0;
-    for (const receipt of acceptedReceipts) {
-      const result = await this.projector.projectReceipt(receipt.id);
+    for (const { id } of acceptedReceiptIds) {
+      const result = await this.projector.projectReceipt(id);
       if (result.projected) {
         projected += 1;
       }

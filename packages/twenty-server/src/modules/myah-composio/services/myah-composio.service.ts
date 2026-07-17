@@ -12,6 +12,7 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { FieldActorSource } from 'twenty-shared/types';
 
 const COMPOSIO_API_BASE_URL = 'https://backend.composio.dev/api/v3.1';
+const COMPOSIO_TOOL_TIMEOUT_MS = 30_000;
 const INSTAGRAM_TOOLKIT_SLUG = 'instagram';
 
 export const INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG =
@@ -270,6 +271,7 @@ export class MyahComposioService {
             user_id: buildInstagramComposioUserId(workspaceId),
             arguments: toolArguments,
           }),
+          signal: AbortSignal.timeout(COMPOSIO_TOOL_TIMEOUT_MS),
         },
       );
     } catch {
