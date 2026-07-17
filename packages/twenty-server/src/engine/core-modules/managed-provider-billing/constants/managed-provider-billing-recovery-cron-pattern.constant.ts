@@ -1,0 +1,1 @@
+export const MANAGED_PROVIDER_BILLING_RECOVERY_CRON_PATTERN = '*/15 * * * *';
