@@ -192,6 +192,9 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       id: '20202020-0000-0000-0000-000000000004',
       universalIdentifier: STANDARD_OBJECTS.person.universalIdentifier,
     };
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
 
     getOrRecompute.mockResolvedValue({
       ...allFlatEntityMaps,
@@ -278,6 +281,25 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     ).toBeUndefined();
   });
 
+  it('skips migration machinery when the complete native Myah graph already exists', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-07-15T00:00:00.000Z',
+      });
+
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+
+    await runOnWorkspace();
+
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
+    expect(createQueryRunner).not.toHaveBeenCalled();
+  });
+
   it('uses an already-owned Myah entity as the migration source', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({
@@ -289,6 +311,9 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       ...allFlatEntityMaps,
       featureFlagsMap: {},
     });
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
 
     await runOnWorkspace();
 

@@ -34,7 +34,11 @@ describe('BrandBrainToolProvider', () => {
         { brandNameOrSlug: 'Acme' },
         context,
       ),
-    ).resolves.toEqual({ brandSlug: 'acme' });
+    ).resolves.toEqual({
+      success: true,
+      message: 'Brand Brain tool executed successfully',
+      result: { brandSlug: 'acme' },
+    });
     expect(execute).toHaveBeenCalledWith(
       { brandNameOrSlug: 'Acme' },
       expect.objectContaining({ toolCallId: '', messages: [] }),

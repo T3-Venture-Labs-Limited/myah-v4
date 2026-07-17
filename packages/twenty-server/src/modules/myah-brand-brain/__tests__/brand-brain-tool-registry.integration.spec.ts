@@ -79,11 +79,17 @@ describe('Brand Brain public tool provider journey', () => {
         throw new Error(`Public Brand Brain tool not found: ${publicToolName}`);
       }
 
-      return provider.executeStaticTool(
+      const output = await provider.executeStaticTool(
         descriptor.executionRef.toolId,
         args,
         context,
       );
+
+      if (!output.success) {
+        throw new Error(output.error);
+      }
+
+      return output.result;
     };
 
     const seeded = await executePublicTool(
@@ -102,13 +108,13 @@ describe('Brand Brain public tool provider journey', () => {
           {
             label: 'Founder brief',
             sourceType: 'user-provided',
+            capturedAt: '2026-07-17',
             excerpt: 'Use this tone for creator campaigns.',
             informedPaths: ['lash-glow/content-guidelines'],
             confidence: 'high',
           },
         ],
         actor: 'agent',
-        occurredAt: '2026-07-15',
       },
     );
 
@@ -119,6 +125,14 @@ describe('Brand Brain public tool provider journey', () => {
       logAppended: true,
     });
     expect(links).not.toHaveLength(0);
+    expect(
+      pages.find(({ canonicalPath }) => canonicalPath === 'lash-glow/log')?.body
+        ?.markdown,
+    ).toMatch(/## \[\d{4}-\d{2}-\d{2}\]/);
+    expect(
+      pages.find(({ canonicalPath }) => canonicalPath === 'lash-glow/log')?.body
+        ?.markdown,
+    ).not.toContain('undefined');
 
     const brandContext = await executePublicTool(
       'app_brand_brain_get_context',
@@ -139,7 +153,6 @@ describe('Brand Brain public tool provider journey', () => {
         canonicalPath: 'content-guidelines',
         appendMarkdown: 'Use short, direct sentences in paid social copy.',
         actor: 'agent',
-        occurredAt: '2026-07-15',
       },
     );
 
@@ -153,6 +166,10 @@ describe('Brand Brain public tool provider journey', () => {
       pages.find(({ canonicalPath }) => canonicalPath === 'lash-glow/log')?.body
         ?.markdown,
     ).toContain('Updated lash-glow/content-guidelines');
+    expect(
+      pages.find(({ canonicalPath }) => canonicalPath === 'lash-glow/log')?.body
+        ?.markdown,
+    ).not.toContain('undefined');
     const bodyAfterTargetedUpdate = pages.find(
       ({ canonicalPath }) => canonicalPath === 'lash-glow/content-guidelines',
     )?.body?.markdown;

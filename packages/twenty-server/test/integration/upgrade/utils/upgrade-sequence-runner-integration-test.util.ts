@@ -2,7 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
 import { config } from 'dotenv';
-import { DataSource, type Repository } from 'typeorm';
+import { DataSource, IsNull, type Repository } from 'typeorm';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -13,6 +13,7 @@ import {
   UpgradeMigrationService,
   type WorkspaceLastAttemptedCommand,
 } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
+import { formatUpgradeErrorForStorage } from 'src/engine/core-modules/upgrade/utils/format-upgrade-error-for-storage.util';
 import {
   UpgradeSequenceReaderService,
   type UpgradeStep,
@@ -128,6 +129,93 @@ class UpgradeSequenceRunnerTestMigrationService extends UpgradeMigrationService 
     private readonly testMigrationRepository: Repository<UpgradeMigrationEntity>,
   ) {
     super(testMigrationRepository);
+  }
+
+  override async isLastAttemptCompleted({
+    name,
+    workspaceId,
+  }: {
+    name: string;
+    workspaceId: string | null;
+  }): Promise<boolean> {
+    const latestAttempt = await this.testMigrationRepository.findOne({
+      where: {
+        name,
+        executedByVersion: EXECUTED_BY_VERSION,
+        workspaceId: workspaceId === null ? IsNull() : workspaceId,
+      },
+      order: { attempt: 'DESC' },
+    });
+
+    return latestAttempt?.status === 'completed';
+  }
+
+  override async recordUpgradeMigration(
+    params: Parameters<UpgradeMigrationService['recordUpgradeMigration']>[0],
+  ): Promise<void> {
+    const { name, workspaceIds, isInstance, status } = params;
+    const repository = params.queryRunner
+      ? params.queryRunner.manager.getRepository(UpgradeMigrationEntity)
+      : this.testMigrationRepository;
+    const errorMessage =
+      params.status === 'failed'
+        ? formatUpgradeErrorForStorage(params.error)
+        : null;
+
+    if (isInstance) {
+      const previousAttempts = await repository.count({
+        where: {
+          name,
+          executedByVersion: EXECUTED_BY_VERSION,
+          workspaceId: IsNull(),
+        },
+      });
+      const attempt = previousAttempts + 1;
+
+      await repository.save([
+        {
+          name,
+          status,
+          attempt,
+          executedByVersion: EXECUTED_BY_VERSION,
+          workspaceId: null,
+          errorMessage,
+        },
+        ...workspaceIds.map((workspaceId) => ({
+          name,
+          status,
+          attempt,
+          executedByVersion: EXECUTED_BY_VERSION,
+          workspaceId,
+          errorMessage,
+        })),
+      ]);
+
+      return;
+    }
+
+    const rows = [];
+
+    for (const workspaceId of workspaceIds) {
+      const previousAttempts = await repository.count({
+        where: {
+          name,
+          executedByVersion: EXECUTED_BY_VERSION,
+          workspaceId,
+        },
+      });
+
+      rows.push({
+        name,
+        status,
+        attempt: previousAttempts + 1,
+        executedByVersion: EXECUTED_BY_VERSION,
+        workspaceId,
+        errorMessage,
+      });
+    }
+
+    await repository.save(rows);
   }
 
   override async getLastAttemptedCommandNameOrThrow(
@@ -420,11 +508,13 @@ export const seedInstanceMigration = async (
     status,
     workspaceIds = [],
     attempt = 1,
+    executedByVersion = EXECUTED_BY_VERSION,
   }: {
     name: string;
     status: 'completed' | 'failed';
     workspaceIds?: string[];
     attempt?: number;
+    executedByVersion?: string;
   },
 ) => {
   // Seeds must have past timestamps so the runner's NOW()-based records
@@ -442,20 +532,13 @@ export const seedInstanceMigration = async (
   values.push(
     `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, NULL, $${paramIndex++}, false)`,
   );
-  args.push(name, status, attempt, EXECUTED_BY_VERSION, createdAt);
+  args.push(name, status, attempt, executedByVersion, createdAt);
 
   for (const workspaceId of workspaceIds) {
     values.push(
       `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, false)`,
     );
-    args.push(
-      name,
-      status,
-      attempt,
-      EXECUTED_BY_VERSION,
-      workspaceId,
-      createdAt,
-    );
+    args.push(name, status, attempt, executedByVersion, workspaceId, createdAt);
   }
 
   await dataSource.query(

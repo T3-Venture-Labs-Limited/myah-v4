@@ -47,12 +47,18 @@ export class BrandBrainToolProvider implements ToolProvider {
     args: Record<string, unknown>,
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
-    return executeToolFromToolSet(
+    const result = (await executeToolFromToolSet(
       this.buildPublicToolSet(context),
       toolName,
       args,
       this.category,
-    );
+    )) as unknown as object;
+
+    return {
+      success: true,
+      message: 'Brand Brain tool executed successfully',
+      result,
+    };
   }
 
   private buildPublicToolSet(context: ToolProviderContext): ToolSet {

@@ -309,9 +309,38 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       'navigationMenuItem',
       navigationMenuItemUniversalIdentifiers,
     );
+    const hasCompleteNativeMyahGraph =
+      TWENTY_STANDARD_ALL_METADATA_NAME.every((metadataName) => {
+        const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
+        const desiredUniversalIdentifiers = Object.keys(
+          (
+            toAllFlatEntityMaps as unknown as Record<
+              string,
+              SyncableFlatEntityMaps
+            >
+          )[flatEntityMapsKey].byUniversalIdentifier,
+        );
+        const currentFlatEntityMaps = (
+          fromAllFlatEntityMaps as unknown as Record<
+            string,
+            SyncableFlatEntityMaps
+          >
+        )[flatEntityMapsKey];
 
+        return desiredUniversalIdentifiers.every(
+          (universalIdentifier) =>
+            currentFlatEntityMaps.byUniversalIdentifier[universalIdentifier] !==
+            undefined,
+        );
+      });
 
+    if (!hasLegacyMyahApplication && hasCompleteNativeMyahGraph) {
+      this.logger.log(
+        `Skipping Myah standard metadata synchronization for workspace ${workspaceId}: native metadata graph is already complete`,
+      );
 
+      return;
+    }
     const obsoleteUniversalIdentifiersByMetadataName =
       hasLegacyMyahApplication
         ? getReplacedTwentyCrmMetadataUniversalIdentifiers(

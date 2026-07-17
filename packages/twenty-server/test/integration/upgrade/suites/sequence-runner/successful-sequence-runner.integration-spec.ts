@@ -19,6 +19,8 @@ import {
   WS_2,
 } from 'test/integration/upgrade/utils/upgrade-sequence-runner-integration-test.util';
 
+const STALE_EXECUTED_BY_VERSION = `42.42.42-stale-${process.pid}`;
+
 describe('UpgradeSequenceRunnerService — execution (integration)', () => {
   let context: IntegrationTestContext;
 
@@ -28,12 +30,20 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
 
   afterAll(async () => {
     await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
+    await context.dataSource.query(
+      `DELETE FROM core."upgradeMigration" WHERE "executedByVersion" = $1`,
+      [STALE_EXECUTED_BY_VERSION],
+    );
     await context.module?.close();
     await context.dataSource?.destroy();
   }, 15000);
 
   beforeEach(async () => {
     await clearUpgradeSequenceRunnerTestMigrations(context.dataSource);
+    await context.dataSource.query(
+      `DELETE FROM core."upgradeMigration" WHERE "executedByVersion" = $1`,
+      [STALE_EXECUTED_BY_VERSION],
+    );
     resetSeedSequenceCounter();
     setMockActiveWorkspaceIds([]);
     jest.restoreAllMocks();
@@ -107,6 +117,59 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
 
       // Runner retries Ic2
       'Ic2:instance:completed:2',
+    ]);
+  });
+
+  it('ignores a completed command from another test process', async () => {
+    const sequence = [makeFastInstance('Ic0'), makeFastInstance('Ic1')];
+
+    await seedInstanceMigration(context.dataSource, {
+      name: 'Ic0',
+      status: 'completed',
+    });
+    await seedInstanceMigration(context.dataSource, {
+      name: 'Ic1',
+      status: 'completed',
+      executedByVersion: STALE_EXECUTED_BY_VERSION,
+    });
+
+    await context.runner.run({
+      sequence,
+      options: DEFAULT_OPTIONS,
+    });
+
+    const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
+
+    expect(executed.map(migrationRecordToKey)).toStrictEqual([
+      'Ic0:instance:completed:1',
+      'Ic1:instance:completed:1',
+    ]);
+  });
+
+  it('starts attempts at one when only another test process has attempted the command', async () => {
+    const sequence = [makeFastInstance('Ic0'), makeFastInstance('Ic1')];
+
+    await seedInstanceMigration(context.dataSource, {
+      name: 'Ic0',
+      status: 'completed',
+    });
+    await seedInstanceMigration(context.dataSource, {
+      name: 'Ic1',
+      status: 'failed',
+      attempt: 7,
+      executedByVersion: STALE_EXECUTED_BY_VERSION,
+    });
+
+    await context.runner.run({
+      sequence,
+      options: DEFAULT_OPTIONS,
+    });
+
+    const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
+
+    expect(executed.map(migrationRecordToKey)).toStrictEqual([
+      'Ic0:instance:completed:1',
+      'Ic1:instance:completed:1',
     ]);
   });
 

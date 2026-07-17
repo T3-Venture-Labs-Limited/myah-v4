@@ -44,7 +44,7 @@ export class ToolRegistryService {
       }),
     );
 
-    return results.flat();
+    return this.preferNativeBrandBrainDescriptors(results.flat());
   }
 
   async resolveSchemas({
@@ -367,7 +367,9 @@ export class ToolRegistryService {
         }),
     );
 
-    const descriptors = results.flat() as ToolDescriptor[];
+    const descriptors = this.preferNativeBrandBrainDescriptors(
+      results.flat() as ToolDescriptor[],
+    );
 
     let filteredDescriptors = descriptors;
 
@@ -390,6 +392,22 @@ export class ToolRegistryService {
     );
 
     return toolSet;
+  }
+
+  private preferNativeBrandBrainDescriptors<
+    T extends ToolIndexEntry | ToolDescriptor,
+  >(descriptors: T[]): T[] {
+    const nativeBrandBrainToolNames = new Set(
+      descriptors
+        .filter((descriptor) => descriptor.category === 'BRAND_BRAIN')
+        .map((descriptor) => descriptor.name),
+    );
+
+    return descriptors.filter(
+      (descriptor) =>
+        descriptor.category !== 'LOGIC_FUNCTION' ||
+        !nativeBrandBrainToolNames.has(descriptor.name),
+    );
   }
 
   private buildContextFromToolContext(
