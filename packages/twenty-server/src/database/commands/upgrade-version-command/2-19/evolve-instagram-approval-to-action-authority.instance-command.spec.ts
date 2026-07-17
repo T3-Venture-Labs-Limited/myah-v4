@@ -719,6 +719,32 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     ]);
   });
 
+  it('rejects a non-inbound inbound-proof direction', async () => {
+    await installLegacyFixture(queryRunner, 'absent');
+    await new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand().up(
+      queryRunner,
+    );
+
+    await expect(
+      queryRaw(
+        queryRunner,
+        `INSERT INTO core."actionApprovalBinding" (
+          "workspaceId", "initiatorUserWorkspaceId", "actionName", "draftId",
+          "contentDigest", "threadId", "expiresAt", "inboundDirection"
+        ) VALUES (
+          '${workspaceId}',
+          '00000000-0000-0000-0000-000000000601',
+          'send_instagram_reply',
+          '00000000-0000-0000-0000-000000000602',
+          'abc',
+          '00000000-0000-0000-0000-000000000603',
+          now(),
+          'OUTBOUND'
+        )`,
+      ),
+    ).rejects.toThrow('CHK_ACTION_APPROVAL_BINDING_INBOUND_DIRECTION');
+  });
+
   it('continues from a provider-binding cursor without recreating legacy tables', async () => {
     await installLegacyFixture(queryRunner, 'absent');
     const prepare =
