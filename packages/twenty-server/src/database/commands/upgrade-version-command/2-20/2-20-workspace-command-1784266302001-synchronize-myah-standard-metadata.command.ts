@@ -67,7 +67,7 @@ const toUniversalIdentifiers = (
 type SyncableFlatEntityMaps = FlatEntityMaps<SyncableFlatEntity>;
 
 
-@RegisteredWorkspaceCommand('2.20.0', 1825100000000)
+@RegisteredWorkspaceCommand('2.20.0', 1784266302001)
 @Command({
   name: 'upgrade:2-20:synchronize-myah-standard-metadata',
   description:

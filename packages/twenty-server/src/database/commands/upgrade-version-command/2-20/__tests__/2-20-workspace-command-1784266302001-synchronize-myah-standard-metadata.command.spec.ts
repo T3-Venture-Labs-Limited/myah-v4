@@ -7,7 +7,7 @@ import type { DataSource } from 'typeorm';
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
-import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1825100000000-synchronize-myah-standard-metadata.command';
+import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
 import type { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
