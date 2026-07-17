@@ -77,6 +77,9 @@ export class SendInstagramReplyTool implements Tool {
 
           return { success: true, message: 'Instagram reply accepted.' };
         }
+        if (existingReceipt.state === ActionExecutionReceiptState.SENT) {
+          return { success: true, message: 'Instagram reply accepted.' };
+        }
 
         return {
           success: false,
@@ -116,6 +119,9 @@ export class SendInstagramReplyTool implements Tool {
             };
           }
 
+          return { success: true, message: 'Instagram reply accepted.' };
+        }
+        if (reservation.receipt.state === ActionExecutionReceiptState.SENT) {
           return { success: true, message: 'Instagram reply accepted.' };
         }
 

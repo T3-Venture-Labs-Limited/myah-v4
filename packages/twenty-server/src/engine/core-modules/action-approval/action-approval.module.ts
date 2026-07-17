@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { ActionApprovalReconciliationCronCommand } from 'src/engine/core-modules/action-approval/crons/commands/action-approval-reconciliation.cron.command';
+import { ActionApprovalReconciliationCronJob } from 'src/engine/core-modules/action-approval/crons/action-approval-reconciliation.cron.job';
 import { ActionApprovalResolver } from 'src/engine/core-modules/action-approval/action-approval.resolver';
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
@@ -39,6 +41,8 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ActionReceiptRedactionService,
     ActionReceiptWorkspaceProjectionWriterService,
     InstagramReplyActionDefinition,
+    ActionApprovalReconciliationCronJob,
+    ActionApprovalReconciliationCronCommand,
     {
       provide: ACTION_RECEIPT_PROJECTION_WRITER,
       useExisting: ActionReceiptWorkspaceProjectionWriterService,

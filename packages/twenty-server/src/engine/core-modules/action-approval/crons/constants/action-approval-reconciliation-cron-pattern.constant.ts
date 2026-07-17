@@ -1,0 +1,1 @@
+export const ACTION_APPROVAL_RECONCILIATION_CRON_PATTERN = '* * * * *';

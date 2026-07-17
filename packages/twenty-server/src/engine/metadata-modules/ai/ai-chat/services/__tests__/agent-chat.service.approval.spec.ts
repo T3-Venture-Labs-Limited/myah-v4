@@ -44,9 +44,13 @@ const buildService = ({
   let transactionState: typeof persistedState | null = null;
 
   const threadRepository = {
-    findOne: jest.fn().mockResolvedValue(
-      threadOwned ? { id: 'thread-id', userWorkspaceId: 'user-workspace-id' } : null,
-    ),
+    findOne: jest
+      .fn()
+      .mockResolvedValue(
+        threadOwned
+          ? { id: 'thread-id', userWorkspaceId: 'user-workspace-id' }
+          : null,
+      ),
     update: jest.fn().mockImplementation(() => {
       if (claimAffected > 0) {
         (transactionState ?? persistedState).threadClaimed = true;
@@ -212,8 +216,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
   });
 
   it('strips comment, timestamps, and unsafe fields from registered chat output', async () => {
-    const actionApprovalBindingId =
-      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const actionApprovalBindingId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
     const { service, actionApprovalService, messagePartRepository } =
       buildService({
         messageParts: [
@@ -247,16 +250,13 @@ describe('AgentChatService.resolvePendingApproval', () => {
 
     expect(
       actionApprovalService.decidePendingBindingInTransaction,
-    ).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        workspaceId: 'workspace-id',
-        userWorkspaceId: 'user-workspace-id',
-        threadId: 'thread-id',
-        approvalBindingId: actionApprovalBindingId,
-        decision: 'approved',
-      },
-    );
+    ).toHaveBeenCalledWith(expect.anything(), {
+      workspaceId: 'workspace-id',
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'thread-id',
+      approvalBindingId: actionApprovalBindingId,
+      decision: 'approved',
+    });
     expect(messagePartRepository.update).toHaveBeenCalledWith(
       'workspace-id',
       { id: 'part-id', toolName: REQUEST_APPROVAL_TOOL_NAME },
@@ -272,8 +272,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
   });
 
   it('rolls back the registered decision when persisting its chat state fails', async () => {
-    const actionApprovalBindingId =
-      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const actionApprovalBindingId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
     const {
       service,
       persistedState,
@@ -319,8 +318,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
   });
 
   it('does not decide or resolve when the pending thread claim affects no rows', async () => {
-    const actionApprovalBindingId =
-      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const actionApprovalBindingId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
     const {
       service,
       persistedState,
@@ -363,8 +361,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
   });
 
   it('does not resolve chat state when the registered decision fails', async () => {
-    const actionApprovalBindingId =
-      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const actionApprovalBindingId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
     const {
       service,
       persistedState,
@@ -406,8 +403,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
   });
 
   it('commits an expired binding outcome without resuming the action', async () => {
-    const actionApprovalBindingId =
-      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const actionApprovalBindingId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
     const {
       service,
       threadRepository,
@@ -438,29 +434,29 @@ describe('AgentChatService.resolvePendingApproval', () => {
       userWorkspaceId: 'user-workspace-id',
     });
 
-    expect(result.shouldResume).toBe(false);
-    expect(messagePartRepository.update).not.toHaveBeenCalled();
-    expect(threadRepository.update).toHaveBeenNthCalledWith(
-      1,
+    expect(result).toMatchObject({ shouldResume: false });
+    expect(threadRepository.update).toHaveBeenCalledTimes(1);
+    expect(threadRepository.update).toHaveBeenCalledWith(
       'workspace-id',
       { id: 'thread-id', pendingQuestionMessageId: 'message-id' },
       { pendingQuestionMessageId: null, activeStreamId: null },
     );
-    expect(threadRepository.update).toHaveBeenNthCalledWith(
-      2,
+    expect(messagePartRepository.update).toHaveBeenCalledWith(
       'workspace-id',
+      { id: 'part-id', toolName: REQUEST_APPROVAL_TOOL_NAME },
       {
-        id: 'thread-id',
-        pendingQuestionMessageId: IsNull(),
-        activeStreamId: IsNull(),
+        toolOutput: {
+          result: {
+            status: 'resolved',
+            actionApprovalBindingId,
+          },
+        },
       },
-      { pendingQuestionMessageId: 'message-id' },
     );
   });
 
   it('does not resume when the pending message part update affects no rows', async () => {
-    const actionApprovalBindingId =
-      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const actionApprovalBindingId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
     const { service, persistedState, actionApprovalService } = buildService({
       partAffected: 0,
       messageParts: [
@@ -497,8 +493,7 @@ describe('AgentChatService.resolvePendingApproval', () => {
   });
 
   it('restores a registered binding when resume setup fails', async () => {
-    const actionApprovalBindingId =
-      'f79694a7-24af-4f37-bfad-4d529e53d1d9';
+    const actionApprovalBindingId = 'f79694a7-24af-4f37-bfad-4d529e53d1d9';
     const { service, actionApprovalService } = buildService({
       messageParts: [
         {

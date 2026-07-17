@@ -249,6 +249,32 @@ describe('SendInstagramReplyTool', () => {
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
   });
 
+  it('returns redacted success for an existing sent receipt without provider I/O', async () => {
+    const { tool, actionApprovalService, myahComposioService, projector } =
+      buildTool();
+    actionApprovalService.findExecutionReceiptForBinding.mockResolvedValue({
+      id: 'receipt-id',
+      workspaceId,
+      state: ActionExecutionReceiptState.SENT,
+      providerCode: 'accepted',
+      outcome: 'accepted',
+      occurredAt: new Date('2026-07-16T00:00:00.000Z'),
+    });
+
+    await expect(
+      tool.execute({ actionApprovalBindingId }, context),
+    ).resolves.toEqual({
+      success: true,
+      message: 'Instagram reply accepted.',
+    });
+
+    expect(projector.projectReceipt).not.toHaveBeenCalled();
+    expect(
+      myahComposioService.getActiveInstagramAccount,
+    ).not.toHaveBeenCalled();
+    expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
+  });
+
   it('does not reach the provider when the registered binding is rejected', async () => {
     const { tool, actionApprovalService, myahComposioService } = buildTool();
     actionApprovalService.getApprovedBinding.mockRejectedValue(

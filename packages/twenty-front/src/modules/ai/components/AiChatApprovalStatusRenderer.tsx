@@ -1,13 +1,14 @@
+import { useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { type DynamicToolUIPart, type ToolUIPart } from 'ai';
 import { useContext } from 'react';
-import { type RequestApprovalToolResult } from 'twenty-shared/ai';
 import { IconShield } from 'twenty-ui/icon';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { ShimmeringText } from '@/ai/components/ShimmeringText';
 import { AiChatActionApprovalEvidenceRenderer } from '@/ai/components/AiChatActionApprovalEvidenceRenderer';
+import { GET_ACTION_APPROVAL_PROPOSAL } from '@/ai/graphql/queries/getActionApprovalProposal';
 
 const StyledContainer = styled.div`
   align-items: flex-start;
@@ -40,8 +41,15 @@ const StyledDetail = styled.span`
   font-size: ${themeCssVariables.font.size.sm};
 `;
 
+type GetActionApprovalProposalData = {
+  getActionApprovalProposal: { state: string } | null;
+};
+
 const ACTION_APPROVAL_BINDING_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
 
 export const AiChatApprovalStatusRenderer = ({
   toolPart,
@@ -52,20 +60,34 @@ export const AiChatApprovalStatusRenderer = ({
 }) => {
   const { t } = useLingui();
   const { theme } = useContext(ThemeContext);
-  const result = (
-    toolPart.output as {
-      result?: RequestApprovalToolResult & { actionApprovalBindingId?: unknown };
-    } | null
-  )?.result;
+  const result =
+    isRecord(toolPart.output) && isRecord(toolPart.output.result)
+      ? toolPart.output.result
+      : undefined;
   const actionApprovalBindingId =
     typeof result?.actionApprovalBindingId === 'string' &&
     ACTION_APPROVAL_BINDING_ID_PATTERN.test(result.actionApprovalBindingId)
       ? result.actionApprovalBindingId
       : undefined;
-  const status = result?.status ?? 'pending';
-  const evidenceLifecycleState = `${status}:${result?.decision ?? ''}:${isStreaming ? 'streaming' : 'complete'}`;
+  const { data: proposalData } = useQuery<GetActionApprovalProposalData>(
+    GET_ACTION_APPROVAL_PROPOSAL,
+    {
+      variables: { bindingId: actionApprovalBindingId },
+      fetchPolicy: 'cache-and-network',
+      skip: !actionApprovalBindingId,
+    },
+  );
+  const resultStatus =
+    typeof result?.status === 'string' ? result.status : undefined;
+  const comment =
+    typeof result?.comment === 'string' ? result.comment : undefined;
+  const status = actionApprovalBindingId
+    ? (proposalData?.getActionApprovalProposal?.state ??
+      (resultStatus === 'pending' ? 'PENDING' : 'RESOLVED'))
+    : (resultStatus ?? 'pending');
+  const evidenceLifecycleState = `${status}:${isStreaming ? 'streaming' : 'complete'}`;
 
-  if (status === 'pending') {
+  if (status === 'pending' || status === 'PENDING') {
     const label = t`Waiting for approval...`;
 
     return (
@@ -88,8 +110,17 @@ export const AiChatApprovalStatusRenderer = ({
     );
   }
 
-  const decisionLabel =
-    result?.decision === 'approved'
+  const decisionLabel = actionApprovalBindingId
+    ? status === 'APPROVED' || status === 'CONSUMED'
+      ? t`Approved`
+      : status === 'REJECTED'
+        ? t`Rejected`
+        : status === 'CHANGES_REQUESTED'
+          ? t`Changes requested`
+          : status === 'EXPIRED'
+            ? t`Expired`
+            : t`Approval resolved`
+    : result?.decision === 'approved'
       ? t`Approved`
       : result?.decision === 'rejected'
         ? t`Rejected`
@@ -100,14 +131,16 @@ export const AiChatApprovalStatusRenderer = ({
       <IconShield size={theme.icon.size.sm} />
       <StyledContent>
         <StyledMessage>{decisionLabel}</StyledMessage>
-        {result?.comment && <StyledDetail>{result.comment}</StyledDetail>}
-      </StyledContent>
-        {actionApprovalBindingId && (
-          <AiChatActionApprovalEvidenceRenderer
-            bindingId={actionApprovalBindingId}
-            lifecycleState={evidenceLifecycleState}
-          />
+        {!actionApprovalBindingId && comment && (
+          <StyledDetail>{comment}</StyledDetail>
         )}
+      </StyledContent>
+      {actionApprovalBindingId && (
+        <AiChatActionApprovalEvidenceRenderer
+          bindingId={actionApprovalBindingId}
+          lifecycleState={evidenceLifecycleState}
+        />
+      )}
     </StyledContainer>
   );
 };

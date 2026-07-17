@@ -38,23 +38,29 @@ export const markApprovalResolved = (
           return part;
         }
 
-        const actionApprovalBindingId = part.output.result.actionApprovalBindingId;
+        const actionApprovalBindingId =
+          part.output.result.actionApprovalBindingId;
+
+        const isRegisteredApproval =
+          typeof actionApprovalBindingId === 'string' &&
+          ACTION_APPROVAL_BINDING_ID_PATTERN.test(actionApprovalBindingId);
 
         return {
           ...part,
           output: {
-            result: {
-              ...(typeof actionApprovalBindingId === 'string' &&
-              ACTION_APPROVAL_BINDING_ID_PATTERN.test(actionApprovalBindingId)
-                ? { actionApprovalBindingId }
-                : {}),
-              status: 'resolved',
-              decision: resolution.decision,
-              ...(typeof resolution.comment === 'string'
-                ? { comment: resolution.comment }
-                : {}),
-              decidedAt: new Date().toISOString(),
-            },
+            result: isRegisteredApproval
+              ? {
+                  actionApprovalBindingId,
+                  status: 'resolved',
+                }
+              : {
+                  status: 'resolved',
+                  decision: resolution.decision,
+                  ...(typeof resolution.comment === 'string'
+                    ? { comment: resolution.comment }
+                    : {}),
+                  decidedAt: new Date().toISOString(),
+                },
           },
         } as ExtendedUIMessagePart;
       }),

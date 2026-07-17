@@ -1,3 +1,4 @@
+import { isToolUIPart } from 'ai';
 import { type ExtendedUIMessage } from 'twenty-shared/ai';
 
 import { markApprovalResolved } from '@/ai/utils/markApprovalResolved';
@@ -42,7 +43,13 @@ describe('approval optimistic state helpers', () => {
       },
     );
 
-    expect(updated[0].parts[0].output).toEqual({
+    const resolvedPart = updated[0].parts[0];
+    expect(isToolUIPart(resolvedPart)).toBe(true);
+    if (!isToolUIPart(resolvedPart)) {
+      return;
+    }
+
+    expect(resolvedPart.output).toEqual({
       result: {
         status: 'resolved',
         decision: 'approved',
@@ -53,8 +60,7 @@ describe('approval optimistic state helpers', () => {
   });
 
   it('preserves the opaque action approval binding UUID when resolving', () => {
-    const actionApprovalBindingId =
-      'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
+    const actionApprovalBindingId = 'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
     const registeredMessages = [
       {
         ...messages[0],
@@ -81,9 +87,8 @@ describe('approval optimistic state helpers', () => {
     });
   });
 
-  it('strips untrusted approval result fields while resolving', () => {
-    const actionApprovalBindingId =
-      'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
+  it('keeps registered approval output opaque while resolving', () => {
+    const actionApprovalBindingId = 'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
     const registeredMessages = [
       {
         ...messages[0],
@@ -117,17 +122,19 @@ describe('approval optimistic state helpers', () => {
       { decision: 'approved', comment: 'Approved' },
     );
 
-    expect(updated[0].parts[0].output).toEqual({
+    const resolvedPart = updated[0].parts[0];
+    expect(isToolUIPart(resolvedPart)).toBe(true);
+    if (!isToolUIPart(resolvedPart)) {
+      return;
+    }
+
+    expect(resolvedPart.output).toEqual({
       result: {
         actionApprovalBindingId,
         status: 'resolved',
-        decision: 'approved',
-        comment: 'Approved',
-        decidedAt: expect.any(String),
       },
     });
   });
-
 
   it('leaves non-matching tool calls untouched', () => {
     const updated = markApprovalResolved(messages, 'message-id', 'other-call', {

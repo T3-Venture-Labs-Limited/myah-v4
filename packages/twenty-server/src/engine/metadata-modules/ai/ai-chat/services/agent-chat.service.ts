@@ -845,25 +845,8 @@ export class AgentChatService {
           )
         : null;
 
-      if (bindingDecision && !bindingDecision.accepted) {
-        await threadRepository.update(
-          workspaceId,
-          {
-            id: threadId,
-            pendingQuestionMessageId: IsNull(),
-            activeStreamId: IsNull(),
-          },
-          { pendingQuestionMessageId: messageId },
-        );
-
-        return {
-          turnId: message.turnId,
-          rollback: { partId: pendingPart.id, previousOutput },
-          shouldResume: false,
-        };
-      }
-
-      const shouldResume = decision.decision === 'approved';
+      const shouldResume =
+        bindingDecision?.accepted !== false && decision.decision === 'approved';
 
       const partUpdate = await messagePartRepository.update(
         workspaceId,
