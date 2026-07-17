@@ -56,6 +56,77 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: Select isolated application ports
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const net = require('node:net');
+
+          const reservePort = () =>
+            new Promise((resolve, reject) => {
+              const server = net.createServer();
+
+              server.once('error', reject);
+              server.listen(0, '127.0.0.1', () => {
+                const address = server.address();
+
+                if (address === null || typeof address === 'string') {
+                  server.close(() =>
+                    reject(new Error('Unable to reserve an application port')),
+                  );
+                  return;
+                }
+
+                resolve({ port: address.port, server });
+              });
+            });
+
+          const main = async () => {
+            const reservations = [];
+
+            try {
+              const serverReservation = await reservePort();
+
+              reservations.push(serverReservation);
+
+              const frontendReservation = await reservePort();
+
+              reservations.push(frontendReservation);
+
+              const serverUrl = `http://localhost:${serverReservation.port}`;
+              const frontendUrl = `http://localhost:${frontendReservation.port}`;
+
+              fs.appendFileSync(
+                process.env.GITHUB_ENV,
+                [
+                  `NODE_PORT=${serverReservation.port}`,
+                  `SERVER_URL=${serverUrl}`,
+                  `REACT_APP_SERVER_BASE_URL=${serverUrl}`,
+                  `BACKEND_BASE_URL=${serverUrl}`,
+                  `FRONTEND_URL=${frontendUrl}`,
+                  `FRONTEND_BASE_URL=${frontendUrl}`,
+                ].join('\n') + '\n',
+              );
+            } finally {
+              await Promise.all(
+                reservations.map(
+                  ({ server }) =>
+                    new Promise((resolve, reject) =>
+                      server.close((error) =>
+                        error ? reject(error) : resolve(),
+                      ),
+                    ),
+                ),
+              );
+            }
+          };
+
+          main().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
 
@@ -81,9 +152,16 @@ jobs:
         run: |
           cp packages/twenty-front/.env.example packages/twenty-front/.env
           npx nx reset:env:e2e-testing-server twenty-server
+          printf '\nNODE_PORT=%s\nSERVER_URL=%s\nFRONTEND_URL=%s\n' \
+            "$NODE_PORT" "$SERVER_URL" "$FRONTEND_URL" \
+            >> packages/twenty-server/.env
 
       - name: Build frontend
         run: NODE_ENV=production npx nx build twenty-front
+
+      - name: Inject frontend runtime environment
+        working-directory: packages/twenty-front
+        run: ./scripts/inject-runtime-env.sh
 
       - name: Build server
         run: npx nx build twenty-server
@@ -104,25 +182,67 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d postgres -c 'CREATE DATABASE "test";'
           npx nx run twenty-server:database:reset
 
+      - name: Verify isolated application ports
+        run: |
+          node <<'NODE'
+          const net = require('node:net');
+
+          const assertPortIsAvailable = (name, port) =>
+            new Promise((resolve, reject) => {
+              const server = net.createServer();
+
+              server.once('error', (error) =>
+                reject(
+                  new Error(
+                    `${name} port ${port} became unavailable before startup: ${error.message}`,
+                  ),
+                ),
+              );
+              server.listen(Number(port), '127.0.0.1', () =>
+                server.close((error) => (error ? reject(error) : resolve())),
+              );
+            });
+
+          Promise.all([
+            assertPortIsAvailable('server', process.env.NODE_PORT),
+            assertPortIsAvailable(
+              'frontend',
+              new URL(process.env.FRONTEND_BASE_URL).port,
+            ),
+          ]).catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
       - name: Start server
         run: |
-          npx nx start twenty-server &
+          nohup npx nx run twenty-server:start:ci > "$RUNNER_TEMP/twenty-server.log" 2>&1 &
           echo "Waiting for server to be ready..."
-          timeout 60 bash -c 'until curl -s http://localhost:3000/health; do sleep 2; done'
+          if ! timeout 60 bash -c 'until curl --fail --silent --show-error "$SERVER_URL/healthz"; do sleep 2; done'; then
+            cat "$RUNNER_TEMP/twenty-server.log"
+            exit 1
+          fi
 
       - name: Start frontend
         run: |
-          npm_config_yes=true npx serve -s packages/twenty-front/build -l 3001 &
+          npm_config_yes=true nohup npx serve -s packages/twenty-front/build --listen "tcp://127.0.0.1:${FRONTEND_BASE_URL##*:}" > "$RUNNER_TEMP/twenty-front.log" 2>&1 &
           echo "Waiting for frontend to be ready..."
-          timeout 60 bash -c 'until curl -s http://localhost:3001; do sleep 2; done'
+          if ! timeout 60 bash -c 'until curl --fail --silent --show-error "$FRONTEND_BASE_URL"; do sleep 2; done'; then
+            cat "$RUNNER_TEMP/twenty-front.log"
+            exit 1
+          fi
 
       - name: Start worker
         run: |
-          npx nx run twenty-server:worker &
+          nohup npx nx run twenty-server:worker > "$RUNNER_TEMP/twenty-worker.log" 2>&1 &
           echo "Worker started"
 
       - name: Run Playwright tests
-        run: npx nx test twenty-e2e-testing
+        run: |
+          curl --fail --silent --show-error "$SERVER_URL/healthz"
+          curl --fail --silent --show-error "$FRONTEND_BASE_URL" > /dev/null
+          npx nx test twenty-e2e-testing
 
       - name: Upload Playwright results
         if: always()
