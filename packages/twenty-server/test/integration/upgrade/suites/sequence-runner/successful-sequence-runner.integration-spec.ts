@@ -19,7 +19,12 @@ import {
   WS_2,
 } from 'test/integration/upgrade/utils/upgrade-sequence-runner-integration-test.util';
 
+const TEST_RUN_TOKEN = `${process.pid}-${Date.now()}`;
 const STALE_EXECUTED_BY_VERSION = `42.42.42-stale-${process.pid}`;
+const CROSS_VERSION_COMPLETED_CURSOR = `CrossVersionCompletedIc0-${TEST_RUN_TOKEN}`;
+const CROSS_VERSION_COMPLETED_COMMAND = `CrossVersionCompletedIc1-${TEST_RUN_TOKEN}`;
+const CROSS_VERSION_FAILED_CURSOR = `CrossVersionFailedIc0-${TEST_RUN_TOKEN}`;
+const CROSS_VERSION_FAILED_COMMAND = `CrossVersionFailedIc1-${TEST_RUN_TOKEN}`;
 
 describe('UpgradeSequenceRunnerService — execution (integration)', () => {
   let context: IntegrationTestContext;
@@ -122,16 +127,16 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
 
   it('ignores a completed command from another test process', async () => {
     const sequence = [
-      makeFastInstance('CrossVersionCompletedIc0'),
-      makeFastInstance('CrossVersionCompletedIc1'),
+      makeFastInstance(CROSS_VERSION_COMPLETED_CURSOR),
+      makeFastInstance(CROSS_VERSION_COMPLETED_COMMAND),
     ];
 
     await seedInstanceMigration(context.dataSource, {
-      name: 'CrossVersionCompletedIc0',
+      name: CROSS_VERSION_COMPLETED_CURSOR,
       status: 'completed',
     });
     await seedInstanceMigration(context.dataSource, {
-      name: 'CrossVersionCompletedIc1',
+      name: CROSS_VERSION_COMPLETED_COMMAND,
       status: 'completed',
       executedByVersion: STALE_EXECUTED_BY_VERSION,
     });
@@ -144,23 +149,23 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executed.map(migrationRecordToKey)).toStrictEqual([
-      'CrossVersionCompletedIc0:instance:completed:1',
-      'CrossVersionCompletedIc1:instance:completed:2',
+      `${CROSS_VERSION_COMPLETED_CURSOR}:instance:completed:1`,
+      `${CROSS_VERSION_COMPLETED_COMMAND}:instance:completed:2`,
     ]);
   });
 
   it('keeps attempt identifiers unique across test processes', async () => {
     const sequence = [
-      makeFastInstance('CrossVersionFailedIc0'),
-      makeFastInstance('CrossVersionFailedIc1'),
+      makeFastInstance(CROSS_VERSION_FAILED_CURSOR),
+      makeFastInstance(CROSS_VERSION_FAILED_COMMAND),
     ];
 
     await seedInstanceMigration(context.dataSource, {
-      name: 'CrossVersionFailedIc0',
+      name: CROSS_VERSION_FAILED_CURSOR,
       status: 'completed',
     });
     await seedInstanceMigration(context.dataSource, {
-      name: 'CrossVersionFailedIc1',
+      name: CROSS_VERSION_FAILED_COMMAND,
       status: 'failed',
       attempt: 7,
       executedByVersion: STALE_EXECUTED_BY_VERSION,
@@ -174,8 +179,8 @@ describe('UpgradeSequenceRunnerService — execution (integration)', () => {
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executed.map(migrationRecordToKey)).toStrictEqual([
-      'CrossVersionFailedIc0:instance:completed:1',
-      'CrossVersionFailedIc1:instance:completed:2',
+      `${CROSS_VERSION_FAILED_CURSOR}:instance:completed:1`,
+      `${CROSS_VERSION_FAILED_COMMAND}:instance:completed:2`,
     ]);
   });
 
