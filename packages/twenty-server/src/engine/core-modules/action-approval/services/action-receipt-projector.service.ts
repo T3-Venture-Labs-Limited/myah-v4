@@ -15,6 +15,8 @@ import {
 @Injectable()
 export class ActionReceiptProjectorService {
   constructor(
+    // Reconciliation receives only a globally unique receipt ID after scanning accepted receipts across all workspaces; the receipt's workspaceId selects the projection schema.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(ActionExecutionReceiptEntity)
     private readonly receiptRepository: Repository<ActionExecutionReceiptEntity>,
     @Inject(ACTION_RECEIPT_PROJECTION_WRITER)
