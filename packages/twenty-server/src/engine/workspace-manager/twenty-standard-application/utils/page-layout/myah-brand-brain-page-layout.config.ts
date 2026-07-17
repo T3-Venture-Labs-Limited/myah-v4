@@ -3,7 +3,11 @@ import { PageLayoutTabLayoutMode } from 'twenty-shared/types';
 import { STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
 import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
 import { PageLayoutType } from 'src/engine/metadata-modules/page-layout/enums/page-layout-type.enum';
-import { GRID_POSITIONS, CANVAS_LAYOUT_POSITIONS, VERTICAL_LIST_LAYOUT_POSITIONS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout-tabs.template';
+import {
+  GRID_POSITIONS,
+  CANVAS_LAYOUT_POSITIONS,
+  VERTICAL_LIST_LAYOUT_POSITIONS,
+} from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout-tabs.template';
 import { type StandardPageLayoutConfig } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout-config/standard-page-layout-config.type';
 
 export const MYAH_BRAND_BRAIN_PAGE_LAYOUT_CONFIG = {

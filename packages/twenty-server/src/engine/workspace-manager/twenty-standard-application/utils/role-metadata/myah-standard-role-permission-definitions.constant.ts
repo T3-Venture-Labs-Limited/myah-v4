@@ -34,8 +34,7 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
     MYAH_STANDARD_OBJECTS.brandBrainLink.universalIdentifier,
   ].map((objectMetadataUniversalIdentifier) =>
     buildObjectPermissionDefinition({
-      roleUniversalIdentifier:
-        MYAH_BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER,
+      roleUniversalIdentifier: MYAH_BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER,
       objectMetadataUniversalIdentifier,
     }),
   ),

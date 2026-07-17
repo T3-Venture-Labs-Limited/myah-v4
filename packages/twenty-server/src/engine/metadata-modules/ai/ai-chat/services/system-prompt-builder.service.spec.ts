@@ -10,8 +10,8 @@ describe('SystemPromptBuilderService', () => {
       null as never,
     );
 
-    expect(
-      service['getCategoryLabel']('BRAND_BRAIN' as ToolCategory),
-    ).toBe('Brand Brain Tools (manage brand knowledge and campaign context)');
+    expect(service['getCategoryLabel']('BRAND_BRAIN' as ToolCategory)).toBe(
+      'Brand Brain Tools (manage brand knowledge and campaign context)',
+    );
   });
 });

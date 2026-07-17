@@ -80,12 +80,8 @@ describe('brand brain agent memory planner', () => {
   it('normalizes brand slugs defensively', () => {
     expect(normalizeBrandSlug(' Lash Glow! ')).toBe('lash-glow');
     expect(normalizeBrandSlug('Crème Déjà Vu')).toBe('creme-deja-vu');
-    expect(normalizeBrandSlug('brain-brand-orbit-bloom')).toBe(
-      'orbit-bloom',
-    );
-    expect(normalizeBrandSlug('brand-brain-orbit-bloom')).toBe(
-      'orbit-bloom',
-    );
+    expect(normalizeBrandSlug('brain-brand-orbit-bloom')).toBe('orbit-bloom');
+    expect(normalizeBrandSlug('brand-brain-orbit-bloom')).toBe('orbit-bloom');
     expect(() => normalizeBrandSlug(' !!! ')).toThrow(
       'Brand name must produce a non-empty slug.',
     );

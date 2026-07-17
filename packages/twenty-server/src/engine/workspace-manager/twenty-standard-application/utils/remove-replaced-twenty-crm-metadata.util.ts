@@ -71,8 +71,7 @@ const referencesRemovedEntity = ({
     metadataName === 'fieldMetadata' &&
     isDefined(flatEntity.universalSettings) &&
     typeof flatEntity.universalSettings === 'object' &&
-    'junctionTargetFieldUniversalIdentifier' in
-      flatEntity.universalSettings &&
+    'junctionTargetFieldUniversalIdentifier' in flatEntity.universalSettings &&
     typeof flatEntity.universalSettings
       .junctionTargetFieldUniversalIdentifier === 'string' &&
     removedUniversalIdentifiersByMetadataName.fieldMetadata?.has(
@@ -225,7 +224,9 @@ export const removeReplacedTwentyCrmMetadata = (
       );
 
       if (retainedUniversalIdentifiers.length === 0) {
-        delete flatEntityMaps.universalIdentifiersByApplicationId[applicationId];
+        delete flatEntityMaps.universalIdentifiersByApplicationId[
+          applicationId
+        ];
       } else {
         flatEntityMaps.universalIdentifiersByApplicationId[applicationId] =
           retainedUniversalIdentifiers;

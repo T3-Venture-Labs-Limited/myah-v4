@@ -14,7 +14,8 @@ const MYAH_NAVIGATION_ITEMS = {
     type: NavigationMenuItemType.OBJECT,
     icon: 'IconNotebook',
     position: 0,
-    targetObjectUniversalIdentifier: BRAND_BRAIN_PAGE_OBJECT_UNIVERSAL_IDENTIFIER,
+    targetObjectUniversalIdentifier:
+      BRAND_BRAIN_PAGE_OBJECT_UNIVERSAL_IDENTIFIER,
   },
   creators: {
     universalIdentifier: 'd06225df-32da-5c5d-b5d1-2b8d48fdca1c',
@@ -79,43 +80,46 @@ export const computeMyahNavigationMenuItems = ({
         throw new Error(`View not found for navigation menu item ${name}`);
       }
 
-      return [name, {
-        id: v4(),
-        type: definition.type,
-        universalIdentifier: definition.universalIdentifier,
-        applicationId,
-        applicationUniversalIdentifier:
-          TWENTY_STANDARD_APPLICATION.universalIdentifier,
-        workspaceId,
-        userWorkspaceId: null,
-        targetRecordId: null,
-        targetObjectMetadataId:
-          definition.type === NavigationMenuItemType.OBJECT
-            ? targetObject?.id ?? null
-            : null,
-        targetObjectMetadataUniversalIdentifier:
-          definition.type === NavigationMenuItemType.OBJECT
-            ? targetObject?.universalIdentifier ?? null
-            : null,
-        viewId:
-          definition.type === NavigationMenuItemType.VIEW
-            ? targetView?.id ?? null
-            : null,
-        viewUniversalIdentifier:
-          definition.type === NavigationMenuItemType.VIEW
-            ? targetView?.universalIdentifier ?? null
-            : null,
-        folderId: null,
-        folderUniversalIdentifier: null,
-        pageLayoutId: null,
-        pageLayoutUniversalIdentifier: null,
-        name: null,
-        link: null,
-        icon: definition.icon,
-        color: null,
-        position: definition.position,
-        createdAt: now,
-        updatedAt: now,
-      } satisfies FlatNavigationMenuItem];
+      return [
+        name,
+        {
+          id: v4(),
+          type: definition.type,
+          universalIdentifier: definition.universalIdentifier,
+          applicationId,
+          applicationUniversalIdentifier:
+            TWENTY_STANDARD_APPLICATION.universalIdentifier,
+          workspaceId,
+          userWorkspaceId: null,
+          targetRecordId: null,
+          targetObjectMetadataId:
+            definition.type === NavigationMenuItemType.OBJECT
+              ? (targetObject?.id ?? null)
+              : null,
+          targetObjectMetadataUniversalIdentifier:
+            definition.type === NavigationMenuItemType.OBJECT
+              ? (targetObject?.universalIdentifier ?? null)
+              : null,
+          viewId:
+            definition.type === NavigationMenuItemType.VIEW
+              ? (targetView?.id ?? null)
+              : null,
+          viewUniversalIdentifier:
+            definition.type === NavigationMenuItemType.VIEW
+              ? (targetView?.universalIdentifier ?? null)
+              : null,
+          folderId: null,
+          folderUniversalIdentifier: null,
+          pageLayoutId: null,
+          pageLayoutUniversalIdentifier: null,
+          name: null,
+          link: null,
+          icon: definition.icon,
+          color: null,
+          position: definition.position,
+          createdAt: now,
+          updatedAt: now,
+        } satisfies FlatNavigationMenuItem,
+      ];
     }),
   ) as Record<keyof typeof MYAH_NAVIGATION_ITEMS, FlatNavigationMenuItem>;

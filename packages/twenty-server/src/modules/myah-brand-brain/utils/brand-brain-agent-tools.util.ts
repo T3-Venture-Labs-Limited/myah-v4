@@ -461,7 +461,9 @@ const pageOrder = ({
   return index === -1 ? recommendedPaths.length : index;
 };
 
-const truncateMarkdown = (markdown: string): { markdown: string; truncated: boolean } =>
+const truncateMarkdown = (
+  markdown: string,
+): { markdown: string; truncated: boolean } =>
   markdown.length > BODY_CHARACTER_LIMIT_PER_PAGE
     ? {
         markdown: `${markdown.slice(0, BODY_CHARACTER_LIMIT_PER_PAGE).trim()}\n\n[Truncated]`,
@@ -486,7 +488,9 @@ const pageMarkdown = (
   return { markdown: null, truncated: false };
 };
 
-const capContextMetadata = (value: string): {
+const capContextMetadata = (
+  value: string,
+): {
   value: string;
   truncated: boolean;
 } => {
@@ -585,7 +589,7 @@ export const getBrandBrainContext = async ({
   task?: string;
   store: BrandBrainExecutorStore;
 }): Promise<BrandBrainContextToolResult> => {
-  const brandSlug = normalizeBrandSlug(brandNameOrSlug).slice(0, 128)
+  const brandSlug = normalizeBrandSlug(brandNameOrSlug).slice(0, 128);
   const rawPages = await store.listPagesByBrandSlug({ brandSlug });
   const brandPages = rawPages
     .filter((page) =>
@@ -652,8 +656,9 @@ export const getBrandBrainContext = async ({
         truncated: title.truncated || summary.truncated || markdown.truncated,
       };
     });
-  const links = brandLinks.slice(0, MAX_CONTEXT_LINKS).map(
-    (link): { value: BrandBrainContextLink; truncated: boolean } => {
+  const links = brandLinks
+    .slice(0, MAX_CONTEXT_LINKS)
+    .map((link): { value: BrandBrainContextLink; truncated: boolean } => {
       const description = link.description
         ? capMarkdown({
             markdown: link.description,
@@ -668,8 +673,7 @@ export const getBrandBrainContext = async ({
         },
         truncated: description.truncated,
       };
-    },
-  );
+    });
   const contextPages = pages.map(({ value }) => value);
   const contextLinks = links.map(({ value }) => value);
   const contentWasTruncated =
@@ -731,8 +735,12 @@ export const getBrandBrainContext = async ({
     missingRecommendedPaths: [],
     truncated: true,
   };
-  const compactResult = (candidate: BrandBrainContextToolResult): BrandBrainContextToolResult => {
-    if (JSON.stringify(candidate).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+  const compactResult = (
+    candidate: BrandBrainContextToolResult,
+  ): BrandBrainContextToolResult => {
+    if (
+      JSON.stringify(candidate).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT
+    ) {
       return candidate;
     }
 
@@ -757,7 +765,10 @@ export const getBrandBrainContext = async ({
       contextCharacterCount: 0,
     };
 
-    if (JSON.stringify(compactOverhead).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+    if (
+      JSON.stringify(compactOverhead).length <=
+      BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT
+    ) {
       let low = 0;
       let high = compactCandidate.contextMarkdown.length;
       while (low < high) {
@@ -767,7 +778,9 @@ export const getBrandBrainContext = async ({
           contextMarkdown: compactCandidate.contextMarkdown.slice(0, midpoint),
           contextCharacterCount: midpoint,
         };
-        if (JSON.stringify(attempt).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+        if (
+          JSON.stringify(attempt).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT
+        ) {
           low = midpoint;
         } else {
           high = midpoint - 1;
@@ -792,7 +805,9 @@ export const getBrandBrainContext = async ({
         contextCharacterCount: midpoint,
         truncated: true,
       };
-      if (JSON.stringify(attempt).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT) {
+      if (
+        JSON.stringify(attempt).length <= BRAND_BRAIN_CONTEXT_CHARACTER_LIMIT
+      ) {
         low = midpoint;
       } else {
         high = midpoint - 1;
@@ -806,10 +821,9 @@ export const getBrandBrainContext = async ({
       truncated: true,
     };
     return result;
-  }
+  };
 
   return compactResult(initialResult);
-
 };
 
 const buildSearchResultMarkdown = ({
@@ -910,12 +924,15 @@ export const searchOrReadBrandBrain = async ({
 
   if (canonicalPath) {
     const page = brandPages.find(
-      (candidate) => normalizeCanonicalPath(candidate.canonicalPath) === canonicalPath,
+      (candidate) =>
+        normalizeCanonicalPath(candidate.canonicalPath) === canonicalPath,
     );
 
     if (page) {
       const markdown = page.body?.markdown?.trim() ?? '';
-      const requestedSectionHeading = input.sectionHeading?.trim().toLowerCase();
+      const requestedSectionHeading = input.sectionHeading
+        ?.trim()
+        .toLowerCase();
       const matchedSection = requestedSectionHeading
         ? splitMarkdownSections(markdown).find(
             (section) =>

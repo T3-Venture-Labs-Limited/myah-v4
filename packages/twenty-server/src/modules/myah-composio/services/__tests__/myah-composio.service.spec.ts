@@ -268,16 +268,12 @@ describe('MyahComposioService', () => {
     ]);
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining(
-        'user_ids=workspace%3Aworkspace-a%3Ainstagram',
-      ),
+      expect.stringContaining('user_ids=workspace%3Aworkspace-a%3Ainstagram'),
       expect.any(Object),
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining(
-        'user_ids=workspace%3Aworkspace-b%3Ainstagram',
-      ),
+      expect.stringContaining('user_ids=workspace%3Aworkspace-b%3Ainstagram'),
       expect.any(Object),
     );
   });

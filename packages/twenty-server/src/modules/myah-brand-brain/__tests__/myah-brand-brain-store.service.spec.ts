@@ -16,7 +16,9 @@ describe('MyahBrandBrainStoreService', () => {
       ]),
     };
     const globalWorkspaceOrmManager = {
-      executeInWorkspaceContext: jest.fn((callback: () => unknown) => callback()),
+      executeInWorkspaceContext: jest.fn((callback: () => unknown) =>
+        callback(),
+      ),
       getRepository: jest.fn().mockResolvedValue(pageRepository),
     } as unknown as GlobalWorkspaceOrmManager;
     const service = new MyahBrandBrainStoreService(globalWorkspaceOrmManager);
@@ -26,7 +28,9 @@ describe('MyahBrandBrainStoreService', () => {
       rolePermissionConfig: { shouldBypassPermissionChecks: true },
     });
 
-    await expect(store.listPagesByBrandSlug({ brandSlug: 'acme' })).resolves.toEqual([
+    await expect(
+      store.listPagesByBrandSlug({ brandSlug: 'acme' }),
+    ).resolves.toEqual([
       expect.objectContaining({ id: 'page-id', canonicalPath: 'acme' }),
     ]);
     expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(

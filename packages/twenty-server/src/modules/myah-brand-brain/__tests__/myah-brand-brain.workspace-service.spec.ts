@@ -3,7 +3,9 @@ import { MyahBrandBrainWorkspaceService } from 'src/modules/myah-brand-brain/ser
 describe('MyahBrandBrainWorkspaceService', () => {
   it('generates the four source-compatible Brand Brain tool descriptors', () => {
     const createStore = jest.fn();
-    const service = new MyahBrandBrainWorkspaceService({ createStore } as never);
+    const service = new MyahBrandBrainWorkspaceService({
+      createStore,
+    } as never);
 
     const tools = service.generateBrandBrainTools({
       workspaceId: 'workspace-id',

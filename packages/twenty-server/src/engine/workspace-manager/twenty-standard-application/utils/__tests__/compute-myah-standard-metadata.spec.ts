@@ -1,4 +1,3 @@
-
 import {
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
@@ -55,18 +54,25 @@ const mapsWithPermissions = result.allFlatEntityMaps as unknown as {
 };
 
 describe('Myah standard metadata contract', () => {
-  const categories = Object.entries(contract)
-    .filter(([key]) => key.startsWith('flat')) as [keyof TwentyStandardAllFlatEntityMaps, readonly string[]][];
+  const categories = Object.entries(contract).filter(([key]) =>
+    key.startsWith('flat'),
+  ) as [keyof TwentyStandardAllFlatEntityMaps, readonly string[]][];
 
   it('places every source-derived declaration in its exact flat map', () => {
     const myahIds = new Set(categories.flatMap(([, ids]) => ids));
     for (const [mapName, expected] of categories) {
-      const actual = Object.keys(result.allFlatEntityMaps[mapName].byUniversalIdentifier)
-        .filter((id) => myahIds.has(id)).sort();
+      const actual = Object.keys(
+        result.allFlatEntityMaps[mapName].byUniversalIdentifier,
+      )
+        .filter((id) => myahIds.has(id))
+        .sort();
       expect(actual).toEqual([...expected].sort());
       for (const id of expected) {
         for (const [otherName] of categories) {
-          if (otherName !== mapName) expect(result.allFlatEntityMaps[otherName].byUniversalIdentifier[id]).toBeUndefined();
+          if (otherName !== mapName)
+            expect(
+              result.allFlatEntityMaps[otherName].byUniversalIdentifier[id],
+            ).toBeUndefined();
         }
       }
     }
@@ -195,8 +201,7 @@ describe('Myah standard metadata contract', () => {
         expect(fields).toContainEqual(
           expect.objectContaining({
             name: junction.inverseFieldName,
-            objectMetadataUniversalIdentifier:
-              target.objectUniversalIdentifier,
+            objectMetadataUniversalIdentifier: target.objectUniversalIdentifier,
             relationTargetObjectMetadataUniversalIdentifier:
               junction.objectUniversalIdentifier,
           }),
@@ -207,12 +212,16 @@ describe('Myah standard metadata contract', () => {
 
   it('excludes nested select options from every flat category', () => {
     for (const optionId of contract.nestedOptionUniversalIdentifiers) {
-      for (const [mapName] of categories) expect(result.allFlatEntityMaps[mapName].byUniversalIdentifier[optionId]).toBeUndefined();
+      for (const [mapName] of categories)
+        expect(
+          result.allFlatEntityMaps[mapName].byUniversalIdentifier[optionId],
+        ).toBeUndefined();
     }
   });
 
   it('asserts every source-derived relation endpoint', () => {
-    const fields = result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier;
+    const fields =
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier;
     for (const relation of contract.relations) {
       expect(fields[relation.sourceField]).toMatchObject({
         objectMetadataUniversalIdentifier: relation.sourceObject,
@@ -224,9 +233,16 @@ describe('Myah standard metadata contract', () => {
 
   it('links the canonical path index to its canonical field', () => {
     const { index, object, field } = contract.canonicalPathIndex;
-    expect(result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[index]).toMatchObject({
+    expect(
+      result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[index],
+    ).toMatchObject({
       objectMetadataUniversalIdentifier: object,
-      universalFlatIndexFieldMetadatas: [{ indexMetadataUniversalIdentifier: index, fieldMetadataUniversalIdentifier: field }],
+      universalFlatIndexFieldMetadatas: [
+        {
+          indexMetadataUniversalIdentifier: index,
+          fieldMetadataUniversalIdentifier: field,
+        },
+      ],
     });
   });
 
@@ -340,8 +356,10 @@ describe('Myah standard metadata contract', () => {
     ]);
 
     expect(objectPermissions).toHaveLength(12);
-    for (const [roleUniversalIdentifier, objectUniversalIdentifiers] of
-      expectedObjectsByRole) {
+    for (const [
+      roleUniversalIdentifier,
+      objectUniversalIdentifiers,
+    ] of expectedObjectsByRole) {
       for (const objectMetadataUniversalIdentifier of objectUniversalIdentifiers) {
         expect(objectPermissions).toContainEqual(
           expect.objectContaining({
@@ -363,8 +381,7 @@ describe('Myah standard metadata contract', () => {
     expect(fieldPermissions).toHaveLength(
       PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.length,
     );
-    for (const fieldMetadataUniversalIdentifier of
-      PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS) {
+    for (const fieldMetadataUniversalIdentifier of PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS) {
       expect(fieldPermissions).toContainEqual(
         expect.objectContaining({
           universalIdentifier: uuidv5(

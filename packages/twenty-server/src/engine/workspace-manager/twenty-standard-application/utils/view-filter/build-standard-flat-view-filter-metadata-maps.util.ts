@@ -11,7 +11,12 @@ type StandardViewFilterBuilder<P extends AllStandardObjectName> = (
   args: Omit<CreateStandardViewFilterArgs<P>, 'context'>,
 ) => Record<string, FlatViewFilter>;
 
-const STANDARD_FLAT_VIEW_FILTER_METADATA_BUILDERS_BY_OBJECT_NAME = { task: computeStandardTaskViewFilters, brandBrainUpdateProposal: computeMyahViewFilters } as const satisfies { [P in AllStandardObjectName]?: StandardViewFilterBuilder<P>; };
+const STANDARD_FLAT_VIEW_FILTER_METADATA_BUILDERS_BY_OBJECT_NAME = {
+  task: computeStandardTaskViewFilters,
+  brandBrainUpdateProposal: computeMyahViewFilters,
+} as const satisfies {
+  [P in AllStandardObjectName]?: StandardViewFilterBuilder<P>;
+};
 
 export const buildStandardFlatViewFilterMetadataMaps = (
   args: Omit<CreateStandardViewFilterArgs, 'context' | 'objectName'>,

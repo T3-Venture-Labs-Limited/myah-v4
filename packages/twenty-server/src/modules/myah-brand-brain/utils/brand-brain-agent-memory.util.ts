@@ -280,10 +280,7 @@ const normalizeCanonicalPath = (value: string): string =>
 const valueOrUnknown = (value?: string): string =>
   value?.trim() ? value.trim() : UNKNOWN_PLACEHOLDER;
 
-const MODEL_GENERATED_BRAND_SLUG_PREFIXES = [
-  'brain-brand-',
-  'brand-brain-',
-];
+const MODEL_GENERATED_BRAND_SLUG_PREFIXES = ['brain-brand-', 'brand-brain-'];
 
 export const normalizeBrandSlug = (brandName: string): string => {
   const normalized = normalizePathSegment(brandName);
@@ -293,7 +290,8 @@ export const normalizeBrandSlug = (brandName: string): string => {
   }
 
   const prefixStripped = MODEL_GENERATED_BRAND_SLUG_PREFIXES.reduce(
-    (value, prefix) => (value.startsWith(prefix) ? value.slice(prefix.length) : value),
+    (value, prefix) =>
+      value.startsWith(prefix) ? value.slice(prefix.length) : value,
     normalized,
   );
 

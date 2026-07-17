@@ -54,8 +54,7 @@ export const buildMyahBrandBrainAdminStandardFlatRole = (
     context: {
       ...base,
       roleName: 'brandBrainAdmin',
-      universalIdentifier:
-        MYAH_BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER,
+      universalIdentifier: MYAH_BRAND_BRAIN_ADMIN_ROLE_UNIVERSAL_IDENTIFIER,
       label: 'Brand Brain Admin',
       description: 'Can manage Brand Brain pages and links in the local MVP.',
       icon: 'IconNotebook',
@@ -72,8 +71,7 @@ export const buildMyahCreatorOpsDefaultStandardFlatRole = (
     context: {
       ...base,
       roleName: 'creatorOpsDefault',
-      universalIdentifier:
-        MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+      universalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
       label: 'Myah Creator Ops default function role',
       description: 'Myah Creator Ops default function role',
       objectPermissionUniversalIdentifiers:

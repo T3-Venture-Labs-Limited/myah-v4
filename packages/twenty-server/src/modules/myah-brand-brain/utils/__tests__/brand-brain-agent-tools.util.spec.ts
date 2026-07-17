@@ -352,26 +352,24 @@ describe('brand brain agent tools', () => {
     expect(context.truncated).toBe(true);
     expect(context.contextMarkdown).toContain('[Truncated]');
   });
-  it.each(
+  it.each([
+    ['title', { title: 'T'.repeat(600) }],
+    ['summary', { summary: 'S'.repeat(600) }],
+    ['body', { body: buildRichTextBody('B'.repeat(1700)) }],
+    ['description', { description: 'D'.repeat(600) }],
+    ['task', { task: 'K'.repeat(600) }],
+  ] as Array<
     [
-      ['title', { title: 'T'.repeat(600) }],
-      ['summary', { summary: 'S'.repeat(600) }],
-      ['body', { body: buildRichTextBody('B'.repeat(1700)) }],
-      ['description', { description: 'D'.repeat(600) }],
-      ['task', { task: 'K'.repeat(600) }],
-    ] as Array<
-      [
-        string,
-        {
-          title?: string;
-          summary?: string;
-          body?: BrandBrainExecutorPageRecord['body'];
-          description?: string;
-          task?: string;
-        },
-      ]
-    >,
-  )('marks %s-only overflow as truncated', async (_field, values) => {
+      string,
+      {
+        title?: string;
+        summary?: string;
+        body?: BrandBrainExecutorPageRecord['body'];
+        description?: string;
+        task?: string;
+      },
+    ]
+  >)('marks %s-only overflow as truncated', async (_field, values) => {
     const store = new MockBrandBrainStore({
       pages: [
         {
@@ -417,11 +415,15 @@ describe('brand brain agent tools', () => {
 
     expect(contentGuidelines).toBeDefined();
 
-    const longOpening = Array.from({ length: 120 }, (_, index) =>
-      `Opening filler line ${index} keeps the important rule outside the compact context cap.`,
+    const longOpening = Array.from(
+      { length: 120 },
+      (_, index) =>
+        `Opening filler line ${index} keeps the important rule outside the compact context cap.`,
     ).join('\n');
-    const longSectionMiddle = Array.from({ length: 120 }, (_, index) =>
-      `FTC section filler line ${index} still does not include the disclosure marker.`,
+    const longSectionMiddle = Array.from(
+      { length: 120 },
+      (_, index) =>
+        `FTC section filler line ${index} still does not include the disclosure marker.`,
     ).join('\n');
 
     await store.updatePage({
@@ -485,7 +487,9 @@ describe('brand brain agent tools', () => {
     expect(exactSectionRead.matches[0].markdown).toContain(
       'This section starts with the heading',
     );
-    expect(exactSectionRead.matches[0].markdown).toContain('[Truncated middle]');
+    expect(exactSectionRead.matches[0].markdown).toContain(
+      '[Truncated middle]',
+    );
     expect(exactSectionRead.matches[0].markdown).toContain('#ApiSmokeTest');
 
     const sectionSearch = await searchOrReadBrandBrain({
@@ -560,7 +564,9 @@ describe('brand brain agent tools', () => {
       (page) => page.canonicalPath === 'lashglow/log',
     );
 
-    expect(contentPage?.body?.markdown?.match(/#ApiSmokeTest/g)).toHaveLength(1);
+    expect(contentPage?.body?.markdown?.match(/#ApiSmokeTest/g)).toHaveLength(
+      1,
+    );
     expect(logPage?.body?.markdown).toContain('API smoke targeted update');
   });
 

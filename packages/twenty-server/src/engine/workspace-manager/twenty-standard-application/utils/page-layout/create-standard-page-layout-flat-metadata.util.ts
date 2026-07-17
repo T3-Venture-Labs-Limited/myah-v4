@@ -54,7 +54,9 @@ const findTabKeyByUniversalIdentifier = (
   tabUniversalIdentifier: string,
 ): string => {
   const layout =
-    ALL_STANDARD_PAGE_LAYOUTS[layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS];
+    ALL_STANDARD_PAGE_LAYOUTS[
+      layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS
+    ];
 
   if (!isDefined(layout)) {
     throw new Error(`Layout with name ${layoutName} not found`);
@@ -86,7 +88,9 @@ export const createStandardPageLayoutFlatMetadata = ({
   now,
 }: CreateStandardPageLayoutArgs): FlatPageLayout => {
   const layout =
-    ALL_STANDARD_PAGE_LAYOUTS[layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS];
+    ALL_STANDARD_PAGE_LAYOUTS[
+      layoutName as keyof typeof ALL_STANDARD_PAGE_LAYOUTS
+    ];
   const universalIdentifier = layout.universalIdentifier;
   const layoutIds = standardPageLayoutMetadataRelatedEntityIds[layoutName];
 

@@ -12,7 +12,6 @@ import {
   updateBrandBrainPageContent,
 } from 'src/modules/myah-brand-brain/utils/brand-brain-agent-tools.util';
 
-
 const brandBrainSeedInputSchema = z.object({
   brandName: z.string(),
   websiteUrl: z.string().optional(),
@@ -21,31 +20,44 @@ const brandBrainSeedInputSchema = z.object({
   audience: z.string().optional(),
   positioning: z.string().optional(),
   contentGuidelines: z.string().optional(),
-  products: z.array(z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    url: z.string().optional(),
-    price: z.string().optional(),
-  })).optional(),
-  socialChannels: z.array(z.object({ platform: z.string(), value: z.string() })).optional(),
-  sourceNotes: z.array(z.object({
-    label: z.string(),
-    sourceType: z.enum(['user-provided', 'website', 'document', 'agent-observation']),
-    sourceUrl: z.string().optional(),
-    capturedAt: z.string().optional(),
-    excerpt: z.string().optional(),
-    informedPaths: z.array(z.string()).optional(),
-    confidence: z.enum(['low', 'medium', 'high']).optional(),
-  })).optional(),
+  products: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        url: z.string().optional(),
+        price: z.string().optional(),
+      }),
+    )
+    .optional(),
+  socialChannels: z
+    .array(z.object({ platform: z.string(), value: z.string() }))
+    .optional(),
+  sourceNotes: z
+    .array(
+      z.object({
+        label: z.string(),
+        sourceType: z.enum([
+          'user-provided',
+          'website',
+          'document',
+          'agent-observation',
+        ]),
+        sourceUrl: z.string().optional(),
+        capturedAt: z.string().optional(),
+        excerpt: z.string().optional(),
+        informedPaths: z.array(z.string()).optional(),
+        confidence: z.enum(['low', 'medium', 'high']).optional(),
+      }),
+    )
+    .optional(),
   actor: z.string().optional(),
   occurredAt: z.string().optional(),
 });
 
 @Injectable()
 export class MyahBrandBrainWorkspaceService {
-  constructor(
-    private readonly storeFactory: MyahBrandBrainStoreService,
-  ) {}
+  constructor(private readonly storeFactory: MyahBrandBrainStoreService) {}
 
   generateBrandBrainTools({
     workspaceId,
@@ -80,12 +92,14 @@ export class MyahBrandBrainWorkspaceService {
         execute: (input) => searchOrReadBrandBrain({ ...input, store }),
       },
       'brand-brain-seed-or-update-from-brief': {
-        description: 'Seed missing Brand Brain pages from a brand brief without overwriting useful existing content.',
+        description:
+          'Seed missing Brand Brain pages from a brand brief without overwriting useful existing content.',
         inputSchema: brandBrainSeedInputSchema,
         execute: (input) => seedOrUpdateBrandBrainFromBrief({ input, store }),
       },
       'brand-brain-update-page-content': {
-        description: 'Append a targeted, non-destructive update to a specific Myah Brand Brain page and log the change.',
+        description:
+          'Append a targeted, non-destructive update to a specific Myah Brand Brain page and log the change.',
         inputSchema: z.object({
           brandNameOrSlug: z.string(),
           canonicalPath: z.string(),
