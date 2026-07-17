@@ -105,15 +105,17 @@ const renderEvidence = () =>
     </I18nProvider>,
   );
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
 describe('AiChatActionApprovalEvidence', () => {
   it('renders provider acceptance as neutral pending projection', () => {
     renderEvidence();
 
-    expect(screen.getByText('Accepted; waiting for projection')).toBeInTheDocument();
+    expect(
+      screen.getByText('Accepted; waiting for projection'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Send Instagram reply')).toBeInTheDocument();
   });
 

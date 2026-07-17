@@ -61,7 +61,9 @@ const pendingApproval: AgentChatPendingApproval = {
   },
 };
 
-const renderApprovalCard = (approval: AgentChatPendingApproval = pendingApproval) =>
+const renderApprovalCard = (
+  approval: AgentChatPendingApproval = pendingApproval,
+) =>
   render(
     <I18nProvider i18n={i18n}>
       <ThemeProvider colorScheme="light">
@@ -133,7 +135,9 @@ describe('AiChatApprovalCard', () => {
     });
     expect(screen.getByText('Projected message')).toBeVisible();
     expect(screen.getByText(serverDerivedProposal.body)).toBeVisible();
-    expect(screen.getByText(`To: ${serverDerivedProposal.recipientLabel}`)).toBeVisible();
+    expect(
+      screen.getByText(`To: ${serverDerivedProposal.recipientLabel}`),
+    ).toBeVisible();
     expect(
       screen.getByText(`From: ${serverDerivedProposal.sendingAccountLabel}`),
     ).toBeVisible();
@@ -152,7 +156,10 @@ describe('AiChatApprovalCard', () => {
   it.each([
     [
       'the proposal is loading',
-      { data: { getActionApprovalProposal: serverDerivedProposal }, loading: true },
+      {
+        data: { getActionApprovalProposal: serverDerivedProposal },
+        loading: true,
+      },
     ],
     [
       'the proposal query errors',

@@ -50,7 +50,9 @@ const pendingGenericApprovalResultSchema = z.object({
       })
       .optional(),
     consequences: z.array(z.string()),
-    options: z.object({ allowRequestChanges: z.boolean().optional() }).optional(),
+    options: z
+      .object({ allowRequestChanges: z.boolean().optional() })
+      .optional(),
   }),
 });
 
@@ -87,8 +89,9 @@ export const agentChatPendingApprovalComponentSelector =
             continue;
           }
 
-          const registered =
-            pendingRegisteredApprovalResultSchema.safeParse(part.output.result);
+          const registered = pendingRegisteredApprovalResultSchema.safeParse(
+            part.output.result,
+          );
           if (registered.success) {
             return {
               messageId: lastAssistantMessage.id,
@@ -97,8 +100,9 @@ export const agentChatPendingApprovalComponentSelector =
             };
           }
 
-          const generic =
-            pendingGenericApprovalResultSchema.safeParse(part.output.result);
+          const generic = pendingGenericApprovalResultSchema.safeParse(
+            part.output.result,
+          );
           if (generic.success) {
             return {
               messageId: lastAssistantMessage.id,

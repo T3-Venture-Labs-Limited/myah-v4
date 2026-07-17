@@ -92,13 +92,6 @@ export class SendInstagramReplyTool implements Tool {
         workspaceId: context.workspaceId,
         binding,
       });
-      const proof = await this.rebuildInboundProof(
-        context.workspaceId,
-        authority,
-      );
-      if (!proof) {
-        return { success: false, message: 'Instagram reply was not sent.' };
-      }
 
       const reservation =
         await this.actionApprovalService.reserveExecutionForBinding({
@@ -142,6 +135,18 @@ export class SendInstagramReplyTool implements Tool {
       }
 
       try {
+        const proof = await this.rebuildInboundProof(
+          context.workspaceId,
+          authority,
+        );
+        if (!proof) {
+          return this.recordTerminalState(
+            reservation.receipt.id,
+            ActionExecutionReceiptState.FAILED,
+            'failed',
+          );
+        }
+
         const sendResult = await this.myahComposioService.executeInstagramTool({
           workspaceId: context.workspaceId,
           connectedAccountId:

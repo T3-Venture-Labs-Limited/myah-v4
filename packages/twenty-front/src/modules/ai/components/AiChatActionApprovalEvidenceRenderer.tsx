@@ -1,5 +1,5 @@
 import { useQuery } from '@apollo/client/react';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 import {
   AiChatActionApprovalEvidence,
@@ -36,21 +36,7 @@ export const AiChatActionApprovalEvidenceRenderer = ({
       variables: { bindingId },
       fetchPolicy: 'cache-and-network',
     });
-  const previousLifecycleStateRef = useRef(lifecycleState);
-  const bindingIdRef = useRef(bindingId);
-
   useEffect(() => {
-    if (bindingIdRef.current !== bindingId) {
-      bindingIdRef.current = bindingId;
-      previousLifecycleStateRef.current = lifecycleState;
-      return;
-    }
-
-    if (previousLifecycleStateRef.current === lifecycleState) {
-      return;
-    }
-
-    previousLifecycleStateRef.current = lifecycleState;
     void proposalRefetch({ bindingId });
     void receiptRefetch({ bindingId });
   }, [bindingId, lifecycleState, proposalRefetch, receiptRefetch]);

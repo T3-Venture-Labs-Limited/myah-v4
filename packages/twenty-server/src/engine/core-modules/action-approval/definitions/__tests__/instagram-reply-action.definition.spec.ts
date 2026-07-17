@@ -303,6 +303,35 @@ describe('InstagramReplyActionDefinition', () => {
       }),
     ).rejects.toThrow('Instagram reply source graph is unavailable');
   });
+  it('rejects a preview when its provider conversation changes after approval', async () => {
+    const { definition } = buildDefinition();
+    const expected = await definition.propose({
+      workspaceId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      threadId,
+      input: { draftId },
+    });
+    const binding = {
+      ...expected.expectedActionBinding,
+      state: 'PENDING',
+      expiresAt: new Date('2026-07-17T10:30:00.000Z'),
+      createdAt: new Date('2026-07-17T10:00:00.000Z'),
+      decidedAt: null,
+    };
+    const { definition: changedConversationDefinition } = buildDefinition({
+      conversation: {
+        ...sourceGraph,
+        providerConversationId: 'different-provider-conversation-id',
+      },
+    });
+
+    await expect(
+      changedConversationDefinition.getProposal({
+        workspaceId,
+        binding: binding as never,
+      }),
+    ).rejects.toThrow('Instagram reply source graph is unavailable');
+  });
 
   it('rejects a graph hidden from the initiator before creating a binding', async () => {
     const { definition } = buildDefinition({ draft: null });

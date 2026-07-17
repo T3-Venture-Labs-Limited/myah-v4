@@ -302,7 +302,9 @@ export class InstagramReplyActionDefinition {
       actionVersion: this.actionVersion,
       draftId: graph.draftId,
       contentDigest: computeActionContentDigest(graph.draftBody),
-      recipientFingerprint: computeActionContentDigest(graph.recipientIgsid),
+      recipientFingerprint: computeActionContentDigest(
+        JSON.stringify([graph.providerConversationId, graph.recipientIgsid]),
+      ),
       sendingAccountFingerprint: computeActionContentDigest(
         JSON.stringify([
           graph.account.id,

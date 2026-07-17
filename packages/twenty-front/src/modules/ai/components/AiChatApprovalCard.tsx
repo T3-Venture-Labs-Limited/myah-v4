@@ -169,17 +169,20 @@ type GetActionApprovalProposalData = {
   };
 };
 
-type ExactActionApprovalProposal = GetActionApprovalProposalData['getActionApprovalProposal'] & {
-  action: 'send_instagram_reply';
-  actionVersion: 1;
-  body: string;
-  recipientLabel: string;
-  sendingAccountLabel: string;
-  state: 'PENDING';
-};
+type ExactActionApprovalProposal =
+  GetActionApprovalProposalData['getActionApprovalProposal'] & {
+    action: 'send_instagram_reply';
+    actionVersion: 1;
+    body: string;
+    recipientLabel: string;
+    sendingAccountLabel: string;
+    state: 'PENDING';
+  };
 
 const isExactActionApprovalProposal = (
-  proposal: GetActionApprovalProposalData['getActionApprovalProposal'] | undefined,
+  proposal:
+    | GetActionApprovalProposalData['getActionApprovalProposal']
+    | undefined,
 ): proposal is ExactActionApprovalProposal =>
   proposal?.action === 'send_instagram_reply' &&
   proposal.actionVersion === 1 &&
@@ -230,13 +233,15 @@ export const AiChatApprovalCard = ({
   const request: RequestApprovalToolInput =
     'request' in pendingApproval
       ? pendingApproval.request
-      : isActionApprovalProposalDecidable && exactProposal
+      : isActionApprovalProposalDecidable && exactProposal !== undefined
         ? {
             title: t`Review Instagram reply`,
             summary: t`Review the exact server-derived Instagram reply before it is sent.`,
             actionKind: 'external_write',
             riskLevel: 'medium',
-            consequences: [t`The reply will be sent to the existing conversation.`],
+            consequences: [
+              t`The reply will be sent to the existing conversation.`,
+            ],
             preview: { format: 'text', content: exactProposal.body },
           }
         : {
@@ -298,10 +303,14 @@ export const AiChatApprovalCard = ({
         </StyledSection>
       )}
 
-      {isActionApprovalProposalDecidable && exactProposal && (
+      {isActionApprovalProposalDecidable && exactProposal !== undefined && (
         <StyledMeta>
-          <span>{t`To`}: {exactProposal.recipientLabel}</span>
-          <span>{t`From`}: {exactProposal.sendingAccountLabel}</span>
+          <span>
+            {t`To`}: {exactProposal.recipientLabel}
+          </span>
+          <span>
+            {t`From`}: {exactProposal.sendingAccountLabel}
+          </span>
         </StyledMeta>
       )}
 

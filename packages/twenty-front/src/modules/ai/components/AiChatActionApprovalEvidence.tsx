@@ -16,6 +16,11 @@ export type ActionApprovalEvidenceLink = {
   role: string;
 };
 
+type ActionApprovalEvidenceLinkChipProps = Pick<
+  ActionApprovalEvidenceLink,
+  'objectMetadataId' | 'recordId'
+>;
+
 export type ActionApprovalProposalEvidence = {
   action: string;
   state: string;
@@ -50,7 +55,6 @@ const StyledEvidenceLinks = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-
 const getReceiptStatusLabel = (state: string) => {
   if (state === 'PROVIDER_ACCEPTED') {
     return 'Accepted; waiting for projection';
@@ -73,7 +77,9 @@ const getReceiptStatusLabel = (state: string) => {
 const ActionApprovalEvidenceLinkFallback = () => {
   const { t } = useLingui();
 
-  return <Chip label={t`Evidence unavailable`} variant={ChipVariant.Transparent} />;
+  return (
+    <Chip label={t`Evidence unavailable`} variant={ChipVariant.Transparent} />
+  );
 };
 
 const ResolvedActionApprovalEvidenceLink = ({
@@ -105,7 +111,7 @@ const ResolvedActionApprovalEvidenceLink = ({
 const ActionApprovalEvidenceLinkChip = ({
   objectMetadataId,
   recordId,
-}: ActionApprovalEvidenceLink) => {
+}: ActionApprovalEvidenceLinkChipProps) => {
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
   const objectMetadataItem = objectMetadataItems.find(
     (item) => item.id === objectMetadataId,
@@ -143,14 +149,17 @@ export const AiChatActionApprovalEvidence = ({
         <>
           <span>{getReceiptStatusLabel(receipt.state)}</span>
           {receipt.outcome && <span>{receipt.outcome}</span>}
-          <span>{t`Receipt updated`} {new Date(receipt.occurredAt).toLocaleString()}</span>
+          <span>
+            {t`Receipt updated`} {new Date(receipt.occurredAt).toLocaleString()}
+          </span>
         </>
       )}
       <StyledEvidenceLinks>
         {evidenceLinks.map((evidenceLink) => (
           <ActionApprovalEvidenceLinkChip
             key={`${evidenceLink.objectMetadataId}-${evidenceLink.recordId}-${evidenceLink.role}`}
-            {...evidenceLink}
+            objectMetadataId={evidenceLink.objectMetadataId}
+            recordId={evidenceLink.recordId}
           />
         ))}
       </StyledEvidenceLinks>

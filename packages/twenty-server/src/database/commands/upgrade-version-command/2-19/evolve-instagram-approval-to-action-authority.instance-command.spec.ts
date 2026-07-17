@@ -717,6 +717,25 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
       },
     ]);
   });
+  it('installs receipt idempotency uniqueness during the fast legacy cutover', async () => {
+    await installLegacyFixture(queryRunner, 'original');
+    await new EvolveInstagramApprovalToActionAuthorityFastInstanceCommand().up(
+      queryRunner,
+    );
+
+    await expect(
+      queryRaw(
+        queryRunner,
+        `SELECT conname
+         FROM pg_constraint
+         WHERE conrelid = 'core."actionExecutionReceipt"'::regclass
+           AND conname = 'UQ_ACTION_EXECUTION_RECEIPT_WORKSPACE_IDEMPOTENCY'
+           AND contype = 'u'`,
+      ),
+    ).resolves.toStrictEqual([
+      { conname: 'UQ_ACTION_EXECUTION_RECEIPT_WORKSPACE_IDEMPOTENCY' },
+    ]);
+  });
 
   it('rejects a non-inbound inbound-proof direction', async () => {
     await installLegacyFixture(queryRunner, 'absent');

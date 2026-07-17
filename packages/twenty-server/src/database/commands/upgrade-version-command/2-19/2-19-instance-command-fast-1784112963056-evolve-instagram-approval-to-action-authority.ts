@@ -195,6 +195,22 @@ const prepareLegacyReceipt = async (queryRunner: QueryRunner) => {
   );
 };
 
+const ensureReceiptIdempotencyConstraint = async (
+  queryRunner: QueryRunner,
+) => {
+  await queryRunner.query(`DO $$ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'UQ_ACTION_EXECUTION_RECEIPT_WORKSPACE_IDEMPOTENCY'
+        AND conrelid = 'core."actionExecutionReceipt"'::regclass
+    ) THEN
+      ALTER TABLE core."actionExecutionReceipt"
+        ADD CONSTRAINT "UQ_ACTION_EXECUTION_RECEIPT_WORKSPACE_IDEMPOTENCY"
+        UNIQUE ("workspaceId", "idempotencyKey");
+    END IF;
+  END $$`);
+};
+
 const assertTablesAreEmpty = async (queryRunner: QueryRunner) => {
   const rows = (await queryRunner.query(`SELECT
     (SELECT count(*) FROM ${BINDING}) AS "bindingRows",
@@ -358,6 +374,7 @@ export class EvolveInstagramApprovalToActionAuthorityFastInstanceCommand
       await prepareLegacyBinding(queryRunner);
       await prepareLegacyReceipt(queryRunner);
       await createGenericTables(queryRunner);
+      await ensureReceiptIdempotencyConstraint(queryRunner);
 
       return;
     }

@@ -297,7 +297,7 @@ describe('SendInstagramReplyTool', () => {
     expect(myahComposioService.executeInstagramTool).not.toHaveBeenCalled();
   });
 
-  it('revalidates immutable authority before performing a reservation', async () => {
+  it('revalidates immutable authority before reserving and performs provider I/O only after reservation', async () => {
     const {
       tool,
       actionApprovalService,
@@ -318,10 +318,10 @@ describe('SendInstagramReplyTool', () => {
         .invocationCallOrder[0],
     );
     expect(
-      myahComposioService.executeInstagramTool.mock.invocationCallOrder[0],
-    ).toBeLessThan(
       actionApprovalService.reserveExecutionForBinding.mock
         .invocationCallOrder[0],
+    ).toBeLessThan(
+      myahComposioService.executeInstagramTool.mock.invocationCallOrder[0],
     );
   });
 
@@ -408,7 +408,7 @@ describe('SendInstagramReplyTool', () => {
       { ...boundInboundMessage, id: undefined },
     ],
   ])(
-    'does not consume or send when the bounded provider proof contains %s',
+    'records terminal failure without sending when the bounded provider proof contains %s',
     async (_reason, message) => {
       const { tool, actionApprovalService, myahComposioService } = buildTool();
       myahComposioService.executeInstagramTool
@@ -426,10 +426,14 @@ describe('SendInstagramReplyTool', () => {
 
       expect(
         actionApprovalService.reserveExecutionForBinding,
-      ).not.toHaveBeenCalled();
+      ).toHaveBeenCalledTimes(1);
       expect(
         actionApprovalService.recordProviderTerminalState,
-      ).not.toHaveBeenCalled();
+      ).toHaveBeenCalledWith({
+        receiptId: 'receipt-id',
+        state: ActionExecutionReceiptState.FAILED,
+        code: 'failed',
+      });
       expect(myahComposioService.executeInstagramTool).toHaveBeenCalledTimes(1);
     },
   );
