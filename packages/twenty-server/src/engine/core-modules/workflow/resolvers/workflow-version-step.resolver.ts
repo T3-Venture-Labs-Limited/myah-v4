@@ -7,6 +7,7 @@ import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/c
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool';
 import { CreateWorkflowVersionStepInput } from 'src/engine/core-modules/workflow/dtos/create-workflow-version-step.input';
 import { DeleteWorkflowVersionStepInput } from 'src/engine/core-modules/workflow/dtos/delete-workflow-version-step.input';
@@ -49,6 +50,7 @@ export class WorkflowVersionStepResolver {
     private readonly workflowRunnerWorkspaceService: WorkflowRunnerWorkspaceService,
     private readonly workflowRunWorkspaceService: WorkflowRunWorkspaceService,
     private readonly httpTool: HttpTool,
+    private readonly externalWritePolicyService: ExternalWritePolicyService,
     private readonly connectedAccountMetadataService: ConnectedAccountMetadataService,
   ) {}
 
@@ -164,6 +166,15 @@ export class WorkflowVersionStepResolver {
     @Args('input')
     { url, method, headers, body }: TestHttpRequestInput,
   ): Promise<TestHttpRequestDTO> {
+    await this.externalWritePolicyService.assertExecutable({
+      toolName: 'http_request',
+      context: {
+        workspaceId: workspace.id,
+        roleId: '',
+        rolePermissionConfig: { shouldBypassPermissionChecks: true },
+      },
+    });
+
     return this.httpTool.execute(
       {
         url,

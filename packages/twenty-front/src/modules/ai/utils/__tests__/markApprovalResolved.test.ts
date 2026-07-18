@@ -1,6 +1,6 @@
+import { isToolUIPart } from 'ai';
 import { type ExtendedUIMessage } from 'twenty-shared/ai';
 
-import { markApprovalPending } from '@/ai/utils/markApprovalPending';
 import { markApprovalResolved } from '@/ai/utils/markApprovalResolved';
 
 const request = {
@@ -43,41 +43,95 @@ describe('approval optimistic state helpers', () => {
       },
     );
 
-    expect(updated[0].parts[0]).toMatchObject({
-      output: {
-        result: {
-          request,
-          status: 'resolved',
-          decision: 'approved',
-          comment: 'Looks good',
-          decidedAt: expect.any(String),
-        },
+    const resolvedPart = updated[0].parts[0];
+    expect(isToolUIPart(resolvedPart)).toBe(true);
+    if (!isToolUIPart(resolvedPart)) {
+      return;
+    }
+
+    expect(resolvedPart.output).toEqual({
+      result: {
+        status: 'resolved',
+        decision: 'approved',
+        comment: 'Looks good',
+        decidedAt: expect.any(String),
       },
     });
   });
 
-  it('restores the matching approval part to pending', () => {
-    const resolved = markApprovalResolved(
-      messages,
-      'message-id',
-      'approval-call',
+  it('preserves the opaque action approval binding UUID when resolving', () => {
+    const actionApprovalBindingId = 'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
+    const registeredMessages = [
       {
-        decision: 'rejected',
+        ...messages[0],
+        parts: [
+          {
+            ...messages[0].parts[0],
+            output: {
+              result: { status: 'pending', actionApprovalBindingId },
+            },
+          },
+        ],
       },
-    );
+    ] as ExtendedUIMessage[];
 
-    const updated = markApprovalPending(
-      resolved,
+    const updated = markApprovalResolved(
+      registeredMessages,
       'message-id',
       'approval-call',
+      { decision: 'approved' },
     );
 
     expect(updated[0].parts[0]).toMatchObject({
-      output: {
-        result: {
-          request,
-          status: 'pending',
-        },
+      output: { result: { actionApprovalBindingId, status: 'resolved' } },
+    });
+  });
+
+  it('keeps registered approval output opaque while resolving', () => {
+    const actionApprovalBindingId = 'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
+    const registeredMessages = [
+      {
+        ...messages[0],
+        parts: [
+          {
+            ...messages[0].parts[0],
+            output: {
+              body: 'body-must-not-survive',
+              preview: 'preview-must-not-survive',
+              providerPayload: 'provider-payload-must-not-survive',
+              authorization: 'authorization-must-not-survive',
+              error: 'error-must-not-survive',
+              result: {
+                actionApprovalBindingId,
+                body: 'nested-body-must-not-survive',
+                preview: 'nested-preview-must-not-survive',
+                providerToken: 'provider-token-must-not-survive',
+                auth: 'auth-must-not-survive',
+                error: 'nested-error-must-not-survive',
+              },
+            },
+          },
+        ],
+      },
+    ] as ExtendedUIMessage[];
+
+    const updated = markApprovalResolved(
+      registeredMessages,
+      'message-id',
+      'approval-call',
+      { decision: 'approved', comment: 'Approved' },
+    );
+
+    const resolvedPart = updated[0].parts[0];
+    expect(isToolUIPart(resolvedPart)).toBe(true);
+    if (!isToolUIPart(resolvedPart)) {
+      return;
+    }
+
+    expect(resolvedPart.output).toEqual({
+      result: {
+        actionApprovalBindingId,
+        status: 'resolved',
       },
     });
   });

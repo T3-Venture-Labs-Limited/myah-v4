@@ -8,7 +8,6 @@ import {
   type AskQuestionsToolResult,
   ExtendedUIMessage,
   REQUEST_APPROVAL_TOOL_NAME,
-  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
   type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
 import { isDefined } from 'twenty-shared/utils';
@@ -19,7 +18,7 @@ import type { UIDataTypes, UIMessagePart, UITools } from 'ai';
 
 import { CodeInterpreterService } from 'src/engine/core-modules/code-interpreter/code-interpreter.service';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
-import { InstagramReplyApprovalService } from 'src/engine/core-modules/instagram-reply/services/instagram-reply-approval.service';
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { AgentMessagePartEntity } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-message-part.entity';
 import {
   AgentMessageEntity,
@@ -47,6 +46,9 @@ const APPROVAL_DECISIONS = [
   'rejected',
   'changes_requested',
 ] as const satisfies ApprovalDecision[];
+
+const ACTION_APPROVAL_BINDING_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type AgentChatApprovalDecision = {
   decision: ApprovalDecision | string;
@@ -91,7 +93,7 @@ export class AgentChatService {
     private readonly titleGenerationService: AgentTitleGenerationService,
     private readonly workspaceEventBroadcaster: WorkspaceEventBroadcaster,
     private readonly codeInterpreterService: CodeInterpreterService,
-    private readonly instagramReplyApprovalService: InstagramReplyApprovalService,
+    private readonly actionApprovalService: ActionApprovalService,
   ) {}
 
   async createThread({
@@ -705,7 +707,7 @@ export class AgentChatService {
     rollback: {
       partId: string;
       previousOutput: Record<string, unknown>;
-      instagramReplyApprovalId?: string;
+      actionApprovalBindingId?: string;
     };
     shouldResume: boolean;
   }> {
@@ -716,159 +718,198 @@ export class AgentChatService {
       );
     }
 
-    const message = await this.messageRepository.findOne(workspaceId, {
-      where: { id: messageId, threadId },
-      relations: ['parts'],
-    });
-
-    if (!message) {
-      throw new AiException(
-        'Approval message not found',
-        AiExceptionCode.MESSAGE_NOT_FOUND,
-      );
-    }
-
-    const pendingHumanInputParts = (message.parts ?? []).filter((part) => {
-      if (
-        part.toolName !== ASK_QUESTIONS_TOOL_NAME &&
-        part.toolName !== REQUEST_APPROVAL_TOOL_NAME &&
-        part.toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
-      ) {
-        return false;
+    return this.actionApprovalService.executeInTransaction(async (manager) => {
+      const threadRepository = this.threadRepository.withManager(manager);
+      const messageRepository = this.messageRepository.withManager(manager);
+      const messagePartRepository =
+        this.messagePartRepository.withManager(manager);
+      const thread = await threadRepository.findOne(workspaceId, {
+        where: { id: threadId, userWorkspaceId, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!thread) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
       }
 
-      const result = (
-        part.toolOutput as { result?: { status?: string } } | null
-      )?.result;
+      const lockedMessage = await messageRepository.findOne(workspaceId, {
+        where: { id: messageId, threadId },
+        lock: { mode: 'pessimistic_write' },
+      });
 
-      return result?.status === 'pending';
-    });
+      if (!lockedMessage) {
+        throw new AiException(
+          'Approval message not found',
+          AiExceptionCode.MESSAGE_NOT_FOUND,
+        );
+      }
 
-    if (pendingHumanInputParts.length !== 1) {
-      throw new AiException(
-        'Expected exactly one pending approval request.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
+      const message = await messageRepository.findOne(workspaceId, {
+        where: { id: messageId, threadId },
+        relations: ['parts'],
+      });
+
+      if (!message) {
+        throw new AiException(
+          'Approval message not found',
+          AiExceptionCode.MESSAGE_NOT_FOUND,
+        );
+      }
+
+      const pendingHumanInputParts = (message.parts ?? []).filter((part) => {
+        if (
+          part.toolName !== ASK_QUESTIONS_TOOL_NAME &&
+          part.toolName !== REQUEST_APPROVAL_TOOL_NAME
+        ) {
+          return false;
+        }
+
+        const result = (
+          part.toolOutput as { result?: { status?: string } } | null
+        )?.result;
+
+        return result?.status === 'pending';
+      });
+
+      if (pendingHumanInputParts.length !== 1) {
+        throw new AiException(
+          'Expected exactly one pending approval request.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      const pendingPart = pendingHumanInputParts[0];
+
+      if (pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      const previousOutput =
+        (pendingPart.toolOutput as Record<string, unknown> | null) ?? {};
+      const previousResult = previousOutput.result as
+        | (RequestApprovalToolResult & { actionApprovalBindingId?: string })
+        | undefined;
+
+      if (previousResult?.status !== 'pending') {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      const actionApprovalBindingId = previousResult.actionApprovalBindingId;
+      if (
+        actionApprovalBindingId !== undefined &&
+        !ACTION_APPROVAL_BINDING_ID_PATTERN.test(actionApprovalBindingId)
+      ) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
+
+      const claim = await threadRepository.update(
+        workspaceId,
+        { id: threadId, pendingQuestionMessageId: messageId },
+        {
+          pendingQuestionMessageId: null,
+          activeStreamId: null,
+        },
       );
-    }
 
-    const pendingPart = pendingHumanInputParts[0];
+      if ((claim.affected ?? 0) === 0) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
 
-    if (
-      pendingPart.toolName !== REQUEST_APPROVAL_TOOL_NAME &&
-      pendingPart.toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
-    ) {
-      throw new AiException(
-        'No pending approval request to resolve.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
+      const bindingDecision = actionApprovalBindingId
+        ? await this.actionApprovalService.decidePendingBindingInTransaction(
+            manager,
+            {
+              workspaceId,
+              userWorkspaceId,
+              threadId,
+              approvalBindingId: actionApprovalBindingId,
+              decision: decision.decision as
+                | 'approved'
+                | 'rejected'
+                | 'changes_requested',
+            },
+          )
+        : null;
+
+      const shouldResume =
+        bindingDecision?.accepted !== false && decision.decision === 'approved';
+
+      const partUpdate = await messagePartRepository.update(
+        workspaceId,
+        { id: pendingPart.id, toolName: REQUEST_APPROVAL_TOOL_NAME },
+        {
+          toolOutput: actionApprovalBindingId
+            ? {
+                result: {
+                  status: 'resolved',
+                  actionApprovalBindingId,
+                },
+              }
+            : {
+                ...previousOutput,
+                success: true,
+                message: 'User resolved the approval request.',
+                result: {
+                  request: previousResult.request,
+                  status: 'resolved',
+                  decision: decision.decision as ApprovalDecision,
+                  comment: decision.comment,
+                  decidedAt: new Date().toISOString(),
+                },
+              },
+        },
       );
-    }
 
-    const previousOutput =
-      (pendingPart.toolOutput as Record<string, unknown> | null) ?? {};
-    const previousResult = previousOutput.result as
-      | RequestApprovalToolResult
-      | undefined;
+      if ((partUpdate.affected ?? 0) === 0) {
+        throw new AiException(
+          'No pending approval request to resolve.',
+          AiExceptionCode.APPROVAL_NOT_PENDING,
+        );
+      }
 
-    if (previousResult?.status !== 'pending') {
-      throw new AiException(
-        'No pending approval request to resolve.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
-      );
-    }
+      if (shouldResume) {
+        const resumeClaim = await threadRepository.update(
+          workspaceId,
+          {
+            id: threadId,
+            pendingQuestionMessageId: IsNull(),
+            activeStreamId: IsNull(),
+          },
+          { activeStreamId: streamId },
+        );
 
-    const instagramReplyApprovalId =
-      pendingPart.toolName === REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME
-        ? previousResult.approvalId
-        : undefined;
-
-    const shouldResume = decision.decision === 'approved';
-
-    const claim = await this.threadRepository.update(
-      workspaceId,
-      { id: threadId, pendingQuestionMessageId: messageId },
-      {
-        pendingQuestionMessageId: null,
-        activeStreamId: shouldResume ? streamId : null,
-      },
-    );
-
-    if ((claim.affected ?? 0) === 0) {
-      throw new AiException(
-        'No pending approval request to resolve.',
-        AiExceptionCode.APPROVAL_NOT_PENDING,
-      );
-    }
-
-    let hasResolvedNativeApproval = false;
-
-    try {
-      if (pendingPart.toolName === REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME) {
-        if (!instagramReplyApprovalId) {
+        if ((resumeClaim.affected ?? 0) === 0) {
           throw new AiException(
-            'Instagram reply approval binding is invalid.',
+            'No pending approval request to resolve.',
             AiExceptionCode.APPROVAL_NOT_PENDING,
           );
         }
-
-        await this.instagramReplyApprovalService.resolveApproval({
-          workspaceId,
-          userWorkspaceId,
-          threadId,
-          approvalId: instagramReplyApprovalId,
-          decision: decision.decision as
-            | 'approved'
-            | 'rejected'
-            | 'changes_requested',
-        });
-        hasResolvedNativeApproval = true;
       }
 
-      await this.messagePartRepository.update(
-        workspaceId,
-        { id: pendingPart.id },
-        {
-          toolOutput: {
-            ...previousOutput,
-            success: true,
-            message: 'User resolved the approval request.',
-            result: {
-              request: previousResult.request,
-              approvalId: previousResult.approvalId,
-              status: 'resolved',
-              decision: decision.decision as ApprovalDecision,
-              comment: decision.comment,
-              decidedAt: new Date().toISOString(),
-            } satisfies RequestApprovalToolResult,
-          },
+      return {
+        turnId: message.turnId,
+        rollback: {
+          partId: pendingPart.id,
+          previousOutput,
+          ...(actionApprovalBindingId ? { actionApprovalBindingId } : {}),
         },
-      );
-    } catch (error) {
-      if (hasResolvedNativeApproval && instagramReplyApprovalId) {
-        await this.instagramReplyApprovalService.restorePendingApproval({
-          workspaceId,
-          threadId,
-          approvalId: instagramReplyApprovalId,
-        });
-      }
-      await this.threadRepository
-        .update(
-          workspaceId,
-          { id: threadId, activeStreamId: streamId },
-          { pendingQuestionMessageId: messageId, activeStreamId: null },
-        )
-        .catch(() => {});
-      throw error;
-    }
-
-    return {
-      turnId: message.turnId,
-      rollback: {
-        partId: pendingPart.id,
-        previousOutput,
-        ...(instagramReplyApprovalId ? { instagramReplyApprovalId } : {}),
-      },
-      shouldResume,
-    };
+        shouldResume,
+      };
+    });
   }
 
   async restorePendingApproval({
@@ -885,14 +926,14 @@ export class AgentChatService {
     rollback: {
       partId: string;
       previousOutput: Record<string, unknown>;
-      instagramReplyApprovalId?: string;
+      actionApprovalBindingId?: string;
     };
   }): Promise<void> {
-    if (rollback.instagramReplyApprovalId) {
-      await this.instagramReplyApprovalService.restorePendingApproval({
+    if (rollback.actionApprovalBindingId) {
+      await this.actionApprovalService.restorePendingBinding({
         workspaceId,
         threadId,
-        approvalId: rollback.instagramReplyApprovalId,
+        approvalBindingId: rollback.actionApprovalBindingId,
       });
     }
 

@@ -10,17 +10,35 @@ const draftId = 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b';
 const replyBody = 'Thanks for reaching out.';
 
 const buildService = ({
-  activeAccounts = [{ id: 'account-record-id' }],
+  activeAccounts = [
+    { id: 'account-record-id', igUserId: 'sending-account-igsid' },
+  ],
   conversations = [],
+  inboundMessages = [
+    {
+      id: 'provider-inbound-message-id',
+      message: 'Hello from Instagram',
+      from: { id: 'recipient-igsid' },
+      to: { data: [{ id: 'sending-account-igsid' }] },
+      created_time: '2026-07-17T11:30:00.000Z',
+    },
+  ],
   draft = {
     body: replyBody,
     name: 'Reply to wakozaco',
     sentAt: null,
     title: 'Reply to wakozaco',
   },
+  existingInboundMessages = [],
 }: {
-  activeAccounts?: { id: string }[];
+  activeAccounts?: { id: string; igUserId: string }[];
   conversations?: { id: string; recipientIgsid: string | null }[];
+  inboundMessages?: Record<string, unknown>[];
+  existingInboundMessages?: {
+    id: string;
+    direction: string;
+    providerCreatedAt: Date | string | null;
+  }[];
   draft?:
     | {
         body: string;
@@ -30,7 +48,7 @@ const buildService = ({
       }
     | undefined;
 } = {}) => {
-  const query = jest.fn(async (sql: string) => {
+  const query = jest.fn(async (sql: string, _parameters?: unknown[]) => {
     if (sql.includes('FROM') && sql.includes('_myahInstagramAccount')) {
       return activeAccounts;
     }
@@ -41,6 +59,10 @@ const buildService = ({
 
     if (sql.includes('SELECT "body", "sentAt"')) {
       return draft ? [draft] : [];
+    }
+
+    if (sql.includes('SELECT "id", "direction", "providerCreatedAt"')) {
+      return existingInboundMessages;
     }
 
     if (sql.includes('SELECT "providerConversationId", "recipientIgsid"')) {
@@ -56,30 +78,56 @@ const buildService = ({
 
     return [];
   });
+  const dataSource = {
+    query,
+    transaction: jest.fn(
+      async (callback: (manager: { query: typeof query }) => unknown) =>
+        callback({ query }),
+    ),
+  };
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
       callback(),
     ),
-    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({ query }),
+    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue(dataSource),
   };
   const workspaceRepository = {
     findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
   };
 
+  const myahComposioService = {
+    getActiveInstagramAccount: jest.fn().mockResolvedValue({
+      connectedAccountId,
+      composioUserId: `workspace:${workspaceId}:instagram`,
+    }),
+    executeInstagramTool: jest.fn().mockResolvedValue({
+      kind: 'success',
+      data: {
+        data: inboundMessages,
+      },
+    }),
+  };
+  const DraftService = InstagramReplyDraftService as unknown as new (
+    ...args: unknown[]
+  ) => InstagramReplyDraftService;
+
   return {
     query,
     globalWorkspaceOrmManager,
     workspaceRepository,
-    service: new InstagramReplyDraftService(
-      workspaceRepository as never,
-      globalWorkspaceOrmManager as never,
+    myahComposioService,
+    service: new DraftService(
+      workspaceRepository,
+      globalWorkspaceOrmManager,
+      myahComposioService,
     ),
   };
 };
 
 describe('InstagramReplyDraftService', () => {
-  it('stages a local conversation candidate and review draft without provider access', async () => {
-    const { service, query, globalWorkspaceOrmManager } = buildService();
+  it('ingests exact live inbound provider evidence before staging a draft', async () => {
+    const { service, query, globalWorkspaceOrmManager, myahComposioService } =
+      buildService();
 
     const result = await service.prepare({
       workspaceId,
@@ -89,6 +137,7 @@ describe('InstagramReplyDraftService', () => {
       recipientIgsid: 'recipient-igsid',
       recipientLabel: '@wakozaco',
       body: `  ${replyBody}  `,
+      inboundMessageId: 'provider-inbound-message-id',
     });
 
     expect(result).toMatchObject({
@@ -110,6 +159,172 @@ describe('InstagramReplyDraftService', () => {
     expect(query.mock.calls.map(([sql]) => sql).join('\n')).toContain(
       "'NEEDS_REVIEW', 'AI'",
     );
+    expect(myahComposioService.executeInstagramTool).toHaveBeenCalledWith({
+      workspaceId,
+      connectedAccountId,
+      toolSlug: 'INSTAGRAM_LIST_ALL_MESSAGES',
+      arguments: {
+        conversation_id: 'provider-conversation-id',
+        limit: 25,
+      },
+    });
+    expect(query.mock.calls.map(([sql]) => sql).join('\n')).toContain(
+      '"_myahSocialMessage"',
+    );
+    expect(
+      query.mock.calls.find(
+        ([sql]) =>
+          sql.includes('INSERT INTO') && sql.includes('"_myahSocialMessage"'),
+      )?.[1],
+    ).toEqual(
+      expect.arrayContaining([
+        'provider-inbound-message-id',
+        new Date('2026-07-17T11:30:00.000Z'),
+      ]),
+    );
+    expect(
+      query.mock.calls.find(
+        ([sql]) =>
+          sql.includes('INSERT INTO') &&
+          sql.includes('"_myahInstagramReplyDraft"'),
+      )?.[0],
+    ).toContain('"inboundMessageRecordId"');
+    expect(
+      query.mock.calls.find(
+        ([sql]) =>
+          sql.includes('INSERT INTO') &&
+          sql.includes('"_myahInstagramReplyDraft"'),
+      )?.[0],
+    ).toContain('"inboundProviderMessageId"');
+  });
+  it('does not create a draft from an unbound provider message', async () => {
+    const { service, query, globalWorkspaceOrmManager } = buildService({
+      inboundMessages: [
+        {
+          id: 'different-provider-message-id',
+          from: { id: 'recipient-igsid' },
+          to: { data: [{ id: 'sending-account-igsid' }] },
+          created_time: '2026-07-17T11:30:00.000Z',
+        },
+      ],
+    });
+
+    await expect(
+      service.prepare({
+        workspaceId,
+        userWorkspaceId,
+        connectedAccountId,
+        providerConversationId: 'provider-conversation-id',
+        recipientIgsid: 'recipient-igsid',
+        recipientLabel: '@wakozaco',
+        body: replyBody,
+        inboundMessageId: 'provider-inbound-message-id',
+      }),
+    ).rejects.toThrow('inbound Instagram message is unavailable');
+
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+  it('backfills a legacy inbound provider timestamp only from matching proof', async () => {
+    const { service, query } = buildService({
+      existingInboundMessages: [
+        {
+          id: 'legacy-inbound-record-id',
+          direction: 'INBOUND',
+          providerCreatedAt: null,
+        },
+      ],
+    });
+
+    await service.prepare({
+      workspaceId,
+      userWorkspaceId,
+      connectedAccountId,
+      providerConversationId: 'provider-conversation-id',
+      recipientIgsid: 'recipient-igsid',
+      recipientLabel: '@wakozaco',
+      body: replyBody,
+      inboundMessageId: 'provider-inbound-message-id',
+    });
+
+    expect(
+      query.mock.calls.find(
+        ([sql]) =>
+          sql.includes('UPDATE') && sql.includes('"providerCreatedAt"'),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.any(String),
+        ['legacy-inbound-record-id', new Date('2026-07-17T11:30:00.000Z')],
+      ]),
+    );
+  });
+  it('rejects a legacy inbound row once its provider timestamp differs', async () => {
+    const { service, query } = buildService({
+      existingInboundMessages: [
+        {
+          id: 'legacy-inbound-record-id',
+          direction: 'INBOUND',
+          providerCreatedAt: new Date('2026-07-17T11:31:00.000Z'),
+        },
+      ],
+    });
+
+    await expect(
+      service.prepare({
+        workspaceId,
+        userWorkspaceId,
+        connectedAccountId,
+        providerConversationId: 'provider-conversation-id',
+        recipientIgsid: 'recipient-igsid',
+        recipientLabel: '@wakozaco',
+        body: replyBody,
+        inboundMessageId: 'provider-inbound-message-id',
+      }),
+    ).rejects.toThrow('inbound Instagram message no longer matches');
+
+    expect(
+      query.mock.calls.some(
+        ([sql]) =>
+          sql.includes('INSERT INTO') &&
+          sql.includes('"_myahInstagramReplyDraft"'),
+      ),
+    ).toBe(false);
+  });
+
+  it('persists the prepared draft and conversation through the canonical account graph', async () => {
+    const { service, query } = buildService();
+
+    await service.prepare({
+      workspaceId,
+      userWorkspaceId,
+      connectedAccountId,
+      providerConversationId: 'provider-conversation-id',
+      recipientIgsid: 'recipient-igsid',
+      recipientLabel: '@wakozaco',
+      body: replyBody,
+      inboundMessageId: 'provider-inbound-message-id',
+    });
+
+    const statements = query.mock.calls.map(
+      ([sql, parameters]) => `${sql}\n${JSON.stringify(parameters)}`,
+    );
+    expect(
+      statements.find(
+        (statement) =>
+          statement.includes('INSERT INTO') &&
+          statement.includes('"_myahSocialConversation"'),
+      ),
+    ).toContain('"instagramAccountId"');
+    expect(
+      statements.find(
+        (statement) =>
+          statement.includes('INSERT INTO') &&
+          statement.includes('"_myahInstagramReplyDraft"'),
+      ),
+    ).toContain('"conversationId"');
   });
 
   it('does not create candidate records for a missing or ambiguous active account', async () => {
@@ -124,6 +339,7 @@ describe('InstagramReplyDraftService', () => {
         recipientIgsid: 'recipient-igsid',
         recipientLabel: '@wakozaco',
         body: replyBody,
+        inboundMessageId: 'provider-inbound-message-id',
       }),
     ).rejects.toThrow('not the workspace active account');
 

@@ -1,10 +1,11 @@
-import { defineObject, FieldType } from 'twenty-sdk/define';
+import { defineObject, FieldType, RelationType } from 'twenty-sdk/define';
 
 import {
   INSTAGRAM_ACCOUNT_AFTER_CURSOR_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_AUTH_CONFIG_ID_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_COMPOSIO_USER_ID_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_CONNECTED_ACCOUNT_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  INSTAGRAM_ACCOUNT_CONVERSATIONS_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_IG_USER_ID_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_LABEL_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_LAST_CHECKED_AT_FIELD_UNIVERSAL_IDENTIFIER,
@@ -12,6 +13,8 @@ import {
   INSTAGRAM_ACCOUNT_LAST_ERROR_FIELD_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_OBJECT_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_STATUS_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_ACCOUNT_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
   INSTAGRAM_ACCOUNT_USERNAME_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
@@ -172,6 +175,22 @@ export default defineObject({
       defaultValue: null,
       description:
         'Redacted latest provider/status error if the connection fails.',
+    },
+    {
+      universalIdentifier:
+        INSTAGRAM_ACCOUNT_CONVERSATIONS_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RELATION,
+      label: 'Conversations',
+      name: 'conversations',
+      description: 'Instagram conversations associated with this account.',
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        SOCIAL_CONVERSATION_ACCOUNT_FIELD_UNIVERSAL_IDENTIFIER,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
     },
   ],
 });

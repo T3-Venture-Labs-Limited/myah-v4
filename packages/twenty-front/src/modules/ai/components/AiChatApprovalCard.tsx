@@ -1,3 +1,4 @@
+import { useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -5,6 +6,7 @@ import {
   type ApprovalActionKind,
   type ApprovalDecision,
   type ApprovalRiskLevel,
+  type RequestApprovalToolInput,
 } from 'twenty-shared/ai';
 import {
   IconAlertTriangle,
@@ -18,6 +20,7 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { LazyMarkdownRenderer } from '@/ai/components/LazyMarkdownRenderer';
 import { useSubmitApprovalDecision } from '@/ai/hooks/useSubmitApprovalDecision';
 import { type AgentChatPendingApproval } from '@/ai/types/AgentChatPendingApproval';
+import { GET_ACTION_APPROVAL_PROPOSAL } from '@/ai/graphql/queries/getActionApprovalProposal';
 
 const StyledCard = styled.div`
   background-color: ${themeCssVariables.background.transparent.lighter};
@@ -154,6 +157,40 @@ const APPROVAL_RISK_LEVEL_LABELS: Record<ApprovalRiskLevel, string> = {
   critical: 'Critical',
 };
 
+type GetActionApprovalProposalData = {
+  getActionApprovalProposal: {
+    action: string;
+    actionVersion: number;
+    body: string | null;
+    recipientLabel: string | null;
+    sendingAccountLabel: string | null;
+    state: string;
+    expiresAt: string;
+  };
+};
+
+type ExactActionApprovalProposal =
+  GetActionApprovalProposalData['getActionApprovalProposal'] & {
+    action: 'send_instagram_reply';
+    actionVersion: 1;
+    body: string;
+    recipientLabel: string;
+    sendingAccountLabel: string;
+    state: 'PENDING';
+  };
+
+const isExactActionApprovalProposal = (
+  proposal:
+    | GetActionApprovalProposalData['getActionApprovalProposal']
+    | undefined,
+): proposal is ExactActionApprovalProposal =>
+  proposal?.action === 'send_instagram_reply' &&
+  proposal.actionVersion === 1 &&
+  proposal.state === 'PENDING' &&
+  typeof proposal.body === 'string' &&
+  typeof proposal.recipientLabel === 'string' &&
+  typeof proposal.sendingAccountLabel === 'string';
+
 export const AiChatApprovalCard = ({
   pendingApproval,
 }: AiChatApprovalCardProps) => {
@@ -161,10 +198,64 @@ export const AiChatApprovalCard = ({
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitDecision } = useSubmitApprovalDecision();
-  const { messageId, toolCallId, request } = pendingApproval;
+  const { messageId, toolCallId } = pendingApproval;
+  const actionApprovalBindingId =
+    'actionApprovalBindingId' in pendingApproval
+      ? pendingApproval.actionApprovalBindingId
+      : undefined;
+  const {
+    data: proposalData,
+    loading: isProposalLoading,
+    error: proposalError,
+  } = useQuery<GetActionApprovalProposalData>(GET_ACTION_APPROVAL_PROPOSAL, {
+    variables: { bindingId: actionApprovalBindingId },
+    fetchPolicy: 'cache-and-network',
+    skip: !actionApprovalBindingId,
+  });
+  const proposal = proposalData?.getActionApprovalProposal;
+  const exactProposal = isExactActionApprovalProposal(proposal)
+    ? proposal
+    : undefined;
+  const proposalExpiresAt = exactProposal
+    ? Date.parse(exactProposal.expiresAt)
+    : Number.NaN;
+  const isActionApprovalProposalDecidable =
+    actionApprovalBindingId !== undefined &&
+    !isProposalLoading &&
+    !proposalError &&
+    exactProposal !== undefined &&
+    Number.isFinite(proposalExpiresAt) &&
+    proposalExpiresAt > Date.now();
+  const isDecisionDisabled =
+    isSubmitting ||
+    (actionApprovalBindingId !== undefined &&
+      !isActionApprovalProposalDecidable);
+  const request: RequestApprovalToolInput =
+    'request' in pendingApproval
+      ? pendingApproval.request
+      : isActionApprovalProposalDecidable && exactProposal !== undefined
+        ? {
+            title: t`Review Instagram reply`,
+            summary: t`Review the exact server-derived Instagram reply before it is sent.`,
+            actionKind: 'external_write',
+            riskLevel: 'medium',
+            consequences: [
+              t`The reply will be sent to the existing conversation.`,
+            ],
+            preview: { format: 'text', content: exactProposal.body },
+          }
+        : {
+            title: t`Instagram reply unavailable`,
+            summary: t`The exact server-derived Instagram reply is unavailable.`,
+            actionKind: 'external_write',
+            riskLevel: 'medium',
+            consequences: [
+              t`The reply cannot be approved until its source is available.`,
+            ],
+          };
 
   const handleDecision = async (decision: ApprovalDecision) => {
-    if (isSubmitting) {
+    if (isDecisionDisabled) {
       return;
     }
 
@@ -199,7 +290,9 @@ export const AiChatApprovalCard = ({
 
       {request.preview && (
         <StyledSection>
-          <StyledSectionTitle>{t`Preview`}</StyledSectionTitle>
+          <StyledSectionTitle>
+            {actionApprovalBindingId ? t`Projected message` : t`Preview`}
+          </StyledSectionTitle>
           {request.preview.format === 'markdown' ? (
             <StyledMarkdownPreview>
               <LazyMarkdownRenderer text={request.preview.content} />
@@ -208,6 +301,17 @@ export const AiChatApprovalCard = ({
             <StyledPreview>{request.preview.content}</StyledPreview>
           )}
         </StyledSection>
+      )}
+
+      {isActionApprovalProposalDecidable && exactProposal !== undefined && (
+        <StyledMeta>
+          <span>
+            {t`To`}: {exactProposal.recipientLabel}
+          </span>
+          <span>
+            {t`From`}: {exactProposal.sendingAccountLabel}
+          </span>
+        </StyledMeta>
       )}
 
       <StyledSection>
@@ -231,7 +335,7 @@ export const AiChatApprovalCard = ({
             title={t`Request changes`}
             variant="secondary"
             Icon={IconRefresh}
-            disabled={isSubmitting}
+            disabled={isDecisionDisabled}
             onClick={() => void handleDecision('changes_requested')}
           />
         )}
@@ -239,13 +343,13 @@ export const AiChatApprovalCard = ({
           title={t`Reject`}
           variant="secondary"
           Icon={IconX}
-          disabled={isSubmitting}
+          disabled={isDecisionDisabled}
           onClick={() => void handleDecision('rejected')}
         />
         <MainButton
           title={t`Approve`}
           Icon={IconCheck}
-          disabled={isSubmitting}
+          disabled={isDecisionDisabled}
           onClick={() => void handleDecision('approved')}
         />
       </StyledActions>

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { type WorkflowRunStepLog } from 'twenty-shared/workflow';
 
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
@@ -21,12 +22,21 @@ export class CreateCalendarEventWorkflowAction extends ToolBackedWorkflowAction<
   constructor(
     private readonly createCalendarEventTool: CreateCalendarEventTool,
     workflowRunStepLogService: WorkflowRunStepLogWorkspaceService,
+    externalWritePolicyService: ExternalWritePolicyService,
   ) {
-    super(CreateCalendarEventWorkflowAction.name, workflowRunStepLogService);
+    super(
+      CreateCalendarEventWorkflowAction.name,
+      workflowRunStepLogService,
+      externalWritePolicyService,
+    );
   }
 
   protected getTool(): Tool {
     return this.createCalendarEventTool;
+  }
+
+  protected getToolName(): string {
+    return 'create_calendar_event';
   }
 
   protected assertStep(step: WorkflowAction): void {

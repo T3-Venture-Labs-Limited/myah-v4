@@ -1,4 +1,5 @@
 import { ActionToolProvider } from 'src/engine/core-modules/tool-provider/providers/action-tool.provider';
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 
 const createTool = () => ({
   description: 'test tool',
@@ -32,6 +33,7 @@ const buildProvider = ({ hasPermission }: { hasPermission: boolean }) => {
       sendInstagramReplyTool as never,
       permissionsService as never,
       {} as never,
+      new ExternalWritePolicyService(permissionsService as never),
     ),
   };
 };
@@ -48,9 +50,13 @@ describe('ActionToolProvider Instagram reply execution', () => {
     });
 
     await expect(
-      provider.executeStaticTool('send_instagram_reply', {}, context as never),
+      provider.executeStaticTool(
+        'send_instagram_reply',
+        { actionApprovalBindingId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
+        context as never,
+      ),
     ).rejects.toThrow(
-      'Missing permission to execute the Instagram reply action',
+      'Missing permission to execute action tool "send_instagram_reply".',
     );
 
     expect(sendInstagramReplyTool.execute).not.toHaveBeenCalled();
@@ -63,14 +69,14 @@ describe('ActionToolProvider Instagram reply execution', () => {
     await expect(
       provider.executeStaticTool(
         'send_instagram_reply',
-        { approvalId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
+        { actionApprovalBindingId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
         context as never,
       ),
     ).resolves.toEqual({ success: true, message: 'executed' });
 
     expect(permissionsService.hasToolPermission).toHaveBeenCalledTimes(1);
     expect(sendInstagramReplyTool.execute).toHaveBeenCalledWith(
-      { approvalId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
+      { actionApprovalBindingId: 'b3ccec70-56c3-4ae6-b1f2-71d93957b5a6' },
       expect.objectContaining({ workspaceId: 'workspace-id' }),
     );
   });
@@ -87,7 +93,7 @@ describe('ActionToolProvider Instagram reply execution', () => {
         context as never,
       ),
     ).rejects.toThrow(
-      'Missing permission to execute the Instagram reply action',
+      'Missing permission to execute action tool "prepare_instagram_reply_draft".',
     );
 
     expect(prepareInstagramReplyDraftTool.execute).not.toHaveBeenCalled();

@@ -2,6 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { WorkflowActionType } from 'twenty-shared/workflow';
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { DraftEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/draft-email-tool';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -66,6 +67,10 @@ describe('DraftEmailWorkflowAction', () => {
       providers: [
         DraftEmailWorkflowAction,
         { provide: DraftEmailTool, useValue: mockDraftEmailTool },
+        {
+          provide: ExternalWritePolicyService,
+          useValue: { assertExecutable: jest.fn() },
+        },
         {
           provide: WorkflowRunStepLogWorkspaceService,
           useValue: { setStepLog: mockSetStepLog },

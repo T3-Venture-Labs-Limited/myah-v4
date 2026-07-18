@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ToolModule } from 'src/engine/core-modules/tool/tool.module';
+import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-provider.module';
 import { WorkflowTriggerController } from 'src/engine/core-modules/workflow/controllers/workflow-trigger.controller';
 import { WorkflowBuilderResolver } from 'src/engine/core-modules/workflow/resolvers/workflow-builder.resolver';
 import { WorkflowTriggerResolver } from 'src/engine/core-modules/workflow/resolvers/workflow-trigger.resolver';
@@ -32,6 +33,7 @@ import { WorkflowTriggerModule } from 'src/modules/workflow/workflow-trigger/wor
     WorkflowRunnerModule,
     PermissionsModule,
     ToolModule,
+    ToolProviderModule,
     LogicFunctionModule,
     CodeStepBuildModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,

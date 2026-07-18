@@ -13,6 +13,7 @@ const PrepareInstagramReplyDraftInputZodSchema = z.object({
   connectedAccountId: z.string().trim().min(1),
   providerConversationId: z.string().trim().min(1),
   recipientIgsid: z.string().trim().min(1),
+  inboundMessageId: z.string().trim().min(1),
   recipientLabel: z.string().trim().min(1),
   body: z.string().trim().min(1),
 });
@@ -25,8 +26,7 @@ type PrepareInstagramReplyDraftToolInput = z.infer<
 export class PrepareInstagramReplyDraftTool implements Tool {
   description =
     'Prepare one local Instagram reply draft from an existing live-read conversation. ' +
-    'Use only after the user asks to reply and bounded live reads established the provider conversation ID and inbound recipient IGSID. ' +
-    'This creates a reviewable local draft only: it never calls the provider and never sends a message. ' +
+    'It verifies and persists the specified inbound provider message before creating the reviewable draft; it never sends a message. ' +
     'Use the returned account, conversation, draft IDs, and exact body to request approval.';
   inputSchema = PrepareInstagramReplyDraftInputZodSchema;
 

@@ -5,6 +5,7 @@ import { YogaDriver, type YogaDriverConfig } from '@graphql-yoga/nestjs';
 
 import { GraphQLConfigModule } from 'src/engine/api/graphql/graphql-config/graphql-config.module';
 import { metadataModuleFactory } from 'src/engine/api/graphql/metadata.module-factory';
+import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
 import { CacheStorageNamespace } from 'src/engine/core-modules/cache-storage/types/cache-storage-namespace.enum';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
@@ -39,6 +40,7 @@ import { MetadataEngineModule } from 'src/engine/metadata-modules/metadata-engin
       ],
     }),
     MetadataEngineModule,
+    ActionApprovalModule,
   ],
 })
 export class MetadataGraphQLApiModule {}

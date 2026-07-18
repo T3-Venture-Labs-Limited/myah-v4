@@ -1,6 +1,5 @@
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
-import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 import {
   getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
@@ -46,7 +45,6 @@ describe('approval tool availability', () => {
       getGenericApprovedResumeActiveToolNames([
         'execute_tool',
         REQUEST_APPROVAL_TOOL_NAME,
-        REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
         'ask_questions',
       ]),
     ).toEqual(['execute_tool', 'ask_questions']);
@@ -129,8 +127,15 @@ describe('approval tool availability', () => {
           role: 'assistant',
           parts: [
             {
-              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
-              output: { result: { status: 'resolved', decision: 'approved' } },
+              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+              output: {
+                result: {
+                  status: 'resolved',
+                  decision: 'approved',
+                  actionApprovalBindingId:
+                    'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
+                },
+              },
             },
           ],
         },
@@ -167,20 +172,46 @@ describe('approval tool availability', () => {
     ).toBe(false);
   });
 
-  it('preserves Instagram send eligibility after an approval when a follow-up user message is newer', () => {
+  it('only exposes the sender for a resolved registered approval result with a binding UUID', () => {
+    const messagesFor = (result: Record<string, unknown>) => [
+      {
+        role: 'assistant',
+        parts: [
+          {
+            type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+            output: { result },
+          },
+        ],
+      },
+      { role: 'user', parts: [] },
+    ];
+
     expect(
-      hasApprovedInstagramReplyApproval([
-        {
-          role: 'assistant',
-          parts: [
-            {
-              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
-              output: { result: { status: 'resolved', decision: 'approved' } },
-            },
-          ],
-        },
-        { role: 'user', parts: [] },
-      ]),
+      hasApprovedInstagramReplyApproval(
+        messagesFor({
+          status: 'pending',
+          actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      hasApprovedInstagramReplyApproval(messagesFor({ status: 'resolved' })),
+    ).toBe(false);
+    expect(
+      hasApprovedInstagramReplyApproval(
+        messagesFor({
+          status: 'resolved',
+          actionApprovalBindingId: 'not-a-uuid',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      hasApprovedInstagramReplyApproval(
+        messagesFor({
+          status: 'resolved',
+          actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
+        }),
+      ),
     ).toBe(true);
   });
 });

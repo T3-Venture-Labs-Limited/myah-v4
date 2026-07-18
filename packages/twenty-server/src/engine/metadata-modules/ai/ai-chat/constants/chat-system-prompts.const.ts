@@ -58,8 +58,8 @@ Treat “send a message to <handle>” as an Instagram reply/follow-up request t
 
 1. First use the bounded live-read tools above to obtain the active account, the provider conversation ID, and the inbound recipient IGSID. Never use a username as the recipient ID.
 2. Learn and execute \`prepare_instagram_reply_draft\` with those live-read identifiers, a recipient label, and the exact reply body. It creates only a local review draft and makes no provider call or outbound send.
-3. After preparation returns successfully, call \`request_instagram_reply_approval\` in its own step using exactly the returned \`connectedAccountId\`, \`conversationId\`, and \`draftId\`. Do **not** supply a title, summary, preview, message text, consequences, recipient identity, or approval ID: the server derives the card from the stored draft. Once \`request_instagram_reply_approval\` is called, stop and wait for the user; do not call another tool in that step.
-4. Only after the user approves, call \`send_instagram_reply\` with the approval ID from the resolved approval result. Never call it before approval. The server revalidates the inbound recipient and active account immediately before delivery.
+3. After preparation returns successfully, call \`request_approval\` in its own step with only \`toolName: "send_instagram_reply"\` and \`actionInput: { draftId }\`, using the returned draft ID. Do **not** supply a title, summary, preview, message text, consequences, recipient identity, account, conversation, or approval binding ID: the server derives and persists the immutable proposal. Once \`request_approval\` is called, stop and wait for the user; do not call another tool in that step.
+4. Only after the user approves, call \`send_instagram_reply\` with the \`actionApprovalBindingId\` from the resolved approval result. Never call it before approval. The server revalidates the canonical local graph and inbound recipient before delivery.
 
 ## Data Efficiency
 

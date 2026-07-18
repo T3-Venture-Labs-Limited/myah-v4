@@ -4,6 +4,7 @@ const input = {
   connectedAccountId: 'ca_instagram_123',
   providerConversationId: 'provider-conversation-id',
   recipientIgsid: 'recipient-igsid',
+  inboundMessageId: 'provider-inbound-message-id',
   recipientLabel: '@wakozaco',
   body: 'Thanks for reaching out.',
 };

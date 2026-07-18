@@ -3,14 +3,18 @@ import {
   type ApprovalDecision,
   type ExtendedUIMessage,
   type ExtendedUIMessagePart,
-  type RequestApprovalToolResult,
 } from 'twenty-shared/ai';
-import { isDefined } from 'twenty-shared/utils';
 
 type ApprovalResolution = {
   decision: ApprovalDecision;
   comment?: string;
 };
+
+const ACTION_APPROVAL_BINDING_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
 
 export const markApprovalResolved = (
   messages: ExtendedUIMessage[],
@@ -30,29 +34,33 @@ export const markApprovalResolved = (
           return part;
         }
 
-        const previousOutput = isDefined(part.output)
-          ? (part.output as Record<string, unknown>)
-          : {};
-        const previousResult = previousOutput.result as
-          | RequestApprovalToolResult
-          | undefined;
-        const request = previousResult?.request;
-
-        if (!isDefined(request)) {
+        if (!isRecord(part.output) || !isRecord(part.output.result)) {
           return part;
         }
+
+        const actionApprovalBindingId =
+          part.output.result.actionApprovalBindingId;
+
+        const isRegisteredApproval =
+          typeof actionApprovalBindingId === 'string' &&
+          ACTION_APPROVAL_BINDING_ID_PATTERN.test(actionApprovalBindingId);
 
         return {
           ...part,
           output: {
-            ...previousOutput,
-            result: {
-              request,
-              status: 'resolved',
-              decision: resolution.decision,
-              comment: resolution.comment,
-              decidedAt: new Date().toISOString(),
-            } satisfies RequestApprovalToolResult,
+            result: isRegisteredApproval
+              ? {
+                  actionApprovalBindingId,
+                  status: 'resolved',
+                }
+              : {
+                  status: 'resolved',
+                  decision: resolution.decision,
+                  ...(typeof resolution.comment === 'string'
+                    ? { comment: resolution.comment }
+                    : {}),
+                  decidedAt: new Date().toISOString(),
+                },
           },
         } as ExtendedUIMessagePart;
       }),

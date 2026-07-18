@@ -1,15 +1,25 @@
-import { defineObject, FieldType } from 'twenty-sdk/define';
+import {
+  defineObject,
+  FieldType,
+  OnDeleteAction,
+  RelationType,
+} from 'twenty-sdk/define';
 
 import {
   REPLY_DRAFT_APPROVED_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_BODY_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_GENERATED_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_OBJECT_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_INBOUND_MESSAGE_RECORD_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_INBOUND_PROVIDER_MESSAGE_ID_FIELD_UNIVERSAL_IDENTIFIER,
+  REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SEND_BLOCKED_REASON_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SENT_AT_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_SOURCE_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_STATUS_FIELD_UNIVERSAL_IDENTIFIER,
   REPLY_DRAFT_TITLE_FIELD_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
+  SOCIAL_CONVERSATION_REPLY_DRAFTS_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
 
 enum ReplyDraftStatus {
@@ -127,6 +137,26 @@ export default defineObject({
       ],
     },
     {
+      universalIdentifier:
+        REPLY_DRAFT_INBOUND_MESSAGE_RECORD_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      label: 'Inbound message record ID',
+      name: 'inboundMessageRecordId',
+      isNullable: true,
+      defaultValue: null,
+      description: 'Exact local inbound message evidence for this reply draft.',
+    },
+    {
+      universalIdentifier:
+        REPLY_DRAFT_INBOUND_PROVIDER_MESSAGE_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.TEXT,
+      label: 'Inbound provider message ID',
+      name: 'inboundProviderMessageId',
+      isNullable: true,
+      defaultValue: null,
+      description: 'Exact Instagram inbound message ID for this reply draft.',
+    },
+    {
       universalIdentifier: REPLY_DRAFT_GENERATED_AT_FIELD_UNIVERSAL_IDENTIFIER,
       type: FieldType.DATE_TIME,
       label: 'Generated at',
@@ -164,6 +194,24 @@ export default defineObject({
       defaultValue: null,
       description:
         'Reason a draft cannot be sent, such as a closed Instagram reply window.',
+    },
+    {
+      universalIdentifier:
+        REPLY_DRAFT_CONVERSATION_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RELATION,
+      label: 'Conversation',
+      name: 'conversation',
+      description: 'Conversation this draft replies to.',
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        SOCIAL_CONVERSATION_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        SOCIAL_CONVERSATION_REPLY_DRAFTS_FIELD_UNIVERSAL_IDENTIFIER,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'conversationId',
+      },
     },
   ],
 });

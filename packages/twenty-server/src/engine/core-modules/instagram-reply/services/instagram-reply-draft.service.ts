@@ -10,6 +10,10 @@ import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.ent
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import {
+  INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
+  MyahComposioService,
+} from 'src/modules/myah-composio/services/myah-composio.service';
 
 export type PrepareInstagramReplyDraftInput = {
   workspaceId: string;
@@ -18,6 +22,7 @@ export type PrepareInstagramReplyDraftInput = {
   providerConversationId: string;
   recipientIgsid: string;
   recipientLabel: string;
+  inboundMessageId: string;
   body: string;
 };
 
@@ -57,6 +62,13 @@ type ConversationRecord = {
   id: string;
   recipientIgsid: string | null;
 };
+type TrustedInboundMessage = {
+  id: string;
+  text: string;
+  createdAt: Date;
+  recipientIgsids: string[];
+  direction?: string;
+};
 
 @Injectable()
 export class InstagramReplyDraftService {
@@ -64,6 +76,7 @@ export class InstagramReplyDraftService {
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly myahComposioService: MyahComposioService,
   ) {}
 
   async prepare(
@@ -74,80 +87,230 @@ export class InstagramReplyDraftService {
     const recipientLabel = input.recipientLabel.trim();
     const providerConversationId = input.providerConversationId.trim();
     const recipientIgsid = input.recipientIgsid.trim();
+    const inboundMessageId = input.inboundMessageId.trim();
 
     if (
       !body ||
       !recipientLabel ||
       !providerConversationId ||
-      !recipientIgsid
+      !recipientIgsid ||
+      !inboundMessageId
     ) {
       throw new Error('Instagram reply draft details are incomplete.');
     }
+
+    const inboundMessage = await this.loadTrustedInboundMessage({
+      workspaceId: input.workspaceId,
+      connectedAccountId: input.connectedAccountId,
+      providerConversationId,
+      recipientIgsid,
+      inboundMessageId,
+    });
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
         const dataSource =
           await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
         const schemaName = getWorkspaceSchemaName(workspace.id);
-        const activeAccounts = await dataSource.query<{ id: string }[]>(
-          `
-            SELECT "id"
-            FROM "${schemaName}"."_myahInstagramAccount"
-            WHERE "connectedAccountId" = $1
-              AND "status" = 'ACTIVE'
-              AND "deletedAt" IS NULL
-            LIMIT 2
-          `,
-          [input.connectedAccountId],
-          undefined,
-          { shouldBypassPermissionChecks: true },
-        );
 
-        if (activeAccounts.length !== 1) {
-          throw new Error(
-            'The selected Instagram account is not the workspace active account.',
+        return dataSource.transaction(async (manager) => {
+          const activeAccounts = await manager.query<
+            { id: string; igUserId: string | null }[]
+          >(
+            `
+              SELECT "id", "igUserId"
+              FROM "${schemaName}"."_myahInstagramAccount"
+              WHERE "connectedAccountId" = $1
+                AND "status" = 'ACTIVE'
+                AND "deletedAt" IS NULL
+              LIMIT 2
+            `,
+            [input.connectedAccountId],
           );
-        }
 
-        const conversations = await dataSource.query<ConversationRecord[]>(
-          `
-            SELECT "id", "recipientIgsid"
-            FROM "${schemaName}"."_myahSocialConversation"
-            WHERE "providerConversationId" = $1
-              AND "deletedAt" IS NULL
-            LIMIT 2
-          `,
-          [providerConversationId],
-          undefined,
-          { shouldBypassPermissionChecks: true },
-        );
-
-        let conversationId: string;
-
-        if (conversations.length > 1) {
-          throw new Error('The Instagram conversation is ambiguous.');
-        }
-
-        if (conversations.length === 1) {
-          const [conversation] = conversations;
-
-          if (conversation.recipientIgsid !== recipientIgsid) {
+          if (activeAccounts.length !== 1) {
             throw new Error(
-              'The Instagram conversation recipient does not match the live read.',
+              'The selected Instagram account is not the workspace active account.',
+            );
+          }
+          const [account] = activeAccounts;
+
+          const conversations = await manager.query<ConversationRecord[]>(
+            `
+              SELECT "id", "recipientIgsid"
+              FROM "${schemaName}"."_myahSocialConversation"
+              WHERE "providerConversationId" = $1
+                AND "instagramAccountId" = $2
+                AND "deletedAt" IS NULL
+              LIMIT 2
+            `,
+            [providerConversationId, account.id],
+          );
+
+          let conversationId: string;
+
+          if (conversations.length > 1) {
+            throw new Error('The Instagram conversation is ambiguous.');
+          }
+
+          if (conversations.length === 1) {
+            const [conversation] = conversations;
+
+            if (conversation.recipientIgsid !== recipientIgsid) {
+              throw new Error(
+                'The Instagram conversation recipient does not match the live read.',
+              );
+            }
+
+            conversationId = conversation.id;
+            await manager.query(
+              `
+                UPDATE "${schemaName}"."_myahSocialConversation"
+                SET "name" = $2, "label" = $2, "updatedAt" = NOW()
+                WHERE "id" = $1
+              `,
+              [conversationId, recipientLabel],
+            );
+          } else {
+            conversationId = randomUUID();
+            await manager.query(
+              `
+                INSERT INTO "${schemaName}"."_myahSocialConversation" (
+                  "id",
+                  "name",
+                  "label",
+                  "providerConversationId",
+                  "recipientIgsid",
+                  "instagramAccountId",
+                  "createdBySource",
+                  "createdByWorkspaceMemberId",
+                  "createdByName",
+                  "createdByContext",
+                  "updatedBySource",
+                  "updatedByWorkspaceMemberId",
+                  "updatedByName",
+                  "updatedByContext"
+                ) VALUES (
+                  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+                )
+              `,
+              [
+                conversationId,
+                recipientLabel,
+                recipientLabel,
+                providerConversationId,
+                recipientIgsid,
+                account.id,
+                FieldActorSource.AGENT,
+                input.userWorkspaceId,
+                'Myah Agent',
+                {},
+                FieldActorSource.AGENT,
+                input.userWorkspaceId,
+                'Myah Agent',
+                {},
+              ],
+            );
+          }
+          if (
+            !account.igUserId ||
+            !inboundMessage.recipientIgsids.includes(account.igUserId) ||
+            (inboundMessage.direction && inboundMessage.direction !== 'INBOUND')
+          ) {
+            throw new Error(
+              'The inbound Instagram message could not be verified.',
             );
           }
 
-          conversationId = conversation.id;
-        } else {
-          conversationId = randomUUID();
-          await dataSource.query(
+          const existingMessages = await manager.query<
+            {
+              id: string;
+              direction: string;
+              providerCreatedAt: Date | string | null;
+            }[]
+          >(
             `
-              INSERT INTO "${schemaName}"."_myahSocialConversation" (
+              SELECT "id", "direction", "providerCreatedAt"
+              FROM "${schemaName}"."_myahSocialMessage"
+              WHERE "conversationId" = $1
+                AND "providerMessageId" = $2
+                AND "deletedAt" IS NULL
+              LIMIT 2
+            `,
+            [conversationId, inboundMessage.id],
+          );
+          if (existingMessages.length > 1) {
+            throw new Error('The inbound Instagram message is ambiguous.');
+          }
+          let inboundRecordId: string;
+          if (existingMessages.length === 1) {
+            const [existingMessage] = existingMessages;
+            if (existingMessage.direction !== 'INBOUND') {
+              throw new Error(
+                'The inbound Instagram message no longer matches.',
+              );
+            }
+            inboundRecordId = existingMessage.id;
+            if (!existingMessage.providerCreatedAt) {
+              await manager.query(
+                `
+                  UPDATE "${schemaName}"."_myahSocialMessage"
+                  SET "providerCreatedAt" = $2, "updatedAt" = NOW()
+                  WHERE "id" = $1
+                    AND "direction" = 'INBOUND'
+                    AND "providerCreatedAt" IS NULL
+                `,
+                [inboundRecordId, inboundMessage.createdAt],
+              );
+            } else if (
+              new Date(existingMessage.providerCreatedAt).getTime() !==
+              inboundMessage.createdAt.getTime()
+            ) {
+              throw new Error(
+                'The inbound Instagram message no longer matches.',
+              );
+            }
+          } else {
+            inboundRecordId = randomUUID();
+            await manager.query(
+              `
+                INSERT INTO "${schemaName}"."_myahSocialMessage" (
+                  "id", "text", "conversationId", "direction", "sentVia",
+                  "providerMessageId", "providerCreatedAt", "createdAt", "updatedAt",
+                  "createdBySource", "createdByWorkspaceMemberId", "createdByName", "createdByContext",
+                  "updatedBySource", "updatedByWorkspaceMemberId", "updatedByName", "updatedByContext"
+                ) VALUES (
+                  $1, $2, $3, 'INBOUND', 'COMPOSIO', $4, $5, NOW(), NOW(),
+                  $6, $7, 'Myah Agent', $8::jsonb, $6, $7, 'Myah Agent', $8::jsonb
+                )
+              `,
+              [
+                inboundRecordId,
+                inboundMessage.text,
+                conversationId,
+                inboundMessage.id,
+                inboundMessage.createdAt,
+                FieldActorSource.AGENT,
+                input.userWorkspaceId,
+                JSON.stringify({ providerConversationId }),
+              ],
+            );
+          }
+
+          const draftId = randomUUID();
+          await manager.query(
+            `
+              INSERT INTO "${schemaName}"."_myahInstagramReplyDraft" (
                 "id",
                 "name",
-                "label",
-                "providerConversationId",
-                "recipientIgsid",
+                "title",
+                "body",
+                "conversationId",
+                "inboundMessageRecordId",
+                "inboundProviderMessageId",
+                "status",
+                "source",
+                "generatedAt",
                 "createdBySource",
                 "createdByWorkspaceMemberId",
                 "createdByName",
@@ -157,15 +320,18 @@ export class InstagramReplyDraftService {
                 "updatedByName",
                 "updatedByContext"
               ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+                $1, $2, $3, $4, $5, $6, $7, 'NEEDS_REVIEW', 'AI', NOW(),
+                $8, $9, $10, $11, $12, $13, $14, $15
               )
             `,
             [
+              draftId,
+              `Reply to ${recipientLabel}`,
+              `Reply to ${recipientLabel}`,
+              body,
               conversationId,
-              recipientLabel,
-              recipientLabel,
-              providerConversationId,
-              recipientIgsid,
+              inboundRecordId,
+              inboundMessage.id,
               FieldActorSource.AGENT,
               input.userWorkspaceId,
               'Myah Agent',
@@ -175,59 +341,15 @@ export class InstagramReplyDraftService {
               'Myah Agent',
               {},
             ],
-            undefined,
-            { shouldBypassPermissionChecks: true },
           );
-        }
 
-        const draftId = randomUUID();
-        await dataSource.query(
-          `
-            INSERT INTO "${schemaName}"."_myahInstagramReplyDraft" (
-              "id",
-              "name",
-              "title",
-              "body",
-              "status",
-              "source",
-              "generatedAt",
-              "createdBySource",
-              "createdByWorkspaceMemberId",
-              "createdByName",
-              "createdByContext",
-              "updatedBySource",
-              "updatedByWorkspaceMemberId",
-              "updatedByName",
-              "updatedByContext"
-            ) VALUES (
-              $1, $2, $3, $4, 'NEEDS_REVIEW', 'AI', NOW(),
-              $5, $6, $7, $8, $9, $10, $11, $12
-            )
-          `,
-          [
+          return {
+            connectedAccountId: input.connectedAccountId,
+            conversationId,
             draftId,
-            `Reply to ${recipientLabel}`,
-            `Reply to ${recipientLabel}`,
             body,
-            FieldActorSource.AGENT,
-            input.userWorkspaceId,
-            'Myah Agent',
-            {},
-            FieldActorSource.AGENT,
-            input.userWorkspaceId,
-            'Myah Agent',
-            {},
-          ],
-          undefined,
-          { shouldBypassPermissionChecks: true },
-        );
-
-        return {
-          connectedAccountId: input.connectedAccountId,
-          conversationId,
-          draftId,
-          body,
-        };
+          };
+        });
       },
       buildSystemAuthContext({ workspace }),
     );
@@ -351,6 +473,98 @@ export class InstagramReplyDraftService {
         'The Instagram conversation no longer matches the approved recipient.',
       );
     }
+  }
+
+  private async loadTrustedInboundMessage({
+    workspaceId,
+    connectedAccountId,
+    providerConversationId,
+    recipientIgsid,
+    inboundMessageId,
+  }: Pick<
+    PrepareInstagramReplyDraftInput,
+    | 'workspaceId'
+    | 'connectedAccountId'
+    | 'providerConversationId'
+    | 'recipientIgsid'
+    | 'inboundMessageId'
+  >): Promise<TrustedInboundMessage> {
+    await this.myahComposioService.getActiveInstagramAccount({
+      workspaceId,
+      connectedAccountId,
+    });
+    const proof = await this.myahComposioService.executeInstagramTool({
+      workspaceId,
+      connectedAccountId,
+      toolSlug: INSTAGRAM_LIST_ALL_MESSAGES_TOOL_SLUG,
+      arguments: { conversation_id: providerConversationId, limit: 25 },
+    });
+    if (
+      proof.kind !== 'success' ||
+      !proof.data ||
+      typeof proof.data !== 'object'
+    ) {
+      throw new Error('The inbound Instagram message is unavailable.');
+    }
+
+    const record = proof.data as Record<string, unknown>;
+    const nestedData =
+      record.data && typeof record.data === 'object'
+        ? (record.data as Record<string, unknown>).data
+        : undefined;
+    const messages = [record.data, record.items, nestedData].find(
+      Array.isArray,
+    );
+    const message = messages?.find(
+      (candidate): candidate is Record<string, unknown> =>
+        !!candidate &&
+        typeof candidate === 'object' &&
+        candidate.id === inboundMessageId,
+    );
+    const sender =
+      message?.from && typeof message.from === 'object'
+        ? (message.from as Record<string, unknown>)
+        : undefined;
+    const recipient =
+      message?.to && typeof message.to === 'object'
+        ? (message.to as Record<string, unknown>)
+        : undefined;
+    const recipientIgsids = [
+      recipient?.id,
+      ...(Array.isArray(recipient?.data)
+        ? recipient.data.map((value) =>
+            value && typeof value === 'object'
+              ? (value as Record<string, unknown>).id
+              : undefined,
+          )
+        : []),
+    ].filter((id): id is string => typeof id === 'string');
+    const createdAt =
+      typeof message?.created_time === 'string'
+        ? new Date(message.created_time)
+        : undefined;
+    const direction =
+      typeof message?.direction === 'string'
+        ? message.direction.toUpperCase()
+        : undefined;
+    if (
+      !message ||
+      sender?.id !== recipientIgsid ||
+      !recipientIgsids.length ||
+      !createdAt ||
+      Number.isNaN(createdAt.getTime()) ||
+      (direction && direction !== 'INBOUND')
+    ) {
+      throw new Error('The inbound Instagram message is unavailable.');
+    }
+
+    return {
+      id: inboundMessageId,
+      text: typeof message.message === 'string' ? message.message : '',
+      createdAt,
+      recipientIgsids,
+      direction,
+    };
   }
 
   private async getWorkspace(workspaceId: string): Promise<FlatWorkspace> {

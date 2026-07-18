@@ -2,10 +2,7 @@ import { streamText } from 'ai';
 
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { ChatExecutionService } from 'src/engine/metadata-modules/ai/ai-chat/services/chat-execution.service';
-import {
-  REQUEST_APPROVAL_TOOL_NAME,
-  REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-} from 'twenty-shared/ai';
+import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
 
 jest.mock('ai', () => ({
   ...jest.requireActual('ai'),
@@ -208,7 +205,7 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
     );
   });
 
-  it('exposes only the minimal Instagram approval tool after a local draft succeeds', async () => {
+  it('keeps the generic registered approval tool available after a local draft succeeds', async () => {
     const { service } = buildService();
 
     await service.streamChat({
@@ -255,13 +252,7 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
     });
 
     expect(beforeDraft.activeTools).toContain(REQUEST_APPROVAL_TOOL_NAME);
-    expect(beforeDraft.activeTools).not.toContain(
-      REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-    );
-    expect(afterDraft.activeTools).not.toContain(REQUEST_APPROVAL_TOOL_NAME);
-    expect(afterDraft.activeTools).toContain(
-      REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-    );
+    expect(afterDraft.activeTools).toContain(REQUEST_APPROVAL_TOOL_NAME);
   });
 
   it('keeps unrelated writes dispatcher-denied after an immediately approved Instagram card', async () => {
@@ -297,7 +288,7 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
           role: 'assistant',
           parts: [
             {
-              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
+              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
               toolCallId: 'instagram-approval-call',
               state: 'output-available',
               input: {},
@@ -307,13 +298,8 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
                 result: {
                   status: 'resolved',
                   decision: 'approved',
-                  request: {
-                    title: 'Review Instagram reply',
-                    summary: 'Review the local draft.',
-                    actionKind: 'external_write',
-                    riskLevel: 'medium',
-                    consequences: ['The message will be sent.'],
-                  },
+                  actionApprovalBindingId:
+                    'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
                 },
               },
             },

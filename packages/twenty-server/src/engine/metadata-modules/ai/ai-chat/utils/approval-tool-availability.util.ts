@@ -1,6 +1,6 @@
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
+import { isValidUuid } from 'twenty-shared/utils';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
-import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-instagram-reply-approval.tool';
 
 const READ_ONLY_DATABASE_OPERATIONS = new Set([
   'find_many',
@@ -43,11 +43,7 @@ export const getPreApprovalExcludedToolNames = (
   );
 
 export const getGenericApprovedResumeActiveToolNames = (toolNames: string[]) =>
-  toolNames.filter(
-    (toolName) =>
-      toolName !== REQUEST_APPROVAL_TOOL_NAME &&
-      toolName !== REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME,
-  );
+  toolNames.filter((toolName) => toolName !== REQUEST_APPROVAL_TOOL_NAME);
 
 type MessagePartLike = {
   type?: string;
@@ -58,6 +54,16 @@ type MessagePartLike = {
 type MessageLike = {
   role?: string;
   parts?: MessagePartLike[];
+};
+
+type ApprovalToolResult = {
+  status?: string;
+  decision?: string;
+  actionApprovalBindingId?: string;
+};
+
+type ApprovalToolOutput = {
+  result: ApprovalToolResult;
 };
 
 export const hasLatestMessageApprovedGenericApproval = (
@@ -79,14 +85,14 @@ export const hasLatestMessageApprovedGenericApproval = (
     return (
       part.type === `tool-${REQUEST_APPROVAL_TOOL_NAME}` &&
       output.result.status === 'resolved' &&
-      output.result.decision === 'approved'
+      output.result.decision === 'approved' &&
+      !isRegisteredActionApprovalOutput(output)
     );
   });
 };
 
-// A user may need to confirm an already approved reply in a later turn. This
-// only exposes the dedicated sender; the execution service still binds that
-// call to the approved request, its thread, and its workspace.
+// A registered approval opens only its matching sender. The sender still
+// rechecks its binding, thread, workspace, and immutable source graph.
 export const hasApprovedInstagramReplyApproval = (messages: MessageLike[]) =>
   messages.some(
     (message) =>
@@ -95,16 +101,15 @@ export const hasApprovedInstagramReplyApproval = (messages: MessageLike[]) =>
         const output = part.output ?? part.toolOutput;
 
         return (
-          part.type === `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}` &&
+          part.type === `tool-${REQUEST_APPROVAL_TOOL_NAME}` &&
           isApprovalToolOutput(output) &&
-          output.result.status === 'resolved' &&
-          output.result.decision === 'approved'
+          isRegisteredActionApprovalOutput(output)
         );
       }),
   );
 const isApprovalToolOutput = (
   output: unknown,
-): output is { result: { status?: string; decision?: string } } => {
+): output is ApprovalToolOutput => {
   if (!output || typeof output !== 'object' || !('result' in output)) {
     return false;
   }
@@ -113,3 +118,12 @@ const isApprovalToolOutput = (
 
   return !!result && typeof result === 'object';
 };
+
+const isRegisteredActionApprovalOutput = (
+  output: ApprovalToolOutput,
+): output is ApprovalToolOutput & {
+  result: ApprovalToolResult & { actionApprovalBindingId: string };
+} =>
+  output.result.status === 'resolved' &&
+  typeof output.result.actionApprovalBindingId === 'string' &&
+  isValidUuid(output.result.actionApprovalBindingId);

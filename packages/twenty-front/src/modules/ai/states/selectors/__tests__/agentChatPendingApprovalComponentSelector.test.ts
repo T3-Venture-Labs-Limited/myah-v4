@@ -1,23 +1,16 @@
 import { createStore } from 'jotai/vanilla';
-import { REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
+import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
 
 import { agentChatDisplayedThreadState } from '@/ai/states/agentChatDisplayedThreadState';
 import { agentChatMessagesComponentFamilyState } from '@/ai/states/agentChatMessagesComponentFamilyState';
 import { agentChatPendingApprovalComponentSelector } from '@/ai/states/selectors/agentChatPendingApprovalComponentSelector';
 
 describe('agentChatPendingApprovalComponentSelector', () => {
-  it('selects a pending server-owned Instagram reply approval', () => {
+  it('stores only the registered approval binding UUID', () => {
     const store = createStore();
     const instanceId = 'instance-id';
     const threadId = 'thread-id';
-    const request = {
-      title: 'Review Instagram reply to wakozaco',
-      summary: 'Review the prepared Instagram reply before it is sent.',
-      actionKind: 'external_write' as const,
-      riskLevel: 'medium' as const,
-      consequences: ['The reply will be sent.'],
-    };
-
+    const actionApprovalBindingId = 'b24f28a7-64bd-4cb8-ac5f-837536ca11db';
     store.set(agentChatDisplayedThreadState.atom, threadId);
     store.set(
       agentChatMessagesComponentFamilyState.atomFamily({
@@ -30,15 +23,16 @@ describe('agentChatPendingApprovalComponentSelector', () => {
           role: 'assistant',
           parts: [
             {
-              type: `tool-${REQUEST_INSTAGRAM_REPLY_APPROVAL_TOOL_NAME}`,
+              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
               toolCallId: 'approval-call-id',
               state: 'output-available',
               input: {
-                connectedAccountId: 'ca_instagram_123',
-                conversationId: '2370f3fb-5738-458c-ae4d-0bdb2c24611e',
-                draftId: 'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
+                toolName: 'send_instagram_reply',
+                actionInput: { draftId: 'ignored-by-client' },
               },
-              output: { result: { request, status: 'pending' } },
+              output: {
+                result: { status: 'pending', actionApprovalBindingId },
+              },
             },
           ],
         },
@@ -54,7 +48,7 @@ describe('agentChatPendingApprovalComponentSelector', () => {
     ).toEqual({
       messageId: 'message-id',
       toolCallId: 'approval-call-id',
-      request,
+      actionApprovalBindingId,
     });
   });
 });

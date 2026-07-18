@@ -1,14 +1,14 @@
 import { z } from 'zod';
 
-export const InstagramReplyToolInputZodSchema = z.object({
-  approvalId: z
-    .string()
-    .uuid()
-    .describe(
-      'Opaque approval id returned by request_instagram_reply_approval for this exact Instagram reply.',
-    ),
-});
+export const sendInstagramReplyInputSchema = z
+  .object({
+    actionApprovalBindingId: z
+      .string()
+      .uuid()
+      .describe('Opaque immutable approval binding for this exact reply.'),
+  })
+  .strict();
 
-export type InstagramReplyToolInput = z.infer<
-  typeof InstagramReplyToolInputZodSchema
+export type SendInstagramReplyInput = z.infer<
+  typeof sendInstagramReplyInputSchema
 >;

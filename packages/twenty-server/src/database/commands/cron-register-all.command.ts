@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Command, CommandRunner } from 'nest-commander';
 import { isDefined } from 'twenty-shared/utils';
 
+import { ActionApprovalReconciliationCronCommand } from 'src/engine/core-modules/action-approval/crons/commands/action-approval-reconciliation.cron.command';
 import { MarketplaceCatalogSyncCronCommand } from 'src/engine/core-modules/application/application-marketplace/crons/commands/marketplace-catalog-sync.cron.command';
 import { StaleRegistrationCleanupCronCommand } from 'src/engine/core-modules/application/application-oauth/stale-registration-cleanup/commands/stale-registration-cleanup.cron.command';
 import { ApplicationVersionCheckCronCommand } from 'src/engine/core-modules/application/application-upgrade/crons/commands/application-version-check.cron.command';
@@ -64,6 +65,7 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly enterpriseKeyValidationCronCommand: EnterpriseKeyValidationCronCommand,
     private readonly rotateSigningKeysCronCommand: RotateSigningKeysCronCommand,
     private readonly marketplaceCatalogSyncCronCommand: MarketplaceCatalogSyncCronCommand,
+    private readonly actionApprovalReconciliationCronCommand: ActionApprovalReconciliationCronCommand,
     private readonly applicationVersionCheckCronCommand: ApplicationVersionCheckCronCommand,
     private readonly staleRegistrationCleanupCronCommand: StaleRegistrationCleanupCronCommand,
     private readonly billingReminderCronCommand: BillingReminderCronCommand,
@@ -197,6 +199,10 @@ export class CronRegisterAllCommand extends CommandRunner {
         name: 'ManagedProviderBillingRecovery',
         command: this.managedProviderBillingRecoveryCronCommand,
         isEnabled: isMetronomeEnabled,
+      },
+      {
+        name: 'ActionApprovalReconciliation',
+        command: this.actionApprovalReconciliationCronCommand,
       },
     ];
 

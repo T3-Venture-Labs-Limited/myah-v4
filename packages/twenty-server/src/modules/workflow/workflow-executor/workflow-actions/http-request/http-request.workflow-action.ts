@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { type WorkflowRunStepLog } from 'twenty-shared/workflow';
 
+import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
 import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
@@ -21,12 +22,21 @@ export class HttpRequestWorkflowAction extends ToolBackedWorkflowAction<Workflow
   constructor(
     private readonly httpTool: HttpTool,
     workflowRunStepLogService: WorkflowRunStepLogWorkspaceService,
+    externalWritePolicyService: ExternalWritePolicyService,
   ) {
-    super(HttpRequestWorkflowAction.name, workflowRunStepLogService);
+    super(
+      HttpRequestWorkflowAction.name,
+      workflowRunStepLogService,
+      externalWritePolicyService,
+    );
   }
 
   protected getTool(): Tool {
     return this.httpTool;
+  }
+
+  protected getToolName(): string {
+    return 'http_request';
   }
 
   protected assertStep(step: WorkflowAction): void {
