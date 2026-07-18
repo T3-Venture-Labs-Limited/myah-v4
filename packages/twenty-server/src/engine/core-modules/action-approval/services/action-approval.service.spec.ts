@@ -138,7 +138,7 @@ describe('ActionApprovalService overdue authority', () => {
     const approvedBinding = {
       ...binding,
       state: ActionApprovalBindingState.APPROVED,
-      expiresAt: new Date('2026-07-18T00:00:00.000Z'),
+      expiresAt: new Date('2099-07-18T00:00:00.000Z'),
       actionName: 'send_instagram_reply',
       actionVersion: 1,
       draftId: '00000000-0000-4000-8000-000000000005',

@@ -20,7 +20,7 @@ const runAggregate = async (metronomeEnabled: boolean) => {
     }),
   };
   const aggregate = Reflect.construct(CronRegisterAllCommand, [
-    ...Array.from({ length: 25 }, () => otherCronCommand),
+    ...Array.from({ length: 26 }, () => otherCronCommand),
     managedProviderBillingRecoveryCronCommand,
     twentyConfigService,
   ]) as CronRegisterAllCommand;
