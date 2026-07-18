@@ -2,7 +2,7 @@ import { DataSource, type QueryRunner } from 'typeorm';
 import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
-import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-evolve-instagram-approval-to-action-authority';
+import { EvolveInstagramApprovalToActionAuthorityFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963058-evolve-instagram-approval-to-action-authority';
 import { AddInstagramReplyApprovalProviderBindingSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784106536001-add-instagram-reply-approval-provider-binding';
 import { FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784112963059-finalize-instagram-approval-action-authority';
 jest.useRealTimers();
@@ -660,7 +660,7 @@ describe('EvolveInstagramApprovalToActionAuthorityFastInstanceCommand', () => {
     ).toStrictEqual([
       {
         runAfterWorkspace: false,
-        timestamp: 1784112963056,
+        timestamp: 1784112963058,
         type: 'fast',
         version: '2.19.0',
       },

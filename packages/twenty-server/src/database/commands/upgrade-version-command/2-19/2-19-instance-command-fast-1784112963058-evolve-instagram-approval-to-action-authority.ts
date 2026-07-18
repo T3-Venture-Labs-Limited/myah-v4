@@ -332,7 +332,7 @@ const restoreLegacyShape = async (queryRunner: QueryRunner) => {
   );
 };
 
-@RegisteredInstanceCommand('2.19.0', 1784112963056)
+@RegisteredInstanceCommand('2.19.0', 1784112963058)
 export class EvolveInstagramApprovalToActionAuthorityFastInstanceCommand
   implements FastInstanceCommand
 {
