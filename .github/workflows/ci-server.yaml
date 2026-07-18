@@ -262,7 +262,7 @@ jobs:
   server-validation:
     needs: [server-build, select-runner]
     timeout-minutes: 30
-    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:18
