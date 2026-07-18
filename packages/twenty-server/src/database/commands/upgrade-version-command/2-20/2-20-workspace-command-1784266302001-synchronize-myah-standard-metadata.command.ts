@@ -349,6 +349,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         : {};
 
     const fromMyahFlatEntityMaps = createEmptyAllFlatEntityMaps();
+    const dependencyAllFlatEntityMaps = createEmptyAllFlatEntityMaps();
     for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
       const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
       const toFlatEntityMaps = toAllFlatEntityMaps[
@@ -357,6 +358,12 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       const fromFlatEntityMaps = fromAllFlatEntityMaps[
         flatEntityMapsKey
       ] as unknown as SyncableFlatEntityMaps;
+      (
+        dependencyAllFlatEntityMaps as unknown as Record<
+          string,
+          SyncableFlatEntityMaps
+        >
+      )[flatEntityMapsKey] = structuredClone(fromFlatEntityMaps);
       const universalIdentifiers = new Set([
         ...Object.keys(toFlatEntityMaps.byUniversalIdentifier),
         ...(obsoleteUniversalIdentifiersByMetadataName[metadataName] ?? []),
@@ -390,6 +397,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
             fromAllFlatEntityMaps: fromMyahFlatEntityMaps,
             toAllUniversalFlatEntityMaps: toAllFlatEntityMaps,
           }),
+          dependencyAllFlatEntityMaps,
           additionalCacheDataMaps: { featureFlagsMap },
           idByUniversalIdentifierByMetadataName,
           dryRun: options.dryRun,

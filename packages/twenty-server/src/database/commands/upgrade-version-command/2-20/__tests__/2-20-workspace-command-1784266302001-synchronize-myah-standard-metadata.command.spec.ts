@@ -176,6 +176,53 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     ).toBeDefined();
   });
 
+  it('provides isolated retained standard objects as migration dependencies', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-07-15T00:00:00.000Z',
+      });
+
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+    validateBuildAndRunWorkspaceMigrationFromTo.mockImplementation(
+      async (migrationInput) => {
+        const dependencyObjects =
+          migrationInput.dependencyAllFlatEntityMaps.flatObjectMetadataMaps
+            .byUniversalIdentifier;
+
+        dependencyObjects.optimisticObject =
+          dependencyObjects[STANDARD_OBJECTS.noteTarget.universalIdentifier];
+
+        return { status: 'success' };
+      },
+    );
+
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+
+    expect(
+      migrationInput.dependencyAllFlatEntityMaps.flatObjectMetadataMaps
+        .byUniversalIdentifier[STANDARD_OBJECTS.taskTarget.universalIdentifier],
+    ).toBeDefined();
+    expect(
+      migrationInput.dependencyAllFlatEntityMaps.flatObjectMetadataMaps
+        .byUniversalIdentifier[STANDARD_OBJECTS.noteTarget.universalIdentifier],
+    ).toBeDefined();
+    expect(
+      allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier
+        .optimisticObject,
+    ).toBeUndefined();
+  });
+
   it('retains CRM metadata when no legacy Myah application is installed', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({
