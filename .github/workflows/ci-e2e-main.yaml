@@ -152,7 +152,7 @@ jobs:
         run: |
           cp packages/twenty-front/.env.example packages/twenty-front/.env
           npx nx reset:env:e2e-testing-server twenty-server
-          printf '\nNODE_PORT=%s\nSERVER_URL=%s\nFRONTEND_URL=%s\n' \
+          printf '\nNODE_PORT=%s\nSERVER_URL=%s\nFRONTEND_URL=%s\nIS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS=false\n' \
             "$NODE_PORT" "$SERVER_URL" "$FRONTEND_URL" \
             >> packages/twenty-server/.env
 
