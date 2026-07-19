@@ -305,9 +305,10 @@ jobs:
     name: >-
       ${{
         (github.event_name == 'pull_request' &&
-         (github.event.action == 'labeled' || github.event.action == 'unlabeled') &&
-         github.event.label.name != 'run-merge-queue' &&
-         format('ci-e2e-main-unrelated-label-{0}', github.run_id)) ||
+         (github.event.action == 'unlabeled' ||
+          (github.event.action == 'labeled' &&
+           github.event.label.name != 'run-merge-queue')) &&
+         format('ci-e2e-main-non-gate-{0}', github.run_id)) ||
         'ci-e2e-main-status-check'
       }}
     if: always() && !cancelled()
