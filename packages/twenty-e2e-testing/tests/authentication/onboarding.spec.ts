@@ -15,7 +15,9 @@ test('New workspace signup goes through every onboarding stage', async ({
   const subdomain = `test-${suffix}`;
 
   await test.step('Create a new account', async () => {
-    await page.goto('/welcome');
+    await page.goto(
+      new URL('/welcome', process.env.FRONTEND_BASE_URL).toString(),
+    );
     await loginPage.clickLoginWithEmailIfVisible();
     await loginPage.typeEmail(email);
     await loginPage.clickContinueButton();
