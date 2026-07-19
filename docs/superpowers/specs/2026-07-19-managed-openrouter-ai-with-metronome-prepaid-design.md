@@ -70,6 +70,7 @@ The OpenAI-compatible provider accepts `user`, but its current option schema str
 14. One grant-operator permission and server-only grant mutation.
 15. Focused contract tests, Metronome sandbox proof, real free-route and minimal paid OpenRouter proofs, and assistant/workflow smoke tests.
 16. Workspace-by-workspace rollout, model quarantine, and safe rollback.
+17. One durable, non-financial provider-pool admission fence that makes tariff pause/drain/activation race-proof.
 
 ### 4.2 Explicit non-goals
 
@@ -88,7 +89,7 @@ The OpenAI-compatible provider accepts `user`, but its current option schema str
 - Dynamic provider-price lookup during customer requests.
 - A local customer wallet, balance table, fractional-charge accumulator, pricing ledger, invoice system, or payment ledger.
 - A catalogue polling daemon or broad admin funding console.
-- A separate activation command; existing focused tests, the grant API, provider contracts, and application smoke produce activation evidence.
+- A separate activation command or public mutation; source-controlled desired state is reconciled against one internal provider-pool admission fence, and existing focused tests, the grant API, provider contracts, and application smoke produce activation evidence.
 
 ## 5. Workspace and model policy
 
@@ -199,7 +200,15 @@ activeCreditAcquisitionMultiplier =
   )
 ```
 
-Before every top-up, pause new managed reservations and wait until no `RESERVED` or unknown provider operation remains bound to the active tariff. Then record the purchase, compute the conservative multiplier, activate a new tariff version, and resume. Every reservation and receipt immutably binds that tariff version and its multiplier-evidence version. Never lower or reset the multiplier while any prior credits or provider outcomes may remain. A lower multiplier may begin a new pool only after managed generation is paused, no provider operations are pending, and OpenRouter's authoritative balance is confirmed zero.
+Before every top-up, publish source-controlled `DRAINING` state with a strictly higher monotonic desired-state epoch and a digest of the complete desired-state/tariff/evidence manifest, then deploy it. Startup reconciliation must lock and durably set the provider-pool admission fence before the deployment is considered healthy. Every reservation admission locks the same row inside its transaction and requires `ACTIVE` plus an exact active tariff/evidence-version match, so old and new application instances reject while draining.
+
+The fence applies desired state only when its epoch is greater than the persisted applied epoch. A lower epoch is a stale no-op and cannot mutate the row; the process must use the persisted row for admission. Equal epoch with a different digest is a hard configuration conflict. Equal epoch with the same digest is exact replay. These rules prevent a restarted old `ACTIVE` binary from reopening after `DRAINING`, and prevent a restarted old `DRAINING` binary from closing a newer `ACTIVE` fence.
+
+After the fence is durably `DRAINING`, wait until no `RESERVED` or unknown/reconciliation provider operation remains bound to the active tariff anywhere in the shared OpenRouter pool. Then record the purchase, compute the conservative multiplier, and publish a new immutable tariff/evidence version with desired `ACTIVE`, another strictly higher epoch, and its exact manifest digest. Startup reconciliation locks the fence row, rechecks provider-wide quiescence and immutable evidence in the same transaction, then atomically switches the active versions/state/epoch/digest. Any missing evidence, version mismatch, stale/conflicting epoch, or unresolved prior-version operation leaves the fence closed. Only after this transaction commits may rollout admit traffic.
+
+The fence stores only provider key, `DISABLED | DRAINING | ACTIVE`, active tariff/evidence versions, applied desired-state epoch/digest, a monotonic row version, and timestamps. It is not a wallet, price catalogue, balance, funding record, or customer ledger, and there is no public mutation or separate activation command. Prices and acquisition evidence remain immutable and source-controlled.
+
+Every reservation and receipt immutably binds that tariff version and its multiplier-evidence version. Never lower or reset the multiplier while any prior credits or provider outcomes may remain. A lower multiplier may begin a new pool only after managed generation is paused, no provider operations are pending, and OpenRouter's authoritative balance is confirmed zero.
 
 A completed operation whose receipt and canonical event are already durable does not block the transition: its exact charge, tariff, multiplier evidence, and deterministic transaction ID are immutable, so pending delivery/settlement never consults the newly active tariff. Tests prove that old-version delivery remains unchanged after a new version activates.
 
@@ -811,24 +820,28 @@ This smoke path is the user-facing acceptance proof. Compilation alone is insuff
 
 ### 15.1 Rollout
 
-1. Deploy code with Metronome and managed OpenRouter disabled.
-2. Publish the versioned platform policy describing OpenRouter routing/upstream retention and verify the existing AI UI link resolves to it.
-3. Configure the server-only OpenRouter key and external key budget.
-4. Pause managed reservations, wait for no prior-tariff reserved/unknown operations, manually top up OpenRouter, record cash/usable-credit evidence, and atomically activate the new conservative multiplier/tariff version.
-5. Apply and verify the source-controlled Metronome cent-unit catalogue and rate.
-6. Complete the focused sandbox, provider, and static boundary contracts, including the DeepSeek/Grok 128k paid proofs.
-7. Grant a capped sponsored credit to the Myah-team workspace.
-8. Enable managed OpenRouter only for that workspace.
-9. Run the free-Gemma assistant and workflow smoke paths.
-10. Expand only to explicitly approved design-partner workspaces.
-11. Keep Gemma labelled temporary test tariff.
-12. Do not enable general customer rollout until MYAH-147 supplies self-service Stripe funding.
-13. Remove or explicitly reprice Gemma before general availability.
+1. Deploy the fence-aware reservation code with Metronome and managed OpenRouter globally disabled.
+2. Verify every serving instance reports the exact fence-aware revision before any `DRAINING` transition; an old instance that does not lock/read the fence is a rollout blocker.
+3. Publish the versioned platform policy describing OpenRouter routing/upstream retention and verify the existing AI UI link resolves to it.
+4. Configure the server-only OpenRouter key and external key budget.
+5. Publish/deploy source-controlled `DRAINING` with the next desired-state epoch/digest; verify startup reconciliation durably closes the provider-pool admission fence before the deployment becomes healthy, and a restarted lower-epoch `ACTIVE` binary cannot reopen it.
+6. Wait for no prior-tariff `RESERVED` or unknown/reconciliation operation across any model/workspace in the shared OpenRouter pool.
+7. Manually top up OpenRouter and record measured cash/usable-credit/timestamp/rail evidence.
+8. Publish/deploy the new immutable conservative multiplier/tariff/evidence version with desired `ACTIVE` and another higher epoch/digest; verify startup reconciliation atomically rechecks evidence/quiescence, opens the fence, and rejects a restarted lower-epoch `DRAINING` writer.
+9. Apply and verify the source-controlled Metronome cent-unit catalogue and rate.
+10. Complete the focused sandbox, provider, and static boundary contracts, including the DeepSeek/Grok 128k paid proofs.
+11. Grant a capped sponsored credit to the Myah-team workspace.
+12. Enable managed OpenRouter only for that workspace.
+13. Run the free-Gemma assistant and workflow smoke paths.
+14. Expand only to explicitly approved design-partner workspaces.
+15. Keep Gemma labelled temporary test tariff.
+16. Do not enable general customer rollout until MYAH-147 supplies self-service Stripe funding.
+17. Remove or explicitly reprice Gemma before general availability.
 
 ### 15.2 Rollback
 
-- disable global managed OpenRouter or one model/tariff;
-- reject new reservations immediately;
+- publish/deploy `DISABLED` globally or disable one model/tariff;
+- verify the durable admission fence closes and new reservation transactions reject immediately;
 - remove disabled models from selectors;
 - preserve and reconcile every existing operation;
 - do not delete Metronome products, rates, events, funding entries, or receipts;
@@ -853,7 +866,7 @@ MYAH-216 is complete only when:
 12. generation ID is durably attached before stream completion when provided;
 13. successful usage stores immutable inference-credit, reference-cost, tariff, multiplier-evidence, billed-cent, and workspace/member facts;
 14. every reservation and receipt binds one immutable tariff/multiplier version;
-15. top-up tariff transitions pause new reservations and wait for no prior-tariff reserved/unknown operations;
+15. top-up tariff transitions publish a higher epoch/exact digest, durably pause all pool reservations, wait for no prior-tariff reserved/unknown operations, reject equal-epoch/different-digest conflicts, and make lower-epoch `ACTIVE`/`DRAINING` restarts stale no-ops;
 16. derived tariffs prove at least 30% cash gross margin after conservative pooled OpenRouter credit-acquisition cost;
 17. customer billing never exceeds the authorized reservation;
 18. overrun quarantines the model and records absorbed Myah cost;
