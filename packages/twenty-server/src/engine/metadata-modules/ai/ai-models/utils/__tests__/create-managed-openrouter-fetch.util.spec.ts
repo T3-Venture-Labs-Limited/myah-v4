@@ -1,4 +1,7 @@
-import { createManagedOpenRouterFetch } from '../create-managed-openrouter-fetch.util';
+import {
+  createManagedOpenRouterFetch,
+  runWithManagedOpenRouterResponseObserver,
+} from '../create-managed-openrouter-fetch.util';
 
 describe('createManagedOpenRouterFetch', () => {
   it.each([
@@ -55,6 +58,35 @@ describe('createManagedOpenRouterFetch', () => {
       }),
     ).rejects.toThrow('Managed OpenRouter request policy validation failed');
     expect(baseFetch).not.toHaveBeenCalled();
+  });
+
+  it('reports the generation ID before returning the provider response', async () => {
+    const events: string[] = [];
+    const baseFetch = jest.fn().mockImplementation(async () => {
+      events.push('provider-response');
+
+      return new Response('{}', {
+        headers: { 'x-generation-id': 'generation-id' },
+        status: 200,
+      });
+    });
+    const guardedFetch = createManagedOpenRouterFetch(baseFetch);
+
+    await runWithManagedOpenRouterResponseObserver(
+      async (providerExecutionId) => {
+        events.push(`attached:${providerExecutionId}`);
+      },
+      () =>
+        guardedFetch('https://openrouter.ai/api/v1/chat/completions', {
+          body: JSON.stringify({
+            model: 'deepseek/deepseek-v4-flash',
+            user: 'managed-0123456789abcdef01234567',
+          }),
+          method: 'POST',
+        }),
+    );
+
+    expect(events).toEqual(['provider-response', 'attached:generation-id']);
   });
 
   it('does not modify unrelated requests', async () => {

@@ -106,67 +106,76 @@ export class ManagedProviderBillingRecoveryService {
   private async recoverUnknownOpenRouterOperations(now: Date): Promise<void> {
     if (!this.openRouterGenerationLookupService) return;
 
-    const operations = await this.operationRepository.find({
-      take: RECOVERY_BATCH_SIZE,
-      where: [
-        {
-          completionOutcome: 'UNKNOWN',
-          providerKey: 'openrouter',
-          state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
-        },
-        {
-          completionOutcome: 'UNKNOWN',
-          providerCostMicrousd: IsNull(),
-          providerExecutionId: MoreThan(''),
-          providerKey: 'openrouter',
-          state: ManagedProviderOperationState.RELEASED,
-        },
-      ],
-    });
+    let cursor: string | undefined;
 
-    await Promise.all(
-      operations.map(async (operation) => {
-        if (!operation.providerExecutionId) return;
+    while (true) {
+      const cursorFilter = cursor === undefined ? {} : { id: MoreThan(cursor) };
+      const operations = await this.operationRepository.find({
+        order: { id: 'ASC' },
+        take: RECOVERY_BATCH_SIZE,
+        where: [
+          {
+            ...cursorFilter,
+            completionOutcome: 'UNKNOWN',
+            nextDeliveryAttemptAt: IsNull(),
+            providerKey: 'openrouter',
+            state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+          },
+          {
+            ...cursorFilter,
+            completionOutcome: 'UNKNOWN',
+            nextDeliveryAttemptAt: LessThanOrEqual(now),
+            providerKey: 'openrouter',
+            state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+          },
+          {
+            ...cursorFilter,
+            completionOutcome: 'UNKNOWN',
+            providerExecutionId: MoreThan(''),
+            providerKey: 'openrouter',
+            state: ManagedProviderOperationState.RESERVED,
+          },
+          {
+            ...cursorFilter,
+            completionOutcome: 'UNKNOWN',
+            providerCostMicrousd: IsNull(),
+            providerExecutionId: MoreThan(''),
+            providerKey: 'openrouter',
+            state: ManagedProviderOperationState.RELEASED,
+          },
+        ],
+      });
 
-        if (
-          operation.state ===
-            ManagedProviderOperationState.RECONCILIATION_REQUIRED &&
-          operation.createdAt instanceof Date &&
-          now.getTime() - operation.createdAt.getTime() >=
-            RECONCILIATION_TIMEOUT_MS
-        ) {
-          await this.operationRepository.manager.transaction(
-            async (manager) => {
-              const lockedOperation = await manager.findOne(
-                ManagedProviderOperationEntity,
-                {
-                  lock: { mode: 'pessimistic_write' },
-                  where: {
-                    id: operation.id,
-                    workspaceId: operation.workspaceId,
-                  },
-                },
-              );
-              if (
-                lockedOperation?.state !==
-                ManagedProviderOperationState.RECONCILIATION_REQUIRED
-              )
-                return;
-              await manager.save(ManagedProviderOperationEntity, {
-                ...lockedOperation,
-                lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
-                nextDeliveryAttemptAt: null,
-                releasedAt: now,
-                state: ManagedProviderOperationState.RELEASED,
-              });
-            },
-          );
-          return;
+      for (const operation of operations) {
+        const isPastDeadline = this.isPastReconciliationDeadline(
+          operation,
+          now,
+        );
+
+        if (!operation.providerExecutionId) {
+          if (isPastDeadline) {
+            await this.releaseUnknownOperation(operation, now);
+          } else {
+            await this.scheduleUnknownRetry(operation, now);
+          }
+          continue;
         }
 
-        const generation = await this.openRouterGenerationLookupService!.lookup(
-          operation.providerExecutionId,
-        );
+        let generation;
+        try {
+          generation = await this.openRouterGenerationLookupService.lookup(
+            operation.providerExecutionId,
+          );
+        } catch {
+          await this.scheduleUnknownRetry(operation, now);
+          continue;
+        }
+
+        if (generation.status === 'unavailable') {
+          await this.scheduleUnknownRetry(operation, now);
+          continue;
+        }
+
         if (
           generation.status !== 'found' ||
           generation.id !== operation.providerExecutionId ||
@@ -174,32 +183,41 @@ export class ManagedProviderBillingRecoveryService {
             operation.providerConfigurationKey ||
           !this.isMatchingGenerationUsage(operation, generation)
         ) {
-          await this.scheduleUnknownRetry(operation, now);
-          return;
+          if (isPastDeadline) {
+            await this.releaseUnknownOperation(operation, now);
+          } else {
+            await this.scheduleUnknownRetry(operation, now);
+          }
+          continue;
         }
 
         const providerCostMicrousd = Math.ceil(
           generation.totalCostUsd * 1_000_000,
         );
-        if (!Number.isSafeInteger(providerCostMicrousd)) {
-          await this.scheduleUnknownRetry(operation, now);
-          return;
+        if (
+          !Number.isSafeInteger(providerCostMicrousd) ||
+          providerCostMicrousd < 0
+        ) {
+          if (isPastDeadline) {
+            await this.releaseUnknownOperation(operation, now);
+          } else {
+            await this.scheduleUnknownRetry(operation, now);
+          }
+          continue;
         }
+
         const recoveredUsageProperties = this.getRecoveredUsageProperties(
           operation,
           generation,
           providerCostMicrousd,
         );
-        if (!recoveredUsageProperties) {
-          await this.scheduleUnknownRetry(operation, now);
-          return;
-        }
         if (
-          operation.providerCostMicrousd !== null &&
-          operation.providerCostMicrousd !== providerCostMicrousd.toString()
+          !recoveredUsageProperties ||
+          (operation.providerCostMicrousd !== null &&
+            operation.providerCostMicrousd !== providerCostMicrousd.toString())
         ) {
           await this.scheduleUnknownRetry(operation, now);
-          return;
+          continue;
         }
 
         let delivered = false;
@@ -216,11 +234,14 @@ export class ManagedProviderBillingRecoveryService {
             (lockedOperation.state !==
               ManagedProviderOperationState.RECONCILIATION_REQUIRED &&
               lockedOperation.state !==
+                ManagedProviderOperationState.RESERVED &&
+              lockedOperation.state !==
                 ManagedProviderOperationState.RELEASED) ||
             lockedOperation.completionOutcome !== 'UNKNOWN' ||
             lockedOperation.providerCostMicrousd !== null
-          )
+          ) {
             return;
+          }
 
           if (
             lockedOperation.state === ManagedProviderOperationState.RELEASED
@@ -256,8 +277,53 @@ export class ManagedProviderBillingRecoveryService {
             { id: `managed-provider-usage:${operation.id}`, retryLimit: 3 },
           );
         }
-      }),
+      }
+
+      if (operations.length < RECOVERY_BATCH_SIZE) {
+        return;
+      }
+
+      cursor = operations[operations.length - 1].id;
+    }
+  }
+
+  private isPastReconciliationDeadline(
+    operation: ManagedProviderOperationEntity,
+    now: Date,
+  ): boolean {
+    return (
+      operation.createdAt instanceof Date &&
+      now.getTime() - operation.createdAt.getTime() >= RECONCILIATION_TIMEOUT_MS
     );
+  }
+
+  private async releaseUnknownOperation(
+    operation: ManagedProviderOperationEntity,
+    now: Date,
+  ): Promise<void> {
+    await this.operationRepository.manager.transaction(async (manager) => {
+      const lockedOperation = await manager.findOne(
+        ManagedProviderOperationEntity,
+        {
+          lock: { mode: 'pessimistic_write' },
+          where: { id: operation.id, workspaceId: operation.workspaceId },
+        },
+      );
+      if (
+        lockedOperation?.state !==
+        ManagedProviderOperationState.RECONCILIATION_REQUIRED
+      ) {
+        return;
+      }
+
+      await manager.save(ManagedProviderOperationEntity, {
+        ...lockedOperation,
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
+        nextDeliveryAttemptAt: null,
+        releasedAt: now,
+        state: ManagedProviderOperationState.RELEASED,
+      });
+    });
   }
 
   private async scheduleUnknownRetry(
@@ -274,15 +340,18 @@ export class ManagedProviderBillingRecoveryService {
       );
       if (
         lockedOperation?.state !==
-        ManagedProviderOperationState.RECONCILIATION_REQUIRED
-      )
+          ManagedProviderOperationState.RECONCILIATION_REQUIRED &&
+        lockedOperation?.state !== ManagedProviderOperationState.RESERVED
+      ) {
         return;
+      }
       await manager.save(ManagedProviderOperationEntity, {
         ...lockedOperation,
         lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_PENDING',
         nextDeliveryAttemptAt: new Date(
           now.getTime() + RECONCILIATION_RETRY_DELAY_MS,
         ),
+        state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
       });
     });
   }
@@ -373,6 +442,17 @@ export class ManagedProviderBillingRecoveryService {
     const effectiveCachedInputRate = usesLongContextTariff
       ? cachedInputRate
       : baseCachedInputRate;
+    const configuredCacheCreationRate = usesLongContextTariff
+      ? maximum.cacheCreationRate
+      : (maximum.baseCacheCreationRate ?? maximum.cacheCreationRate);
+    if (
+      configuredCacheCreationRate !== undefined &&
+      (typeof configuredCacheCreationRate !== 'number' ||
+        !Number.isFinite(configuredCacheCreationRate) ||
+        configuredCacheCreationRate !== 0)
+    ) {
+      return null;
+    }
 
     const retailMicrousd = Math.ceil(
       (generation.promptTokens - generation.cachedPromptTokens) *

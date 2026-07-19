@@ -287,7 +287,7 @@ export class StreamAgentChatJob {
             const { turnId } = await userMessagePromise;
 
             const managedProviderRequestIdRoot = data.existingTurnId
-              ? `${data.existingTurnId}:resume:${data.streamId}`
+              ? data.existingTurnId
               : turnId;
 
             if (!managedProviderRequestIdRoot) {

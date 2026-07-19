@@ -68,6 +68,66 @@ describe('AiModelRegistryService', () => {
       'No AI models are available. Configure at least one AI provider.',
     );
   });
+  it('keeps managed OpenRouter models alongside a custom OpenRouter provider', () => {
+    const providerConfigService = service[
+      'providerConfigService' as keyof AiModelRegistryService
+    ] as unknown as {
+      isManagedOpenRouterEnabled: jest.Mock;
+      hasCustomOpenRouterProvider: jest.Mock;
+      getResolvedProviders: jest.Mock;
+    };
+
+    providerConfigService.isManagedOpenRouterEnabled.mockReturnValue(true);
+    providerConfigService.hasCustomOpenRouterProvider.mockReturnValue(true);
+    providerConfigService.getResolvedProviders.mockReturnValue({
+      openrouter: {
+        apiKey: 'managed-key',
+        npm: '@ai-sdk/openai-compatible',
+        models: [{ name: 'managed-model', label: 'Managed model' }],
+        name: 'Managed OpenRouter',
+      },
+      'openrouter-custom': {
+        apiKey: 'custom-key',
+        npm: '@ai-sdk/openai-compatible',
+        models: [{ name: 'custom-model', label: 'Custom model' }],
+        name: 'Custom OpenRouter',
+      },
+    });
+    const sdkProviderFactory = (
+      service as unknown as {
+        sdkProviderFactory: {
+          createProvider: jest.Mock;
+        };
+      }
+    ).sdkProviderFactory;
+    sdkProviderFactory.createProvider = jest.fn().mockReturnValue({
+      createModel: (name: string) => ({ name }),
+    });
+
+    expect(service.getModel('openrouter/managed-model')).toBeDefined();
+    expect(service.getModel('openrouter-custom/custom-model')).toBeDefined();
+  });
+
+  it('fails closed for global client selectors without workspace identity', () => {
+    jest.spyOn(service, 'getAvailableModels').mockReturnValue([
+      {
+        modelId: 'openrouter/managed-model',
+        providerName: 'openrouter',
+        sdkPackage: '@ai-sdk/openai-compatible',
+        model: {} as any,
+      },
+      {
+        modelId: 'openai/gpt-4',
+        providerName: 'openai',
+        sdkPackage: '@ai-sdk/openai',
+        model: {} as any,
+      },
+    ]);
+
+    expect(
+      service.getAdminFilteredModels().map(({ modelId }) => modelId),
+    ).toEqual(['openai/gpt-4']);
+  });
 
   it('should return effective model config for AUTO_SELECT_SMART_MODEL_ID when models are available', () => {
     jest.spyOn(service, 'getAvailableModels').mockReturnValue([

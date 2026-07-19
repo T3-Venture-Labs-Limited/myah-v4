@@ -3,7 +3,14 @@ export const MANAGED_OPENROUTER_PROVIDER_LABEL = 'Myah Managed OpenRouter';
 export const MANAGED_OPENROUTER_EVENT_TYPE = 'managed_openrouter_generation';
 
 // Versioned tariff facts are part of every reservation and completion receipt.
-export const MANAGED_OPENROUTER_TARIFF_VERSION = '2026-07-19-v1';
+export const MANAGED_OPENROUTER_TARIFF_VERSION = '2026-07-19-v2';
+
+export const MANAGED_OPENROUTER_GEMMA_PAID_REFERENCE_PRICE_PER_MILLION = {
+  input: 0.32,
+  output: 0.79,
+  cacheRead: 0.18,
+  cacheWrite: 0.32,
+} as const;
 
 export const MANAGED_OPENROUTER_MODEL_IDS = [
   'openrouter/deepseek/deepseek-v4-flash',
@@ -15,13 +22,12 @@ export const MANAGED_OPENROUTER_MODEL_IDS = [
 export type ManagedOpenRouterModelId =
   (typeof MANAGED_OPENROUTER_MODEL_IDS)[number];
 
-// Minimum Metronome list prices in USD per million tokens. Paid prices
-// round up from the highest documented OpenRouter rate divided by 0.70.
+// Minimum Metronome list prices in USD per million tokens.
 export const MANAGED_OPENROUTER_MINIMUM_PRICE_PER_MILLION = {
   'openrouter/deepseek/deepseek-v4-flash': { input: 0.14, output: 0.28 },
   'openrouter/x-ai/grok-4.5': { input: 2.86, output: 8.58 },
   'openrouter/openai/gpt-5.6-luna': { input: 1.43, output: 8.58 },
-  'openrouter/google/gemma-4-31b-it:free': { input: 0, output: 0 },
+  'openrouter/google/gemma-4-31b-it:free': { input: 0.32, output: 0.79 },
 } as const satisfies Record<
   ManagedOpenRouterModelId,
   { input: number; output: number }

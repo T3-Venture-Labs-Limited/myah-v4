@@ -48,6 +48,7 @@ const GeneratePostCardEffect = () => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            operationId: `postcard:${recordId}`,
             systemPrompt: SYSTEM_PROMPT,
             userPrompt,
           }),

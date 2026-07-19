@@ -95,8 +95,7 @@ export class AiModelRegistryService {
   private registerModelsFromProviders(providers: AiProvidersConfig): void {
     for (const [providerKey, config] of Object.entries(providers)) {
       const isManagedProvider =
-        providerKey === MANAGED_OPENROUTER_PROVIDER_NAME &&
-        !this.providerConfigService.hasCustomOpenRouterProvider();
+        providerKey === MANAGED_OPENROUTER_PROVIDER_NAME;
 
       if (
         isManagedProvider &&
@@ -335,11 +334,14 @@ export class AiModelRegistryService {
   }
 
   getAdminFilteredModels(): RegisteredAiModel[] {
-    return this.getAvailableModels().filter((model) =>
-      this.isModelAdminAllowed(model.modelId),
+    // Client config has no workspace identity. Fail closed instead of
+    // publishing managed-only models to every workspace's selector.
+    return this.getAvailableModels().filter(
+      (model) =>
+        model.providerName !== MANAGED_OPENROUTER_PROVIDER_NAME &&
+        this.isModelAdminAllowed(model.modelId),
     );
   }
-
   getAllModelsWithStatus(): Array<{
     modelConfig: AiModelConfig;
     isAvailable: boolean;

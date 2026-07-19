@@ -103,7 +103,7 @@ describe('ai-providers.json integrity', () => {
       }),
       expect.objectContaining({
         name: 'google/gemma-4-31b-it:free',
-        label: 'Gemma 4 31B (Free)',
+        label: 'Gemma 4 31B — Temporary Test Tariff',
       }),
     ]);
   });

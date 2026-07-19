@@ -56,14 +56,18 @@ export class ManagedProviderFundingJournalService {
   /** Must be awaited before any remote Metronome call. */
   async createPending(
     input: CreateFundingIntent,
-  ): Promise<ManagedProviderFundingActionEntity> {
+  ): Promise<
+    ManagedProviderFundingActionEntity & { createdByCaller?: boolean }
+  > {
     const existing = await this.findByIdempotency(
       input.workspaceId,
       input.idempotencyKey,
     );
 
     if (existing) {
-      return this.getExactReplay(existing, input);
+      return Object.assign(this.getExactReplay(existing, input), {
+        createdByCaller: false,
+      });
     }
 
     const metronomeUniquenessKey = `myah:${createHash('sha256')
@@ -102,7 +106,8 @@ export class ManagedProviderFundingJournalService {
     });
 
     try {
-      return await this.repository.save(action);
+      const saved = await this.repository.save(action);
+      return Object.assign(saved, { createdByCaller: true });
     } catch (error) {
       const concurrent = await this.findByIdempotency(
         input.workspaceId,
@@ -110,7 +115,9 @@ export class ManagedProviderFundingJournalService {
       );
 
       if (concurrent) {
-        return this.getExactReplay(concurrent, input);
+        return Object.assign(this.getExactReplay(concurrent, input), {
+          createdByCaller: false,
+        });
       }
 
       throw error;
@@ -123,16 +130,18 @@ export class ManagedProviderFundingJournalService {
     externalResourceId?: string | null,
     failureCode?: string | null,
   ): Promise<ManagedProviderFundingActionEntity> {
-    await this.repository.update(id, {
-      state,
-      externalResourceId: externalResourceId ?? null,
-      failureCode: failureCode ?? null,
-      safeErrorCode: failureCode ?? null,
-      ...(state === 'SUCCEEDED' && externalResourceId
-        ? { creditId: externalResourceId }
-        : {}),
-    });
-
+    await this.repository.update(
+      { id, state: 'PENDING' },
+      {
+        state,
+        externalResourceId: externalResourceId ?? null,
+        failureCode: failureCode ?? null,
+        safeErrorCode: failureCode ?? null,
+        ...(state === 'SUCCEEDED' && externalResourceId
+          ? { creditId: externalResourceId }
+          : {}),
+      },
+    );
     return this.repository.findOneByOrFail({ id });
   }
   private getExactReplay(

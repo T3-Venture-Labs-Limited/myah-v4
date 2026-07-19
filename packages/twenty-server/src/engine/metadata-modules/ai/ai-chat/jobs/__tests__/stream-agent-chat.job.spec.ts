@@ -244,12 +244,12 @@ describe('StreamAgentChatJob', () => {
     expect(agentChatStreamingService.flushNextQueuedMessage).toHaveBeenCalled();
     expect(chatExecutionService.streamChat).toHaveBeenCalledWith(
       expect.objectContaining({
-        managedProviderRequestIdRoot: 'turn-id:resume:stream-id',
+        managedProviderRequestIdRoot: 'turn-id',
       }),
     );
   });
 
-  it('keeps resume roots unique per stream and stable on replay', async () => {
+  it('reuses the same logical provider operation for unresolved chat resumes', async () => {
     const { job, chatExecutionService } = buildJob();
 
     await job.handle(jobData);
@@ -261,11 +261,7 @@ describe('StreamAgentChatJob', () => {
         ([options]: [{ managedProviderRequestIdRoot: string }]) =>
           options.managedProviderRequestIdRoot,
       ),
-    ).toEqual([
-      'turn-id:resume:stream-id',
-      'turn-id:resume:stream-id-2',
-      'turn-id:resume:stream-id',
-    ]);
+    ).toEqual(['turn-id', 'turn-id', 'turn-id']);
   });
 
   it('waits for a late human-input chunk before persisting the assistant turn', async () => {

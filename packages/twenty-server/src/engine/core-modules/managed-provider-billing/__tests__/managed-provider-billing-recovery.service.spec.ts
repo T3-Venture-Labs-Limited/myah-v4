@@ -726,7 +726,9 @@ describe('ManagedProviderBillingRecoveryService', () => {
       ...unknownOperation(),
       createdAt: new Date('2026-07-08T00:00:00.000Z'),
     };
-    const lookup = { lookup: jest.fn() };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({ status: 'not_found' }),
+    };
     const { messageQueueService, operationRepository, save, service } =
       createService(lookup);
     (operationRepository.manager.transaction as jest.Mock).mockImplementation(
@@ -753,7 +755,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
         state: ManagedProviderOperationState.RELEASED,
       }),
     );
-    expect(lookup.lookup).not.toHaveBeenCalled();
+    expect(lookup.lookup).toHaveBeenCalledWith('gen-123');
     expect(messageQueueService.add).not.toHaveBeenCalledWith(
       expect.any(String),
       { operationId: operation.id },
@@ -887,6 +889,125 @@ describe('ManagedProviderBillingRecoveryService', () => {
       { operationId: 'unknown-operation' },
       expect.objectContaining({
         id: 'managed-provider-usage:unknown-operation',
+      }),
+    );
+  });
+  it('reconciles reserved OpenRouter operations with a captured provider ID', async () => {
+    const operation = {
+      ...unknownOperation(),
+      state: ManagedProviderOperationState.RESERVED,
+    };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({ status: 'unavailable' }),
+    };
+    const { operationRepository, service } = createService(lookup);
+    const save = jest.fn();
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(lookup.lookup).toHaveBeenCalledWith('gen-123');
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+      }),
+    );
+  });
+
+  it('releases unknown operations without a provider ID after the deadline', async () => {
+    const operation = {
+      ...unknownOperation(),
+      createdAt: new Date('2026-07-08T00:00:00.000Z'),
+      providerExecutionId: null,
+    };
+    const lookup = { lookup: jest.fn() };
+    const { operationRepository, save, service } = createService(lookup);
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(lookup.lookup).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
+        state: ManagedProviderOperationState.RELEASED,
+      }),
+    );
+  });
+
+  it('does not synthesize zero cache-write usage for a priced cache-write tariff', async () => {
+    const operation = {
+      ...unknownOperation(),
+      maximumUsageProperties: {
+        ...unknownOperation().maximumUsageProperties,
+        cacheCreationRate: 0.32,
+      },
+    };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({
+        status: 'found',
+        id: 'gen-123',
+        model: 'openai/gpt-5.6-luna',
+        cachedPromptTokens: 0,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalCostUsd: 0.001,
+      }),
+    };
+    const { messageQueueService, operationRepository, service } =
+      createService(lookup);
+    const save = jest.fn();
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(messageQueueService.add).not.toHaveBeenCalledWith(
+      expect.any(String),
+      { operationId: operation.id },
+      expect.anything(),
+    );
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_PENDING',
       }),
     );
   });

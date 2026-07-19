@@ -17,6 +17,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
     get: jest.fn((key: string) => {
       const values: Record<string, unknown> = {
         MANAGED_OPENROUTER_CREDIT_PRODUCT_ID: 'credit-product-id',
+        MANAGED_OPENROUTER_CHARGE_PRODUCT_ID: 'charge-product-id',
         MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: [workspaceId],
         MANAGED_OPENROUTER_GRANT_DAILY_ACTION_LIMIT: 20,
         MANAGED_OPENROUTER_GRANT_OPERATOR_USER_IDS: [operatorId],
@@ -40,12 +41,21 @@ describe('AdminPanelManagedProviderBillingService', () => {
       countRecentActions: jest.fn().mockResolvedValue(0),
       createPending: jest.fn().mockResolvedValue({
         createdAt: new Date('2026-07-19T10:00:00.000Z'),
+        createdByCaller: true,
+        failureCode: null,
         id: 'funding-action-id',
         metronomeUniquenessKey: 'myah:funding-key',
         state: 'PENDING',
+        updatedAt: new Date('2026-07-19T10:00:00.000Z'),
+      }),
+      transition: jest.fn().mockResolvedValue({
+        createdAt: new Date('2026-07-19T10:00:00.000Z'),
+        failureCode: null,
+        id: 'funding-action-id',
+        state: 'SUCCEEDED',
+        updatedAt: new Date('2026-07-19T10:00:00.000Z'),
       }),
       findByIdempotency: jest.fn().mockResolvedValue(null),
-      transition: jest.fn(),
     };
     const service = new AdminPanelManagedProviderBillingService(
       metronomeClientService as unknown as MetronomeClientService,
@@ -69,6 +79,11 @@ describe('AdminPanelManagedProviderBillingService', () => {
       contractId: 'contract-id',
       creditId: 'credit-id',
       customerId: 'customer-id',
+      fundingActionCreatedAt: new Date('2026-07-19T10:00:00.000Z'),
+      fundingActionErrorCode: null,
+      fundingActionId: 'funding-action-id',
+      fundingActionState: 'SUCCEEDED',
+      fundingActionUpdatedAt: new Date('2026-07-19T10:00:00.000Z'),
     });
     expect(
       fundingJournalService.createPending.mock.invocationCallOrder[0],
@@ -77,6 +92,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
     );
     expect(metronomeClientService.createCustomerCredit).toHaveBeenCalledWith({
       amountCents: 5_000,
+      applicableProductIds: ['charge-product-id'],
       contractId: 'contract-id',
       customerId: 'customer-id',
       customFields: { myah_managed_openrouter: 'sponsored' },
@@ -177,6 +193,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
       countRecentActions: jest.fn().mockResolvedValue(0),
       createPending: jest.fn().mockResolvedValue({
         createdAt: new Date('2026-07-19T10:00:00.000Z'),
+        createdByCaller: true,
         id: 'funding-action-id',
         metronomeUniquenessKey: 'myah:funding-key',
         state: 'PENDING',

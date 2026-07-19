@@ -45,6 +45,24 @@ export class ProviderConfigService {
     const catalog = this.resolveTemplates(rawCatalog);
     const custom = this.twentyConfigService.get('AI_PROVIDERS');
 
+    if (
+      custom &&
+      typeof custom === 'object' &&
+      Object.prototype.hasOwnProperty.call(
+        custom,
+        MANAGED_OPENROUTER_PROVIDER_NAME,
+      )
+    ) {
+      const { [MANAGED_OPENROUTER_PROVIDER_NAME]: customOpenRouter, ...rest } =
+        custom;
+
+      return {
+        ...catalog,
+        ...rest,
+        [`${MANAGED_OPENROUTER_PROVIDER_NAME}-custom`]: customOpenRouter,
+      };
+    }
+
     return { ...catalog, ...custom };
   }
 

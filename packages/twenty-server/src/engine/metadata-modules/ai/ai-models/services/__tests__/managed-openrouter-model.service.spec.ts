@@ -58,11 +58,13 @@ const createService = ({
   customOpenRouter = false,
   enabled = true,
   eligible = true,
+  gemmaEligible = true,
   operationState = ManagedProviderOperationState.RESERVED,
 }: {
   customOpenRouter?: boolean;
   enabled?: boolean;
   eligible?: boolean;
+  gemmaEligible?: boolean;
   operationState?: ManagedProviderOperationState;
 } = {}) => {
   const operationService = {
@@ -85,7 +87,13 @@ const createService = ({
         MANAGED_OPENROUTER_ENABLED: enabled,
         MANAGED_OPENROUTER_CHARGE_PRODUCT_ID:
           '33333333-3333-4333-8333-333333333333',
+        MANAGED_OPENROUTER_CASH_PAID_MICROUSD: '105500000',
+        MANAGED_OPENROUTER_USABLE_CREDITS_MICROUSD: '100000000',
+        MANAGED_OPENROUTER_MULTIPLIER_EVIDENCE_VERSION: 'topup-2026-07-19',
         MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: eligible
+          ? ['workspace-id']
+          : [],
+        MANAGED_OPENROUTER_GEMMA_TEST_WORKSPACE_IDS: gemmaEligible
           ? ['workspace-id']
           : [],
       };
@@ -130,7 +138,7 @@ const wrap = ({
 
 describe('ManagedOpenRouterModelService', () => {
   it('returns non-OpenRouter models unchanged', () => {
-    const { service } = createService();
+    const { service } = createService({ eligible: false });
     const { model } = createProviderModel();
 
     expect(wrap({ model, providerName: 'openai', service })).toBe(model);
@@ -155,17 +163,31 @@ describe('ManagedOpenRouterModelService', () => {
     expect(operationService.reserveOperation).not.toHaveBeenCalled();
   });
 
-  it('leaves a custom OpenRouter provider on the BYOK path', () => {
-    const { service } = createService({ customOpenRouter: true });
+  it('leaves an explicitly named custom OpenRouter provider on the BYOK path', () => {
+    const { service } = createService({
+      customOpenRouter: true,
+      eligible: false,
+    });
     const { model } = createProviderModel();
 
-    expect(wrap({ model, service })).toBe(model);
+    expect(wrap({ model, providerName: 'openrouter-custom', service })).toBe(
+      model,
+    );
     expect(
       service.isManagedModel({
         modelId: modelConfig.modelId,
-        providerName: 'openrouter',
+        providerName: 'openrouter-custom',
       }),
     ).toBe(false);
+  });
+
+  it('rejects BYOK model selection for a managed workspace', () => {
+    const { service } = createService({ customOpenRouter: true });
+    const { model } = createProviderModel();
+
+    expect(() =>
+      wrap({ model, providerName: 'openrouter-custom', service }),
+    ).toThrow('Managed OpenRouter generation failed');
   });
 
   it('reserves before provider I/O and completes one billable operation', async () => {
@@ -208,29 +230,29 @@ describe('ManagedOpenRouterModelService', () => {
 
     expect(order).toEqual(['reserve', 'provider', 'complete']);
     expect(operationService.reserveOperation).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         actorUserWorkspaceId: 'user-workspace-id',
         expectedProductIds: ['33333333-3333-4333-8333-333333333333'],
-        maximumUsageProperties: {
+        maximumUsageProperties: expect.objectContaining({
           inputUnits: expect.any(Number),
           model: 'openrouter/deepseek/deepseek-v4-flash',
           outputUnits: 100,
-          tariffVersion: '2026-07-19-v1',
+          tariffVersion: '2026-07-19-v2',
           inputRate: 0.098,
           outputRate: 0.196,
           cachedInputRate: 0.098,
           chargeCentUnits: 1,
-          baseInputRate: 0.098,
-          baseOutputRate: 0.196,
-          baseCachedInputRate: 0.098,
-        },
+          charge_cent_unit: '1',
+          model_id: 'openrouter/deepseek/deepseek-v4-flash',
+          tariff_version: '2026-07-19-v2',
+        }),
         metronomeEventType: 'managed_openrouter_generation',
         operationKey: 'generation',
         providerConfigurationKey: 'openrouter/deepseek/deepseek-v4-flash',
         providerKey: 'openrouter',
         requestId: 'chat-turn-1:0',
         workspaceId: 'workspace-id',
-      },
+      }),
       { rejectReplay: true },
     );
     expect(operationService.attachProviderExecutionId).toHaveBeenCalledWith({
@@ -240,45 +262,45 @@ describe('ManagedOpenRouterModelService', () => {
       providerKey: 'openrouter',
       workspaceId: 'workspace-id',
     });
-    expect(operationService.completeOperation).toHaveBeenCalledWith({
-      actualUsageProperties: {
-        inputUnits: 12,
-        inputNoCacheUnits: 12,
-        inputCacheReadUnits: 0,
-        inputCacheWriteUnits: 0,
-        model: 'openrouter/deepseek/deepseek-v4-flash',
-        outputUnits: 7,
-        tariffVersion: '2026-07-19-v1',
-        inputRate: 0.098,
-        outputRate: 0.196,
-        cachedInputRate: 0.098,
-        chargeCentUnits: 1,
-      },
-      actorUserWorkspaceId: 'user-workspace-id',
-      operationId: 'operation-1',
-      operationKey: 'generation',
-      outcome: 'BILLABLE',
-      providerConfigurationKey: 'openrouter/deepseek/deepseek-v4-flash',
-      providerCostMicrousd: '3',
-      providerExecutionId: 'generation-1',
-      providerKey: 'openrouter',
-      workspaceId: 'workspace-id',
-    });
+    expect(operationService.completeOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actualUsageProperties: expect.objectContaining({
+          inputUnits: 12,
+          inputNoCacheUnits: 12,
+          inputCacheReadUnits: 0,
+          inputCacheWriteUnits: 0,
+          model: 'openrouter/deepseek/deepseek-v4-flash',
+          outputUnits: 7,
+          tariffVersion: '2026-07-19-v2',
+          chargeCentUnits: 1,
+          charge_cent_unit: '1',
+          model_id: 'openrouter/deepseek/deepseek-v4-flash',
+          operation_id: 'operation-1',
+          tariff_version: '2026-07-19-v2',
+        }),
+        actorUserWorkspaceId: 'user-workspace-id',
+        operationId: 'operation-1',
+        outcome: 'BILLABLE',
+        providerCostMicrousd: '3',
+        providerExecutionId: 'generation-1',
+        workspaceId: 'workspace-id',
+      }),
+    );
   });
 
-  it('reserves and delivers exactly zero charge units for the approved free model', async () => {
-    const freeModelConfig: AiModelConfig = {
+  it('bills the temporary free-route model at its paid reference tariff', async () => {
+    const freeRouteModelConfig: AiModelConfig = {
       ...modelConfig,
-      cachedInputCostPerMillionTokens: 0,
-      inputCostPerMillionTokens: 0,
+      cachedInputCostPerMillionTokens: 0.18,
+      inputCostPerMillionTokens: 0.32,
       modelId: 'openrouter/google/gemma-4-31b-it:free',
-      outputCostPerMillionTokens: 0,
+      outputCostPerMillionTokens: 0.79,
     };
     const { operationService, service } = createService();
     const { model } = createProviderModel();
     const managedModel = wrap({
       model,
-      modelConfig: freeModelConfig,
+      modelConfig: freeRouteModelConfig,
       service,
     });
 
@@ -290,7 +312,9 @@ describe('ManagedOpenRouterModelService', () => {
     expect(operationService.reserveOperation).toHaveBeenCalledWith(
       expect.objectContaining({
         maximumUsageProperties: expect.objectContaining({
-          chargeCentUnits: 0,
+          chargeCentUnits: 1,
+          inputRate: 0.32,
+          outputRate: 0.79,
         }),
         providerConfigurationKey: 'openrouter/google/gemma-4-31b-it:free',
       }),
@@ -299,11 +323,29 @@ describe('ManagedOpenRouterModelService', () => {
     expect(operationService.completeOperation).toHaveBeenCalledWith(
       expect.objectContaining({
         actualUsageProperties: expect.objectContaining({
-          chargeCentUnits: 0,
+          chargeCentUnits: 1,
+          inputRate: 0.32,
+          outputRate: 0.79,
         }),
         providerConfigurationKey: 'openrouter/google/gemma-4-31b-it:free',
       }),
     );
+  });
+
+  it('rejects Gemma outside its narrower test audience', () => {
+    const { service } = createService({ gemmaEligible: false });
+    const { model } = createProviderModel();
+
+    expect(() =>
+      wrap({
+        model,
+        modelConfig: {
+          ...modelConfig,
+          modelId: 'openrouter/google/gemma-4-31b-it:free',
+        },
+        service,
+      }),
+    ).toThrow('Managed OpenRouter generation failed');
   });
 
   it('bounds provider requests and applies managed routing controls without PII', async () => {
@@ -346,7 +388,7 @@ describe('ManagedOpenRouterModelService', () => {
 
   it('uses the configured output bound for invalid requested limits', async () => {
     const { operationService, service } = createService();
-    const { model } = createProviderModel();
+    const { doGenerate, model } = createProviderModel();
 
     await wrap({ model, service }).doGenerate({
       maxOutputTokens: Number.NaN,
@@ -361,6 +403,13 @@ describe('ManagedOpenRouterModelService', () => {
         }),
       }),
       { rejectReplay: true },
+    );
+    const reservedOutputUnits =
+      operationService.reserveOperation.mock.calls[0][0].maximumUsageProperties
+        .outputUnits;
+
+    expect(doGenerate.mock.calls[0][0].maxOutputTokens).toBe(
+      reservedOutputUnits,
     );
   });
 
@@ -408,6 +457,29 @@ describe('ManagedOpenRouterModelService', () => {
       JSON.stringify(operationService.completeOperation.mock.calls),
     ).not.toContain('secret prompt body');
   });
+
+  it.each([401, 403])(
+    'releases a reservation for a definite pre-execution %s rejection',
+    async (statusCode) => {
+      const { operationService, service } = createService();
+      const providerError = Object.assign(new Error('provider rejected'), {
+        statusCode,
+      });
+      const { doGenerate, model } = createProviderModel();
+
+      doGenerate.mockRejectedValue(providerError);
+
+      await expect(
+        wrap({ model, service }).doGenerate({ prompt: [] } as never),
+      ).rejects.toThrow('Managed OpenRouter generation failed');
+      expect(operationService.completeOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: 'NON_BILLABLE_FAILURE',
+          providerExecutionId: null,
+        }),
+      );
+    },
+  );
 
   it('completes streaming usage before forwarding the finish part', async () => {
     const order: string[] = [];
@@ -559,7 +631,7 @@ describe('ManagedOpenRouterModelService', () => {
     const { operationService, service } = createService();
     operationService.reserveOperation.mockResolvedValue({
       id: 'operation-1',
-      reservedAmountCents: '40',
+      reservedAmountCents: '42',
       state: ManagedProviderOperationState.RESERVED,
     });
     const { doGenerate, model } = createProviderModel();
@@ -610,7 +682,7 @@ describe('ManagedOpenRouterModelService', () => {
         maximumUsageProperties: expect.objectContaining({
           baseInputRate: 2.86,
           baseOutputRate: 8.58,
-          chargeCentUnits: 40,
+          chargeCentUnits: 42,
           inputRate: 4,
           longContextThreshold: 200_000,
           outputRate: 12,
@@ -621,7 +693,7 @@ describe('ManagedOpenRouterModelService', () => {
     expect(operationService.completeOperation).toHaveBeenCalledWith(
       expect.objectContaining({
         actualUsageProperties: expect.objectContaining({
-          chargeCentUnits: 29,
+          chargeCentUnits: 30,
           inputRate: 2.86,
           outputRate: 8.58,
         }),

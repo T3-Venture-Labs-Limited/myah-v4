@@ -1259,6 +1259,14 @@ export interface BillingSession {
     __typename: 'BillingSession'
 }
 
+export interface ManagedProviderBillingStatus {
+    available: Scalars['Boolean']
+    prepaidBalanceCents?: Scalars['String']
+    pendingOperationCount: Scalars['Int']
+    reconciliationRequiredOperationCount: Scalars['Int']
+    __typename: 'ManagedProviderBillingStatus'
+}
+
 export interface BillingUpdate {
     /** Current billing subscription */
     currentBillingSubscription: BillingSubscription
@@ -2750,6 +2758,7 @@ export interface Query {
     getViewSorts: ViewSort[]
     getViewSort?: ViewSort
     getViewFields: ViewField[]
+    managedProviderBillingStatus: ManagedProviderBillingStatus
     getViewField?: ViewField
     getViewFieldGroups: ViewFieldGroup[]
     getViewFieldGroup?: ViewFieldGroup
@@ -4398,6 +4407,15 @@ export interface BillingSessionGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface ManagedProviderBillingStatusGenqlSelection{
+    available?: boolean | number
+    prepaidBalanceCents?: boolean | number
+    pendingOperationCount?: boolean | number
+    reconciliationRequiredOperationCount?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface BillingUpdateGenqlSelection{
     /** Current billing subscription */
     currentBillingSubscription?: BillingSubscriptionGenqlSelection
@@ -5977,6 +5995,7 @@ export interface QueryGenqlSelection{
     navigationMenuItem?: (NavigationMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
     enterprisePortalSession?: { __args: {returnUrlPath?: (Scalars['String'] | null)} } | boolean | number
     enterpriseCheckoutSession?: { __args: {billingInterval?: (Scalars['String'] | null)} } | boolean | number
+    managedProviderBillingStatus?: ManagedProviderBillingStatusGenqlSelection
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTOGenqlSelection
     getViewFilterGroups?: (ViewFilterGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
     getViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String']} })

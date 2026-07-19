@@ -74,6 +74,7 @@ describe('MetronomeClientService', () => {
       (service: MetronomeClientService) =>
         service.createCustomerCredit({
           amountCents: 5_000,
+          applicableProductIds: ['charge-product-id'],
           contractId: 'contract-id',
           customerId: 'customer-id',
           endingBefore: '2027-01-01T00:00:00.000Z',
@@ -666,6 +667,7 @@ describe('MetronomeClientService', () => {
     await expect(
       service.createCustomerCredit({
         amountCents: 5_000,
+        applicableProductIds: ['charge-product-id'],
         contractId: 'contract-id',
         customerId: 'customer-id',
         endingBefore: '2027-01-01T00:00:00.000Z',
@@ -686,6 +688,7 @@ describe('MetronomeClientService', () => {
         ],
       },
       applicable_contract_ids: ['contract-id'],
+      applicable_product_ids: ['charge-product-id'],
       customer_id: 'customer-id',
       name: 'Design partner credit',
       priority: 0,
@@ -702,6 +705,7 @@ describe('MetronomeClientService', () => {
           product: { id: 'credit-product-id', name: 'Credits' },
           uniqueness_key: 'design-partner-credit-1',
           applicable_contract_ids: ['contract-id'],
+          applicable_product_ids: ['charge-product-id'],
           access_schedule: {
             schedule_items: [
               {
@@ -750,6 +754,7 @@ describe('MetronomeClientService', () => {
     await expect(
       service.createCustomerCredit({
         amountCents: 5_000,
+        applicableProductIds: ['charge-product-id'],
         contractId: 'contract-id',
         customerId: 'customer-id',
         endingBefore: '2027-01-01T00:00:00.000Z',
@@ -838,6 +843,7 @@ describe('MetronomeClientService', () => {
       await expect(
         service.createCustomerCredit({
           amountCents: 5_000,
+          applicableProductIds: ['charge-product-id'],
           contractId: 'contract-id',
           customerId: 'customer-id',
           endingBefore: '2027-01-01T00:00:00.000Z',
@@ -850,6 +856,46 @@ describe('MetronomeClientService', () => {
       expect(createCredit).toHaveBeenCalledTimes(1);
     },
   );
+  it('keeps a credit create outcome uncertain when recovery listing fails', async () => {
+    const createCredit = jest.fn().mockRejectedValue({ status: 500 });
+    const listCredits = jest.fn().mockRejectedValue({ status: 503 });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: {
+              credits: { create: createCredit, list: listCredits },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+    const twentyConfigService = {
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as Pick<TwentyConfigService, 'get'>;
+    const service = new MetronomeClientService(
+      twentyConfigService as unknown as TwentyConfigService,
+    );
+
+    await expect(
+      service.createCustomerCredit({
+        amountCents: 5_000,
+        applicableProductIds: ['charge-product-id'],
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        endingBefore: '2027-01-01T00:00:00.000Z',
+        name: 'Design partner credit',
+        productId: 'credit-product-id',
+        startingAt: '2026-07-19T00:00:00.000Z',
+        uniquenessKey: 'design-partner-credit-1',
+      }),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    });
+  });
   it('fails closed on a non-conflict credit request failure', async () => {
     const createCredit = jest.fn().mockRejectedValue({ status: 400 });
     metronomeConstructor.mockImplementation(
@@ -872,6 +918,7 @@ describe('MetronomeClientService', () => {
     await expect(
       service.createCustomerCredit({
         amountCents: 5_000,
+        applicableProductIds: ['charge-product-id'],
         contractId: 'contract-id',
         customerId: 'customer-id',
         endingBefore: '2027-01-01T00:00:00.000Z',

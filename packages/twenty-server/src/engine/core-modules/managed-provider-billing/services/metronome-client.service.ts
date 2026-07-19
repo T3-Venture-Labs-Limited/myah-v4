@@ -90,6 +90,7 @@ export type MetronomeUsageEvent = {
 
 export type MetronomeCustomerCreditInput = {
   amountCents: number;
+  applicableProductIds: string[];
   contractId: string;
   customerId: string;
   endingBefore: string;
@@ -171,6 +172,7 @@ export class MetronomeClientService {
   }
   async createCustomerCredit({
     amountCents,
+    applicableProductIds,
     contractId,
     customerId,
     endingBefore,
@@ -189,6 +191,7 @@ export class MetronomeClientService {
     const client = this.getClient();
     try {
       const response = await client.v1.customers.credits.create({
+        applicable_product_ids: applicableProductIds,
         access_schedule: {
           schedule_items: [
             {
@@ -225,6 +228,7 @@ export class MetronomeClientService {
       if (isAmbiguousCreate) {
         return this.recoverCustomerCredit({
           amountCents,
+          applicableProductIds,
           contractId,
           customerId,
           endingBefore,
@@ -246,6 +250,7 @@ export class MetronomeClientService {
   private async recoverCustomerCredit({
     amountCents,
     contractId,
+    applicableProductIds,
     customerId,
     endingBefore,
     productId,
@@ -253,17 +258,27 @@ export class MetronomeClientService {
     uniquenessKey,
   }: Omit<MetronomeCustomerCreditInput, 'name'>): Promise<{ id: string }> {
     const client = this.getClient();
-    let page = await this.execute(() =>
-      client.v1.customers.credits.list({
-        customer_id: customerId,
-        include_archived: true,
-      }),
-    );
-    const credits = [...page.data];
+    const credits: Awaited<
+      ReturnType<typeof client.v1.customers.credits.list>
+    >['data'] = [];
 
-    while (typeof page.hasNextPage === 'function' && page.hasNextPage()) {
-      page = await this.execute(() => page.getNextPage());
+    try {
+      let page = await this.execute(() =>
+        client.v1.customers.credits.list({
+          customer_id: customerId,
+          include_archived: true,
+        }),
+      );
       credits.push(...page.data);
+
+      while (typeof page.hasNextPage === 'function' && page.hasNextPage()) {
+        page = await this.execute(() => page.getNextPage());
+        credits.push(...page.data);
+      }
+    } catch {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+      );
     }
 
     const matches = credits.filter(
@@ -273,6 +288,10 @@ export class MetronomeClientService {
       const scheduleItems = credit.access_schedule?.schedule_items ?? [];
       return (
         credit.product.id === productId &&
+        credit.applicable_product_ids?.length === applicableProductIds.length &&
+        applicableProductIds.every((applicableProductId) =>
+          credit.applicable_product_ids?.includes(applicableProductId),
+        ) &&
         credit.applicable_contract_ids?.length === 1 &&
         credit.applicable_contract_ids[0] === contractId &&
         scheduleItems.length === 1 &&

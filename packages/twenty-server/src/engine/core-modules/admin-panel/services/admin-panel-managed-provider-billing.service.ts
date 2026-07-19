@@ -116,9 +116,18 @@ export class AdminPanelManagedProviderBillingService {
         throw new Error('Managed provider funding replay is incomplete');
       }
 
-      return { contractId, creditId: fundingAction.creditId, customerId };
+      return {
+        contractId,
+        creditId: fundingAction.creditId,
+        customerId,
+        fundingActionId: fundingAction.id,
+        fundingActionState: fundingAction.state,
+        fundingActionErrorCode: fundingAction.failureCode,
+        fundingActionCreatedAt: fundingAction.createdAt,
+        fundingActionUpdatedAt: fundingAction.updatedAt,
+      };
     }
-    if (existing) {
+    if (existing || fundingAction.createdByCaller !== true) {
       throw new Error(
         'Managed provider funding requires manual reconciliation',
       );
@@ -136,6 +145,11 @@ export class AdminPanelManagedProviderBillingService {
       const { id: creditId } =
         await this.metronomeClientService.createCustomerCredit({
           amountCents,
+          applicableProductIds: [
+            this.twentyConfigService.get(
+              'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
+            ),
+          ],
           contractId,
           customerId,
           customFields: { myah_managed_openrouter: 'sponsored' },
@@ -148,13 +162,22 @@ export class AdminPanelManagedProviderBillingService {
           uniquenessKey: fundingAction.metronomeUniquenessKey,
         });
 
-      await this.fundingJournalService.transition(
+      const transitionedAction = await this.fundingJournalService.transition(
         fundingAction.id,
         'SUCCEEDED',
         creditId,
       );
 
-      return { contractId, creditId, customerId };
+      return {
+        contractId,
+        creditId,
+        customerId,
+        fundingActionId: fundingAction.id,
+        fundingActionState: transitionedAction.state,
+        fundingActionErrorCode: transitionedAction.failureCode,
+        fundingActionCreatedAt: transitionedAction.createdAt,
+        fundingActionUpdatedAt: transitionedAction.updatedAt,
+      };
     } catch (error) {
       const isUncertain =
         !(error instanceof MetronomeClientException) ||

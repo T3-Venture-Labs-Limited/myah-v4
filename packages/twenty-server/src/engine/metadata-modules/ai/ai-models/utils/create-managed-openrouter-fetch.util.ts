@@ -1,8 +1,18 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { MANAGED_OPENROUTER_PROVIDER_MAX_PRICE_PER_MILLION } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 
 const MANAGED_USER_PATTERN = /^managed-[a-f0-9]{24}$/;
 
 type JsonRecord = Record<string, unknown>;
+type ResponseObserver = (providerExecutionId: string) => Promise<void>;
+
+const responseObserverStorage = new AsyncLocalStorage<ResponseObserver>();
+
+export const runWithManagedOpenRouterResponseObserver = <T>(
+  observer: ResponseObserver,
+  callback: () => T,
+): T => responseObserverStorage.run(observer, callback);
 
 export const createManagedOpenRouterFetch = (
   baseFetch: typeof fetch = globalThis.fetch,
@@ -32,7 +42,7 @@ export const createManagedOpenRouterFetch = (
         model as keyof typeof MANAGED_OPENROUTER_PROVIDER_MAX_PRICE_PER_MILLION
       ];
 
-    return baseFetch(input, {
+    const response = await baseFetch(input, {
       ...init,
       body: JSON.stringify({
         ...requestBody,
@@ -42,6 +52,14 @@ export const createManagedOpenRouterFetch = (
         },
       }),
     });
+    const providerExecutionId = response.headers.get('x-generation-id');
+    const observer = responseObserverStorage.getStore();
+
+    if (providerExecutionId && observer) {
+      await observer(providerExecutionId);
+    }
+
+    return response;
   };
 };
 
