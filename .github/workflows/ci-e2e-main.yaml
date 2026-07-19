@@ -12,7 +12,13 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: >-
+    ${{
+      github.ref != 'refs/heads/main' &&
+      (github.event_name != 'pull_request' ||
+       (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+       github.event.label.name == 'run-merge-queue')
+    }}
 
 jobs:
   select-runner:
@@ -25,7 +31,10 @@ jobs:
     if: >
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'run-merge-queue'))
+       contains(github.event.pull_request.labels.*.name, 'run-merge-queue') &&
+       github.event.action != 'unlabeled' &&
+       (github.event.action != 'labeled' ||
+        github.event.label.name == 'run-merge-queue'))
     runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     timeout-minutes: 30
     env:
@@ -56,75 +65,112 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Select isolated application ports
+      - name: Reserve isolated application ports
         run: |
-          node <<'NODE'
+          cat > "$RUNNER_TEMP/reserve-port.cjs" <<'NODE'
           const fs = require('node:fs');
           const net = require('node:net');
 
-          const reservePort = () =>
-            new Promise((resolve, reject) => {
-              const server = net.createServer();
+          const [statePath] = process.argv.slice(2);
 
-              server.once('error', reject);
-              server.listen(0, '127.0.0.1', () => {
-                const address = server.address();
+          if (!statePath) {
+            throw new Error('A reservation state path is required');
+          }
 
-                if (address === null || typeof address === 'string') {
-                  server.close(() =>
-                    reject(new Error('Unable to reserve an application port')),
-                  );
-                  return;
-                }
+          const server = net.createServer();
 
-                resolve({ port: address.port, server });
-              });
-            });
+          server.once('error', (error) => {
+            console.error(error);
+            process.exit(1);
+          });
 
-          const main = async () => {
-            const reservations = [];
+          server.listen(0, '127.0.0.1', () => {
+            const address = server.address();
 
-            try {
-              const serverReservation = await reservePort();
-
-              reservations.push(serverReservation);
-
-              const frontendReservation = await reservePort();
-
-              reservations.push(frontendReservation);
-
-              const serverUrl = `http://localhost:${serverReservation.port}`;
-              const frontendUrl = `http://localhost:${frontendReservation.port}`;
-
-              fs.appendFileSync(
-                process.env.GITHUB_ENV,
-                [
-                  `NODE_PORT=${serverReservation.port}`,
-                  `SERVER_URL=${serverUrl}`,
-                  `REACT_APP_SERVER_BASE_URL=${serverUrl}`,
-                  `BACKEND_BASE_URL=${serverUrl}`,
-                  `FRONTEND_URL=${frontendUrl}`,
-                  `FRONTEND_BASE_URL=${frontendUrl}`,
-                ].join('\n') + '\n',
-              );
-            } finally {
-              await Promise.all(
-                reservations.map(
-                  ({ server }) =>
-                    new Promise((resolve, reject) =>
-                      server.close((error) =>
-                        error ? reject(error) : resolve(),
-                      ),
-                    ),
-                ),
-              );
+            if (address === null || typeof address === 'string') {
+              throw new Error('Unable to reserve an application port');
             }
+
+            fs.writeFileSync(
+              statePath,
+              JSON.stringify({ pid: process.pid, port: address.port }),
+              { flag: 'wx' },
+            );
+          });
+
+          const shutdown = () => {
+            server.close((error) => {
+              if (error) {
+                console.error(error);
+                process.exit(1);
+              }
+
+              process.exit(0);
+            });
           };
 
-          main().catch((error) => {
-            console.error(error);
-            process.exitCode = 1;
-          });
+          process.once('SIGINT', shutdown);
+          process.once('SIGTERM', shutdown);
+          NODE
+
+          nohup node "$RUNNER_TEMP/reserve-port.cjs" \
+            "$RUNNER_TEMP/server-port-reservation.json" \
+            > "$RUNNER_TEMP/server-port-reservation.log" 2>&1 &
+          nohup node "$RUNNER_TEMP/reserve-port.cjs" \
+            "$RUNNER_TEMP/frontend-port-reservation.json" \
+            > "$RUNNER_TEMP/frontend-port-reservation.log" 2>&1 &
+
+          if ! timeout 10 bash -c '
+            until
+              test -s "$RUNNER_TEMP/server-port-reservation.json" &&
+              test -s "$RUNNER_TEMP/frontend-port-reservation.json"
+            do
+              sleep 0.1
+            done
+          '; then
+            cat "$RUNNER_TEMP/server-port-reservation.log"
+            cat "$RUNNER_TEMP/frontend-port-reservation.log"
+            exit 1
+          fi
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const readReservation = (name) =>
+            JSON.parse(
+              fs.readFileSync(
+                path.join(
+                  process.env.RUNNER_TEMP,
+                  `${name}-port-reservation.json`,
+                ),
+                'utf8',
+              ),
+            );
+
+          const server = readReservation('server');
+          const frontend = readReservation('frontend');
+
+          if (server.port === frontend.port) {
+            throw new Error('Application port reservations must be distinct');
+          }
+
+          const serverUrl = `http://localhost:${server.port}`;
+          const frontendUrl = `http://localhost:${frontend.port}`;
+
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            [
+              `NODE_PORT=${server.port}`,
+              `SERVER_URL=${serverUrl}`,
+              `REACT_APP_SERVER_BASE_URL=${serverUrl}`,
+              `BACKEND_BASE_URL=${serverUrl}`,
+              `FRONTEND_URL=${frontendUrl}`,
+              `FRONTEND_BASE_URL=${frontendUrl}`,
+              `SERVER_PORT_RESERVATION_PID=${server.pid}`,
+              `FRONTEND_PORT_RESERVATION_PID=${frontend.pid}`,
+            ].join('\n') + '\n',
+          );
           NODE
 
       - name: Install dependencies
@@ -182,41 +228,18 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d postgres -c 'CREATE DATABASE "test";'
           npx nx run twenty-server:database:reset
 
-      - name: Verify isolated application ports
+      - name: Verify isolated application port reservations
         run: |
-          node <<'NODE'
-          const net = require('node:net');
-
-          const assertPortIsAvailable = (name, port) =>
-            new Promise((resolve, reject) => {
-              const server = net.createServer();
-
-              server.once('error', (error) =>
-                reject(
-                  new Error(
-                    `${name} port ${port} became unavailable before startup: ${error.message}`,
-                  ),
-                ),
-              );
-              server.listen(Number(port), '127.0.0.1', () =>
-                server.close((error) => (error ? reject(error) : resolve())),
-              );
-            });
-
-          Promise.all([
-            assertPortIsAvailable('server', process.env.NODE_PORT),
-            assertPortIsAvailable(
-              'frontend',
-              new URL(process.env.FRONTEND_BASE_URL).port,
-            ),
-          ]).catch((error) => {
-            console.error(error);
-            process.exitCode = 1;
-          });
-          NODE
+          kill -0 "$SERVER_PORT_RESERVATION_PID"
+          kill -0 "$FRONTEND_PORT_RESERVATION_PID"
 
       - name: Start server
         run: |
+          kill "$SERVER_PORT_RESERVATION_PID"
+          timeout 10 bash -c \
+            'while kill -0 "$SERVER_PORT_RESERVATION_PID" 2>/dev/null; do sleep 0.1; done'
+          echo 'SERVER_PORT_RESERVATION_PID=' >> "$GITHUB_ENV"
+
           nohup npx nx run twenty-server:start:ci > "$RUNNER_TEMP/twenty-server.log" 2>&1 &
           echo "Waiting for server to be ready..."
           if ! timeout 60 bash -c 'until curl --fail --silent --show-error "$SERVER_URL/healthz"; do sleep 2; done'; then
@@ -226,6 +249,11 @@ jobs:
 
       - name: Start frontend
         run: |
+          kill "$FRONTEND_PORT_RESERVATION_PID"
+          timeout 10 bash -c \
+            'while kill -0 "$FRONTEND_PORT_RESERVATION_PID" 2>/dev/null; do sleep 0.1; done'
+          echo 'FRONTEND_PORT_RESERVATION_PID=' >> "$GITHUB_ENV"
+
           npm_config_yes=true nohup npx serve -s packages/twenty-front/build --listen "tcp://127.0.0.1:${FRONTEND_BASE_URL##*:}" > "$RUNNER_TEMP/twenty-front.log" 2>&1 &
           echo "Waiting for frontend to be ready..."
           if ! timeout 60 bash -c 'until curl --fail --silent --show-error "$FRONTEND_BASE_URL"; do sleep 2; done'; then
@@ -243,6 +271,18 @@ jobs:
           curl --fail --silent --show-error "$SERVER_URL/healthz"
           curl --fail --silent --show-error "$FRONTEND_BASE_URL" > /dev/null
           npx nx test twenty-e2e-testing
+
+      - name: Release application port reservations
+        if: always()
+        run: |
+          for pid in \
+            "${SERVER_PORT_RESERVATION_PID:-}" \
+            "${FRONTEND_PORT_RESERVATION_PID:-}"
+          do
+            if test -n "$pid" && kill -0 "$pid" 2>/dev/null; then
+              kill "$pid"
+            fi
+          done
 
       - name: Upload Playwright results
         if: always()
