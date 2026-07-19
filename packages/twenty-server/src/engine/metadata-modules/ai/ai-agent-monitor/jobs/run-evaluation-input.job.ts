@@ -54,6 +54,7 @@ export class RunEvaluationInputJob {
     }
 
     const executionResult = await this.aiAgentExecutorService.executeAgent({
+      executionSurface: 'evaluator-grader',
       agent,
       userPrompt: data.input,
       workspaceId: data.workspaceId,

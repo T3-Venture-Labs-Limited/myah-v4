@@ -9,6 +9,7 @@ import { DefaultAiCatalogService } from 'src/engine/metadata-modules/ai/ai-model
 import { ModelsDevCatalogService } from 'src/engine/metadata-modules/ai/ai-models/services/models-dev-catalog.service';
 import { NativeToolBinderService } from 'src/engine/metadata-modules/ai/ai-models/services/native-tool-binder.service';
 import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
+import { ManagedOpenRouterAdmissionService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-admission.service';
 import { ProviderConfigService } from 'src/engine/metadata-modules/ai/ai-models/services/provider-config.service';
 import { SdkProviderFactoryService } from 'src/engine/metadata-modules/ai/ai-models/services/sdk-provider-factory.service';
 
@@ -25,6 +26,7 @@ import { SdkProviderFactoryService } from 'src/engine/metadata-modules/ai/ai-mod
     AiModelConfigService,
     NativeToolBinderService,
     ManagedOpenRouterModelService,
+    ManagedOpenRouterAdmissionService,
   ],
   exports: [
     DefaultAiCatalogService,

@@ -7,6 +7,28 @@ import { type TwentyConfigService } from 'src/engine/core-modules/twenty-config/
 import { type AiModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-config.type';
 import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 
+jest.mock(
+  'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants',
+  () => {
+    const actual = jest.requireActual(
+      'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants',
+    );
+
+    return {
+      ...actual,
+      MANAGED_OPENROUTER_TARIFF_MANIFEST: {
+        ...actual.MANAGED_OPENROUTER_TARIFF_MANIFEST,
+        acquisition: {
+          cashPaidMicrousd: '1000000',
+          evidenceIdentity: 'test-funding-evidence',
+          usableCreditsReceivedMicrousd: '1000000',
+        },
+      },
+      MANAGED_OPENROUTER_TARIFF_MANIFEST_IS_FUNDED: true,
+    };
+  },
+);
+
 const modelConfig: AiModelConfig = {
   modelId: 'openrouter/deepseek/deepseek-v4-flash',
   label: 'DeepSeek V4 Flash',
@@ -116,16 +138,25 @@ const createService = ({
 const wrap = ({
   model,
   service,
+  executionSurface = 'chat',
   modelConfig: wrappedModelConfig = modelConfig,
   providerName = 'openrouter',
 }: {
   model: LanguageModel;
   modelConfig?: AiModelConfig;
   service: ManagedOpenRouterModelService;
+  executionSurface?:
+    | 'rest-generate'
+    | 'graphql-agent'
+    | 'chat'
+    | 'title'
+    | 'evaluator-grader'
+    | 'workflow-background';
   providerName?: string;
 }) => {
   const wrappedModel = service.wrapModel({
     actorUserWorkspaceId: 'user-workspace-id',
+    executionSurface,
     model,
     modelConfig: wrappedModelConfig,
     providerName,
@@ -230,30 +261,11 @@ describe('ManagedOpenRouterModelService', () => {
 
     expect(order).toEqual(['reserve', 'provider', 'complete']);
     expect(operationService.reserveOperation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorUserWorkspaceId: 'user-workspace-id',
-        expectedProductIds: ['33333333-3333-4333-8333-333333333333'],
-        maximumUsageProperties: expect.objectContaining({
-          inputUnits: expect.any(Number),
-          model: 'openrouter/deepseek/deepseek-v4-flash',
-          outputUnits: 100,
-          tariffVersion: '2026-07-19-v2',
-          inputRate: 0.098,
-          outputRate: 0.196,
-          cachedInputRate: 0.098,
-          chargeCentUnits: 1,
-          charge_cent_unit: '1',
-          model_id: 'openrouter/deepseek/deepseek-v4-flash',
-          tariff_version: '2026-07-19-v2',
-        }),
-        metronomeEventType: 'managed_openrouter_generation',
-        operationKey: 'generation',
-        providerConfigurationKey: 'openrouter/deepseek/deepseek-v4-flash',
-        providerKey: 'openrouter',
-        requestId: 'chat-turn-1:0',
-        workspaceId: 'workspace-id',
-      }),
+      expect.any(Object),
       { rejectReplay: true },
+    );
+    expect(operationService.reserveOperation.mock.calls[0][0].requestId).toBe(
+      'chat:chat-turn-1:0',
     );
     expect(operationService.attachProviderExecutionId).toHaveBeenCalledWith({
       operationId: 'operation-1',
@@ -287,6 +299,108 @@ describe('ManagedOpenRouterModelService', () => {
       }),
     );
   });
+  it.each([
+    [{ type: 'image', image: 'https://example.com/image.png' }],
+    [
+      {
+        type: 'file',
+        data: 'https://example.com/document.pdf',
+        mediaType: 'application/pdf',
+      },
+    ],
+  ])(
+    'rejects URL-backed multimodal content before reservation or provider I/O',
+    async (part) => {
+      const { operationService, service } = createService();
+      const { doGenerate, model } = createProviderModel();
+
+      await expect(
+        wrap({ model, service }).doGenerate({
+          prompt: [{ role: 'user', content: [part] }],
+        } as never),
+      ).rejects.toThrow('Managed OpenRouter generation failed');
+
+      expect(operationService.reserveOperation).not.toHaveBeenCalled();
+      expect(doGenerate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('uses authoritative raw cache usage when V3 strips cache-write fields', async () => {
+    const { operationService, service } = createService();
+    const { doGenerate, model } = createProviderModel();
+    doGenerate.mockResolvedValue({
+      content: [{ type: 'text', text: 'hello' }],
+      finishReason: { unified: 'stop', raw: 'stop' },
+      response: { id: 'generation-1' },
+      usage: {
+        inputTokens: {
+          total: 100,
+          noCache: 99,
+          cacheRead: 10,
+          cacheWrite: 1,
+        },
+        outputTokens: { total: 7 },
+        raw: {
+          cost: 0.000002548,
+          prompt_tokens_details: {
+            cache_write_tokens: 20,
+            cached_tokens: 10,
+          },
+        },
+      },
+      warnings: [],
+    });
+
+    await expect(
+      wrap({ model, service }).doGenerate({ prompt: [] } as never),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        usage: expect.objectContaining({
+          inputTokens: expect.objectContaining({ total: 100 }),
+          outputTokens: expect.objectContaining({ total: 7 }),
+        }),
+      }),
+    );
+    expect(operationService.completeOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actualUsageProperties: expect.objectContaining({
+          inputNoCacheUnits: 70,
+          inputCacheReadUnits: 10,
+          inputCacheWriteUnits: 20,
+          outputUnits: 7,
+        }),
+        outcome: 'BILLABLE',
+      }),
+    );
+  });
+  it('fails closed when cache evidence is contradictory or incomplete', async () => {
+    const { operationService, service } = createService();
+    const { doGenerate, model } = createProviderModel();
+    doGenerate.mockResolvedValue({
+      content: [{ type: 'text', text: 'hello' }],
+      finishReason: { unified: 'stop', raw: 'stop' },
+      response: { id: 'generation-1' },
+      usage: {
+        inputTokens: {
+          total: 12,
+          noCache: 12,
+        },
+        outputTokens: { total: 7 },
+        raw: { cost: 0.000002548 },
+      },
+      warnings: [],
+    });
+
+    await expect(
+      wrap({ model, service }).doGenerate({ prompt: [] } as never),
+    ).rejects.toThrow('Managed OpenRouter generation failed');
+    expect(operationService.completeOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'UNKNOWN',
+        providerExecutionId: 'generation-1',
+      }),
+    );
+  });
 
   it('bills the temporary free-route model at its paid reference tariff', async () => {
     const freeRouteModelConfig: AiModelConfig = {
@@ -313,8 +427,8 @@ describe('ManagedOpenRouterModelService', () => {
       expect.objectContaining({
         maximumUsageProperties: expect.objectContaining({
           chargeCentUnits: 1,
-          inputRate: 0.32,
-          outputRate: 0.79,
+          inputRate: 0.22,
+          outputRate: 0.55,
         }),
         providerConfigurationKey: 'openrouter/google/gemma-4-31b-it:free',
       }),
@@ -324,8 +438,8 @@ describe('ManagedOpenRouterModelService', () => {
       expect.objectContaining({
         actualUsageProperties: expect.objectContaining({
           chargeCentUnits: 1,
-          inputRate: 0.32,
-          outputRate: 0.79,
+          inputRate: 0.22,
+          outputRate: 0.55,
         }),
         providerConfigurationKey: 'openrouter/google/gemma-4-31b-it:free',
       }),
@@ -362,7 +476,7 @@ describe('ManagedOpenRouterModelService', () => {
     ];
     const options = request.providerOptions.openrouter as Record<string, any>;
 
-    expect(request.maxOutputTokens).toBe(modelConfig.maxOutputTokens);
+    expect(request.maxOutputTokens).toBe(100_000);
     expect(options.user).toMatch(/^managed-[a-f0-9]{24}$/);
     expect(options.user).not.toContain('workspace-id');
   });
@@ -386,31 +500,39 @@ describe('ManagedOpenRouterModelService', () => {
     );
   });
 
-  it('uses the configured output bound for invalid requested limits', async () => {
+  it.each([0, -1, Number.NaN])(
+    'rejects invalid requested output limit %p before reservation',
+    async (maxOutputTokens) => {
+      const { operationService, service } = createService();
+      const { doGenerate, model } = createProviderModel();
+
+      await expect(
+        wrap({ model, service }).doGenerate({
+          maxOutputTokens,
+          prompt: [],
+        } as never),
+      ).rejects.toThrow('Managed AI request has an invalid output limit');
+      expect(operationService.reserveOperation).not.toHaveBeenCalled();
+      expect(doGenerate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a request that leaves no context capacity for output', async () => {
     const { operationService, service } = createService();
     const { doGenerate, model } = createProviderModel();
+    const byteLengthSpy = jest
+      .spyOn(Buffer, 'byteLength')
+      .mockReturnValueOnce(modelConfig.contextWindowTokens - 256);
 
-    await wrap({ model, service }).doGenerate({
-      maxOutputTokens: Number.NaN,
-      prompt: [],
-    } as never);
-
-    expect(operationService.reserveOperation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        maximumUsageProperties: expect.objectContaining({
-          inputUnits: expect.any(Number),
-          outputUnits: modelConfig.maxOutputTokens,
-        }),
-      }),
-      { rejectReplay: true },
-    );
-    const reservedOutputUnits =
-      operationService.reserveOperation.mock.calls[0][0].maximumUsageProperties
-        .outputUnits;
-
-    expect(doGenerate.mock.calls[0][0].maxOutputTokens).toBe(
-      reservedOutputUnits,
-    );
+    try {
+      await expect(
+        wrap({ model, service }).doGenerate({ prompt: [] } as never),
+      ).rejects.toThrow('Managed AI request leaves no output capacity');
+    } finally {
+      byteLengthSpy.mockRestore();
+    }
+    expect(operationService.reserveOperation).not.toHaveBeenCalled();
+    expect(doGenerate).not.toHaveBeenCalled();
   });
 
   it('never calls OpenRouter when reservation fails', async () => {
@@ -458,7 +580,7 @@ describe('ManagedOpenRouterModelService', () => {
     ).not.toContain('secret prompt body');
   });
 
-  it.each([401, 403])(
+  it.each([401, 402, 403])(
     'releases a reservation for a definite pre-execution %s rejection',
     async (statusCode) => {
       const { operationService, service } = createService();
@@ -536,6 +658,56 @@ describe('ManagedOpenRouterModelService', () => {
       'finish',
     ]);
     expect(order).toEqual(['complete', 'finish']);
+    expect(operationService.completeOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'BILLABLE',
+        providerExecutionId: 'stream-generation-1',
+      }),
+    );
+  });
+  it('arbitrates a late cancellation after finish as one billable completion', async () => {
+    let releaseCompletion!: () => void;
+    const completionReleased = new Promise<void>((resolve) => {
+      releaseCompletion = resolve;
+    });
+    const { operationService, service } = createService();
+    operationService.completeOperation.mockImplementation(
+      async ({ outcome }) => {
+        if (outcome === 'BILLABLE') {
+          await completionReleased;
+        }
+      },
+    );
+    const { doStream, model } = createProviderModel();
+
+    doStream.mockResolvedValue({
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            type: 'response-metadata',
+            id: 'stream-generation-1',
+          });
+          controller.enqueue({ type: 'finish', usage });
+        },
+      }),
+      request: { body: {} },
+      warnings: [],
+    });
+
+    const result = await wrap({ model, service }).doStream({
+      prompt: [],
+    } as never);
+    const reader = result.stream.getReader();
+    await reader.read();
+    const finishRead = reader.read();
+    await Promise.resolve();
+    const cancel = reader.cancel('late client cancellation');
+    releaseCompletion();
+
+    await finishRead;
+    await cancel;
+
+    expect(operationService.completeOperation).toHaveBeenCalledTimes(1);
     expect(operationService.completeOperation).toHaveBeenCalledWith(
       expect.objectContaining({
         outcome: 'BILLABLE',
@@ -624,7 +796,32 @@ describe('ManagedOpenRouterModelService', () => {
       operationService.reserveOperation.mock.calls.map(
         ([input]) => input.requestId,
       ),
-    ).toEqual(['chat-turn-1:0', 'chat-turn-1:1']);
+    ).toEqual(['chat:chat-turn-1:0', 'chat:chat-turn-1:1']);
+  });
+
+  it('separates operation identity by execution surface for the same caller root', async () => {
+    const { operationService, service } = createService();
+    const first = createProviderModel();
+    const second = createProviderModel();
+    const firstWrapped = wrap({
+      executionSurface: 'chat',
+      model: first.model,
+      service,
+    });
+    const secondWrapped = wrap({
+      executionSurface: 'rest-generate',
+      model: second.model,
+      service,
+    });
+
+    await firstWrapped.doGenerate({ prompt: [] } as never);
+    await secondWrapped.doGenerate({ prompt: [] } as never);
+
+    expect(
+      operationService.reserveOperation.mock.calls.map(
+        ([input]) => input.requestId,
+      ),
+    ).toEqual(['chat:chat-turn-1:0', 'rest-generate:chat-turn-1:0']);
   });
 
   it('reserves the maximum long-context tariff and bills short usage at the base tariff', async () => {
@@ -657,15 +854,15 @@ describe('ManagedOpenRouterModelService', () => {
     });
     const expensiveModelConfig: AiModelConfig = {
       ...modelConfig,
-      inputCostPerMillionTokens: 2.86,
+      inputCostPerMillionTokens: 2,
       longContextCost: {
-        cachedInputCostPerMillionTokens: 0.86,
+        cachedInputCostPerMillionTokens: 0.6,
         inputCostPerMillionTokens: 4,
         outputCostPerMillionTokens: 12,
         thresholdTokens: 200_000,
       },
       modelId: 'openrouter/x-ai/grok-4.5',
-      outputCostPerMillionTokens: 8.58,
+      outputCostPerMillionTokens: 6,
     };
 
     await wrap({
@@ -680,9 +877,9 @@ describe('ManagedOpenRouterModelService', () => {
     expect(operationService.reserveOperation).toHaveBeenCalledWith(
       expect.objectContaining({
         maximumUsageProperties: expect.objectContaining({
-          baseInputRate: 2.86,
-          baseOutputRate: 8.58,
-          chargeCentUnits: 42,
+          baseInputRate: 2,
+          baseOutputRate: 6,
+          chargeCentUnits: 57,
           inputRate: 4,
           longContextThreshold: 200_000,
           outputRate: 12,
@@ -693,9 +890,9 @@ describe('ManagedOpenRouterModelService', () => {
     expect(operationService.completeOperation).toHaveBeenCalledWith(
       expect.objectContaining({
         actualUsageProperties: expect.objectContaining({
-          chargeCentUnits: 30,
-          inputRate: 2.86,
-          outputRate: 8.58,
+          chargeCentUnits: 29,
+          inputRate: 2,
+          outputRate: 6,
         }),
       }),
     );

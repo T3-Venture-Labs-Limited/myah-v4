@@ -1,6 +1,8 @@
 const RATE_SCALE = BigInt(1_000_000);
 const MICROUSD_PER_CENT = BigInt(10_000);
 
+const GROSS_MARGIN_NUMERATOR = BigInt(100);
+const GROSS_MARGIN_DENOMINATOR = BigInt(70);
 type RatedUnits = {
   rate: number;
   units: number;
@@ -37,9 +39,10 @@ export const getManagedOpenRouterChargeCentUnits = ({
 
     return total + BigInt(item.units) * getScaledRate(item.rate);
   }, BigInt(0));
-  const denominator = usableCredits * RATE_SCALE * MICROUSD_PER_CENT;
+  const denominator =
+    usableCredits * RATE_SCALE * MICROUSD_PER_CENT * GROSS_MARGIN_DENOMINATOR;
   const chargeCentUnits = divideCeiling(
-    scaledRetailMicrousd * cashPaid,
+    scaledRetailMicrousd * cashPaid * GROSS_MARGIN_NUMERATOR,
     denominator,
   );
   const billableChargeCentUnits =

@@ -40,7 +40,7 @@ export class ClientConfigService {
     );
   }
 
-  async getClientConfig(): Promise<ClientConfig> {
+  async getClientConfig(workspaceId?: string): Promise<ClientConfig> {
     const captchaProvider = this.twentyConfigService.get('CAPTCHA_DRIVER');
     const supportDriver = this.twentyConfigService.get('SUPPORT_DRIVER');
     const calendarBookingPageId = this.twentyConfigService.get(
@@ -51,8 +51,13 @@ export class ClientConfigService {
       this.twentyConfigService.get('EMAILING_DOMAIN_DRIVER') ===
       EmailingDomainDriver.LOG;
 
-    const availableModels =
-      this.aiModelRegistryService.getAdminFilteredModels();
+    const availableModels = workspaceId
+      ? this.aiModelRegistryService
+          .getAvailableModelsForWorkspace(workspaceId)
+          .filter((model) =>
+            this.aiModelRegistryService.isModelAdminAllowed(model.modelId),
+          )
+      : this.aiModelRegistryService.getAdminFilteredModels();
     const recommendedModelIds =
       this.aiModelRegistryService.getRecommendedModelIds();
     const resolvedProviders =
@@ -98,12 +103,12 @@ export class ClientConfigService {
 
     if (aiModels.length > 0) {
       const defaultSpeedModel =
-        this.aiModelRegistryService.getDefaultSpeedModel();
+        this.aiModelRegistryService.getDefaultSpeedModel(workspaceId);
       const defaultSpeedModelConfig =
         this.aiModelRegistryService.getModelConfig(defaultSpeedModel?.modelId);
 
       const defaultPerformanceModel =
-        this.aiModelRegistryService.getDefaultPerformanceModel();
+        this.aiModelRegistryService.getDefaultPerformanceModel(workspaceId);
       const defaultPerformanceModelConfig =
         this.aiModelRegistryService.getModelConfig(
           defaultPerformanceModel?.modelId,

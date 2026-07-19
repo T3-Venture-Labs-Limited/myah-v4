@@ -5,7 +5,10 @@ import { type AiSdkPackage } from 'twenty-shared/ai';
 
 import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
 import { ConfigGroupHashService } from 'src/engine/core-modules/twenty-config/services/config-group-hash.service';
-import { MANAGED_OPENROUTER_PROVIDER_NAME } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
+import {
+  MANAGED_OPENROUTER_MODEL_IDS,
+  MANAGED_OPENROUTER_PROVIDER_NAME,
+} from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { AiModelRole } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-role.enum';
 
 import {
@@ -197,14 +200,14 @@ export class AiModelRegistryService {
   getRecommendedModelIds(): Set<string> {
     return this.preferencesService.getRecommendedModelIds();
   }
-
   private getFirstAvailableModelFromList(
     modelIds: string[],
+    workspaceId?: string,
   ): RegisteredAiModel | undefined {
     for (const modelId of modelIds) {
       const model = this.getModel(modelId);
 
-      if (model) {
+      if (model && this.isModelAllowedForWorkspace(model, workspaceId)) {
         return model;
       }
     }
@@ -212,23 +215,74 @@ export class AiModelRegistryService {
     return undefined;
   }
 
-  getDefaultSpeedModel(): RegisteredAiModel {
-    return this.getDefaultModelForRole(AiModelRole.FAST);
+  private isModelAllowedForWorkspace(
+    model: RegisteredAiModel,
+    workspaceId?: string,
+  ): boolean {
+    if (!workspaceId) {
+      return model.providerName !== MANAGED_OPENROUTER_PROVIDER_NAME;
+    }
+
+    const workspaceEligible =
+      this.providerConfigService.isManagedOpenRouterWorkspaceEligible(
+        workspaceId,
+      );
+    const isManaged = model.providerName === MANAGED_OPENROUTER_PROVIDER_NAME;
+
+    if (workspaceEligible !== isManaged) {
+      return false;
+    }
+
+    return (
+      !isManaged ||
+      !model.modelId.endsWith('google/gemma-4-31b-it:free') ||
+      this.providerConfigService.isManagedOpenRouterGemmaWorkspaceEligible(
+        workspaceId,
+      )
+    );
   }
 
-  getDefaultPerformanceModel(): RegisteredAiModel {
-    return this.getDefaultModelForRole(AiModelRole.SMART);
+  getAvailableModelsForWorkspace(workspaceId?: string): RegisteredAiModel[] {
+    return this.getAvailableModels().filter((model) =>
+      this.isModelAllowedForWorkspace(model, workspaceId),
+    );
   }
 
-  private getDefaultModelForRole(role: AiModelRole): RegisteredAiModel {
+  getDefaultSpeedModel(workspaceId?: string): RegisteredAiModel {
+    return this.getDefaultModelForRole(AiModelRole.FAST, workspaceId);
+  }
+
+  getDefaultPerformanceModel(workspaceId?: string): RegisteredAiModel {
+    return this.getDefaultModelForRole(AiModelRole.SMART, workspaceId);
+  }
+
+  private getDefaultModelForRole(
+    role: AiModelRole,
+    workspaceId?: string,
+  ): RegisteredAiModel {
     const prefs = this.preferencesService.getPreferences();
     const preferenceKey =
       role === AiModelRole.FAST ? 'defaultFastModels' : 'defaultSmartModels';
 
-    let model = this.getFirstAvailableModelFromList(prefs[preferenceKey] ?? []);
+    const managedDefault = this.getModel(
+      'openrouter/deepseek/deepseek-v4-flash',
+    );
+    let model =
+      managedDefault &&
+      this.isModelAdminAllowed(managedDefault.modelId) &&
+      this.isModelAllowedForWorkspace(managedDefault, workspaceId)
+        ? managedDefault
+        : this.getFirstAvailableModelFromList(
+            prefs[preferenceKey] ?? [],
+            workspaceId,
+          );
 
     if (!model) {
-      model = this.getAvailableModels()[0];
+      model = this.getAvailableModels().find(
+        (candidate) =>
+          this.isModelAdminAllowed(candidate.modelId) &&
+          this.isModelAllowedForWorkspace(candidate, workspaceId),
+      );
     }
 
     if (!model) {
@@ -241,18 +295,49 @@ export class AiModelRegistryService {
     return model;
   }
 
-  getEffectiveModelConfig(modelId: string): AiModelConfig {
+  getEffectiveModelConfig(
+    modelId: string,
+    workspaceId?: string,
+  ): AiModelConfig {
     this.ensureFresh();
 
     if (isAutoSelectModelId(modelId)) {
       const defaultModel =
         modelId === AUTO_SELECT_FAST_MODEL_ID
-          ? this.getDefaultSpeedModel()
-          : this.getDefaultPerformanceModel();
+          ? this.getDefaultSpeedModel(workspaceId)
+          : this.getDefaultPerformanceModel(workspaceId);
 
       return (
         this.modelConfigCache.get(defaultModel.modelId) ??
         this.createDefaultConfigForCustomModel(defaultModel)
+      );
+    }
+    const managedModel = modelId.startsWith(
+      `${MANAGED_OPENROUTER_PROVIDER_NAME}/`,
+    );
+    const workspaceEligible =
+      workspaceId !== undefined &&
+      this.providerConfigService.isManagedOpenRouterWorkspaceEligible(
+        workspaceId,
+      );
+
+    const invalidForWorkspace =
+      workspaceId === undefined
+        ? false
+        : workspaceEligible !== managedModel ||
+          (managedModel &&
+            (!MANAGED_OPENROUTER_MODEL_IDS.includes(
+              modelId as (typeof MANAGED_OPENROUTER_MODEL_IDS)[number],
+            ) ||
+              (modelId.endsWith('google/gemma-4-31b-it:free') &&
+                !this.providerConfigService.isManagedOpenRouterGemmaWorkspaceEligible(
+                  workspaceId,
+                ))));
+
+    if (invalidForWorkspace) {
+      throw new AiException(
+        'The selected model is not available in this workspace.',
+        AiExceptionCode.AGENT_EXECUTION_FAILED,
       );
     }
 
@@ -308,6 +393,31 @@ export class AiModelRegistryService {
     modelId: string,
     availabilitySettings: WorkspaceModelAvailabilitySettings,
   ): void {
+    const workspaceId = availabilitySettings.id;
+    const managedModel = modelId.startsWith(
+      `${MANAGED_OPENROUTER_PROVIDER_NAME}/`,
+    );
+    const isGemmaModel = modelId.endsWith('google/gemma-4-31b-it:free');
+
+    if (
+      managedModel &&
+      (!MANAGED_OPENROUTER_MODEL_IDS.some(
+        (approvedId) => approvedId === modelId,
+      ) ||
+        !this.providerConfigService.isManagedOpenRouterWorkspaceEligible(
+          workspaceId,
+        ) ||
+        (isGemmaModel &&
+          !this.providerConfigService.isManagedOpenRouterGemmaWorkspaceEligible(
+            workspaceId,
+          )))
+    ) {
+      throw new AiException(
+        'The selected model is not available in this workspace.',
+        AiExceptionCode.AGENT_EXECUTION_FAILED,
+      );
+    }
+
     if (!this.isModelAdminAllowed(modelId)) {
       throw new AiException(
         'The selected model has been disabled by the administrator.',
@@ -315,15 +425,23 @@ export class AiModelRegistryService {
       );
     }
 
-    const recommendedModelIds = this.getRecommendedModelIds();
-
-    const isAvailable = isAutoSelectModelId(modelId)
-      ? workspaceHasEnabledModels(availabilitySettings, recommendedModelIds)
-      : isModelAllowedByWorkspace(
-          modelId,
-          availabilitySettings,
-          recommendedModelIds,
-        );
+    const workspaceEligible =
+      this.providerConfigService.isManagedOpenRouterWorkspaceEligible(
+        workspaceId,
+      );
+    const recommendedModelIds =
+      this.preferencesService.getRecommendedModelIds();
+    const isAvailable = workspaceEligible
+      ? managedModel || isAutoSelectModelId(modelId)
+      : managedModel
+        ? false
+        : isAutoSelectModelId(modelId)
+          ? workspaceHasEnabledModels(availabilitySettings, recommendedModelIds)
+          : isModelAllowedByWorkspace(
+              modelId,
+              availabilitySettings,
+              recommendedModelIds,
+            );
 
     if (!isAvailable) {
       throw new AiException(
@@ -421,9 +539,13 @@ export class AiModelRegistryService {
     return this.providerConfigService.getCatalogProviderNames();
   }
 
-  resolveModelForAgent(agent: { modelId: string } | null): RegisteredAiModel {
+  resolveModelForAgent(
+    agent: { modelId: string } | null,
+    workspaceId?: string,
+  ): RegisteredAiModel {
     const aiModel = this.getEffectiveModelConfig(
       agent?.modelId ?? AUTO_SELECT_SMART_MODEL_ID,
+      workspaceId,
     );
 
     const registeredModel = this.getModel(aiModel.modelId);

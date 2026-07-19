@@ -21,6 +21,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
   const acceptedOperation = {
     actualUsageProperties: { quantity: 3 },
     expectedBillableMetricIds: ['metric-id'],
+    actualMetronomeProperties: {
+      charge_cent_unit: '3',
+      model_id: 'openrouter/model',
+      operation_id: 'operation-id',
+      tariff_version: 'tariff-v1',
+    },
     id: 'operation-id',
     metronomeEventType: 'managed-provider-operation',
     deliveryEventAt: new Date('2026-07-16T00:00:00.000Z'),
@@ -86,7 +92,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
           matchedBillableMetricIds: ['metric-id'],
           timestamp: '2026-07-16T00:00:00.000Z',
           processedAt: '2026-07-16T00:01:00.000Z',
-          properties: { quantity: '3' },
+          properties: {
+            charge_cent_unit: '3',
+            model_id: 'openrouter/model',
+            operation_id: 'operation-id',
+            tariff_version: 'tariff-v1',
+          },
           transactionId: 'managed-provider-usage:operation-id',
         },
       ]),
@@ -181,12 +192,24 @@ describe('ManagedProviderBillingRecoveryService', () => {
   it('backs off every remaining accepted operation after a balance rate limit', async () => {
     const { metronomeClientService, operationRepository, save, service } =
       createService();
-    const firstBatch = Array.from({ length: 100 }, (_, index) => ({
-      ...acceptedOperation,
-      id: `operation-${index.toString().padStart(3, '0')}`,
-    }));
+    const firstBatch = Array.from({ length: 100 }, (_, index) => {
+      const id = `operation-${index.toString().padStart(3, '0')}`;
+
+      return {
+        ...acceptedOperation,
+        actualMetronomeProperties: {
+          ...acceptedOperation.actualMetronomeProperties,
+          operation_id: id,
+        },
+        id,
+      };
+    });
     const finalOperation = {
       ...acceptedOperation,
+      actualMetronomeProperties: {
+        ...acceptedOperation.actualMetronomeProperties,
+        operation_id: 'operation-100',
+      },
       id: 'operation-100',
     };
 
@@ -205,7 +228,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
           matchedBillableMetricIds: ['metric-id'],
           timestamp: '2026-07-16T00:00:00.000Z',
           processedAt: '2026-07-16T00:01:00.000Z',
-          properties: { quantity: '3' },
+          properties: {
+            charge_cent_unit: '3',
+            model_id: 'openrouter/model',
+            operation_id: transactionId.replace('managed-provider-usage:', ''),
+            tariff_version: 'tariff-v1',
+          },
           transactionId,
         })),
     );
@@ -337,7 +365,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
         matchedBillableMetricIds: ['unexpected-metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
-        properties: { quantity: '3' },
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         transactionId: 'managed-provider-usage:operation-id',
       },
     ]);
@@ -390,11 +423,15 @@ describe('ManagedProviderBillingRecoveryService', () => {
         customerId: 'customer-id',
         matchedCustomerId: 'customer-id',
         eventType: 'managed-provider-operation',
-        isDuplicate: false,
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         matchedBillableMetricIds: ['metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
-        properties: { quantity: '3' },
         transactionId: 'managed-provider-usage:operation-id',
       },
       {
@@ -405,7 +442,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
         matchedBillableMetricIds: ['metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
-        properties: { quantity: '3' },
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         transactionId: 'managed-provider-usage:operation-id',
       },
     ]);
@@ -431,7 +473,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
         matchedBillableMetricIds: ['metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: null,
-        properties: { quantity: '3' },
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         transactionId: 'managed-provider-usage:operation-id',
       },
     ]);
@@ -497,7 +544,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
         matchedBillableMetricIds: ['metric-id', 'unexpected-metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
-        properties: { quantity: '3' },
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         transactionId: 'managed-provider-usage:operation-id',
       },
     ]);
@@ -613,15 +665,20 @@ describe('ManagedProviderBillingRecoveryService', () => {
       id: 'unknown-operation',
       maximumUsageProperties: {
         baseCachedInputRate: 0.14,
+        baseCacheCreationRate: 1.43,
         baseInputRate: 1.43,
         baseOutputRate: 8.58,
         cachedInputRate: 0.29,
+        cacheCreationRate: 0,
         inputRate: 2.86,
         inputUnits: 100,
         longContextThreshold: 272_000,
         outputRate: 12.86,
         outputUnits: 100,
         tariffVersion: '2026-07-19-v1',
+        cashPaidMicrousd: '1000000',
+        usableCreditsReceivedMicrousd: '1000000',
+        multiplierEvidenceVersion: 'funding-v1',
       },
       providerConfigurationKey: 'openrouter/openai/gpt-5.6-luna',
       providerCostMicrousd: null,
@@ -922,6 +979,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
     expect(save).toHaveBeenCalledWith(
       ManagedProviderOperationEntity,
       expect.objectContaining({
+        completionOutcome: 'UNKNOWN',
         state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
       }),
     );
@@ -961,7 +1019,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
     );
   });
 
-  it('does not synthesize zero cache-write usage for a priced cache-write tariff', async () => {
+  it('recovers authoritative cache-write usage and canonical billing evidence', async () => {
     const operation = {
       ...unknownOperation(),
       maximumUsageProperties: {
@@ -974,7 +1032,8 @@ describe('ManagedProviderBillingRecoveryService', () => {
         status: 'found',
         id: 'gen-123',
         model: 'openai/gpt-5.6-luna',
-        cachedPromptTokens: 0,
+        cachedPromptTokens: 1,
+        cacheWriteTokens: 1,
         promptTokens: 4,
         completionTokens: 2,
         totalCostUsd: 0.001,
@@ -999,15 +1058,117 @@ describe('ManagedProviderBillingRecoveryService', () => {
 
     await service.recover();
 
-    expect(messageQueueService.add).not.toHaveBeenCalledWith(
+    expect(messageQueueService.add).toHaveBeenCalledWith(
       expect.any(String),
       { operationId: operation.id },
-      expect.anything(),
+      expect.objectContaining({ id: `managed-provider-usage:${operation.id}` }),
     );
     expect(save).toHaveBeenCalledWith(
       ManagedProviderOperationEntity,
       expect.objectContaining({
-        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_PENDING',
+        actualUsageProperties: expect.objectContaining({
+          inputCacheReadUnits: 1,
+          inputCacheWriteUnits: 1,
+          inputNoCacheUnits: 2,
+          cashPaidMicrousd: '1000000',
+          usableCreditsReceivedMicrousd: '1000000',
+          multiplierEvidenceVersion: 'funding-v1',
+          charge_cent_unit: '1',
+          model_id: operation.providerConfigurationKey,
+          tariff_version: '2026-07-19-v1',
+          operation_id: operation.id,
+        }),
+      }),
+    );
+  });
+
+  it('records immutable quarantine evidence when known cost cannot be priced by deadline', async () => {
+    const operation = {
+      ...unknownOperation(),
+      createdAt: new Date('2026-07-08T00:00:00.000Z'),
+      maximumUsageProperties: {
+        ...unknownOperation().maximumUsageProperties,
+        cacheCreationRate: 0.32,
+        baseCacheCreationRate: 0.32,
+      },
+    };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({
+        status: 'found',
+        id: 'gen-123',
+        model: 'openai/gpt-5.6-luna',
+        cachedPromptTokens: 1,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalCostUsd: 0.001,
+      }),
+    };
+    const { operationRepository, save, service } = createService(lookup);
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        actualUsageProperties: expect.objectContaining({
+          absorbedCostMicrousd: '1000',
+          model: operation.providerConfigurationKey,
+          model_id: operation.providerConfigurationKey,
+          operation_id: operation.id,
+          overrun: true,
+          tariffVersion: '2026-07-19-v1',
+          tariff_version: '2026-07-19-v1',
+        }),
+        providerCostMicrousd: '1000',
+        state: ManagedProviderOperationState.RELEASED,
+      }),
+    );
+  });
+  it('releases a reserved crash row with no completion outcome after the deadline', async () => {
+    const operation = {
+      ...unknownOperation(),
+      completionOutcome: null,
+      createdAt: new Date('2026-07-08T00:00:00.000Z'),
+      providerExecutionId: null,
+      state: ManagedProviderOperationState.RESERVED,
+    };
+    const lookup = { lookup: jest.fn() };
+    const { operationRepository, save, service } = createService(lookup);
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(lookup.lookup).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
+        state: ManagedProviderOperationState.RELEASED,
       }),
     );
   });

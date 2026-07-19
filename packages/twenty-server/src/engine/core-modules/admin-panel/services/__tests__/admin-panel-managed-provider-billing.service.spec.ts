@@ -22,6 +22,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
         MANAGED_OPENROUTER_GRANT_DAILY_ACTION_LIMIT: 20,
         MANAGED_OPENROUTER_GRANT_OPERATOR_USER_IDS: [operatorId],
         MANAGED_OPENROUTER_MAX_GRANT_CENTS: 1_000_000,
+        MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS: 30 * 24 * 60 * 60 * 1000,
       };
 
       return values[key];
@@ -31,7 +32,10 @@ describe('AdminPanelManagedProviderBillingService', () => {
   it('journals then grants a credit to the exact workspace customer and contract', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-19T10:00:00.000Z'));
     const metronomeClientService = {
-      createCustomerCredit: jest.fn().mockResolvedValue({ id: 'credit-id' }),
+      createCustomerCredit: jest.fn().mockResolvedValue({
+        creditId: 'credit-id',
+        metronomeEditId: 'edit-id',
+      }),
     };
     const metronomeWorkspaceCustomerService = {
       ensureWorkspaceContract: jest.fn().mockResolvedValue('contract-id'),
@@ -39,11 +43,13 @@ describe('AdminPanelManagedProviderBillingService', () => {
     };
     const fundingJournalService = {
       countRecentActions: jest.fn().mockResolvedValue(0),
-      createPending: jest.fn().mockResolvedValue({
+      createPendingRateLimited: jest.fn().mockResolvedValue({
         createdAt: new Date('2026-07-19T10:00:00.000Z'),
         createdByCaller: true,
         failureCode: null,
         id: 'funding-action-id',
+        applicableProductIds: ['charge-product-id'],
+        creditProductId: 'credit-product-id',
         metronomeUniquenessKey: 'myah:funding-key',
         state: 'PENDING',
         updatedAt: new Date('2026-07-19T10:00:00.000Z'),
@@ -68,7 +74,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
       service.grantCredit(
         {
           amountCents: 5_000,
-          endingBefore: new Date('2027-01-01T00:00:00.000Z'),
+          endingBefore: new Date('2026-08-01T00:00:00.000Z'),
           reason: 'design partner pilot',
           idempotencyKey: 'pilot-grant-1',
           workspaceId,
@@ -76,9 +82,13 @@ describe('AdminPanelManagedProviderBillingService', () => {
         operatorId,
       ),
     ).resolves.toEqual({
+      amountCents: 5_000,
       contractId: 'contract-id',
       creditId: 'credit-id',
+      currency: 'USD',
+      metronomeEditId: 'edit-id',
       customerId: 'customer-id',
+      workspaceId,
       fundingActionCreatedAt: new Date('2026-07-19T10:00:00.000Z'),
       fundingActionErrorCode: null,
       fundingActionId: 'funding-action-id',
@@ -86,9 +96,17 @@ describe('AdminPanelManagedProviderBillingService', () => {
       fundingActionUpdatedAt: new Date('2026-07-19T10:00:00.000Z'),
     });
     expect(
-      fundingJournalService.createPending.mock.invocationCallOrder[0],
+      fundingJournalService.createPendingRateLimited.mock
+        .invocationCallOrder[0],
     ).toBeLessThan(
       metronomeClientService.createCustomerCredit.mock.invocationCallOrder[0],
+    );
+    expect(fundingJournalService.createPendingRateLimited).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicableProductIds: ['charge-product-id'],
+        creditProductId: 'credit-product-id',
+      }),
+      20,
     );
     expect(metronomeClientService.createCustomerCredit).toHaveBeenCalledWith({
       amountCents: 5_000,
@@ -96,7 +114,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
       contractId: 'contract-id',
       customerId: 'customer-id',
       customFields: { myah_managed_openrouter: 'sponsored' },
-      endingBefore: '2027-01-01T00:00:00.000Z',
+      endingBefore: '2026-08-01T00:00:00.000Z',
       name: 'Myah managed OpenRouter sponsored credit: design partner pilot',
       productId: 'credit-product-id',
       startingAt: '2026-07-19T10:00:00.000Z',
@@ -106,8 +124,56 @@ describe('AdminPanelManagedProviderBillingService', () => {
       'funding-action-id',
       'SUCCEEDED',
       'credit-id',
+      undefined,
+      'edit-id',
     );
     jest.useRealTimers();
+  });
+
+  it('returns immutable journal facts on an exact replay', async () => {
+    const replayedAt = new Date('2026-07-19T10:00:00.000Z');
+    const fundingJournalService = {
+      createPendingRateLimited: jest.fn().mockResolvedValue({
+        amountCents: '5000',
+        currency: 'USD',
+        createdAt: replayedAt,
+        createdByCaller: false,
+        creditId: 'credit-id',
+        failureCode: null,
+        id: 'funding-action-id',
+        metronomeEditId: 'edit-id',
+        state: 'SUCCEEDED',
+        updatedAt: replayedAt,
+        workspaceId,
+      }),
+    };
+    const metronomeWorkspaceCustomerService = {
+      ensureWorkspaceContract: jest.fn().mockResolvedValue('contract-id'),
+      ensureWorkspaceCustomer: jest.fn().mockResolvedValue('customer-id'),
+    };
+    const service = new AdminPanelManagedProviderBillingService(
+      { createCustomerCredit: jest.fn() } as unknown as MetronomeClientService,
+      metronomeWorkspaceCustomerService as unknown as MetronomeWorkspaceCustomerService,
+      createConfig() as unknown as TwentyConfigService,
+      fundingJournalService as unknown as ManagedProviderFundingJournalService,
+    );
+
+    await expect(
+      service.grantCredit(
+        {
+          amountCents: 5_000,
+          endingBefore: new Date('2026-08-01T00:00:00.000Z'),
+          reason: 'design partner pilot',
+          idempotencyKey: 'pilot-grant-1',
+          workspaceId,
+        },
+        operatorId,
+      ),
+    ).resolves.toMatchObject({
+      workspaceId,
+      amountCents: 5_000,
+      currency: 'USD',
+    });
   });
 
   it('rejects a credit that does not end in the future before Metronome I/O', async () => {
@@ -117,7 +183,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
     };
     const fundingJournalService = {
       countRecentActions: jest.fn(),
-      createPending: jest.fn(),
+      createPendingRateLimited: jest.fn(),
       findByIdempotency: jest.fn(),
       transition: jest.fn(),
     };
@@ -143,7 +209,48 @@ describe('AdminPanelManagedProviderBillingService', () => {
         operatorId,
       ),
     ).rejects.toThrow('Managed provider credit must end in the future');
-    expect(fundingJournalService.createPending).not.toHaveBeenCalled();
+    expect(
+      fundingJournalService.createPendingRateLimited,
+    ).not.toHaveBeenCalled();
+    expect(metronomeClientService.createCustomerCredit).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+  it('rejects an overlong sponsored-credit lifetime before journal or Metronome I/O', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-19T10:00:00.000Z'));
+    const config = createConfig();
+    config.get.mockImplementation((key: string) =>
+      key === 'MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS'
+        ? 24 * 60 * 60 * 1000
+        : createConfig().get(key),
+    );
+    const fundingJournalService = {
+      createPendingRateLimited: jest.fn(),
+      findByIdempotency: jest.fn(),
+      transition: jest.fn(),
+    };
+    const metronomeClientService = { createCustomerCredit: jest.fn() };
+    const service = new AdminPanelManagedProviderBillingService(
+      metronomeClientService as unknown as MetronomeClientService,
+      {} as unknown as MetronomeWorkspaceCustomerService,
+      config as unknown as TwentyConfigService,
+      fundingJournalService as unknown as ManagedProviderFundingJournalService,
+    );
+
+    await expect(
+      service.grantCredit(
+        {
+          amountCents: 100,
+          endingBefore: new Date('2026-07-21T10:00:01.000Z'),
+          idempotencyKey: 'overlong',
+          reason: 'bounded expiry',
+          workspaceId,
+        },
+        operatorId,
+      ),
+    ).rejects.toThrow('lifetime exceeds the maximum');
+    expect(
+      fundingJournalService.createPendingRateLimited,
+    ).not.toHaveBeenCalled();
     expect(metronomeClientService.createCustomerCredit).not.toHaveBeenCalled();
     jest.useRealTimers();
   });
@@ -157,7 +264,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
     );
     const fundingJournalService = {
       countRecentActions: jest.fn(),
-      createPending: jest.fn(),
+      createPendingRateLimited: jest.fn(),
       findByIdempotency: jest.fn(),
       transition: jest.fn(),
     };
@@ -176,7 +283,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
       service.grantCredit(
         {
           amountCents: 100,
-          endingBefore: new Date('2027-01-01T00:00:00.000Z'),
+          endingBefore: new Date('2026-08-01T00:00:00.000Z'),
           idempotencyKey: 'unauthorized',
           reason: 'must not run',
           workspaceId,
@@ -184,16 +291,20 @@ describe('AdminPanelManagedProviderBillingService', () => {
         operatorId,
       ),
     ).rejects.toThrow('not authorized');
-    expect(fundingJournalService.createPending).not.toHaveBeenCalled();
+    expect(
+      fundingJournalService.createPendingRateLimited,
+    ).not.toHaveBeenCalled();
     expect(metronomeClientService.createCustomerCredit).not.toHaveBeenCalled();
   });
 
   it('quarantines an ambiguous Metronome credit outcome for reconciliation', async () => {
     const fundingJournalService = {
       countRecentActions: jest.fn().mockResolvedValue(0),
-      createPending: jest.fn().mockResolvedValue({
+      createPendingRateLimited: jest.fn().mockResolvedValue({
+        applicableProductIds: ['charge-product-id'],
         createdAt: new Date('2026-07-19T10:00:00.000Z'),
         createdByCaller: true,
+        creditProductId: 'credit-product-id',
         id: 'funding-action-id',
         metronomeUniquenessKey: 'myah:funding-key',
         state: 'PENDING',
@@ -223,7 +334,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
       service.grantCredit(
         {
           amountCents: 100,
-          endingBefore: new Date('2027-01-01T00:00:00.000Z'),
+          endingBefore: new Date('2026-08-01T00:00:00.000Z'),
           idempotencyKey: 'ambiguous',
           reason: 'test reconciliation',
           workspaceId,

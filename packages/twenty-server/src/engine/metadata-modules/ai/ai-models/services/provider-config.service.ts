@@ -38,6 +38,26 @@ export class ProviderConfigService {
     return this.twentyConfigService.get('MANAGED_OPENROUTER_ENABLED');
   }
 
+  isManagedOpenRouterWorkspaceEligible(workspaceId?: string): boolean {
+    return (
+      this.isManagedOpenRouterEnabled() &&
+      typeof workspaceId === 'string' &&
+      this.twentyConfigService
+        .get('MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS')
+        .includes(workspaceId)
+    );
+  }
+
+  isManagedOpenRouterGemmaWorkspaceEligible(workspaceId?: string): boolean {
+    return (
+      this.isManagedOpenRouterWorkspaceEligible(workspaceId) &&
+      typeof workspaceId === 'string' &&
+      this.twentyConfigService
+        .get('MANAGED_OPENROUTER_GEMMA_TEST_WORKSPACE_IDS')
+        .includes(workspaceId)
+    );
+  }
+
   getResolvedProviders(): AiProvidersConfig {
     const rawCatalog = this.defaultAiCatalogService.getDefaultAiCatalog();
     // Only resolve {{VAR}} templates in the committed catalog — never in

@@ -155,6 +155,7 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
     roleTargetRepository.findOne.mockResolvedValueOnce({ roleId: agentRoleId });
 
     await service.executeAgent({
+      executionSurface: 'workflow-background',
       agent: buildAgent(),
       userPrompt: 'test',
       workspaceId,
@@ -175,6 +176,7 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
     roleTargetRepository.findOne.mockResolvedValueOnce(null);
 
     await service.executeAgent({
+      executionSurface: 'workflow-background',
       agent: buildAgent(),
       userPrompt: 'test',
       workspaceId,
@@ -187,6 +189,7 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
     managedOpenRouterModelService.isManagedModel.mockReturnValue(true);
 
     await service.executeAgent({
+      executionSurface: 'workflow-background',
       agent: buildAgent(),
       managedProviderRequestIdRoot: 'workflow-operation-1',
       userPrompt: 'test',
@@ -232,6 +235,7 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
       } as unknown as Awaited<ReturnType<typeof generateText>>);
 
       const result = await service.executeAgent({
+        executionSurface: 'workflow-background',
         agent: buildAgent(),
         userPrompt: 'test',
         workspaceId,
@@ -264,6 +268,7 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
       } as unknown as Awaited<ReturnType<typeof generateText>>);
 
       const result = await service.executeAgent({
+        executionSurface: 'workflow-background',
         agent: buildAgent(),
         userPrompt: 'test',
         workspaceId,

@@ -7,6 +7,7 @@ import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models
 import { ProviderConfigService } from 'src/engine/metadata-modules/ai/ai-models/services/provider-config.service';
 import { SdkProviderFactoryService } from 'src/engine/metadata-modules/ai/ai-models/services/sdk-provider-factory.service';
 import { AUTO_SELECT_SMART_MODEL_ID } from 'twenty-shared/constants';
+import { type WorkspaceModelAvailabilitySettings } from 'src/engine/metadata-modules/ai/ai-models/utils/is-model-allowed.util';
 
 describe('AiModelRegistryService', () => {
   let service: AiModelRegistryService;
@@ -252,5 +253,96 @@ describe('AiModelRegistryService', () => {
 
     expect(result).toBeDefined();
     expect(result.modelId).toBe('fallback-model');
+  });
+  it('allows managed models only for eligible workspaces and Gemma only for its audience', () => {
+    const providerConfigService = service[
+      'providerConfigService' as keyof AiModelRegistryService
+    ] as unknown as {
+      isManagedOpenRouterWorkspaceEligible: jest.Mock;
+      isManagedOpenRouterGemmaWorkspaceEligible: jest.Mock;
+    };
+    providerConfigService.isManagedOpenRouterWorkspaceEligible = jest
+      .fn()
+      .mockImplementation(
+        (workspaceId: string) =>
+          workspaceId === 'funded' || workspaceId === 'gemma',
+      );
+    providerConfigService.isManagedOpenRouterGemmaWorkspaceEligible = jest
+      .fn()
+      .mockImplementation((workspaceId: string) => workspaceId === 'gemma');
+
+    expect(() =>
+      service.validateModelAvailability(
+        'openrouter/deepseek/deepseek-v4-flash',
+        {
+          id: 'funded',
+          useRecommendedModels: true,
+          enabledAiModelIds: [],
+        } satisfies WorkspaceModelAvailabilitySettings,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      service.validateModelAvailability('openai/gpt-4.1', {
+        id: 'funded',
+        useRecommendedModels: false,
+        enabledAiModelIds: ['openai/gpt-4.1'],
+      } satisfies WorkspaceModelAvailabilitySettings),
+    ).toThrow('not available in this workspace');
+    expect(() =>
+      service.validateModelAvailability(
+        'openrouter/deepseek/deepseek-v4-flash',
+        {
+          id: 'unfunded',
+          useRecommendedModels: false,
+          enabledAiModelIds: ['openrouter/deepseek/deepseek-v4-flash'],
+        } satisfies WorkspaceModelAvailabilitySettings,
+      ),
+    ).toThrow('not available in this workspace');
+    expect(() =>
+      service.validateModelAvailability(
+        'openrouter/google/gemma-4-31b-it:free',
+        {
+          id: 'funded',
+          useRecommendedModels: false,
+          enabledAiModelIds: ['openrouter/google/gemma-4-31b-it:free'],
+        } satisfies WorkspaceModelAvailabilitySettings,
+      ),
+    ).toThrow('not available in this workspace');
+    expect(() =>
+      service.validateModelAvailability(
+        'openrouter/google/gemma-4-31b-it:free',
+        {
+          id: 'gemma',
+          useRecommendedModels: false,
+          enabledAiModelIds: ['openrouter/google/gemma-4-31b-it:free'],
+        } satisfies WorkspaceModelAvailabilitySettings,
+      ),
+    ).not.toThrow();
+  });
+
+  it('uses managed DeepSeek for eligible AUTO_SELECT and native defaults otherwise', () => {
+    const providerConfigService = service[
+      'providerConfigService' as keyof AiModelRegistryService
+    ] as unknown as {
+      isManagedOpenRouterWorkspaceEligible: jest.Mock;
+    };
+    providerConfigService.isManagedOpenRouterWorkspaceEligible = jest
+      .fn()
+      .mockReturnValue(true);
+    jest.spyOn(service, 'getModel').mockImplementation((modelId: string) =>
+      modelId === 'openrouter/deepseek/deepseek-v4-flash'
+        ? ({
+            modelId,
+            providerName: 'openrouter',
+            sdkPackage: '@ai-sdk/openai-compatible',
+            model: {} as any,
+          } as any)
+        : undefined,
+    );
+
+    expect(
+      service.getEffectiveModelConfig(AUTO_SELECT_SMART_MODEL_ID, 'funded')
+        .modelId,
+    ).toBe('openrouter/deepseek/deepseek-v4-flash');
   });
 });

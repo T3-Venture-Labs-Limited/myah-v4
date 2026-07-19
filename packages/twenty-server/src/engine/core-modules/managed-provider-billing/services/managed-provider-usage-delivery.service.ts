@@ -10,10 +10,7 @@ import {
   MetronomeClientException,
   MetronomeClientExceptionCode,
 } from '../metronome-client.exception';
-import {
-  getValidatedMetronomeUsageAmountCents,
-  isApprovedFreeManagedOpenRouterOperation,
-} from '../utils/get-validated-metronome-usage-amount-cents.util';
+import { getValidatedMetronomeUsageAmountCents } from '../utils/get-validated-metronome-usage-amount-cents.util';
 
 import { MetronomeClientService } from './metronome-client.service';
 import { MetronomeWorkspaceCustomerService } from './metronome-workspace-customer.service';
@@ -85,7 +82,10 @@ export class ManagedProviderUsageDeliveryService {
           return { status: 'NOT_PENDING' } as const;
         }
 
-        if (!lockedOperation.actualUsageProperties) {
+        if (
+          !lockedOperation.actualUsageProperties ||
+          !lockedOperation.actualMetronomeProperties
+        ) {
           throw new Error('Managed provider usage facts are unavailable');
         }
 
@@ -93,7 +93,7 @@ export class ManagedProviderUsageDeliveryService {
           await this.metronomeClientService.ingestUsage({
             customerId,
             eventType: lockedOperation.metronomeEventType,
-            properties: lockedOperation.actualUsageProperties,
+            properties: lockedOperation.actualMetronomeProperties,
             timestamp: deliveryEventAt.toISOString(),
             transactionId: `managed-provider-usage:${lockedOperation.id}`,
           });
@@ -194,14 +194,14 @@ export class ManagedProviderUsageDeliveryService {
       if (persistedQuote != null) {
         quotedActualAmountCents = BigInt(persistedQuote);
       } else {
-        if (!operation.actualUsageProperties) {
+        if (!operation.actualMetronomeProperties) {
           throw new Error('Managed provider usage facts are unavailable');
         }
 
         const preview = await this.metronomeClientService.previewUsage({
           customerId,
           eventType: operation.metronomeEventType,
-          properties: operation.actualUsageProperties,
+          properties: operation.actualMetronomeProperties,
           timestamp: deliveryEventAt.toISOString(),
         });
 
@@ -211,11 +211,7 @@ export class ManagedProviderUsageDeliveryService {
             customerId,
             expectedProductIds: operation.expectedProductIds,
             preview,
-            allowZeroAmount: isApprovedFreeManagedOpenRouterOperation({
-              providerKey: operation.providerKey,
-              providerConfigurationKey: operation.providerConfigurationKey,
-              metronomeEventType: operation.metronomeEventType,
-            }),
+            allowZeroAmount: false,
           });
         } catch {
           await manager.save(ManagedProviderOperationEntity, {

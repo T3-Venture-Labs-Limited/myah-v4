@@ -29,6 +29,8 @@ describe('ManagedProviderFundingActionEntity', () => {
       'reason',
       'expiresAt',
       'applicability',
+      'applicableProductIds',
+      'creditProductId',
       'paymentEvidence',
       'correctedOperationId',
     ]) {

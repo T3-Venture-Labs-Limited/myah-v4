@@ -1,3 +1,5 @@
+import { AUTO_SELECT_SMART_MODEL_ID } from 'twenty-shared/constants';
+
 import { AgentChatResolver } from 'src/engine/metadata-modules/ai/ai-chat/resolvers/agent-chat.resolver';
 
 describe('AgentChatResolver managed provider credit preflight', () => {
@@ -15,6 +17,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
     };
     const aiModelRegistryService = {
       getAvailableModels: jest.fn().mockReturnValue([{}]),
+      getEffectiveModelConfig: jest.fn().mockReturnValue({ modelId }),
       getModel: jest.fn().mockReturnValue({
         modelId,
         providerName: 'openrouter',
@@ -50,6 +53,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
       {} as never,
       billingUsageService as never,
       {
+        getEffectiveModelConfig: aiModelRegistryService.getEffectiveModelConfig,
         getModel: aiModelRegistryService.getModel,
         getAvailableModels: aiModelRegistryService.getAvailableModels,
         validateModelAvailability:
@@ -178,5 +182,28 @@ describe('AgentChatResolver managed provider credit preflight', () => {
     expect(billingUsageService.hasAvailableCreditsOrThrow).toHaveBeenCalledWith(
       'workspace-id',
     );
+  });
+  it('skips local credits when AUTO resolves to an eligible managed model', async () => {
+    const { resolver, billingUsageService, aiModelRegistryService } =
+      buildResolver(true);
+    const autoWorkspace = {
+      id: 'workspace-id',
+      smartModel: AUTO_SELECT_SMART_MODEL_ID,
+    } as never;
+
+    await resolver.retryChatMessage(
+      'thread-id',
+      AUTO_SELECT_SMART_MODEL_ID,
+      'user-workspace-id',
+      autoWorkspace,
+    );
+
+    expect(aiModelRegistryService.getEffectiveModelConfig).toHaveBeenCalledWith(
+      AUTO_SELECT_SMART_MODEL_ID,
+      'workspace-id',
+    );
+    expect(
+      billingUsageService.hasAvailableCreditsOrThrow,
+    ).not.toHaveBeenCalled();
   });
 });

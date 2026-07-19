@@ -26,11 +26,12 @@ describe('CreateManagedProviderFundingActionFastInstanceCommand', () => {
 
     await command.up({ query } as never);
 
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(6);
     expect(query.mock.calls[0][0]).toContain(
       'CREATE TABLE IF NOT EXISTS "core"."managedProviderFundingAction"',
     );
-    expect(query.mock.calls[1][0]).toContain('CREATE INDEX IF NOT EXISTS');
+    expect(query.mock.calls[1][0]).toContain('ADD COLUMN IF NOT EXISTS');
+    expect(query.mock.calls[4][0]).toContain('ON DELETE SET NULL');
   });
 
   it('does not drop a table that may be owned by the shipped 2.19 command', async () => {

@@ -17,6 +17,7 @@ export const MODEL_ICON_CONFIG: Record<ModelIconConfigKey, IconComponent> = {
   [ModelFamily.CLAUDE]: IconModelClaude,
   [ModelFamily.GEMINI]: IconBrandGemini,
   [ModelFamily.MISTRAL]: IconBrandMistral,
+  [ModelFamily.DEEPSEEK]: IconRobot,
   [ModelFamily.GROK]: IconBrandXai,
   FALLBACK: IconRobot,
 };

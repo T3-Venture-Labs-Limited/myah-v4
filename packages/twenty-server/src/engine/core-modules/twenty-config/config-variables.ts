@@ -12,6 +12,7 @@ import {
   IsUrl,
   Matches,
   Min,
+  Max,
   ValidateIf,
   IsUUID,
   type ValidationError,
@@ -228,43 +229,6 @@ export class ConfigVariables {
   })
   @IsOptional()
   MANAGED_OPENROUTER_GEMMA_TEST_WORKSPACE_IDS: string[] = [];
-  @ConfigVariablesMetadata({
-    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
-    description:
-      'Actual cash paid in microusd for the active managed OpenRouter credit pool',
-    isEnvOnly: true,
-    isHiddenInAdminPanel: true,
-    type: ConfigVariableType.STRING,
-  })
-  @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
-  @Matches(/^[1-9]\d*$/)
-  MANAGED_OPENROUTER_CASH_PAID_MICROUSD = '';
-
-  @ConfigVariablesMetadata({
-    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
-    description:
-      'Usable credits received in microusd for the active managed OpenRouter credit pool',
-    isEnvOnly: true,
-    isHiddenInAdminPanel: true,
-    type: ConfigVariableType.STRING,
-  })
-  @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
-  @Matches(/^[1-9]\d*$/)
-  MANAGED_OPENROUTER_USABLE_CREDITS_MICROUSD = '';
-
-  @ConfigVariablesMetadata({
-    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
-    description:
-      'Immutable evidence version for the active managed OpenRouter cash-to-credit multiplier',
-    isEnvOnly: true,
-    isHiddenInAdminPanel: true,
-    type: ConfigVariableType.STRING,
-  })
-  @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
-  @IsString()
-  @IsNotEmpty()
-  @Matches(/\S/)
-  MANAGED_OPENROUTER_MULTIPLIER_EVIDENCE_VERSION = '';
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
@@ -309,6 +273,19 @@ export class ConfigVariables {
   @IsInt()
   @Min(1)
   MANAGED_OPENROUTER_GRANT_DAILY_ACTION_LIMIT = 20;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Maximum lifetime in milliseconds for sponsored managed provider credits',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.NUMBER,
+  })
+  @IsInt()
+  @Min(1)
+  @Max(2_592_000_000)
+  MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS = 2_592_000_000;
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,

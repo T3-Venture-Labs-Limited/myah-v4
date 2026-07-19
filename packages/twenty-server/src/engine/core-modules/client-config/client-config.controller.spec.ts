@@ -114,10 +114,26 @@ describe('ClientConfigController', () => {
         .spyOn(clientConfigService, 'getClientConfig')
         .mockResolvedValue(mockClientConfig);
 
-      const result = await controller.getClientConfig();
+      const result = await controller.getClientConfig(undefined);
 
       expect(result).toEqual(mockClientConfig);
-      expect(clientConfigService.getClientConfig).toHaveBeenCalled();
+      expect(clientConfigService.getClientConfig).toHaveBeenCalledWith(
+        undefined,
+      );
+    });
+
+    it('forwards authenticated workspace identity to tenant-aware model filtering', async () => {
+      const workspace = { id: 'workspace-id' };
+
+      jest
+        .spyOn(clientConfigService, 'getClientConfig')
+        .mockResolvedValue({} as never);
+
+      await controller.getClientConfig(workspace as never);
+
+      expect(clientConfigService.getClientConfig).toHaveBeenCalledWith(
+        'workspace-id',
+      );
     });
   });
 });

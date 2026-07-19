@@ -1,5 +1,7 @@
 import { type Repository } from 'typeorm';
 
+import { MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
+
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
@@ -14,6 +16,7 @@ import { type CompleteManagedProviderOperationInput } from '../types/complete-ma
 import { MetronomeClientService } from '../services/metronome-client.service';
 import { MetronomeWorkspaceCustomerService } from '../services/metronome-workspace-customer.service';
 import { ManagedProviderOperationService } from '../services/managed-provider-operation.service';
+import { ManagedProviderPoolService } from '../services/managed-provider-pool.service';
 
 describe('ManagedProviderOperationService', () => {
   const workspaceId = 'workspace-id';
@@ -41,10 +44,12 @@ describe('ManagedProviderOperationService', () => {
     balance = 10,
     existingOperation = null,
     metronomeEnabled = true,
+    managedWorkspace = false,
   }: {
     balance?: number;
     existingOperation?: Partial<ManagedProviderOperationEntity> | null;
     metronomeEnabled?: boolean;
+    managedWorkspace?: boolean;
   } = {}) => {
     const manager: TransactionManagerMock = {
       create: jest.fn((_, values) => values),
@@ -123,6 +128,13 @@ describe('ManagedProviderOperationService', () => {
     const twentyConfigService = {
       get: jest.fn(() => metronomeEnabled),
     } as Pick<TwentyConfigService, 'get'>;
+    const managedProviderPoolService = {
+      assertReservationAllowed: jest.fn().mockResolvedValue(undefined),
+      isManagedWorkspace: jest.fn().mockReturnValue(managedWorkspace),
+    } as Pick<
+      ManagedProviderPoolService,
+      'assertReservationAllowed' | 'isManagedWorkspace'
+    >;
     const messageQueueService = {
       add: jest.fn().mockResolvedValue(undefined),
     } as Pick<MessageQueueService, 'add'>;
@@ -134,6 +146,7 @@ describe('ManagedProviderOperationService', () => {
         metronomeClientService.previewUsage as unknown as jest.Mock,
       metronomeClientService,
       metronomeWorkspaceCustomerService,
+      managedProviderPoolService,
       operationRepository,
       messageQueueService,
       service: new ManagedProviderOperationService(
@@ -141,6 +154,7 @@ describe('ManagedProviderOperationService', () => {
         metronomeClientService as MetronomeClientService,
         metronomeWorkspaceCustomerService as MetronomeWorkspaceCustomerService,
         twentyConfigService as TwentyConfigService,
+        managedProviderPoolService as ManagedProviderPoolService,
         messageQueueService as MessageQueueService,
       ),
     };
@@ -188,7 +202,7 @@ describe('ManagedProviderOperationService', () => {
     );
     expect(operationRepository.createQueryBuilder).not.toHaveBeenCalled();
   });
-  it('reserves zero for the exact approved free managed OpenRouter model', async () => {
+  it('rejects a zero-priced preview for the reference-priced Gemma route', async () => {
     const { manager, metronomeClientService, service } = createService();
     const freeInput = {
       ...input,
@@ -215,14 +229,37 @@ describe('ManagedProviderOperationService', () => {
       ],
     });
 
-    await expect(service.reserveOperation(freeInput)).resolves.toMatchObject({
-      reservedAmountCents: '0',
-      state: ManagedProviderOperationState.RESERVED,
-    });
-    expect(manager.save).toHaveBeenCalledWith(
-      ManagedProviderOperationEntity,
-      expect.objectContaining({ reservedAmountCents: '0' }),
+    await expect(service.reserveOperation(freeInput)).rejects.toThrow(
+      'Metronome usage preview is ambiguous',
     );
+    expect(manager.save).not.toHaveBeenCalled();
+  });
+  it('locks and validates the durable provider pool before reserving', async () => {
+    const { managedProviderPoolService, service } = createService({
+      managedWorkspace: true,
+    });
+    const managedInput = {
+      ...input,
+      maximumUsageProperties: {
+        quantity: 7,
+        multiplierEvidenceVersion: 'evidence-v2',
+        tariffVersion: '2026-07-19-v2',
+      },
+      providerKey: 'openrouter',
+    };
+
+    await expect(service.reserveOperation(managedInput)).resolves.toMatchObject(
+      {
+        state: ManagedProviderOperationState.RESERVED,
+      },
+    );
+    expect(
+      managedProviderPoolService.assertReservationAllowed,
+    ).toHaveBeenCalledWith(expect.any(Object), {
+      configurationDigest: MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST,
+      providerKey: 'openrouter',
+      tariffVersion: '2026-07-19-v2',
+    });
   });
 
   it('rejects insufficient prepaid balance without creating an operation', async () => {
@@ -688,6 +725,53 @@ describe('ManagedProviderOperationService', () => {
       { operationId: 'operation-id' },
       { id: 'managed-provider-usage:operation-id', retryLimit: 3 },
     );
+  });
+  it('returns durable billable completion when usage publication fails', async () => {
+    const reservedOperation = {
+      ...input,
+      actualUsageProperties: null,
+      completedAt: null,
+      id: 'operation-id',
+      providerCostMicrousd: null,
+      providerExecutionId: null,
+      quotedActualAmountCents: null,
+      releasedAt: null,
+      state: ManagedProviderOperationState.RESERVED,
+    };
+    const { manager, messageQueueService, service } = createService();
+    manager.findOne.mockImplementation((entity) =>
+      entity === ManagedProviderOperationEntity ? reservedOperation : null,
+    );
+    manager.save.mockImplementation((_, values) => values);
+    (messageQueueService.add as jest.Mock).mockRejectedValueOnce(
+      new Error('queue unavailable'),
+    );
+
+    await expect(
+      service.completeOperation({
+        actualUsageProperties: { quantity: 3 },
+        actorUserWorkspaceId: 'user-workspace-id',
+        operationId: 'operation-id',
+        operationKey: 'reviewed-operation',
+        outcome: 'BILLABLE',
+        providerConfigurationKey: 'reviewed-configuration',
+        providerCostMicrousd: '1234',
+        providerExecutionId: 'provider-execution-id',
+        providerKey: 'provider',
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({
+      id: 'operation-id',
+      state: ManagedProviderOperationState.USAGE_PENDING,
+    });
+
+    expect(manager.save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        state: ManagedProviderOperationState.USAGE_PENDING,
+      }),
+    );
+    expect(messageQueueService.add).toHaveBeenCalledTimes(1);
   });
 
   it('records billable completion when provider cost is unavailable', async () => {

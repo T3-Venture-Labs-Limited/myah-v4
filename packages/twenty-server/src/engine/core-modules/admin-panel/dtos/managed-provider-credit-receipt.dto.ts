@@ -1,4 +1,4 @@
-import { Field, GraphQLISODateTime, ObjectType } from '@nestjs/graphql';
+import { Field, GraphQLISODateTime, Int, ObjectType } from '@nestjs/graphql';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 
@@ -6,6 +6,17 @@ import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/
 export class ManagedProviderCreditReceiptDTO {
   @Field(() => UUIDScalarType, { nullable: true })
   creditId: string | null;
+  @Field(() => UUIDScalarType)
+  workspaceId: string;
+
+  @Field(() => Int)
+  amountCents: number;
+
+  @Field(() => String)
+  currency: string;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  metronomeEditId: string | null;
 
   @Field(() => UUIDScalarType)
   customerId: string;

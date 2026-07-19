@@ -20,6 +20,8 @@ import {
   type MetronomeUsageEvent,
 } from './metronome-client.service';
 import { OpenRouterGenerationLookupService } from './openrouter-generation-lookup.service';
+import { getManagedOpenRouterChargeCentUnits } from 'src/engine/metadata-modules/ai/ai-models/utils/get-managed-openrouter-charge-cent-units.util';
+import { getMetronomeEventProperties } from '../utils/get-metronome-event-properties.util';
 import { validateSafeMetronomeEventProperties } from '../utils/validate-safe-metronome-event-properties.util';
 
 const INITIAL_SETTLEMENT_RETRY_DELAY_MS = 60_000;
@@ -116,6 +118,20 @@ export class ManagedProviderBillingRecoveryService {
         where: [
           {
             ...cursorFilter,
+            completionOutcome: IsNull(),
+            nextDeliveryAttemptAt: IsNull(),
+            providerKey: 'openrouter',
+            state: ManagedProviderOperationState.RESERVED,
+          },
+          {
+            ...cursorFilter,
+            completionOutcome: IsNull(),
+            nextDeliveryAttemptAt: LessThanOrEqual(now),
+            providerKey: 'openrouter',
+            state: ManagedProviderOperationState.RESERVED,
+          },
+          {
+            ...cursorFilter,
             completionOutcome: 'UNKNOWN',
             nextDeliveryAttemptAt: IsNull(),
             providerKey: 'openrouter',
@@ -130,8 +146,25 @@ export class ManagedProviderBillingRecoveryService {
           },
           {
             ...cursorFilter,
-            completionOutcome: 'UNKNOWN',
+            completionOutcome: IsNull(),
             providerExecutionId: MoreThan(''),
+            releasedAt: MoreThan(
+              new Date(now.getTime() - RECONCILIATION_TIMEOUT_MS),
+            ),
+            providerKey: 'openrouter',
+            state: ManagedProviderOperationState.RELEASED,
+          },
+          {
+            ...cursorFilter,
+            completionOutcome: 'UNKNOWN',
+            nextDeliveryAttemptAt: IsNull(),
+            providerKey: 'openrouter',
+            state: ManagedProviderOperationState.RESERVED,
+          },
+          {
+            ...cursorFilter,
+            completionOutcome: 'UNKNOWN',
+            nextDeliveryAttemptAt: LessThanOrEqual(now),
             providerKey: 'openrouter',
             state: ManagedProviderOperationState.RESERVED,
           },
@@ -139,6 +172,9 @@ export class ManagedProviderBillingRecoveryService {
             ...cursorFilter,
             completionOutcome: 'UNKNOWN',
             providerCostMicrousd: IsNull(),
+            releasedAt: MoreThan(
+              new Date(now.getTime() - RECONCILIATION_TIMEOUT_MS),
+            ),
             providerExecutionId: MoreThan(''),
             providerKey: 'openrouter',
             state: ManagedProviderOperationState.RELEASED,
@@ -167,12 +203,20 @@ export class ManagedProviderBillingRecoveryService {
             operation.providerExecutionId,
           );
         } catch {
-          await this.scheduleUnknownRetry(operation, now);
+          if (isPastDeadline) {
+            await this.releaseUnknownOperation(operation, now);
+          } else {
+            await this.scheduleUnknownRetry(operation, now);
+          }
           continue;
         }
 
         if (generation.status === 'unavailable') {
-          await this.scheduleUnknownRetry(operation, now);
+          if (isPastDeadline) {
+            await this.releaseUnknownOperation(operation, now);
+          } else {
+            await this.scheduleUnknownRetry(operation, now);
+          }
           continue;
         }
 
@@ -216,7 +260,15 @@ export class ManagedProviderBillingRecoveryService {
           (operation.providerCostMicrousd !== null &&
             operation.providerCostMicrousd !== providerCostMicrousd.toString())
         ) {
-          await this.scheduleUnknownRetry(operation, now);
+          if (isPastDeadline) {
+            await this.releaseUnknownOperation(
+              operation,
+              now,
+              providerCostMicrousd,
+            );
+          } else {
+            await this.scheduleUnknownRetry(operation, now);
+          }
           continue;
         }
 
@@ -237,7 +289,12 @@ export class ManagedProviderBillingRecoveryService {
                 ManagedProviderOperationState.RESERVED &&
               lockedOperation.state !==
                 ManagedProviderOperationState.RELEASED) ||
-            lockedOperation.completionOutcome !== 'UNKNOWN' ||
+            (lockedOperation.completionOutcome !== 'UNKNOWN' &&
+              !(
+                lockedOperation.state ===
+                  ManagedProviderOperationState.RESERVED &&
+                lockedOperation.completionOutcome === null
+              )) ||
             lockedOperation.providerCostMicrousd !== null
           ) {
             return;
@@ -261,6 +318,10 @@ export class ManagedProviderBillingRecoveryService {
           await manager.save(ManagedProviderOperationEntity, {
             ...lockedOperation,
             actualUsageProperties: recoveredUsageProperties,
+            actualMetronomeProperties: getMetronomeEventProperties(
+              recoveredUsageProperties,
+              lockedOperation.id,
+            ),
             completionOutcome: 'BILLABLE',
             completedAt,
             nextDeliveryAttemptAt: completedAt,
@@ -282,11 +343,9 @@ export class ManagedProviderBillingRecoveryService {
       if (operations.length < RECOVERY_BATCH_SIZE) {
         return;
       }
-
       cursor = operations[operations.length - 1].id;
     }
   }
-
   private isPastReconciliationDeadline(
     operation: ManagedProviderOperationEntity,
     now: Date,
@@ -296,10 +355,10 @@ export class ManagedProviderBillingRecoveryService {
       now.getTime() - operation.createdAt.getTime() >= RECONCILIATION_TIMEOUT_MS
     );
   }
-
   private async releaseUnknownOperation(
     operation: ManagedProviderOperationEntity,
     now: Date,
+    providerCostMicrousd?: number,
   ): Promise<void> {
     await this.operationRepository.manager.transaction(async (manager) => {
       const lockedOperation = await manager.findOne(
@@ -311,15 +370,35 @@ export class ManagedProviderBillingRecoveryService {
       );
       if (
         lockedOperation?.state !==
-        ManagedProviderOperationState.RECONCILIATION_REQUIRED
+          ManagedProviderOperationState.RECONCILIATION_REQUIRED &&
+        lockedOperation?.state !== ManagedProviderOperationState.RESERVED
       ) {
         return;
       }
-
       await manager.save(ManagedProviderOperationEntity, {
         ...lockedOperation,
         lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
         nextDeliveryAttemptAt: null,
+        ...(providerCostMicrousd !== undefined && {
+          actualUsageProperties: {
+            ...(lockedOperation.actualUsageProperties ?? {}),
+            absorbedCostMicrousd: providerCostMicrousd.toString(),
+            model: lockedOperation.providerConfigurationKey,
+            model_id: lockedOperation.providerConfigurationKey,
+            operation_id: lockedOperation.id,
+            overrun: true,
+            ...(typeof lockedOperation.maximumUsageProperties?.tariffVersion ===
+              'string' && {
+              tariffVersion:
+                lockedOperation.maximumUsageProperties.tariffVersion,
+              tariff_version:
+                lockedOperation.maximumUsageProperties.tariffVersion,
+            }),
+          },
+          providerCostMicrousd:
+            lockedOperation.providerCostMicrousd ??
+            providerCostMicrousd.toString(),
+        }),
         releasedAt: now,
         state: ManagedProviderOperationState.RELEASED,
       });
@@ -347,6 +426,7 @@ export class ManagedProviderBillingRecoveryService {
       }
       await manager.save(ManagedProviderOperationEntity, {
         ...lockedOperation,
+        completionOutcome: 'UNKNOWN',
         lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_PENDING',
         nextDeliveryAttemptAt: new Date(
           now.getTime() + RECONCILIATION_RETRY_DELAY_MS,
@@ -378,6 +458,7 @@ export class ManagedProviderBillingRecoveryService {
     operation: ManagedProviderOperationEntity,
     generation: {
       cachedPromptTokens: number;
+      cacheWriteTokens?: number;
       completionTokens: number;
       model: string;
       promptTokens: number;
@@ -442,54 +523,100 @@ export class ManagedProviderBillingRecoveryService {
     const effectiveCachedInputRate = usesLongContextTariff
       ? cachedInputRate
       : baseCachedInputRate;
+    const cacheWriteTokens = generation.cacheWriteTokens;
     const configuredCacheCreationRate = usesLongContextTariff
       ? maximum.cacheCreationRate
       : (maximum.baseCacheCreationRate ?? maximum.cacheCreationRate);
     if (
+      (configuredCacheCreationRate !== undefined &&
+        (typeof configuredCacheCreationRate !== 'number' ||
+          !Number.isFinite(configuredCacheCreationRate) ||
+          configuredCacheCreationRate < 0)) ||
+      (cacheWriteTokens !== undefined &&
+        (!Number.isSafeInteger(cacheWriteTokens) || cacheWriteTokens < 0)) ||
+      generation.cachedPromptTokens + (cacheWriteTokens ?? 0) >
+        generation.promptTokens
+    ) {
+      return null;
+    }
+    if (
+      cacheWriteTokens === undefined &&
       configuredCacheCreationRate !== undefined &&
-      (typeof configuredCacheCreationRate !== 'number' ||
-        !Number.isFinite(configuredCacheCreationRate) ||
-        configuredCacheCreationRate !== 0)
+      configuredCacheCreationRate !== effectiveInputRate
+    ) {
+      return null;
+    }
+    const effectiveCacheCreationRate =
+      configuredCacheCreationRate ?? effectiveInputRate;
+    const normalizedCacheWriteTokens = cacheWriteTokens ?? 0;
+    if (
+      typeof maximum.cashPaidMicrousd !== 'string' ||
+      typeof maximum.usableCreditsReceivedMicrousd !== 'string' ||
+      typeof maximum.multiplierEvidenceVersion !== 'string' ||
+      maximum.cashPaidMicrousd.trim() === '' ||
+      maximum.usableCreditsReceivedMicrousd.trim() === '' ||
+      maximum.multiplierEvidenceVersion.trim() === ''
     ) {
       return null;
     }
 
-    const retailMicrousd = Math.ceil(
-      (generation.promptTokens - generation.cachedPromptTokens) *
-        effectiveInputRate +
-        generation.cachedPromptTokens * effectiveCachedInputRate +
-        generation.completionTokens * effectiveOutputRate,
-    );
-    if (!Number.isSafeInteger(retailMicrousd)) {
+    let uncappedChargeCentUnits: number;
+    try {
+      uncappedChargeCentUnits = getManagedOpenRouterChargeCentUnits({
+        cashPaidMicrousd: maximum.cashPaidMicrousd,
+        ratedUnits: [
+          {
+            rate: effectiveInputRate,
+            units:
+              generation.promptTokens -
+              generation.cachedPromptTokens -
+              normalizedCacheWriteTokens,
+          },
+          {
+            rate: effectiveCachedInputRate,
+            units: generation.cachedPromptTokens,
+          },
+          {
+            rate: effectiveCacheCreationRate,
+            units: normalizedCacheWriteTokens,
+          },
+          { rate: effectiveOutputRate, units: generation.completionTokens },
+        ],
+        usableCreditsReceivedMicrousd: maximum.usableCreditsReceivedMicrousd,
+      });
+    } catch {
       return null;
     }
-
-    const isApprovedFreeModel =
-      operation.providerConfigurationKey ===
-        'openrouter/google/gemma-4-31b-it:free' &&
-      effectiveInputRate === 0 &&
-      effectiveOutputRate === 0 &&
-      effectiveCachedInputRate === 0;
-    const uncappedChargeCentUnits = isApprovedFreeModel
-      ? 0
-      : Math.max(1, Math.ceil(retailMicrousd / 10_000));
     const hasOverrun = uncappedChargeCentUnits > reservedAmountCents;
 
     return {
       cachedInputRate: effectiveCachedInputRate,
+      cacheCreationRate: effectiveCacheCreationRate,
       chargeCentUnits: hasOverrun
         ? reservedAmountCents
         : uncappedChargeCentUnits,
+      charge_cent_unit: (hasOverrun
+        ? reservedAmountCents
+        : uncappedChargeCentUnits
+      ).toString(),
       inputCacheReadUnits: generation.cachedPromptTokens,
-      inputCacheWriteUnits: 0,
+      inputCacheWriteUnits: normalizedCacheWriteTokens,
       inputNoCacheUnits:
-        generation.promptTokens - generation.cachedPromptTokens,
+        generation.promptTokens -
+        generation.cachedPromptTokens -
+        normalizedCacheWriteTokens,
       inputRate: effectiveInputRate,
       inputUnits: generation.promptTokens,
       model: operation.providerConfigurationKey,
+      model_id: operation.providerConfigurationKey,
+      operation_id: operation.id,
       outputRate: effectiveOutputRate,
       outputUnits: generation.completionTokens,
       tariffVersion,
+      tariff_version: tariffVersion,
+      cashPaidMicrousd: maximum.cashPaidMicrousd,
+      usableCreditsReceivedMicrousd: maximum.usableCreditsReceivedMicrousd,
+      multiplierEvidenceVersion: maximum.multiplierEvidenceVersion,
       ...(hasOverrun && {
         absorbedCostMicrousd: providerCostMicrousd,
         excessChargeCentUnits: uncappedChargeCentUnits - reservedAmountCents,
@@ -647,7 +774,7 @@ export class ManagedProviderBillingRecoveryService {
         operation.expectedBillableMetricIds,
       ) ||
       !this.hasEquivalentProperties(
-        operation.actualUsageProperties,
+        operation.actualMetronomeProperties,
         event.properties,
       )
     ) {

@@ -1,3 +1,4 @@
+import { type ManagedOpenRouterExecutionSurface } from 'src/engine/metadata-modules/ai/ai-models/types/managed-openrouter-execution-surface.type';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -118,6 +119,7 @@ export class AgentAsyncExecutorService {
     userPrompt,
     actorContext,
     authContext,
+    executionSurface,
     workspaceId,
     userWorkspaceId,
     managedProviderRequestIdRoot,
@@ -127,6 +129,7 @@ export class AgentAsyncExecutorService {
     userPrompt: string;
     actorContext?: ActorMetadata;
     authContext?: WorkspaceAuthContext;
+    executionSurface: ManagedOpenRouterExecutionSurface;
     workspaceId: string;
     userWorkspaceId?: string | null;
     managedProviderRequestIdRoot?: string;
@@ -139,23 +142,25 @@ export class AgentAsyncExecutorService {
     let usesManagedOpenRouter = false;
 
     try {
-      if (agent) {
-        const workspace = await this.workspaceRepository.findOneBy({
-          id: agent.workspaceId,
-        });
+      const workspace = await this.workspaceRepository.findOneBy({
+        id: workspaceId,
+      });
 
-        if (workspace) {
-          this.aiModelRegistryService.validateModelAvailability(
-            agent.modelId,
-            workspace,
-          );
-        }
+      if (agent && workspace) {
+        this.aiModelRegistryService.validateModelAvailability(
+          agent.modelId,
+          workspace,
+        );
       }
 
       const registeredModel =
-        await this.aiModelRegistryService.resolveModelForAgent(agent);
+        await this.aiModelRegistryService.resolveModelForAgent(
+          agent,
+          workspaceId,
+        );
       const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
         registeredModel.modelId,
+        workspaceId,
       );
       usesManagedOpenRouter = this.managedOpenRouterModelService.isManagedModel(
         {
@@ -174,6 +179,7 @@ export class AgentAsyncExecutorService {
         await this.billingUsageService.hasAvailableCreditsOrThrow(workspaceId);
       }
       const executionModel = this.managedOpenRouterModelService.wrapModel({
+        executionSurface,
         actorUserWorkspaceId: userWorkspaceId ?? null,
         model: registeredModel.model,
         modelConfig,

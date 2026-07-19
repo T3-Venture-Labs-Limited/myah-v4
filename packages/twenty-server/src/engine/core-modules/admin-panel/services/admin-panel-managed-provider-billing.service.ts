@@ -16,6 +16,7 @@ import { type RecordManagedProviderOfflineCommitmentInput } from '../dtos/record
 
 const MAX_FUNDING_AMOUNT_CENTS = 1_000_000;
 const MAX_FUNDING_REASON_LENGTH = 500;
+const DEFAULT_MAX_GRANT_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class AdminPanelManagedProviderBillingService {
@@ -68,39 +69,70 @@ export class AdminPanelManagedProviderBillingService {
       throw new Error('Managed provider credit must end in the future');
     }
 
-    const existing = await this.fundingJournalService.findByIdempotency(
-      workspaceId,
-      idempotencyKey,
+    const configuredLifetime = this.twentyConfigService.get(
+      'MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS',
     );
+    const maximumLifetimeMs =
+      typeof configuredLifetime === 'number'
+        ? configuredLifetime
+        : DEFAULT_MAX_GRANT_LIFETIME_MS;
 
-    if (!existing) {
-      const dailyActionLimit = this.twentyConfigService.get(
-        'MANAGED_OPENROUTER_GRANT_DAILY_ACTION_LIMIT',
-      );
-      const recentActionCount =
-        await this.fundingJournalService.countRecentActions(operatorIdentity);
-
-      if (
-        typeof dailyActionLimit !== 'number' ||
-        recentActionCount >= dailyActionLimit
-      ) {
-        throw new Error('Managed provider grant rate limit exceeded');
-      }
+    if (
+      !Number.isSafeInteger(maximumLifetimeMs) ||
+      maximumLifetimeMs <= 0 ||
+      maximumLifetimeMs > DEFAULT_MAX_GRANT_LIFETIME_MS ||
+      endingBefore.getTime() - now.getTime() > maximumLifetimeMs
+    ) {
+      throw new Error('Managed provider credit lifetime exceeds the maximum');
     }
 
-    const fundingAction = await this.fundingJournalService.createPending({
-      actionType: 'SPONSORED_CREDIT',
+    const dailyActionLimit = this.twentyConfigService.get(
+      'MANAGED_OPENROUTER_GRANT_DAILY_ACTION_LIMIT',
+    );
+    if (
+      typeof dailyActionLimit !== 'number' ||
+      !Number.isSafeInteger(dailyActionLimit) ||
+      dailyActionLimit <= 0
+    ) {
+      throw new Error('Managed provider grant rate limit is misconfigured');
+    }
+
+    const creditProductId = this.twentyConfigService.get(
+      'MANAGED_OPENROUTER_CREDIT_PRODUCT_ID',
+    );
+    const applicableProductIds = [
+      this.twentyConfigService.get('MANAGED_OPENROUTER_CHARGE_PRODUCT_ID'),
+    ];
+    if (
+      typeof creditProductId !== 'string' ||
+      creditProductId.trim() === '' ||
+      applicableProductIds.some(
+        (productId) => typeof productId !== 'string' || productId.trim() === '',
+      )
+    ) {
+      throw new Error('Managed provider funding product mapping is invalid');
+    }
+
+    const fundingIntent = {
+      actionType: 'SPONSORED_CREDIT' as const,
       amountCents,
       applicability: { workspaceId },
+      applicableProductIds,
+      creditProductId,
       currency: 'USD',
       expiresAt: endingBefore,
       externalReference: idempotencyKey,
       idempotencyKey,
       operatorIdentity,
-      permissionUsed: 'managed_provider_grant',
+      permissionUsed: 'managed_provider_grant' as const,
       reason: reason.trim(),
       workspaceId,
-    });
+    };
+    const fundingAction =
+      await this.fundingJournalService.createPendingRateLimited(
+        fundingIntent,
+        dailyActionLimit,
+      );
 
     if (fundingAction.state === 'SUCCEEDED') {
       const customerId =
@@ -112,14 +144,18 @@ export class AdminPanelManagedProviderBillingService {
           workspaceId,
         );
 
-      if (!fundingAction.creditId) {
+      if (!fundingAction.creditId || !fundingAction.metronomeEditId) {
         throw new Error('Managed provider funding replay is incomplete');
       }
 
       return {
+        amountCents: Number(fundingAction.amountCents),
         contractId,
         creditId: fundingAction.creditId,
+        currency: fundingAction.currency,
+        metronomeEditId: fundingAction.metronomeEditId,
         customerId,
+        workspaceId: fundingAction.workspaceId ?? workspaceId,
         fundingActionId: fundingAction.id,
         fundingActionState: fundingAction.state,
         fundingActionErrorCode: fundingAction.failureCode,
@@ -127,7 +163,7 @@ export class AdminPanelManagedProviderBillingService {
         fundingActionUpdatedAt: fundingAction.updatedAt,
       };
     }
-    if (existing || fundingAction.createdByCaller !== true) {
+    if (fundingAction.createdByCaller !== true) {
       throw new Error(
         'Managed provider funding requires manual reconciliation',
       );
@@ -142,22 +178,16 @@ export class AdminPanelManagedProviderBillingService {
         await this.metronomeWorkspaceCustomerService.ensureWorkspaceContract(
           workspaceId,
         );
-      const { id: creditId } =
+      const { creditId, metronomeEditId } =
         await this.metronomeClientService.createCustomerCredit({
           amountCents,
-          applicableProductIds: [
-            this.twentyConfigService.get(
-              'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
-            ),
-          ],
+          applicableProductIds: fundingAction.applicableProductIds ?? [],
           contractId,
           customerId,
           customFields: { myah_managed_openrouter: 'sponsored' },
           endingBefore: endingBefore.toISOString(),
           name: `Myah managed OpenRouter sponsored credit: ${reason.trim()}`,
-          productId: this.twentyConfigService.get(
-            'MANAGED_OPENROUTER_CREDIT_PRODUCT_ID',
-          ),
+          productId: fundingAction.creditProductId ?? '',
           startingAt: fundingAction.createdAt.toISOString(),
           uniquenessKey: fundingAction.metronomeUniquenessKey,
         });
@@ -166,12 +196,18 @@ export class AdminPanelManagedProviderBillingService {
         fundingAction.id,
         'SUCCEEDED',
         creditId,
+        undefined,
+        metronomeEditId,
       );
 
       return {
+        amountCents,
         contractId,
         creditId,
+        currency: fundingAction.currency ?? 'USD',
+        metronomeEditId,
         customerId,
+        workspaceId,
         fundingActionId: fundingAction.id,
         fundingActionState: transitionedAction.state,
         fundingActionErrorCode: transitionedAction.failureCode,

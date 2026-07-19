@@ -1259,20 +1259,20 @@ export interface BillingSession {
     __typename: 'BillingSession'
 }
 
-export interface ManagedProviderBillingStatus {
-    available: Scalars['Boolean']
-    prepaidBalanceCents?: Scalars['String']
-    pendingOperationCount: Scalars['Int']
-    reconciliationRequiredOperationCount: Scalars['Int']
-    __typename: 'ManagedProviderBillingStatus'
-}
-
 export interface BillingUpdate {
     /** Current billing subscription */
     currentBillingSubscription: BillingSubscription
     /** All billing subscriptions */
     billingSubscriptions: BillingSubscription[]
     __typename: 'BillingUpdate'
+}
+
+export interface ManagedProviderBillingStatus {
+    available: Scalars['Boolean']
+    prepaidBalanceCents?: Scalars['String']
+    pendingOperationCount: Scalars['Int']
+    reconciliationRequiredOperationCount: Scalars['Int']
+    __typename: 'ManagedProviderBillingStatus'
 }
 
 export interface InviteSuggestion {
@@ -1546,7 +1546,7 @@ export interface ClientAiModelConfig {
     __typename: 'ClientAiModelConfig'
 }
 
-export type ModelFamily = 'GPT' | 'CLAUDE' | 'GEMINI' | 'MISTRAL' | 'GROK'
+export type ModelFamily = 'GPT' | 'CLAUDE' | 'GEMINI' | 'MISTRAL' | 'DEEPSEEK' | 'GROK'
 
 export interface Billing {
     isBillingEnabled: Scalars['Boolean']
@@ -2758,7 +2758,6 @@ export interface Query {
     getViewSorts: ViewSort[]
     getViewSort?: ViewSort
     getViewFields: ViewField[]
-    managedProviderBillingStatus: ManagedProviderBillingStatus
     getViewField?: ViewField
     getViewFieldGroups: ViewFieldGroup[]
     getViewFieldGroup?: ViewFieldGroup
@@ -2766,6 +2765,7 @@ export interface Query {
     apiKey?: ApiKey
     getInviteSuggestions: InviteSuggestion[]
     applicationConnectionProviders: ApplicationConnectionProvider[]
+    managedProviderBillingStatus: ManagedProviderBillingStatus
     billingPortalSession: BillingSession
     listPlans: BillingPlan[]
     getResourceCreditUsage: BillingResourceCreditUsage[]
@@ -4407,20 +4407,20 @@ export interface BillingSessionGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface ManagedProviderBillingStatusGenqlSelection{
-    available?: boolean | number
-    prepaidBalanceCents?: boolean | number
-    pendingOperationCount?: boolean | number
-    reconciliationRequiredOperationCount?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface BillingUpdateGenqlSelection{
     /** Current billing subscription */
     currentBillingSubscription?: BillingSubscriptionGenqlSelection
     /** All billing subscriptions */
     billingSubscriptions?: BillingSubscriptionGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderBillingStatusGenqlSelection{
+    available?: boolean | number
+    prepaidBalanceCents?: boolean | number
+    pendingOperationCount?: boolean | number
+    reconciliationRequiredOperationCount?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -5995,7 +5995,6 @@ export interface QueryGenqlSelection{
     navigationMenuItem?: (NavigationMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
     enterprisePortalSession?: { __args: {returnUrlPath?: (Scalars['String'] | null)} } | boolean | number
     enterpriseCheckoutSession?: { __args: {billingInterval?: (Scalars['String'] | null)} } | boolean | number
-    managedProviderBillingStatus?: ManagedProviderBillingStatusGenqlSelection
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTOGenqlSelection
     getViewFilterGroups?: (ViewFilterGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
     getViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String']} })
@@ -6013,6 +6012,7 @@ export interface QueryGenqlSelection{
     apiKey?: (ApiKeyGenqlSelection & { __args: {input: GetApiKeyInput} })
     getInviteSuggestions?: InviteSuggestionGenqlSelection
     applicationConnectionProviders?: (ApplicationConnectionProviderGenqlSelection & { __args: {applicationId: Scalars['UUID']} })
+    managedProviderBillingStatus?: ManagedProviderBillingStatusGenqlSelection
     billingPortalSession?: (BillingSessionGenqlSelection & { __args?: {returnUrlPath?: (Scalars['String'] | null), forPaymentMethodUpdate?: (Scalars['Boolean'] | null)} })
     listPlans?: BillingPlanGenqlSelection
     getResourceCreditUsage?: BillingResourceCreditUsageGenqlSelection
@@ -7563,6 +7563,14 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       return BillingUpdate_possibleTypes.includes(obj.__typename)
     }
     
+
+
+    const ManagedProviderBillingStatus_possibleTypes: string[] = ['ManagedProviderBillingStatus']
+    export const isManagedProviderBillingStatus = (obj?: { __typename?: any } | null): obj is ManagedProviderBillingStatus => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderBillingStatus"')
+      return ManagedProviderBillingStatus_possibleTypes.includes(obj.__typename)
+    }
+
 
 
     const InviteSuggestion_possibleTypes: string[] = ['InviteSuggestion']
@@ -9373,6 +9381,7 @@ export const enumModelFamily = {
    CLAUDE: 'CLAUDE' as const,
    GEMINI: 'GEMINI' as const,
    MISTRAL: 'MISTRAL' as const,
+   DEEPSEEK: 'DEEPSEEK' as const,
    GROK: 'GROK' as const
 }
 

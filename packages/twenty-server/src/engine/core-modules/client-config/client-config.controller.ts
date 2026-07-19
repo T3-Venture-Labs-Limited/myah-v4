@@ -4,6 +4,8 @@ import { type ClientConfig } from 'src/engine/core-modules/client-config/client-
 import { ClientConfigService } from 'src/engine/core-modules/client-config/services/client-config.service';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
+import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
+import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 @Controller('/client-config')
 export class ClientConfigController {
@@ -11,7 +13,10 @@ export class ClientConfigController {
 
   @Get()
   @UseGuards(PublicEndpointGuard, NoPermissionGuard)
-  async getClientConfig(): Promise<ClientConfig> {
-    return this.clientConfigService.getClientConfig();
+  async getClientConfig(
+    @AuthWorkspace({ allowUndefined: true })
+    workspace: WorkspaceEntity | undefined,
+  ): Promise<ClientConfig> {
+    return this.clientConfigService.getClientConfig(workspace?.id);
   }
 }

@@ -32,7 +32,9 @@ export type ManagedProviderFundingActionState =
 @Index('IDX_MANAGED_PROVIDER_FUNDING_ACTION_PENDING', ['state', 'createdAt'])
 export class ManagedProviderFundingActionEntity {
   @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ type: 'uuid', update: false }) workspaceId: string;
+  @Column({ type: 'uuid', nullable: true, update: false }) workspaceId:
+    | string
+    | null;
   @Column({ type: 'text', update: false }) fundingType: string;
   @Column({ type: 'text', update: false })
   actionType: ManagedProviderFundingActionType;
@@ -48,6 +50,10 @@ export class ManagedProviderFundingActionEntity {
   expiresAt: Date | null;
   @Column({ type: 'jsonb', nullable: true, update: false })
   applicability: Record<string, unknown> | null;
+  @Column({ type: 'jsonb', nullable: true, update: false })
+  applicableProductIds: string[] | null;
+  @Column({ type: 'text', nullable: true, update: false })
+  creditProductId: string | null;
   @Column({ type: 'jsonb', nullable: true, update: false })
   paymentEvidence: Record<string, unknown> | null;
   @Column({ type: 'uuid', nullable: true, update: false })

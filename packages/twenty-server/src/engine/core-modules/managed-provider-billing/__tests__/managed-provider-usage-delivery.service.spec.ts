@@ -9,9 +9,15 @@ import { ManagedProviderUsageDeliveryService } from '../services/managed-provide
 import { MetronomeWorkspaceCustomerService } from '../services/metronome-workspace-customer.service';
 
 describe('ManagedProviderUsageDeliveryService', () => {
-  it('delivers zero usage for the exact approved free managed OpenRouter model', async () => {
+  it('requires reconciliation when the approved free route returns a zero quote', async () => {
     const operation = {
       actualUsageProperties: { quantity: 1 },
+      actualMetronomeProperties: {
+        charge_cent_unit: '1',
+        model_id: 'openrouter/google/gemma-4-31b-it:free',
+        operation_id: 'operation-id',
+        tariff_version: '2026-07-19-v2',
+      },
       expectedProductIds: ['product-id'],
       id: 'operation-id',
       providerKey: 'openrouter',
@@ -79,12 +85,11 @@ describe('ManagedProviderUsageDeliveryService', () => {
 
     await service.deliverUsage('operation-id');
 
-    expect(metronomeClientService.ingestUsage).toHaveBeenCalled();
+    expect(metronomeClientService.ingestUsage).not.toHaveBeenCalled();
     expect(manager.save).toHaveBeenCalledWith(
       ManagedProviderOperationEntity,
       expect.objectContaining({
-        quotedActualAmountCents: '0',
-        state: ManagedProviderOperationState.USAGE_ACCEPTED,
+        state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
       }),
     );
   });
@@ -93,6 +98,12 @@ describe('ManagedProviderUsageDeliveryService', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
     const operation = {
       actualUsageProperties: { quantity: 3 },
+      actualMetronomeProperties: {
+        charge_cent_unit: '3',
+        model_id: 'openrouter/model',
+        operation_id: 'operation-id',
+        tariff_version: 'tariff-v1',
+      },
       expectedProductIds: ['product-id'],
       id: 'operation-id',
       metronomeEventType: 'managed-provider-operation',
@@ -183,7 +194,12 @@ describe('ManagedProviderUsageDeliveryService', () => {
     expect(metronomeClientService.previewUsage).toHaveBeenCalledWith({
       customerId: 'customer-id',
       eventType: 'managed-provider-operation',
-      properties: { quantity: 3 },
+      properties: {
+        charge_cent_unit: '3',
+        model_id: 'openrouter/model',
+        operation_id: 'operation-id',
+        tariff_version: 'tariff-v1',
+      },
       timestamp: firstTimestamp,
     });
     expect(manager.save).toHaveBeenCalledWith(
@@ -246,6 +262,12 @@ describe('ManagedProviderUsageDeliveryService', () => {
   it('requires reconciliation rather than ingesting when actual usage exceeds its reservation', async () => {
     const operation = {
       actualUsageProperties: { quantity: 3 },
+      actualMetronomeProperties: {
+        charge_cent_unit: '3',
+        model_id: 'openrouter/model',
+        operation_id: 'operation-id',
+        tariff_version: 'tariff-v1',
+      },
       expectedProductIds: ['product-id'],
       id: 'operation-id',
       metronomeEventType: 'managed-provider-operation',
@@ -374,6 +396,12 @@ describe('ManagedProviderUsageDeliveryService', () => {
   it('records a safe retry marker and rethrows when Metronome ingestion fails', async () => {
     const operation = {
       actualUsageProperties: { quantity: 3 },
+      actualMetronomeProperties: {
+        charge_cent_unit: '3',
+        model_id: 'openrouter/model',
+        operation_id: 'operation-id',
+        tariff_version: 'tariff-v1',
+      },
       deliveryAttemptCount: 1,
       expectedProductIds: ['product-id'],
       id: 'operation-id',
@@ -452,6 +480,12 @@ describe('ManagedProviderUsageDeliveryService', () => {
   it('requires reconciliation immediately when the actual usage quote is ambiguous', async () => {
     const operation = {
       actualUsageProperties: { quantity: 3 },
+      actualMetronomeProperties: {
+        charge_cent_unit: '3',
+        model_id: 'openrouter/model',
+        operation_id: 'operation-id',
+        tariff_version: 'tariff-v1',
+      },
       deliveryAttemptCount: 0,
       expectedProductIds: ['product-id'],
       id: 'operation-id',
@@ -510,6 +544,12 @@ describe('ManagedProviderUsageDeliveryService', () => {
   it('serializes quote validation so an ambiguous preview cannot race a valid quote into ingestion', async () => {
     const operation = {
       actualUsageProperties: { quantity: 3 },
+      actualMetronomeProperties: {
+        charge_cent_unit: '3',
+        model_id: 'openrouter/model',
+        operation_id: 'operation-id',
+        tariff_version: 'tariff-v1',
+      },
       deliveryAttemptCount: 0,
       deliveryEventAt: null,
       expectedProductIds: ['product-id'],

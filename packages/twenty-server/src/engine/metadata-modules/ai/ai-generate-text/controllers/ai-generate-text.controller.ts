@@ -60,11 +60,13 @@ export class AiGenerateTextController {
     );
 
     const registeredModel =
-      await this.aiModelRegistryService.resolveModelForAgent({
-        modelId: resolvedModelId,
-      });
+      await this.aiModelRegistryService.resolveModelForAgent(
+        { modelId: resolvedModelId },
+        workspace.id,
+      );
     const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
       registeredModel.modelId,
+      workspace.id,
     );
     const usesManagedOpenRouter =
       this.managedOpenRouterModelService.isManagedModel({
@@ -76,6 +78,7 @@ export class AiGenerateTextController {
       await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
     }
     const executionModel = this.managedOpenRouterModelService.wrapModel({
+      executionSurface: 'rest-generate',
       actorUserWorkspaceId: userWorkspaceId,
       model: registeredModel.model,
       modelConfig,

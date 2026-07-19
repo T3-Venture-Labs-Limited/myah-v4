@@ -1,6 +1,7 @@
 import { isAutoSelectModelId } from 'twenty-shared/utils';
 
 export type WorkspaceModelAvailabilitySettings = {
+  id?: string;
   useRecommendedModels: boolean;
   enabledAiModelIds: string[];
 };

@@ -203,12 +203,16 @@ export class ChatExecutionService {
     );
 
     const registeredModel =
-      await this.aiModelRegistryService.resolveModelForAgent({
-        modelId: resolvedModelId,
-      });
+      await this.aiModelRegistryService.resolveModelForAgent(
+        {
+          modelId: resolvedModelId,
+        },
+        workspace.id,
+      );
 
     const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
       registeredModel.modelId,
+      workspace.id,
     );
     const usesManagedOpenRouter =
       this.managedOpenRouterModelService.isManagedModel({
@@ -216,6 +220,7 @@ export class ChatExecutionService {
         providerName: registeredModel.providerName,
       });
     const executionModel = this.managedOpenRouterModelService.wrapModel({
+      executionSurface: 'chat',
       actorUserWorkspaceId: userWorkspaceId,
       model: registeredModel.model,
       modelConfig,

@@ -55,11 +55,9 @@ export class OpenRouterGenerationLookupService {
       const model = this.string(data.model);
       const promptTokens = this.nonNegativeInteger(data.tokens_prompt);
       const completionTokens = this.nonNegativeInteger(data.tokens_completion);
-      const cachedPromptTokens =
-        data.native_tokens_cached === undefined ||
-        data.native_tokens_cached === null
-          ? 0
-          : this.nonNegativeInteger(data.native_tokens_cached);
+      const cachedPromptTokens = this.nonNegativeInteger(
+        data.native_tokens_cached,
+      );
       const totalCostUsd = this.nonNegativeNumber(data.total_cost);
 
       if (

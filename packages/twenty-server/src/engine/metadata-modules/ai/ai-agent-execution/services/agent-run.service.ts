@@ -62,6 +62,7 @@ export class AgentRunService {
 
     const { result, hasNoMoreAvailableCredits } =
       await this.agentAsyncExecutorService.executeAgent({
+        executionSurface: 'graphql-agent',
         agent,
         userPrompt: input.prompt,
         authContext,

@@ -35,7 +35,8 @@ export class AgentTitleGenerationService {
     userWorkspaceId: string | null,
     threadId: string,
   ): Promise<string> {
-    const defaultModel = this.aiModelRegistryService.getDefaultSpeedModel();
+    const defaultModel =
+      this.aiModelRegistryService.getDefaultSpeedModel(workspaceId);
 
     if (!defaultModel) {
       this.logger.warn('No default AI model available for title generation');
@@ -44,6 +45,7 @@ export class AgentTitleGenerationService {
     }
     const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
       defaultModel.modelId,
+      workspaceId,
     );
     const usesManagedOpenRouter =
       this.managedOpenRouterModelService.isManagedModel({
@@ -55,6 +57,7 @@ export class AgentTitleGenerationService {
       await this.billingUsageService.hasAvailableCreditsOrThrow(workspaceId);
     }
     const executionModel = this.managedOpenRouterModelService.wrapModel({
+      executionSurface: 'title',
       actorUserWorkspaceId: userWorkspaceId,
       model: defaultModel.model,
       modelConfig,

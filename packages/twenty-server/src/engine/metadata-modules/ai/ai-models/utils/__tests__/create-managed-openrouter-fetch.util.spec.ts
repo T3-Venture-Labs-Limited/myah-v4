@@ -1,5 +1,6 @@
 import {
   createManagedOpenRouterFetch,
+  getManagedOpenRouterRawUsage,
   runWithManagedOpenRouterResponseObserver,
 } from '../create-managed-openrouter-fetch.util';
 
@@ -87,6 +88,187 @@ describe('createManagedOpenRouterFetch', () => {
     );
 
     expect(events).toEqual(['provider-response', 'attached:generation-id']);
+  });
+
+  it.each([
+    [
+      'application/json',
+      JSON.stringify({
+        usage: {
+          cost: 0.000003,
+          prompt_tokens_details: {
+            cache_write_tokens: 3,
+            cached_tokens: 2,
+          },
+        },
+      }),
+    ],
+    [
+      'text/event-stream',
+      'data: {"usage":{"cost":0.000003,"prompt_tokens_details":{"cache_write_tokens":3,"cached_tokens":2}}}\n\n',
+    ],
+  ])(
+    'preserves authoritative terminal usage for %s responses',
+    async (contentType, body) => {
+      const baseFetch = jest.fn().mockResolvedValue(
+        new Response(body, {
+          headers: {
+            'content-type': contentType,
+            'x-generation-id': 'generation-id',
+          },
+          status: 200,
+        }),
+      );
+      const guardedFetch = createManagedOpenRouterFetch(baseFetch);
+
+      const rawUsage = await runWithManagedOpenRouterResponseObserver(
+        async () => undefined,
+        async () => {
+          const response = await guardedFetch(
+            'https://openrouter.ai/api/v1/chat/completions',
+            {
+              body: JSON.stringify({
+                model: 'deepseek/deepseek-v4-flash',
+                user: 'managed-0123456789abcdef01234567',
+              }),
+              method: 'POST',
+            },
+          );
+          if (contentType === 'text/event-stream') {
+            await response.text();
+          }
+          return getManagedOpenRouterRawUsage();
+        },
+      );
+
+      expect(rawUsage).toEqual({
+        cost: 0.000003,
+        prompt_tokens_details: {
+          cache_write_tokens: 3,
+          cached_tokens: 2,
+        },
+      });
+    },
+  );
+
+  it('keeps the last valid usage when DONE and malformed SSE lines follow it', async () => {
+    const baseFetch = jest.fn().mockResolvedValue(
+      new Response(
+        'data: {"usage":{"cost":0.000003}}\n\ndata: [DONE]\n\ndata: {not-json}\n',
+        {
+          headers: {
+            'content-type': 'text/event-stream',
+            'x-generation-id': 'generation-id',
+          },
+        },
+      ),
+    );
+    const guardedFetch = createManagedOpenRouterFetch(baseFetch);
+
+    const rawUsage = await runWithManagedOpenRouterResponseObserver(
+      async () => undefined,
+      async () => {
+        const response = await guardedFetch(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            body: JSON.stringify({
+              model: 'deepseek/deepseek-v4-flash',
+              user: 'managed-0123456789abcdef01234567',
+            }),
+            method: 'POST',
+          },
+        );
+        await response.text();
+        return getManagedOpenRouterRawUsage();
+      },
+    );
+
+    expect(rawUsage).toEqual({ cost: 0.000003 });
+  });
+
+  it('cancels bounded SSE observation with the request signal', async () => {
+    const controller = new AbortController();
+    const stream = new ReadableStream<Uint8Array>({
+      start(streamController) {
+        streamController.enqueue(
+          new TextEncoder().encode(`data: ${'x'.repeat(70_000)}`),
+        );
+      },
+    });
+    const baseFetch = jest.fn().mockResolvedValue(
+      new Response(stream, {
+        headers: {
+          'content-type': 'text/event-stream',
+          'x-generation-id': 'generation-id',
+        },
+      }),
+    );
+    const guardedFetch = createManagedOpenRouterFetch(baseFetch);
+
+    const rawUsagePromise = runWithManagedOpenRouterResponseObserver(
+      async () => undefined,
+      async () => {
+        await guardedFetch('https://openrouter.ai/api/v1/chat/completions', {
+          body: JSON.stringify({
+            model: 'deepseek/deepseek-v4-flash',
+            user: 'managed-0123456789abcdef01234567',
+          }),
+          method: 'POST',
+          signal: controller.signal,
+        });
+        return getManagedOpenRouterRawUsage();
+      },
+    );
+    controller.abort();
+
+    await expect(rawUsagePromise).resolves.toBeUndefined();
+  });
+
+  it('cancels the upstream reader when the forwarded SSE response is cancelled', async () => {
+    const cancel = jest.fn();
+    let pulls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull() {
+        pulls += 1;
+        return new Promise(() => undefined);
+      },
+      cancel,
+    });
+    const baseFetch = jest.fn().mockResolvedValue(
+      new Response(stream, {
+        headers: {
+          'content-type': 'text/event-stream',
+          'x-generation-id': 'generation-id',
+        },
+      }),
+    );
+    const guardedFetch = createManagedOpenRouterFetch(baseFetch);
+
+    let rawUsagePromise: Promise<unknown> | undefined;
+    const response = await runWithManagedOpenRouterResponseObserver(
+      async () => undefined,
+      async () => {
+        const forwardedResponse = await guardedFetch(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            body: JSON.stringify({
+              model: 'deepseek/deepseek-v4-flash',
+              user: 'managed-0123456789abcdef01234567',
+            }),
+            method: 'POST',
+          },
+        );
+        rawUsagePromise = getManagedOpenRouterRawUsage();
+        return forwardedResponse;
+      },
+    );
+
+    const reader = response.body?.getReader();
+    await reader?.cancel();
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(pulls).toBe(1);
+    await expect(rawUsagePromise).resolves.toBeUndefined();
   });
 
   it('does not modify unrelated requests', async () => {

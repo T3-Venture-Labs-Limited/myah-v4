@@ -1604,19 +1604,19 @@ type BillingSession {
   url: String
 }
 
-type ManagedProviderBillingStatus {
-  available: Boolean!
-  prepaidBalanceCents: String
-  pendingOperationCount: Int!
-  reconciliationRequiredOperationCount: Int!
-}
-
 type BillingUpdate {
   """Current billing subscription"""
   currentBillingSubscription: BillingSubscription!
 
   """All billing subscriptions"""
   billingSubscriptions: [BillingSubscription!]!
+}
+
+type ManagedProviderBillingStatus {
+  available: Boolean!
+  prepaidBalanceCents: String
+  pendingOperationCount: Int!
+  reconciliationRequiredOperationCount: Int!
 }
 
 type InviteSuggestion {
@@ -1907,6 +1907,7 @@ enum ModelFamily {
   CLAUDE
   GEMINI
   MISTRAL
+  DEEPSEEK
   GROK
 }
 
@@ -3117,13 +3118,13 @@ type Query {
   getViewSort(id: String!): ViewSort
   getViewFields(viewId: String!): [ViewField!]!
   getViewField(id: String!): ViewField
-  managedProviderBillingStatus: ManagedProviderBillingStatus!
   getViewFieldGroups(viewId: String!): [ViewFieldGroup!]!
   getViewFieldGroup(id: String!): ViewFieldGroup
   apiKeys: [ApiKey!]!
   apiKey(input: GetApiKeyInput!): ApiKey
   getInviteSuggestions: [InviteSuggestion!]!
   applicationConnectionProviders(applicationId: UUID!): [ApplicationConnectionProvider!]!
+  managedProviderBillingStatus: ManagedProviderBillingStatus!
   billingPortalSession(returnUrlPath: String, forPaymentMethodUpdate: Boolean): BillingSession!
   listPlans: [BillingPlan!]!
   getResourceCreditUsage: [BillingResourceCreditUsage!]!

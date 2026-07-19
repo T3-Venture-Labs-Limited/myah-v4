@@ -1,5 +1,10 @@
 import { REACT_APP_SERVER_BASE_URL } from '~/config';
 import { getClientConfig } from '@/client-config/utils/getClientConfig';
+import { getTokenPair } from '@/apollo/utils/getTokenPair';
+
+jest.mock('@/apollo/utils/getTokenPair', () => ({
+  getTokenPair: jest.fn(),
+}));
 
 global.fetch = jest.fn();
 
@@ -51,9 +56,10 @@ const mockClientConfig = {
 describe('getClientConfig', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (getTokenPair as jest.Mock).mockReturnValue(null);
   });
 
-  it('should fetch client config from API', async () => {
+  it('keeps bootstrap config available without authentication', async () => {
     (fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockClientConfig,
@@ -65,12 +71,36 @@ describe('getClientConfig', () => {
       `${REACT_APP_SERVER_BASE_URL}/client-config`,
       {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
       },
     );
     expect(result).toEqual(mockClientConfig);
+  });
+
+  it('sends the authenticated access token', async () => {
+    (getTokenPair as jest.Mock).mockReturnValue({
+      accessOrWorkspaceAgnosticToken: { token: 'access-token' },
+    });
+    (fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockClientConfig,
+    });
+
+    await getClientConfig();
+
+    expect(fetch).toHaveBeenCalledWith(
+      `${REACT_APP_SERVER_BASE_URL}/client-config`,
+      expect.objectContaining({
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          authorization: 'Bearer access-token',
+        },
+      }),
+    );
   });
 
   it('should handle fetch errors', async () => {

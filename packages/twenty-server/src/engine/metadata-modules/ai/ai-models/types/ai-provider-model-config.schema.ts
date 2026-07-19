@@ -16,6 +16,7 @@ export const aiProviderModelConfigSchema = z.object({
   contextWindowTokens: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   modalities: z.array(z.string()).optional(),
+  supportsStructuredOutputs: z.boolean().optional(),
   supportsReasoning: z.boolean().optional(),
   isDeprecated: z.boolean().optional(),
 });

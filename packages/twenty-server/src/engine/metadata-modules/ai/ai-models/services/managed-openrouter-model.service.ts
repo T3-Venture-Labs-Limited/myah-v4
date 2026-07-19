@@ -17,19 +17,26 @@ import {
 } from 'src/engine/metadata-modules/ai/ai.exception';
 import {
   MANAGED_OPENROUTER_EVENT_TYPE,
-  MANAGED_OPENROUTER_GEMMA_PAID_REFERENCE_PRICE_PER_MILLION,
   MANAGED_OPENROUTER_MODEL_IDS,
   MANAGED_OPENROUTER_PROVIDER_NAME,
-  MANAGED_OPENROUTER_TARIFF_VERSION,
+  MANAGED_OPENROUTER_TARIFF_MANIFEST,
+  MANAGED_OPENROUTER_TARIFF_MANIFEST_IS_FUNDED,
+  getManagedOpenRouterManifestModel,
 } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { type AiModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-config.type';
-import { runWithManagedOpenRouterResponseObserver } from 'src/engine/metadata-modules/ai/ai-models/utils/create-managed-openrouter-fetch.util';
+import { type ManagedOpenRouterExecutionSurface } from 'src/engine/metadata-modules/ai/ai-models/types/managed-openrouter-execution-surface.type';
+import {
+  getManagedOpenRouterRawUsage,
+  runWithManagedOpenRouterResponseObserver,
+  type ManagedOpenRouterRawUsage,
+} from 'src/engine/metadata-modules/ai/ai-models/utils/create-managed-openrouter-fetch.util';
 import { getManagedOpenRouterChargeCentUnits } from 'src/engine/metadata-modules/ai/ai-models/utils/get-managed-openrouter-charge-cent-units.util';
 
 const MANAGED_OPENROUTER_OPERATION_KEY = 'generation';
 
 type ManagedOpenRouterModelContext = {
   actorUserWorkspaceId: string | null;
+  executionSurface: ManagedOpenRouterExecutionSurface;
   model: LanguageModel;
   modelConfig: AiModelConfig;
   providerName: string | undefined;
@@ -124,6 +131,7 @@ export class ManagedOpenRouterModelService {
 
   wrapModel({
     actorUserWorkspaceId,
+    executionSurface,
     model,
     modelConfig,
     providerName,
@@ -161,19 +169,23 @@ export class ManagedOpenRouterModelService {
     const middleware: LanguageModelMiddleware = {
       specificationVersion: 'v3',
       wrapGenerate: async ({ doGenerate, params }) => {
+        this.assertManagedPromptSupportsReservation(params.prompt);
         this.applyManagedRequestTransport(params, workspaceId);
         const reservation = await this.reserveGeneration({
           actorUserWorkspaceId,
+          executionSurface,
           invocationOrdinal: invocationOrdinal++,
           modelConfig,
           params,
           requestIdRoot,
           workspaceId,
         });
-
         params.maxOutputTokens = reservation.maximumOutputUnits;
 
         let providerExecutionId: string | undefined;
+        let authoritativeRawUsagePromise:
+          | Promise<ManagedOpenRouterRawUsage | undefined>
+          | undefined;
         let providerExecutionIdAttached = false;
         let result;
 
@@ -182,6 +194,7 @@ export class ManagedOpenRouterModelService {
           result = await runWithManagedOpenRouterResponseObserver(
             async (observedProviderExecutionId) => {
               providerExecutionId = observedProviderExecutionId;
+              authoritativeRawUsagePromise = getManagedOpenRouterRawUsage();
               await this.attachProviderExecutionId(
                 reservation,
                 observedProviderExecutionId,
@@ -225,10 +238,14 @@ export class ManagedOpenRouterModelService {
               providerExecutionId,
             );
           }
+          const authoritativeRawUsage = authoritativeRawUsagePromise
+            ? await authoritativeRawUsagePromise
+            : undefined;
           await this.completeBillable({
-            providerCostMicrousd: this.getProviderCostMicrousd(
-              result.usage.raw,
-            ),
+            authoritativeRawUsage,
+            providerCostMicrousd:
+              this.getProviderCostMicrousd(authoritativeRawUsage) ??
+              this.getProviderCostMicrousd(result.usage.raw),
             providerExecutionId,
             reservation,
             usage: result.usage,
@@ -248,8 +265,10 @@ export class ManagedOpenRouterModelService {
         };
       },
       wrapStream: async ({ doStream, params }) => {
+        this.assertManagedPromptSupportsReservation(params.prompt);
         this.applyManagedRequestTransport(params, workspaceId);
         const reservation = await this.reserveGeneration({
+          executionSurface,
           actorUserWorkspaceId,
           invocationOrdinal: invocationOrdinal++,
           modelConfig,
@@ -259,6 +278,9 @@ export class ManagedOpenRouterModelService {
         });
 
         params.maxOutputTokens = reservation.maximumOutputUnits;
+        let authoritativeRawUsagePromise:
+          | Promise<ManagedOpenRouterRawUsage | undefined>
+          | undefined;
 
         let providerExecutionId: string | undefined;
         let providerExecutionIdAttached = false;
@@ -268,6 +290,7 @@ export class ManagedOpenRouterModelService {
           const result = await runWithManagedOpenRouterResponseObserver(
             async (observedProviderExecutionId) => {
               providerExecutionId = observedProviderExecutionId;
+              authoritativeRawUsagePromise = getManagedOpenRouterRawUsage();
               await this.attachProviderExecutionId(
                 reservation,
                 observedProviderExecutionId,
@@ -290,6 +313,7 @@ export class ManagedOpenRouterModelService {
               result.stream,
               reservation,
               providerExecutionId,
+              authoritativeRawUsagePromise,
             ),
           };
         } catch (error) {
@@ -342,6 +366,32 @@ export class ManagedOpenRouterModelService {
       : Math.min(configuredMaximumOutputUnits, requestedMaximumOutputUnits);
   }
 
+  private assertManagedPromptSupportsReservation(prompt: unknown): void {
+    if (this.containsUnsupportedMultimodalPart(prompt)) {
+      throw this.createSafeProviderError();
+    }
+  }
+
+  private containsUnsupportedMultimodalPart(value: unknown): boolean {
+    if (Array.isArray(value)) {
+      return value.some((entry) =>
+        this.containsUnsupportedMultimodalPart(entry),
+      );
+    }
+    if (typeof value !== 'object' || value === null) {
+      return false;
+    }
+
+    const record = value as Record<string, unknown>;
+    if (record.type === 'image' || record.type === 'file') {
+      return true;
+    }
+
+    return Object.values(record).some((entry) =>
+      this.containsUnsupportedMultimodalPart(entry),
+    );
+  }
+
   private applyManagedRequestTransport(
     params: {
       maxOutputTokens?: number;
@@ -362,9 +412,9 @@ export class ManagedOpenRouterModelService {
     };
     params.providerOptions = providerOptions;
   }
-
   private async reserveGeneration({
     actorUserWorkspaceId,
+    executionSurface,
     invocationOrdinal,
     modelConfig,
     params,
@@ -381,63 +431,78 @@ export class ManagedOpenRouterModelService {
     const chargeProductId = this.twentyConfigService.get(
       'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
     );
-    const cashPaidMicrousd = this.twentyConfigService.get(
-      'MANAGED_OPENROUTER_CASH_PAID_MICROUSD',
-    );
-    const usableCreditsReceivedMicrousd = this.twentyConfigService.get(
-      'MANAGED_OPENROUTER_USABLE_CREDITS_MICROUSD',
-    );
-    const multiplierEvidenceVersion = this.twentyConfigService.get(
-      'MANAGED_OPENROUTER_MULTIPLIER_EVIDENCE_VERSION',
-    );
-
+    if (!MANAGED_OPENROUTER_TARIFF_MANIFEST_IS_FUNDED) {
+      throw this.createSafeProviderError();
+    }
+    const tariffVersion: unknown =
+      MANAGED_OPENROUTER_TARIFF_MANIFEST.tariffVersion;
+    const {
+      cashPaidMicrousd,
+      usableCreditsReceivedMicrousd,
+      evidenceIdentity,
+    }: {
+      cashPaidMicrousd: unknown;
+      usableCreditsReceivedMicrousd: unknown;
+      evidenceIdentity: unknown;
+    } = MANAGED_OPENROUTER_TARIFF_MANIFEST.acquisition;
     if (
+      typeof tariffVersion !== 'string' ||
+      tariffVersion.trim() === '' ||
       typeof cashPaidMicrousd !== 'string' ||
       typeof usableCreditsReceivedMicrousd !== 'string' ||
-      typeof multiplierEvidenceVersion !== 'string' ||
-      multiplierEvidenceVersion.trim() === ''
+      typeof evidenceIdentity !== 'string' ||
+      evidenceIdentity.trim() === ''
     ) {
       throw this.createSafeProviderError();
+    }
+    const manifestModel = getManagedOpenRouterManifestModel(
+      modelConfig.modelId,
+    );
+    if (!manifestModel) {
+      throw this.createSafeProviderError();
+    }
+    const multiplierEvidenceVersion = evidenceIdentity;
+
+    if (
+      params.maxOutputTokens !== undefined &&
+      (!Number.isSafeInteger(params.maxOutputTokens) ||
+        params.maxOutputTokens <= 0)
+    ) {
+      throw new AiException(
+        'Managed AI request has an invalid output limit',
+        AiExceptionCode.AGENT_EXECUTION_FAILED,
+      );
     }
 
     const estimatedMaximumInputUnits =
       Buffer.byteLength(JSON.stringify(params), 'utf8') + 256;
-    if (estimatedMaximumInputUnits > modelConfig.contextWindowTokens) {
+    if (estimatedMaximumInputUnits > manifestModel.contextWindowTokens) {
       throw new AiException(
         'Managed AI request exceeds the model context window',
         AiExceptionCode.AGENT_EXECUTION_FAILED,
       );
     }
     const maximumOutputUnits = Math.min(
-      this.getMaximumOutputUnits(modelConfig, params.maxOutputTokens),
-      modelConfig.contextWindowTokens - estimatedMaximumInputUnits,
+      manifestModel.maxOutputTokens,
+      params.maxOutputTokens ?? manifestModel.maxOutputTokens,
+      manifestModel.contextWindowTokens - estimatedMaximumInputUnits,
     );
-    const isGemma =
-      modelConfig.modelId === 'openrouter/google/gemma-4-31b-it:free';
-    const baseInputRate = isGemma
-      ? MANAGED_OPENROUTER_GEMMA_PAID_REFERENCE_PRICE_PER_MILLION.input
-      : modelConfig.inputCostPerMillionTokens || 0;
-    const baseOutputRate = isGemma
-      ? MANAGED_OPENROUTER_GEMMA_PAID_REFERENCE_PRICE_PER_MILLION.output
-      : modelConfig.outputCostPerMillionTokens || 0;
-    const baseCachedInputRate = isGemma
-      ? MANAGED_OPENROUTER_GEMMA_PAID_REFERENCE_PRICE_PER_MILLION.cacheRead
-      : (modelConfig.cachedInputCostPerMillionTokens ?? baseInputRate);
-    const baseCacheCreationRate = isGemma
-      ? MANAGED_OPENROUTER_GEMMA_PAID_REFERENCE_PRICE_PER_MILLION.cacheWrite
-      : (modelConfig.cacheCreationCostPerMillionTokens ?? baseInputRate);
-    const longContextInputRate =
-      modelConfig.longContextCost?.inputCostPerMillionTokens;
-    const longContextOutputRate =
-      modelConfig.longContextCost?.outputCostPerMillionTokens;
-    const longContextCachedInputRate = modelConfig.longContextCost
-      ? (modelConfig.longContextCost.cachedInputCostPerMillionTokens ??
-        baseCachedInputRate)
-      : undefined;
-    const longContextCacheCreationRate = modelConfig.longContextCost
-      ? (modelConfig.longContextCost.cacheCreationCostPerMillionTokens ??
-        baseCacheCreationRate)
-      : undefined;
+    if (maximumOutputUnits <= 0) {
+      throw new AiException(
+        'Managed AI request leaves no output capacity',
+        AiExceptionCode.AGENT_EXECUTION_FAILED,
+      );
+    }
+    const baseInputRate = manifestModel.input;
+    const baseOutputRate = manifestModel.output;
+    const baseCachedInputRate = manifestModel.cachedInput;
+    const baseCacheCreationRate = manifestModel.cacheCreation;
+    const longContextInputRate = manifestModel.longContext?.input;
+    const longContextOutputRate = manifestModel.longContext?.output;
+    const longContextCachedInputRate = manifestModel.longContext?.cachedInput;
+    const longContextCacheCreationRate =
+      manifestModel.longContext?.cacheCreation;
+    const longContextThreshold = manifestModel.longContext?.thresholdTokens;
     const maximumInputRate = longContextInputRate ?? baseInputRate;
     const maximumOutputRate = longContextOutputRate ?? baseOutputRate;
     const maximumCachedInputRate =
@@ -461,7 +526,7 @@ export class ManagedOpenRouterModelService {
       await this.operationService.assertProviderConfigurationActive(
         MANAGED_OPENROUTER_PROVIDER_NAME,
         modelConfig.modelId,
-        MANAGED_OPENROUTER_TARIFF_VERSION,
+        tariffVersion,
       );
       const operation = await this.operationService.reserveOperation(
         {
@@ -471,7 +536,7 @@ export class ManagedOpenRouterModelService {
             inputUnits: estimatedMaximumInputUnits,
             model: modelConfig.modelId,
             outputUnits: maximumOutputUnits,
-            tariffVersion: MANAGED_OPENROUTER_TARIFF_VERSION,
+            tariffVersion,
             cashPaidMicrousd,
             usableCreditsReceivedMicrousd,
             multiplierEvidenceVersion,
@@ -483,23 +548,23 @@ export class ManagedOpenRouterModelService {
             baseOutputRate,
             baseCachedInputRate,
             baseCacheCreationRate,
-            ...(modelConfig.longContextCost && {
+            ...(manifestModel.longContext && {
               longContextCachedInputRate,
               longContextCacheCreationRate,
               longContextInputRate,
               longContextOutputRate,
-              longContextThreshold: modelConfig.longContextCost.thresholdTokens,
+              longContextThreshold,
             }),
             chargeCentUnits: maximumChargeCentUnits,
             charge_cent_unit: maximumChargeCentUnits.toString(),
             model_id: modelConfig.modelId,
-            tariff_version: MANAGED_OPENROUTER_TARIFF_VERSION,
+            tariff_version: tariffVersion,
           },
+          requestId: `${executionSurface}:${requestIdRoot}:${invocationOrdinal}`,
           metronomeEventType: MANAGED_OPENROUTER_EVENT_TYPE,
           operationKey: MANAGED_OPENROUTER_OPERATION_KEY,
           providerConfigurationKey: modelConfig.modelId,
           providerKey: MANAGED_OPENROUTER_PROVIDER_NAME,
-          requestId: `${requestIdRoot}:${invocationOrdinal}`,
           workspaceId,
         },
         { rejectReplay: true },
@@ -509,7 +574,7 @@ export class ManagedOpenRouterModelService {
         modelId: modelConfig.modelId,
         operationId: operation.id,
         workspaceId,
-        tariffVersion: MANAGED_OPENROUTER_TARIFF_VERSION,
+        tariffVersion,
         inputRate: baseInputRate,
         outputRate: baseOutputRate,
         cachedInputRate: baseCachedInputRate,
@@ -518,12 +583,12 @@ export class ManagedOpenRouterModelService {
         baseOutputRate,
         baseCachedInputRate,
         baseCacheCreationRate,
-        ...(modelConfig.longContextCost && {
+        ...(manifestModel.longContext && {
           longContextCachedInputRate,
           longContextCacheCreationRate,
           longContextInputRate,
           longContextOutputRate,
-          longContextThreshold: modelConfig.longContextCost.thresholdTokens,
+          longContextThreshold,
         }),
         cashPaidMicrousd,
         usableCreditsReceivedMicrousd,
@@ -554,11 +619,17 @@ export class ManagedOpenRouterModelService {
   }
 
   private async completeBillable({
+    authoritativeRawUsage,
     providerCostMicrousd,
     providerExecutionId,
     reservation,
     usage,
   }: {
+    authoritativeRawUsage?: {
+      cost?: unknown;
+      prompt_tokens_details?: Record<string, unknown>;
+      completion_tokens_details?: Record<string, unknown>;
+    };
     providerCostMicrousd: string | null;
     providerExecutionId: string;
     reservation: ReservedGeneration;
@@ -575,38 +646,61 @@ export class ManagedOpenRouterModelService {
   }): Promise<void> {
     const inputUnits = usage.inputTokens.total;
     const outputUnits = usage.outputTokens.total;
-
-    const rawDetails = usage.raw?.prompt_tokens_details as
-      | Record<string, unknown>
-      | undefined;
+    const rawDetails = (authoritativeRawUsage?.prompt_tokens_details ??
+      usage.raw?.prompt_tokens_details) as Record<string, unknown> | undefined;
     const rawCacheRead =
       rawDetails?.cached_tokens ?? rawDetails?.cache_read_tokens;
     const rawCacheWrite =
       rawDetails?.cache_write_tokens ??
       rawDetails?.cache_creation_tokens ??
       rawDetails?.cache_creation_input_tokens;
+    const hasRawCacheWriteField =
+      rawDetails !== undefined &&
+      [
+        'cache_write_tokens',
+        'cache_creation_tokens',
+        'cache_creation_input_tokens',
+      ].some((key) => rawDetails[key] !== undefined);
     const inputCacheReadUnits =
-      usage.inputTokens.cacheRead ??
-      (typeof rawCacheRead === 'number' ? rawCacheRead : undefined);
+      typeof rawCacheRead === 'number'
+        ? rawCacheRead
+        : usage.inputTokens.cacheRead;
+    const hasNoCacheUnits = usage.inputTokens.noCache !== undefined;
+    const hasCacheReadUnits = inputCacheReadUnits !== undefined;
+    const hasReportedCacheWriteUnits =
+      usage.inputTokens.cacheWrite !== undefined || hasRawCacheWriteField;
     const inputCacheWriteUnits =
-      usage.inputTokens.cacheWrite ??
-      (typeof rawCacheWrite === 'number' ? rawCacheWrite : undefined);
-    const inputNoCacheUnits =
-      usage.inputTokens.noCache ??
-      (Number.isSafeInteger(inputUnits) &&
-      Number.isSafeInteger(inputCacheReadUnits) &&
-      Number.isSafeInteger(inputCacheWriteUnits)
+      typeof rawCacheWrite === 'number'
+        ? rawCacheWrite
+        : hasReportedCacheWriteUnits
+          ? usage.inputTokens.cacheWrite
+          : hasNoCacheUnits && hasCacheReadUnits
+            ? 0
+            : undefined;
+    const inputNoCacheUnits = hasRawCacheWriteField
+      ? Number.isSafeInteger(inputUnits) &&
+        Number.isSafeInteger(inputCacheReadUnits) &&
+        Number.isSafeInteger(inputCacheWriteUnits)
         ? Number(inputUnits) -
           Number(inputCacheReadUnits) -
           Number(inputCacheWriteUnits)
-        : undefined);
-    const hasNoCacheUnits = inputNoCacheUnits !== undefined;
-    const hasCacheReadUnits = inputCacheReadUnits !== undefined;
-    const hasCacheWriteUnits = inputCacheWriteUnits !== undefined;
+        : undefined
+      : (usage.inputTokens.noCache ??
+        (Number.isSafeInteger(inputUnits) &&
+        Number.isSafeInteger(inputCacheReadUnits) &&
+        Number.isSafeInteger(inputCacheWriteUnits)
+          ? Number(inputUnits) -
+            Number(inputCacheReadUnits) -
+            Number(inputCacheWriteUnits)
+          : undefined));
     const hasAnyInputBreakdown =
-      hasNoCacheUnits || hasCacheReadUnits || hasCacheWriteUnits;
+      inputNoCacheUnits !== undefined ||
+      inputCacheReadUnits !== undefined ||
+      inputCacheWriteUnits !== undefined;
     const hasCompleteInputBreakdown =
-      hasNoCacheUnits && hasCacheReadUnits && hasCacheWriteUnits;
+      inputNoCacheUnits !== undefined &&
+      inputCacheReadUnits !== undefined &&
+      inputCacheWriteUnits !== undefined;
 
     if (
       providerCostMicrousd === null ||
@@ -806,7 +900,7 @@ export class ManagedOpenRouterModelService {
     const status =
       candidate.statusCode ?? candidate.status ?? candidate.response?.status;
 
-    return status === 401 || status === 403;
+    return status === 401 || status === 402 || status === 403;
   }
 
   private wrapUsageStream(
@@ -815,10 +909,30 @@ export class ManagedOpenRouterModelService {
     >,
     reservation: ReservedGeneration,
     initialProviderExecutionId?: string,
+    authoritativeRawUsagePromise?: Promise<
+      | {
+          cost?: unknown;
+          prompt_tokens_details?: Record<string, unknown>;
+          completion_tokens_details?: Record<string, unknown>;
+        }
+      | undefined
+    >,
   ) {
     const reader = stream.getReader();
-    let completed = false;
+    type CompletionState = 'open' | 'finishing' | 'completed' | 'unknown';
+    let completionState: CompletionState = 'open';
     let providerExecutionId = initialProviderExecutionId;
+    const completeUnknownOnce = async () => {
+      if (completionState !== 'open') {
+        return;
+      }
+      completionState = 'unknown';
+      await this.completeUnknownSafely(
+        reservation,
+        providerExecutionId ?? null,
+      );
+    };
+
     return new ReadableStream({
       cancel: async (reason) => {
         try {
@@ -826,31 +940,19 @@ export class ManagedOpenRouterModelService {
         } catch {
           // Upstream cancellation errors must not escape to the caller.
         } finally {
-          if (!completed) {
-            completed = true;
-            await this.completeUnknownSafely(
-              reservation,
-              providerExecutionId ?? null,
-            );
-          }
+          await completeUnknownOnce();
         }
       },
       pull: async (controller) => {
         try {
           const { done, value } = await reader.read();
           if (done) {
-            if (!completed) {
-              completed = true;
-              await this.completeUnknownSafely(
-                reservation,
-                providerExecutionId ?? null,
-              );
+            await completeUnknownOnce();
+            if (completionState === 'unknown') {
               controller.error(this.createSafeProviderError());
-
-              return;
+            } else {
+              controller.close();
             }
-
-            controller.close();
 
             return;
           }
@@ -868,11 +970,7 @@ export class ManagedOpenRouterModelService {
 
           if (value.type === 'finish') {
             if (!providerExecutionId || !('usage' in value) || !value.usage) {
-              completed = true;
-              await this.completeUnknownSafely(
-                reservation,
-                providerExecutionId ?? null,
-              );
+              await completeUnknownOnce();
               controller.error(this.createSafeProviderError());
 
               return;
@@ -884,25 +982,36 @@ export class ManagedOpenRouterModelService {
               raw?: Record<string, unknown>;
             };
 
-            await this.completeBillable({
-              providerCostMicrousd: this.getProviderCostMicrousd(usage.raw),
-              providerExecutionId,
-              reservation,
-              usage,
-            });
-            completed = true;
-          } else if (value.type === 'error' && !completed) {
-            completed = true;
+            completionState = 'finishing';
+            try {
+              const authoritativeRawUsage = authoritativeRawUsagePromise
+                ? await authoritativeRawUsagePromise
+                : undefined;
+              await this.completeBillable({
+                authoritativeRawUsage,
+                providerCostMicrousd:
+                  this.getProviderCostMicrousd(authoritativeRawUsage) ??
+                  this.getProviderCostMicrousd(usage.raw),
+                providerExecutionId,
+                reservation,
+                usage,
+              });
+              completionState = 'completed';
+            } catch {
+              completionState = 'open';
+              await completeUnknownOnce();
+              controller.error(this.createSafeProviderError());
+
+              return;
+            }
+          } else if (value.type === 'error') {
+            await completeUnknownOnce();
             this.metricsService.incrementCounterBy({
               amount: 1,
               attributes: this.getMetricAttributes(reservation.modelId),
               key: MetricsKeys.ManagedOpenRouterProviderFailed,
             });
             this.logLifecycle('provider_failed', reservation);
-            await this.completeUnknownSafely(
-              reservation,
-              providerExecutionId ?? null,
-            );
             controller.error(this.createSafeProviderError());
 
             return;
@@ -910,14 +1019,7 @@ export class ManagedOpenRouterModelService {
 
           controller.enqueue(value);
         } catch {
-          if (!completed) {
-            completed = true;
-            await this.completeUnknownSafely(
-              reservation,
-              providerExecutionId ?? null,
-            );
-          }
-
+          await completeUnknownOnce();
           controller.error(this.createSafeProviderError());
         }
       },

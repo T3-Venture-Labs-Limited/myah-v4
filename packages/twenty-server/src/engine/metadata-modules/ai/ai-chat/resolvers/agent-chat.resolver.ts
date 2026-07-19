@@ -64,8 +64,12 @@ export class AgentChatResolver {
     private readonly threadRepository: WorkspaceScopedRepository<AgentChatThreadEntity>,
   ) {}
 
-  private isManagedModel(modelId: string): boolean {
-    const registeredModel = this.aiModelRegistryService.getModel(modelId);
+  private isManagedModel(modelId: string, workspaceId: string): boolean {
+    const effectiveModelConfig =
+      this.aiModelRegistryService.getEffectiveModelConfig(modelId, workspaceId);
+    const registeredModel = this.aiModelRegistryService.getModel(
+      effectiveModelConfig.modelId,
+    );
 
     return registeredModel
       ? this.managedOpenRouterModelService.isManagedModel({
@@ -192,7 +196,7 @@ export class AgentChatResolver {
       workspace,
     );
 
-    if (!this.isManagedModel(resolvedModelId)) {
+    if (!this.isManagedModel(resolvedModelId, workspace.id)) {
       await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
     }
 
@@ -298,7 +302,7 @@ export class AgentChatResolver {
       workspace,
     );
 
-    if (!this.isManagedModel(modelId ?? workspace.smartModel)) {
+    if (!this.isManagedModel(modelId ?? workspace.smartModel, workspace.id)) {
       await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
     }
 
@@ -341,7 +345,7 @@ export class AgentChatResolver {
       workspace,
     );
 
-    if (!this.isManagedModel(resolvedModelId)) {
+    if (!this.isManagedModel(resolvedModelId, workspace.id)) {
       await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
     }
 
@@ -457,7 +461,7 @@ export class AgentChatResolver {
         workspace,
       );
 
-      if (!this.isManagedModel(modelId ?? workspace.smartModel)) {
+      if (!this.isManagedModel(modelId ?? workspace.smartModel, workspace.id)) {
         await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
       }
 

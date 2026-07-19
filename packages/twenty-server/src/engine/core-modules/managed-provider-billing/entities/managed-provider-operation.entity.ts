@@ -8,8 +8,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
-
 import { ManagedProviderOperationState } from '../enums/managed-provider-operation-state.enum';
 import { type SafeMetronomeEventProperties } from '../types/safe-metronome-event-properties.type';
 
@@ -34,7 +32,10 @@ import { type SafeMetronomeEventProperties } from '../types/safe-metronome-event
   'requestId',
 ])
 @Entity({ name: 'managedProviderOperation', schema: 'core' })
-export class ManagedProviderOperationEntity extends WorkspaceRelatedEntity {
+export class ManagedProviderOperationEntity {
+  @Column({ type: 'uuid' })
+  workspaceId: string;
+
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -67,6 +68,11 @@ export class ManagedProviderOperationEntity extends WorkspaceRelatedEntity {
 
   @Column({ nullable: true, type: 'jsonb' })
   actualUsageProperties: SafeMetronomeEventProperties | null;
+  @Column({ type: 'jsonb' })
+  maximumMetronomeProperties: SafeMetronomeEventProperties;
+
+  @Column({ nullable: true, type: 'jsonb' })
+  actualMetronomeProperties: SafeMetronomeEventProperties | null;
 
   @Column({ nullable: true, type: 'text' })
   completionOutcome: 'BILLABLE' | 'NON_BILLABLE_FAILURE' | 'UNKNOWN' | null;

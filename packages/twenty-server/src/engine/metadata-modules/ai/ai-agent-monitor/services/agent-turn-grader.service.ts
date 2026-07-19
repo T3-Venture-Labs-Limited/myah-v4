@@ -61,7 +61,8 @@ export class AgentTurnGraderService {
   ): Promise<{ score: number; comment: string }> {
     let usesManagedOpenRouter = false;
     try {
-      const defaultModel = this.aiModelRegistryService.getDefaultSpeedModel();
+      const defaultModel =
+        this.aiModelRegistryService.getDefaultSpeedModel(workspaceId);
 
       if (!defaultModel) {
         this.logger.warn('No default AI model available for evaluation');
@@ -71,6 +72,7 @@ export class AgentTurnGraderService {
 
       const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
         defaultModel.modelId,
+        workspaceId,
       );
       usesManagedOpenRouter = this.managedOpenRouterModelService.isManagedModel(
         {
@@ -79,6 +81,7 @@ export class AgentTurnGraderService {
         },
       );
       const executionModel = this.managedOpenRouterModelService.wrapModel({
+        executionSurface: 'evaluator-grader',
         actorUserWorkspaceId: null,
         model: defaultModel.model,
         modelConfig,
