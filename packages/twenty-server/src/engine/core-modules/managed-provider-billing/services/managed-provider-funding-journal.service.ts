@@ -28,6 +28,8 @@ export type CreateFundingIntent = {
 @Injectable()
 export class ManagedProviderFundingJournalService {
   constructor(
+    // Finance control-plane operations enforce workspaceId explicitly and rate-limit operators across workspaces.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(ManagedProviderFundingActionEntity)
     private readonly repository: Repository<ManagedProviderFundingActionEntity>,
   ) {}
