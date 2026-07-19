@@ -1,10 +1,10 @@
 import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
-import { CreateManagedProviderFundingActionFastInstanceCommand } from '../2-20-instance-command-fast-1784266302003-create-managed-provider-funding-action';
+import { CreateManagedProviderFundingActionFastInstanceCommand } from '../2-19-instance-command-fast-1784266302003-create-managed-provider-funding-action';
 
 describe('CreateManagedProviderFundingActionFastInstanceCommand', () => {
-  it('has a distinct registered 2.20 identity and is in the production registry', () => {
+  it('has a distinct registered 2.19 identity and is in the production registry', () => {
     expect(
       getRegisteredInstanceCommandMetadata(
         CreateManagedProviderFundingActionFastInstanceCommand,
@@ -13,7 +13,7 @@ describe('CreateManagedProviderFundingActionFastInstanceCommand', () => {
       runAfterWorkspace: false,
       timestamp: 1784266302003,
       type: 'fast',
-      version: '2.20.0',
+      version: '2.19.0',
     });
     expect(INSTANCE_COMMANDS).toContain(
       CreateManagedProviderFundingActionFastInstanceCommand,

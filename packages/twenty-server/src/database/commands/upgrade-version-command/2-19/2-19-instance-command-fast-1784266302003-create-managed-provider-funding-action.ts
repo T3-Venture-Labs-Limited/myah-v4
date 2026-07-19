@@ -3,10 +3,10 @@ import { QueryRunner } from 'typeorm';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { FastInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/fast-instance-command.interface';
 
-// The funding table was appended to an already-shipped 2.19 command. Existing
-// installations recorded that command before the append, so this distinct 2.20
-// identity repairs them. IF NOT EXISTS also keeps fresh installs idempotent.
-@RegisteredInstanceCommand('2.20.0', 1784266302003)
+// The funding table was appended to an already-recorded 2.19 command.
+// This distinct current-version identity repairs existing installations;
+// IF NOT EXISTS also keeps fresh installs idempotent.
+@RegisteredInstanceCommand('2.19.0', 1784266302003)
 export class CreateManagedProviderFundingActionFastInstanceCommand
   implements FastInstanceCommand
 {
