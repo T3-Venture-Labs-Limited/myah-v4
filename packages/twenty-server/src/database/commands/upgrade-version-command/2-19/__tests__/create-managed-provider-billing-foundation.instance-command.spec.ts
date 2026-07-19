@@ -74,6 +74,23 @@ describe('CreateManagedProviderBillingFoundationFastInstanceCommand', () => {
           ),
         ),
       ).toBe(true);
+      expect(
+        statements.some((statement) =>
+          statement.includes(
+            'CREATE TABLE "core"."managedProviderFundingAction"',
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        statements.some((statement) =>
+          statement.includes(
+            'CONSTRAINT "UQ_MANAGED_PROVIDER_FUNDING_ACTION_IDEMPOTENCY" UNIQUE ("workspaceId", "idempotencyKey")',
+          ),
+        ),
+      ).toBe(true);
+      expect(statements).toContain(
+        'CREATE INDEX "IDX_MANAGED_PROVIDER_FUNDING_ACTION_PENDING" ON "core"."managedProviderFundingAction" ("state", "createdAt") WHERE "state" IN (\'PENDING\', \'RECONCILIATION_REQUIRED\')',
+      );
     });
   });
 
@@ -85,6 +102,7 @@ describe('CreateManagedProviderBillingFoundationFastInstanceCommand', () => {
       await command.down(queryRunner);
 
       expect(query.mock.calls.map((call) => call[0] as string)).toEqual([
+        'DROP TABLE "core"."managedProviderFundingAction"',
         'DROP TABLE "core"."managedProviderOperation"',
         'DROP INDEX "core"."IDX_MYAH_WORKSPACE_INSTALLATION_METRONOME_CUSTOMER_ID_UNIQUE"',
         'ALTER TABLE "core"."myahWorkspaceInstallation" DROP COLUMN "metronomeCustomerId"',

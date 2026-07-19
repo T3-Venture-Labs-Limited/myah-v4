@@ -188,6 +188,42 @@ describe('ManagedProviderOperationService', () => {
     );
     expect(operationRepository.createQueryBuilder).not.toHaveBeenCalled();
   });
+  it('reserves zero for the exact approved free managed OpenRouter model', async () => {
+    const { manager, metronomeClientService, service } = createService();
+    const freeInput = {
+      ...input,
+      metronomeEventType: 'managed_openrouter_generation',
+      providerConfigurationKey: 'openrouter/google/gemma-4-31b-it:free',
+      providerKey: 'openrouter',
+    };
+    (metronomeClientService.previewUsage as jest.Mock).mockResolvedValueOnce({
+      invoices: [
+        {
+          contractId: 'contract-id',
+          customerId: 'customer-id',
+          id: 'invoice-id',
+          lineItems: [
+            {
+              name: 'Free usage',
+              productId: 'product-id',
+              total: 0,
+              type: 'usage',
+            },
+          ],
+          total: 0,
+        },
+      ],
+    });
+
+    await expect(service.reserveOperation(freeInput)).resolves.toMatchObject({
+      reservedAmountCents: '0',
+      state: ManagedProviderOperationState.RESERVED,
+    });
+    expect(manager.save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({ reservedAmountCents: '0' }),
+    );
+  });
 
   it('rejects insufficient prepaid balance without creating an operation', async () => {
     const { manager, service } = createService({ balance: 6 });
@@ -538,6 +574,64 @@ describe('ManagedProviderOperationService', () => {
 
     expect(metronomeClientService.getPrepaidBalance).not.toHaveBeenCalled();
     expect(operationRepository.manager.transaction).not.toHaveBeenCalled();
+    expect(manager.save).not.toHaveBeenCalled();
+  });
+
+  it('durably attaches a provider execution id before completion', async () => {
+    const reservedOperation = {
+      ...input,
+      id: 'operation-id',
+      providerExecutionId: null,
+      state: ManagedProviderOperationState.RESERVED,
+    };
+    const { manager, service } = createService();
+
+    manager.findOne.mockResolvedValue(reservedOperation);
+    manager.save.mockImplementation((_, values) => values);
+
+    await expect(
+      service.attachProviderExecutionId({
+        operationId: 'operation-id',
+        providerConfigurationKey: input.providerConfigurationKey,
+        providerExecutionId: 'generation-id',
+        providerKey: input.providerKey,
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({ providerExecutionId: 'generation-id' });
+    expect(manager.findOne).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      {
+        lock: { mode: 'pessimistic_write' },
+        where: { id: 'operation-id', workspaceId },
+      },
+    );
+    expect(manager.save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({ providerExecutionId: 'generation-id' }),
+    );
+  });
+
+  it('rejects a conflicting provider execution id attachment', async () => {
+    const { manager, service } = createService();
+
+    manager.findOne.mockResolvedValue({
+      ...input,
+      id: 'operation-id',
+      providerExecutionId: 'first-generation-id',
+      state: ManagedProviderOperationState.RESERVED,
+    });
+
+    await expect(
+      service.attachProviderExecutionId({
+        operationId: 'operation-id',
+        providerConfigurationKey: input.providerConfigurationKey,
+        providerExecutionId: 'second-generation-id',
+        providerKey: input.providerKey,
+        workspaceId,
+      }),
+    ).rejects.toMatchObject({
+      code: ManagedProviderBillingExceptionCode.OPERATION_REPLAY_CONFLICT,
+    });
     expect(manager.save).not.toHaveBeenCalled();
   });
 

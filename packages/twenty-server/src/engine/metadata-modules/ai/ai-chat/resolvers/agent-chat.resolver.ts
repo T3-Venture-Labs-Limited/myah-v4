@@ -39,6 +39,7 @@ import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/service
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { getCancelChannel } from 'src/engine/metadata-modules/ai/ai-chat/utils/get-cancel-channel.util';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import {
   AiException,
   AiExceptionCode,
@@ -57,10 +58,22 @@ export class AgentChatResolver {
     private readonly systemPromptBuilderService: SystemPromptBuilderService,
     private readonly billingUsageService: BillingUsageService,
     private readonly aiModelRegistryService: AiModelRegistryService,
+    private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
     private readonly redisClientService: RedisClientService,
     @InjectWorkspaceScopedRepository(AgentChatThreadEntity)
     private readonly threadRepository: WorkspaceScopedRepository<AgentChatThreadEntity>,
   ) {}
+
+  private isManagedModel(modelId: string): boolean {
+    const registeredModel = this.aiModelRegistryService.getModel(modelId);
+
+    return registeredModel
+      ? this.managedOpenRouterModelService.isManagedModel({
+          modelId: registeredModel.modelId,
+          providerName: registeredModel.providerName,
+        })
+      : false;
+  }
 
   @Query(() => [AgentChatThreadDTO])
   async chatThreads(
@@ -179,7 +192,9 @@ export class AgentChatResolver {
       workspace,
     );
 
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+    if (!this.isManagedModel(resolvedModelId)) {
+      await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+    }
 
     const thread = await this.threadRepository.findOne(workspace.id, {
       where: { id: threadId, userWorkspaceId },
@@ -283,7 +298,9 @@ export class AgentChatResolver {
       workspace,
     );
 
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+    if (!this.isManagedModel(modelId ?? workspace.smartModel)) {
+      await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+    }
 
     const result = await this.agentChatStreamingService.retryLastFailedTurn({
       threadId,
@@ -324,7 +341,9 @@ export class AgentChatResolver {
       workspace,
     );
 
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+    if (!this.isManagedModel(resolvedModelId)) {
+      await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+    }
 
     const thread = await this.threadRepository.findOne(workspace.id, {
       where: { id: threadId, userWorkspaceId },
@@ -438,7 +457,9 @@ export class AgentChatResolver {
         workspace,
       );
 
-      await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+      if (!this.isManagedModel(modelId ?? workspace.smartModel)) {
+        await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+      }
 
       await this.agentChatStreamingService.enqueueResumeStream({
         threadId,

@@ -7,8 +7,12 @@ import { NotFoundError } from 'src/engine/core-modules/graphql/utils/graphql-err
 import { AgentMessageEntity } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-message.entity';
 import { AgentTurnEntity } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-turn.entity';
 import { AgentTurnEvaluationEntity } from 'src/engine/metadata-modules/ai/ai-agent-monitor/entities/agent-turn-evaluation.entity';
-import { AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
+import {
+  AI_TELEMETRY_CONFIG,
+  MANAGED_AI_TELEMETRY_CONFIG,
+} from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 @Injectable()
@@ -21,6 +25,7 @@ export class AgentTurnGraderService {
     @InjectWorkspaceScopedRepository(AgentTurnEvaluationEntity)
     private readonly evaluationRepository: WorkspaceScopedRepository<AgentTurnEvaluationEntity>,
     private readonly aiModelRegistryService: AiModelRegistryService,
+    private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
   ) {}
 
   async evaluateTurn({
@@ -41,7 +46,7 @@ export class AgentTurnGraderService {
       });
     }
 
-    const { score, comment } = await this.evaluateWithAI(turn);
+    const { score, comment } = await this.evaluateWithAI(turn, workspaceId);
 
     return this.evaluationRepository.save(workspaceId, {
       turnId,
@@ -52,7 +57,9 @@ export class AgentTurnGraderService {
 
   private async evaluateWithAI(
     turn: AgentTurnEntity & { messages: AgentMessageEntity[] },
+    workspaceId: string,
   ): Promise<{ score: number; comment: string }> {
+    let usesManagedOpenRouter = false;
     try {
       const defaultModel = this.aiModelRegistryService.getDefaultSpeedModel();
 
@@ -62,6 +69,23 @@ export class AgentTurnGraderService {
         return this.getFallbackEvaluation(turn);
       }
 
+      const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
+        defaultModel.modelId,
+      );
+      usesManagedOpenRouter = this.managedOpenRouterModelService.isManagedModel(
+        {
+          modelId: defaultModel.modelId,
+          providerName: defaultModel.providerName,
+        },
+      );
+      const executionModel = this.managedOpenRouterModelService.wrapModel({
+        actorUserWorkspaceId: null,
+        model: defaultModel.model,
+        modelConfig,
+        providerName: defaultModel.providerName,
+        requestIdRoot: `${turn.id}:evaluation`,
+        workspaceId,
+      });
       const evaluationContext = this.buildEvaluationContext(turn);
 
       const prompt = `You are evaluating an AI agent's performance on a single turn (user request + agent response).
@@ -82,10 +106,13 @@ Respond ONLY with valid JSON in this exact format:
 {"score": <number>, "comment": "<string>"}`;
 
       const result = await generateText({
-        model: defaultModel.model,
+        model: executionModel,
         prompt,
         temperature: 0.3,
-        experimental_telemetry: AI_TELEMETRY_CONFIG,
+        experimental_telemetry: usesManagedOpenRouter
+          ? MANAGED_AI_TELEMETRY_CONFIG
+          : AI_TELEMETRY_CONFIG,
+        maxRetries: usesManagedOpenRouter ? 0 : undefined,
       });
 
       const parsed = JSON.parse(result.text);
@@ -95,8 +122,13 @@ Respond ONLY with valid JSON in this exact format:
         comment: (parsed.comment || 'Evaluation completed').substring(0, 500),
       };
     } catch (error) {
-      this.logger.error('Failed to evaluate turn with AI:', error);
-
+      if (usesManagedOpenRouter) {
+        this.logger.error(
+          'Failed to evaluate turn with AI (managed response omitted)',
+        );
+      } else {
+        this.logger.error('Failed to evaluate turn with AI:', error);
+      }
       return this.getFallbackEvaluation(turn);
     }
   }

@@ -104,4 +104,34 @@ describe('managed provider billing configuration', () => {
       ]),
     );
   });
+  it('requires all managed OpenRouter credentials and product mappings when enabled', () => {
+    const errors = validateSync(
+      Object.assign(new ConfigVariables(), {
+        MANAGED_OPENROUTER_ENABLED: true,
+      }),
+      { strictGroups: true },
+    );
+
+    expect(errors.map(({ property }) => property)).toEqual(
+      expect.arrayContaining([
+        'OPENROUTER_API_KEY',
+        'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
+        'MANAGED_OPENROUTER_CREDIT_PRODUCT_ID',
+      ]),
+    );
+  });
+
+  it('allows empty managed OpenRouter configuration while disabled', () => {
+    const errors = validateSync(new ConfigVariables(), {
+      strictGroups: true,
+    });
+
+    expect(errors.map(({ property }) => property)).not.toEqual(
+      expect.arrayContaining([
+        'OPENROUTER_API_KEY',
+        'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
+        'MANAGED_OPENROUTER_CREDIT_PRODUCT_ID',
+      ]),
+    );
+  });
 });

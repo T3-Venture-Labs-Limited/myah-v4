@@ -11,8 +11,12 @@ import { BillingUsageService } from 'src/engine/core-modules/billing/services/bi
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/services/ai-billing.service';
 import { extractCacheCreationTokensFromSteps } from 'src/engine/metadata-modules/ai/ai-billing/utils/extract-cache-creation-tokens.util';
-import { AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
+import {
+  AI_TELEMETRY_CONFIG,
+  MANAGED_AI_TELEMETRY_CONFIG,
+} from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 
 @Injectable()
 export class AgentTitleGenerationService {
@@ -22,15 +26,15 @@ export class AgentTitleGenerationService {
     private readonly aiModelRegistryService: AiModelRegistryService,
     private readonly aiBillingService: AiBillingService,
     private readonly billingUsageService: BillingUsageService,
+    private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
   ) {}
 
   async generateThreadTitle(
     messageContent: string,
     workspaceId: string,
     userWorkspaceId: string | null,
+    threadId: string,
   ): Promise<string> {
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspaceId);
-
     const defaultModel = this.aiModelRegistryService.getDefaultSpeedModel();
 
     if (!defaultModel) {
@@ -38,15 +42,38 @@ export class AgentTitleGenerationService {
 
       return this.generateFallbackTitle(messageContent);
     }
+    const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
+      defaultModel.modelId,
+    );
+    const usesManagedOpenRouter =
+      this.managedOpenRouterModelService.isManagedModel({
+        modelId: defaultModel.modelId,
+        providerName: defaultModel.providerName,
+      });
+
+    if (!usesManagedOpenRouter) {
+      await this.billingUsageService.hasAvailableCreditsOrThrow(workspaceId);
+    }
+    const executionModel = this.managedOpenRouterModelService.wrapModel({
+      actorUserWorkspaceId: userWorkspaceId,
+      model: defaultModel.model,
+      modelConfig,
+      providerName: defaultModel.providerName,
+      requestIdRoot: `${threadId}:title`,
+      workspaceId,
+    });
 
     let usage: LanguageModelUsage | undefined;
     let steps: StepResult<ToolSet>[] | undefined;
 
     try {
       const result = await generateText({
-        model: defaultModel.model,
+        model: executionModel,
         prompt: `Generate a concise, descriptive title (maximum 60 characters) for a chat thread based on the following message. The title should capture the main topic or purpose of the conversation. Return only the title, nothing else. Message: "${messageContent}"`,
-        experimental_telemetry: AI_TELEMETRY_CONFIG,
+        experimental_telemetry: usesManagedOpenRouter
+          ? MANAGED_AI_TELEMETRY_CONFIG
+          : AI_TELEMETRY_CONFIG,
+        maxRetries: usesManagedOpenRouter ? 0 : undefined,
       });
 
       usage = result.usage;
@@ -58,7 +85,7 @@ export class AgentTitleGenerationService {
 
       return this.generateFallbackTitle(messageContent);
     } finally {
-      if (usage) {
+      if (usage && !usesManagedOpenRouter) {
         const cacheCreationTokens = steps
           ? extractCacheCreationTokensFromSteps(steps)
           : 0;

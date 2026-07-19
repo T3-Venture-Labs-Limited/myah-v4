@@ -22,6 +22,8 @@ describe('AiModelRegistryService', () => {
     } as any;
 
     const mockProviderConfigService = {
+      hasCustomOpenRouterProvider: jest.fn().mockReturnValue(false),
+      isManagedOpenRouterEnabled: jest.fn().mockReturnValue(false),
       getResolvedProviders: jest.fn().mockReturnValue({}),
     };
 

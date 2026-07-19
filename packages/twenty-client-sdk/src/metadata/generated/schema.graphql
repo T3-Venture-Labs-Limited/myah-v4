@@ -4328,6 +4328,7 @@ input DestroyViewGroupInput {
 input RunAgentInput {
   agentUniversalIdentifier: String!
   prompt: String!
+  operationId: String!
 }
 
 input GetAuthorizationUrlForSSOInput {

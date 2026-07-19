@@ -19,6 +19,7 @@ describe('AgentRunService', () => {
 
   const input = {
     agentUniversalIdentifier: 'agent-uid',
+    operationId: 'operation-1',
     prompt: 'Enrich record 123',
   };
 

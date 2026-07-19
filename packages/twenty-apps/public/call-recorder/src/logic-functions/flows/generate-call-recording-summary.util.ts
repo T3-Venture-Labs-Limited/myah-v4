@@ -58,6 +58,7 @@ export const generateCallRecordingSummary = async (
   const agentResult = await runAgent({
     agentUniversalIdentifier:
       CALL_RECORDING_SUMMARIZER_AGENT_UNIVERSAL_IDENTIFIER,
+    operationId: callRecordingId,
     prompt,
   });
 

@@ -58,6 +58,7 @@ export class RunEvaluationInputJob {
       userPrompt: data.input,
       workspaceId: data.workspaceId,
       userWorkspaceId: null,
+      managedProviderRequestIdRoot: `${data.turnId}:evaluation-input`,
     });
 
     await this.agentChatService.addMessage({

@@ -44,9 +44,13 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-billing/utils/extract-cache-creation-tokens.util';
 import { mergeLanguageModelUsage } from 'src/engine/metadata-modules/ai/ai-billing/utils/merge-language-model-usage.util';
 import { getCallLevelProviderOptions } from 'src/engine/metadata-modules/ai/ai-chat/utils/provider-options.util';
-import { AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
+import {
+  AI_TELEMETRY_CONFIG,
+  MANAGED_AI_TELEMETRY_CONFIG,
+} from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { AiModelConfigService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-config.service';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import { NativeToolBinderService } from 'src/engine/metadata-modules/ai/ai-models/services/native-tool-binder.service';
 import { type NativeModelToolOptions } from 'src/engine/metadata-modules/ai/ai-models/types/native-model-tool-options.type';
 import {
@@ -92,6 +96,7 @@ export class AgentAsyncExecutorService {
     private readonly roleTargetRepository: WorkspaceScopedRepository<RoleTargetEntity>,
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
+    private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
   ) {}
 
   private async getAgentRoleId(
@@ -115,6 +120,7 @@ export class AgentAsyncExecutorService {
     authContext,
     workspaceId,
     userWorkspaceId,
+    managedProviderRequestIdRoot,
     operationType = UsageOperationType.AI_WORKFLOW_TOKEN,
   }: {
     agent: AgentEntity | null;
@@ -123,14 +129,14 @@ export class AgentAsyncExecutorService {
     authContext?: WorkspaceAuthContext;
     workspaceId: string;
     userWorkspaceId?: string | null;
+    managedProviderRequestIdRoot?: string;
     operationType?: UsageOperationType;
   }): Promise<AgentExecutionResult> {
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspaceId);
-
     let accumulatedUsage: LanguageModelUsage = EMPTY_USAGE;
     let cacheCreationTokens = 0;
     let nativeWebSearchCallCount = 0;
     let executionSteps: StepResult<ToolSet>[] = [];
+    let usesManagedOpenRouter = false;
 
     try {
       if (agent) {
@@ -148,6 +154,33 @@ export class AgentAsyncExecutorService {
 
       const registeredModel =
         await this.aiModelRegistryService.resolveModelForAgent(agent);
+      const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
+        registeredModel.modelId,
+      );
+      usesManagedOpenRouter = this.managedOpenRouterModelService.isManagedModel(
+        {
+          modelId: registeredModel.modelId,
+          providerName: registeredModel.providerName,
+        },
+      );
+      if (usesManagedOpenRouter && !managedProviderRequestIdRoot) {
+        throw new AiException(
+          'Managed AI execution requires a stable operation identifier',
+          AiExceptionCode.AGENT_EXECUTION_FAILED,
+        );
+      }
+
+      if (!usesManagedOpenRouter) {
+        await this.billingUsageService.hasAvailableCreditsOrThrow(workspaceId);
+      }
+      const executionModel = this.managedOpenRouterModelService.wrapModel({
+        actorUserWorkspaceId: userWorkspaceId ?? null,
+        model: registeredModel.model,
+        modelConfig,
+        providerName: registeredModel.providerName,
+        requestIdRoot: managedProviderRequestIdRoot,
+        workspaceId,
+      });
 
       let tools: ToolSet = {};
       let providerOptions = getCallLevelProviderOptions({
@@ -230,28 +263,33 @@ export class AgentAsyncExecutorService {
       const textResponse = await generateText({
         system: `${WORKFLOW_SYSTEM_PROMPTS.BASE}\n\n${agent ? agent.prompt : ''}`,
         tools,
-        model: registeredModel.model,
+        model: executionModel,
         prompt: userPrompt,
         stopWhen: (step) =>
           stepCountIs(AGENT_CONFIG.MAX_STEPS)(step) ||
           hasNoMoreAvailableCredits,
         providerOptions,
-        experimental_telemetry: AI_TELEMETRY_CONFIG,
+        maxRetries: usesManagedOpenRouter ? 0 : undefined,
+        experimental_telemetry: usesManagedOpenRouter
+          ? MANAGED_AI_TELEMETRY_CONFIG
+          : AI_TELEMETRY_CONFIG,
         onStepFinish: async (step) => {
-          const { hasNoMoreAvailableCredits: stepHasNoMoreAvailableCredits } =
-            await this.aiBillingService.decrementAndCheckAvailableCredits(
-              registeredModel.modelId,
-              {
-                usage: step.usage,
-                cacheCreationTokens: extractCacheCreationTokens(
-                  step.providerMetadata,
-                ),
-              },
-              workspaceId,
-            );
+          if (!usesManagedOpenRouter) {
+            const { hasNoMoreAvailableCredits: stepHasNoMoreAvailableCredits } =
+              await this.aiBillingService.decrementAndCheckAvailableCredits(
+                registeredModel.modelId,
+                {
+                  usage: step.usage,
+                  cacheCreationTokens: extractCacheCreationTokens(
+                    step.providerMetadata,
+                  ),
+                },
+                workspaceId,
+              );
 
-          if (stepHasNoMoreAvailableCredits) {
-            hasNoMoreAvailableCredits = true;
+            if (stepHasNoMoreAvailableCredits) {
+              hasNoMoreAvailableCredits = true;
+            }
           }
 
           for (const part of step.content) {
@@ -297,7 +335,11 @@ export class AgentAsyncExecutorService {
             tools: toolsForRepair,
             inputSchema,
             error,
-            model: registeredModel.model,
+            model: executionModel,
+            telemetryConfig: usesManagedOpenRouter
+              ? MANAGED_AI_TELEMETRY_CONFIG
+              : AI_TELEMETRY_CONFIG,
+            maxRetries: usesManagedOpenRouter ? 0 : undefined,
           });
         },
       });
@@ -321,7 +363,7 @@ export class AgentAsyncExecutorService {
       if (agentSchema) {
         const structuredResult = await generateText({
           system: WORKFLOW_SYSTEM_PROMPTS.OUTPUT_GENERATOR,
-          model: registeredModel.model,
+          model: executionModel,
           prompt: `Based on the following execution results, generate the structured output according to the schema:
 
                  Execution Results: ${textResponse.text}
@@ -333,10 +375,15 @@ export class AgentAsyncExecutorService {
             providerOptions: undefined,
             promptCacheKey: agent?.id,
           }),
-          experimental_telemetry: AI_TELEMETRY_CONFIG,
+          maxRetries: usesManagedOpenRouter ? 0 : undefined,
+          experimental_telemetry: usesManagedOpenRouter
+            ? MANAGED_AI_TELEMETRY_CONFIG
+            : AI_TELEMETRY_CONFIG,
           onStepFinish: async (step) => {
-            const { hasNoMoreAvailableCredits: stepHasNoMoreAvailableCredits } =
-              await this.aiBillingService.decrementAndCheckAvailableCredits(
+            if (!usesManagedOpenRouter) {
+              const {
+                hasNoMoreAvailableCredits: stepHasNoMoreAvailableCredits,
+              } = await this.aiBillingService.decrementAndCheckAvailableCredits(
                 registeredModel.modelId,
                 {
                   usage: step.usage,
@@ -347,8 +394,9 @@ export class AgentAsyncExecutorService {
                 workspaceId,
               );
 
-            if (stepHasNoMoreAvailableCredits) {
-              hasNoMoreAvailableCredits = true;
+              if (stepHasNoMoreAvailableCredits) {
+                hasNoMoreAvailableCredits = true;
+              }
             }
           },
         });
@@ -414,15 +462,17 @@ export class AgentAsyncExecutorService {
         (accumulatedUsage.outputTokens ?? 0) +
         cacheCreationTokens;
 
-      void this.aiBillingService.emitAiTokenUsageEvent(
-        workspaceId,
-        creditsUsedMicro,
-        totalTokens,
-        modelId,
-        operationType,
-        agent?.id ?? null,
-        userWorkspaceId,
-      );
+      if (!usesManagedOpenRouter) {
+        void this.aiBillingService.emitAiTokenUsageEvent(
+          workspaceId,
+          creditsUsedMicro,
+          totalTokens,
+          modelId,
+          operationType,
+          agent?.id ?? null,
+          userWorkspaceId,
+        );
+      }
 
       void this.aiBillingService.billNativeWebSearchUsage(
         nativeWebSearchCallCount,

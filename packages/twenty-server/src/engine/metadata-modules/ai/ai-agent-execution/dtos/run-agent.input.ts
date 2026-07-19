@@ -14,4 +14,9 @@ export class RunAgentInputDTO implements RunAgentInput {
   @IsNotEmpty()
   @Field()
   prompt: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Field()
+  operationId: string;
 }

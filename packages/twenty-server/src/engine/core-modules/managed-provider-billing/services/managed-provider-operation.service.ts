@@ -24,7 +24,10 @@ import {
   MetronomeClientExceptionCode,
 } from '../metronome-client.exception';
 import { validateSafeMetronomeEventProperties } from '../utils/validate-safe-metronome-event-properties.util';
-import { getValidatedMetronomeUsageAmountCents } from '../utils/get-validated-metronome-usage-amount-cents.util';
+import {
+  getValidatedMetronomeUsageAmountCents,
+  isApprovedFreeManagedOpenRouterOperation,
+} from '../utils/get-validated-metronome-usage-amount-cents.util';
 
 import { MetronomeClientService } from './metronome-client.service';
 import { MetronomeWorkspaceCustomerService } from './metronome-workspace-customer.service';
@@ -45,8 +48,35 @@ export class ManagedProviderOperationService {
     private readonly messageQueueService: MessageQueueService,
   ) {}
 
+  async assertProviderConfigurationActive(
+    providerKey: string,
+    providerConfigurationKey: string,
+    tariffVersion: string,
+  ): Promise<void> {
+    const quarantined = await this.operationRepository
+      .createQueryBuilder('operation')
+      .where('operation.providerKey = :providerKey', { providerKey })
+      .andWhere(
+        'operation.providerConfigurationKey = :providerConfigurationKey',
+        {
+          providerConfigurationKey,
+        },
+      )
+      .andWhere(`operation.actualUsageProperties->>'overrun' = 'true'`)
+      .andWhere(
+        `operation.actualUsageProperties->>'tariffVersion' = :tariffVersion`,
+        { tariffVersion },
+      )
+      .getExists();
+
+    if (quarantined) {
+      throw new Error('Managed provider configuration is quarantined');
+    }
+  }
+
   async reserveOperation(
     input: ReserveManagedProviderOperationInput,
+    options: { rejectReplay?: boolean } = {},
   ): Promise<ManagedProviderOperationEntity> {
     if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
       throw new MetronomeClientException(
@@ -73,6 +103,11 @@ export class ManagedProviderOperationService {
     });
 
     if (existingOperation) {
+      if (options.rejectReplay) {
+        throw new ManagedProviderBillingException(
+          ManagedProviderBillingExceptionCode.OPERATION_REPLAY_CONFLICT,
+        );
+      }
       return this.getExactReplay(
         existingOperation,
         operationInput,
@@ -92,11 +127,17 @@ export class ManagedProviderOperationService {
       eventType: operationInput.metronomeEventType,
       properties: operationInput.maximumUsageProperties,
     });
+    const allowZeroAmount = isApprovedFreeManagedOpenRouterOperation({
+      providerKey: operationInput.providerKey,
+      providerConfigurationKey: operationInput.providerConfigurationKey,
+      metronomeEventType: operationInput.metronomeEventType,
+    });
     const reservedAmountCents = getValidatedMetronomeUsageAmountCents({
       contractId,
       customerId,
       expectedProductIds,
       preview,
+      allowZeroAmount,
     });
     const expectedBillableMetricIds =
       await this.metronomeClientService.getBillableMetricIds(
@@ -126,6 +167,11 @@ export class ManagedProviderOperationService {
         });
 
       if (concurrentOperation) {
+        if (options.rejectReplay) {
+          throw new ManagedProviderBillingException(
+            ManagedProviderBillingExceptionCode.OPERATION_REPLAY_CONFLICT,
+          );
+        }
         return this.getExactReplay(
           concurrentOperation,
           operationInput,
@@ -267,6 +313,55 @@ export class ManagedProviderOperationService {
     }
 
     return completedOperation;
+  }
+
+  async attachProviderExecutionId({
+    operationId,
+    providerConfigurationKey,
+    providerExecutionId,
+    providerKey,
+    workspaceId,
+  }: {
+    operationId: string;
+    providerConfigurationKey: string;
+    providerExecutionId: string;
+    providerKey: string;
+    workspaceId: string;
+  }): Promise<ManagedProviderOperationEntity> {
+    if (providerExecutionId.trim().length === 0) {
+      throw new Error('Managed provider execution id is invalid');
+    }
+
+    return this.operationRepository.manager.transaction(async (manager) => {
+      const operation = await manager.findOne(ManagedProviderOperationEntity, {
+        lock: { mode: 'pessimistic_write' },
+        where: { id: operationId, workspaceId },
+      });
+
+      if (!operation) {
+        throw new Error('Managed provider operation was not found');
+      }
+
+      if (
+        operation.providerKey !== providerKey ||
+        operation.providerConfigurationKey !== providerConfigurationKey ||
+        (operation.providerExecutionId !== null &&
+          operation.providerExecutionId !== providerExecutionId)
+      ) {
+        throw new ManagedProviderBillingException(
+          ManagedProviderBillingExceptionCode.OPERATION_REPLAY_CONFLICT,
+        );
+      }
+
+      if (operation.providerExecutionId === providerExecutionId) {
+        return operation;
+      }
+
+      return manager.save(ManagedProviderOperationEntity, {
+        ...operation,
+        providerExecutionId,
+      });
+    });
   }
 
   private validateCompletionInput(

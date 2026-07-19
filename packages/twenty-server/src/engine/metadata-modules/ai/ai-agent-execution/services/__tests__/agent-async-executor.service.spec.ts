@@ -3,6 +3,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { generateText } from 'ai';
 
+import { MANAGED_AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { ToolRegistryService } from 'src/engine/core-modules/tool-provider/services/tool-registry.service';
@@ -13,6 +14,7 @@ import { NATIVE_WEB_SEARCH_COST_PER_CALL_DOLLARS } from 'src/engine/metadata-mod
 import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/services/ai-billing.service';
 import { AiModelConfigService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-config.service';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import { NativeToolBinderService } from 'src/engine/metadata-modules/ai/ai-models/services/native-tool-binder.service';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
@@ -50,6 +52,11 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
     emitAiTokenUsageEvent: jest.Mock;
     billNativeWebSearchUsage: jest.Mock;
   };
+  let billingUsageService: { hasAvailableCreditsOrThrow: jest.Mock };
+  let managedOpenRouterModelService: {
+    isManagedModel: jest.Mock;
+    wrapModel: jest.Mock;
+  };
 
   const agentId = 'agent-1';
   const workspaceId = 'workspace-1';
@@ -75,6 +82,13 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
       emitAiTokenUsageEvent: jest.fn(),
       billNativeWebSearchUsage: jest.fn(),
     };
+    billingUsageService = {
+      hasAvailableCreditsOrThrow: jest.fn().mockResolvedValue(undefined),
+    };
+    managedOpenRouterModelService = {
+      isManagedModel: jest.fn().mockReturnValue(false),
+      wrapModel: jest.fn(({ model }) => model),
+    };
 
     generateTextMock.mockClear();
 
@@ -89,6 +103,9 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
               modelId: 'openai/gpt-4.1',
               sdkPackage: '@ai-sdk/openai',
               model: {},
+            }),
+            getEffectiveModelConfig: jest.fn().mockReturnValue({
+              modelId: 'openai/gpt-4.1',
             }),
           },
         },
@@ -107,10 +124,12 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
         },
         { provide: AiBillingService, useValue: aiBillingService },
         {
+          provide: ManagedOpenRouterModelService,
+          useValue: managedOpenRouterModelService,
+        },
+        {
           provide: BillingUsageService,
-          useValue: {
-            hasAvailableCreditsOrThrow: jest.fn().mockResolvedValue(undefined),
-          },
+          useValue: billingUsageService,
         },
         {
           provide: MetricsService,
@@ -162,6 +181,30 @@ describe('AgentAsyncExecutorService — workflow agent role-scoped tool resoluti
     });
 
     expect(toolRegistry.getToolsByCategories).not.toHaveBeenCalled();
+  });
+
+  it('uses Metronome reservation instead of local credits for managed OpenRouter', async () => {
+    managedOpenRouterModelService.isManagedModel.mockReturnValue(true);
+
+    await service.executeAgent({
+      agent: buildAgent(),
+      managedProviderRequestIdRoot: 'workflow-operation-1',
+      userPrompt: 'test',
+      workspaceId,
+    });
+
+    expect(
+      billingUsageService.hasAvailableCreditsOrThrow,
+    ).not.toHaveBeenCalled();
+    expect(
+      aiBillingService.decrementAndCheckAvailableCredits,
+    ).not.toHaveBeenCalled();
+    expect(aiBillingService.emitAiTokenUsageEvent).not.toHaveBeenCalled();
+    expect(generateTextMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        experimental_telemetry: MANAGED_AI_TELEMETRY_CONFIG,
+      }),
+    );
   });
 
   describe('cost folding', () => {

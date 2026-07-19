@@ -1389,5 +1389,70 @@
         "supportsReasoning": true
       }
     ]
+  },
+  "openrouter": {
+    "npm": "@ai-sdk/openai-compatible",
+    "name": "openrouter",
+    "label": "Myah Managed OpenRouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "apiKey": "{{OPENROUTER_API_KEY}}",
+    "models": [
+      {
+        "name": "deepseek/deepseek-v4-flash",
+        "label": "DeepSeek V4 Flash",
+        "inputCostPerMillionTokens": 0.14,
+        "outputCostPerMillionTokens": 0.28,
+        "cachedInputCostPerMillionTokens": 0.03,
+        "contextWindowTokens": 1048576,
+        "maxOutputTokens": 32768,
+        "supportsReasoning": true
+      },
+      {
+        "name": "x-ai/grok-4.5",
+        "label": "Grok 4.5",
+        "inputCostPerMillionTokens": 2.86,
+        "outputCostPerMillionTokens": 8.58,
+        "cachedInputCostPerMillionTokens": 0.43,
+        "longContextCost": {
+          "inputCostPerMillionTokens": 5.72,
+          "outputCostPerMillionTokens": 17.15,
+          "thresholdTokens": 200000,
+          "cachedInputCostPerMillionTokens": 0.86
+        },
+        "contextWindowTokens": 500000,
+        "maxOutputTokens": 32768,
+        "modalities": ["image", "pdf"],
+        "supportsReasoning": true
+      },
+      {
+        "name": "openai/gpt-5.6-luna",
+        "label": "GPT-5.6 Luna",
+        "modelFamily": "GPT",
+        "inputCostPerMillionTokens": 1.43,
+        "outputCostPerMillionTokens": 8.58,
+        "cachedInputCostPerMillionTokens": 0.14,
+        "longContextCost": {
+          "inputCostPerMillionTokens": 2.86,
+          "outputCostPerMillionTokens": 12.86,
+          "thresholdTokens": 272000,
+          "cachedInputCostPerMillionTokens": 0.29
+        },
+        "contextWindowTokens": 1050000,
+        "maxOutputTokens": 128000,
+        "modalities": ["image", "pdf"],
+        "supportsReasoning": true
+      },
+      {
+        "name": "google/gemma-4-31b-it:free",
+        "label": "Gemma 4 31B (Free)",
+        "modelFamily": "GEMINI",
+        "inputCostPerMillionTokens": 0,
+        "outputCostPerMillionTokens": 0,
+        "contextWindowTokens": 262144,
+        "maxOutputTokens": 32768,
+        "modalities": ["image"],
+        "supportsReasoning": true
+      }
+    ]
   }
 }

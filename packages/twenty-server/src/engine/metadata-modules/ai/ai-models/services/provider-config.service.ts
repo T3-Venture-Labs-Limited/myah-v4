@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { type ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { DefaultAiCatalogService } from 'src/engine/metadata-modules/ai/ai-models/services/default-ai-catalog.service';
+import { MANAGED_OPENROUTER_PROVIDER_NAME } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 
 import { type AiProviderConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-provider-config.type';
 import { type AiProvidersConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-providers-config.type';
@@ -19,6 +20,22 @@ export class ProviderConfigService {
     return new Set(
       Object.keys(this.defaultAiCatalogService.getDefaultAiCatalog()),
     );
+  }
+  hasCustomOpenRouterProvider(): boolean {
+    const customProviders = this.twentyConfigService.get('AI_PROVIDERS');
+
+    return (
+      customProviders !== null &&
+      typeof customProviders === 'object' &&
+      Object.prototype.hasOwnProperty.call(
+        customProviders,
+        MANAGED_OPENROUTER_PROVIDER_NAME,
+      )
+    );
+  }
+
+  isManagedOpenRouterEnabled(): boolean {
+    return this.twentyConfigService.get('MANAGED_OPENROUTER_ENABLED');
   }
 
   getResolvedProviders(): AiProvidersConfig {

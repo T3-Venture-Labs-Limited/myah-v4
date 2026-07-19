@@ -1,5 +1,6 @@
 import { streamText } from 'ai';
 
+import { MANAGED_AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { ChatExecutionService } from 'src/engine/metadata-modules/ai/ai-chat/services/chat-execution.service';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
@@ -16,7 +17,7 @@ jest.mock('ai', () => ({
   })),
 }));
 
-const buildService = () => {
+const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
   const toolRegistry = {
     buildToolIndex: jest.fn().mockResolvedValue([]),
     getToolsByName: jest.fn().mockResolvedValue({}),
@@ -110,6 +111,10 @@ const buildService = () => {
   };
   const instagramReplyDraftService = {};
   const instagramReplyApprovalService = {};
+  const managedOpenRouterModelService = {
+    isManagedModel: jest.fn().mockReturnValue(managed),
+    wrapModel: jest.fn(() => 'wrapped-managed-model'),
+  };
 
   const service = new ChatExecutionService(
     toolRegistry as never,
@@ -127,10 +132,13 @@ const buildService = () => {
     metricsService as never,
     instagramReplyDraftService as never,
     instagramReplyApprovalService as never,
+    managedOpenRouterModelService as never,
   );
 
   return {
     service,
+    aiBillingService,
+    managedOpenRouterModelService,
     toolRegistry,
     brandBrainPreflightService,
     metricsService,
@@ -156,6 +164,7 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
       threadId: 'thread-id',
       browsingContext: null,
       conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
       messages: [
         {
           id: 'message-id',
@@ -218,6 +227,7 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
       threadId: 'thread-id',
       browsingContext: null,
       conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
       messages: [
         {
           id: 'message-id',
@@ -282,6 +292,7 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
       threadId: 'thread-id',
       browsingContext: null,
       conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
       messages: [
         {
           id: 'message-id',
@@ -326,5 +337,118 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
       }),
     );
     expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalled();
+  });
+  it('wraps managed OpenRouter before streaming and bypasses local credits', async () => {
+    const { aiBillingService, managedOpenRouterModelService, service } =
+      buildService({ managed: true });
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'thread-id',
+      browsingContext: null,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'message-id',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Hello' }],
+        },
+      ],
+      lastUserMessageText: 'Hello',
+    });
+
+    expect(managedOpenRouterModelService.wrapModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserWorkspaceId: 'user-workspace-id',
+        model: 'test-model-sdk-object',
+        requestIdRoot: 'turn-id',
+        workspaceId: 'workspace-id',
+      }),
+    );
+    expect(
+      aiBillingService.decrementAndCheckAvailableCredits,
+    ).not.toHaveBeenCalled();
+    expect(streamText).toHaveBeenLastCalledWith(
+      expect.objectContaining({ model: 'wrapped-managed-model' }),
+    );
+    expect(streamText).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        experimental_telemetry: MANAGED_AI_TELEMETRY_CONFIG,
+      }),
+    );
+  });
+  it('does not record learned tool or skill input values in managed metrics', async () => {
+    const { service, metricsService } = buildService({ managed: true });
+    (streamText as jest.Mock).mockImplementationOnce((options) => {
+      void options.onStepFinish({
+        content: [
+          {
+            type: 'tool-result',
+            toolName: 'learn_tools',
+            input: { toolNames: ['secret_tool_name'] },
+            output: { success: true },
+            toolCallId: 'call-1',
+          },
+          {
+            type: 'tool-result',
+            toolName: 'load_skills',
+            input: { skillNames: ['private-skill-name'] },
+            output: { success: true },
+            toolCallId: 'call-2',
+          },
+        ],
+        usage: { outputTokens: 2, inputTokens: 3, totalTokens: 5 },
+        toolCalls: [],
+        providerMetadata: undefined,
+      });
+      return {
+        usage: Promise.resolve({
+          inputTokens: 3,
+          outputTokens: 2,
+          totalTokens: 5,
+        }),
+        steps: Promise.resolve([]),
+      };
+    });
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'thread-id',
+      browsingContext: null,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'message-id',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Hello' }],
+        },
+      ],
+      lastUserMessageText: 'Hello',
+    });
+
+    const calls = metricsService.incrementCounterBy.mock.calls;
+    expect(JSON.stringify(calls)).not.toContain('secret_tool_name');
+    expect(JSON.stringify(calls)).not.toContain('private-skill-name');
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        [
+          expect.objectContaining({
+            key: MetricsKeys.AiChatToolExecutionSucceeded,
+          }),
+        ],
+      ]),
+    );
   });
 });

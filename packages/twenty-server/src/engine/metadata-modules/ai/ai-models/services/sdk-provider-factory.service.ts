@@ -26,8 +26,10 @@ import {
   AI_SDK_OPENAI_COMPATIBLE,
   AI_SDK_XAI,
 } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-sdk-package.const';
+import { MANAGED_OPENROUTER_PROVIDER_LABEL } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { sanitizeGeminiToolResultRefsMiddleware } from 'src/engine/metadata-modules/ai/ai-models/middleware/sanitize-gemini-tool-result-refs.middleware';
 import { type AiProviderConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-provider-config.type';
+import { createManagedOpenRouterFetch } from 'src/engine/metadata-modules/ai/ai-models/utils/create-managed-openrouter-fetch.util';
 
 export type AiSdkProviderInstance = {
   createModel: (modelId: string) => LanguageModel;
@@ -200,6 +202,9 @@ export class SdkProviderFactoryService {
       name: config.name ?? 'openai-compatible',
       baseURL: config.baseUrl,
       ...(config.apiKey && { apiKey: config.apiKey }),
+      ...(config.label === MANAGED_OPENROUTER_PROVIDER_LABEL && {
+        fetch: createManagedOpenRouterFetch(),
+      }),
     });
 
     return {

@@ -66,6 +66,7 @@ export class AgentRunService {
         userPrompt: input.prompt,
         authContext,
         workspaceId: workspace.id,
+        managedProviderRequestIdRoot: input.operationId,
         userWorkspaceId: requestUserWorkspaceId,
         operationType: UsageOperationType.AI_WORKFLOW_TOKEN,
       });

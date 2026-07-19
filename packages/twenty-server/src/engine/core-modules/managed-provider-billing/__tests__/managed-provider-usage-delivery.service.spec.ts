@@ -9,6 +9,86 @@ import { ManagedProviderUsageDeliveryService } from '../services/managed-provide
 import { MetronomeWorkspaceCustomerService } from '../services/metronome-workspace-customer.service';
 
 describe('ManagedProviderUsageDeliveryService', () => {
+  it('delivers zero usage for the exact approved free managed OpenRouter model', async () => {
+    const operation = {
+      actualUsageProperties: { quantity: 1 },
+      expectedProductIds: ['product-id'],
+      id: 'operation-id',
+      providerKey: 'openrouter',
+      providerConfigurationKey: 'openrouter/google/gemma-4-31b-it:free',
+      metronomeEventType: 'managed_openrouter_generation',
+      deliveryAttemptCount: 0,
+      deliveryEventAt: null,
+      metronomeAcceptedAt: null,
+      reservedAmountCents: '0',
+      quotedActualAmountCents: null,
+      settleAfter: null,
+      state: ManagedProviderOperationState.USAGE_PENDING,
+      workspaceId: 'workspace-id',
+      completedAt: new Date(),
+      createdAt: new Date(),
+    };
+    const manager = {
+      findOne: jest.fn().mockResolvedValue(operation),
+      save: jest.fn().mockImplementation(async (_, value) => {
+        Object.assign(operation, value);
+        return operation;
+      }),
+    };
+    const operationRepository = {
+      findOneBy: jest.fn().mockResolvedValue(operation),
+      manager: { transaction: jest.fn((callback) => callback(manager)) },
+    } as unknown as Pick<
+      Repository<ManagedProviderOperationEntity>,
+      'findOneBy' | 'manager'
+    >;
+    const metronomeClientService = {
+      ingestUsage: jest.fn().mockResolvedValue(undefined),
+      previewUsage: jest.fn().mockResolvedValue({
+        invoices: [
+          {
+            contractId: 'contract-id',
+            customerId: 'customer-id',
+            id: 'invoice-id',
+            lineItems: [
+              {
+                name: 'Free usage',
+                productId: 'product-id',
+                total: 0,
+                type: 'usage',
+              },
+            ],
+            total: 0,
+          },
+        ],
+      }),
+    } as Pick<MetronomeClientService, 'ingestUsage' | 'previewUsage'>;
+    const workspaceCustomerService = {
+      ensureWorkspaceContract: jest.fn().mockResolvedValue('contract-id'),
+      ensureWorkspaceCustomer: jest.fn().mockResolvedValue('customer-id'),
+    } as Pick<
+      MetronomeWorkspaceCustomerService,
+      'ensureWorkspaceContract' | 'ensureWorkspaceCustomer'
+    >;
+    const service = new ManagedProviderUsageDeliveryService(
+      operationRepository as Repository<ManagedProviderOperationEntity>,
+      metronomeClientService as MetronomeClientService,
+      workspaceCustomerService as MetronomeWorkspaceCustomerService,
+      { get: jest.fn(() => 0) } as unknown as TwentyConfigService,
+    );
+
+    await service.deliverUsage('operation-id');
+
+    expect(metronomeClientService.ingestUsage).toHaveBeenCalled();
+    expect(manager.save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        quotedActualAmountCents: '0',
+        state: ManagedProviderOperationState.USAGE_ACCEPTED,
+      }),
+    );
+  });
+
   it('persists one event timestamp and reuses it after an ingest retry', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-16T00:00:00.000Z'));
     const operation = {

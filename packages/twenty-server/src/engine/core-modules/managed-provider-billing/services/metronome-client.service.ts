@@ -88,6 +88,18 @@ export type MetronomeUsageEvent = {
   transactionId: string;
 };
 
+export type MetronomeCustomerCreditInput = {
+  amountCents: number;
+  contractId: string;
+  customerId: string;
+  endingBefore: string;
+  name: string;
+  productId: string;
+  startingAt: string;
+  uniquenessKey: string;
+  customFields?: Record<string, string>;
+};
+
 @Injectable()
 export class MetronomeClientService {
   private client: Metronome | undefined;
@@ -157,6 +169,133 @@ export class MetronomeClientService {
       );
     }
   }
+  async createCustomerCredit({
+    amountCents,
+    contractId,
+    customerId,
+    endingBefore,
+    name,
+    productId,
+    startingAt,
+    uniquenessKey,
+    customFields,
+  }: MetronomeCustomerCreditInput): Promise<{ id: string }> {
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+      throw new Error(
+        'Metronome customer credit amount must be positive cents',
+      );
+    }
+
+    const client = this.getClient();
+    try {
+      const response = await client.v1.customers.credits.create({
+        access_schedule: {
+          schedule_items: [
+            {
+              amount: amountCents,
+              ending_before: endingBefore,
+              starting_at: startingAt,
+            },
+          ],
+        },
+        applicable_contract_ids: [contractId],
+        customer_id: customerId,
+        name,
+        priority: 0,
+        product_id: productId,
+        ...(customFields === undefined ? {} : { custom_fields: customFields }),
+        uniqueness_key: uniquenessKey,
+      });
+
+      return { id: response.data.id };
+    } catch (error) {
+      const status = this.getErrorStatus(error);
+      const isAmbiguousCreate =
+        status === 409 ||
+        status === 429 ||
+        status === undefined ||
+        status >= 500 ||
+        (error instanceof MetronomeClientException &&
+          [
+            MetronomeClientExceptionCode.CONFLICT,
+            MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+            MetronomeClientExceptionCode.RATE_LIMITED,
+          ].includes(error.code));
+
+      if (isAmbiguousCreate) {
+        return this.recoverCustomerCredit({
+          amountCents,
+          contractId,
+          customerId,
+          endingBefore,
+          productId,
+          startingAt,
+          uniquenessKey,
+        });
+      }
+      throw new MetronomeClientException(
+        status === 429
+          ? MetronomeClientExceptionCode.RATE_LIMITED
+          : status === undefined || status >= 500
+            ? MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN
+            : MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+  }
+
+  private async recoverCustomerCredit({
+    amountCents,
+    contractId,
+    customerId,
+    endingBefore,
+    productId,
+    startingAt,
+    uniquenessKey,
+  }: Omit<MetronomeCustomerCreditInput, 'name'>): Promise<{ id: string }> {
+    const client = this.getClient();
+    let page = await this.execute(() =>
+      client.v1.customers.credits.list({
+        customer_id: customerId,
+        include_archived: true,
+      }),
+    );
+    const credits = [...page.data];
+
+    while (typeof page.hasNextPage === 'function' && page.hasNextPage()) {
+      page = await this.execute(() => page.getNextPage());
+      credits.push(...page.data);
+    }
+
+    const matches = credits.filter(
+      (credit) => credit.uniqueness_key === uniquenessKey,
+    );
+    const exactMatches = matches.filter((credit) => {
+      const scheduleItems = credit.access_schedule?.schedule_items ?? [];
+      return (
+        credit.product.id === productId &&
+        credit.applicable_contract_ids?.length === 1 &&
+        credit.applicable_contract_ids[0] === contractId &&
+        scheduleItems.length === 1 &&
+        scheduleItems[0].amount === amountCents &&
+        new Date(scheduleItems[0].starting_at).getTime() ===
+          new Date(startingAt).getTime() &&
+        scheduleItems[0].ending_before === endingBefore
+      );
+    });
+
+    if (matches.length === 0) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+      );
+    }
+
+    if (matches.length !== 1 || exactMatches.length !== 1) {
+      throw new MetronomeClientException(MetronomeClientExceptionCode.CONFLICT);
+    }
+
+    return { id: exactMatches[0].id };
+  }
+
   async findCurrentContracts(
     customerId: string,
   ): Promise<MetronomeCurrentContract[]> {
@@ -265,13 +404,18 @@ export class MetronomeClientService {
       })),
     };
   }
-
   async getPrepaidBalance(customerId: string): Promise<{ balance: number }> {
     const client = this.getClient();
     const response = await this.execute(() =>
       client.v1.contracts.getNetBalance({
         customer_id: customerId,
-        filters: [{ balance_types: ['PREPAID_COMMIT'] }],
+        filters: [
+          { balance_types: ['PREPAID_COMMIT'] },
+          {
+            balance_types: ['CREDIT'],
+            custom_fields: { myah_managed_openrouter: 'sponsored' },
+          },
+        ],
         invoice_inclusion_mode: 'FINALIZED_AND_DRAFT',
       }),
     );

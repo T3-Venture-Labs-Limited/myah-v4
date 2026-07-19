@@ -20,6 +20,7 @@ import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/serv
 import { AiRestApiExceptionFilter } from 'src/engine/metadata-modules/ai/filters/ai-api-exception.filter';
 import { GenerateTextInput } from 'src/engine/metadata-modules/ai/ai-generate-text/dtos/generate-text.input';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
+import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-rest-api-exception.filter';
 
 @Controller('rest/ai')
@@ -34,6 +35,7 @@ export class AiGenerateTextController {
     private readonly aiModelRegistryService: AiModelRegistryService,
     private readonly aiBillingService: AiBillingService,
     private readonly billingUsageService: BillingUsageService,
+    private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
   ) {}
 
   @Post('generate-text')
@@ -50,8 +52,6 @@ export class AiGenerateTextController {
       );
     }
 
-    await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
-
     const resolvedModelId = body.modelId ?? workspace.fastModel;
 
     this.aiModelRegistryService.validateModelAvailability(
@@ -63,14 +63,35 @@ export class AiGenerateTextController {
       await this.aiModelRegistryService.resolveModelForAgent({
         modelId: resolvedModelId,
       });
+    const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
+      registeredModel.modelId,
+    );
+    const usesManagedOpenRouter =
+      this.managedOpenRouterModelService.isManagedModel({
+        modelId: registeredModel.modelId,
+        providerName: registeredModel.providerName,
+      });
+
+    if (!usesManagedOpenRouter) {
+      await this.billingUsageService.hasAvailableCreditsOrThrow(workspace.id);
+    }
+    const executionModel = this.managedOpenRouterModelService.wrapModel({
+      actorUserWorkspaceId: userWorkspaceId,
+      model: registeredModel.model,
+      modelConfig,
+      providerName: registeredModel.providerName,
+      requestIdRoot: body.operationId,
+      workspaceId: workspace.id,
+    });
 
     let result: Awaited<ReturnType<typeof generateText>> | undefined;
 
     try {
       result = await generateText({
-        model: registeredModel.model,
+        model: executionModel,
         system: body.systemPrompt,
         prompt: body.userPrompt,
+        maxRetries: usesManagedOpenRouter ? 0 : undefined,
       });
 
       return {
@@ -81,7 +102,7 @@ export class AiGenerateTextController {
         },
       };
     } finally {
-      if (result) {
+      if (result && !usesManagedOpenRouter) {
         void this.aiBillingService.calculateAndBillUsage(
           resolvedModelId,
           {

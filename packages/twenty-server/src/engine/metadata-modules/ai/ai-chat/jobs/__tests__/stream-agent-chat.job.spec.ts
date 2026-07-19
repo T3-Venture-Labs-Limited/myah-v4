@@ -196,6 +196,7 @@ describe('StreamAgentChatJob', () => {
       threadRepository,
       agentChatService,
       eventPublisherService,
+      chatExecutionService,
       agentChatStreamingService,
       cancelCallbacks,
     };
@@ -207,6 +208,7 @@ describe('StreamAgentChatJob', () => {
       publishedEvents,
       threadRepository,
       agentChatService,
+      chatExecutionService,
       agentChatStreamingService,
     } = buildJob();
 
@@ -240,6 +242,30 @@ describe('StreamAgentChatJob', () => {
       { activeStreamId: null },
     );
     expect(agentChatStreamingService.flushNextQueuedMessage).toHaveBeenCalled();
+    expect(chatExecutionService.streamChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        managedProviderRequestIdRoot: 'turn-id:resume:stream-id',
+      }),
+    );
+  });
+
+  it('keeps resume roots unique per stream and stable on replay', async () => {
+    const { job, chatExecutionService } = buildJob();
+
+    await job.handle(jobData);
+    await job.handle({ ...jobData, streamId: 'stream-id-2' });
+    await job.handle(jobData);
+
+    expect(
+      chatExecutionService.streamChat.mock.calls.map(
+        ([options]: [{ managedProviderRequestIdRoot: string }]) =>
+          options.managedProviderRequestIdRoot,
+      ),
+    ).toEqual([
+      'turn-id:resume:stream-id',
+      'turn-id:resume:stream-id-2',
+      'turn-id:resume:stream-id',
+    ]);
   });
 
   it('waits for a late human-input chunk before persisting the assistant turn', async () => {

@@ -1,4 +1,5 @@
 import defaultAiProviders from 'src/engine/metadata-modules/ai/ai-models/ai-providers.json';
+import { MANAGED_OPENROUTER_MINIMUM_PRICE_PER_MILLION } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { aiProvidersConfigSchema } from 'src/engine/metadata-modules/ai/ai-models/types/ai-providers-config.schema';
 import { type AiProvidersConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-providers-config.type';
 import { buildCompositeModelId } from 'src/engine/metadata-modules/ai/ai-models/utils/composite-model-id.util';
@@ -12,6 +13,7 @@ const EXPECTED_PROVIDER_NAMES = [
   'google',
   'xai',
   'mistral',
+  'openrouter',
 ];
 
 describe('ai-providers.json integrity', () => {
@@ -79,5 +81,42 @@ describe('ai-providers.json integrity', () => {
       expect(config.npm).toBeDefined();
       expect(config.npm).toMatch(/^@ai-sdk\//);
     });
+  });
+  it('registers only the reviewed managed OpenRouter catalog', () => {
+    expect(PROVIDERS.openrouter).toMatchObject({
+      apiKey: '{{OPENROUTER_API_KEY}}',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      npm: '@ai-sdk/openai-compatible',
+    });
+    expect(PROVIDERS.openrouter?.models).toEqual([
+      expect.objectContaining({
+        name: 'deepseek/deepseek-v4-flash',
+        label: 'DeepSeek V4 Flash',
+      }),
+      expect.objectContaining({
+        name: 'x-ai/grok-4.5',
+        label: 'Grok 4.5',
+      }),
+      expect.objectContaining({
+        name: 'openai/gpt-5.6-luna',
+        label: 'GPT-5.6 Luna',
+      }),
+      expect.objectContaining({
+        name: 'google/gemma-4-31b-it:free',
+        label: 'Gemma 4 31B (Free)',
+      }),
+    ]);
+  });
+  it('uses the reviewed 30 percent minimum-margin list prices', () => {
+    for (const model of PROVIDERS.openrouter?.models ?? []) {
+      const modelId =
+        `openrouter/${model.name}` as keyof typeof MANAGED_OPENROUTER_MINIMUM_PRICE_PER_MILLION;
+      const minimumPrice =
+        MANAGED_OPENROUTER_MINIMUM_PRICE_PER_MILLION[modelId];
+
+      expect(minimumPrice).toBeDefined();
+      expect(model.inputCostPerMillionTokens).toBe(minimumPrice.input);
+      expect(model.outputCostPerMillionTokens).toBe(minimumPrice.output);
+    }
   });
 });

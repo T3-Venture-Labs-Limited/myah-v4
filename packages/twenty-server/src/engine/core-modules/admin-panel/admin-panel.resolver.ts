@@ -22,6 +22,10 @@ import { AdminWorkspaceChatThreadDTO } from 'src/engine/core-modules/admin-panel
 import { ConfigVariableDTO } from 'src/engine/core-modules/admin-panel/dtos/config-variable.dto';
 import { ConfigVariablesDTO } from 'src/engine/core-modules/admin-panel/dtos/config-variables.dto';
 import { DeleteJobsResponseDTO } from 'src/engine/core-modules/admin-panel/dtos/delete-jobs-response.dto';
+import { CorrectManagedProviderFundingInput } from 'src/engine/core-modules/admin-panel/dtos/correct-managed-provider-funding.input';
+import { GrantManagedProviderCreditInput } from 'src/engine/core-modules/admin-panel/dtos/grant-managed-provider-credit.input';
+import { ManagedProviderCreditReceiptDTO } from 'src/engine/core-modules/admin-panel/dtos/managed-provider-credit-receipt.dto';
+import { RecordManagedProviderOfflineCommitmentInput } from 'src/engine/core-modules/admin-panel/dtos/record-managed-provider-offline-commitment.input';
 import { QueueJobsResponseDTO } from 'src/engine/core-modules/admin-panel/dtos/queue-jobs-response.dto';
 import { RetryJobsResponseDTO } from 'src/engine/core-modules/admin-panel/dtos/retry-jobs-response.dto';
 import { RevokeSigningKeyInput } from 'src/engine/core-modules/admin-panel/dtos/revoke-signing-key.input';
@@ -41,6 +45,7 @@ import { MaintenanceModeService } from 'src/engine/core-modules/admin-panel/main
 import { AdminPanelBillingService } from 'src/engine/core-modules/admin-panel/services/admin-panel-billing.service';
 import { AdminPanelChatService } from 'src/engine/core-modules/admin-panel/services/admin-panel-chat.service';
 import { AdminPanelConfigService } from 'src/engine/core-modules/admin-panel/services/admin-panel-config.service';
+import { AdminPanelManagedProviderBillingService } from 'src/engine/core-modules/admin-panel/services/admin-panel-managed-provider-billing.service';
 import { AdminPanelSigningKeyService } from 'src/engine/core-modules/admin-panel/services/admin-panel-signing-key.service';
 import { AdminPanelServerAdminService } from 'src/engine/core-modules/admin-panel/services/admin-panel-server-admin.service';
 import { AdminPanelStatisticsService } from 'src/engine/core-modules/admin-panel/services/admin-panel-statistics.service';
@@ -124,6 +129,7 @@ export class AdminPanelResolver {
     private readonly adminStatisticsService: AdminPanelStatisticsService,
     private readonly adminBillingService: AdminPanelBillingService,
     private readonly adminChatService: AdminPanelChatService,
+    private readonly adminManagedProviderBillingService: AdminPanelManagedProviderBillingService,
     private readonly adminConfigService: AdminPanelConfigService,
     private readonly adminVersionService: AdminPanelVersionService,
     private readonly adminPanelHealthService: AdminPanelHealthService,
@@ -135,8 +141,8 @@ export class AdminPanelResolver {
     private readonly twentyConfigService: TwentyConfigService,
     private readonly aiModelRegistryService: AiModelRegistryService,
     private readonly aiModelPreferencesService: AiModelPreferencesService,
-    private readonly defaultAiCatalogService: DefaultAiCatalogService,
     private readonly modelsDevCatalogService: ModelsDevCatalogService,
+    private readonly defaultAiCatalogService: DefaultAiCatalogService,
     private readonly usageAnalyticsService: UsageAnalyticsService,
     private readonly maintenanceModeService: MaintenanceModeService,
     private readonly upgradeStatusService: UpgradeStatusService,
@@ -507,15 +513,15 @@ export class AdminPanelResolver {
   async getAiProviders(): Promise<Record<string, unknown>> {
     const providers =
       this.aiModelRegistryService.getResolvedProvidersForAdmin();
+    const catalog = this.defaultAiCatalogService.getDefaultAiCatalog();
     const catalogNames = this.aiModelRegistryService.getCatalogProviderNames();
-    const rawCatalog = this.defaultAiCatalogService.getDefaultAiCatalog();
     const masked: Record<string, Record<string, unknown>> = {};
 
     for (const [key, config] of Object.entries(providers)) {
       const isCatalog = catalogNames.has(key);
-      const rawConfig = isCatalog ? rawCatalog[key] : undefined;
-      const apiKeyConfigVariable = rawConfig
-        ? extractConfigVariableName(rawConfig.apiKey)
+      const isOpenRouter = key === 'openrouter';
+      const apiKeyConfigVariable = isCatalog
+        ? extractConfigVariableName(catalog[key]?.apiKey)
         : undefined;
 
       masked[key] = {
@@ -527,15 +533,49 @@ export class AdminPanelResolver {
         ...(config.baseUrl && { baseUrl: config.baseUrl }),
         ...(config.region && { region: config.region }),
         ...(config.dataResidency && { dataResidency: config.dataResidency }),
-        ...(config.apiKey && {
-          apiKey: `${config.apiKey.substring(0, 8)}...`,
-        }),
-        ...(apiKeyConfigVariable && { apiKeyConfigVariable }),
+        ...(!isOpenRouter &&
+          config.apiKey && {
+            apiKey: `${config.apiKey.substring(0, 8)}...`,
+          }),
+        ...(!isOpenRouter && apiKeyConfigVariable && { apiKeyConfigVariable }),
+        ...(isOpenRouter && { hasApiKey: !!config.apiKey }),
         hasAccessKey: !!(config.accessKeyId && config.secretAccessKey),
       };
     }
 
     return masked;
+  }
+
+  @Mutation(() => ManagedProviderCreditReceiptDTO)
+  async grantManagedProviderCredit(
+    @Args() input: GrantManagedProviderCreditInput,
+    @AuthUser() actor: AuthContextUser,
+  ): Promise<ManagedProviderCreditReceiptDTO> {
+    return this.adminManagedProviderBillingService.grantCredit(input, actor.id);
+  }
+  @Mutation(() => Boolean)
+  async recordManagedProviderOfflineCommitment(
+    @Args() input: RecordManagedProviderOfflineCommitmentInput,
+    @AuthUser() actor: AuthContextUser,
+  ): Promise<boolean> {
+    await this.adminManagedProviderBillingService.recordOfflineCommitment(
+      input,
+      actor.id,
+    );
+
+    return true;
+  }
+  @Mutation(() => Boolean)
+  async correctManagedProviderFunding(
+    @Args() input: CorrectManagedProviderFundingInput,
+    @AuthUser() actor: AuthContextUser,
+  ): Promise<boolean> {
+    await this.adminManagedProviderBillingService.correctFunding(
+      input,
+      actor.id,
+    );
+
+    return true;
   }
 
   @Mutation(() => Boolean)

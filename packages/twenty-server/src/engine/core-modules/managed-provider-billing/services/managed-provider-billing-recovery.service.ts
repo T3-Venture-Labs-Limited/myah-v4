@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 
@@ -19,11 +19,14 @@ import {
   MetronomeClientService,
   type MetronomeUsageEvent,
 } from './metronome-client.service';
+import { OpenRouterGenerationLookupService } from './openrouter-generation-lookup.service';
 import { validateSafeMetronomeEventProperties } from '../utils/validate-safe-metronome-event-properties.util';
 
 const INITIAL_SETTLEMENT_RETRY_DELAY_MS = 60_000;
 const MAX_SETTLEMENT_RETRY_DELAY_MS = 15 * 60_000;
 const RECOVERY_BATCH_SIZE = 100;
+const RECONCILIATION_TIMEOUT_MS = 7 * 24 * 60 * 60 * 1_000;
+const RECONCILIATION_RETRY_DELAY_MS = 24 * 60 * 60 * 1_000;
 const STALE_RESERVATION_THRESHOLD_MS = 34 * 24 * 60 * 60 * 1_000;
 
 @Injectable()
@@ -45,6 +48,8 @@ export class ManagedProviderBillingRecoveryService {
     @InjectMessageQueue(MessageQueue.workspaceQueue)
     private readonly messageQueueService: MessageQueueService,
     private readonly twentyConfigService: TwentyConfigService,
+    @Optional()
+    private readonly openRouterGenerationLookupService?: OpenRouterGenerationLookupService,
   ) {}
 
   async recover(): Promise<void> {
@@ -58,6 +63,7 @@ export class ManagedProviderBillingRecoveryService {
 
     await this.recoverPendingOperations(now);
     await this.recoverAcceptedOperations(now);
+    await this.recoverUnknownOpenRouterOperations(now);
   }
 
   private async recoverPendingOperations(now: Date): Promise<void> {
@@ -96,6 +102,321 @@ export class ManagedProviderBillingRecoveryService {
 
       cursor = pendingOperations[pendingOperations.length - 1].id;
     }
+  }
+  private async recoverUnknownOpenRouterOperations(now: Date): Promise<void> {
+    if (!this.openRouterGenerationLookupService) return;
+
+    const operations = await this.operationRepository.find({
+      take: RECOVERY_BATCH_SIZE,
+      where: [
+        {
+          completionOutcome: 'UNKNOWN',
+          providerKey: 'openrouter',
+          state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+        },
+        {
+          completionOutcome: 'UNKNOWN',
+          providerCostMicrousd: IsNull(),
+          providerExecutionId: MoreThan(''),
+          providerKey: 'openrouter',
+          state: ManagedProviderOperationState.RELEASED,
+        },
+      ],
+    });
+
+    await Promise.all(
+      operations.map(async (operation) => {
+        if (!operation.providerExecutionId) return;
+
+        if (
+          operation.state ===
+            ManagedProviderOperationState.RECONCILIATION_REQUIRED &&
+          operation.createdAt instanceof Date &&
+          now.getTime() - operation.createdAt.getTime() >=
+            RECONCILIATION_TIMEOUT_MS
+        ) {
+          await this.operationRepository.manager.transaction(
+            async (manager) => {
+              const lockedOperation = await manager.findOne(
+                ManagedProviderOperationEntity,
+                {
+                  lock: { mode: 'pessimistic_write' },
+                  where: {
+                    id: operation.id,
+                    workspaceId: operation.workspaceId,
+                  },
+                },
+              );
+              if (
+                lockedOperation?.state !==
+                ManagedProviderOperationState.RECONCILIATION_REQUIRED
+              )
+                return;
+              await manager.save(ManagedProviderOperationEntity, {
+                ...lockedOperation,
+                lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
+                nextDeliveryAttemptAt: null,
+                releasedAt: now,
+                state: ManagedProviderOperationState.RELEASED,
+              });
+            },
+          );
+          return;
+        }
+
+        const generation = await this.openRouterGenerationLookupService!.lookup(
+          operation.providerExecutionId,
+        );
+        if (
+          generation.status !== 'found' ||
+          generation.id !== operation.providerExecutionId ||
+          `openrouter/${generation.model}` !==
+            operation.providerConfigurationKey ||
+          !this.isMatchingGenerationUsage(operation, generation)
+        ) {
+          await this.scheduleUnknownRetry(operation, now);
+          return;
+        }
+
+        const providerCostMicrousd = Math.ceil(
+          generation.totalCostUsd * 1_000_000,
+        );
+        if (!Number.isSafeInteger(providerCostMicrousd)) {
+          await this.scheduleUnknownRetry(operation, now);
+          return;
+        }
+        const recoveredUsageProperties = this.getRecoveredUsageProperties(
+          operation,
+          generation,
+          providerCostMicrousd,
+        );
+        if (!recoveredUsageProperties) {
+          await this.scheduleUnknownRetry(operation, now);
+          return;
+        }
+        if (
+          operation.providerCostMicrousd !== null &&
+          operation.providerCostMicrousd !== providerCostMicrousd.toString()
+        ) {
+          await this.scheduleUnknownRetry(operation, now);
+          return;
+        }
+
+        let delivered = false;
+        await this.operationRepository.manager.transaction(async (manager) => {
+          const lockedOperation = await manager.findOne(
+            ManagedProviderOperationEntity,
+            {
+              lock: { mode: 'pessimistic_write' },
+              where: { id: operation.id, workspaceId: operation.workspaceId },
+            },
+          );
+          if (
+            !lockedOperation ||
+            (lockedOperation.state !==
+              ManagedProviderOperationState.RECONCILIATION_REQUIRED &&
+              lockedOperation.state !==
+                ManagedProviderOperationState.RELEASED) ||
+            lockedOperation.completionOutcome !== 'UNKNOWN' ||
+            lockedOperation.providerCostMicrousd !== null
+          )
+            return;
+
+          if (
+            lockedOperation.state === ManagedProviderOperationState.RELEASED
+          ) {
+            await manager.save(ManagedProviderOperationEntity, {
+              ...lockedOperation,
+              actualUsageProperties: recoveredUsageProperties,
+              providerCostMicrousd: providerCostMicrousd.toString(),
+            });
+            this.logger.error(
+              `Late OpenRouter generation evidence absorbed for released operation ${operation.id}`,
+            );
+            return;
+          }
+
+          const completedAt = new Date();
+          await manager.save(ManagedProviderOperationEntity, {
+            ...lockedOperation,
+            actualUsageProperties: recoveredUsageProperties,
+            completionOutcome: 'BILLABLE',
+            completedAt,
+            nextDeliveryAttemptAt: completedAt,
+            providerCostMicrousd: providerCostMicrousd.toString(),
+            state: ManagedProviderOperationState.USAGE_PENDING,
+          });
+          delivered = true;
+        });
+
+        if (delivered) {
+          await this.messageQueueService.add(
+            DeliverManagedProviderUsageJob.name,
+            { operationId: operation.id },
+            { id: `managed-provider-usage:${operation.id}`, retryLimit: 3 },
+          );
+        }
+      }),
+    );
+  }
+
+  private async scheduleUnknownRetry(
+    operation: ManagedProviderOperationEntity,
+    now: Date,
+  ): Promise<void> {
+    await this.operationRepository.manager.transaction(async (manager) => {
+      const lockedOperation = await manager.findOne(
+        ManagedProviderOperationEntity,
+        {
+          lock: { mode: 'pessimistic_write' },
+          where: { id: operation.id, workspaceId: operation.workspaceId },
+        },
+      );
+      if (
+        lockedOperation?.state !==
+        ManagedProviderOperationState.RECONCILIATION_REQUIRED
+      )
+        return;
+      await manager.save(ManagedProviderOperationEntity, {
+        ...lockedOperation,
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_PENDING',
+        nextDeliveryAttemptAt: new Date(
+          now.getTime() + RECONCILIATION_RETRY_DELAY_MS,
+        ),
+      });
+    });
+  }
+
+  private isMatchingGenerationUsage(
+    operation: ManagedProviderOperationEntity,
+    generation: { promptTokens: number; completionTokens: number },
+  ): boolean {
+    const maximum = operation.maximumUsageProperties;
+    if (!maximum) {
+      return false;
+    }
+    return (
+      typeof maximum.inputUnits === 'number' &&
+      Number.isSafeInteger(maximum.inputUnits) &&
+      generation.promptTokens <= maximum.inputUnits &&
+      typeof maximum.outputUnits === 'number' &&
+      Number.isSafeInteger(maximum.outputUnits) &&
+      generation.completionTokens <= maximum.outputUnits
+    );
+  }
+
+  private getRecoveredUsageProperties(
+    operation: ManagedProviderOperationEntity,
+    generation: {
+      cachedPromptTokens: number;
+      completionTokens: number;
+      model: string;
+      promptTokens: number;
+    },
+    providerCostMicrousd: number,
+  ): Record<string, boolean | number | string> | null {
+    const maximum = operation.maximumUsageProperties;
+    if (!maximum) {
+      return null;
+    }
+    const inputRate = maximum.inputRate;
+    const outputRate = maximum.outputRate;
+    const cachedInputRate = maximum.cachedInputRate;
+    const baseInputRate = maximum.baseInputRate ?? inputRate;
+    const baseOutputRate = maximum.baseOutputRate ?? outputRate;
+    const baseCachedInputRate = maximum.baseCachedInputRate ?? cachedInputRate;
+    const longContextThreshold = maximum.longContextThreshold;
+    const tariffVersion = maximum.tariffVersion;
+    const reservedAmountCents = Number(operation.reservedAmountCents);
+
+    if (
+      typeof inputRate !== 'number' ||
+      !Number.isFinite(inputRate) ||
+      inputRate < 0 ||
+      typeof outputRate !== 'number' ||
+      !Number.isFinite(outputRate) ||
+      outputRate < 0 ||
+      typeof cachedInputRate !== 'number' ||
+      !Number.isFinite(cachedInputRate) ||
+      cachedInputRate < 0 ||
+      typeof baseInputRate !== 'number' ||
+      !Number.isFinite(baseInputRate) ||
+      baseInputRate < 0 ||
+      typeof baseOutputRate !== 'number' ||
+      !Number.isFinite(baseOutputRate) ||
+      baseOutputRate < 0 ||
+      typeof baseCachedInputRate !== 'number' ||
+      !Number.isFinite(baseCachedInputRate) ||
+      baseCachedInputRate < 0 ||
+      (longContextThreshold !== undefined &&
+        (typeof longContextThreshold !== 'number' ||
+          !Number.isSafeInteger(longContextThreshold) ||
+          longContextThreshold < 0)) ||
+      typeof tariffVersion !== 'string' ||
+      !tariffVersion ||
+      !Number.isSafeInteger(reservedAmountCents) ||
+      reservedAmountCents < 0 ||
+      generation.cachedPromptTokens > generation.promptTokens
+    ) {
+      return null;
+    }
+
+    const usesLongContextTariff =
+      typeof longContextThreshold === 'number' &&
+      generation.promptTokens >= longContextThreshold;
+    const effectiveInputRate = usesLongContextTariff
+      ? inputRate
+      : baseInputRate;
+    const effectiveOutputRate = usesLongContextTariff
+      ? outputRate
+      : baseOutputRate;
+    const effectiveCachedInputRate = usesLongContextTariff
+      ? cachedInputRate
+      : baseCachedInputRate;
+
+    const retailMicrousd = Math.ceil(
+      (generation.promptTokens - generation.cachedPromptTokens) *
+        effectiveInputRate +
+        generation.cachedPromptTokens * effectiveCachedInputRate +
+        generation.completionTokens * effectiveOutputRate,
+    );
+    if (!Number.isSafeInteger(retailMicrousd)) {
+      return null;
+    }
+
+    const isApprovedFreeModel =
+      operation.providerConfigurationKey ===
+        'openrouter/google/gemma-4-31b-it:free' &&
+      effectiveInputRate === 0 &&
+      effectiveOutputRate === 0 &&
+      effectiveCachedInputRate === 0;
+    const uncappedChargeCentUnits = isApprovedFreeModel
+      ? 0
+      : Math.max(1, Math.ceil(retailMicrousd / 10_000));
+    const hasOverrun = uncappedChargeCentUnits > reservedAmountCents;
+
+    return {
+      cachedInputRate: effectiveCachedInputRate,
+      chargeCentUnits: hasOverrun
+        ? reservedAmountCents
+        : uncappedChargeCentUnits,
+      inputCacheReadUnits: generation.cachedPromptTokens,
+      inputCacheWriteUnits: 0,
+      inputNoCacheUnits:
+        generation.promptTokens - generation.cachedPromptTokens,
+      inputRate: effectiveInputRate,
+      inputUnits: generation.promptTokens,
+      model: operation.providerConfigurationKey,
+      outputRate: effectiveOutputRate,
+      outputUnits: generation.completionTokens,
+      tariffVersion,
+      ...(hasOverrun && {
+        absorbedCostMicrousd: providerCostMicrousd,
+        excessChargeCentUnits: uncappedChargeCentUnits - reservedAmountCents,
+        overrun: true,
+        uncappedChargeCentUnits,
+      }),
+    };
   }
 
   private async recoverAcceptedOperations(now: Date): Promise<void> {

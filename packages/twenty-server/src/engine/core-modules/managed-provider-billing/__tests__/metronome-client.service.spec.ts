@@ -70,6 +70,20 @@ describe('MetronomeClientService', () => {
         }),
     ],
     [
+      'createCustomerCredit',
+      (service: MetronomeClientService) =>
+        service.createCustomerCredit({
+          amountCents: 5_000,
+          contractId: 'contract-id',
+          customerId: 'customer-id',
+          endingBefore: '2027-01-01T00:00:00.000Z',
+          name: 'Design partner credit',
+          productId: 'credit-product-id',
+          startingAt: '2026-07-19T00:00:00.000Z',
+          uniquenessKey: 'design-partner-credit-1',
+        }),
+    ],
+    [
       'findCurrentContracts',
       (service: MetronomeClientService) =>
         service.findCurrentContracts('customer-id'),
@@ -422,7 +436,7 @@ describe('MetronomeClientService', () => {
     expect(listRateCards).toHaveBeenCalledWith({ limit: 100 });
   });
 
-  it('reads only prepaid USD balance including draft invoices', async () => {
+  it('reads sponsored credits and prepaid commitments including draft invoices', async () => {
     const getNetBalance = jest.fn().mockResolvedValue({
       data: { balance: 500 },
     });
@@ -452,7 +466,13 @@ describe('MetronomeClientService', () => {
     });
     expect(getNetBalance).toHaveBeenCalledWith({
       customer_id: 'customer-id',
-      filters: [{ balance_types: ['PREPAID_COMMIT'] }],
+      filters: [
+        { balance_types: ['PREPAID_COMMIT'] },
+        {
+          balance_types: ['CREDIT'],
+          custom_fields: { myah_managed_openrouter: 'sponsored' },
+        },
+      ],
       invoice_inclusion_mode: 'FINALIZED_AND_DRAFT',
     });
   });
@@ -616,6 +636,254 @@ describe('MetronomeClientService', () => {
     });
   });
 
+  it('creates an idempotent credit scoped to the exact customer contract', async () => {
+    const createCredit = jest.fn().mockResolvedValue({
+      data: { id: 'credit-id' },
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: {
+              credits: {
+                create: createCredit,
+              },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+    const twentyConfigService = {
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as Pick<TwentyConfigService, 'get'>;
+    const service = new MetronomeClientService(
+      twentyConfigService as unknown as TwentyConfigService,
+    );
+
+    await expect(
+      service.createCustomerCredit({
+        amountCents: 5_000,
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        endingBefore: '2027-01-01T00:00:00.000Z',
+        name: 'Design partner credit',
+        productId: 'credit-product-id',
+        startingAt: '2026-07-19T00:00:00.000Z',
+        uniquenessKey: 'design-partner-credit-1',
+      }),
+    ).resolves.toEqual({ id: 'credit-id' });
+    expect(createCredit).toHaveBeenCalledWith({
+      access_schedule: {
+        schedule_items: [
+          {
+            amount: 5_000,
+            ending_before: '2027-01-01T00:00:00.000Z',
+            starting_at: '2026-07-19T00:00:00.000Z',
+          },
+        ],
+      },
+      applicable_contract_ids: ['contract-id'],
+      customer_id: 'customer-id',
+      name: 'Design partner credit',
+      priority: 0,
+      product_id: 'credit-product-id',
+      uniqueness_key: 'design-partner-credit-1',
+    });
+  });
+  it('recovers an exact credit from a later page after a uniqueness conflict', async () => {
+    const createCredit = jest.fn().mockRejectedValue({ status: 409 });
+    const getNextPage = jest.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'recovered-credit-id',
+          product: { id: 'credit-product-id', name: 'Credits' },
+          uniqueness_key: 'design-partner-credit-1',
+          applicable_contract_ids: ['contract-id'],
+          access_schedule: {
+            schedule_items: [
+              {
+                amount: 5_000,
+                starting_at: '2026-07-19T00:00:00.000Z',
+                ending_before: '2027-01-01T00:00:00.000Z',
+              },
+            ],
+          },
+        },
+      ],
+      hasNextPage: () => false,
+    });
+    const listCredits = jest.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'unrelated-credit-id',
+          product: { id: 'credit-product-id', name: 'Credits' },
+          uniqueness_key: 'another-credit',
+        },
+      ],
+      getNextPage,
+      hasNextPage: () => true,
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: {
+              credits: { create: createCredit, list: listCredits },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+    const twentyConfigService = {
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as Pick<TwentyConfigService, 'get'>;
+    const service = new MetronomeClientService(
+      twentyConfigService as unknown as TwentyConfigService,
+    );
+
+    await expect(
+      service.createCustomerCredit({
+        amountCents: 5_000,
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        endingBefore: '2027-01-01T00:00:00.000Z',
+        name: 'Design partner credit',
+        productId: 'credit-product-id',
+        startingAt: '2026-07-19T00:00:00.000Z',
+        uniquenessKey: 'design-partner-credit-1',
+      }),
+    ).resolves.toEqual({ id: 'recovered-credit-id' });
+    expect(listCredits).toHaveBeenCalledWith({
+      customer_id: 'customer-id',
+      include_archived: true,
+    });
+    expect(getNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      'missing evidence',
+      [],
+      MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    ],
+    [
+      'multiple evidence',
+      [
+        {
+          id: 'credit-1',
+          product: { id: 'credit-product-id', name: 'Credits' },
+          uniqueness_key: 'design-partner-credit-1',
+        },
+        {
+          id: 'credit-2',
+          product: { id: 'credit-product-id', name: 'Credits' },
+          uniqueness_key: 'design-partner-credit-1',
+        },
+      ],
+      MetronomeClientExceptionCode.CONFLICT,
+    ],
+    [
+      'mismatched amount',
+      [
+        {
+          id: 'credit-1',
+          product: { id: 'credit-product-id', name: 'Credits' },
+          uniqueness_key: 'design-partner-credit-1',
+          applicable_contract_ids: ['contract-id'],
+          access_schedule: {
+            schedule_items: [
+              {
+                amount: 4_999,
+                starting_at: '2026-07-19T00:00:00.000Z',
+                ending_before: '2027-01-01T00:00:00.000Z',
+              },
+            ],
+          },
+        },
+      ],
+      MetronomeClientExceptionCode.CONFLICT,
+    ],
+  ])(
+    'rejects %s credit conflict evidence',
+    async (_, credits, expectedCode) => {
+      const createCredit = jest.fn().mockRejectedValue({ status: 409 });
+      const listCredits = jest.fn().mockResolvedValue({ data: credits });
+      metronomeConstructor.mockImplementation(
+        () =>
+          ({
+            v1: {
+              customers: {
+                credits: { create: createCredit, list: listCredits },
+              },
+            },
+          }) as unknown as Metronome,
+      );
+      const twentyConfigService = {
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as Pick<TwentyConfigService, 'get'>;
+      const service = new MetronomeClientService(
+        twentyConfigService as unknown as TwentyConfigService,
+      );
+
+      await expect(
+        service.createCustomerCredit({
+          amountCents: 5_000,
+          contractId: 'contract-id',
+          customerId: 'customer-id',
+          endingBefore: '2027-01-01T00:00:00.000Z',
+          name: 'Design partner credit',
+          productId: 'credit-product-id',
+          startingAt: '2026-07-19T00:00:00.000Z',
+          uniquenessKey: 'design-partner-credit-1',
+        }),
+      ).rejects.toMatchObject({ code: expectedCode });
+      expect(createCredit).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('fails closed on a non-conflict credit request failure', async () => {
+    const createCredit = jest.fn().mockRejectedValue({ status: 400 });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: { customers: { credits: { create: createCredit } } },
+        }) as unknown as Metronome,
+    );
+    const twentyConfigService = {
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as Pick<TwentyConfigService, 'get'>;
+    const service = new MetronomeClientService(
+      twentyConfigService as unknown as TwentyConfigService,
+    );
+
+    await expect(
+      service.createCustomerCredit({
+        amountCents: 5_000,
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        endingBefore: '2027-01-01T00:00:00.000Z',
+        name: 'Design partner credit',
+        productId: 'credit-product-id',
+        startingAt: '2026-07-19T00:00:00.000Z',
+        uniquenessKey: 'design-partner-credit-1',
+      }),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.REQUEST_FAILED,
+    });
+  });
   it.each([
     ['observed conflict', 409, MetronomeClientExceptionCode.CONFLICT],
     [

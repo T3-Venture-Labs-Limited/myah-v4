@@ -87,10 +87,14 @@ import {
   injectCacheBreakpoint,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/provider-options.util';
 import { replaceUnsupportedFileParts } from 'src/engine/metadata-modules/ai/ai-chat/utils/replace-unsupported-file-parts.util';
-import { AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
+import {
+  AI_TELEMETRY_CONFIG,
+  MANAGED_AI_TELEMETRY_CONFIG,
+} from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
 import { NativeToolBinderService } from 'src/engine/metadata-modules/ai/ai-models/services/native-tool-binder.service';
 import { type AiModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-config.type';
+import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import { getNativeModelCapabilities } from 'src/engine/metadata-modules/ai/ai-models/utils/get-native-model-capabilities.util';
 import { SkillService } from 'src/engine/metadata-modules/skill/skill.service';
 
@@ -105,6 +109,7 @@ export type ChatExecutionOptions = {
   onCompaction?: () => void;
   modelId?: string;
   abortSignal?: AbortSignal;
+  managedProviderRequestIdRoot: string;
   conversationSizeTokens: number;
 };
 
@@ -134,6 +139,7 @@ export class ChatExecutionService {
     private readonly metricsService: MetricsService,
     private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
     private readonly actionApprovalService: ActionApprovalService,
+    private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
   ) {}
 
   async streamChat({
@@ -147,6 +153,7 @@ export class ChatExecutionService {
     onCompaction,
     modelId,
     abortSignal,
+    managedProviderRequestIdRoot,
     conversationSizeTokens,
   }: ChatExecutionOptions): Promise<ChatExecutionResult> {
     const { actorContext, roleId, userId, userContext } =
@@ -203,6 +210,19 @@ export class ChatExecutionService {
     const modelConfig = this.aiModelRegistryService.getEffectiveModelConfig(
       registeredModel.modelId,
     );
+    const usesManagedOpenRouter =
+      this.managedOpenRouterModelService.isManagedModel({
+        modelId: registeredModel.modelId,
+        providerName: registeredModel.providerName,
+      });
+    const executionModel = this.managedOpenRouterModelService.wrapModel({
+      actorUserWorkspaceId: userWorkspaceId,
+      model: registeredModel.model,
+      modelConfig,
+      providerName: registeredModel.providerName,
+      requestIdRoot: managedProviderRequestIdRoot,
+      workspaceId: workspace.id,
+    });
 
     // Native and action search may both be bound here; the model picks at runtime.
     const nativeCapabilities = getNativeModelCapabilities(
@@ -532,15 +552,17 @@ export class ChatExecutionService {
         convertDollarsToBillingCredits(costInDollars),
       );
 
-      await this.aiBillingService.emitAiTokenUsageEvent(
-        workspace.id,
-        creditsUsedMicro,
-        totalTokens,
-        registeredModel.modelId,
-        UsageOperationType.AI_CHAT_TOKEN,
-        null,
-        userWorkspaceId,
-      );
+      if (!usesManagedOpenRouter) {
+        await this.aiBillingService.emitAiTokenUsageEvent(
+          workspace.id,
+          creditsUsedMicro,
+          totalTokens,
+          registeredModel.modelId,
+          UsageOperationType.AI_CHAT_TOKEN,
+          null,
+          userWorkspaceId,
+        );
+      }
 
       // billNativeWebSearchUsage short-circuits when count <= 0, so calling
       // unconditionally is safe regardless of whether native search fired.
@@ -581,7 +603,7 @@ export class ChatExecutionService {
     };
 
     const stream = streamText({
-      model: registeredModel.model,
+      model: executionModel,
       messages: [systemMessage, ...modelMessages],
       tools: guardedTools,
       abortSignal,
@@ -590,7 +612,10 @@ export class ChatExecutionService {
         hasToolCall(ASK_QUESTIONS_TOOL_NAME)(step) ||
         hasToolCall(REQUEST_APPROVAL_TOOL_NAME)(step) ||
         hasNoMoreAvailableCredits,
-      experimental_telemetry: AI_TELEMETRY_CONFIG,
+      maxRetries: usesManagedOpenRouter ? 0 : undefined,
+      experimental_telemetry: usesManagedOpenRouter
+        ? MANAGED_AI_TELEMETRY_CONFIG
+        : AI_TELEMETRY_CONFIG,
       providerOptions: getCallLevelProviderOptions({
         sdkPackage: registeredModel.sdkPackage,
         providerOptions: undefined,
@@ -643,20 +668,22 @@ export class ChatExecutionService {
           attributes: { model: registeredModel.modelId },
         });
 
-        const { hasNoMoreAvailableCredits: stepHasNoMoreAvailableCredits } =
-          await this.aiBillingService.decrementAndCheckAvailableCredits(
-            registeredModel.modelId,
-            {
-              usage: step.usage,
-              cacheCreationTokens: extractCacheCreationTokens(
-                step.providerMetadata,
-              ),
-            },
-            workspace.id,
-          );
+        if (!usesManagedOpenRouter) {
+          const { hasNoMoreAvailableCredits: stepHasNoMoreAvailableCredits } =
+            await this.aiBillingService.decrementAndCheckAvailableCredits(
+              registeredModel.modelId,
+              {
+                usage: step.usage,
+                cacheCreationTokens: extractCacheCreationTokens(
+                  step.providerMetadata,
+                ),
+              },
+              workspace.id,
+            );
 
-        if (stepHasNoMoreAvailableCredits) {
-          hasNoMoreAvailableCredits = true;
+          if (stepHasNoMoreAvailableCredits) {
+            hasNoMoreAvailableCredits = true;
+          }
         }
 
         this.logger.log(
@@ -721,7 +748,9 @@ export class ChatExecutionService {
                 amount: 1,
                 attributes: {
                   model: registeredModel.modelId,
-                  tool: getToolMetricName(learntToolName),
+                  tool: usesManagedOpenRouter
+                    ? LEARN_TOOLS_TOOL_NAME
+                    : getToolMetricName(learntToolName),
                 },
               });
             }
@@ -743,7 +772,9 @@ export class ChatExecutionService {
                 amount: 1,
                 attributes: {
                   model: registeredModel.modelId,
-                  skill: loadedSkillName,
+                  skill: usesManagedOpenRouter
+                    ? LOAD_SKILL_TOOL_NAME
+                    : loadedSkillName,
                 },
               });
             }
@@ -764,18 +795,23 @@ export class ChatExecutionService {
           tools: toolsForRepair,
           inputSchema,
           error,
-          model: registeredModel.model,
-          billingContext: {
-            aiBillingService: this.aiBillingService,
-            modelId: registeredModel.modelId,
-            workspaceId: workspace.id,
-            userWorkspaceId,
-            operationType: UsageOperationType.AI_CHAT_TOKEN,
-          },
+          model: executionModel,
+          telemetryConfig: usesManagedOpenRouter
+            ? MANAGED_AI_TELEMETRY_CONFIG
+            : AI_TELEMETRY_CONFIG,
+          maxRetries: usesManagedOpenRouter ? 0 : undefined,
+          billingContext: usesManagedOpenRouter
+            ? undefined
+            : {
+                aiBillingService: this.aiBillingService,
+                modelId: registeredModel.modelId,
+                workspaceId: workspace.id,
+                userWorkspaceId,
+                operationType: UsageOperationType.AI_CHAT_TOKEN,
+              },
         });
       },
     });
-
     Promise.all([stream.usage, stream.steps])
       .then(async ([, steps]) => {
         await emitTurnUsageEvent(steps);

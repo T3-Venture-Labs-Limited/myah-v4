@@ -10,7 +10,10 @@ import {
   MetronomeClientException,
   MetronomeClientExceptionCode,
 } from '../metronome-client.exception';
-import { getValidatedMetronomeUsageAmountCents } from '../utils/get-validated-metronome-usage-amount-cents.util';
+import {
+  getValidatedMetronomeUsageAmountCents,
+  isApprovedFreeManagedOpenRouterOperation,
+} from '../utils/get-validated-metronome-usage-amount-cents.util';
 
 import { MetronomeClientService } from './metronome-client.service';
 import { MetronomeWorkspaceCustomerService } from './metronome-workspace-customer.service';
@@ -208,6 +211,11 @@ export class ManagedProviderUsageDeliveryService {
             customerId,
             expectedProductIds: operation.expectedProductIds,
             preview,
+            allowZeroAmount: isApprovedFreeManagedOpenRouterOperation({
+              providerKey: operation.providerKey,
+              providerConfigurationKey: operation.providerConfigurationKey,
+              metronomeEventType: operation.metronomeEventType,
+            }),
           });
         } catch {
           await manager.save(ManagedProviderOperationEntity, {

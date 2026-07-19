@@ -5,6 +5,7 @@ import { type AiSdkPackage } from 'twenty-shared/ai';
 
 import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
 import { ConfigGroupHashService } from 'src/engine/core-modules/twenty-config/services/config-group-hash.service';
+import { MANAGED_OPENROUTER_PROVIDER_NAME } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { AiModelRole } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-role.enum';
 
 import {
@@ -66,9 +67,11 @@ export class AiModelRegistryService {
   // so any mutation to an LLM-tagged config variable is picked up automatically
   // on the next read — no explicit refresh from callers needed.
   private ensureFresh(): void {
-    const configHash = this.configGroupHashService.computeHash(
-      ConfigVariablesGroup.LLM,
-    );
+    const configHash = [
+      this.configGroupHashService.computeHash(ConfigVariablesGroup.LLM),
+      this.providerConfigService.isManagedOpenRouterEnabled(),
+      this.providerConfigService.hasCustomOpenRouterProvider(),
+    ].join(':');
 
     if (configHash === this.currentConfigHash) {
       return;
@@ -91,6 +94,16 @@ export class AiModelRegistryService {
 
   private registerModelsFromProviders(providers: AiProvidersConfig): void {
     for (const [providerKey, config] of Object.entries(providers)) {
+      const isManagedProvider =
+        providerKey === MANAGED_OPENROUTER_PROVIDER_NAME &&
+        !this.providerConfigService.hasCustomOpenRouterProvider();
+
+      if (
+        isManagedProvider &&
+        !this.providerConfigService.isManagedOpenRouterEnabled()
+      ) {
+        continue;
+      }
       if (!config.npm) {
         this.logger.warn(
           `Skipping provider "${providerKey}": missing npm field`,
