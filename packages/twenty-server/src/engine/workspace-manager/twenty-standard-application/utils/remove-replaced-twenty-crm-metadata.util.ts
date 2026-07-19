@@ -32,6 +32,45 @@ const REPLACED_CRM_OBJECT_UNIVERSAL_IDENTIFIERS = [
   STANDARD_OBJECTS.opportunity.universalIdentifier,
 ] as const;
 
+const serializedWidgetConfigurationReferencesRemovedEntity = ({
+  value,
+  removedFieldUniversalIdentifiers,
+  removedViewUniversalIdentifiers,
+}: {
+  value: unknown;
+  removedFieldUniversalIdentifiers: Set<string> | undefined;
+  removedViewUniversalIdentifiers: Set<string> | undefined;
+}): boolean => {
+  if (typeof value === 'string') {
+    return (
+      removedFieldUniversalIdentifiers?.has(value) === true ||
+      removedViewUniversalIdentifiers?.has(value) === true
+    );
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) =>
+      serializedWidgetConfigurationReferencesRemovedEntity({
+        value: item,
+        removedFieldUniversalIdentifiers,
+        removedViewUniversalIdentifiers,
+      }),
+    );
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+
+  return Object.values(value).some((item) =>
+    serializedWidgetConfigurationReferencesRemovedEntity({
+      value: item,
+      removedFieldUniversalIdentifiers,
+      removedViewUniversalIdentifiers,
+    }),
+  );
+};
+
 const referencesRemovedEntity = ({
   flatEntity,
   metadataName,
@@ -83,15 +122,13 @@ const referencesRemovedEntity = ({
 
   if (
     metadataName === 'pageLayoutWidget' &&
-    isDefined(flatEntity.universalConfiguration) &&
-    typeof flatEntity.universalConfiguration === 'object' &&
-    'configurationType' in flatEntity.universalConfiguration &&
-    flatEntity.universalConfiguration.configurationType === 'FIELD' &&
-    'fieldMetadataId' in flatEntity.universalConfiguration &&
-    typeof flatEntity.universalConfiguration.fieldMetadataId === 'string' &&
-    removedUniversalIdentifiersByMetadataName.fieldMetadata?.has(
-      flatEntity.universalConfiguration.fieldMetadataId,
-    ) === true
+    serializedWidgetConfigurationReferencesRemovedEntity({
+      value: flatEntity.universalConfiguration,
+      removedFieldUniversalIdentifiers:
+        removedUniversalIdentifiersByMetadataName.fieldMetadata,
+      removedViewUniversalIdentifiers:
+        removedUniversalIdentifiersByMetadataName.view,
+    })
   ) {
     return true;
   }
