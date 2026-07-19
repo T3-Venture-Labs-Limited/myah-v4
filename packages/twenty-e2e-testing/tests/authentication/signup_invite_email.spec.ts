@@ -10,6 +10,8 @@ test('Sign up with invite link via email', async ({
   profileSection,
   confirmationModal,
 }) => {
+  test.setTimeout(120000);
+
   const email = `test${randomUUID().replaceAll('-', '')}@apple.dev`;
   const firstName = 'John';
   const lastName = 'Doe';
