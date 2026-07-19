@@ -60,7 +60,7 @@ export const generateCallRecordingSummary = async (
       CALL_RECORDING_SUMMARIZER_AGENT_UNIVERSAL_IDENTIFIER,
     operationId: callRecordingId,
     prompt,
-  });
+  } as Parameters<typeof runAgent>[0] & { operationId: string });
 
   const markdown = extractCallRecordingSummaryMarkdown(agentResult);
 
