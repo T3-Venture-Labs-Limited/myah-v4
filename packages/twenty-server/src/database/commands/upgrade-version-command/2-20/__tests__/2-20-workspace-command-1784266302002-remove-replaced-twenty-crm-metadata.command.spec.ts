@@ -194,7 +194,12 @@ describe('RemoveReplacedTwentyCrmMetadataCommand', () => {
 
     expect(flush).toHaveBeenCalledWith(
       WORKSPACE_ID,
-      expect.arrayContaining(['flatObjectMetadataMaps', 'flatFieldMetadataMaps']),
+      expect.arrayContaining([
+        'flatObjectMetadataMaps',
+        'flatFieldMetadataMaps',
+        'flatRowLevelPermissionPredicateMaps',
+        'flatRowLevelPermissionPredicateGroupMaps',
+      ]),
     );
     expect(incrementMetadataVersion).toHaveBeenCalledWith(WORKSPACE_ID);
   });

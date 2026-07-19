@@ -146,10 +146,11 @@ export class RemoveReplacedTwentyCrmMetadataCommand extends ActiveOrSuspendedWor
       return;
     }
 
-    await this.workspaceCacheService.flush(
-      workspaceId,
-      TWENTY_STANDARD_ALL_METADATA_NAME.map(getMetadataFlatEntityMapsKey),
-    );
+    await this.workspaceCacheService.flush(workspaceId, [
+      ...TWENTY_STANDARD_ALL_METADATA_NAME.map(getMetadataFlatEntityMapsKey),
+      'flatRowLevelPermissionPredicateMaps',
+      'flatRowLevelPermissionPredicateGroupMaps',
+    ]);
     await this.workspaceMetadataVersionService.incrementMetadataVersion(
       workspaceId,
     );
