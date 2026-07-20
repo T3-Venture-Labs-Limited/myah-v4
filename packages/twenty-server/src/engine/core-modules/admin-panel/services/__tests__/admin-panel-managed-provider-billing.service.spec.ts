@@ -30,7 +30,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
   });
 
   it('journals then grants a credit to the exact workspace customer and contract', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-07-19T10:00:00.000Z'));
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-19T10:37:42.123Z'));
     const metronomeClientService = {
       createCustomerCredit: jest.fn().mockResolvedValue({
         creditId: 'credit-id',
@@ -44,7 +44,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
     const fundingJournalService = {
       countRecentActions: jest.fn().mockResolvedValue(0),
       createPendingRateLimited: jest.fn().mockResolvedValue({
-        createdAt: new Date('2026-07-19T10:00:00.000Z'),
+        createdAt: new Date('2026-07-19T11:00:01.000Z'),
         createdByCaller: true,
         failureCode: null,
         id: 'funding-action-id',
@@ -74,7 +74,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
       service.grantCredit(
         {
           amountCents: 5_000,
-          endingBefore: new Date('2026-08-01T00:00:00.000Z'),
+          endingBefore: new Date('2026-08-01T00:47:13.444Z'),
           reason: 'design partner pilot',
           idempotencyKey: 'pilot-grant-1',
           workspaceId,
@@ -105,6 +105,7 @@ describe('AdminPanelManagedProviderBillingService', () => {
       expect.objectContaining({
         applicableProductIds: ['charge-product-id'],
         creditProductId: 'credit-product-id',
+        expiresAt: new Date('2026-08-01T00:00:00.000Z'),
       }),
       20,
     );

@@ -8,6 +8,7 @@ import {
   MetronomeClientException,
   MetronomeClientExceptionCode,
 } from 'src/engine/core-modules/managed-provider-billing/metronome-client.exception';
+import { toMetronomeHourBoundary } from 'src/engine/core-modules/managed-provider-billing/utils/to-metronome-hour-boundary.util';
 
 import { type GrantManagedProviderCreditInput } from '../dtos/grant-managed-provider-credit.input';
 import { type ManagedProviderCreditReceiptDTO } from '../dtos/managed-provider-credit-receipt.dto';
@@ -64,8 +65,10 @@ export class AdminPanelManagedProviderBillingService {
     }
 
     const now = new Date();
+    const creditStartingAt = toMetronomeHourBoundary(now);
+    const creditEndingBefore = toMetronomeHourBoundary(endingBefore);
 
-    if (endingBefore.getTime() <= now.getTime()) {
+    if (creditEndingBefore.getTime() <= creditStartingAt.getTime()) {
       throw new Error('Managed provider credit must end in the future');
     }
 
@@ -120,7 +123,7 @@ export class AdminPanelManagedProviderBillingService {
       applicableProductIds,
       creditProductId,
       currency: 'USD',
-      expiresAt: endingBefore,
+      expiresAt: creditEndingBefore,
       externalReference: idempotencyKey,
       idempotencyKey,
       operatorIdentity,
@@ -185,10 +188,12 @@ export class AdminPanelManagedProviderBillingService {
           contractId,
           customerId,
           customFields: { myah_managed_openrouter: 'sponsored' },
-          endingBefore: endingBefore.toISOString(),
+          endingBefore:
+            fundingAction.expiresAt?.toISOString() ??
+            creditEndingBefore.toISOString(),
           name: `Myah managed OpenRouter sponsored credit: ${reason.trim()}`,
           productId: fundingAction.creditProductId ?? '',
-          startingAt: fundingAction.createdAt.toISOString(),
+          startingAt: creditStartingAt.toISOString(),
           uniquenessKey: fundingAction.metronomeUniquenessKey,
         });
 

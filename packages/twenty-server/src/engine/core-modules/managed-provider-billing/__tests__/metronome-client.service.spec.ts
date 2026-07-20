@@ -226,7 +226,7 @@ describe('MetronomeClientService', () => {
   });
 
   it('maps enabled contract creation to the configured rate card and uniqueness key', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-07-16T12:00:00.000Z'));
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-16T12:37:42.123Z'));
     const createContract = jest.fn().mockResolvedValue({
       data: { id: 'contract-id' },
     });
@@ -842,10 +842,10 @@ describe('MetronomeClientService', () => {
         applicableProductIds: ['charge-product-id'],
         contractId: 'contract-id',
         customerId: 'customer-id',
-        endingBefore: '2027-01-01T00:00:00.000Z',
+        endingBefore: '2027-01-01T00:47:13.444Z',
         name: 'Design partner credit',
         productId: 'credit-product-id',
-        startingAt: '2026-07-19T00:00:00.000Z',
+        startingAt: '2026-07-19T00:37:42.123Z',
         uniquenessKey: 'design-partner-credit-1',
       }),
     ).resolves.toEqual({ creditId: 'credit-id', metronomeEditId: 'edit-id' });
@@ -904,8 +904,24 @@ describe('MetronomeClientService', () => {
     });
   });
 
-  it('classifies an ambiguous v2 edit failure as recoverable', async () => {
-    const edit = jest.fn().mockRejectedValue({ status: 500 });
+  it.each([
+    [
+      'an ambiguous server failure as recoverable',
+      { status: 500 },
+      MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    ],
+    [
+      'the live 422 uniqueness-key response as a conflict',
+      { status: 422, message: '422 Uniqueness key already exists: credit-key' },
+      MetronomeClientExceptionCode.CONFLICT,
+    ],
+    [
+      'an unrelated 422 validation response as a request failure',
+      { status: 422, message: '422 Invalid contract credit payload' },
+      MetronomeClientExceptionCode.REQUEST_FAILED,
+    ],
+  ])('classifies %s', async (_, providerError, expectedCode) => {
+    const edit = jest.fn().mockRejectedValue(providerError);
     metronomeConstructor.mockImplementation(
       () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
     );
@@ -929,9 +945,7 @@ describe('MetronomeClientService', () => {
         startingAt: '2026-07-19T00:00:00.000Z',
         uniquenessKey: 'design-partner-credit-1',
       }),
-    ).rejects.toMatchObject({
-      code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
-    });
+    ).rejects.toMatchObject({ code: expectedCode });
   });
   it.each([
     ['observed conflict', 409, MetronomeClientExceptionCode.CONFLICT],
