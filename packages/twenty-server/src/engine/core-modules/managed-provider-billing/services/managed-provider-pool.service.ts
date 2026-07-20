@@ -36,6 +36,14 @@ export class ManagedProviderPoolService {
     private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
+  async isStorageAvailable(): Promise<boolean> {
+    const [result] = (await this.poolRepository.manager.query(
+      `SELECT to_regclass('core."managedProviderPool"') AS "tableName"`,
+    )) as Array<{ tableName: string | null }>;
+
+    return result?.tableName !== null && result?.tableName !== undefined;
+  }
+
   isManagedWorkspace(providerKey: string, workspaceId: string): boolean {
     return (
       providerKey === 'openrouter' &&

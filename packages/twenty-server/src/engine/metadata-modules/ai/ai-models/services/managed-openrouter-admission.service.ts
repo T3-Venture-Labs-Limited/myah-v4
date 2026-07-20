@@ -12,6 +12,10 @@ export class ManagedOpenRouterAdmissionService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    if (!(await this.managedProviderPoolService.isStorageAvailable())) {
+      return;
+    }
+
     const manifest = MANAGED_OPENROUTER_POOL_DESIRED_MANIFEST;
     const digest = createHash('sha256')
       .update(JSON.stringify(manifest))

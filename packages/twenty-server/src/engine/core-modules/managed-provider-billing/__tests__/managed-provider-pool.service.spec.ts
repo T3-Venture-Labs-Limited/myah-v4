@@ -58,6 +58,32 @@ describe('ManagedProviderPoolService', () => {
     };
   };
 
+  it.each([
+    [null, false],
+    ['core.managedProviderPool', true],
+  ])(
+    'reports pool storage availability from the database catalog',
+    async (tableName, expected) => {
+      const poolRepository = {
+        manager: {
+          query: jest.fn().mockResolvedValue([{ tableName }]),
+        },
+      } as unknown as Repository<ManagedProviderPoolEntity>;
+      const configService = {
+        get: jest.fn(),
+      } as unknown as TwentyConfigService;
+      const service = new ManagedProviderPoolService(
+        poolRepository,
+        configService,
+      );
+
+      await expect(service.isStorageAvailable()).resolves.toBe(expected);
+      expect(poolRepository.manager.query).toHaveBeenCalledWith(
+        `SELECT to_regclass('core."managedProviderPool"') AS "tableName"`,
+      );
+    },
+  );
+
   it('locks and admits only an exact active tariff and evidence version', async () => {
     const repository = {
       findOne: jest.fn().mockResolvedValue(activePool),
