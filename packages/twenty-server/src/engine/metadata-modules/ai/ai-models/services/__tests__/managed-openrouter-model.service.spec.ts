@@ -4,6 +4,7 @@ import { type LanguageModel } from 'ai';
 import { ManagedProviderOperationState } from 'src/engine/core-modules/managed-provider-billing/enums/managed-provider-operation-state.enum';
 import { type ManagedProviderOperationService } from 'src/engine/core-modules/managed-provider-billing/services/managed-provider-operation.service';
 import { type TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { MANAGED_OPENROUTER_TARIFF_VERSION } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { type AiModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-config.type';
 import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 
@@ -283,12 +284,12 @@ describe('ManagedOpenRouterModelService', () => {
           inputCacheWriteUnits: 0,
           model: 'openrouter/deepseek/deepseek-v4-flash',
           outputUnits: 7,
-          tariffVersion: '2026-07-19-v2',
+          tariffVersion: MANAGED_OPENROUTER_TARIFF_VERSION,
           chargeCentUnits: 1,
           charge_cent_unit: '1',
           model_id: 'openrouter/deepseek/deepseek-v4-flash',
           operation_id: 'operation-1',
-          tariff_version: '2026-07-19-v2',
+          tariff_version: MANAGED_OPENROUTER_TARIFF_VERSION,
         }),
         actorUserWorkspaceId: 'user-workspace-id',
         operationId: 'operation-1',
