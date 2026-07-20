@@ -1,11 +1,16 @@
 import { render, waitFor } from '@testing-library/react';
+import { useEffect, useRef } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { PageChangeEffect } from '@/app/effect-components/PageChangeEffect';
 import { usePageChangeEffectNavigateLocation } from '~/hooks/usePageChangeEffectNavigateLocation';
 
 const navigate = jest.fn();
 const noOp = jest.fn();
+const getReturnToPath = jest.fn().mockReturnValue('');
 const store = { get: jest.fn(), set: jest.fn() };
+const { useNavigate: useActualNavigate } = jest.requireActual(
+  'react-router-dom',
+);
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -26,7 +31,7 @@ jest.mock('@/app/hooks/useExecuteTasksOnAnyLocationChange', () => ({
 jest.mock('@/auth/hooks/useReturnToPath', () => ({
   useReturnToPath: () => ({
     saveReturnToPath: noOp,
-    getReturnToPath: () => '',
+    getReturnToPath,
     clearReturnToPath: noOp,
   }),
 }));
@@ -110,7 +115,7 @@ jest.mock('~/utils/isMatchingLocation', () => ({
 
 describe('PageChangeEffect', () => {
   beforeEach(() => {
-    navigate.mockClear();
+    navigate.mockReset();
     store.get.mockClear();
     store.set.mockClear();
     jest
@@ -124,6 +129,7 @@ describe('PageChangeEffect', () => {
         future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
         initialEntries={['/myah']}
       >
+        <RouteTransitionEffect />
         <PageChangeEffect />
       </MemoryRouter>,
     );
@@ -134,6 +140,29 @@ describe('PageChangeEffect', () => {
     pending: undefined,
     ready: '/myah/today',
   } as const;
+  const RouteTransitionEffect = ({
+    destination,
+  }: {
+    destination?: string;
+  }) => {
+    const navigateToDestination = useActualNavigate();
+    const previousDestinationRef = useRef<string | undefined>(undefined);
+
+    useEffect(() => {
+      navigate.mockImplementation(navigateToDestination);
+
+      if (
+        destination !== previousDestinationRef.current &&
+        destination !== undefined
+      ) {
+        previousDestinationRef.current = destination;
+        navigateToDestination(destination);
+      }
+    }, [destination, navigateToDestination]);
+
+    return null;
+  };
+
 
   const expectTodayRedirectAfterResolution = async (
     resolvedState: 'ready' | 'forbidden',
@@ -150,6 +179,7 @@ describe('PageChangeEffect', () => {
         future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
         initialEntries={['/myah']}
       >
+        <RouteTransitionEffect />
         <PageChangeEffect />
       </MemoryRouter>,
     );
@@ -163,6 +193,7 @@ describe('PageChangeEffect', () => {
         future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
         initialEntries={['/myah']}
       >
+        <RouteTransitionEffect />
         <PageChangeEffect />
       </MemoryRouter>,
     );
@@ -175,6 +206,7 @@ describe('PageChangeEffect', () => {
         future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
         initialEntries={['/myah']}
       >
+        <RouteTransitionEffect />
         <PageChangeEffect />
       </MemoryRouter>,
     );
@@ -187,5 +219,50 @@ describe('PageChangeEffect', () => {
 
   it('navigates to Today exactly once when Today is forbidden', async () => {
     await expectTodayRedirectAfterResolution('forbidden');
+  });
+
+  it('navigates again when the route moves away while the target is unchanged', async () => {
+    const target = '/myah/today?tab=tasks#priority';
+    jest
+      .mocked(usePageChangeEffectNavigateLocation)
+      .mockReturnValue(target);
+
+    const view = render(
+      <MemoryRouter
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        initialEntries={[target]}
+      >
+        <RouteTransitionEffect />
+        <PageChangeEffect />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    expect(navigate).toHaveBeenLastCalledWith(target);
+
+    view.rerender(
+      <MemoryRouter
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        initialEntries={[target]}
+      >
+        <RouteTransitionEffect />
+        <PageChangeEffect />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <MemoryRouter
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        initialEntries={[target]}
+      >
+        <RouteTransitionEffect destination="/myah" />
+        <PageChangeEffect />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(2));
+    expect(navigate).toHaveBeenLastCalledWith(target);
   });
 });

@@ -147,8 +147,10 @@ export const PageChangeEffect = () => {
 
     if (
       !isAppEffectRedirectEnabled ||
-      lastPageChangeEffectNavigateLocationRef.current ===
-        pageChangeEffectNavigateLocation
+      (lastPageChangeEffectNavigateLocationRef.current ===
+        pageChangeEffectNavigateLocation &&
+        `${location.pathname}${location.search}${location.hash}` ===
+          pageChangeEffectNavigateLocation)
     ) {
       return;
     }
@@ -173,6 +175,7 @@ export const PageChangeEffect = () => {
       clearReturnToPath();
     }
   }, [
+    location,
     navigate,
     pageChangeEffectNavigateLocation,
     isAppEffectRedirectEnabled,
