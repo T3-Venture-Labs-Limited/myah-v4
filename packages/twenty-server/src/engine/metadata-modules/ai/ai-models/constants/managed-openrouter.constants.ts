@@ -13,7 +13,7 @@ export const MANAGED_OPENROUTER_EVENT_TYPE = 'managed_openrouter_generation';
 // The source manifest below is the sole billing authority. Keep this file
 // reviewable: activation requires replacing the unfunded acquisition facts and
 // digest in the same source change.
-const REVIEWED_MANAGED_OPENROUTER_TARIFF_VERSION = '2026-07-19-v2';
+const REVIEWED_MANAGED_OPENROUTER_TARIFF_VERSION = '2026-07-20-v3';
 
 export const MANAGED_OPENROUTER_GEMMA_PAID_REFERENCE_PRICE_PER_MILLION = {
   input: 0.22,
@@ -55,9 +55,10 @@ export const MANAGED_OPENROUTER_TARIFF_MANIFEST = {
   providerKey: MANAGED_OPENROUTER_PROVIDER_NAME,
   tariffVersion: REVIEWED_MANAGED_OPENROUTER_TARIFF_VERSION,
   acquisition: {
-    cashPaidMicrousd: null,
-    usableCreditsReceivedMicrousd: null,
-    evidenceIdentity: null,
+    cashPaidMicrousd: '100000000',
+    usableCreditsReceivedMicrousd: '100000000',
+    evidenceIdentity:
+      'openrouter-credits-api-total-credits-usd-340-to-440-2026-07-20',
   },
   models: {
     'openrouter/deepseek/deepseek-v4-flash': {
@@ -139,7 +140,7 @@ export const MANAGED_OPENROUTER_PROVIDER_MAX_PRICE_PER_MILLION =
   ) as Record<string, { readonly prompt: number; readonly completion: number }>;
 
 export const MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST =
-  '91920e85fef98a8729b7e33e800d4602f0b80da60cc579f7bf3ef9081b4a8a13' as const;
+  'de4a270869ce41fe8d2677abeeed750a21ea7d2c52fabbd6c3bae5a45e311ecf' as const;
 
 export const MANAGED_OPENROUTER_TARIFF_MANIFEST_IS_FUNDED =
   MANAGED_OPENROUTER_TARIFF_MANIFEST.acquisition.cashPaidMicrousd !== null &&
@@ -150,9 +151,9 @@ export const MANAGED_OPENROUTER_TARIFF_MANIFEST_IS_FUNDED =
 export const MANAGED_OPENROUTER_POOL_DESIRED_MANIFEST = {
   providerKey: MANAGED_OPENROUTER_PROVIDER_NAME,
   configurationDigest: MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST,
-  tariffVersion: null,
-  epoch: '2',
-  state: ManagedProviderPoolState.DRAINING,
+  tariffVersion: MANAGED_OPENROUTER_TARIFF_VERSION,
+  epoch: '3',
+  state: ManagedProviderPoolState.ACTIVE,
 } as const;
 
 export const getManagedOpenRouterManifestModel = (
