@@ -142,6 +142,9 @@ describe('PageChangeEffect', () => {
 
     await waitFor(() => expect(navigate).not.toHaveBeenCalled());
 
+    jest
+      .mocked(usePageChangeEffectNavigateLocation)
+      .mockReturnValue(todayDestinationByState.missing);
     view.rerender(
       <MemoryRouter
         future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
@@ -166,6 +169,16 @@ describe('PageChangeEffect', () => {
 
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
     expect(navigate).toHaveBeenLastCalledWith('/myah/today');
+
+    view.rerender(
+      <MemoryRouter
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        initialEntries={['/myah']}
+      >
+        <PageChangeEffect />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
   };
 
   it('navigates to Today exactly once when Today becomes ready', async () => {
