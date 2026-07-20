@@ -3,9 +3,14 @@ import {
   resolveMyahNavigationRoutes,
   type MyahNavigationRouteResolutionSources,
 } from '@/myah/navigation/hooks/useResolvedMyahNavigationRoutes';
-import { type MyahNavigationRoute } from '@/myah/navigation/types/MyahNavigationRoute';
+import {
+  type MyahNavigationRoute,
+  type ResolvedMyahNavigationRoute,
+} from '@/myah/navigation/types/MyahNavigationRoute';
 import { IconCircle } from 'twenty-ui/icon';
 import { createStore } from 'jotai';
+import { renderHook } from '@testing-library/react';
+import * as React from 'react';
 
 const loadedMetadataStoreItems = {
   objectMetadataItems: { status: 'up-to-date' },
@@ -153,6 +158,111 @@ describe('resolveMyahNavigationRoutes', () => {
         kind: 'native',
         path: '/objects/campaigns?viewId=campaign-view-id',
       },
+    });
+  });
+
+  it('uses the persisted campaign view on the hook first render', () => {
+    localStorage.setItem(
+      'lastVisitedViewPerObjectMetadataItemState',
+      JSON.stringify({ 'campaign-object-id': 'campaign-view-id' }),
+    );
+
+    jest.isolateModules(() => {
+      jest.doMock('react', () => React);
+      const { Provider: JotaiProvider, createStore: createIsolatedStore } =
+        require('jotai');
+      const {
+        currentUserWorkspaceState,
+      } = require('@/auth/states/currentUserWorkspaceState');
+      const {
+        metadataStoreState,
+      } = require('@/metadata-store/states/metadataStoreState');
+      const {
+        useResolvedMyahNavigationRoutes: useIsolatedResolvedMyahNavigationRoutes,
+      } = require('@/myah/navigation/hooks/useResolvedMyahNavigationRoutes');
+
+      const store = createIsolatedStore();
+      const loadedMetadataStoreItem = {
+        current: [],
+        draft: [],
+        status: 'up-to-date',
+      };
+
+      for (const metadataStoreKey of [
+        'fieldMetadataItems',
+        'views',
+        'viewFields',
+        'pageLayouts',
+        'pageLayoutTabs',
+        'pageLayoutWidgets',
+      ]) {
+        store.set(
+          metadataStoreState.atomFamily(metadataStoreKey),
+          loadedMetadataStoreItem,
+        );
+      }
+
+      store.set(metadataStoreState.atomFamily('objectMetadataItems'), {
+        ...loadedMetadataStoreItem,
+        current: [
+          {
+            id: 'campaign-object-id',
+            nameSingular: 'campaign',
+            namePlural: 'campaigns',
+            universalIdentifier: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+          },
+        ],
+      });
+      store.set(currentUserWorkspaceState.atom, {
+        permissionFlags: [],
+        twoFactorAuthenticationMethodSummary: null,
+        objectsPermissions: [
+          {
+            objectMetadataId: 'campaign-object-id',
+            canReadObjectRecords: true,
+            canUpdateObjectRecords: true,
+            canSoftDeleteObjectRecords: true,
+            canDestroyObjectRecords: true,
+            restrictedFields: {},
+            rowLevelPermissionPredicates: [],
+            rowLevelPermissionPredicateGroups: [],
+          },
+        ],
+      });
+
+      const Wrapper = ({ children }: { children: React.ReactNode }) => (
+        <JotaiProvider store={store}>{children}</JotaiProvider>
+      );
+      const observedRoutes: ResolvedMyahNavigationRoute[][] = [];
+      renderHook(
+        () => {
+          const routes = useIsolatedResolvedMyahNavigationRoutes();
+          observedRoutes.push(routes);
+          return routes;
+        },
+        { wrapper: Wrapper },
+      );
+      const initialCampaignRoute = observedRoutes[0].find(
+        (resolvedRoute) => resolvedRoute.route.id === 'campaigns',
+      );
+
+      expect(initialCampaignRoute).toMatchObject({
+        status: 'ready',
+        destination: {
+          kind: 'native',
+          path: '/objects/campaigns?viewId=campaign-view-id',
+        },
+      });
+      expect(observedRoutes).not.toContainEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            status: 'ready',
+            destination: expect.objectContaining({
+              path: '/objects/campaigns',
+            }),
+          }),
+        ]),
+      );
     });
   });
 
