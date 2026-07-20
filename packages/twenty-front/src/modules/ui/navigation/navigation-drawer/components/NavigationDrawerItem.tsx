@@ -319,6 +319,7 @@ export const NavigationDrawerItem = ({
     onClick: isExternalLink
       ? (navigationOnClick ?? handleExternalLinkClick)
       : navigationOnClick,
+    onBeforeNavigation: disabled ? undefined : handleMobileNavigation,
     triggerEvent,
   });
 
