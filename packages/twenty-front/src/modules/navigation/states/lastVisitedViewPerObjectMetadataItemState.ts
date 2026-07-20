@@ -7,4 +7,5 @@ export const lastVisitedViewPerObjectMetadataItemState = createAtomState<Record<
   key: 'lastVisitedViewPerObjectMetadataItemState',
   defaultValue: null,
   useLocalStorage: true,
+  localStorageOptions: { getOnInit: true },
 });

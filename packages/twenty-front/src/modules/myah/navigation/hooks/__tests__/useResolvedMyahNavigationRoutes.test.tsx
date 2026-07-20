@@ -5,6 +5,7 @@ import {
 } from '@/myah/navigation/hooks/useResolvedMyahNavigationRoutes';
 import { type MyahNavigationRoute } from '@/myah/navigation/types/MyahNavigationRoute';
 import { IconCircle } from 'twenty-ui/icon';
+import { createStore } from 'jotai';
 
 const loadedMetadataStoreItems = {
   objectMetadataItems: { status: 'up-to-date' },
@@ -98,6 +99,59 @@ describe('resolveMyahNavigationRoutes', () => {
         kind: 'native',
         path: '/objects/campaigns?viewId=campaign-view-id',
         objectNameSingular: 'campaign',
+      },
+    });
+  });
+
+  it('waits for persisted last-visited views before resolving native object routes', () => {
+    localStorage.setItem(
+      'lastVisitedViewPerObjectMetadataItemState',
+      JSON.stringify({ 'campaign-object-id': 'campaign-view-id' }),
+    );
+
+    let hydratedLastVisitedViews: Record<string, string> | null = null;
+
+    jest.isolateModules(() => {
+      const {
+        lastVisitedViewPerObjectMetadataItemState,
+      } = require('@/navigation/states/lastVisitedViewPerObjectMetadataItemState');
+
+      hydratedLastVisitedViews = createStore().get(
+        lastVisitedViewPerObjectMetadataItemState.atom,
+      );
+    });
+
+    const sources = buildSources({
+      objectMetadataItems: [
+        {
+          id: 'campaign-object-id',
+          nameSingular: 'campaign',
+          namePlural: 'campaigns',
+          universalIdentifier: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+        },
+      ],
+      objectPermissionsByObjectMetadataId: {
+        'campaign-object-id': { canReadObjectRecords: true },
+      },
+    });
+    const [pendingRoute] = resolveMyahNavigationRoutes(
+      [getMyahNavigationRoute('campaigns')],
+      { ...sources, isLastVisitedViewDataLoaded: false },
+    );
+    const [readyRoute] = resolveMyahNavigationRoutes(
+      [getMyahNavigationRoute('campaigns')],
+      {
+        ...sources,
+        lastVisitedViewIdByObjectMetadataId: hydratedLastVisitedViews ?? {},
+      },
+    );
+
+    expect(pendingRoute.status).toBe('pending');
+    expect(readyRoute).toMatchObject({
+      status: 'ready',
+      destination: {
+        kind: 'native',
+        path: '/objects/campaigns?viewId=campaign-view-id',
       },
     });
   });
