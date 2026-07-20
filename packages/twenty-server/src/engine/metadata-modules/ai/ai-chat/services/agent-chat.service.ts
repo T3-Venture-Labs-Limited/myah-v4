@@ -1270,6 +1270,7 @@ export class AgentChatService {
       messageContent,
       workspaceId,
       thread.userWorkspaceId,
+      threadId,
     );
 
     await this.threadRepository.update(

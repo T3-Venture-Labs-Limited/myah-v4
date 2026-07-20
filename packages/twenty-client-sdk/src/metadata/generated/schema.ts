@@ -1267,6 +1267,14 @@ export interface BillingUpdate {
     __typename: 'BillingUpdate'
 }
 
+export interface ManagedProviderBillingStatus {
+    available: Scalars['Boolean']
+    prepaidBalanceCents?: Scalars['String']
+    pendingOperationCount: Scalars['Int']
+    reconciliationRequiredOperationCount: Scalars['Int']
+    __typename: 'ManagedProviderBillingStatus'
+}
+
 export interface InviteSuggestion {
     email: Scalars['String']
     displayName?: Scalars['String']
@@ -1538,7 +1546,7 @@ export interface ClientAiModelConfig {
     __typename: 'ClientAiModelConfig'
 }
 
-export type ModelFamily = 'GPT' | 'CLAUDE' | 'GEMINI' | 'MISTRAL' | 'GROK'
+export type ModelFamily = 'GPT' | 'CLAUDE' | 'GEMINI' | 'MISTRAL' | 'DEEPSEEK' | 'GROK'
 
 export interface Billing {
     isBillingEnabled: Scalars['Boolean']
@@ -2757,6 +2765,7 @@ export interface Query {
     apiKey?: ApiKey
     getInviteSuggestions: InviteSuggestion[]
     applicationConnectionProviders: ApplicationConnectionProvider[]
+    managedProviderBillingStatus: ManagedProviderBillingStatus
     billingPortalSession: BillingSession
     listPlans: BillingPlan[]
     getResourceCreditUsage: BillingResourceCreditUsage[]
@@ -4407,6 +4416,15 @@ export interface BillingUpdateGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface ManagedProviderBillingStatusGenqlSelection{
+    available?: boolean | number
+    prepaidBalanceCents?: boolean | number
+    pendingOperationCount?: boolean | number
+    reconciliationRequiredOperationCount?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface InviteSuggestionGenqlSelection{
     email?: boolean | number
     displayName?: boolean | number
@@ -5994,6 +6012,7 @@ export interface QueryGenqlSelection{
     apiKey?: (ApiKeyGenqlSelection & { __args: {input: GetApiKeyInput} })
     getInviteSuggestions?: InviteSuggestionGenqlSelection
     applicationConnectionProviders?: (ApplicationConnectionProviderGenqlSelection & { __args: {applicationId: Scalars['UUID']} })
+    managedProviderBillingStatus?: ManagedProviderBillingStatusGenqlSelection
     billingPortalSession?: (BillingSessionGenqlSelection & { __args?: {returnUrlPath?: (Scalars['String'] | null), forPaymentMethodUpdate?: (Scalars['Boolean'] | null)} })
     listPlans?: BillingPlanGenqlSelection
     getResourceCreditUsage?: BillingResourceCreditUsageGenqlSelection
@@ -6638,7 +6657,7 @@ export interface DestroyViewGroupInput {
 /** The id of the view group to destroy. */
 id: Scalars['UUID']}
 
-export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String']}
+export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId?: (Scalars['String'] | null)}
 
 export interface GetAuthorizationUrlForSSOInput {identityProviderId: Scalars['UUID'],workspaceInviteHash?: (Scalars['String'] | null)}
 
@@ -7542,6 +7561,14 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isBillingUpdate = (obj?: { __typename?: any } | null): obj is BillingUpdate => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingUpdate"')
       return BillingUpdate_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderBillingStatus_possibleTypes: string[] = ['ManagedProviderBillingStatus']
+    export const isManagedProviderBillingStatus = (obj?: { __typename?: any } | null): obj is ManagedProviderBillingStatus => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderBillingStatus"')
+      return ManagedProviderBillingStatus_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -9354,6 +9381,7 @@ export const enumModelFamily = {
    CLAUDE: 'CLAUDE' as const,
    GEMINI: 'GEMINI' as const,
    MISTRAL: 'MISTRAL' as const,
+   DEEPSEEK: 'DEEPSEEK' as const,
    GROK: 'GROK' as const
 }
 

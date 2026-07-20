@@ -49,7 +49,6 @@ import {
   WorkspaceNotFoundDefaultError,
 } from 'src/engine/core-modules/workspace/workspace.exception';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
-import { isModelAllowedByWorkspace } from 'src/engine/metadata-modules/ai/ai-models/utils/is-model-allowed.util';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ALL_METADATA_ENTITY_BY_METADATA_NAME } from 'src/engine/metadata-modules/flat-entity/constant/all-metadata-entity-by-metadata-name.constant';
 import { ALL_METADATA_NAMES_SORTED_ATOMICALLY } from 'src/engine/metadata-modules/flat-entity/constant/all-metadata-names-sorted-atomically.constant';
@@ -274,20 +273,12 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
       ].filter(isDefined);
 
       for (const modelId of modelsToValidate) {
-        if (!this.aiModelRegistryService.isModelAdminAllowed(modelId)) {
-          throw new WorkspaceException(
-            'Selected model has been disabled by the administrator',
-            WorkspaceExceptionCode.ENVIRONMENT_VAR_NOT_ENABLED,
-          );
-        }
-
-        if (
-          !isModelAllowedByWorkspace(
-            modelId,
-            effectiveWorkspace,
-            this.aiModelRegistryService.getRecommendedModelIds(),
-          )
-        ) {
+        try {
+          this.aiModelRegistryService.validateModelAvailability(modelId, {
+            id: workspace.id,
+            ...effectiveWorkspace,
+          });
+        } catch {
           throw new WorkspaceException(
             'Selected model is not available in this workspace',
             WorkspaceExceptionCode.ENVIRONMENT_VAR_NOT_ENABLED,

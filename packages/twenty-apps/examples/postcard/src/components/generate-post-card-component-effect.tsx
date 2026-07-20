@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { defineFrontComponent } from 'twenty-sdk/define';
 import {
   enqueueSnackbar,
@@ -14,8 +14,11 @@ const SYSTEM_PROMPT =
   'under 150 words. Use a personal tone. Output ONLY the postcard message ' +
   'text, nothing else — no greeting label, no sign-off label, just the message.';
 
+export const createPostcardOperationId = (): string => crypto.randomUUID();
+
 const GeneratePostCardEffect = () => {
   const recordId = useRecordId();
+  const [operationId] = useState(createPostcardOperationId);
 
   useEffect(() => {
     if (recordId === null) {
@@ -48,6 +51,7 @@ const GeneratePostCardEffect = () => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            operationId,
             systemPrompt: SYSTEM_PROMPT,
             userPrompt,
           }),
@@ -101,7 +105,7 @@ const GeneratePostCardEffect = () => {
     };
 
     generate();
-  }, [recordId]);
+  }, [recordId, operationId]);
 
   return null;
 };

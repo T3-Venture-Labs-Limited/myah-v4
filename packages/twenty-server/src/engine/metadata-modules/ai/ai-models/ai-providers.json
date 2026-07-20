@@ -1389,5 +1389,78 @@
         "supportsReasoning": true
       }
     ]
+  },
+  "openrouter": {
+    "npm": "@ai-sdk/openai-compatible",
+    "name": "openrouter",
+    "label": "Myah Managed OpenRouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "apiKey": "{{OPENROUTER_API_KEY}}",
+    "models": [
+      {
+        "name": "deepseek/deepseek-v4-flash",
+        "label": "DeepSeek V4 Flash",
+        "inputCostPerMillionTokens": 0.098,
+        "outputCostPerMillionTokens": 0.196,
+        "cachedInputCostPerMillionTokens": 0.0196,
+        "cacheCreationCostPerMillionTokens": 0.098,
+        "contextWindowTokens": 1048576,
+        "maxOutputTokens": 128000,
+        "supportsReasoning": true,
+        "supportsStructuredOutputs": true
+      },
+      {
+        "name": "x-ai/grok-4.5",
+        "label": "Grok 4.5",
+        "inputCostPerMillionTokens": 2,
+        "outputCostPerMillionTokens": 6,
+        "cachedInputCostPerMillionTokens": 0.3,
+        "cacheCreationCostPerMillionTokens": 2,
+        "longContextCost": {
+          "inputCostPerMillionTokens": 4,
+          "outputCostPerMillionTokens": 12,
+          "thresholdTokens": 200000,
+          "cachedInputCostPerMillionTokens": 0.6,
+          "cacheCreationCostPerMillionTokens": 4
+        },
+        "contextWindowTokens": 500000,
+        "maxOutputTokens": 128000,
+        "supportsReasoning": true,
+        "supportsStructuredOutputs": true
+      },
+      {
+        "name": "openai/gpt-5.6-luna",
+        "label": "GPT-5.6 Luna",
+        "modelFamily": "GPT",
+        "inputCostPerMillionTokens": 1,
+        "outputCostPerMillionTokens": 6,
+        "cachedInputCostPerMillionTokens": 0.1,
+        "cacheCreationCostPerMillionTokens": 1.25,
+        "longContextCost": {
+          "inputCostPerMillionTokens": 2,
+          "outputCostPerMillionTokens": 9,
+          "thresholdTokens": 272000,
+          "cachedInputCostPerMillionTokens": 0.2,
+          "cacheCreationCostPerMillionTokens": 2.5
+        },
+        "contextWindowTokens": 1050000,
+        "maxOutputTokens": 128000,
+        "supportsReasoning": true,
+        "supportsStructuredOutputs": true
+      },
+      {
+        "name": "google/gemma-4-31b-it:free",
+        "label": "Gemma 4 31B — Temporary Test Tariff",
+        "modelFamily": "GEMINI",
+        "inputCostPerMillionTokens": 0.22,
+        "outputCostPerMillionTokens": 0.55,
+        "cachedInputCostPerMillionTokens": 0.12,
+        "cacheCreationCostPerMillionTokens": 0.22,
+        "contextWindowTokens": 262144,
+        "maxOutputTokens": 32768,
+        "supportsReasoning": true,
+        "supportsStructuredOutputs": true
+      }
+    ]
   }
 }

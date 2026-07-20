@@ -9,9 +9,10 @@ describe('ManagedProviderBillingException', () => {
       ManagedProviderBillingExceptionCode.OPERATION_REPLAY_CONFLICT,
     );
 
-    expect(exception.message).toBe(
-      'Managed provider operation replay conflicts with the existing operation',
-    );
+    expect(exception).toMatchObject({
+      message:
+        'Managed provider operation replay conflicts with the existing operation',
+    });
     const insufficientBalanceException = new ManagedProviderBillingException(
       ManagedProviderBillingExceptionCode.INSUFFICIENT_PREPAID_BALANCE,
     );

@@ -1,3 +1,4 @@
+import { MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
@@ -11,6 +12,7 @@ import { MessageQueueService } from 'src/engine/core-modules/message-queue/servi
 
 import { DeliverManagedProviderUsageJob } from '../jobs/deliver-managed-provider-usage.job';
 import { ManagedProviderOperationEntity } from '../entities/managed-provider-operation.entity';
+import { ManagedProviderPoolEntity } from '../entities/managed-provider-pool.entity';
 import { ManagedProviderOperationState } from '../enums/managed-provider-operation-state.enum';
 import { type ReserveManagedProviderOperationInput } from '../types/reserve-managed-provider-operation.input';
 import { type CompleteManagedProviderOperationInput } from '../types/complete-managed-provider-operation.input';
@@ -25,9 +27,11 @@ import {
 } from '../metronome-client.exception';
 import { validateSafeMetronomeEventProperties } from '../utils/validate-safe-metronome-event-properties.util';
 import { getValidatedMetronomeUsageAmountCents } from '../utils/get-validated-metronome-usage-amount-cents.util';
+import { getMetronomeEventProperties } from '../utils/get-metronome-event-properties.util';
 
 import { MetronomeClientService } from './metronome-client.service';
 import { MetronomeWorkspaceCustomerService } from './metronome-workspace-customer.service';
+import { ManagedProviderPoolService } from './managed-provider-pool.service';
 
 @Injectable()
 export class ManagedProviderOperationService {
@@ -40,25 +44,62 @@ export class ManagedProviderOperationService {
     private readonly metronomeClientService: MetronomeClientService,
     private readonly metronomeWorkspaceCustomerService: MetronomeWorkspaceCustomerService,
     private readonly twentyConfigService: TwentyConfigService,
+    private readonly managedProviderPoolService: ManagedProviderPoolService,
 
     @InjectMessageQueue(MessageQueue.workspaceQueue)
     private readonly messageQueueService: MessageQueueService,
   ) {}
 
+  async assertProviderConfigurationActive(
+    providerKey: string,
+    providerConfigurationKey: string,
+    tariffVersion: string,
+  ): Promise<void> {
+    const quarantined = await this.operationRepository
+      .createQueryBuilder('operation')
+      .where('operation.providerKey = :providerKey', { providerKey })
+      .andWhere(
+        'operation.providerConfigurationKey = :providerConfigurationKey',
+        {
+          providerConfigurationKey,
+        },
+      )
+      .andWhere(`operation.actualUsageProperties->>'overrun' = 'true'`)
+      .andWhere(
+        `operation.actualUsageProperties->>'tariffVersion' = :tariffVersion`,
+        { tariffVersion },
+      )
+      .getExists();
+
+    if (quarantined) {
+      throw new Error('Managed provider configuration is quarantined');
+    }
+  }
+
   async reserveOperation(
     input: ReserveManagedProviderOperationInput,
+    options: { rejectReplay?: boolean } = {},
   ): Promise<ManagedProviderOperationEntity> {
     if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
       throw new MetronomeClientException(
         MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
       );
     }
-
+    const auditMaximumUsageProperties = validateSafeMetronomeEventProperties(
+      input.maximumUsageProperties,
+    );
     const operationInput = {
       ...input,
-      maximumUsageProperties: validateSafeMetronomeEventProperties(
-        input.maximumUsageProperties,
-      ),
+      maximumUsageProperties: auditMaximumUsageProperties,
+      maximumMetronomeProperties:
+        typeof auditMaximumUsageProperties.charge_cent_unit === 'string' &&
+        typeof auditMaximumUsageProperties.model_id === 'string' &&
+        typeof auditMaximumUsageProperties.tariff_version === 'string'
+          ? getMetronomeEventProperties(
+              auditMaximumUsageProperties,
+              input.requestId,
+            )
+          : auditMaximumUsageProperties,
     };
 
     const { expectedProductIds: inputExpectedProductIds, ...operationValues } =
@@ -73,6 +114,11 @@ export class ManagedProviderOperationService {
     });
 
     if (existingOperation) {
+      if (options.rejectReplay) {
+        throw new ManagedProviderBillingException(
+          ManagedProviderBillingExceptionCode.OPERATION_REPLAY_CONFLICT,
+        );
+      }
       return this.getExactReplay(
         existingOperation,
         operationInput,
@@ -90,13 +136,14 @@ export class ManagedProviderOperationService {
     const preview = await this.metronomeClientService.previewUsage({
       customerId,
       eventType: operationInput.metronomeEventType,
-      properties: operationInput.maximumUsageProperties,
+      properties: operationInput.maximumMetronomeProperties,
     });
     const reservedAmountCents = getValidatedMetronomeUsageAmountCents({
       contractId,
       customerId,
       expectedProductIds,
       preview,
+      allowZeroAmount: false,
     });
     const expectedBillableMetricIds =
       await this.metronomeClientService.getBillableMetricIds(
@@ -116,6 +163,25 @@ export class ManagedProviderOperationService {
         throw new Error('Metronome workspace customer mapping is unavailable');
       }
 
+      if (
+        this.managedProviderPoolService.isManagedWorkspace(
+          operationInput.providerKey,
+          operationInput.workspaceId,
+        )
+      ) {
+        await this.managedProviderPoolService.assertReservationAllowed(
+          manager.getRepository(ManagedProviderPoolEntity),
+          {
+            providerKey: operationInput.providerKey,
+            tariffVersion:
+              typeof operationInput.maximumUsageProperties.tariffVersion ===
+              'string'
+                ? operationInput.maximumUsageProperties.tariffVersion
+                : '',
+            configurationDigest: MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST,
+          },
+        );
+      }
       const transactionOperationRepository = manager.getRepository(
         ManagedProviderOperationEntity,
       );
@@ -126,6 +192,11 @@ export class ManagedProviderOperationService {
         });
 
       if (concurrentOperation) {
+        if (options.rejectReplay) {
+          throw new ManagedProviderBillingException(
+            ManagedProviderBillingExceptionCode.OPERATION_REPLAY_CONFLICT,
+          );
+        }
         return this.getExactReplay(
           concurrentOperation,
           operationInput,
@@ -181,6 +252,8 @@ export class ManagedProviderOperationService {
         providerCostMicrousd: null,
         providerExecutionId: null,
         quotedActualAmountCents: null,
+        maximumMetronomeProperties: operationInput.maximumMetronomeProperties,
+        actualMetronomeProperties: null,
         releasedAt: null,
         reservedAmountCents: reservedAmountCents.toString(),
         settleAfter: null,
@@ -195,11 +268,19 @@ export class ManagedProviderOperationService {
   async completeOperation(
     input: CompleteManagedProviderOperationInput,
   ): Promise<ManagedProviderOperationEntity> {
+    this.validateCompletionInput(input);
     const actualUsageProperties = validateSafeMetronomeEventProperties(
       input.actualUsageProperties,
     );
-    this.validateCompletionInput(input);
-
+    const actualMetronomeProperties =
+      input.outcome === 'BILLABLE' &&
+      typeof actualUsageProperties.charge_cent_unit === 'string' &&
+      typeof actualUsageProperties.model_id === 'string' &&
+      typeof actualUsageProperties.tariff_version === 'string'
+        ? getMetronomeEventProperties(actualUsageProperties, input.operationId)
+        : input.outcome === 'BILLABLE'
+          ? actualUsageProperties
+          : null;
     const completedOperation =
       await this.operationRepository.manager.transaction(async (manager) => {
         const operation = await manager.findOne(
@@ -239,6 +320,7 @@ export class ManagedProviderOperationService {
           actualUsageProperties,
           completedAt,
           completionOutcome: input.outcome,
+          actualMetronomeProperties,
           nextDeliveryAttemptAt:
             state === ManagedProviderOperationState.USAGE_PENDING
               ? completedAt
@@ -256,17 +338,70 @@ export class ManagedProviderOperationService {
     if (
       completedOperation.state === ManagedProviderOperationState.USAGE_PENDING
     ) {
-      await this.messageQueueService.add<DeliverManagedProviderUsageJobData>(
-        DeliverManagedProviderUsageJob.name,
-        { operationId: completedOperation.id },
-        {
-          id: `managed-provider-usage:${completedOperation.id}`,
-          retryLimit: 3,
-        },
-      );
+      try {
+        await this.messageQueueService.add<DeliverManagedProviderUsageJobData>(
+          DeliverManagedProviderUsageJob.name,
+          { operationId: completedOperation.id },
+          {
+            id: `managed-provider-usage:${completedOperation.id}`,
+            retryLimit: 3,
+          },
+        );
+      } catch {
+        // The durable completion remains recoverable through the usage outbox.
+      }
     }
 
     return completedOperation;
+  }
+
+  async attachProviderExecutionId({
+    operationId,
+    providerConfigurationKey,
+    providerExecutionId,
+    providerKey,
+    workspaceId,
+  }: {
+    operationId: string;
+    providerConfigurationKey: string;
+    providerExecutionId: string;
+    providerKey: string;
+    workspaceId: string;
+  }): Promise<ManagedProviderOperationEntity> {
+    if (providerExecutionId.trim().length === 0) {
+      throw new Error('Managed provider execution id is invalid');
+    }
+
+    return this.operationRepository.manager.transaction(async (manager) => {
+      const operation = await manager.findOne(ManagedProviderOperationEntity, {
+        lock: { mode: 'pessimistic_write' },
+        where: { id: operationId, workspaceId },
+      });
+
+      if (!operation) {
+        throw new Error('Managed provider operation was not found');
+      }
+
+      if (
+        operation.providerKey !== providerKey ||
+        operation.providerConfigurationKey !== providerConfigurationKey ||
+        (operation.providerExecutionId !== null &&
+          operation.providerExecutionId !== providerExecutionId)
+      ) {
+        throw new ManagedProviderBillingException(
+          ManagedProviderBillingExceptionCode.OPERATION_REPLAY_CONFLICT,
+        );
+      }
+
+      if (operation.providerExecutionId === providerExecutionId) {
+        return operation;
+      }
+
+      return manager.save(ManagedProviderOperationEntity, {
+        ...operation,
+        providerExecutionId,
+      });
+    });
   }
 
   private validateCompletionInput(

@@ -12,7 +12,9 @@ import {
   IsUrl,
   Matches,
   Min,
+  Max,
   ValidateIf,
+  IsUUID,
   type ValidationError,
   validateSync,
 } from 'class-validator';
@@ -159,6 +161,131 @@ export class ConfigVariables {
   @IsOptional()
   @Min(10_000)
   METRONOME_USAGE_SETTLEMENT_DELAY_MS = 30_000;
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Enable Myah-managed OpenRouter AI with Metronome prepaid billing',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  MANAGED_OPENROUTER_ENABLED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Server-only OpenRouter API key for Myah-managed AI',
+    isSensitive: true,
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  OPENROUTER_API_KEY = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Metronome one-cent charge-unit product ID for managed OpenRouter generations',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
+  @IsUUID()
+  MANAGED_OPENROUTER_CHARGE_PRODUCT_ID = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Metronome USD credit product ID for managed OpenRouter funding',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
+  @IsUUID()
+  MANAGED_OPENROUTER_CREDIT_PRODUCT_ID = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Workspaces eligible for managed OpenRouter funding',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.ARRAY,
+  })
+  @IsOptional()
+  MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: string[] = [];
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Narrow workspace allowlist for the temporary managed Gemma test tariff',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.ARRAY,
+  })
+  @IsOptional()
+  MANAGED_OPENROUTER_GEMMA_TEST_WORKSPACE_IDS: string[] = [];
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'User IDs authorized to grant managed provider credits',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.ARRAY,
+  })
+  @IsOptional()
+  MANAGED_OPENROUTER_GRANT_OPERATOR_USER_IDS: string[] = [];
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'User IDs authorized to record or correct managed provider funding',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.ARRAY,
+  })
+  @IsOptional()
+  MANAGED_OPENROUTER_FINANCE_OPERATOR_USER_IDS: string[] = [];
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Maximum sponsored managed provider grant in USD cents',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.NUMBER,
+  })
+  @IsInt()
+  @Min(1)
+  MANAGED_OPENROUTER_MAX_GRANT_CENTS = 1_000_000;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Maximum managed provider grant actions per operator in a rolling day',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.NUMBER,
+  })
+  @IsInt()
+  @Min(1)
+  MANAGED_OPENROUTER_GRANT_DAILY_ACTION_LIMIT = 20;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Maximum lifetime in milliseconds for sponsored managed provider credits',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.NUMBER,
+  })
+  @IsInt()
+  @Min(1)
+  @Max(2_592_000_000)
+  MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS = 2_592_000_000;
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,

@@ -7,6 +7,7 @@ import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models
 import { ProviderConfigService } from 'src/engine/metadata-modules/ai/ai-models/services/provider-config.service';
 import { SdkProviderFactoryService } from 'src/engine/metadata-modules/ai/ai-models/services/sdk-provider-factory.service';
 import { AUTO_SELECT_SMART_MODEL_ID } from 'twenty-shared/constants';
+import { type WorkspaceModelAvailabilitySettings } from 'src/engine/metadata-modules/ai/ai-models/utils/is-model-allowed.util';
 
 describe('AiModelRegistryService', () => {
   let service: AiModelRegistryService;
@@ -22,6 +23,8 @@ describe('AiModelRegistryService', () => {
     } as any;
 
     const mockProviderConfigService = {
+      hasCustomOpenRouterProvider: jest.fn().mockReturnValue(false),
+      isManagedOpenRouterEnabled: jest.fn().mockReturnValue(false),
       getResolvedProviders: jest.fn().mockReturnValue({}),
     };
 
@@ -65,6 +68,66 @@ describe('AiModelRegistryService', () => {
     ).toThrow(
       'No AI models are available. Configure at least one AI provider.',
     );
+  });
+  it('keeps managed OpenRouter models alongside a custom OpenRouter provider', () => {
+    const providerConfigService = service[
+      'providerConfigService' as keyof AiModelRegistryService
+    ] as unknown as {
+      isManagedOpenRouterEnabled: jest.Mock;
+      hasCustomOpenRouterProvider: jest.Mock;
+      getResolvedProviders: jest.Mock;
+    };
+
+    providerConfigService.isManagedOpenRouterEnabled.mockReturnValue(true);
+    providerConfigService.hasCustomOpenRouterProvider.mockReturnValue(true);
+    providerConfigService.getResolvedProviders.mockReturnValue({
+      openrouter: {
+        apiKey: 'managed-key',
+        npm: '@ai-sdk/openai-compatible',
+        models: [{ name: 'managed-model', label: 'Managed model' }],
+        name: 'Managed OpenRouter',
+      },
+      'openrouter-custom': {
+        apiKey: 'custom-key',
+        npm: '@ai-sdk/openai-compatible',
+        models: [{ name: 'custom-model', label: 'Custom model' }],
+        name: 'Custom OpenRouter',
+      },
+    });
+    const sdkProviderFactory = (
+      service as unknown as {
+        sdkProviderFactory: {
+          createProvider: jest.Mock;
+        };
+      }
+    ).sdkProviderFactory;
+    sdkProviderFactory.createProvider = jest.fn().mockReturnValue({
+      createModel: (name: string) => ({ name }),
+    });
+
+    expect(service.getModel('openrouter/managed-model')).toBeDefined();
+    expect(service.getModel('openrouter-custom/custom-model')).toBeDefined();
+  });
+
+  it('fails closed for global client selectors without workspace identity', () => {
+    jest.spyOn(service, 'getAvailableModels').mockReturnValue([
+      {
+        modelId: 'openrouter/managed-model',
+        providerName: 'openrouter',
+        sdkPackage: '@ai-sdk/openai-compatible',
+        model: {} as any,
+      },
+      {
+        modelId: 'openai/gpt-4',
+        providerName: 'openai',
+        sdkPackage: '@ai-sdk/openai',
+        model: {} as any,
+      },
+    ]);
+
+    expect(
+      service.getAdminFilteredModels().map(({ modelId }) => modelId),
+    ).toEqual(['openai/gpt-4']);
   });
 
   it('should return effective model config for AUTO_SELECT_SMART_MODEL_ID when models are available', () => {
@@ -190,5 +253,96 @@ describe('AiModelRegistryService', () => {
 
     expect(result).toBeDefined();
     expect(result.modelId).toBe('fallback-model');
+  });
+  it('allows managed models only for eligible workspaces and Gemma only for its audience', () => {
+    const providerConfigService = service[
+      'providerConfigService' as keyof AiModelRegistryService
+    ] as unknown as {
+      isManagedOpenRouterWorkspaceEligible: jest.Mock;
+      isManagedOpenRouterGemmaWorkspaceEligible: jest.Mock;
+    };
+    providerConfigService.isManagedOpenRouterWorkspaceEligible = jest
+      .fn()
+      .mockImplementation(
+        (workspaceId: string) =>
+          workspaceId === 'funded' || workspaceId === 'gemma',
+      );
+    providerConfigService.isManagedOpenRouterGemmaWorkspaceEligible = jest
+      .fn()
+      .mockImplementation((workspaceId: string) => workspaceId === 'gemma');
+
+    expect(() =>
+      service.validateModelAvailability(
+        'openrouter/deepseek/deepseek-v4-flash',
+        {
+          id: 'funded',
+          useRecommendedModels: true,
+          enabledAiModelIds: [],
+        } satisfies WorkspaceModelAvailabilitySettings,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      service.validateModelAvailability('openai/gpt-4.1', {
+        id: 'funded',
+        useRecommendedModels: false,
+        enabledAiModelIds: ['openai/gpt-4.1'],
+      } satisfies WorkspaceModelAvailabilitySettings),
+    ).toThrow('not available in this workspace');
+    expect(() =>
+      service.validateModelAvailability(
+        'openrouter/deepseek/deepseek-v4-flash',
+        {
+          id: 'unfunded',
+          useRecommendedModels: false,
+          enabledAiModelIds: ['openrouter/deepseek/deepseek-v4-flash'],
+        } satisfies WorkspaceModelAvailabilitySettings,
+      ),
+    ).toThrow('not available in this workspace');
+    expect(() =>
+      service.validateModelAvailability(
+        'openrouter/google/gemma-4-31b-it:free',
+        {
+          id: 'funded',
+          useRecommendedModels: false,
+          enabledAiModelIds: ['openrouter/google/gemma-4-31b-it:free'],
+        } satisfies WorkspaceModelAvailabilitySettings,
+      ),
+    ).toThrow('not available in this workspace');
+    expect(() =>
+      service.validateModelAvailability(
+        'openrouter/google/gemma-4-31b-it:free',
+        {
+          id: 'gemma',
+          useRecommendedModels: false,
+          enabledAiModelIds: ['openrouter/google/gemma-4-31b-it:free'],
+        } satisfies WorkspaceModelAvailabilitySettings,
+      ),
+    ).not.toThrow();
+  });
+
+  it('uses managed DeepSeek for eligible AUTO_SELECT and native defaults otherwise', () => {
+    const providerConfigService = service[
+      'providerConfigService' as keyof AiModelRegistryService
+    ] as unknown as {
+      isManagedOpenRouterWorkspaceEligible: jest.Mock;
+    };
+    providerConfigService.isManagedOpenRouterWorkspaceEligible = jest
+      .fn()
+      .mockReturnValue(true);
+    jest.spyOn(service, 'getModel').mockImplementation((modelId: string) =>
+      modelId === 'openrouter/deepseek/deepseek-v4-flash'
+        ? ({
+            modelId,
+            providerName: 'openrouter',
+            sdkPackage: '@ai-sdk/openai-compatible',
+            model: {} as any,
+          } as any)
+        : undefined,
+    );
+
+    expect(
+      service.getEffectiveModelConfig(AUTO_SELECT_SMART_MODEL_ID, 'funded')
+        .modelId,
+    ).toBe('openrouter/deepseek/deepseek-v4-flash');
   });
 });

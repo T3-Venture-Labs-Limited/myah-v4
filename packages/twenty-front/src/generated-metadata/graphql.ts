@@ -2327,6 +2327,14 @@ export type LoginToken = {
   loginToken: AuthToken;
 };
 
+export type ManagedProviderBillingStatus = {
+  __typename?: 'ManagedProviderBillingStatus';
+  available: Scalars['Boolean']['output'];
+  pendingOperationCount: Scalars['Int']['output'];
+  prepaidBalanceCents?: Maybe<Scalars['String']['output']>;
+  reconciliationRequiredOperationCount: Scalars['Int']['output'];
+};
+
 export type MarketplaceApp = {
   __typename?: 'MarketplaceApp';
   author: Scalars['String']['output'];
@@ -2541,6 +2549,7 @@ export type MinimalView = {
 
 export enum ModelFamily {
   CLAUDE = 'CLAUDE',
+  DEEPSEEK = 'DEEPSEEK',
   GEMINI = 'GEMINI',
   GPT = 'GPT',
   GROK = 'GROK',
@@ -4484,6 +4493,7 @@ export type Query = {
   indexMetadatas: IndexConnection;
   lineChartData: LineChartData;
   listPlans: Array<BillingPlan>;
+  managedProviderBillingStatus: ManagedProviderBillingStatus;
   minimalMetadata: MinimalMetadata;
   myCalendarChannels: Array<CalendarChannel>;
   myConnectedAccounts: Array<ConnectedAccountPublicDto>;
@@ -5062,6 +5072,7 @@ export enum RowLevelPermissionPredicateOperand {
 
 export type RunAgentInput = {
   agentUniversalIdentifier: Scalars['String']['input'];
+  operationId?: InputMaybe<Scalars['String']['input']>;
   prompt: Scalars['String']['input'];
 };
 

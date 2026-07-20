@@ -90,9 +90,13 @@ import { MigrateAiModelPreferencesSlowInstanceCommand } from 'src/database/comma
 import { AddFolderImportToMessageFolderPendingSyncActionFastInstanceCommand } from './2-15/2-15-instance-command-fast-1781714499016-add-folder-import-to-message-folder-pending-sync-action';
 import { AddViewKanbanColumnWidthFastInstanceCommand } from './2-15/2-15-instance-command-fast-1781900000000-add-view-kanban-column-width';
 import { AddPendingQuestionMessageIdToAgentChatThreadFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1782999138000-add-pending-question-to-agent-chat-thread';
+import { MigrateOpenRouterModelPreferencesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-slow-1784485121001-migrate-openrouter-model-preferences';
 import { AddWorkspaceDiscoverabilityToWorkspaceFastInstanceCommand } from './2-19/2-19-instance-command-fast-1783004140000-add-workspace-discoverability-to-workspace';
 import { AddStatusToFileFastInstanceCommand } from './2-19/2-19-instance-command-fast-1783082964705-add-status-to-file';
 import { DropMetadataStandardOverridesColumnFastInstanceCommand } from './2-20/2-20-instance-command-fast-1784266302000-drop-metadata-standard-overrides-column';
+import { CreateManagedProviderFundingActionFastInstanceCommand } from './2-19/2-19-instance-command-fast-1784266302003-create-managed-provider-funding-action';
+import { CreateManagedProviderPoolFastInstanceCommand } from './2-19/2-19-instance-command-fast-1784486000000-create-managed-provider-pool';
+import { AddMetronomeAuditPropertiesFastInstanceCommand } from './2-19/2-19-instance-command-fast-1784487000000-add-metronome-audit-properties';
 import { AddLogoToApplicationRegistrationFastInstanceCommand } from './2-19/2-19-instance-command-fast-1783069672191-add-logo-to-application-registration';
 import { BackfillLogoOnApplicationRegistrationSlowInstanceCommand } from './2-19/2-19-instance-command-slow-1783069673191-backfill-logo-on-application-registration';
 import { AddDisplayFieldsToApplicationRegistrationFastInstanceCommand } from './2-19/2-19-instance-command-fast-1783073776590-add-display-fields-to-application-registration';
@@ -107,6 +111,7 @@ import { FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand } from 'src
 import { PendingMigrationCheckFastInstanceCommand } from './2-19/2-19-instance-command-fast-1784112688976-pending-migration-check';
 
 import { CreateManagedProviderBillingFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-create-managed-provider-billing-foundation';
+import { RepairManagedProviderOperationRetentionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784488000000-repair-managed-provider-operation-retention';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -167,6 +172,7 @@ export const INSTANCE_COMMANDS = [
   DropFieldMetadataIsUniqueColumnFastInstanceCommand,
   AddLogicFunctionExecutionModeFastInstanceCommand,
   MigrateAiModelPreferencesSlowInstanceCommand,
+  MigrateOpenRouterModelPreferencesSlowInstanceCommand,
   EncryptNonSecretApplicationVariableSlowInstanceCommand,
   DropIsCustomFromObjectAndFieldMetadataFastInstanceCommand,
   DropEmailingDomainDriverColumnFastInstanceCommand,
@@ -200,6 +206,9 @@ export const INSTANCE_COMMANDS = [
   AddLastStreamErrorToAgentChatThreadFastInstanceCommand,
   AddLogoFileIdToApplicationFastInstanceCommand,
   DropMetadataStandardOverridesColumnFastInstanceCommand,
+  CreateManagedProviderFundingActionFastInstanceCommand,
+  CreateManagedProviderPoolFastInstanceCommand,
+  AddMetronomeAuditPropertiesFastInstanceCommand,
   AddTypeAndOptionsToApplicationVariablesFastInstanceCommand,
   AddLogoToApplicationRegistrationFastInstanceCommand,
   BackfillLogoOnApplicationRegistrationSlowInstanceCommand,
@@ -212,6 +221,7 @@ export const INSTANCE_COMMANDS = [
   AddInstagramReplyApprovalProviderBindingSlowInstanceCommand,
   PendingMigrationCheckFastInstanceCommand,
   RepairInstagramReplyApprovalSchemaFastInstanceCommand,
+  RepairManagedProviderOperationRetentionFastInstanceCommand,
   CreateManagedProviderBillingFoundationFastInstanceCommand,
   EvolveInstagramApprovalToActionAuthorityFastInstanceCommand,
   FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand,

@@ -104,4 +104,62 @@ describe('managed provider billing configuration', () => {
       ]),
     );
   });
+  it('requires managed OpenRouter credentials and product mappings when enabled', () => {
+    const errors = validateSync(
+      Object.assign(new ConfigVariables(), {
+        MANAGED_OPENROUTER_ENABLED: true,
+      }),
+      { strictGroups: true },
+    );
+
+    expect(errors.map(({ property }) => property)).toEqual(
+      expect.arrayContaining([
+        'OPENROUTER_API_KEY',
+        'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
+        'MANAGED_OPENROUTER_CREDIT_PRODUCT_ID',
+      ]),
+    );
+  });
+
+  it('bounds sponsored managed provider credit lifetimes to 30 days', () => {
+    const validErrors = validateSync(
+      Object.assign(new ConfigVariables(), {
+        MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS: 2_592_000_000,
+      }),
+      { strictGroups: true },
+    );
+    const invalidErrors = validateSync(
+      Object.assign(new ConfigVariables(), {
+        MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS: 2_592_000_001,
+      }),
+      { strictGroups: true },
+    );
+
+    expect(
+      validErrors.some(
+        ({ property }) =>
+          property === 'MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS',
+      ),
+    ).toBe(false);
+    expect(invalidErrors.map(({ property }) => property)).toContain(
+      'MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS',
+    );
+  });
+
+  it('allows empty managed OpenRouter configuration while disabled', () => {
+    const errors = validateSync(new ConfigVariables(), {
+      strictGroups: true,
+    });
+
+    expect(errors.map(({ property }) => property)).not.toEqual(
+      expect.arrayContaining([
+        'OPENROUTER_API_KEY',
+        'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
+        'MANAGED_OPENROUTER_CREDIT_PRODUCT_ID',
+        'MANAGED_OPENROUTER_CASH_PAID_MICROUSD',
+        'MANAGED_OPENROUTER_USABLE_CREDITS_MICROUSD',
+        'MANAGED_OPENROUTER_MULTIPLIER_EVIDENCE_VERSION',
+      ]),
+    );
+  });
 });
