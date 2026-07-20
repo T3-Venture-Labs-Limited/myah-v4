@@ -151,8 +151,8 @@ export const MANAGED_OPENROUTER_POOL_DESIRED_MANIFEST = {
   providerKey: MANAGED_OPENROUTER_PROVIDER_NAME,
   configurationDigest: MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST,
   tariffVersion: null,
-  epoch: '1',
-  state: ManagedProviderPoolState.DISABLED,
+  epoch: '2',
+  state: ManagedProviderPoolState.DRAINING,
 } as const;
 
 export const getManagedOpenRouterManifestModel = (

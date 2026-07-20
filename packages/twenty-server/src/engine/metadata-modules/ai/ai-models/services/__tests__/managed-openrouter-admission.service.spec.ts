@@ -16,7 +16,7 @@ describe('ManagedOpenRouterAdmissionService', () => {
     expect(poolService.reconcileDesiredState).not.toHaveBeenCalled();
   });
 
-  it('durably reconciles the source-controlled closed fence during startup', async () => {
+  it('durably reconciles the source-controlled draining fence during startup', async () => {
     const poolService = {
       reconcileDesiredState: jest.fn().mockResolvedValue(undefined),
       isStorageAvailable: jest.fn().mockResolvedValue(true),
@@ -29,9 +29,9 @@ describe('ManagedOpenRouterAdmissionService', () => {
       configurationDigest:
         '91920e85fef98a8729b7e33e800d4602f0b80da60cc579f7bf3ef9081b4a8a13',
       digest: expect.stringMatching(/^[a-f0-9]{64}$/),
-      epoch: '1',
+      epoch: '2',
       providerKey: 'openrouter',
-      state: ManagedProviderPoolState.DISABLED,
+      state: ManagedProviderPoolState.DRAINING,
       tariffVersion: null,
     });
   });
