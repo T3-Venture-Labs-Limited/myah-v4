@@ -9,6 +9,7 @@ jest.mock('@/apollo/utils/getTokenPair', () => ({
 global.fetch = jest.fn();
 
 const mockClientConfig = {
+  aiModels: [],
   billing: {
     isBillingEnabled: true,
     billingUrl: 'https://billing.example.com',
@@ -51,6 +52,14 @@ const mockClientConfig = {
   isGoogleMessagingEnabled: false,
   isGoogleCalendarEnabled: false,
   isConfigVariablesInDbEnabled: false,
+  isImapSmtpCaldavEnabled: false,
+  isEmailingDomainInDemoMode: false,
+  isCloudflareIntegrationEnabled: false,
+  isClickHouseConfigured: false,
+  isWorkspaceSchemaDDLLocked: false,
+  onboarding: {},
+  isTwoFactorAuthenticationEnabled: false,
+  allowRequestsToTwentyIcons: false,
 };
 
 describe('getClientConfig', () => {
@@ -100,6 +109,63 @@ describe('getClientConfig', () => {
           authorization: 'Bearer access-token',
         },
       }),
+    );
+  });
+
+  it('rejects an unauthenticated API payload returned with HTTP 200', async () => {
+    (fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        errors: [
+          {
+            extensions: { code: 'UNAUTHENTICATED' },
+            message: 'Token has expired.',
+          },
+        ],
+      }),
+    });
+
+    await expect(getClientConfig()).rejects.toMatchObject({
+      name: 'ClientConfigUnauthenticatedError',
+    });
+  });
+
+  it('rejects an unexpected HTTP-200 response body', async () => {
+    (fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'unexpected' }),
+    });
+
+    await expect(getClientConfig()).rejects.toThrow(
+      'Invalid client config response',
+    );
+  });
+
+  it('rejects a malformed config payload with incomplete workspace settings', async () => {
+    (fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        aiModels: [],
+        authProviders: {},
+      }),
+    });
+
+    await expect(getClientConfig()).rejects.toThrow(
+      'Invalid client config response',
+    );
+  });
+
+  it('rejects a config payload with an invalid sign-in preference', async () => {
+    (fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ...mockClientConfig,
+        signInPrefilled: 'invalid',
+      }),
+    });
+
+    await expect(getClientConfig()).rejects.toThrow(
+      'Invalid client config response',
     );
   });
 
