@@ -8,6 +8,7 @@ import {
   MetronomeClientException,
   MetronomeClientExceptionCode,
 } from '../metronome-client.exception';
+import { toMetronomeHourBoundary } from '../utils/to-metronome-hour-boundary.util';
 import { validateSafeMetronomeEventProperties } from '../utils/validate-safe-metronome-event-properties.util';
 
 const RATE_CARD_REPLAY_PAGE_LIMIT = 100;
@@ -160,7 +161,7 @@ export class MetronomeClientService {
     try {
       const response = await client.v1.contracts.create({
         customer_id: customerId,
-        starting_at: new Date().toISOString(),
+        starting_at: toMetronomeHourBoundary(new Date()).toISOString(),
         rate_card_alias: rateCardAlias,
         uniqueness_key: uniquenessKey,
       });
@@ -172,7 +173,7 @@ export class MetronomeClientService {
       }
 
       throw new MetronomeClientException(
-        this.getErrorStatus(error) === 409
+        this.isUniquenessConflict(error)
           ? MetronomeClientExceptionCode.CONFLICT
           : MetronomeClientExceptionCode.REQUEST_FAILED,
       );
@@ -207,8 +208,10 @@ export class MetronomeClientService {
               schedule_items: [
                 {
                   amount: amountCents,
-                  ending_before: endingBefore,
-                  starting_at: startingAt,
+                  ending_before:
+                    toMetronomeHourBoundary(endingBefore).toISOString(),
+                  starting_at:
+                    toMetronomeHourBoundary(startingAt).toISOString(),
                 },
               ],
             },
@@ -238,7 +241,7 @@ export class MetronomeClientService {
       }
       const status = this.getErrorStatus(error);
       throw new MetronomeClientException(
-        status === 409
+        this.isUniquenessConflict(error)
           ? MetronomeClientExceptionCode.CONFLICT
           : status === 429
             ? MetronomeClientExceptionCode.RATE_LIMITED
@@ -556,6 +559,27 @@ export class MetronomeClientService {
     }
 
     return MetronomeClientExceptionCode.REQUEST_FAILED;
+  }
+
+  private isUniquenessConflict(error: unknown): boolean {
+    const status = this.getErrorStatus(error);
+
+    return (
+      status === 409 ||
+      (status === 422 &&
+        this.getErrorMessage(error)
+          ?.toLowerCase()
+          .includes('uniqueness key already exists') === true)
+    );
+  }
+
+  private getErrorMessage(error: unknown): string | undefined {
+    return typeof error === 'object' &&
+      error !== null &&
+      'message' in error &&
+      typeof error.message === 'string'
+      ? error.message
+      : undefined;
   }
 
   private getErrorStatus(error: unknown): number | undefined {
