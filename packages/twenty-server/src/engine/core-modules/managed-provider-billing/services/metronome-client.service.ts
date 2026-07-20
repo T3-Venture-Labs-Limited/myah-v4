@@ -11,7 +11,6 @@ import {
 import { toMetronomeHourBoundary } from '../utils/to-metronome-hour-boundary.util';
 import { validateSafeMetronomeEventProperties } from '../utils/validate-safe-metronome-event-properties.util';
 
-const RATE_CARD_REPLAY_PAGE_LIMIT = 100;
 const BALANCE_PAGE_LIMIT = 25;
 
 type MetronomeBalanceResponse = ContractListBalancesResponse;
@@ -39,11 +38,6 @@ export type MetronomeRateCard = {
     startingAt: string | null;
   }>;
   id: string;
-};
-
-export type MetronomeRateCardPage = {
-  hasNextPage: boolean;
-  rateCards: MetronomeRateCard[];
 };
 
 export type MetronomeCustomer = {
@@ -271,24 +265,20 @@ export class MetronomeClientService {
     }));
   }
 
-  async listRateCards(): Promise<MetronomeRateCardPage> {
+  async getRateCard(id: string): Promise<MetronomeRateCard> {
     const client = this.getClient();
     const response = await this.execute(() =>
-      client.v1.contracts.rateCards.list({
-        limit: RATE_CARD_REPLAY_PAGE_LIMIT,
-      }),
+      client.v1.contracts.rateCards.retrieve({ id }),
     );
+    const rateCard = response.data;
 
     return {
-      hasNextPage: response.hasNextPage(),
-      rateCards: response.getPaginatedItems().map((rateCard) => ({
-        aliases: (rateCard.aliases ?? []).map((alias) => ({
-          endingBefore: alias.ending_before ?? null,
-          name: alias.name,
-          startingAt: alias.starting_at ?? null,
-        })),
-        id: rateCard.id,
+      aliases: (rateCard.aliases ?? []).map((alias) => ({
+        endingBefore: alias.ending_before ?? null,
+        name: alias.name,
+        startingAt: alias.starting_at ?? null,
       })),
+      id: rateCard.id,
     };
   }
 

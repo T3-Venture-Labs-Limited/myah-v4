@@ -380,21 +380,18 @@ describe('MetronomeClientService', () => {
     });
   });
 
-  it('maps one bounded rate-card page for contract replay verification', async () => {
-    const listRateCards = jest.fn().mockResolvedValue({
-      getPaginatedItems: jest.fn().mockReturnValue([
-        {
-          aliases: [
-            {
-              ending_before: '2026-08-01T00:00:00.000Z',
-              name: 'managed-provider',
-              starting_at: '2026-07-01T00:00:00.000Z',
-            },
-          ],
-          id: 'rate-card-id',
-        },
-      ]),
-      hasNextPage: jest.fn().mockReturnValue(false),
+  it('retrieves one rate card for contract replay verification', async () => {
+    const retrieveRateCard = jest.fn().mockResolvedValue({
+      data: {
+        aliases: [
+          {
+            ending_before: '2026-08-01T00:00:00.000Z',
+            name: 'managed-provider',
+            starting_at: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+        id: 'rate-card-id',
+      },
     });
     metronomeConstructor.mockImplementation(
       () =>
@@ -402,7 +399,7 @@ describe('MetronomeClientService', () => {
           v1: {
             contracts: {
               rateCards: {
-                list: listRateCards,
+                retrieve: retrieveRateCard,
               },
             },
           },
@@ -419,22 +416,17 @@ describe('MetronomeClientService', () => {
       twentyConfigService as unknown as TwentyConfigService,
     );
 
-    await expect(service.listRateCards()).resolves.toEqual({
-      hasNextPage: false,
-      rateCards: [
+    await expect(service.getRateCard('rate-card-id')).resolves.toEqual({
+      aliases: [
         {
-          aliases: [
-            {
-              endingBefore: '2026-08-01T00:00:00.000Z',
-              name: 'managed-provider',
-              startingAt: '2026-07-01T00:00:00.000Z',
-            },
-          ],
-          id: 'rate-card-id',
+          endingBefore: '2026-08-01T00:00:00.000Z',
+          name: 'managed-provider',
+          startingAt: '2026-07-01T00:00:00.000Z',
         },
       ],
+      id: 'rate-card-id',
     });
-    expect(listRateCards).toHaveBeenCalledWith({ limit: 100 });
+    expect(retrieveRateCard).toHaveBeenCalledWith({ id: 'rate-card-id' });
   });
 
   it('reads eligible sponsored credits and prepaid commitments including draft invoices', async () => {

@@ -14,7 +14,7 @@ import {
   type MetronomeCurrentContract,
   type MetronomeCustomer,
   MetronomeClientService,
-  type MetronomeRateCardPage,
+  type MetronomeRateCard,
 } from '../services/metronome-client.service';
 import { MetronomeWorkspaceCustomerService } from '../services/metronome-workspace-customer.service';
 
@@ -35,7 +35,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
     customers = [],
     installations,
     metronomeEnabled = true,
-    rateCardPage = { hasNextPage: false, rateCards: [] },
+    rateCard = { aliases: [], id: 'rate-card-id' },
     updateAffected = 1,
     workspace = { displayName: 'Workspace', id: workspaceId },
   }: {
@@ -46,7 +46,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
     customers?: MetronomeCustomer[];
     installations: Array<Partial<MyahWorkspaceInstallationEntity> | null>;
     metronomeEnabled?: boolean;
-    rateCardPage?: MetronomeRateCardPage;
+    rateCard?: MetronomeRateCard;
     updateAffected?: number;
     workspace?: Partial<WorkspaceEntity> | null;
   }) => {
@@ -72,7 +72,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
         | 'createCustomer'
         | 'findCurrentContracts'
         | 'findCustomerByIngestAlias'
-        | 'listRateCards'
+        | 'getRateCard'
       >
     > = {
       createContract: jest
@@ -83,7 +83,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
         .mockResolvedValue({ id: 'created-customer-id' }),
       findCurrentContracts: jest.fn().mockResolvedValue(contracts),
       findCustomerByIngestAlias: jest.fn(),
-      listRateCards: jest.fn().mockResolvedValue(rateCardPage),
+      getRateCard: jest.fn().mockResolvedValue(rateCard),
     };
     lookupResults.forEach((customersForLookup) => {
       metronomeClientService.findCustomerByIngestAlias.mockResolvedValueOnce(
@@ -380,7 +380,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
       uniquenessKey: `myah-workspace-contract:${workspaceId}`,
     });
     expect(metronomeClientService.findCurrentContracts).not.toHaveBeenCalled();
-    expect(metronomeClientService.listRateCards).not.toHaveBeenCalled();
+    expect(metronomeClientService.getRateCard).not.toHaveBeenCalled();
   });
 
   it('propagates a non-conflict contract creation failure without recovery', async () => {
@@ -398,7 +398,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
       error,
     );
     expect(metronomeClientService.findCurrentContracts).not.toHaveBeenCalled();
-    expect(metronomeClientService.listRateCards).not.toHaveBeenCalled();
+    expect(metronomeClientService.getRateCard).not.toHaveBeenCalled();
   });
 
   it('recovers one matching current contract after a uniqueness conflict', async () => {
@@ -417,20 +417,15 @@ describe('MetronomeWorkspaceCustomerService', () => {
       installations: [
         { metronomeCustomerId: 'metronome-customer-id', workspaceId },
       ],
-      rateCardPage: {
-        hasNextPage: false,
-        rateCards: [
+      rateCard: {
+        aliases: [
           {
-            aliases: [
-              {
-                endingBefore: null,
-                name: 'managed-provider',
-                startingAt: '2026-07-01T00:00:00.000Z',
-              },
-            ],
-            id: 'rate-card-id',
+            endingBefore: null,
+            name: 'managed-provider',
+            startingAt: '2026-07-01T00:00:00.000Z',
           },
         ],
+        id: 'rate-card-id',
       },
     });
 
@@ -441,7 +436,9 @@ describe('MetronomeWorkspaceCustomerService', () => {
     expect(metronomeClientService.findCurrentContracts).toHaveBeenCalledWith(
       'metronome-customer-id',
     );
-    expect(metronomeClientService.listRateCards).toHaveBeenCalledTimes(1);
+    expect(metronomeClientService.getRateCard).toHaveBeenCalledWith(
+      'rate-card-id',
+    );
   });
 
   it.each([
@@ -471,20 +468,15 @@ describe('MetronomeWorkspaceCustomerService', () => {
       installations: [
         { metronomeCustomerId: 'metronome-customer-id', workspaceId },
       ],
-      rateCardPage: {
-        hasNextPage: false,
-        rateCards: [
+      rateCard: {
+        aliases: [
           {
-            aliases: [
-              {
-                endingBefore,
-                name: 'managed-provider',
-                startingAt: '2026-07-16T12:00:00.000Z',
-              },
-            ],
-            id: 'rate-card-id',
+            endingBefore,
+            name: 'managed-provider',
+            startingAt: '2026-07-16T12:00:00.000Z',
           },
         ],
+        id: 'rate-card-id',
       },
     });
 
@@ -503,25 +495,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
   });
 
   it.each([
-    [
-      'no matching current contract',
-      [],
-      {
-        hasNextPage: false,
-        rateCards: [
-          {
-            aliases: [
-              {
-                endingBefore: null,
-                name: 'managed-provider',
-                startingAt: '2026-07-01T00:00:00.000Z',
-              },
-            ],
-            id: 'rate-card-id',
-          },
-        ],
-      },
-    ],
+    ['no matching current contract', []],
     [
       'multiple matching current contracts',
       [
@@ -538,74 +512,74 @@ describe('MetronomeWorkspaceCustomerService', () => {
           uniquenessKey: `myah-workspace-contract:${workspaceId}`,
         },
       ],
-      {
-        hasNextPage: false,
-        rateCards: [],
-      },
     ],
     [
-      'a mismatched rate-card ID',
+      'a missing rate-card ID',
       [
         {
           id: 'contract-id',
-          rateCardId: 'unexpected-rate-card-id',
+          rateCardId: null,
           startingAt: '2026-07-16T12:00:00.000Z',
           uniquenessKey: `myah-workspace-contract:${workspaceId}`,
         },
       ],
-      {
-        hasNextPage: false,
-        rateCards: [
+    ],
+  ])('requires contract reconciliation for %s', async (_, contracts) => {
+    const { service } = createService({
+      contracts,
+      createContractError: new MetronomeClientException(
+        MetronomeClientExceptionCode.CONFLICT,
+      ),
+      installations: [
+        { metronomeCustomerId: 'metronome-customer-id', workspaceId },
+      ],
+    });
+
+    await expect(
+      service.ensureWorkspaceContract(workspaceId),
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({
+        code: MetronomeClientExceptionCode.CONFLICT,
+      }),
+      message: 'Metronome contract recovery requires reconciliation',
+    });
+  });
+
+  it('requires contract reconciliation for a mismatched retrieved rate-card ID', async () => {
+    const { service } = createService({
+      contracts: [
+        {
+          id: 'contract-id',
+          rateCardId: 'expected-rate-card-id',
+          startingAt: '2026-07-16T12:00:00.000Z',
+          uniquenessKey: `myah-workspace-contract:${workspaceId}`,
+        },
+      ],
+      createContractError: new MetronomeClientException(
+        MetronomeClientExceptionCode.CONFLICT,
+      ),
+      installations: [
+        { metronomeCustomerId: 'metronome-customer-id', workspaceId },
+      ],
+      rateCard: {
+        aliases: [
           {
-            aliases: [
-              {
-                endingBefore: null,
-                name: 'managed-provider',
-                startingAt: '2026-07-01T00:00:00.000Z',
-              },
-            ],
-            id: 'rate-card-id',
+            endingBefore: null,
+            name: 'managed-provider',
+            startingAt: '2026-07-01T00:00:00.000Z',
           },
         ],
+        id: 'unexpected-rate-card-id',
       },
-    ],
-    [
-      'an incomplete rate-card page',
-      [
-        {
-          id: 'contract-id',
-          rateCardId: 'rate-card-id',
-          startingAt: '2026-07-16T12:00:00.000Z',
-          uniquenessKey: `myah-workspace-contract:${workspaceId}`,
-        },
-      ],
-      {
-        hasNextPage: true,
-        rateCards: [],
-      },
-    ],
-  ])(
-    'requires contract reconciliation for %s',
-    async (_, contracts, rateCardPage) => {
-      const { service } = createService({
-        contracts,
-        createContractError: new MetronomeClientException(
-          MetronomeClientExceptionCode.CONFLICT,
-        ),
-        installations: [
-          { metronomeCustomerId: 'metronome-customer-id', workspaceId },
-        ],
-        rateCardPage,
-      });
+    });
 
-      await expect(
-        service.ensureWorkspaceContract(workspaceId),
-      ).rejects.toMatchObject({
-        cause: expect.objectContaining({
-          code: MetronomeClientExceptionCode.CONFLICT,
-        }),
-        message: 'Metronome contract recovery requires reconciliation',
-      });
-    },
-  );
+    await expect(
+      service.ensureWorkspaceContract(workspaceId),
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({
+        code: MetronomeClientExceptionCode.CONFLICT,
+      }),
+      message: 'Metronome contract recovery requires reconciliation',
+    });
+  });
 });
