@@ -5072,7 +5072,7 @@ export enum RowLevelPermissionPredicateOperand {
 
 export type RunAgentInput = {
   agentUniversalIdentifier: Scalars['String']['input'];
-  operationId: Scalars['String']['input'];
+  operationId?: InputMaybe<Scalars['String']['input']>;
   prompt: Scalars['String']['input'];
 };
 

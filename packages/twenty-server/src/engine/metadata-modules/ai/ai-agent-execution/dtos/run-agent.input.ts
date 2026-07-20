@@ -1,6 +1,6 @@
 import { Field, InputType } from '@nestjs/graphql';
 
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { type RunAgentInput } from 'twenty-shared/application';
 
 @InputType('RunAgentInput')
@@ -15,8 +15,9 @@ export class RunAgentInputDTO implements RunAgentInput {
   @Field()
   prompt: string;
 
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @Field()
-  operationId: string;
+  @Field(() => String, { nullable: true })
+  operationId?: string;
 }

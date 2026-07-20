@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { randomUUID } from 'node:crypto';
 import {
   type RunAgentInput,
   type RunAgentResult,
@@ -67,7 +68,7 @@ export class AgentRunService {
         userPrompt: input.prompt,
         authContext,
         workspaceId: workspace.id,
-        managedProviderRequestIdRoot: input.operationId,
+        managedProviderRequestIdRoot: input.operationId ?? randomUUID(),
         userWorkspaceId: requestUserWorkspaceId,
         operationType: UsageOperationType.AI_WORKFLOW_TOKEN,
       });

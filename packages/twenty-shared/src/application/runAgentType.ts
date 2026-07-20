@@ -1,7 +1,7 @@
 export type RunAgentInput = {
   agentUniversalIdentifier: string;
   prompt: string;
-  operationId: string;
+  operationId?: string;
 };
 
 export type RunAgentResult = {

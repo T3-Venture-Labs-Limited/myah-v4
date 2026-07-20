@@ -6657,7 +6657,7 @@ export interface DestroyViewGroupInput {
 /** The id of the view group to destroy. */
 id: Scalars['UUID']}
 
-export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId: Scalars['String']}
+export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId?: (Scalars['String'] | null)}
 
 export interface GetAuthorizationUrlForSSOInput {identityProviderId: Scalars['UUID'],workspaceInviteHash?: (Scalars['String'] | null)}
 
@@ -7570,7 +7570,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderBillingStatus"')
       return ManagedProviderBillingStatus_possibleTypes.includes(obj.__typename)
     }
-
+    
 
 
     const InviteSuggestion_possibleTypes: string[] = ['InviteSuggestion']
