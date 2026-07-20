@@ -56,7 +56,7 @@ const renderDefaultHome = ({
   });
   setTodayStatus(todayStatus);
 
-  const { result } = renderHook(
+  const { result, rerender } = renderHook(
     () => {
       const setCurrentUser = useSetAtomState(currentUserState);
 
@@ -69,7 +69,7 @@ const renderDefaultHome = ({
     { wrapper: Wrapper },
   );
 
-  return { result };
+  return { result, rerender };
 };
 
 describe('useDefaultHomePagePath', () => {
@@ -83,6 +83,27 @@ describe('useDefaultHomePagePath', () => {
 
       await waitFor(() => {
         expect(result.current.defaultHomePagePath).toBe(AppPath.Index);
+      });
+    },
+  );
+
+  it.each(['ready', 'forbidden'] as const)(
+    'redirects to Today only when its resolver transitions from pending to %s',
+    async (todayStatus) => {
+      const { result, rerender } = renderDefaultHome({
+        todayStatus: 'pending',
+        hasReadableObjects: true,
+      });
+
+      await waitFor(() => {
+        expect(result.current.defaultHomePagePath).toBe(AppPath.Index);
+      });
+
+      setTodayStatus(todayStatus);
+      rerender();
+
+      await waitFor(() => {
+        expect(result.current.defaultHomePagePath).toBe('/myah/today');
       });
     },
   );
