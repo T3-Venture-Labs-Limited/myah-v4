@@ -5,12 +5,14 @@ import { MyahNavigationRouteDispatcher } from '@/myah/navigation/components/Myah
 import { useResolvedMyahNavigationRoutes } from '@/myah/navigation/hooks/useResolvedMyahNavigationRoutes';
 import { getMyahNavigationRoute } from '@/myah/navigation/myah-navigation-registry';
 import { type ResolvedMyahNavigationRoute } from '@/myah/navigation/types/MyahNavigationRoute';
+import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
 
 jest.mock('@/myah/navigation/hooks/useResolvedMyahNavigationRoutes');
 jest.mock('~/pages/not-found/NotFound', () => ({
   NotFound: () => <div>Not Found</div>,
 }));
 jest.mock('twenty-ui/feedback', () => ({
+  ...jest.requireActual('twenty-ui/feedback'),
   Loader: () => <div>Loading</div>,
 }));
 
@@ -24,7 +26,7 @@ const NativeDashboard = () => {
   return (
     <>
       <div>Native Dashboard</div>
-      <div>Dashboard permission empty</div>
+      <RecordIndexEmptyStateNotShared />
       <button onClick={() => navigate(-1)}>Back</button>
     </>
   );
@@ -76,8 +78,9 @@ describe('MyahNavigationRouteDispatcher', () => {
       },
     ]);
 
+    expect(await screen.findByText('Object not shared')).toBeVisible();
     expect(
-      await screen.findByText('Dashboard permission empty'),
+      screen.getByText("You don't have access to this object."),
     ).toBeVisible();
     expect(screen.queryByText('Not Found')).not.toBeInTheDocument();
   });
