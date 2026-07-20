@@ -4,7 +4,7 @@ import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { tokenPairState } from '@/auth/states/tokenPairState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
 export const ClientConfigProviderEffect = () => {
@@ -16,15 +16,12 @@ export const ClientConfigProviderEffect = () => {
   const accessToken = tokenPair?.accessOrWorkspaceAgnosticToken?.token;
   const workspaceId = currentWorkspace?.id;
   const configIdentity = `${workspaceId ?? ''}:${accessToken ?? ''}`;
-  const fetchedIdentityRef = useRef<string | null>(null);
+  const [fetchedIdentity, setFetchedIdentity] = useState<string | null>(null);
   const { data, loading, error, fetchClientConfig } = useClientConfig();
 
   useEffect(() => {
     if (clientConfigApiStatus.isLoading) return;
-    if (
-      clientConfigApiStatus.isLoadedOnce &&
-      fetchedIdentityRef.current === configIdentity
-    ) {
+    if (fetchedIdentity === configIdentity) {
       return;
     }
 
@@ -36,7 +33,7 @@ export const ClientConfigProviderEffect = () => {
       isDefined(accessToken) ||
       isDefined(workspaceId)
     ) {
-      fetchedIdentityRef.current = configIdentity;
+      setFetchedIdentity(configIdentity);
       void fetchClientConfig();
     }
   }, [
@@ -44,6 +41,7 @@ export const ClientConfigProviderEffect = () => {
     clientConfigApiStatus.isLoadedOnce,
     clientConfigApiStatus.isLoading,
     configIdentity,
+    fetchedIdentity,
     fetchClientConfig,
     workspaceId,
   ]);
