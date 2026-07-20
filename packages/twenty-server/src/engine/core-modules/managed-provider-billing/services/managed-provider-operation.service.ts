@@ -64,9 +64,9 @@ export class ManagedProviderOperationService {
           providerConfigurationKey,
         },
       )
-      .andWhere(`operation.actualUsageProperties->>'overrun' = 'true'`)
+      .andWhere(`operation."actualUsageProperties"->>'overrun' = 'true'`)
       .andWhere(
-        `operation.actualUsageProperties->>'tariffVersion' = :tariffVersion`,
+        `operation."actualUsageProperties"->>'tariffVersion' = :tariffVersion`,
         { tariffVersion },
       )
       .getExists();
