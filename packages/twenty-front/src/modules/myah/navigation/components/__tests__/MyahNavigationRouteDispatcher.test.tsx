@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
 import { MyahNavigationRouteDispatcher } from '@/myah/navigation/components/MyahNavigationRouteDispatcher';
 import { useResolvedMyahNavigationRoutes } from '@/myah/navigation/hooks/useResolvedMyahNavigationRoutes';
@@ -18,17 +18,33 @@ const mockedUseResolvedMyahNavigationRoutes = jest.mocked(
   useResolvedMyahNavigationRoutes,
 );
 
-const renderDispatcher = (routes: ResolvedMyahNavigationRoute[]) => {
+const NativeDashboard = () => {
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <div>Native Dashboard</div>
+      <div>Dashboard permission empty</div>
+      <button onClick={() => navigate(-1)}>Back</button>
+    </>
+  );
+};
+
+const renderDispatcher = (
+  routes: ResolvedMyahNavigationRoute[],
+  initialEntry = '/myah/today',
+) => {
   mockedUseResolvedMyahNavigationRoutes.mockReturnValue(routes);
 
   render(
-    <MemoryRouter initialEntries={['/myah/today']}>
+    <MemoryRouter initialEntries={['/previous', initialEntry]} initialIndex={1}>
       <Routes>
         <Route
           path="/myah/:pageId"
           element={<MyahNavigationRouteDispatcher />}
         />
-        <Route path="/objects/dashboards" element={<div>Native Dashboard</div>} />
+        <Route path="/previous" element={<div>Previous Page</div>} />
+        <Route path="/objects/dashboards" element={<NativeDashboard />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -45,6 +61,25 @@ describe('MyahNavigationRouteDispatcher', () => {
     ]);
 
     expect(await screen.findByText('Native Dashboard')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(screen.getByText('Previous Page')).toBeVisible();
+  });
+
+  it('replaces a forbidden native route with its permission-empty body', async () => {
+    renderDispatcher([
+      {
+        status: 'forbidden',
+        route: getMyahNavigationRoute('today'),
+        destination: { kind: 'native', path: '/objects/dashboards' },
+      },
+    ]);
+
+    expect(
+      await screen.findByText('Dashboard permission empty'),
+    ).toBeVisible();
+    expect(screen.queryByText('Not Found')).not.toBeInTheDocument();
   });
 
   it('renders a resolved Myah page body', () => {
@@ -70,20 +105,29 @@ describe('MyahNavigationRouteDispatcher', () => {
     expect(screen.queryByText('Not Found')).not.toBeInTheDocument();
   });
 
-  it.each<{ routes: ResolvedMyahNavigationRoute[] }>([
+  it.each<{
+    routes: ResolvedMyahNavigationRoute[];
+    initialEntry: '/myah/today' | '/myah/segments' | '/myah/creator-discovery';
+  }>([
     {
+      initialEntry: '/myah/today',
       routes: [{ status: 'missing', route: getMyahNavigationRoute('today') }],
     },
     {
+      initialEntry: '/myah/segments',
       routes: [{ status: 'deferred', route: getMyahNavigationRoute('segments') }],
     },
     {
+      initialEntry: '/myah/creator-discovery',
       routes: [
         { status: 'soon', route: getMyahNavigationRoute('creator-discovery') },
       ],
     },
-  ])('renders NotFound for an unavailable route', ({ routes }) => {
-    renderDispatcher(routes);
+  ])('renders NotFound for an unavailable route at $initialEntry', ({
+    routes,
+    initialEntry,
+  }) => {
+    renderDispatcher(routes, initialEntry);
 
     expect(screen.getByText('Not Found')).toBeVisible();
   });
