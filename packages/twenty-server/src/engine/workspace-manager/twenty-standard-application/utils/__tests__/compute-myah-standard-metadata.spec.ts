@@ -457,4 +457,51 @@ describe('Myah standard metadata contract', () => {
       );
     }
   });
+
+  it('materializes search metadata for the native Creator CRM records', () => {
+    const searchFieldMetadata = Object.values(
+      result.allFlatEntityMaps.flatSearchFieldMetadataMaps
+        .byUniversalIdentifier,
+    ).filter(isDefined);
+    const creatorSearchFieldMetadata = searchFieldMetadata.filter(
+      ({ objectMetadataUniversalIdentifier }) =>
+        objectMetadataUniversalIdentifier ===
+        MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+    );
+
+    expect(creatorSearchFieldMetadata).toHaveLength(2);
+    expect(creatorSearchFieldMetadata).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
+        }),
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
+        }),
+      ]),
+    );
+
+    for (const [objectMetadataUniversalIdentifier, fieldMetadataUniversalIdentifier] of [
+      [
+        MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier,
+      ],
+      [
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
+      ],
+    ]) {
+      expect(
+        searchFieldMetadata.filter(
+          (searchFieldMetadata) =>
+            searchFieldMetadata.objectMetadataUniversalIdentifier ===
+              objectMetadataUniversalIdentifier &&
+            searchFieldMetadata.fieldMetadataUniversalIdentifier ===
+              fieldMetadataUniversalIdentifier,
+        ),
+      ).toHaveLength(1);
+    }
+  });
 });
