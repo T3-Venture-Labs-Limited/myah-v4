@@ -43,16 +43,19 @@ const objectPaths = [
     'creator.object.ts',
   ]),
 ];
-const fieldPaths = modules(`${brand}/fields`, [
-  'target-page-links-on-brand-brain-page.field.ts',
-  'target-page-on-brand-brain-link.field.ts',
-  'target-page-on-brand-brain-update-proposal.field.ts',
-  'update-proposals-on-brand-brain-page.field.ts',
-  'child-pages-on-brand-brain-page.field.ts',
-  'parent-page-on-brand-brain-page.field.ts',
-  'source-page-links-on-brand-brain-page.field.ts',
-  'source-page-on-brand-brain-link.field.ts',
-]);
+const fieldPaths = [
+  ...modules(`${brand}/fields`, [
+    'target-page-links-on-brand-brain-page.field.ts',
+    'target-page-on-brand-brain-link.field.ts',
+    'target-page-on-brand-brain-update-proposal.field.ts',
+    'update-proposals-on-brand-brain-page.field.ts',
+    'child-pages-on-brand-brain-page.field.ts',
+    'parent-page-on-brand-brain-page.field.ts',
+    'source-page-links-on-brand-brain-page.field.ts',
+    'source-page-on-brand-brain-link.field.ts',
+  ]),
+  `${creatorOps}/fields/owned-creators-on-workspace-member.field.ts`,
+];
 const viewPaths = [
   ...modules(`${brand}/views`, [
     'brand-brain-page-record-page-fields.view.ts',
@@ -63,6 +66,7 @@ const viewPaths = [
     'campaigns.view.ts',
     'creator-lists.view.ts',
     'creators.view.ts',
+    'qualified-creators-with-email.view.ts',
   ]),
 ];
 const navigationPaths = [

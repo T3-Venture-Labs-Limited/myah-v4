@@ -1,4 +1,10 @@
-import { FieldType, RelationType, defineObject } from 'twenty-sdk/define';
+import {
+  FieldType,
+  OnDeleteAction,
+  RelationType,
+  STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
+  defineObject,
+} from 'twenty-sdk/define';
 
 import { CREATOR_FIELD_UNIVERSAL_IDENTIFIERS } from 'src/constants/creator-field-universal-identifiers';
 import {
@@ -144,6 +150,23 @@ export default defineObject({
           color: 'red',
         },
       ],
+    },
+    {
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.owner,
+      type: FieldType.RELATION,
+      name: 'owner',
+      label: 'Owner',
+      icon: 'IconUserCircle',
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember.universalIdentifier,
+      relationTargetFieldMetadataUniversalIdentifier:
+        CREATOR_RELATION_FIELD_UNIVERSAL_IDENTIFIERS.ownedCreators,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'ownerId',
+      },
     },
     {
       universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.source,

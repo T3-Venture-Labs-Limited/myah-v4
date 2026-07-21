@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { FieldType, NavigationMenuItemType, ViewType } from 'twenty-sdk/define';
+import {
+  FieldType,
+  NavigationMenuItemType,
+  ViewFilterOperand,
+  ViewType,
+} from 'twenty-sdk/define';
 
 import * as universalIdentifiers from 'src/constants/universal-identifiers';
 import campaignObjectResult from 'src/objects/campaign.object';
@@ -14,6 +19,7 @@ import promotedAssetObjectResult from 'src/objects/promoted-asset.object';
 import campaignsViewResult from 'src/views/campaigns.view';
 import creatorListsViewResult from 'src/views/creator-lists.view';
 import creatorsViewResult from 'src/views/creators.view';
+import qualifiedCreatorsWithEmailViewResult from 'src/views/qualified-creators-with-email.view';
 import campaignsNavigationMenuItemResult from 'src/navigation-menu-items/campaigns.navigation-menu-item';
 import creatorListsNavigationMenuItemResult from 'src/navigation-menu-items/creator-lists.navigation-menu-item';
 import creatorsNavigationMenuItemResult from 'src/navigation-menu-items/creators.navigation-menu-item';
@@ -46,6 +52,9 @@ const promotedAssetObject = unwrapValidationResult(promotedAssetObjectResult);
 const campaignsView = unwrapValidationResult(campaignsViewResult);
 const creatorListsView = unwrapValidationResult(creatorListsViewResult);
 const creatorsView = unwrapValidationResult(creatorsViewResult);
+const qualifiedCreatorsWithEmailView = unwrapValidationResult(
+  qualifiedCreatorsWithEmailViewResult,
+);
 const campaignsNavigationMenuItem = unwrapValidationResult(
   campaignsNavigationMenuItemResult,
 );
@@ -198,25 +207,46 @@ describe('Creator Ops workflow object schema', () => {
 });
 
 describe('Creator Ops operator views', () => {
-  it('should expose high-value Creator import fields in the Creators table', () => {
-    expect(creatorsView.type).toBe(ViewType.TABLE);
-    expect(creatorsView.objectUniversalIdentifier).toBe(
-      universalIdentifiers.CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+  it('should expose qualification-focused Creator tables', () => {
+    expect(creatorsView.universalIdentifier).toBe(
+      universalIdentifiers.CREATORS_VIEW_UNIVERSAL_IDENTIFIER,
+    );
+    expect(qualifiedCreatorsWithEmailView.universalIdentifier).toBe(
+      universalIdentifiers.QUALIFIED_CREATORS_WITH_EMAIL_VIEW_UNIVERSAL_IDENTIFIER,
     );
 
-    expect(getVisibleFieldUniversalIdentifiers(creatorsView)).toEqual([
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.location,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramFollowerCount,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokUsername,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokFollowerCount,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeTitle,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeSubscriberCount,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.hasBrandDeals,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.promotesAffiliateLinks,
-      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.source,
+    for (const creatorView of [
+      creatorsView,
+      qualifiedCreatorsWithEmailView,
+    ]) {
+      expect(creatorView.type).toBe(ViewType.TABLE);
+      expect(creatorView.objectUniversalIdentifier).toBe(
+        universalIdentifiers.CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+      );
+      expect(getVisibleFieldUniversalIdentifiers(creatorView)).toEqual([
+        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
+        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.creatorStatus,
+        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.owner,
+        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
+        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
+        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramFollowerCount,
+        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.source,
+      ]);
+    }
+
+    expect(qualifiedCreatorsWithEmailView.filters).toEqual([
+      expect.objectContaining({
+        fieldMetadataUniversalIdentifier:
+          universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.creatorStatus,
+        operand: ViewFilterOperand.IS,
+        value: ['QUALIFIED'],
+      }),
+      expect.objectContaining({
+        fieldMetadataUniversalIdentifier:
+          universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
+        operand: ViewFilterOperand.IS_NOT_EMPTY,
+        value: [],
+      }),
     ]);
   });
 
