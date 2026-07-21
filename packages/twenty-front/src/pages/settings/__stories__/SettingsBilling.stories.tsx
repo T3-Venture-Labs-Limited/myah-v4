@@ -63,7 +63,37 @@ const healthyWorkspaceViewModel: WorkspaceBillingViewModel = {
       chargeCents: null,
     },
   ],
-  billingHistory: [],
+  billingHistory: [
+    {
+      id: 'funding-1',
+      occurredAt: '2026-07-01T14:00:00.000Z',
+      description: 'Purchased funds',
+      type: 'purchasedTopUp',
+      amountCents: 2500,
+      document: {
+        label: 'View receipt from July 1, 2026',
+        url: '#receipt-july-1-2026',
+      },
+    },
+    {
+      id: 'funding-2',
+      occurredAt: '2026-06-20T12:00:00.000Z',
+      description: 'Sponsored funds from Myah',
+      type: 'sponsoredGrant',
+      amountCents: 2500,
+    },
+    {
+      id: 'funding-3',
+      occurredAt: '2026-06-18T11:00:00.000Z',
+      description: 'Refund',
+      type: 'refund',
+      amountCents: -500,
+      document: {
+        label: 'View refund receipt from June 18, 2026',
+        url: '#refund-june-18-2026',
+      },
+    },
+  ],
 };
 
 type SettingsBillingStoryArgs = PageDecoratorArgs & SettingsBillingProps;
@@ -180,6 +210,35 @@ export const HealthyFundedWorkspace: Story = {
     );
     await userEvent.click(sevenDaysOption);
     await expect(canvas.findByText('Last 7 days')).resolves.toBeVisible();
+
+    await userEvent.click(billingHistoryTab);
+    await expect(billingHistoryTab).toHaveAttribute('aria-selected', 'true');
+    await expect(usageTab).toHaveAttribute('aria-selected', 'false');
+    const billingHistoryTable = await canvas.findByRole('table', {
+      name: 'Billing history',
+    });
+    await expect(
+      within(billingHistoryTable).findByRole('columnheader', { name: 'Event' }),
+    ).resolves.toBeVisible();
+    await expect(
+      within(billingHistoryTable).findByRole('cell', {
+        name: 'Purchased funds',
+      }),
+    ).resolves.toBeVisible();
+    expect(
+      within(billingHistoryTable).getAllByRole('row').length,
+    ).toBeGreaterThan(1);
+    await expect(
+      canvas.findByText('Sponsored funds from Myah'),
+    ).resolves.toBeVisible();
+    await expect(canvas.findAllByText('+$25.00')).resolves.toHaveLength(2);
+    await expect(canvas.findByText('-$5.00')).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('link', {
+        name: 'View receipt from July 1, 2026',
+      }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText('AI chat')).not.toBeInTheDocument();
   },
 };
 
@@ -217,5 +276,83 @@ export const SettledUsageWithoutCharge: Story = {
       within(row).getByRole('cell', { name: 'Settled' }),
     ).toBeVisible();
     await expect(within(row).getByRole('cell', { name: '—' })).toBeVisible();
+  },
+};
+
+export const LowBalance: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      balanceStatus: 'low',
+      availableBalanceCents: 350,
+      sponsoredBalanceCents: 350,
+      purchasedBalanceCents: 0,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText('Low balance')).resolves.toBeVisible();
+    await expect(
+      canvas.findByText('Managed services may pause soon.'),
+    ).resolves.toBeVisible();
+    await expect(canvas.findByText('Creator research')).resolves.toBeVisible();
+  },
+};
+
+export const EmptyBlockedBalance: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      balanceStatus: 'empty',
+      availableBalanceCents: 0,
+      sponsoredBalanceCents: 0,
+      purchasedBalanceCents: 0,
+      monthToDateSpendCents: 0,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByText(
+        'Your balance is empty. Managed services are paused until funds are added.',
+      ),
+    ).resolves.toBeVisible();
+    expect((await canvas.findAllByText('$0.00')).length).toBeGreaterThan(0);
+    await expect(
+      canvas.findByRole('button', { name: 'Add funds' }),
+    ).resolves.toBeDisabled();
+  },
+};
+
+export const NoUsage: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      usageHistory: [],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText('No usage yet')).resolves.toBeVisible();
+    await expect(canvas.findByText('$42.80')).resolves.toBeVisible();
+  },
+};
+
+export const NoBillingHistory: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      billingHistory: [],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      await canvas.findByRole('tab', { name: 'Billing history' }),
+    );
+    await expect(
+      canvas.findByText('No billing events yet'),
+    ).resolves.toBeVisible();
+    await expect(canvas.findByText('$42.80')).resolves.toBeVisible();
   },
 };

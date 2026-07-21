@@ -16,6 +16,7 @@ import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { styled } from '@linaria/react';
 import { plural, t } from '@lingui/core/macro';
 import { useState } from 'react';
+import { Status } from 'twenty-ui/data-display';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button } from 'twenty-ui/input';
 import { InlineBanner } from 'twenty-ui/feedback';
@@ -110,6 +111,24 @@ const StyledEmptyCopy = styled.p`
   color: ${themeCssVariables.font.color.secondary};
   margin: 0;
 `;
+const StyledLowBalanceWarning = styled.div`
+  align-items: center;
+  background: ${themeCssVariables.snackBar.warning.backgroundColor};
+  border-radius: ${themeCssVariables.border.radius.md};
+  color: ${themeCssVariables.snackBar.warning.color};
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+`;
+const StyledBillingEmptyState = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 8px;
+`;
+const StyledDocumentLink = styled.a`
+  color: ${themeCssVariables.font.color.primary};
+`;
 const StyledUsageTableRow = styled(TableRow)`
   @media (max-width: 640px) {
     grid-template-columns: minmax(96px, 0.9fr) minmax(0, 1.5fr) minmax(
@@ -180,8 +199,30 @@ const getUsageAmount = (
   return formatUsdCents(chargeCents);
 };
 
+const getBillingHistoryTypeLabel = (
+  type: WorkspaceBillingHistoryEntry['type'],
+) => {
+  switch (type) {
+    case 'purchasedTopUp':
+      return t`Purchased top-up`;
+    case 'sponsoredGrant':
+      return t`Sponsored grant`;
+    case 'refund':
+      return t`Refund`;
+    case 'adjustment':
+      return t`Adjustment`;
+  }
+};
+
+const formatSignedUsdCents = (amountCents: number) =>
+  amountCents > 0
+    ? `+${formatUsdCents(amountCents)}`
+    : formatUsdCents(amountCents);
+
 const usageColumns =
   'minmax(132px, 0.9fr) minmax(180px, 1.5fr) minmax(140px, 1fr) minmax(110px, 0.8fr) minmax(96px, 0.7fr)';
+const billingHistoryColumns =
+  'minmax(132px, 0.9fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(160px, 1.2fr) minmax(96px, 0.7fr)';
 
 const renderUnknownSummary = () => (
   <StyledSummary>
@@ -273,6 +314,18 @@ export const SettingsWorkspaceBillingContent = ({
           title={t`Balance`}
           description={t`Workspace billing summary`}
         />
+        {viewModel.balanceStatus === 'low' && (
+          <StyledLowBalanceWarning>
+            <Status color="orange" text={t`Low balance`} weight="medium" />
+            <span>{t`Managed services may pause soon.`}</span>
+          </StyledLowBalanceWarning>
+        )}
+        {viewModel.balanceStatus === 'empty' && (
+          <InlineBanner
+            color="danger"
+            message={t`Your balance is empty. Managed services are paused until funds are added.`}
+          />
+        )}
         <StyledSummary>
           <StyledSettingsBillingCard>
             <StyledSettingsBillingCardHeader>{t`Available balance`}</StyledSettingsBillingCardHeader>
@@ -358,49 +411,107 @@ export const SettingsWorkspaceBillingContent = ({
               ]}
               onChange={(value) => setUsagePeriod(value as UsagePeriod)}
             />
-            <Table role="table" aria-label={t`Usage history`}>
-              <StyledUsageTableRow
-                role="row"
-                gridTemplateColumns={usageColumns}
-              >
-                <StyledUsageTableHeader role="columnheader">{t`Date`}</StyledUsageTableHeader>
-                <StyledUsageTableHeader role="columnheader">{t`Activity`}</StyledUsageTableHeader>
-                <StyledUsageTableHeader role="columnheader">{t`Member`}</StyledUsageTableHeader>
-                <StyledUsageTableHeader role="columnheader">{t`Status`}</StyledUsageTableHeader>
-                <StyledUsageTableHeader
-                  role="columnheader"
-                  align="right"
-                >{t`Amount`}</StyledUsageTableHeader>
-              </StyledUsageTableRow>
-              {viewModel.usageHistory.map((entry) => (
+            {viewModel.usageHistory.length === 0 ? (
+              <StyledBillingEmptyState>
+                <strong>{t`No usage yet`}</strong>
+                <StyledEmptyCopy>
+                  {t`Managed service activity will appear here when your workspace starts using it.`}
+                </StyledEmptyCopy>
+              </StyledBillingEmptyState>
+            ) : (
+              <Table role="table" aria-label={t`Usage history`}>
                 <StyledUsageTableRow
-                  key={entry.id}
                   role="row"
                   gridTemplateColumns={usageColumns}
                 >
-                  <StyledUsageTableCell role="cell">
-                    {new Date(entry.occurredAt).toLocaleString()}
-                  </StyledUsageTableCell>
-                  <StyledUsageActivityCell role="cell">
-                    {entry.activity}
-                    <StyledUsageMetadata>
-                      {t`${entry.member} · ${getUsageStatus(entry.status).label}`}
-                    </StyledUsageMetadata>
-                  </StyledUsageActivityCell>
-                  <StyledUsageTableCell role="cell">
-                    {entry.member}
-                  </StyledUsageTableCell>
-                  <StyledUsageTableCell role="cell">
-                    {getUsageStatus(entry.status).label}
-                  </StyledUsageTableCell>
-                  <StyledUsageTableCell role="cell" align="right">
-                    {getUsageAmount(entry.status, entry.chargeCents)}
-                  </StyledUsageTableCell>
+                  <StyledUsageTableHeader role="columnheader">{t`Date`}</StyledUsageTableHeader>
+                  <StyledUsageTableHeader role="columnheader">{t`Activity`}</StyledUsageTableHeader>
+                  <StyledUsageTableHeader role="columnheader">{t`Member`}</StyledUsageTableHeader>
+                  <StyledUsageTableHeader role="columnheader">{t`Status`}</StyledUsageTableHeader>
+                  <StyledUsageTableHeader
+                    role="columnheader"
+                    align="right"
+                  >{t`Amount`}</StyledUsageTableHeader>
                 </StyledUsageTableRow>
-              ))}
-            </Table>
+                {viewModel.usageHistory.map((entry) => (
+                  <StyledUsageTableRow
+                    key={entry.id}
+                    role="row"
+                    gridTemplateColumns={usageColumns}
+                  >
+                    <StyledUsageTableCell role="cell">
+                      {new Date(entry.occurredAt).toLocaleString()}
+                    </StyledUsageTableCell>
+                    <StyledUsageActivityCell role="cell">
+                      {entry.activity}
+                      <StyledUsageMetadata>
+                        {t`${entry.member} · ${getUsageStatus(entry.status).label}`}
+                      </StyledUsageMetadata>
+                    </StyledUsageActivityCell>
+                    <StyledUsageTableCell role="cell">
+                      {entry.member}
+                    </StyledUsageTableCell>
+                    <StyledUsageTableCell role="cell">
+                      {getUsageStatus(entry.status).label}
+                    </StyledUsageTableCell>
+                    <StyledUsageTableCell role="cell" align="right">
+                      {getUsageAmount(entry.status, entry.chargeCents)}
+                    </StyledUsageTableCell>
+                  </StyledUsageTableRow>
+                ))}
+              </Table>
+            )}
           </>
         )}
+        {displayedTabId === WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY &&
+          (viewModel.billingHistory.length === 0 ? (
+            <StyledBillingEmptyState>
+              <strong>{t`No billing events yet`}</strong>
+              <StyledEmptyCopy>
+                {t`Funding events will appear here when funds are added or adjusted.`}
+              </StyledEmptyCopy>
+            </StyledBillingEmptyState>
+          ) : (
+            <Table role="table" aria-label={t`Billing history`}>
+              <TableRow role="row" gridTemplateColumns={billingHistoryColumns}>
+                <TableHeader role="columnheader">{t`Date`}</TableHeader>
+                <TableHeader role="columnheader">{t`Event`}</TableHeader>
+                <TableHeader role="columnheader">{t`Type`}</TableHeader>
+                <TableHeader role="columnheader">{t`Document`}</TableHeader>
+                <TableHeader
+                  role="columnheader"
+                  align="right"
+                >{t`Amount`}</TableHeader>
+              </TableRow>
+              {viewModel.billingHistory.map((entry) => (
+                <TableRow
+                  key={entry.id}
+                  role="row"
+                  gridTemplateColumns={billingHistoryColumns}
+                >
+                  <TableCell role="cell">
+                    {new Date(entry.occurredAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell role="cell">{entry.description}</TableCell>
+                  <TableCell role="cell">
+                    {getBillingHistoryTypeLabel(entry.type)}
+                  </TableCell>
+                  <TableCell role="cell">
+                    {entry.document === undefined ? (
+                      EM_DASH
+                    ) : (
+                      <StyledDocumentLink href={entry.document.url}>
+                        {entry.document.label}
+                      </StyledDocumentLink>
+                    )}
+                  </TableCell>
+                  <TableCell role="cell" align="right">
+                    {formatSignedUsdCents(entry.amountCents)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </Table>
+          ))}
       </Section>
     </>
   );
