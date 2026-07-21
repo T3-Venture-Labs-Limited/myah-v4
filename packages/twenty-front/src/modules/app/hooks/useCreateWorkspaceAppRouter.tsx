@@ -14,6 +14,7 @@ import { WorkspaceAppProviders } from '@/app/components/WorkspaceAppProviders';
 import { VerifyEmail } from '@/auth/components/VerifyEmail';
 import { MinimalMetadataGate } from '@/metadata-store/components/MinimalMetadataGate';
 import indexAppPath from '@/navigation/utils/indexAppPath';
+import { MyahNavigationRouteDispatcher } from '@/myah/navigation/components/MyahNavigationRouteDispatcher';
 import { OnboardingActivationOutlet } from '@/onboarding/components/OnboardingActivationOutlet';
 import { OnboardingPageLoader } from '@/onboarding/components/OnboardingPageLoader';
 import { OnboardingStepLayout } from '@/onboarding/components/OnboardingStepLayout';
@@ -189,6 +190,10 @@ const createWorkspaceAppRouter = (
                     replace
                   />
                 }
+              />
+              <Route
+                path="/myah/:pageId"
+                element={<MyahNavigationRouteDispatcher />}
               />
               <Route
                 path={AppPath.NotFoundWildcard}
