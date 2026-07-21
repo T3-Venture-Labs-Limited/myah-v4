@@ -581,7 +581,7 @@ describe('ManagedOpenRouterModelService', () => {
     ).not.toContain('secret prompt body');
   });
 
-  it.each([401, 402, 403])(
+  it.each([401, 402, 403, 429])(
     'releases a reservation for a definite pre-execution %s rejection',
     async (statusCode) => {
       const { operationService, service } = createService();
@@ -603,6 +603,26 @@ describe('ManagedOpenRouterModelService', () => {
       );
     },
   );
+
+  it('releases a reservation for a pre-execution stream rate limit', async () => {
+    const { operationService, service } = createService();
+    const providerError = Object.assign(new Error('provider rate limited'), {
+      statusCode: 429,
+    });
+    const { doStream, model } = createProviderModel();
+
+    doStream.mockRejectedValue(providerError);
+
+    await expect(
+      wrap({ model, service }).doStream({ prompt: [] } as never),
+    ).rejects.toThrow('Managed OpenRouter generation failed');
+    expect(operationService.completeOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'NON_BILLABLE_FAILURE',
+        providerExecutionId: null,
+      }),
+    );
+  });
 
   it('completes streaming usage before forwarding the finish part', async () => {
     const order: string[] = [];
@@ -754,6 +774,43 @@ describe('ManagedOpenRouterModelService', () => {
       providerKey: 'openrouter',
       workspaceId: 'workspace-id',
     });
+  });
+
+  it('keeps a rate-limited stream with execution evidence in reconciliation', async () => {
+    const { operationService, service } = createService();
+    const { doStream, model } = createProviderModel();
+    const providerError = Object.assign(new Error('provider rate limited'), {
+      statusCode: 429,
+    });
+
+    doStream.mockResolvedValue({
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            type: 'response-metadata',
+            id: 'stream-generation-1',
+          });
+          controller.enqueue({ type: 'error', error: providerError });
+        },
+      }),
+      request: { body: {} },
+      warnings: [],
+    });
+    const result = await wrap({ model, service }).doStream({
+      prompt: [],
+    } as never);
+    const reader = result.stream.getReader();
+
+    await reader.read();
+    await expect(reader.read()).rejects.toThrow(
+      'Managed OpenRouter generation failed',
+    );
+    expect(operationService.completeOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'UNKNOWN',
+        providerExecutionId: 'stream-generation-1',
+      }),
+    );
   });
 
   it('does not forward provider error payloads from a managed stream', async () => {
