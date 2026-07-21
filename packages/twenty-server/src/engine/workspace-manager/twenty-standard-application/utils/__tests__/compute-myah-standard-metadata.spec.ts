@@ -312,6 +312,15 @@ describe('Myah standard metadata contract', () => {
           'fe31748c-e0e8-40b2-b175-1759c817e54a',
       }),
     );
+    expect(contract.relations).toContainEqual({
+      sourceField:
+        MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
+      sourceObject: MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+      targetObject: STANDARD_OBJECTS.workspaceMember.universalIdentifier,
+      targetField:
+        STANDARD_OBJECTS.workspaceMember.fields.ownedCreators
+          .universalIdentifier,
+    });
     expect(
       result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
     ).toHaveProperty('19483764-6f84-4d09-8f03-945e7d0a4b28');

@@ -21,6 +21,12 @@ type Declaration = {
 };
 
 const root = resolve(__dirname, '../../../../../../../../');
+const standardObjectUniversalIdentifiers = Object.fromEntries(
+  Object.entries(STANDARD_OBJECTS).map(([name, { universalIdentifier }]) => [
+    name,
+    { universalIdentifier },
+  ]),
+) as Record<string, { universalIdentifier: string }>;
 const brand = 'packages/twenty-apps/fixtures/brand-brain-record-wiki-mvp/src';
 const creatorOps = 'packages/twenty-apps/internal/myah-creator-ops/src';
 const modules = (folder: string, names: readonly string[]) =>
@@ -141,7 +147,7 @@ const evalExpr = (node: ts.Node, source: string): Value => {
   }
   if (ts.isIdentifier(node)) {
     if (node.text === 'STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS')
-      return STANDARD_OBJECTS as unknown as Value;
+      return standardObjectUniversalIdentifiers as unknown as Value;
     const sf = file(source);
     const importDeclaration = sf.statements.find(
       (statement): statement is ts.ImportDeclaration =>
