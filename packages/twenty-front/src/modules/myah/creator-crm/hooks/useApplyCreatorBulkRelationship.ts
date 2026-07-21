@@ -38,27 +38,33 @@ export const useApplyCreatorBulkRelationship = () => {
         return;
       }
 
-      try {
-        const recordsToCreate = creatorIdsToAdd.map((creatorId) =>
-          target.kind === 'creator-list'
-            ? { name: '', creatorId, creatorListId: target.id }
-            : { name: '', creatorId, campaignId: target.id },
-        );
+      const recordsToCreate = creatorIdsToAdd.map((creatorId) =>
+        target.kind === 'creator-list'
+          ? { name: '', creatorId, creatorListId: target.id }
+          : { name: '', creatorId, campaignId: target.id },
+      );
 
+      try {
         if (target.kind === 'creator-list') {
           await batchCreateCreatorListMembers({ recordsToCreate });
         } else {
           await batchCreateCampaignCreators({ recordsToCreate });
         }
-
-        await apolloCoreClient.refetchQueries({
-          include: CREATOR_BULK_RELATIONSHIP_QUERY_NAMES,
-        });
       } catch {
         enqueueErrorSnackBar({
           message: t`Failed to add creators to the selected relationship.`,
         });
         throw new Error('Creator bulk relationship creation failed');
+      }
+
+      try {
+        await apolloCoreClient.refetchQueries({
+          include: CREATOR_BULK_RELATIONSHIP_QUERY_NAMES,
+        });
+      } catch {
+        enqueueErrorSnackBar({
+          message: t`Failed to refresh creator relationships.`,
+        });
       }
     },
     [

@@ -11,6 +11,7 @@ const mockUseBatchCreateManyRecords = jest.fn((_args: unknown) => ({
   batchCreateManyRecords: mockBatchCreateManyRecords,
 }));
 const mockRefetchQueries = jest.fn();
+const mockEnqueueErrorSnackBar = jest.fn();
 const mockUseFindManyRecords = jest.fn();
 
 jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
@@ -23,7 +24,7 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
 }));
 
 jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
-  useSnackBar: () => ({ enqueueErrorSnackBar: jest.fn() }),
+  useSnackBar: () => ({ enqueueErrorSnackBar: mockEnqueueErrorSnackBar }),
 }));
 
 jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
@@ -136,6 +137,31 @@ describe('useApplyCreatorBulkRelationship', () => {
       ],
     });
     expect(mockRefetchQueries).toHaveBeenCalled();
+  });
+
+  it('keeps the successful creation lifecycle when cache refresh fails', async () => {
+    mockRefetchQueries.mockRejectedValueOnce(new Error('network unavailable'));
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await expect(
+      result.current.applyCreatorBulkRelationship({
+        target: {
+          kind: 'campaign',
+          id: 'campaign-a',
+          label: 'Spring campaign',
+        },
+        creatorIdsToAdd: ['creator-a'],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(mockBatchCreateManyRecords).toHaveBeenCalledWith({
+      recordsToCreate: [
+        { name: '', creatorId: 'creator-a', campaignId: 'campaign-a' },
+      ],
+    });
+    expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
+      message: 'Failed to refresh creator relationships.',
+    });
   });
 
   it('does not mutate when there are no missing creators', async () => {
