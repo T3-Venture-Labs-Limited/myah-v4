@@ -21,10 +21,11 @@ The page will:
 - show customer-facing usage rows rather than provider internals;
 - show funding events, receipts, and invoices in Billing history;
 - render a disabled **Add funds** action with persistent “Online top-ups coming soon” guidance;
+- show a default payment-method summary and an explicit automatic-top-up form when Payment settings data is available;
 - represent healthy, low-balance, empty/blocked, loading, empty-history, unavailable, and not-connected states;
 - use realistic Storybook fixtures for populated states while rendering no fabricated financial data in production.
 
-MYAH-150 will not add a billing read API, Metronome query resolver, Stripe checkout, Stripe Customer Portal, payment webhooks, invoice generation, or live top-up behavior.
+MYAH-150 will not add a billing read API, Metronome query resolver, Stripe checkout, Stripe Customer Portal session, card-entry flow, payment webhook, invoice generation, payment-setting persistence, or live top-up behavior.
 
 ## 2. Problem explained plainly
 
@@ -51,6 +52,7 @@ The repository currently has no customer-facing GraphQL or REST API for the Metr
 - Billing page layout and reusable presentational view model.
 - Balance, month-to-date spend, usage ledger, and billing-history ledger presentation.
 - Disabled future top-up action.
+- Payment-method summary and automatic-top-up presentation contract.
 - Loading, unavailable, healthy, warning, blocked, and empty states.
 - Storybook fixtures and interactions for all approved visual states.
 - Focused navigation behavior tests.
@@ -60,8 +62,8 @@ The repository currently has no customer-facing GraphQL or REST API for the Metr
 
 - New server resolver, controller, database query, or generated GraphQL type.
 - Metronome balance, invoice, or usage-history reads.
-- Stripe checkout, payment methods, portal sessions, webhooks, refunds, receipts, or invoice creation.
-- Automatic recharge, top-up amounts, payment forms, taxes, or currencies other than USD.
+- Stripe checkout, card entry or storage, portal-session creation, webhooks, refunds, receipts, or invoice creation.
+- Automatic-top-up persistence or execution, payment forms, taxes, or currencies other than USD.
 - Pricing, plans, subscriptions, seat billing, trials, or entitlement management.
 - Charts, exports, search, custom date ranges, advanced filters, or per-user detail routes.
 - Provider cost, gross margin, raw operation IDs, provider configuration, model IDs, token counts, or reconciliation internals.
@@ -132,7 +134,34 @@ The secondary card shows:
 
 Temporary reservations and unsettled operations do not contribute to this total.
 
-### 5.3 Usage history tab
+### 5.3 Payment settings card
+
+One full-width **Payment settings** card appears between the balance summary and the history tabs. It contains:
+
+1. **Payment method** first, because a payment method is required for automatic top-up;
+2. **Automatic top-up** second, with an on/off switch and explicit Save changes action.
+
+When a default payment method exists, Myah shows only customer-safe summary fields:
+
+- card brand;
+- last four digits;
+- expiry month;
+- expiry year;
+- **Manage payment method** action.
+
+When no default payment method exists, the section states **No payment method on file**, presents **Add payment method**, and prevents automatic top-up from being enabled.
+
+The automatic-top-up form uses exact USD currency inputs for:
+
+- **Balance threshold**: when the balance falls below this amount;
+- **Top-up amount**: how much to add;
+- **Monthly automatic top-up limit (optional)**: a customer-configured cap on automatic charges.
+
+Leaving the optional monthly limit blank means no user-configured monthly cap. The UI must explain that this permits repeated automatic charges. When automatic top-up is off, configured values remain visible but disabled so turning the feature off does not imply that the rule was erased.
+
+Changes are pending until the administrator selects **Save changes**. A toggle click never activates automatic charging by itself.
+
+### 5.4 Usage history tab
 
 Usage history is active by default. It shows one customer-facing row per managed operation with:
 
@@ -144,7 +173,7 @@ Usage history is active by default. It shows one customer-facing row per managed
 
 The initial period control offers 7, 30, and 90 days and defaults to 30 days. Arbitrary date ranges are deferred.
 
-### 5.4 Billing history tab
+### 5.5 Billing history tab
 
 Billing history contains funding events only:
 
@@ -230,6 +259,17 @@ This is the initial production state for MYAH-150.
 
 The presentational contract supports an unavailable/error state without stale or fabricated values. A retry action is deferred until a real request exists.
 
+### 8.8 Payment settings
+
+The Payment settings contract is independent from the balance-read state:
+
+- `unavailable`: production displays **Payment settings will appear when billing is connected** and renders no card summary or active financial control;
+- `ready` with payment method: display the safe default-card summary and allow automatic-top-up editing when callbacks are connected;
+- `ready` without payment method: display the Add payment method presentation and prevent automatic top-up from being enabled;
+- `saving`: disable duplicate saves and present the existing button loading treatment.
+
+Storybook may connect callbacks to demonstrate the complete interaction. Production must omit those callbacks until the later Stripe and billing-settings APIs exist.
+
 ## 9. Interaction behavior
 
 - Usage history is the default active tab.
@@ -239,6 +279,9 @@ The presentational contract supports an unavailable/error state without stale or
 - Storybook fixtures may demonstrate the intended filtered result.
 - Document actions use specific labels such as **View receipt from July 1, 2026**.
 - **Add funds** has no click handler in MYAH-150.
+- **Manage payment method**, **Add payment method**, and **Save changes** invoke only callbacks supplied by the component consumer; the component performs no Stripe or network work.
+- **Save changes** remains disabled when nothing changed, required enabled values are missing or invalid, automatic top-up is enabled without a payment method, the optional monthly limit is less than one top-up amount, or no save callback is connected.
+- Valid submitted values cross the callback boundary as integer cents.
 
 ## 10. Component and data architecture
 
@@ -249,7 +292,10 @@ flowchart TD
     P --> C[Myah Billing presentational content]
     C --> S[Status banner]
     C --> B[Balance summary]
+    C --> PS[Payment settings]
     C --> T[Usage / Billing history tabs]
+    PS --> PM[Payment method summary]
+    PS --> AT[Automatic top-up form]
     T --> U[Usage ledger]
     T --> H[Funding-event ledger]
 ```
@@ -270,6 +316,7 @@ The Billing content accepts a typed view model and renders:
 - loading;
 - not connected or unavailable;
 - ready with `healthy`, `low`, or `empty` balance status;
+- unavailable or ready Payment settings;
 - populated and empty ledgers.
 
 A discriminated union uses a `state` field to ensure that loaded financial fields exist only in a loaded state.
@@ -285,12 +332,15 @@ A later read-only billing issue will:
 3. map both sources into the approved frontend view model;
 4. preserve the presentation component unchanged.
 
-A later Stripe issue will:
+A later Stripe and billing-settings issue will:
 
 1. enable the existing **Add funds** action;
-2. connect Stripe-funded Metronome commitments;
-3. populate receipt or invoice document links;
-4. preserve the approved page hierarchy.
+2. create hosted payment-method management sessions for the existing callback;
+3. load and persist the approved automatic-top-up rule;
+4. execute Stripe-funded top-ups and connect them to Metronome commitments;
+5. enforce minimums, maximums, monthly limits, idempotency, and workspace eligibility server-side;
+6. populate receipt or invoice document links;
+7. preserve the approved page hierarchy and component contract.
 
 ## 11. Accessibility and responsive behavior
 
@@ -299,7 +349,9 @@ A later Stripe issue will:
 - Reuse existing Twenty tab, banner, button, empty-state, skeleton, and table primitives where available.
 - Tabs support keyboard navigation and expose selected state.
 - Status meaning is always written in text and is never color-only.
-- The disabled **Add funds** control has persistent adjacent explanatory text rather than tooltip-only guidance.
+- Disabled financial controls have persistent adjacent explanatory text rather than tooltip-only guidance.
+- Every currency field has a visible label and an associated inline validation message.
+- The automatic-top-up switch exposes its enabled state accessibly, and **Save changes** provides an explicit review boundary before future automatic charging is activated.
 - Tables use semantic headers.
 - Document links include the record type and date in their accessible name.
 - Loading, empty, unavailable, and blocked states remain distinguishable to assistive technology.
@@ -310,6 +362,8 @@ A later Stripe issue will:
 - Summary cards stack at narrower content widths.
 - Usage rows always retain Date, Activity, and Amount.
 - Member and Status may move into a secondary stacked line using an existing Twenty responsive-table pattern.
+- The Payment settings card stacks payment-method details and automatic-top-up fields at narrow widths.
+- Threshold, top-up amount, and optional monthly limit form one row when space permits and stack vertically at phone width.
 - Do not change sidebar collapse, drawer, or mobile navigation behavior.
 
 ## 12. Security and privacy
@@ -326,7 +380,7 @@ The frontend must not receive or render:
 - raw provider prompts or responses;
 - internal reconciliation errors or delivery receipts.
 
-Storybook fixtures use invented people, amounts, dates, and document URLs. They contain no production identifiers or payment data.
+Storybook fixtures use invented people, amounts, dates, document URLs, and non-sensitive card summaries. They contain no production identifiers, full card numbers, CVCs, Stripe secrets, payment-provider responses, or real payment data.
 
 ## 13. Alternatives considered
 
@@ -378,7 +432,11 @@ Extend the existing `useSettingsNavigationItems` test to prove:
 Extend the existing Billing story with:
 
 - initial production/not-connected;
-- healthy funded workspace;
+- healthy funded workspace with automatic top-up disabled;
+- automatic top-up enabled;
+- automatic top-up enabled without a monthly limit;
+- no payment method;
+- automatic-top-up validation;
 - mixed sponsored and purchased funds;
 - low balance;
 - empty/blocked balance;
@@ -391,7 +449,12 @@ Storybook interactions prove:
 - Billing history can be selected;
 - 30 days is selected initially and another preset can be chosen;
 - **Add funds** is disabled and its explanatory text is visible;
-- not-connected state contains no fabricated `$0.00`;
+- the default payment-method summary exposes only brand, last four digits, and expiry;
+- disabling automatic top-up preserves visible disabled values;
+- a valid Save submits integer-cent values;
+- invalid or incomplete rules do not submit;
+- no payment method prevents automatic top-up;
+- not-connected state contains no fabricated `$0.00`, card summary, or active payment-setting controls;
 - approved status and empty-state copy renders.
 
 ### 14.3 Browser smoke verification
@@ -403,6 +466,7 @@ Inspect the page in a real browser and record visual evidence for:
 - Usage and Billing history tabs;
 - dark and light themes;
 - desktop and narrow content widths;
+- Payment settings and all currency inputs stack without horizontal overflow at phone width;
 - no clipped money, lost Activity or Amount fields, broken focus, or accidental overflow.
 
 ### 14.4 Repository checks
@@ -429,13 +493,19 @@ MYAH-150 is complete only when:
 6. Money is displayed in USD from integer-cent view-model values.
 7. The primary balance supports a secondary sponsored/purchased breakdown.
 8. **Add funds** is disabled with persistent coming-soon guidance.
-9. Usage rows contain only approved customer-facing fields and statuses.
-10. Billing history contains funding events and optional receipt/invoice links, not usage charges.
-11. Healthy, low, empty/blocked, loading, empty-history, unavailable, and not-connected states are represented.
-12. Production renders no fixture financial data and does not misrepresent unknown values as zero.
-13. Storybook contains realistic isolated fixtures for the approved populated states.
-14. Focused navigation, Storybook, typecheck, format, lint, and browser verification pass or any unrelated pre-existing limitation is reported precisely.
-15. Deferred backend and Stripe scope remains unimplemented and explicitly recorded in delivery notes.
+9. A full-width Payment settings card presents the default payment method before Automatic top-up.
+10. Payment summaries expose only card brand, last four digits, and expiry; no payment method is represented explicitly.
+11. Automatic top-up uses exact USD inputs for threshold, top-up amount, and optional monthly limit.
+12. Turning automatic top-up off preserves configured values visibly in disabled fields.
+13. Changes require **Save changes**, invalid rules do not submit, and valid values submit as integer cents.
+14. Production renders Payment settings as unavailable until callbacks and live data exist.
+15. Usage rows contain only approved customer-facing fields and statuses.
+16. Billing history contains funding events and optional receipt/invoice links, not usage charges.
+17. Healthy, low, empty/blocked, loading, empty-history, unavailable, not-connected, no-payment-method, and automatic-top-up validation states are represented.
+18. Production renders no fixture financial or payment-method data and does not misrepresent unknown values as zero.
+19. Storybook contains realistic isolated fixtures for the approved populated states.
+20. Focused navigation, Storybook, typecheck, format, lint, and browser verification pass or any unrelated pre-existing limitation is reported precisely.
+21. Deferred backend and Stripe scope remains unimplemented and explicitly recorded in delivery notes.
 
 ## 16. Deferred follow-up scope
 
@@ -445,6 +515,9 @@ Separate later issues must own:
 - a workspace-scoped read API for managed-provider operation history;
 - server-side authorization and pagination for those APIs;
 - Stripe-funded top-up checkout and payment confirmation;
+- hosted payment-method management session creation and secure card collection;
+- automatic-top-up persistence, off-session execution, duplicate-charge prevention, Strong Customer Authentication recovery, and webhook processing;
+- server-side threshold, amount, monthly-limit, and workspace-eligibility enforcement;
 - receipts, invoices, refunds, and document links;
-- low-balance thresholds, alerts, and automatic recharge;
+- low-balance threshold calculation, alerts, and notification delivery;
 - data-backed period filtering, search, export, and custom date ranges.

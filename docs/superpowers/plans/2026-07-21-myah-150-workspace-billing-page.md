@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the existing Twenty seat/subscription Billing page with the approved workspace-admin Myah prepaid balance, usage history, and funding history presentation while preserving the existing Settings shell, route, and workspace permission guard.
+**Goal:** Replace the existing Twenty seat/subscription Billing page with the approved workspace-admin Myah prepaid balance, payment settings, usage history, and funding history presentation while preserving the existing Settings shell, route, and workspace permission guard.
 
-**Architecture:** Keep `SettingsPath.Billing` and its existing `SettingsProtectedRouteWrapper(PermissionFlagType.WORKSPACE)` route unchanged. Make the existing Workspace sidebar Billing item independent of Twenty subscription-billing configuration and move it immediately after General. Keep `SettingsBilling` as a thin page that supplies an honest not-connected default to one presentational Billing content component. The component consumes a discriminated view model whose money values are integer cents, owns only tab/period presentation state, and uses existing Twenty cards, banners, buttons, tabs, skeletons, tables, status, layout, and theme tokens. Storybook owns all populated fixtures; production owns none.
+**Architecture:** Keep `SettingsPath.Billing` and its existing `SettingsProtectedRouteWrapper(PermissionFlagType.WORKSPACE)` route unchanged. Keep `SettingsBilling` as a thin page that supplies an honest not-connected default to one presentational Billing content component. Extend the existing discriminated view model with unavailable/ready Payment settings data while keeping the optional Manage/Add payment-method and Save automatic-top-up callbacks separate from display data. The component owns only pending form, tab, and period presentation state; it converts validated USD strings to integer cents and performs no network or Stripe work. Storybook owns all populated financial/payment fixtures and callback spies; production owns none.
 
 **Tech Stack:** React, TypeScript, Lingui, Jotai component state through the existing `TabList`, Linaria, Twenty UI/Settings primitives, Jest, Storybook/Vitest browser tests, Nx, Oxlint, oxfmt.
 
 ## Global constraints
 
-- Frontend only: no server resolver/controller, Metronome read, generated GraphQL change, database migration, Stripe action, checkout, portal session, webhook, or payment state.
+- Frontend only: no server resolver/controller, Metronome read, generated GraphQL change, database migration, Stripe execution, checkout, hosted-session creation, card entry/storage, webhook, or persisted payment state.
 - Preserve the existing route identity: `SettingsPath.Billing === 'billing'` and the existing `SettingsRoutes.tsx` route inside the `PermissionFlagType.WORKSPACE` protected block.
 - Do not add another Billing route, Settings section, Settings shell, feature flag, global atom, service layer, or shared package.
 - Do not render Twenty subscription credits, plans, seats, trials, or resource-credit data as Myah prepaid funds.
@@ -1027,7 +1027,7 @@ No fixture values belong in this page or component module.
 
 ---
 
-### Task 6: Final review, delivery evidence, and explicit deferrals
+### Task 6: Initial final review before the approved Payment settings expansion
 
 **Files:**
 - Review: all changed files relative to the branch base.
@@ -1049,7 +1049,7 @@ No fixture values belong in this page or component module.
   - Usage contains no provider internals;
   - Billing history contains no usage charges;
   - Add funds has no handler and remains disabled;
-  - no Stripe, Metronome read, GraphQL, database, global state, or new route work slipped in;
+  - no Stripe execution, Metronome read, GraphQL, database, global state, or new route work slipped in;
   - old Twenty subscription components remain untouched unless a direct compile correction was required.
 
 - [ ] **Step 2: Request a focused correctness and scope review**
@@ -1090,8 +1090,10 @@ No fixture values belong in this page or component module.
   - managed-provider operation-history reads;
   - server pagination/authorization for those APIs;
   - Stripe checkout/top-ups/payment confirmation;
+  - hosted payment-method session creation and secure card entry;
+  - automatic-top-up persistence, off-session charging, server-side validation, idempotency, webhooks, or Strong Customer Authentication recovery;
   - real receipts, invoices, refunds, or document links;
-  - low-balance threshold calculation/alerts/automatic recharge;
+  - low-balance threshold calculation, alerts, or notification delivery;
   - data-backed period filtering, search, export, or custom date ranges.
 
   Those require separate Linear issues. Do not create speculative follow-ups or links unless they are unambiguously present and applicable.
@@ -1099,3 +1101,191 @@ No fixture values belong in this page or component module.
 - [ ] **Step 5: Finalize branch state**
 
   Ensure the implementation commits are coherent, the plan/spec commits remain present, and no ignored Storybook/browser artifacts or dependency caches are force-added. Then follow the finishing-development-branch workflow for the user’s chosen PR/merge path.
+
+---
+
+### Task 7: Add the approved Payment settings frontend contract
+
+**Files:**
+- Modify: `packages/twenty-front/src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx`
+- Modify: `packages/twenty-front/src/pages/settings/billing/SettingsBilling.tsx`
+- Test and Storybook fixtures: `packages/twenty-front/src/pages/settings/__stories__/SettingsBilling.stories.tsx`
+
+- [ ] **Step 1: Add failing Storybook interaction contracts**
+
+  Add these observable scenarios before changing production code:
+
+  1. `HealthyFundedWorkspace` includes a safe `Visa •••• 4242` summary, expiry, Manage action, disabled automatic-top-up fields, and a disabled Save button.
+  2. `AutomaticTopUpEnabled` begins with enabled editable values; changing threshold to `12.50`, top-up amount to `60.00`, and monthly limit to `240.00`, then selecting Save, calls `onSaveAutomaticTopUp` with `{ enabled: true, thresholdCents: 1250, topUpAmountCents: 6000, monthlyLimitCents: 24000 }`.
+  3. `AutomaticTopUpWithoutMonthlyLimit` shows the no-limit explanation and submits `monthlyLimitCents: null`.
+  4. `NoPaymentMethod` shows Add payment method and cannot enable automatic top-up.
+  5. `AutomaticTopUpValidation` changes the optional monthly limit below one top-up amount, shows the inline error, keeps Save disabled, and does not call the callback.
+  6. `ProductionNotConnected` shows `Payment settings will appear when billing is connected.` and contains neither a card summary nor enabled financial settings.
+
+  Use Storybook `fn()` callbacks through story args. Assert user-visible roles, names, disabled state, error copy, and the exact integer-cent callback payload rather than internal React state.
+
+- [ ] **Step 2: Run the focused browser story file and verify RED**
+
+  Run:
+
+  ```bash
+  env \
+    STORYBOOK_SCOPE=pages \
+    PATH=/tmp/myah-node24/node_modules/.bin:$PATH \
+    ../../node_modules/.bin/vitest run \
+    src/pages/settings/__stories__/SettingsBilling.stories.tsx \
+    --project=storybook \
+    --reporter=verbose
+  ```
+
+  Expected: the existing ten stories remain green and the new assertions fail because Payment settings content and callbacks do not exist.
+
+- [ ] **Step 3: Extend the typed data and callback boundaries**
+
+  Add these component-local exported contracts:
+
+  ```ts
+  export type WorkspaceBillingAutomaticTopUpSettings = {
+    enabled: boolean;
+    thresholdCents: number;
+    topUpAmountCents: number;
+    monthlyLimitCents: number | null;
+  };
+
+  export type WorkspaceBillingPaymentSettings =
+    | { state: 'unavailable' }
+    | {
+        state: 'ready';
+        defaultPaymentMethod: {
+          brand: string;
+          lastFour: string;
+          expiryMonth: number;
+          expiryYear: number;
+        } | null;
+        automaticTopUp: WorkspaceBillingAutomaticTopUpSettings;
+        isSaving: boolean;
+      };
+  ```
+
+  Require `paymentSettings: WorkspaceBillingPaymentSettings` on `WorkspaceBillingReadyViewModel`. Add optional behavior props:
+
+  ```ts
+  export type SettingsWorkspaceBillingContentProps = {
+    viewModel: WorkspaceBillingViewModel;
+    onManagePaymentMethod?: () => void;
+    onSaveAutomaticTopUp?: (
+      settings: WorkspaceBillingAutomaticTopUpSettings,
+    ) => void;
+  };
+  ```
+
+  Mirror and forward both optional callbacks through `SettingsBillingProps`. Leave `NOT_CONNECTED_BILLING_VIEW_MODEL` unchanged and keep production callbacks absent.
+
+- [ ] **Step 4: Implement exact integer-cent parsing and validation**
+
+  Keep form values as strings so partially entered values remain editable. Convert only validated values. The parser accepts unsigned dollars with at most two decimal places and creates cents from the whole/fractional digit strings, not floating-point multiplication:
+
+  ```ts
+  const parseUsdCents = (value: string): number | null => {
+    const match = value.trim().match(/^(\d+)(?:\.(\d{1,2}))?$/);
+    if (match === null) return null;
+
+    const wholeCents = Number(match[1]) * 100;
+    const fractionalCents = Number((match[2] ?? '').padEnd(2, '0'));
+    const amountCents = wholeCents + fractionalCents;
+
+    return Number.isSafeInteger(amountCents) && amountCents > 0
+      ? amountCents
+      : null;
+  };
+  ```
+
+  Validation rules:
+
+  - threshold is required and greater than zero when automatic top-up is enabled;
+  - top-up amount is required and greater than zero when enabled;
+  - monthly limit is optional;
+  - a supplied monthly limit must be valid and at least the top-up amount;
+  - automatic top-up cannot be enabled without a default payment method;
+  - Save is disabled when unchanged, invalid, saving, or no save callback exists.
+
+  Commercial minimums/maximums remain server-owned and are not hardcoded.
+
+- [ ] **Step 5: Render one responsive Payment settings card**
+
+  Insert one full-width `Section` between Balance and the ledger `TabList`. Reuse `StyledSettingsBillingCard`, `StyledSettingsBillingCardHeader`, `SettingsTextInput`, `Toggle`, and `Button`.
+
+  Render:
+
+  - unavailable copy for overall loading/unavailable production states;
+  - Payment method first, with only brand, last four digits, and zero-padded expiry;
+  - Manage payment method when a default exists;
+  - Add payment method and explanatory copy when none exists;
+  - Automatic top-up switch with `aria-label="Automatic top-up"`;
+  - `$`-adorned visible labels for Balance threshold, Top-up amount, and Monthly automatic top-up limit (optional);
+  - disabled-but-visible values when automatic top-up is off;
+  - `No monthly limit allows repeated automatic charges.` when enabled and the monthly-limit input is blank;
+  - an explicit Save changes button using `isLoading={paymentSettings.isSaving}`.
+
+  Use a three-column CSS grid above `MOBILE_VIEWPORT` and one column at or below it. Do not add a modal, API hook, global atom, service, or Stripe dependency.
+
+- [ ] **Step 6: Run the focused browser stories and verify GREEN**
+
+  Re-run the exact command from Step 2.
+
+  Expected: all prior stories and all new Payment settings stories pass in Chromium with no failed interaction assertions.
+
+- [ ] **Step 7: Add the approved component-canvas mobile story**
+
+  Add `MobileAutomaticTopUp` using the same real `SettingsWorkspaceBillingContent` component and ready fixture, but render it without the full `PageDecorator` navigation shell. Set a `390px`-wide mobile viewport and assert:
+
+  - Payment settings is visible;
+  - all three currency fields are visible;
+  - the component canvas has no horizontal overflow;
+  - the Usage history table remains present below the form.
+
+  This story isolates responsive Billing content only; it must not modify production routing or mobile navigation.
+
+- [ ] **Step 8: Format and commit the expansion**
+
+  Run pinned oxfmt on only the three changed TypeScript files, rerun the focused story file, then commit:
+
+  ```bash
+  git add \
+    docs/superpowers/specs/2026-07-21-myah-150-workspace-billing-page-design.md \
+    docs/superpowers/plans/2026-07-21-myah-150-workspace-billing-page.md \
+    packages/twenty-front/src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx \
+    packages/twenty-front/src/pages/settings/billing/SettingsBilling.tsx \
+    packages/twenty-front/src/pages/settings/__stories__/SettingsBilling.stories.tsx
+  git commit -m "feat(billing): add automatic top-up settings"
+  ```
+
+---
+
+### Task 8: Re-run final verification after the Payment settings expansion
+
+**Files:**
+- Review: every changed file relative to `origin/main`.
+- Modify only to resolve a verified defect.
+
+- [ ] **Step 1: Run focused and repository checks**
+
+  Run on the approved Linux host with pinned Node `v24.16.0`:
+
+  - the complete Billing Storybook/Vitest story file;
+  - the focused navigation Jest test;
+  - `yarn nx typecheck twenty-front`;
+  - `yarn nx lint:diff-with-main twenty-front`;
+  - pinned oxfmt check for every changed TypeScript file.
+
+- [ ] **Step 2: Review the real UI**
+
+  Inspect desktop ready, enabled, no-payment-method, validation, and production-not-connected stories plus the `390px` component-canvas story. Confirm hierarchy, labels, disabled states, no-limit warning, error clarity, and no horizontal overflow.
+
+- [ ] **Step 3: Recheck security and scope**
+
+  Confirm production includes no fixture balance or card summary; callbacks remain absent; only safe card summary fields can cross the view-model boundary; no Stripe SDK, network request, persistence, payment execution, server validation, webhook, receipt generation, or new route was added.
+
+- [ ] **Step 4: Request final correctness and over-engineering reviews**
+
+  Resolve every valid finding test-first, rerun invalidated checks, and record exact commands and outcomes in the delivery notes.

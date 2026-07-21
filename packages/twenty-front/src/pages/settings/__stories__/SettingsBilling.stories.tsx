@@ -1,18 +1,26 @@
-import { type Meta, type StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import {
+  type Decorator,
+  type Meta,
+  type StoryObj,
+} from '@storybook/react-vite';
+import { expect, fn, userEvent, within } from 'storybook/test';
+import { MemoryRouter } from 'react-router-dom';
 
 import {
   SettingsBilling,
   type SettingsBillingProps,
 } from '~/pages/settings/billing/SettingsBilling';
-import { type WorkspaceBillingViewModel } from '~/modules/settings/billing/components/SettingsWorkspaceBillingContent';
+import {
+  SettingsWorkspaceBillingContent,
+  type WorkspaceBillingViewModel,
+} from '~/modules/settings/billing/components/SettingsWorkspaceBillingContent';
 import {
   PageDecorator,
   type PageDecoratorArgs,
 } from '~/testing/decorators/PageDecorator';
 import { graphqlMocks } from '~/testing/graphqlMocks';
 import { WorkspaceDecorator } from '~/testing/decorators/WorkspaceDecorator';
-const healthyWorkspaceViewModel: WorkspaceBillingViewModel = {
+const healthyWorkspaceViewModel = {
   state: 'ready',
   balanceStatus: 'healthy',
   availableBalanceCents: 4280,
@@ -21,6 +29,22 @@ const healthyWorkspaceViewModel: WorkspaceBillingViewModel = {
   monthToDateSpendCents: 1720,
   settledOperationCount: 128,
   monthToDateRangeLabel: 'July 1–21, 2026',
+  paymentSettings: {
+    state: 'ready',
+    defaultPaymentMethod: {
+      brand: 'Visa',
+      lastFour: '4242',
+      expiryMonth: 12,
+      expiryYear: 2028,
+    },
+    automaticTopUp: {
+      enabled: false,
+      thresholdCents: 1000,
+      topUpAmountCents: 5000,
+      monthlyLimitCents: 20000,
+    },
+    isSaving: false,
+  },
   usageHistory: [
     {
       id: 'usage-1',
@@ -94,20 +118,35 @@ const healthyWorkspaceViewModel: WorkspaceBillingViewModel = {
       },
     },
   ],
-};
+} satisfies WorkspaceBillingViewModel;
 
 type SettingsBillingStoryArgs = PageDecoratorArgs & SettingsBillingProps;
+const BillingPageDecorator: Decorator<SettingsBillingStoryArgs> = (
+  Story,
+  context,
+) =>
+  context.parameters.componentCanvas === true ? (
+    <Story />
+  ) : (
+    PageDecorator(Story, context)
+  );
 
 const meta: Meta<SettingsBillingStoryArgs> = {
   title: 'Pages/Settings/SettingsBilling',
   component: SettingsBilling,
-  decorators: [WorkspaceDecorator, PageDecorator],
+  decorators: [WorkspaceDecorator, BillingPageDecorator],
   args: {
     routePath: '/settings/billing',
     routeParams: {},
   },
   parameters: { msw: graphqlMocks },
-  render: ({ viewModel }) => <SettingsBilling viewModel={viewModel} />,
+  render: ({ viewModel, onManagePaymentMethod, onSaveAutomaticTopUp }) => (
+    <SettingsBilling
+      viewModel={viewModel}
+      onManagePaymentMethod={onManagePaymentMethod}
+      onSaveAutomaticTopUp={onSaveAutomaticTopUp}
+    />
+  ),
 };
 
 export default meta;
@@ -129,6 +168,12 @@ export const ProductionNotConnected: Story = {
     await expect(
       canvas.findByText('Online top-ups coming soon'),
     ).resolves.toBeVisible();
+    await expect(
+      canvas.findByText(
+        'Payment settings will appear when billing is connected.',
+      ),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText(/4242/)).not.toBeInTheDocument();
   },
 };
 
@@ -239,6 +284,238 @@ export const HealthyFundedWorkspace: Story = {
       }),
     ).resolves.toBeVisible();
     expect(canvas.queryByText('AI chat')).not.toBeInTheDocument();
+    await expect(canvas.findByText('Payment settings')).resolves.toBeVisible();
+    await expect(canvas.findByText(/Visa.*4242/)).resolves.toBeVisible();
+    await expect(canvas.findByText('Expires 12/28')).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('button', { name: 'Manage payment method' }),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('switch', { name: 'Automatic top-up' }),
+    ).resolves.not.toBeChecked();
+    await expect(
+      canvas.findByRole('textbox', { name: 'Balance threshold' }),
+    ).resolves.toBeDisabled();
+    await expect(
+      canvas.findByRole('button', { name: 'Save changes' }),
+    ).resolves.toBeDisabled();
+  },
+};
+
+export const AutomaticTopUpEnabled: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      paymentSettings: {
+        ...healthyWorkspaceViewModel.paymentSettings,
+        automaticTopUp: {
+          enabled: true,
+          thresholdCents: 1000,
+          topUpAmountCents: 5000,
+          monthlyLimitCents: 20000,
+        },
+      },
+    },
+    onManagePaymentMethod: fn(),
+    onSaveAutomaticTopUp: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const threshold = await canvas.findByRole('textbox', {
+      name: 'Balance threshold',
+    });
+    const topUpAmount = await canvas.findByRole('textbox', {
+      name: 'Top-up amount',
+    });
+    const monthlyLimit = await canvas.findByRole('textbox', {
+      name: 'Monthly automatic top-up limit (optional)',
+    });
+
+    await userEvent.clear(threshold);
+    await userEvent.type(threshold, '12.50');
+    await userEvent.clear(topUpAmount);
+    await userEvent.type(topUpAmount, '60.00');
+    await userEvent.clear(monthlyLimit);
+    await userEvent.type(monthlyLimit, '240.00');
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Save changes' }),
+    );
+
+    await expect(args.onSaveAutomaticTopUp).toHaveBeenCalledWith({
+      enabled: true,
+      thresholdCents: 1250,
+      topUpAmountCents: 6000,
+      monthlyLimitCents: 24000,
+    });
+  },
+};
+
+export const AutomaticTopUpWithoutMonthlyLimit: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      paymentSettings: {
+        ...healthyWorkspaceViewModel.paymentSettings,
+        automaticTopUp: {
+          enabled: true,
+          thresholdCents: 1000,
+          topUpAmountCents: 5000,
+          monthlyLimitCents: null,
+        },
+      },
+    },
+    onSaveAutomaticTopUp: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByText('No monthly limit allows repeated automatic charges.'),
+    ).resolves.toBeVisible();
+    const threshold = await canvas.findByRole('textbox', {
+      name: 'Balance threshold',
+    });
+    await userEvent.clear(threshold);
+    await userEvent.type(threshold, '12.00');
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Save changes' }),
+    );
+    await expect(args.onSaveAutomaticTopUp).toHaveBeenCalledWith({
+      enabled: true,
+      thresholdCents: 1200,
+      topUpAmountCents: 5000,
+      monthlyLimitCents: null,
+    });
+  },
+};
+
+export const NoPaymentMethod: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      paymentSettings: {
+        ...healthyWorkspaceViewModel.paymentSettings,
+        defaultPaymentMethod: null,
+      },
+    },
+    onManagePaymentMethod: fn(),
+    onSaveAutomaticTopUp: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.findByText('No payment method on file.'),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('button', { name: 'Add payment method' }),
+    ).resolves.toBeVisible();
+    const automaticTopUpSwitch = await canvas.findByRole('switch', {
+      name: 'Automatic top-up',
+    });
+    await expect(automaticTopUpSwitch).toHaveAttribute('aria-disabled', 'true');
+    await expect(automaticTopUpSwitch).toHaveAttribute('tabindex', '-1');
+    await expect(
+      canvas.findByText(
+        'Add a payment method before enabling automatic top-up.',
+      ),
+    ).resolves.toBeVisible();
+  },
+};
+
+export const AutomaticTopUpValidation: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      paymentSettings: {
+        ...healthyWorkspaceViewModel.paymentSettings,
+        automaticTopUp: {
+          enabled: true,
+          thresholdCents: 1000,
+          topUpAmountCents: 5000,
+          monthlyLimitCents: 20000,
+        },
+      },
+    },
+    onSaveAutomaticTopUp: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const monthlyLimit = await canvas.findByRole('textbox', {
+      name: 'Monthly automatic top-up limit (optional)',
+    });
+    await userEvent.clear(monthlyLimit);
+    await userEvent.type(monthlyLimit, '10.00');
+    await expect(
+      canvas.findByText('Monthly limit must be at least the top-up amount.'),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('button', { name: 'Save changes' }),
+    ).resolves.toBeDisabled();
+    await expect(args.onSaveAutomaticTopUp).not.toHaveBeenCalled();
+  },
+};
+
+export const MobileAutomaticTopUp: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      paymentSettings: {
+        ...healthyWorkspaceViewModel.paymentSettings,
+        automaticTopUp: {
+          enabled: true,
+          thresholdCents: 1000,
+          topUpAmountCents: 5000,
+          monthlyLimitCents: 20000,
+        },
+      },
+    },
+    onManagePaymentMethod: fn(),
+    onSaveAutomaticTopUp: fn(),
+  },
+  parameters: {
+    componentCanvas: true,
+    layout: 'fullscreen',
+    viewport: {
+      options: {
+        myahMobile: {
+          name: 'Myah mobile',
+          styles: { width: '390px', height: '844px' },
+        },
+      },
+      defaultViewport: 'myahMobile',
+    },
+  },
+  render: ({ viewModel, onManagePaymentMethod, onSaveAutomaticTopUp }) => (
+    <MemoryRouter>
+      <div data-testid="billing-mobile-canvas">
+        <SettingsWorkspaceBillingContent
+          viewModel={viewModel ?? healthyWorkspaceViewModel}
+          onManagePaymentMethod={onManagePaymentMethod}
+          onSaveAutomaticTopUp={onSaveAutomaticTopUp}
+        />
+      </div>
+    </MemoryRouter>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText('Payment settings')).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('textbox', { name: 'Balance threshold' }),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('textbox', { name: 'Top-up amount' }),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('textbox', {
+        name: 'Monthly automatic top-up limit (optional)',
+      }),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('table', { name: 'Usage history' }),
+    ).resolves.toBeVisible();
+    const mobileCanvas = await canvas.findByTestId('billing-mobile-canvas');
+    expect(mobileCanvas.scrollWidth).toBeLessThanOrEqual(
+      mobileCanvas.clientWidth,
+    );
   },
 };
 

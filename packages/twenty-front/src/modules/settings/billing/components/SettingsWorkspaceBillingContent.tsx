@@ -6,6 +6,7 @@ import {
 } from '@/settings/billing/components/internal/SettingsBillingCard';
 import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
 import { Select } from '@/ui/input/components/Select';
+import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { TabList } from '@/ui/layout/tab-list/components/TabList';
@@ -18,7 +19,7 @@ import { plural, t } from '@lingui/core/macro';
 import { useState } from 'react';
 import { Status } from 'twenty-ui/data-display';
 import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
-import { Button } from 'twenty-ui/input';
+import { Button, Toggle } from 'twenty-ui/input';
 import { InlineBanner } from 'twenty-ui/feedback';
 import { Section } from 'twenty-ui/layout';
 import { H2Title } from 'twenty-ui/typography';
@@ -58,6 +59,25 @@ export type WorkspaceBillingHistoryEntry = {
   amountCents: number;
   document?: { label: string; url: string };
 };
+export type WorkspaceBillingAutomaticTopUpSettings = {
+  enabled: boolean;
+  thresholdCents: number;
+  topUpAmountCents: number;
+  monthlyLimitCents: number | null;
+};
+export type WorkspaceBillingPaymentSettings =
+  | { state: 'unavailable' }
+  | {
+      state: 'ready';
+      defaultPaymentMethod: {
+        brand: string;
+        lastFour: string;
+        expiryMonth: number;
+        expiryYear: number;
+      } | null;
+      automaticTopUp: WorkspaceBillingAutomaticTopUpSettings;
+      isSaving: boolean;
+    };
 type WorkspaceBillingReadyViewModel = {
   state: 'ready';
   balanceStatus: 'healthy' | 'low' | 'empty';
@@ -67,6 +87,7 @@ type WorkspaceBillingReadyViewModel = {
   monthToDateSpendCents: number;
   settledOperationCount: number;
   monthToDateRangeLabel: string;
+  paymentSettings: WorkspaceBillingPaymentSettings;
   usageHistory: WorkspaceBillingUsageEntry[];
   billingHistory: WorkspaceBillingHistoryEntry[];
 };
@@ -104,6 +125,47 @@ const StyledActions = styled.div`
   gap: 8px;
 `;
 const StyledComingSoonText = styled.span`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: 12px;
+`;
+const StyledPaymentSettingsGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+const StyledPaymentSettingsGroupTitle = styled.strong`
+  color: ${themeCssVariables.font.color.primary};
+`;
+const StyledPaymentMethodRow = styled.div`
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+`;
+const StyledPaymentMethodSummary = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`;
+const StyledAutomaticTopUpHeader = styled.div`
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+`;
+const StyledAutomaticTopUpFields = styled.div`
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    grid-template-columns: 1fr;
+  }
+`;
+const StyledPaymentHelperText = styled.span`
   color: ${themeCssVariables.font.color.secondary};
   font-size: 12px;
 `;
@@ -211,6 +273,38 @@ const formatSignedUsdCents = (amountCents: number) =>
     ? `+${formatUsdCents(amountCents)}`
     : formatUsdCents(amountCents);
 
+const formatUsdInput = (amountCents: number) =>
+  `${Math.floor(amountCents / 100)}.${String(amountCents % 100).padStart(2, '0')}`;
+
+const parseUsdCents = (value: string): number | null => {
+  const match = value.trim().match(/^(\d+)(?:\.(\d{1,2}))?$/);
+  if (match === null) return null;
+
+  const wholeCents = Number(match[1]) * 100;
+  const fractionalCents = Number((match[2] ?? '').padEnd(2, '0'));
+  const amountCents = wholeCents + fractionalCents;
+
+  return Number.isSafeInteger(amountCents) && amountCents > 0
+    ? amountCents
+    : null;
+};
+
+const renderPaymentSettingsUnavailable = () => (
+  <Section>
+    <H2Title
+      title={t`Payment settings`}
+      description={t`Payment method and automatic top-up`}
+    />
+    <StyledSettingsBillingCard>
+      <StyledCardBody>
+        <StyledEmptyCopy>
+          {t`Payment settings will appear when billing is connected.`}
+        </StyledEmptyCopy>
+      </StyledCardBody>
+    </StyledSettingsBillingCard>
+  </Section>
+);
+
 const usageColumns =
   'minmax(132px, 0.9fr) minmax(180px, 1.5fr) minmax(140px, 1fr) minmax(110px, 0.8fr) minmax(96px, 0.7fr)';
 const billingHistoryColumns =
@@ -264,6 +358,7 @@ const renderUnavailable = (reason: 'notConnected' | 'loadFailed') => (
         <StyledComingSoonText>{t`Online top-ups coming soon`}</StyledComingSoonText>
       </StyledActions>
     </Section>
+    {renderPaymentSettingsUnavailable()}
     <Section>
       <H2Title title={t`Usage`} description={t`Recent workspace usage`} />
       <StyledEmptyCopy>{t`Usage details will appear here when billing data is connected.`}</StyledEmptyCopy>
@@ -278,11 +373,206 @@ const renderUnavailable = (reason: 'notConnected' | 'loadFailed') => (
   </>
 );
 
+const WorkspacePaymentSettings = ({
+  paymentSettings,
+  onManagePaymentMethod,
+  onSaveAutomaticTopUp,
+}: {
+  paymentSettings: Extract<WorkspaceBillingPaymentSettings, { state: 'ready' }>;
+  onManagePaymentMethod?: () => void;
+  onSaveAutomaticTopUp?: (
+    settings: WorkspaceBillingAutomaticTopUpSettings,
+  ) => void;
+}) => {
+  const initialSettings = paymentSettings.automaticTopUp;
+  const [enabled, setEnabled] = useState(initialSettings.enabled);
+  const [threshold, setThreshold] = useState(
+    formatUsdInput(initialSettings.thresholdCents),
+  );
+  const [topUpAmount, setTopUpAmount] = useState(
+    formatUsdInput(initialSettings.topUpAmountCents),
+  );
+  const [monthlyLimit, setMonthlyLimit] = useState(
+    initialSettings.monthlyLimitCents === null
+      ? ''
+      : formatUsdInput(initialSettings.monthlyLimitCents),
+  );
+  const thresholdCents = parseUsdCents(threshold);
+  const topUpAmountCents = parseUsdCents(topUpAmount);
+  const monthlyLimitCents =
+    monthlyLimit.trim() === '' ? null : parseUsdCents(monthlyLimit);
+  const thresholdError =
+    enabled && thresholdCents === null
+      ? t`Enter a valid balance threshold.`
+      : undefined;
+  const topUpAmountError =
+    enabled && topUpAmountCents === null
+      ? t`Enter a valid top-up amount.`
+      : undefined;
+  const monthlyLimitError =
+    enabled && monthlyLimit.trim() !== '' && monthlyLimitCents === null
+      ? t`Enter a valid monthly limit.`
+      : enabled &&
+          monthlyLimitCents !== null &&
+          topUpAmountCents !== null &&
+          monthlyLimitCents < topUpAmountCents
+        ? t`Monthly limit must be at least the top-up amount.`
+        : undefined;
+  const hasPaymentMethod = paymentSettings.defaultPaymentMethod !== null;
+  const hasChanges =
+    enabled !== initialSettings.enabled ||
+    thresholdCents !== initialSettings.thresholdCents ||
+    topUpAmountCents !== initialSettings.topUpAmountCents ||
+    monthlyLimitCents !== initialSettings.monthlyLimitCents;
+  const canSave =
+    onSaveAutomaticTopUp !== undefined &&
+    hasChanges &&
+    !paymentSettings.isSaving &&
+    (!enabled || hasPaymentMethod) &&
+    thresholdError === undefined &&
+    topUpAmountError === undefined &&
+    monthlyLimitError === undefined &&
+    thresholdCents !== null &&
+    topUpAmountCents !== null;
+  const paymentMethodActionLabel =
+    paymentSettings.defaultPaymentMethod === null
+      ? t`Add payment method`
+      : t`Manage payment method`;
+
+  const saveChanges = () => {
+    if (!canSave) return;
+    onSaveAutomaticTopUp({
+      enabled,
+      thresholdCents,
+      topUpAmountCents,
+      monthlyLimitCents,
+    });
+  };
+
+  return (
+    <Section>
+      <H2Title
+        title={t`Payment settings`}
+        description={t`Payment method and automatic top-up`}
+      />
+      <StyledSettingsBillingCard>
+        <StyledCardBody>
+          <StyledPaymentSettingsGroup>
+            <StyledPaymentSettingsGroupTitle>
+              {t`Payment method`}
+            </StyledPaymentSettingsGroupTitle>
+            <StyledPaymentMethodRow>
+              {paymentSettings.defaultPaymentMethod === null ? (
+                <StyledPaymentMethodSummary>
+                  <span>{t`No payment method on file.`}</span>
+                </StyledPaymentMethodSummary>
+              ) : (
+                <StyledPaymentMethodSummary>
+                  <span>
+                    {paymentSettings.defaultPaymentMethod.brand} {'•••• '}
+                    {paymentSettings.defaultPaymentMethod.lastFour}
+                  </span>
+                  <StyledPaymentHelperText>
+                    {t`Expires ${String(paymentSettings.defaultPaymentMethod.expiryMonth).padStart(2, '0')}/${String(paymentSettings.defaultPaymentMethod.expiryYear).slice(-2)}`}
+                  </StyledPaymentHelperText>
+                </StyledPaymentMethodSummary>
+              )}
+              <Button
+                ariaLabel={paymentMethodActionLabel}
+                title={paymentMethodActionLabel}
+                variant="secondary"
+                disabled={onManagePaymentMethod === undefined}
+                onClick={onManagePaymentMethod}
+              />
+            </StyledPaymentMethodRow>
+          </StyledPaymentSettingsGroup>
+          <StyledPaymentSettingsGroup>
+            <StyledAutomaticTopUpHeader>
+              <StyledPaymentSettingsGroupTitle>
+                {t`Automatic top-up`}
+              </StyledPaymentSettingsGroupTitle>
+              <Toggle
+                aria-label={t`Automatic top-up`}
+                value={enabled}
+                disabled={!hasPaymentMethod}
+                onChange={setEnabled}
+              />
+            </StyledAutomaticTopUpHeader>
+            {!hasPaymentMethod && (
+              <StyledPaymentHelperText>
+                {t`Add a payment method before enabling automatic top-up.`}
+              </StyledPaymentHelperText>
+            )}
+            <StyledAutomaticTopUpFields>
+              <SettingsTextInput
+                instanceId="workspace-billing-auto-top-up-threshold"
+                label={t`Balance threshold`}
+                value={threshold}
+                onChange={setThreshold}
+                inputMode="decimal"
+                leftAdornment="$"
+                error={thresholdError}
+                disabled={!enabled || !hasPaymentMethod}
+                fullWidth
+              />
+              <SettingsTextInput
+                instanceId="workspace-billing-auto-top-up-amount"
+                label={t`Top-up amount`}
+                value={topUpAmount}
+                onChange={setTopUpAmount}
+                inputMode="decimal"
+                leftAdornment="$"
+                error={topUpAmountError}
+                disabled={!enabled || !hasPaymentMethod}
+                fullWidth
+              />
+              <SettingsTextInput
+                instanceId="workspace-billing-auto-top-up-monthly-limit"
+                label={t`Monthly automatic top-up limit (optional)`}
+                value={monthlyLimit}
+                onChange={setMonthlyLimit}
+                inputMode="decimal"
+                leftAdornment="$"
+                error={monthlyLimitError}
+                disabled={!enabled || !hasPaymentMethod}
+                fullWidth
+              />
+            </StyledAutomaticTopUpFields>
+            {enabled && monthlyLimit.trim() === '' && (
+              <StyledPaymentHelperText>
+                {t`No monthly limit allows repeated automatic charges.`}
+              </StyledPaymentHelperText>
+            )}
+            <StyledActions>
+              <Button
+                ariaLabel={t`Save changes`}
+                title={t`Save changes`}
+                variant="secondary"
+                disabled={!canSave}
+                isLoading={paymentSettings.isSaving}
+                onClick={saveChanges}
+              />
+            </StyledActions>
+          </StyledPaymentSettingsGroup>
+        </StyledCardBody>
+      </StyledSettingsBillingCard>
+    </Section>
+  );
+};
+
+export type SettingsWorkspaceBillingContentProps = {
+  viewModel: WorkspaceBillingViewModel;
+  onManagePaymentMethod?: () => void;
+  onSaveAutomaticTopUp?: (
+    settings: WorkspaceBillingAutomaticTopUpSettings,
+  ) => void;
+};
+
 export const SettingsWorkspaceBillingContent = ({
   viewModel,
-}: {
-  viewModel: WorkspaceBillingViewModel;
-}) => {
+  onManagePaymentMethod,
+  onSaveAutomaticTopUp,
+}: SettingsWorkspaceBillingContentProps) => {
   const [usagePeriod, setUsagePeriod] = useState<UsagePeriod>('30d');
   const activeTabId = useAtomComponentStateValue(
     activeTabIdComponentState,
@@ -371,6 +661,15 @@ export const SettingsWorkspaceBillingContent = ({
           </StyledSettingsBillingCard>
         </StyledSummary>
       </Section>
+      {viewModel.paymentSettings.state === 'unavailable' ? (
+        renderPaymentSettingsUnavailable()
+      ) : (
+        <WorkspacePaymentSettings
+          paymentSettings={viewModel.paymentSettings}
+          onManagePaymentMethod={onManagePaymentMethod}
+          onSaveAutomaticTopUp={onSaveAutomaticTopUp}
+        />
+      )}
       <Section>
         <TabList
           ariaLabel={t`Billing records`}

@@ -2,6 +2,7 @@ import { SettingsPageContainer } from '@/settings/components/SettingsPageContain
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import {
   SettingsWorkspaceBillingContent,
+  type WorkspaceBillingAutomaticTopUpSettings,
   type WorkspaceBillingViewModel,
 } from '@/settings/billing/components/SettingsWorkspaceBillingContent';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -10,6 +11,10 @@ import { getSettingsPath } from 'twenty-shared/utils';
 
 export type SettingsBillingProps = {
   viewModel?: WorkspaceBillingViewModel;
+  onManagePaymentMethod?: () => void;
+  onSaveAutomaticTopUp?: (
+    settings: WorkspaceBillingAutomaticTopUpSettings,
+  ) => void;
 };
 
 const NOT_CONNECTED_BILLING_VIEW_MODEL: WorkspaceBillingViewModel = {
@@ -19,6 +24,8 @@ const NOT_CONNECTED_BILLING_VIEW_MODEL: WorkspaceBillingViewModel = {
 
 export const SettingsBilling = ({
   viewModel = NOT_CONNECTED_BILLING_VIEW_MODEL,
+  onManagePaymentMethod,
+  onSaveAutomaticTopUp,
 }: SettingsBillingProps) => {
   const { t } = useLingui();
 
@@ -37,7 +44,11 @@ export const SettingsBilling = ({
       ]}
     >
       <SettingsPageContainer>
-        <SettingsWorkspaceBillingContent viewModel={viewModel} />
+        <SettingsWorkspaceBillingContent
+          viewModel={viewModel}
+          onManagePaymentMethod={onManagePaymentMethod}
+          onSaveAutomaticTopUp={onSaveAutomaticTopUp}
+        />
       </SettingsPageContainer>
     </SettingsPageLayout>
   );
