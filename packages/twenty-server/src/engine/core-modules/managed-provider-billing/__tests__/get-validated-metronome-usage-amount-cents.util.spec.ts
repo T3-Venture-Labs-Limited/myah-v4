@@ -53,6 +53,119 @@ describe('getValidatedMetronomeUsageAmountCents', () => {
     expect(() => validate(0)).toThrow('Metronome usage preview is ambiguous');
   });
 
+  it('quotes usage before an applicable credit is applied', () => {
+    expect(
+      validate(1, {
+        invoices: [
+          {
+            contractId: 'contract-id',
+            customerId: 'customer-id',
+            id: 'invoice-id',
+            lineItems: [
+              {
+                name: 'Managed provider usage',
+                productId: 'product-id',
+                total: 1,
+                type: 'usage',
+              },
+              {
+                name: 'Sponsored credit applied',
+                productId: 'product-id',
+                total: -1,
+                type: 'applied_commit_or_credit',
+              },
+            ],
+            total: 0,
+          },
+        ],
+      }),
+    ).toBe(BigInt(1));
+  });
+
+  it('rejects a preview with an applied credit but no usage', () => {
+    expect(() =>
+      validate(0, {
+        invoices: [
+          {
+            contractId: 'contract-id',
+            customerId: 'customer-id',
+            id: 'invoice-id',
+            lineItems: [
+              {
+                name: 'Sponsored credit applied',
+                productId: 'product-id',
+                total: -1,
+                type: 'applied_commit_or_credit',
+              },
+            ],
+            total: -1,
+          },
+        ],
+      }),
+    ).toThrow('Metronome usage preview is ambiguous');
+  });
+
+  it.each([
+    {
+      name: 'an unsupported line type',
+      lineItem: {
+        name: 'Unexpected adjustment',
+        productId: 'product-id',
+        total: -1,
+        type: 'adjustment',
+      },
+    },
+    {
+      name: 'a credit for an unexpected product',
+      lineItem: {
+        name: 'Sponsored credit applied',
+        productId: 'other-product-id',
+        total: -1,
+        type: 'applied_commit_or_credit',
+      },
+    },
+    {
+      name: 'a positive applied credit',
+      lineItem: {
+        name: 'Sponsored credit applied',
+        productId: 'product-id',
+        total: 1,
+        type: 'applied_commit_or_credit',
+      },
+    },
+    {
+      name: 'a fractional applied credit',
+      lineItem: {
+        name: 'Sponsored credit applied',
+        productId: 'product-id',
+        total: -0.5,
+        type: 'applied_commit_or_credit',
+      },
+    },
+  ])('rejects $name', ({ lineItem }) => {
+    expect(() =>
+      validate(1, {
+        invoices: [
+          {
+            contractId: 'contract-id',
+            customerId: 'customer-id',
+            id: 'invoice-id',
+            lineItems: [
+              {
+                name: 'Managed provider usage',
+                productId: 'product-id',
+                total: 1,
+                type: 'usage',
+              },
+              lineItem,
+            ],
+            total: 0,
+          },
+        ],
+      }),
+    ).toThrow('Metronome usage preview is ambiguous');
+  });
+
   it('rejects empty, ambiguous, and mismatched previews even for free usage', () => {
     expect(() =>
       getValidatedMetronomeUsageAmountCents({
