@@ -149,7 +149,7 @@ When a default payment method exists, Myah shows only customer-safe summary fiel
 - expiry year;
 - **Manage payment method** action.
 
-When no default payment method exists, the section states **No payment method on file**, presents **Add payment method**, and prevents automatic top-up from being enabled.
+When no default payment method exists, the section states **No payment method on file** and presents **Add payment method**. An inactive automatic-top-up rule cannot be enabled without a payment method. If stale backend data reports an active rule after card removal, the switch remains available only so the administrator can turn that rule off and save the recovery.
 
 The automatic-top-up form uses exact USD currency inputs for:
 
@@ -157,7 +157,7 @@ The automatic-top-up form uses exact USD currency inputs for:
 - **Top-up amount**: how much to add;
 - **Monthly automatic top-up limit (optional)**: a customer-configured cap on automatic charges.
 
-Leaving the optional monthly limit blank means no user-configured monthly cap. The UI must explain that this permits repeated automatic charges. When automatic top-up is off, configured values remain visible but disabled so turning the feature off does not imply that the rule was erased.
+Leaving the optional monthly limit blank means no user-configured monthly cap. The UI must explain that this permits repeated automatic charges. When automatic top-up is off, configured values remain visible but disabled so turning the feature off does not imply that the rule was erased. Any nonblank monthly-limit draft remains subject to currency and minimum-value validation while disabled, preventing malformed text from being mistaken for an intentional blank limit.
 
 Changes are pending until the administrator selects **Save changes**. A toggle click never activates automatic charging by itself.
 
@@ -265,7 +265,7 @@ The Payment settings contract is independent from the balance-read state:
 
 - `unavailable`: production displays **Payment settings will appear when billing is connected** and renders no card summary or active financial control;
 - `ready` with payment method: display the safe default-card summary and allow automatic-top-up editing when callbacks are connected;
-- `ready` without payment method: display the Add payment method presentation and prevent automatic top-up from being enabled;
+- `ready` without payment method: display the Add payment method presentation, prevent an inactive automatic-top-up rule from being enabled, and keep a stale active rule switchable off for recovery;
 - `saving`: disable duplicate saves and present the existing button loading treatment.
 
 Storybook may connect callbacks to demonstrate the complete interaction. Production must omit those callbacks until the later Stripe and billing-settings APIs exist.
@@ -280,7 +280,7 @@ Storybook may connect callbacks to demonstrate the complete interaction. Product
 - Document actions use specific labels such as **View receipt from July 1, 2026**.
 - **Add funds** has no click handler in MYAH-150.
 - **Manage payment method**, **Add payment method**, and **Save changes** invoke only callbacks supplied by the component consumer; the component performs no Stripe or network work.
-- **Save changes** remains disabled when nothing changed, required enabled values are missing or invalid, automatic top-up is enabled without a payment method, the optional monthly limit is less than one top-up amount, or no save callback is connected.
+- **Save changes** remains disabled when nothing changed, required enabled values are missing or invalid, automatic top-up is enabled without a payment method, any nonblank optional monthly limit is invalid or less than one top-up amount, or no save callback is connected.
 - Valid submitted values cross the callback boundary as integer cents.
 
 ## 10. Component and data architecture
@@ -436,6 +436,7 @@ Extend the existing Billing story with:
 - automatic top-up enabled;
 - automatic top-up enabled without a monthly limit;
 - no payment method;
+- active automatic top-up after payment-method removal;
 - automatic-top-up validation;
 - mixed sponsored and purchased funds;
 - low balance;
@@ -453,7 +454,7 @@ Storybook interactions prove:
 - disabling automatic top-up preserves visible disabled values;
 - a valid Save submits integer-cent values;
 - invalid or incomplete rules do not submit;
-- no payment method prevents automatic top-up;
+- no payment method prevents an inactive rule from being enabled while permitting a stale active rule to be turned off and saved;
 - not-connected state contains no fabricated `$0.00`, card summary, or active payment-setting controls;
 - approved status and empty-state copy renders.
 
@@ -497,11 +498,11 @@ MYAH-150 is complete only when:
 10. Payment summaries expose only card brand, last four digits, and expiry; no payment method is represented explicitly.
 11. Automatic top-up uses exact USD inputs for threshold, top-up amount, and optional monthly limit.
 12. Turning automatic top-up off preserves configured values visibly in disabled fields.
-13. Changes require **Save changes**, invalid rules do not submit, and valid values submit as integer cents.
+13. Changes require **Save changes**, invalid rules do not submit, nonblank monthly-limit drafts stay validated while disabled, stale active rules remain switchable off after payment-method removal, and valid values submit as integer cents.
 14. Production renders Payment settings as unavailable until callbacks and live data exist.
 15. Usage rows contain only approved customer-facing fields and statuses.
 16. Billing history contains funding events and optional receipt/invoice links, not usage charges.
-17. Healthy, low, empty/blocked, loading, empty-history, unavailable, not-connected, no-payment-method, and automatic-top-up validation states are represented.
+17. Healthy, low, empty/blocked, loading, empty-history, unavailable, not-connected, no-payment-method, stale-active-without-payment-method, and automatic-top-up validation states are represented.
 18. Production renders no fixture financial or payment-method data and does not misrepresent unknown values as zero.
 19. Storybook contains realistic isolated fixtures for the approved populated states.
 20. Focused navigation, Storybook, typecheck, format, lint, and browser verification pass or any unrelated pre-existing limitation is reported precisely.

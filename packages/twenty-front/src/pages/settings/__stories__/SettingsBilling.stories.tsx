@@ -421,6 +421,51 @@ export const NoPaymentMethod: Story = {
   },
 };
 
+export const ActiveAutomaticTopUpWithoutPaymentMethod: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      paymentSettings: {
+        ...healthyWorkspaceViewModel.paymentSettings,
+        defaultPaymentMethod: null,
+        automaticTopUp: {
+          enabled: true,
+          thresholdCents: 1000,
+          topUpAmountCents: 5000,
+          monthlyLimitCents: 20000,
+        },
+      },
+    },
+    onManagePaymentMethod: fn(),
+    onSaveAutomaticTopUp: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const automaticTopUpSwitch = await canvas.findByRole('switch', {
+      name: 'Automatic top-up',
+    });
+    await expect(automaticTopUpSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(automaticTopUpSwitch).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    await expect(automaticTopUpSwitch).toHaveAttribute('tabindex', '0');
+    await userEvent.click(automaticTopUpSwitch);
+    await expect(automaticTopUpSwitch).toHaveAttribute('aria-checked', 'false');
+    const saveButton = await canvas.findByRole('button', {
+      name: 'Save changes',
+    });
+    await expect(saveButton).toBeEnabled();
+    await userEvent.click(saveButton);
+    await expect(args.onSaveAutomaticTopUp).toHaveBeenCalledWith({
+      enabled: false,
+      thresholdCents: 1000,
+      topUpAmountCents: 5000,
+      monthlyLimitCents: 20000,
+    });
+  },
+};
+
 export const AutomaticTopUpValidation: Story = {
   args: {
     viewModel: {
@@ -444,6 +489,15 @@ export const AutomaticTopUpValidation: Story = {
     });
     await userEvent.clear(monthlyLimit);
     await userEvent.type(monthlyLimit, '10.00');
+    await expect(
+      canvas.findByText('Monthly limit must be at least the top-up amount.'),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByRole('button', { name: 'Save changes' }),
+    ).resolves.toBeDisabled();
+    await userEvent.click(
+      await canvas.findByRole('switch', { name: 'Automatic top-up' }),
+    );
     await expect(
       canvas.findByText('Monthly limit must be at least the top-up amount.'),
     ).resolves.toBeVisible();

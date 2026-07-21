@@ -410,10 +410,9 @@ const WorkspacePaymentSettings = ({
       ? t`Enter a valid top-up amount.`
       : undefined;
   const monthlyLimitError =
-    enabled && monthlyLimit.trim() !== '' && monthlyLimitCents === null
+    monthlyLimit.trim() !== '' && monthlyLimitCents === null
       ? t`Enter a valid monthly limit.`
-      : enabled &&
-          monthlyLimitCents !== null &&
+      : monthlyLimitCents !== null &&
           topUpAmountCents !== null &&
           monthlyLimitCents < topUpAmountCents
         ? t`Monthly limit must be at least the top-up amount.`
@@ -494,7 +493,7 @@ const WorkspacePaymentSettings = ({
               <Toggle
                 aria-label={t`Automatic top-up`}
                 value={enabled}
-                disabled={!hasPaymentMethod}
+                disabled={!hasPaymentMethod && !enabled}
                 onChange={setEnabled}
               />
             </StyledAutomaticTopUpHeader>
