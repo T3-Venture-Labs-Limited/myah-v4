@@ -45,26 +45,34 @@ export const getValidatedMetronomeUsageAmountCents = ({
     throw new Error('Metronome usage preview does not match the workspace');
   }
 
-  const usageTotals = invoice.lineItems.map((lineItem) => {
+  let amountCents = BigInt(0);
+  let usageLineCount = 0;
+
+  for (const lineItem of invoice.lineItems) {
     if (
-      lineItem.type !== 'usage' ||
       !lineItem.productId ||
       !expectedProductIds.includes(lineItem.productId) ||
-      !Number.isSafeInteger(lineItem.total) ||
-      lineItem.total < 0
+      !Number.isSafeInteger(lineItem.total)
     ) {
       throw new Error('Metronome usage preview is ambiguous');
     }
 
-    return BigInt(lineItem.total);
-  });
-  if (usageTotals.length === 0) {
+    if (lineItem.type === 'usage' && lineItem.total >= 0) {
+      amountCents += BigInt(lineItem.total);
+      usageLineCount++;
+      continue;
+    }
+
+    if (lineItem.type === 'applied_commit_or_credit' && lineItem.total <= 0) {
+      continue;
+    }
+
     throw new Error('Metronome usage preview is ambiguous');
   }
-  const amountCents = usageTotals.reduce(
-    (total, lineItemTotal) => total + lineItemTotal,
-    BigInt(0),
-  );
+
+  if (usageLineCount === 0) {
+    throw new Error('Metronome usage preview is ambiguous');
+  }
 
   if (amountCents <= BigInt(0) && !allowZeroAmount) {
     throw new Error('Metronome usage preview is ambiguous');
