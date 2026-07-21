@@ -25,15 +25,14 @@ import './instrument';
 
 import { settings } from './engine/constants/settings';
 import { generateFrontConfig } from './utils/generate-front-config';
+import { getCorsOptions } from './utils/get-cors-options.util';
 
 // Trigger
 const bootstrap = async () => {
   setPgDateTypeParser();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    // Expose WWW-Authenticate so browser-based MCP clients can read the
-    // resource_metadata pointer on 401. Required by MCP authorization spec.
-    cors: { exposedHeaders: ['WWW-Authenticate'] },
+    cors: false,
     bufferLogs: process.env.LOGGER_IS_BUFFER_ENABLED === 'true',
     rawBody: true,
     snapshot: process.env.NODE_ENV === NodeEnvironment.DEVELOPMENT,
@@ -48,6 +47,12 @@ const bootstrap = async () => {
   });
   const logger = app.get(LoggerService);
   const twentyConfigService = app.get(TwentyConfigService);
+  app.enableCors(
+    getCorsOptions({
+      getFrontendUrl: () => twentyConfigService.get('FRONTEND_URL'),
+      getServerUrl: () => twentyConfigService.get('SERVER_URL'),
+    }),
+  );
   const exceptionHandlerService = app.get(ExceptionHandlerService);
 
   process.on('unhandledRejection', (reason) => {

@@ -7,7 +7,7 @@ test.describe.serial('Create Kanban View', () => {
     await page.getByTestId('workspace-dropdown').click();
     await page.getByRole('link', { name: 'Settings' }).click();
     await page.getByRole('link', { name: 'Data model' }).click();
-    await page.getByRole('link', { name: 'Opportunities' }).click();
+    await page.getByRole('link', { name: 'Campaigns' }).click();
     await expect(page.getByRole('button', { name: 'New Field' })).toBeVisible();
     await page.getByRole('button', { name: 'New Field' }).click();
     await page.getByRole('link', { name: 'Select', exact: true }).click();
@@ -29,15 +29,15 @@ test.describe.serial('Create Kanban View', () => {
       .getByRole('textbox')
       .fill('Travel');
     await page.getByRole('button', { name: 'Save' }).click();
-    await page.waitForURL('**/objects/opportunities');
+    await page.waitForURL('**/objects/campaigns');
     await expect(
       page.getByText(industryFieldName, { exact: true }),
     ).toBeVisible();
   });
 
   test('Create Kanban View from Industry Select Field', async ({ page }) => {
-    await page.getByRole('link', { name: 'Opportunities' }).click();
-    await page.getByRole('button', { name: /All Opportunities/ }).click();
+    await page.getByRole('link', { name: 'Campaigns' }).click();
+    await page.getByRole('button', { name: /Campaigns/ }).click();
     await page.getByText('Add view').click();
     await page.getByRole('textbox').press('ControlOrMeta+a');
     await page.getByRole('textbox').fill('By industry');
