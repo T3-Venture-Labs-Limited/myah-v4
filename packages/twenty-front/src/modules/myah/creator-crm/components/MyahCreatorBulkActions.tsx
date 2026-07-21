@@ -17,7 +17,7 @@ import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStateful
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { t } from '@lingui/core/macro';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { MenuItem } from 'twenty-ui/navigation';
@@ -51,7 +51,6 @@ export const MyahCreatorBulkActions = () => {
   const { openModal, closeModal } = useModal();
   const [pendingTarget, setPendingTarget] =
     useState<PendingCreatorBulkRelationshipTarget | null>(null);
-  const selectedTargetIdRef = useRef<string | null>(null);
 
   const selectedCreatorIds =
     targetedRecordsRule.mode === 'selection'
@@ -92,20 +91,10 @@ export const MyahCreatorBulkActions = () => {
   }
 
   const clearPendingTarget = () => {
-    selectedTargetIdRef.current = null;
     setPendingTarget(null);
   };
 
-  const handleTargetPickerClose = () => {
-    if (selectedTargetIdRef.current) {
-      return;
-    }
-
-    clearPendingTarget();
-  };
-
   const openTargetPicker = (kind: CreatorBulkRelationshipTarget['kind']) => {
-    selectedTargetIdRef.current = null;
     setPendingTarget({ kind, id: '' });
     openModal(CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID);
   };
@@ -115,7 +104,6 @@ export const MyahCreatorBulkActions = () => {
       return;
     }
 
-    selectedTargetIdRef.current = targetId;
     setPendingTarget({ ...pendingTarget, id: targetId });
     closeModal(CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID);
   };
@@ -147,7 +135,6 @@ export const MyahCreatorBulkActions = () => {
       />
       <ModalStatefulWrapper
         modalInstanceId={CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID}
-        onClose={handleTargetPickerClose}
         isClosable
         padding="large"
         narrowWidth
