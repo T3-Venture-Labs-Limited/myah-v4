@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
+import { Temporal } from 'temporal-polyfill';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -765,7 +766,10 @@ export class ManagedProviderBillingRecoveryService {
     if (
       !installation?.metronomeCustomerId ||
       event.matchedCustomerId !== installation.metronomeCustomerId ||
-      event.timestamp !== operation.deliveryEventAt?.toISOString() ||
+      !this.hasSameInstant(
+        event.timestamp,
+        operation.deliveryEventAt?.toISOString(),
+      ) ||
       event.customerId !== installation.metronomeCustomerId ||
       event.eventType !== operation.metronomeEventType ||
       !this.hasProcessedEvent(event, now) ||
@@ -987,7 +991,7 @@ export class ManagedProviderBillingRecoveryService {
       expectedEvent.customerId === actualEvent.customerId &&
       expectedEvent.matchedCustomerId === actualEvent.matchedCustomerId &&
       expectedEvent.eventType === actualEvent.eventType &&
-      expectedEvent.timestamp === actualEvent.timestamp &&
+      this.hasSameInstant(expectedEvent.timestamp, actualEvent.timestamp) &&
       expectedEvent.transactionId === actualEvent.transactionId &&
       this.areEqualStringArrays(
         expectedEvent.matchedBillableMetricIds,
@@ -1009,6 +1013,26 @@ export class ManagedProviderBillingRecoveryService {
       new Set(actualMetricIds).size === actualMetricIds.length &&
       actualMetricIds.every((metricId) => expectedMetricIds.includes(metricId))
     );
+  }
+
+  private hasSameInstant(
+    firstTimestamp: string,
+    secondTimestamp: string | undefined,
+  ): boolean {
+    if (secondTimestamp === undefined) {
+      return false;
+    }
+
+    try {
+      return (
+        Temporal.Instant.compare(
+          Temporal.Instant.from(firstTimestamp),
+          Temporal.Instant.from(secondTimestamp),
+        ) === 0
+      );
+    } catch {
+      return false;
+    }
   }
 
   private hasProcessedEvent(event: MetronomeUsageEvent, now: Date): boolean {

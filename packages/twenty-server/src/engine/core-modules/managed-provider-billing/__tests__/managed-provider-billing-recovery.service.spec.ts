@@ -35,6 +35,22 @@ describe('ManagedProviderBillingRecoveryService', () => {
     state: ManagedProviderOperationState.USAGE_ACCEPTED,
     workspaceId: 'workspace-id',
   } as unknown as ManagedProviderOperationEntity;
+  const acceptedUsageEvent = {
+    customerId: 'customer-id',
+    matchedCustomerId: 'customer-id',
+    eventType: 'managed-provider-operation',
+    isDuplicate: false,
+    matchedBillableMetricIds: ['metric-id'],
+    timestamp: '2026-07-16T00:00:00.000000+00:00',
+    processedAt: '2026-07-16T00:01:00.000Z',
+    properties: {
+      charge_cent_unit: '3',
+      model_id: 'openrouter/model',
+      operation_id: 'operation-id',
+      tariff_version: 'tariff-v1',
+    },
+    transactionId: 'managed-provider-usage:operation-id',
+  };
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -83,24 +99,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
     >;
     const metronomeClientService = {
       getPrepaidBalance: jest.fn().mockResolvedValue({ balance: 10 }),
-      searchUsageEvents: jest.fn().mockResolvedValue([
-        {
-          customerId: 'customer-id',
-          matchedCustomerId: 'customer-id',
-          eventType: 'managed-provider-operation',
-          isDuplicate: false,
-          matchedBillableMetricIds: ['metric-id'],
-          timestamp: '2026-07-16T00:00:00.000Z',
-          processedAt: '2026-07-16T00:01:00.000Z',
-          properties: {
-            charge_cent_unit: '3',
-            model_id: 'openrouter/model',
-            operation_id: 'operation-id',
-            tariff_version: 'tariff-v1',
-          },
-          transactionId: 'managed-provider-usage:operation-id',
-        },
-      ]),
+      searchUsageEvents: jest.fn().mockResolvedValue([acceptedUsageEvent]),
     } as Pick<
       MetronomeClientService,
       'getPrepaidBalance' | 'searchUsageEvents'
@@ -300,6 +299,58 @@ describe('ManagedProviderBillingRecoveryService', () => {
     );
   });
 
+  it.each([
+    ['2026-07-16T00:00:00.000001Z', new Date('2026-07-16T00:00:00.000Z')],
+    ['2026-02-30T00:00:00.000Z', new Date('2026-03-02T00:00:00.000Z')],
+  ])(
+    'requires reconciliation for contradictory or invalid timestamp evidence %s',
+    async (timestamp, deliveryEventAt) => {
+      const {
+        findOne,
+        metronomeClientService,
+        operationRepository,
+        save,
+        service,
+      } = createService();
+      const operation = { ...acceptedOperation, deliveryEventAt };
+      jest.setSystemTime(new Date(deliveryEventAt.getTime() + 2 * 60_000));
+
+      (operationRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([operation]);
+      (findOne as jest.Mock).mockImplementation(async (entity) =>
+        entity === MyahWorkspaceInstallationEntity
+          ? {
+              metronomeCustomerId: 'customer-id',
+              workspaceId: 'workspace-id',
+            }
+          : operation,
+      );
+      (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue(
+        [
+          {
+            ...acceptedUsageEvent,
+            timestamp,
+            processedAt: new Date(
+              deliveryEventAt.getTime() + 60_000,
+            ).toISOString(),
+          },
+        ],
+      );
+
+      await service.recover();
+
+      expect(metronomeClientService.getPrepaidBalance).not.toHaveBeenCalled();
+      expect(save).toHaveBeenCalledWith(
+        ManagedProviderOperationEntity,
+        expect.objectContaining({
+          state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+        }),
+      );
+    },
+  );
+
   it('settles an accepted operation at most once across concurrent recovery runs', async () => {
     const { findOne, operationRepository, save, service } = createService();
     const lockedOperation = { ...acceptedOperation };
@@ -440,7 +491,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
         eventType: 'managed-provider-operation',
         isDuplicate: true,
         matchedBillableMetricIds: ['metric-id'],
-        timestamp: '2026-07-16T00:00:00.000Z',
+        timestamp: '2026-07-16T00:00:00.000000+00:00',
         processedAt: '2026-07-16T00:01:00.000Z',
         properties: {
           charge_cent_unit: '3',
