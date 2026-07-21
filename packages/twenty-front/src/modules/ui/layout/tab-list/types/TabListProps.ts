@@ -6,6 +6,7 @@ export type TabListProps = {
   tabs: SingleTabProps[];
   loading?: boolean;
   behaveAsLinks?: boolean;
+  ariaLabel?: string;
   className?: string;
   isInSidePanel?: boolean;
   componentInstanceId: string;

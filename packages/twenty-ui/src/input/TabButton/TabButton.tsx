@@ -8,7 +8,7 @@ import {
   TabContent,
   type TabContentProps,
 } from '@ui/input/TabButton/parts/TabContent';
-import { type ReactElement } from 'react';
+import { type AriaRole, type ReactElement } from 'react';
 
 import styles from './TabButton.module.scss';
 
@@ -20,6 +20,8 @@ type TabButtonProps = {
   active?: boolean;
   disabled?: boolean;
   to?: string;
+  role?: AriaRole;
+  ariaSelected?: boolean;
   LeftIcon?: IconComponent;
   className?: string;
   title?: string;
@@ -37,6 +39,8 @@ export const TabButton = ({
   active,
   disabled,
   to,
+  role,
+  ariaSelected,
   LeftIcon,
   className,
   title,
@@ -53,6 +57,8 @@ export const TabButton = ({
   return (
     <div key={id} id={tabElementId} className={styles.tabTooltipWrapper}>
       <StyledTabButton
+        role={role}
+        aria-selected={ariaSelected}
         data-testid={disableTestId ? undefined : `tab-${id}`}
         active={active}
         disabled={disabled}

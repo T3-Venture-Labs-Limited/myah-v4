@@ -71,6 +71,7 @@ export const TabList = ({
   tabs,
   loading,
   behaveAsLinks = true,
+  ariaLabel,
   isInSidePanel,
   className,
   componentInstanceId,
@@ -157,8 +158,11 @@ export const TabList = ({
             onMoreButtonWidthChange={onMoreButtonWidthChange}
           />
         )}
-
-        <StyledContainer className={className}>
+        <StyledContainer
+          className={className}
+          role={behaveAsLinks ? undefined : 'tablist'}
+          aria-label={behaveAsLinks ? undefined : ariaLabel}
+        >
           <StyledNodeDimension onDimensionChange={onContainerWidthChange}>
             <StyledInnerContainer>
               <StyledTabContainer>
@@ -172,6 +176,10 @@ export const TabList = ({
                     active={tab.id === activeTabId}
                     disabled={tab.disabled ?? loading}
                     pill={tab.pill}
+                    role={behaveAsLinks ? undefined : 'tab'}
+                    ariaSelected={
+                      behaveAsLinks ? undefined : tab.id === activeTabId
+                    }
                     to={behaveAsLinks ? `#${tab.id}` : undefined}
                     tooltipContent={tab.tooltipContent}
                     onClick={
@@ -182,7 +190,6 @@ export const TabList = ({
                   />
                 ))}
               </StyledTabContainer>
-
               {hasHiddenTabs && (
                 <StyledDropdownContainer>
                   <TabListDropdown

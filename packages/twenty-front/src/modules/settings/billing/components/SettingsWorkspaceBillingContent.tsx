@@ -1,6 +1,21 @@
 import { SettingsSectionSkeletonLoader } from '@/settings/components/SettingsSectionSkeletonLoader';
+import { SettingsBillingLabelValueItem } from '@/settings/billing/components/internal/SettingsBillingLabelValueItem';
+import {
+  StyledSettingsBillingCard,
+  StyledSettingsBillingCardHeader,
+} from '@/settings/billing/components/internal/SettingsBillingCard';
+import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
+import { Select } from '@/ui/input/components/Select';
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
+import { TabList } from '@/ui/layout/tab-list/components/TabList';
+import { Table } from '@/ui/layout/table/components/Table';
+import { TableCell } from '@/ui/layout/table/components/TableCell';
+import { TableHeader } from '@/ui/layout/table/components/TableHeader';
+import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { plural, t } from '@lingui/core/macro';
+import { useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button } from 'twenty-ui/input';
 import { InlineBanner } from 'twenty-ui/feedback';
@@ -8,13 +23,24 @@ import { Section } from 'twenty-ui/layout';
 import { H2Title } from 'twenty-ui/typography';
 
 const EM_DASH = '—';
+const usdFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+});
+const formatUsdCents = (amountCents: number): string =>
+  usdFormatter.format(amountCents / 100);
+const WORKSPACE_BILLING_TAB_LIST_ID = 'settings-workspace-billing-tabs';
+const WORKSPACE_BILLING_TAB_IDS = {
+  USAGE: 'usage',
+  BILLING_HISTORY: 'billing-history',
+} as const;
+type UsagePeriod = '7d' | '30d' | '90d';
 
 export type WorkspaceBillingUsageStatus =
   | 'settled'
   | 'processing'
   | 'notCharged'
   | 'underReview';
-
 export type WorkspaceBillingUsageEntry = {
   id: string;
   occurredAt: string;
@@ -23,19 +49,14 @@ export type WorkspaceBillingUsageEntry = {
   status: WorkspaceBillingUsageStatus;
   chargeCents: number | null;
 };
-
 export type WorkspaceBillingHistoryEntry = {
   id: string;
   occurredAt: string;
   description: string;
   type: 'purchasedTopUp' | 'sponsoredGrant' | 'refund' | 'adjustment';
   amountCents: number;
-  document?: {
-    label: string;
-    url: string;
-  };
+  document?: { label: string; url: string };
 };
-
 type WorkspaceBillingReadyViewModel = {
   state: 'ready';
   balanceStatus: 'healthy' | 'low' | 'empty';
@@ -48,70 +69,142 @@ type WorkspaceBillingReadyViewModel = {
   usageHistory: WorkspaceBillingUsageEntry[];
   billingHistory: WorkspaceBillingHistoryEntry[];
 };
-
 export type WorkspaceBillingViewModel =
   | { state: 'loading' }
-  | {
-      state: 'unavailable';
-      reason: 'notConnected' | 'loadFailed';
-    }
+  | { state: 'unavailable'; reason: 'notConnected' | 'loadFailed' }
   | WorkspaceBillingReadyViewModel;
 
 const StyledSummary = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
 `;
-
-const StyledSummaryItem = styled.div`
+const StyledCardBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+`;
+const StyledPrimaryValue = styled.div`
+  font-size: 28px;
+  font-weight: 600;
+`;
+const StyledBreakdown = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
 `;
-
-const StyledLabel = styled.span`
-  color: ${themeCssVariables.font.color.secondary};
-`;
-
-const StyledValue = styled.span`
-  font-size: 20px;
-  font-weight: 600;
-`;
-
 const StyledActions = styled.div`
   align-items: center;
   display: flex;
   gap: 8px;
 `;
-
 const StyledComingSoonText = styled.span`
   color: ${themeCssVariables.font.color.secondary};
   font-size: 12px;
 `;
-
 const StyledEmptyCopy = styled.p`
   color: ${themeCssVariables.font.color.secondary};
   margin: 0;
 `;
+const StyledUsageTableRow = styled(TableRow)`
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(96px, 0.9fr) minmax(0, 1.5fr) minmax(
+        88px,
+        0.8fr
+      ) !important;
+  }
+`;
+const StyledUsageTableHeader = styled(TableHeader)`
+  @media (max-width: 640px) {
+    &:nth-child(3),
+    &:nth-child(4) {
+      display: none;
+    }
+  }
+`;
+const StyledUsageTableCell = styled(TableCell)`
+  @media (max-width: 640px) {
+    &:nth-child(3),
+    &:nth-child(4) {
+      display: none;
+    }
+  }
+`;
+const StyledUsageActivityCell = styled(TableCell)`
+  @media (max-width: 640px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+`;
+const StyledUsageMetadata = styled.span`
+  color: ${themeCssVariables.font.color.secondary};
+  display: none;
+  font-size: 12px;
+  @media (max-width: 640px) {
+    display: block;
+  }
+`;
+const getUsageStatus = (status: WorkspaceBillingUsageStatus) => {
+  switch (status) {
+    case 'settled':
+      return { label: t`Settled` };
+    case 'processing':
+      return { label: t`Processing` };
+    case 'notCharged':
+      return { label: t`Not charged` };
+    case 'underReview':
+      return { label: t`Under review` };
+  }
+};
+
+const formatBalanceBreakdown = (
+  amountCents: number,
+  label: 'sponsored' | 'purchased',
+) =>
+  label === 'sponsored'
+    ? t`${formatUsdCents(amountCents)} sponsored`
+    : t`${formatUsdCents(amountCents)} purchased`;
+
+const getUsageAmount = (
+  status: WorkspaceBillingUsageStatus,
+  chargeCents: number | null,
+) => {
+  if (status === 'processing' || status === 'underReview') return t`Pending`;
+  if (status === 'notCharged') return formatUsdCents(0);
+  if (chargeCents === null) return EM_DASH;
+  return formatUsdCents(chargeCents);
+};
+
+const usageColumns =
+  'minmax(132px, 0.9fr) minmax(180px, 1.5fr) minmax(140px, 1fr) minmax(110px, 0.8fr) minmax(96px, 0.7fr)';
 
 const renderUnknownSummary = () => (
   <StyledSummary>
-    <StyledSummaryItem>
-      <StyledLabel>{t`Available balance`}</StyledLabel>
-      <StyledValue>{EM_DASH}</StyledValue>
-    </StyledSummaryItem>
-    <StyledSummaryItem>
-      <StyledLabel>{t`Month-to-date spend`}</StyledLabel>
-      <StyledValue>{EM_DASH}</StyledValue>
-    </StyledSummaryItem>
-    <StyledSummaryItem>
-      <StyledLabel>{t`Settled operations`}</StyledLabel>
-      <StyledValue>{EM_DASH}</StyledValue>
-    </StyledSummaryItem>
+    <SubscriptionInfoContainer>
+      <StyledCardBody>
+        <SettingsBillingLabelValueItem
+          label={t`Available balance`}
+          value={EM_DASH}
+        />
+      </StyledCardBody>
+    </SubscriptionInfoContainer>
+    <SubscriptionInfoContainer>
+      <StyledCardBody>
+        <SettingsBillingLabelValueItem
+          label={t`Month-to-date spend`}
+          value={EM_DASH}
+        />
+        <SettingsBillingLabelValueItem
+          label={t`Settled operations`}
+          value={EM_DASH}
+        />
+      </StyledCardBody>
+    </SubscriptionInfoContainer>
   </StyledSummary>
 );
 
@@ -157,7 +250,12 @@ export const SettingsWorkspaceBillingContent = ({
 }: {
   viewModel: WorkspaceBillingViewModel;
 }) => {
-  if (viewModel.state === 'loading') {
+  const [usagePeriod, setUsagePeriod] = useState<UsagePeriod>('30d');
+  const activeTabId = useAtomComponentStateValue(
+    activeTabIdComponentState,
+    WORKSPACE_BILLING_TAB_LIST_ID,
+  );
+  if (viewModel.state === 'loading')
     return (
       <>
         <SettingsSectionSkeletonLoader rowCount={3} />
@@ -165,11 +263,145 @@ export const SettingsWorkspaceBillingContent = ({
         <SettingsSectionSkeletonLoader rowCount={4} />
       </>
     );
-  }
-
-  if (viewModel.state === 'unavailable') {
+  if (viewModel.state === 'unavailable')
     return renderUnavailable(viewModel.reason);
-  }
-
-  return null;
+  const displayedTabId = activeTabId ?? WORKSPACE_BILLING_TAB_IDS.USAGE;
+  return (
+    <>
+      <Section>
+        <H2Title
+          title={t`Balance`}
+          description={t`Workspace billing summary`}
+        />
+        <StyledSummary>
+          <StyledSettingsBillingCard>
+            <StyledSettingsBillingCardHeader>{t`Available balance`}</StyledSettingsBillingCardHeader>
+            <StyledCardBody>
+              <StyledPrimaryValue>
+                {formatUsdCents(viewModel.availableBalanceCents)}
+              </StyledPrimaryValue>
+              <StyledBreakdown>
+                {viewModel.sponsoredBalanceCents !== null && (
+                  <SettingsBillingLabelValueItem
+                    label={t`Sponsored`}
+                    value={formatBalanceBreakdown(
+                      viewModel.sponsoredBalanceCents,
+                      'sponsored',
+                    )}
+                  />
+                )}
+                {viewModel.purchasedBalanceCents !== null && (
+                  <SettingsBillingLabelValueItem
+                    label={t`Purchased`}
+                    value={formatBalanceBreakdown(
+                      viewModel.purchasedBalanceCents,
+                      'purchased',
+                    )}
+                  />
+                )}
+              </StyledBreakdown>
+              <StyledActions>
+                <Button
+                  ariaLabel={t`Add funds`}
+                  title={t`Add funds`}
+                  variant="secondary"
+                  disabled
+                />
+                <StyledComingSoonText>{t`Online top-ups coming soon`}</StyledComingSoonText>
+              </StyledActions>
+            </StyledCardBody>
+          </StyledSettingsBillingCard>
+          <StyledSettingsBillingCard>
+            <StyledSettingsBillingCardHeader>{t`Month-to-date spend`}</StyledSettingsBillingCardHeader>
+            <StyledCardBody>
+              <StyledPrimaryValue>
+                {formatUsdCents(viewModel.monthToDateSpendCents)}
+              </StyledPrimaryValue>
+              <SettingsBillingLabelValueItem
+                label={t`Operations`}
+                value={plural(viewModel.settledOperationCount, {
+                  one: `${viewModel.settledOperationCount} managed operation`,
+                  other: `${viewModel.settledOperationCount} managed operations`,
+                })}
+              />
+              <SettingsBillingLabelValueItem
+                label={t`Period`}
+                value={viewModel.monthToDateRangeLabel}
+              />
+            </StyledCardBody>
+          </StyledSettingsBillingCard>
+        </StyledSummary>
+      </Section>
+      <Section>
+        <TabList
+          ariaLabel={t`Billing records`}
+          componentInstanceId={WORKSPACE_BILLING_TAB_LIST_ID}
+          behaveAsLinks={false}
+          tabs={[
+            { id: WORKSPACE_BILLING_TAB_IDS.USAGE, title: t`Usage history` },
+            {
+              id: WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY,
+              title: t`Billing history`,
+            },
+          ]}
+        />
+        {displayedTabId === WORKSPACE_BILLING_TAB_IDS.USAGE && (
+          <>
+            <Select
+              label={t`Usage period`}
+              dropdownId="workspace-billing-usage-period"
+              value={usagePeriod}
+              options={[
+                { value: '7d', label: t`Last 7 days` },
+                { value: '30d', label: t`Last 30 days` },
+                { value: '90d', label: t`Last 90 days` },
+              ]}
+              onChange={(value) => setUsagePeriod(value as UsagePeriod)}
+            />
+            <Table role="table" aria-label={t`Usage history`}>
+              <StyledUsageTableRow
+                role="row"
+                gridTemplateColumns={usageColumns}
+              >
+                <StyledUsageTableHeader role="columnheader">{t`Date`}</StyledUsageTableHeader>
+                <StyledUsageTableHeader role="columnheader">{t`Activity`}</StyledUsageTableHeader>
+                <StyledUsageTableHeader role="columnheader">{t`Member`}</StyledUsageTableHeader>
+                <StyledUsageTableHeader role="columnheader">{t`Status`}</StyledUsageTableHeader>
+                <StyledUsageTableHeader
+                  role="columnheader"
+                  align="right"
+                >{t`Amount`}</StyledUsageTableHeader>
+              </StyledUsageTableRow>
+              {viewModel.usageHistory.map((entry) => (
+                <StyledUsageTableRow
+                  key={entry.id}
+                  role="row"
+                  gridTemplateColumns={usageColumns}
+                >
+                  <StyledUsageTableCell role="cell">
+                    {new Date(entry.occurredAt).toLocaleString()}
+                  </StyledUsageTableCell>
+                  <StyledUsageActivityCell role="cell">
+                    {entry.activity}
+                    <StyledUsageMetadata>
+                      {t`${entry.member} · ${getUsageStatus(entry.status).label}`}
+                    </StyledUsageMetadata>
+                  </StyledUsageActivityCell>
+                  <StyledUsageTableCell role="cell">
+                    {entry.member}
+                  </StyledUsageTableCell>
+                  <StyledUsageTableCell role="cell">
+                    {getUsageStatus(entry.status).label}
+                  </StyledUsageTableCell>
+                  <StyledUsageTableCell role="cell" align="right">
+                    {getUsageAmount(entry.status, entry.chargeCents)}
+                  </StyledUsageTableCell>
+                </StyledUsageTableRow>
+              ))}
+            </Table>
+          </>
+        )}
+      </Section>
+    </>
+  );
 };
