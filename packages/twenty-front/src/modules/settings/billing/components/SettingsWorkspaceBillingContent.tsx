@@ -17,7 +17,7 @@ import { styled } from '@linaria/react';
 import { plural, t } from '@lingui/core/macro';
 import { useState } from 'react';
 import { Status } from 'twenty-ui/data-display';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button } from 'twenty-ui/input';
 import { InlineBanner } from 'twenty-ui/feedback';
 import { Section } from 'twenty-ui/layout';
@@ -77,9 +77,9 @@ export type WorkspaceBillingViewModel =
 
 const StyledSummary = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  @media (max-width: 640px) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
     grid-template-columns: 1fr;
   }
 `;
@@ -129,42 +129,42 @@ const StyledBillingEmptyState = styled.div`
 const StyledDocumentLink = styled.a`
   color: ${themeCssVariables.font.color.primary};
 `;
-const StyledUsageTableRow = styled(TableRow)`
-  @media (max-width: 640px) {
+const StyledResponsiveTableRow = styled(TableRow)`
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
     grid-template-columns: minmax(96px, 0.9fr) minmax(0, 1.5fr) minmax(
         88px,
         0.8fr
       ) !important;
   }
 `;
-const StyledUsageTableHeader = styled(TableHeader)`
-  @media (max-width: 640px) {
+const StyledResponsiveTableHeader = styled(TableHeader)`
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
     &:nth-child(3),
     &:nth-child(4) {
       display: none;
     }
   }
 `;
-const StyledUsageTableCell = styled(TableCell)`
-  @media (max-width: 640px) {
+const StyledResponsiveTableCell = styled(TableCell)`
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
     &:nth-child(3),
     &:nth-child(4) {
       display: none;
     }
   }
 `;
-const StyledUsageActivityCell = styled(TableCell)`
-  @media (max-width: 640px) {
+const StyledResponsivePrimaryCell = styled(TableCell)`
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;
   }
 `;
-const StyledUsageMetadata = styled.span`
+const StyledResponsiveMetadata = styled.span`
   color: ${themeCssVariables.font.color.secondary};
   display: none;
   font-size: 12px;
-  @media (max-width: 640px) {
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
     display: block;
   }
 `;
@@ -180,14 +180,6 @@ const getUsageStatus = (status: WorkspaceBillingUsageStatus) => {
       return { label: t`Under review` };
   }
 };
-
-const formatBalanceBreakdown = (
-  amountCents: number,
-  label: 'sponsored' | 'purchased',
-) =>
-  label === 'sponsored'
-    ? t`${formatUsdCents(amountCents)} sponsored`
-    : t`${formatUsdCents(amountCents)} purchased`;
 
 const getUsageAmount = (
   status: WorkspaceBillingUsageStatus,
@@ -222,7 +214,7 @@ const formatSignedUsdCents = (amountCents: number) =>
 const usageColumns =
   'minmax(132px, 0.9fr) minmax(180px, 1.5fr) minmax(140px, 1fr) minmax(110px, 0.8fr) minmax(96px, 0.7fr)';
 const billingHistoryColumns =
-  'minmax(132px, 0.9fr) minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(160px, 1.2fr) minmax(96px, 0.7fr)';
+  'minmax(120px, 0.9fr) minmax(170px, 1.4fr) minmax(110px, 1fr) minmax(150px, 1.2fr) minmax(90px, 0.7fr)';
 
 const renderUnknownSummary = () => (
   <StyledSummary>
@@ -337,19 +329,13 @@ export const SettingsWorkspaceBillingContent = ({
                 {viewModel.sponsoredBalanceCents !== null && (
                   <SettingsBillingLabelValueItem
                     label={t`Sponsored`}
-                    value={formatBalanceBreakdown(
-                      viewModel.sponsoredBalanceCents,
-                      'sponsored',
-                    )}
+                    value={t`${formatUsdCents(viewModel.sponsoredBalanceCents)} sponsored`}
                   />
                 )}
                 {viewModel.purchasedBalanceCents !== null && (
                   <SettingsBillingLabelValueItem
                     label={t`Purchased`}
-                    value={formatBalanceBreakdown(
-                      viewModel.purchasedBalanceCents,
-                      'purchased',
-                    )}
+                    value={t`${formatUsdCents(viewModel.purchasedBalanceCents)} purchased`}
                   />
                 )}
               </StyledBreakdown>
@@ -420,44 +406,44 @@ export const SettingsWorkspaceBillingContent = ({
               </StyledBillingEmptyState>
             ) : (
               <Table role="table" aria-label={t`Usage history`}>
-                <StyledUsageTableRow
+                <StyledResponsiveTableRow
                   role="row"
                   gridTemplateColumns={usageColumns}
                 >
-                  <StyledUsageTableHeader role="columnheader">{t`Date`}</StyledUsageTableHeader>
-                  <StyledUsageTableHeader role="columnheader">{t`Activity`}</StyledUsageTableHeader>
-                  <StyledUsageTableHeader role="columnheader">{t`Member`}</StyledUsageTableHeader>
-                  <StyledUsageTableHeader role="columnheader">{t`Status`}</StyledUsageTableHeader>
-                  <StyledUsageTableHeader
+                  <StyledResponsiveTableHeader role="columnheader">{t`Date`}</StyledResponsiveTableHeader>
+                  <StyledResponsiveTableHeader role="columnheader">{t`Activity`}</StyledResponsiveTableHeader>
+                  <StyledResponsiveTableHeader role="columnheader">{t`Member`}</StyledResponsiveTableHeader>
+                  <StyledResponsiveTableHeader role="columnheader">{t`Status`}</StyledResponsiveTableHeader>
+                  <StyledResponsiveTableHeader
                     role="columnheader"
                     align="right"
-                  >{t`Amount`}</StyledUsageTableHeader>
-                </StyledUsageTableRow>
+                  >{t`Amount`}</StyledResponsiveTableHeader>
+                </StyledResponsiveTableRow>
                 {viewModel.usageHistory.map((entry) => (
-                  <StyledUsageTableRow
+                  <StyledResponsiveTableRow
                     key={entry.id}
                     role="row"
                     gridTemplateColumns={usageColumns}
                   >
-                    <StyledUsageTableCell role="cell">
+                    <StyledResponsiveTableCell role="cell">
                       {new Date(entry.occurredAt).toLocaleString()}
-                    </StyledUsageTableCell>
-                    <StyledUsageActivityCell role="cell">
+                    </StyledResponsiveTableCell>
+                    <StyledResponsivePrimaryCell role="cell">
                       {entry.activity}
-                      <StyledUsageMetadata>
+                      <StyledResponsiveMetadata>
                         {t`${entry.member} · ${getUsageStatus(entry.status).label}`}
-                      </StyledUsageMetadata>
-                    </StyledUsageActivityCell>
-                    <StyledUsageTableCell role="cell">
+                      </StyledResponsiveMetadata>
+                    </StyledResponsivePrimaryCell>
+                    <StyledResponsiveTableCell role="cell">
                       {entry.member}
-                    </StyledUsageTableCell>
-                    <StyledUsageTableCell role="cell">
+                    </StyledResponsiveTableCell>
+                    <StyledResponsiveTableCell role="cell">
                       {getUsageStatus(entry.status).label}
-                    </StyledUsageTableCell>
-                    <StyledUsageTableCell role="cell" align="right">
+                    </StyledResponsiveTableCell>
+                    <StyledResponsiveTableCell role="cell" align="right">
                       {getUsageAmount(entry.status, entry.chargeCents)}
-                    </StyledUsageTableCell>
-                  </StyledUsageTableRow>
+                    </StyledResponsiveTableCell>
+                  </StyledResponsiveTableRow>
                 ))}
               </Table>
             )}
@@ -473,30 +459,46 @@ export const SettingsWorkspaceBillingContent = ({
             </StyledBillingEmptyState>
           ) : (
             <Table role="table" aria-label={t`Billing history`}>
-              <TableRow role="row" gridTemplateColumns={billingHistoryColumns}>
-                <TableHeader role="columnheader">{t`Date`}</TableHeader>
-                <TableHeader role="columnheader">{t`Event`}</TableHeader>
-                <TableHeader role="columnheader">{t`Type`}</TableHeader>
-                <TableHeader role="columnheader">{t`Document`}</TableHeader>
-                <TableHeader
+              <StyledResponsiveTableRow
+                role="row"
+                gridTemplateColumns={billingHistoryColumns}
+              >
+                <StyledResponsiveTableHeader role="columnheader">{t`Date`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Event`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Type`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Document`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader
                   role="columnheader"
                   align="right"
-                >{t`Amount`}</TableHeader>
-              </TableRow>
+                >{t`Amount`}</StyledResponsiveTableHeader>
+              </StyledResponsiveTableRow>
               {viewModel.billingHistory.map((entry) => (
-                <TableRow
+                <StyledResponsiveTableRow
                   key={entry.id}
                   role="row"
                   gridTemplateColumns={billingHistoryColumns}
                 >
-                  <TableCell role="cell">
+                  <StyledResponsiveTableCell role="cell">
                     {new Date(entry.occurredAt).toLocaleString()}
-                  </TableCell>
-                  <TableCell role="cell">{entry.description}</TableCell>
-                  <TableCell role="cell">
+                  </StyledResponsiveTableCell>
+                  <StyledResponsivePrimaryCell role="cell">
+                    {entry.description}
+                    <StyledResponsiveMetadata>
+                      {getBillingHistoryTypeLabel(entry.type)}
+                      {entry.document !== undefined && (
+                        <>
+                          {' · '}
+                          <StyledDocumentLink href={entry.document.url}>
+                            {entry.document.label}
+                          </StyledDocumentLink>
+                        </>
+                      )}
+                    </StyledResponsiveMetadata>
+                  </StyledResponsivePrimaryCell>
+                  <StyledResponsiveTableCell role="cell">
                     {getBillingHistoryTypeLabel(entry.type)}
-                  </TableCell>
-                  <TableCell role="cell">
+                  </StyledResponsiveTableCell>
+                  <StyledResponsiveTableCell role="cell">
                     {entry.document === undefined ? (
                       EM_DASH
                     ) : (
@@ -504,11 +506,11 @@ export const SettingsWorkspaceBillingContent = ({
                         {entry.document.label}
                       </StyledDocumentLink>
                     )}
-                  </TableCell>
-                  <TableCell role="cell" align="right">
+                  </StyledResponsiveTableCell>
+                  <StyledResponsiveTableCell role="cell" align="right">
                     {formatSignedUsdCents(entry.amountCents)}
-                  </TableCell>
-                </TableRow>
+                  </StyledResponsiveTableCell>
+                </StyledResponsiveTableRow>
               ))}
             </Table>
           ))}
