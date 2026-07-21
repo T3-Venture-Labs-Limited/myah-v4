@@ -81,6 +81,9 @@ jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
     <div>
       {children}
       {onClose && <button onClick={onClose}>Dismiss target picker</button>}
+      {onClose && (
+        <button onClick={onClose}>Dismiss target picker again</button>
+      )}
     </div>
   ),
 }));
@@ -155,6 +158,29 @@ describe('MyahCreatorBulkActions', () => {
     );
     fireEvent.click(
       screen.getByRole('button', { name: 'Dismiss target picker' }),
+    );
+
+    expect(screen.getByText('Spring creators')).toBeVisible();
+    expect(mockOpenModal).toHaveBeenCalledWith(
+      'creator-bulk-relationship-list-a',
+    );
+  });
+
+  it('keeps the preview open through multiple target picker close callbacks', () => {
+    mockUseFindOneRecord.mockReturnValue({
+      record: { id: 'list-a', name: 'Spring creators' },
+    });
+
+    render(<MyahCreatorBulkActions />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Choose a Creator List' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Dismiss target picker' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Dismiss target picker again' }),
     );
 
     expect(screen.getByText('Spring creators')).toBeVisible();

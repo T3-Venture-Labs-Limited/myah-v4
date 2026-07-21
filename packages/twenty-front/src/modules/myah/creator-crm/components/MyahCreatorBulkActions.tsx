@@ -51,7 +51,7 @@ export const MyahCreatorBulkActions = () => {
   const { openModal, closeModal } = useModal();
   const [pendingTarget, setPendingTarget] =
     useState<PendingCreatorBulkRelationshipTarget | null>(null);
-  const shouldKeepPendingTargetOnPickerClose = useRef(false);
+  const selectedTargetIdRef = useRef<string | null>(null);
 
   const selectedCreatorIds =
     targetedRecordsRule.mode === 'selection'
@@ -91,18 +91,21 @@ export const MyahCreatorBulkActions = () => {
     return null;
   }
 
-  const handleTargetPickerClose = () => {
-    if (shouldKeepPendingTargetOnPickerClose.current) {
-      shouldKeepPendingTargetOnPickerClose.current = false;
-
-      return;
-    }
-
+  const clearPendingTarget = () => {
+    selectedTargetIdRef.current = null;
     setPendingTarget(null);
   };
 
+  const handleTargetPickerClose = () => {
+    if (selectedTargetIdRef.current) {
+      return;
+    }
+
+    clearPendingTarget();
+  };
+
   const openTargetPicker = (kind: CreatorBulkRelationshipTarget['kind']) => {
-    shouldKeepPendingTargetOnPickerClose.current = false;
+    selectedTargetIdRef.current = null;
     setPendingTarget({ kind, id: '' });
     openModal(CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID);
   };
@@ -112,14 +115,14 @@ export const MyahCreatorBulkActions = () => {
       return;
     }
 
-    shouldKeepPendingTargetOnPickerClose.current = true;
+    selectedTargetIdRef.current = targetId;
     setPendingTarget({ ...pendingTarget, id: targetId });
     closeModal(CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID);
   };
 
   const clearSelectionAfterSuccess = () => {
     setTargetedRecordsRule({ mode: 'selection', selectedRecordIds: [] });
-    setPendingTarget(null);
+    clearPendingTarget();
   };
 
   return (
@@ -170,7 +173,7 @@ export const MyahCreatorBulkActions = () => {
           target={target}
           selectedCreatorIds={selectedCreatorIds}
           onSuccess={clearSelectionAfterSuccess}
-          onClose={() => setPendingTarget(null)}
+          onClose={clearPendingTarget}
         />
       )}
     </>
