@@ -160,6 +160,39 @@ describe('ManagedProviderOperationService', () => {
     };
   };
 
+  it('quotes camel-case JSONB columns when checking overrun quarantine', async () => {
+    const { operationRepository, service } = createService();
+    const queryBuilder = {
+      andWhere: jest.fn(),
+      getExists: jest.fn().mockResolvedValue(false),
+      where: jest.fn(),
+    };
+
+    queryBuilder.where.mockReturnValue(queryBuilder);
+    queryBuilder.andWhere.mockReturnValue(queryBuilder);
+    (
+      operationRepository.createQueryBuilder as unknown as jest.Mock
+    ).mockReturnValue(queryBuilder);
+
+    await expect(
+      service.assertProviderConfigurationActive(
+        'openrouter',
+        'openrouter/google/gemma-4-31b-it:free',
+        '2026-07-20-v3',
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      2,
+      `operation."actualUsageProperties"->>'overrun' = 'true'`,
+    );
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      3,
+      `operation."actualUsageProperties"->>'tariffVersion' = :tariffVersion`,
+      { tariffVersion: '2026-07-20-v3' },
+    );
+  });
+
   it('reserves the pre-balance usage total under the workspace lock', async () => {
     const { manager, metronomeClientService, operationRepository, service } =
       createService();
