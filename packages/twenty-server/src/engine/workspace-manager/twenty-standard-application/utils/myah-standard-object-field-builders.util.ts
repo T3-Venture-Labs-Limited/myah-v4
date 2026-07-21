@@ -2840,6 +2840,31 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        owner: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'owner',
+            label: 'Owner',
+            description: 'Owner',
+            icon: 'IconUserCircle',
+            targetObjectName: 'workspaceMember',
+            targetFieldName: 'ownedCreators',
+            morphId: null,
+            isNullable: true,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.SET_NULL,
+              joinColumnName: 'ownerId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         source: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,

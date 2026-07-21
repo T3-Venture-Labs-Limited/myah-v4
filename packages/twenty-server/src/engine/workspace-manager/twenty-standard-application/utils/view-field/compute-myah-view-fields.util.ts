@@ -273,17 +273,25 @@ const creatorFields = [
   },
   {
     viewName: 'viewa5abdae3',
-    viewFieldName: 'email',
-    fieldName: 'email',
+    viewFieldName: 'creatorStatus',
+    fieldName: 'creatorStatus',
     position: 1,
     isVisible: true,
-    size: 160,
+    size: 140,
   },
   {
     viewName: 'viewa5abdae3',
-    viewFieldName: 'location',
-    fieldName: 'location',
+    viewFieldName: 'owner',
+    fieldName: 'owner',
     position: 2,
+    isVisible: true,
+    size: 180,
+  },
+  {
+    viewName: 'viewa5abdae3',
+    viewFieldName: 'email',
+    fieldName: 'email',
+    position: 3,
     isVisible: true,
     size: 160,
   },
@@ -291,7 +299,7 @@ const creatorFields = [
     viewName: 'viewa5abdae3',
     viewFieldName: 'instagramUsername',
     fieldName: 'instagramUsername',
-    position: 3,
+    position: 4,
     isVisible: true,
     size: 160,
   },
@@ -299,55 +307,7 @@ const creatorFields = [
     viewName: 'viewa5abdae3',
     viewFieldName: 'instagramFollowerCount',
     fieldName: 'instagramFollowerCount',
-    position: 4,
-    isVisible: true,
-    size: 160,
-  },
-  {
-    viewName: 'viewa5abdae3',
-    viewFieldName: 'tiktokUsername',
-    fieldName: 'tiktokUsername',
     position: 5,
-    isVisible: true,
-    size: 160,
-  },
-  {
-    viewName: 'viewa5abdae3',
-    viewFieldName: 'tiktokFollowerCount',
-    fieldName: 'tiktokFollowerCount',
-    position: 6,
-    isVisible: true,
-    size: 160,
-  },
-  {
-    viewName: 'viewa5abdae3',
-    viewFieldName: 'youtubeTitle',
-    fieldName: 'youtubeTitle',
-    position: 7,
-    isVisible: true,
-    size: 160,
-  },
-  {
-    viewName: 'viewa5abdae3',
-    viewFieldName: 'youtubeSubscriberCount',
-    fieldName: 'youtubeSubscriberCount',
-    position: 8,
-    isVisible: true,
-    size: 160,
-  },
-  {
-    viewName: 'viewa5abdae3',
-    viewFieldName: 'hasBrandDeals',
-    fieldName: 'hasBrandDeals',
-    position: 9,
-    isVisible: true,
-    size: 160,
-  },
-  {
-    viewName: 'viewa5abdae3',
-    viewFieldName: 'promotesAffiliateLinks',
-    fieldName: 'promotesAffiliateLinks',
-    position: 10,
     isVisible: true,
     size: 160,
   },
@@ -355,11 +315,69 @@ const creatorFields = [
     viewName: 'viewa5abdae3',
     viewFieldName: 'source',
     fieldName: 'source',
-    position: 11,
+    position: 6,
     isVisible: true,
     size: 160,
   },
 ] satisfies readonly Spec<'creator', 'viewa5abdae3'>[];
+const qualifiedCreatorsWithEmailFields = [
+  {
+    viewName: 'qualifiedCreatorsWithEmail',
+    viewFieldName: 'name',
+    fieldName: 'name',
+    position: 0,
+    isVisible: true,
+    size: 220,
+  },
+  {
+    viewName: 'qualifiedCreatorsWithEmail',
+    viewFieldName: 'creatorStatus',
+    fieldName: 'creatorStatus',
+    position: 1,
+    isVisible: true,
+    size: 140,
+  },
+  {
+    viewName: 'qualifiedCreatorsWithEmail',
+    viewFieldName: 'owner',
+    fieldName: 'owner',
+    position: 2,
+    isVisible: true,
+    size: 180,
+  },
+  {
+    viewName: 'qualifiedCreatorsWithEmail',
+    viewFieldName: 'email',
+    fieldName: 'email',
+    position: 3,
+    isVisible: true,
+    size: 160,
+  },
+  {
+    viewName: 'qualifiedCreatorsWithEmail',
+    viewFieldName: 'instagramUsername',
+    fieldName: 'instagramUsername',
+    position: 4,
+    isVisible: true,
+    size: 160,
+  },
+  {
+    viewName: 'qualifiedCreatorsWithEmail',
+    viewFieldName: 'instagramFollowerCount',
+    fieldName: 'instagramFollowerCount',
+    position: 5,
+    isVisible: true,
+    size: 160,
+  },
+  {
+    viewName: 'qualifiedCreatorsWithEmail',
+    viewFieldName: 'source',
+    fieldName: 'source',
+    position: 6,
+    isVisible: true,
+    size: 160,
+  },
+] satisfies readonly Spec<'creator', 'qualifiedCreatorsWithEmail'>[];
 
 export const computeMyahViewFields = (
   args: Args,
@@ -370,6 +388,7 @@ export const computeMyahViewFields = (
   ...buildForObject(args, 'campaign', campaignFields),
   ...buildForObject(args, 'creatorList', creatorListFields),
   ...buildForObject(args, 'creator', creatorFields),
+  ...buildForObject(args, 'creator', qualifiedCreatorsWithEmailFields),
 });
 
 export const computeMyahBrandBrainPageViewFields = (args: Args) =>
@@ -398,7 +417,9 @@ export const computeMyahCreatorListViewFields = (args: Args) =>
   );
 export const computeMyahCreatorViewFields = (args: Args) =>
   Object.fromEntries(
-    Object.entries(computeMyahViewFields(args)).filter(([key]) =>
-      key.startsWith('creatorview'),
+    Object.entries(computeMyahViewFields(args)).filter(
+      ([key]) =>
+        key.startsWith('creatorview') ||
+        key.startsWith('creatorqualifiedCreatorsWithEmail'),
     ),
   );

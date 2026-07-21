@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import ts from 'typescript';
+import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 
 type Value = string | Value[] | { [key: string]: Value } | undefined;
@@ -139,6 +140,8 @@ const evalExpr = (node: ts.Node, source: string): Value => {
       : undefined;
   }
   if (ts.isIdentifier(node)) {
+    if (node.text === 'STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS')
+      return STANDARD_OBJECTS as unknown as Value;
     const sf = file(source);
     const importDeclaration = sf.statements.find(
       (statement): statement is ts.ImportDeclaration =>

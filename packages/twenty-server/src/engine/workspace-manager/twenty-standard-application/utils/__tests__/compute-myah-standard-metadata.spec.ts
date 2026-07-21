@@ -300,6 +300,27 @@ describe('Myah standard metadata contract', () => {
             .universalIdentifier,
       }),
     );
+    expect(creatorFields).toContainEqual(
+      expect.objectContaining({
+        name: 'owner',
+        universalIdentifier: '654e0df0-0c1f-4083-bc30-f85252269092',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+        relationTargetObjectMetadataUniversalIdentifier:
+          STANDARD_OBJECTS.workspaceMember.universalIdentifier,
+        relationTargetFieldMetadataUniversalIdentifier:
+          'fe31748c-e0e8-40b2-b175-1759c817e54a',
+      }),
+    );
+    expect(
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
+    ).toHaveProperty('19483764-6f84-4d09-8f03-945e7d0a4b28');
+    expect(
+      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+    ).toHaveProperty('03ddcbb7-42dd-4078-bc0a-c985c6a9c131');
+    expect(
+      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+    ).toHaveProperty('d1319af0-eeb2-4ca3-8afc-31e66c8a4277');
   });
 
   it('normalizes select option positions and defaults', () => {
