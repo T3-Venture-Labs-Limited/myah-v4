@@ -14,7 +14,9 @@ export type MyahNavigationPageId =
   | 'creator-briefs'
   | 'creator-videos'
   | 'analytics'
-  | 'sequences'
+  | 'automations'
+  | 'automation-runs'
+  | 'automation-versions'
   | 'tasks'
   | 'approvals'
   | 'brand-brain'
@@ -75,6 +77,10 @@ export type ResolvedMyahNavigationRoute =
   | {
       status: 'forbidden';
       route: MyahNavigationRoute;
-      destination: { kind: 'native'; path: string; objectNameSingular?: string };
+      destination: {
+        kind: 'native';
+        path: string;
+        objectNameSingular?: string;
+      };
     }
   | { status: 'deferred' | 'missing' | 'soon'; route: MyahNavigationRoute };

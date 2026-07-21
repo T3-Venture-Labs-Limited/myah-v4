@@ -4,15 +4,23 @@ import {
 } from '@/myah/navigation/types/MyahNavigationRoute';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import {
+  IconBox,
   IconBrain,
+  IconChartBar,
   IconCheckbox,
   IconCircle,
+  IconFileText,
+  IconHistory,
   IconInbox,
   IconLayoutDashboard,
   IconList,
   IconPlug,
+  IconSearch,
   IconSend,
+  IconSettingsAutomation,
   IconUsers,
+  IconVersions,
+  IconVideo,
 } from 'twenty-ui/icon';
 
 const CREATOR_OBJECT_UNIVERSAL_IDENTIFIER =
@@ -96,7 +104,7 @@ export const MYAH_NAVIGATION_ROUTES = [
   {
     id: 'creator-discovery',
     label: 'Creator Discovery',
-    Icon: IconCircle,
+    Icon: IconSearch,
     group: 'creator-crm',
     entryPath: '/myah/creator-discovery',
     availability: 'soon',
@@ -119,7 +127,7 @@ export const MYAH_NAVIGATION_ROUTES = [
   {
     id: 'deliverables',
     label: 'Deliverables',
-    Icon: IconCircle,
+    Icon: IconBox,
     group: 'campaign-operations',
     entryPath: '/myah/deliverables',
     availability: 'soon',
@@ -127,7 +135,7 @@ export const MYAH_NAVIGATION_ROUTES = [
   {
     id: 'creator-briefs',
     label: 'Creator Briefs',
-    Icon: IconCircle,
+    Icon: IconFileText,
     group: 'campaign-operations',
     entryPath: '/myah/creator-briefs',
     availability: 'soon',
@@ -135,7 +143,7 @@ export const MYAH_NAVIGATION_ROUTES = [
   {
     id: 'creator-videos',
     label: 'Creator Videos',
-    Icon: IconCircle,
+    Icon: IconVideo,
     group: 'campaign-operations',
     entryPath: '/myah/creator-videos',
     availability: 'soon',
@@ -143,23 +151,53 @@ export const MYAH_NAVIGATION_ROUTES = [
   {
     id: 'analytics',
     label: 'Analytics',
-    Icon: IconCircle,
+    Icon: IconChartBar,
     group: 'campaign-operations',
     entryPath: '/myah/analytics',
     availability: 'soon',
   },
   {
-    id: 'sequences',
-    label: 'Sequences',
-    Icon: IconSend,
+    id: 'automations',
+    label: 'Automations',
+    Icon: IconSettingsAutomation,
     group: 'outreach',
-    entryPath: '/myah/sequences',
+    entryPath: '/myah/automations',
     availability: 'available',
     destination: {
       kind: 'native-object',
       object: {
         kind: 'core-object',
         nameSingular: CoreObjectNameSingular.Workflow,
+      },
+    },
+  },
+  {
+    id: 'automation-runs',
+    label: 'Automation runs',
+    Icon: IconHistory,
+    group: 'outreach',
+    entryPath: '/myah/automation-runs',
+    availability: 'available',
+    destination: {
+      kind: 'native-object',
+      object: {
+        kind: 'core-object',
+        nameSingular: CoreObjectNameSingular.WorkflowRun,
+      },
+    },
+  },
+  {
+    id: 'automation-versions',
+    label: 'Automation versions',
+    Icon: IconVersions,
+    group: 'outreach',
+    entryPath: '/myah/automation-versions',
+    availability: 'available',
+    destination: {
+      kind: 'native-object',
+      object: {
+        kind: 'core-object',
+        nameSingular: CoreObjectNameSingular.WorkflowVersion,
       },
     },
   },

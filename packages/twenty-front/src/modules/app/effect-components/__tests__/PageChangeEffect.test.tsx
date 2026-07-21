@@ -8,9 +8,8 @@ const navigate = jest.fn();
 const noOp = jest.fn();
 const getReturnToPath = jest.fn().mockReturnValue('');
 const store = { get: jest.fn(), set: jest.fn() };
-const { useNavigate: useActualNavigate } = jest.requireActual(
-  'react-router-dom',
-);
+const { useNavigate: useActualNavigate } =
+  jest.requireActual('react-router-dom');
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -140,12 +139,10 @@ describe('PageChangeEffect', () => {
     pending: undefined,
     ready: '/myah/today',
   } as const;
-  const RouteTransitionEffect = ({
-    destination,
-  }: {
-    destination?: string;
-  }) => {
+  const RouteTransitionEffect = ({ destination }: { destination?: string }) => {
     const navigateToDestination = useActualNavigate();
+    // Keep the test transition guard synchronous with its navigation call.
+    // oxlint-disable-next-line twenty/no-state-useref
     const previousDestinationRef = useRef<string | undefined>(undefined);
 
     useEffect(() => {
@@ -162,7 +159,6 @@ describe('PageChangeEffect', () => {
 
     return null;
   };
-
 
   const expectTodayRedirectAfterResolution = async (
     resolvedState: 'ready' | 'forbidden',
@@ -223,9 +219,7 @@ describe('PageChangeEffect', () => {
 
   it('navigates again when the route moves away while the target is unchanged', async () => {
     const target = '/myah/today?tab=tasks#priority';
-    jest
-      .mocked(usePageChangeEffectNavigateLocation)
-      .mockReturnValue(target);
+    jest.mocked(usePageChangeEffectNavigateLocation).mockReturnValue(target);
 
     const view = render(
       <MemoryRouter

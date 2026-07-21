@@ -108,6 +108,58 @@ describe('resolveMyahNavigationRoutes', () => {
     });
   });
 
+  it('resolves each Automation entry to its native workflow object list', () => {
+    const resolvedRoutes = resolveMyahNavigationRoutes(
+      [
+        getMyahNavigationRoute('automations'),
+        getMyahNavigationRoute('automation-runs'),
+        getMyahNavigationRoute('automation-versions'),
+      ],
+      buildSources({
+        objectMetadataItems: [
+          {
+            id: 'workflow-object-id',
+            nameSingular: 'workflow',
+            namePlural: 'workflows',
+          },
+          {
+            id: 'workflow-run-object-id',
+            nameSingular: 'workflowRun',
+            namePlural: 'workflowRuns',
+          },
+          {
+            id: 'workflow-version-object-id',
+            nameSingular: 'workflowVersion',
+            namePlural: 'workflowVersions',
+          },
+        ],
+        objectPermissionsByObjectMetadataId: {
+          'workflow-object-id': { canReadObjectRecords: true },
+          'workflow-run-object-id': { canReadObjectRecords: true },
+          'workflow-version-object-id': { canReadObjectRecords: true },
+        },
+      }),
+    );
+
+    expect(resolvedRoutes).toMatchObject([
+      {
+        status: 'ready',
+        route: { id: 'automations' },
+        destination: { kind: 'native', path: '/objects/workflows' },
+      },
+      {
+        status: 'ready',
+        route: { id: 'automation-runs' },
+        destination: { kind: 'native', path: '/objects/workflowRuns' },
+      },
+      {
+        status: 'ready',
+        route: { id: 'automation-versions' },
+        destination: { kind: 'native', path: '/objects/workflowVersions' },
+      },
+    ]);
+  });
+
   it('waits for persisted last-visited views before resolving native object routes', () => {
     localStorage.setItem(
       'lastVisitedViewPerObjectMetadataItemState',
@@ -169,8 +221,10 @@ describe('resolveMyahNavigationRoutes', () => {
 
     jest.isolateModules(() => {
       jest.doMock('react', () => React);
-      const { Provider: JotaiProvider, createStore: createIsolatedStore } =
-        require('jotai');
+      const {
+        Provider: JotaiProvider,
+        createStore: createIsolatedStore,
+      } = require('jotai');
       const {
         currentUserWorkspaceState,
       } = require('@/auth/states/currentUserWorkspaceState');
@@ -178,7 +232,8 @@ describe('resolveMyahNavigationRoutes', () => {
         metadataStoreState,
       } = require('@/metadata-store/states/metadataStoreState');
       const {
-        useResolvedMyahNavigationRoutes: useIsolatedResolvedMyahNavigationRoutes,
+        useResolvedMyahNavigationRoutes:
+          useIsolatedResolvedMyahNavigationRoutes,
       } = require('@/myah/navigation/hooks/useResolvedMyahNavigationRoutes');
 
       const store = createIsolatedStore();

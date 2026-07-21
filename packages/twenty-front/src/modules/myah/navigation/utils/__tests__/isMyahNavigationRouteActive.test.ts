@@ -1,4 +1,7 @@
-import { getMyahNavigationRoute, MYAH_NAVIGATION_ROUTES } from '@/myah/navigation/myah-navigation-registry';
+import {
+  getMyahNavigationRoute,
+  MYAH_NAVIGATION_ROUTES,
+} from '@/myah/navigation/myah-navigation-registry';
 import { type ResolvedMyahNavigationRoute } from '@/myah/navigation/types/MyahNavigationRoute';
 import { isMyahNavigationRouteActive } from '@/myah/navigation/utils/isMyahNavigationRouteActive';
 

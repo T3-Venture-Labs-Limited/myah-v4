@@ -2,12 +2,9 @@ import { render, screen } from '@testing-library/react';
 
 import { MainNavigationDrawerScrollableItems } from '@/navigation/components/MainNavigationDrawerScrollableItems';
 
-jest.mock(
-  '@/myah/navigation/components/MyahNavigationDrawerSection',
-  () => ({
-    MyahNavigationDrawerSection: () => <div data-testid="myah-navigation" />,
-  }),
-);
+jest.mock('@/myah/navigation/components/MyahNavigationDrawerSection', () => ({
+  MyahNavigationDrawerSection: () => <div data-testid="myah-navigation" />,
+}));
 
 jest.mock(
   '@/navigation-menu-item/display/sections/components/NavigationDrawerOpenedSection',

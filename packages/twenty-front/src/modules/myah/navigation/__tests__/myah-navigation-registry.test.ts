@@ -3,6 +3,13 @@ import {
   getMyahNavigationRoute,
   MYAH_NAVIGATION_ROUTES,
 } from '@/myah/navigation/myah-navigation-registry';
+import {
+  IconBox,
+  IconChartBar,
+  IconFileText,
+  IconSearch,
+  IconVideo,
+} from 'twenty-ui/icon';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 
 describe('MYAH_NAVIGATION_ROUTES', () => {
@@ -53,7 +60,17 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
         group: 'campaign-operations',
         availability: 'soon',
       },
-      { id: 'sequences', group: 'outreach', availability: 'available' },
+      { id: 'automations', group: 'outreach', availability: 'available' },
+      {
+        id: 'automation-runs',
+        group: 'outreach',
+        availability: 'available',
+      },
+      {
+        id: 'automation-versions',
+        group: 'outreach',
+        availability: 'available',
+      },
       { id: 'tasks', group: 'outreach', availability: 'available' },
       { id: 'approvals', group: 'outreach', availability: 'deferred' },
       {
@@ -68,13 +85,18 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
       },
     ]);
 
-    expect(MYAH_NAVIGATION_ROUTES.filter(({ group }) => group === null)).toEqual(
-      [
-        expect.objectContaining({ id: 'today', entryPath: '/myah/today' }),
-        expect.objectContaining({ id: 'inbox', entryPath: '/myah/inbox' }),
-      ],
+    expect(
+      MYAH_NAVIGATION_ROUTES.filter(({ group }) => group === null),
+    ).toEqual([
+      expect.objectContaining({ id: 'today', entryPath: '/myah/today' }),
+      expect.objectContaining({ id: 'inbox', entryPath: '/myah/inbox' }),
+    ]);
+    expect(MYAH_NAVIGATION_ROUTES.map(({ id }) => id)).not.toContain(
+      'settings',
     );
-    expect(MYAH_NAVIGATION_ROUTES.map(({ id }) => id)).not.toContain('settings');
+    expect(MYAH_NAVIGATION_ROUTES.map(({ id }) => id)).not.toContain(
+      'sequences',
+    );
   });
 
   it('preserves one stable entry path for every Core MVP page', () => {
@@ -85,6 +107,19 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
 
     expect(getMyahEntryPath('creator-briefs')).toBe('/myah/creator-briefs');
     expect(getMyahNavigationRoute('creator-briefs').availability).toBe('soon');
+    expect(
+      getMyahEntryPath('automations' as Parameters<typeof getMyahEntryPath>[0]),
+    ).toBe('/myah/automations');
+    expect(
+      getMyahEntryPath(
+        'automation-runs' as Parameters<typeof getMyahEntryPath>[0],
+      ),
+    ).toBe('/myah/automation-runs');
+    expect(
+      getMyahEntryPath(
+        'automation-versions' as Parameters<typeof getMyahEntryPath>[0],
+      ),
+    ).toBe('/myah/automation-versions');
   });
 
   it('assigns actual native targets only to available routes', () => {
@@ -123,11 +158,37 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
         universalIdentifier: '9a09d54a-d464-5692-ac74-70527fb00ddd',
       },
     });
-    expect(getMyahNavigationRoute('sequences').destination).toEqual({
+    expect(
+      getMyahNavigationRoute(
+        'automations' as Parameters<typeof getMyahNavigationRoute>[0],
+      ).destination,
+    ).toEqual({
       kind: 'native-object',
       object: {
         kind: 'core-object',
         nameSingular: CoreObjectNameSingular.Workflow,
+      },
+    });
+    expect(
+      getMyahNavigationRoute(
+        'automation-runs' as Parameters<typeof getMyahNavigationRoute>[0],
+      ).destination,
+    ).toEqual({
+      kind: 'native-object',
+      object: {
+        kind: 'core-object',
+        nameSingular: CoreObjectNameSingular.WorkflowRun,
+      },
+    });
+    expect(
+      getMyahNavigationRoute(
+        'automation-versions' as Parameters<typeof getMyahNavigationRoute>[0],
+      ).destination,
+    ).toEqual({
+      kind: 'native-object',
+      object: {
+        kind: 'core-object',
+        nameSingular: CoreObjectNameSingular.WorkflowVersion,
       },
     });
     expect(getMyahNavigationRoute('tasks').destination).toEqual({
@@ -150,6 +211,14 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
     )) {
       expect(route).not.toHaveProperty('destination');
     }
+  });
+
+  it('uses semantic icons for visible Soon entries', () => {
+    expect(getMyahNavigationRoute('creator-discovery').Icon).toBe(IconSearch);
+    expect(getMyahNavigationRoute('deliverables').Icon).toBe(IconBox);
+    expect(getMyahNavigationRoute('creator-briefs').Icon).toBe(IconFileText);
+    expect(getMyahNavigationRoute('creator-videos').Icon).toBe(IconVideo);
+    expect(getMyahNavigationRoute('analytics').Icon).toBe(IconChartBar);
   });
 
   it('does not duplicate IDs, labels, or entry paths', () => {

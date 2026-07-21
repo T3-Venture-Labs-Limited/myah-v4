@@ -1,7 +1,11 @@
 import { isMyahNavigationRouteActive } from '@/myah/navigation/utils/isMyahNavigationRouteActive';
 import { isNavigationSectionOpenFamilyState } from '@/myah/navigation/states/isNavigationSectionOpenFamilyState';
-import { type MyahNavigationRouteGroupId, type ResolvedMyahNavigationRoute } from '@/myah/navigation/types/MyahNavigationRoute';
+import {
+  type MyahNavigationRouteGroupId,
+  type ResolvedMyahNavigationRoute,
+} from '@/myah/navigation/types/MyahNavigationRoute';
 import { NavigationDrawerItem } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerItem';
+import { getNavigationSubItemLeftAdornment } from '@/ui/navigation/navigation-drawer/utils/getNavigationSubItemLeftAdornment';
 import { NavigationDrawerSection } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerSection';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { styled } from '@linaria/react';
@@ -54,18 +58,22 @@ export const MyahNavigationDrawerGroup = ({
   hash,
 }: MyahNavigationDrawerGroupProps) => {
   const store = useStore();
-  const storedIsOpen = useAtomFamilyStateValue(
+  const isNavigationSectionOpen = useAtomFamilyStateValue(
     isNavigationSectionOpenFamilyState,
     id,
   );
-  const hasActiveChild = routes.some((route) =>
+  const activeChildIndex = routes.findIndex((route) =>
     isMyahNavigationRouteActive({ route, pathname, search, hash }),
   );
-  const isExpanded = storedIsOpen || hasActiveChild;
+  const hasActiveChild = activeChildIndex !== -1;
+  const isExpanded = isNavigationSectionOpen || hasActiveChild;
 
   const toggle = () => {
     if (!hasActiveChild) {
-      store.set(isNavigationSectionOpenFamilyState.atomFamily(id), !storedIsOpen);
+      store.set(
+        isNavigationSectionOpenFamilyState.atomFamily(id),
+        !isNavigationSectionOpen,
+      );
     }
   };
 
@@ -86,7 +94,7 @@ export const MyahNavigationDrawerGroup = ({
         initial={false}
       >
         <StyledItems>
-          {routes.map((route) => {
+          {routes.map((route, index) => {
             const isReady = route.status === 'ready';
             const isSoon = route.status === 'soon';
 
@@ -96,6 +104,11 @@ export const MyahNavigationDrawerGroup = ({
                 label={route.route.label}
                 Icon={route.route.Icon}
                 indentationLevel={2}
+                subItemState={getNavigationSubItemLeftAdornment({
+                  arrayLength: routes.length,
+                  index,
+                  selectedIndex: activeChildIndex,
+                })}
                 active={isMyahNavigationRouteActive({
                   route,
                   pathname,

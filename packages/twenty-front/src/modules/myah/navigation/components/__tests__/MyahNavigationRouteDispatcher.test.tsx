@@ -1,3 +1,5 @@
+// This test uses history traversal to assert the dispatcher uses replace navigation.
+/* oxlint-disable twenty/no-navigate-prefer-link */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
@@ -23,11 +25,13 @@ const mockedUseResolvedMyahNavigationRoutes = jest.mocked(
 const NativeDashboard = () => {
   const navigate = useNavigate();
 
+  const navigateBack = () => navigate(-1);
+
   return (
     <>
       <div>Native Dashboard</div>
       <RecordIndexEmptyStateNotShared />
-      <button onClick={() => navigate(-1)}>Back</button>
+      <button onClick={navigateBack}>Back</button>
     </>
   );
 };
@@ -118,7 +122,9 @@ describe('MyahNavigationRouteDispatcher', () => {
     },
     {
       initialEntry: '/myah/segments',
-      routes: [{ status: 'deferred', route: getMyahNavigationRoute('segments') }],
+      routes: [
+        { status: 'deferred', route: getMyahNavigationRoute('segments') },
+      ],
     },
     {
       initialEntry: '/myah/creator-discovery',
@@ -126,14 +132,14 @@ describe('MyahNavigationRouteDispatcher', () => {
         { status: 'soon', route: getMyahNavigationRoute('creator-discovery') },
       ],
     },
-  ])('renders NotFound for an unavailable route at $initialEntry', ({
-    routes,
-    initialEntry,
-  }) => {
-    renderDispatcher(routes, initialEntry);
+  ])(
+    'renders NotFound for an unavailable route at $initialEntry',
+    ({ routes, initialEntry }) => {
+      renderDispatcher(routes, initialEntry);
 
-    expect(screen.getByText('Not Found')).toBeVisible();
-  });
+      expect(screen.getByText('Not Found')).toBeVisible();
+    },
+  );
 
   it('renders NotFound for an unknown page ID', () => {
     renderDispatcher([]);

@@ -51,7 +51,8 @@ export const PageChangeEffect = () => {
 
   const pageChangeEffectNavigateLocation =
     usePageChangeEffectNavigateLocation();
-
+  // Tracks an imperative navigation target without rerendering before the router commits it.
+  // oxlint-disable-next-line twenty/no-state-useref
   const lastPageChangeEffectNavigateLocationRef = useRef<string | undefined>(
     undefined,
   );

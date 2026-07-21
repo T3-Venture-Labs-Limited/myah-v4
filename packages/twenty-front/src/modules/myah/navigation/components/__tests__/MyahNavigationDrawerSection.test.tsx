@@ -77,7 +77,6 @@ const renderSection = (initialEntry = '/objects/campaigns') => {
 
   return { user };
 };
-
 describe('MyahNavigationDrawerSection', () => {
   it('renders Myah entry links, active routes, and non-interactive Soon entries', () => {
     renderSection();
@@ -86,9 +85,9 @@ describe('MyahNavigationDrawerSection', () => {
       'href',
       '/myah/today',
     );
-    expect(screen.getByRole('button', { name: 'Creator CRM' })).not.toHaveAttribute(
-      'href',
-    );
+    expect(
+      screen.getByRole('button', { name: 'Creator CRM' }),
+    ).not.toHaveAttribute('href');
     expect(
       screen.getByText('Campaigns').closest('[aria-selected="true"]'),
     ).toBeVisible();
@@ -106,7 +105,9 @@ describe('MyahNavigationDrawerSection', () => {
 
   it('toggles inactive groups with Enter and Space while keeping active groups open', async () => {
     const { user } = renderSection();
-    const creatorCrmToggle = screen.getByRole('button', { name: 'Creator CRM' });
+    const creatorCrmToggle = screen.getByRole('button', {
+      name: 'Creator CRM',
+    });
     const campaignOperationsToggle = screen.getByRole('button', {
       name: 'Campaign Operations',
     });
@@ -129,6 +130,8 @@ describe('MyahNavigationDrawerSection', () => {
     await user.tab();
     expect(creatorBriefsControl).not.toHaveFocus();
     await user.keyboard('{Enter}');
-    expect(screen.getByRole('button', { name: /Creator Briefs.*Soon/i })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /Creator Briefs.*Soon/i }),
+    ).toBeDisabled();
   });
 });

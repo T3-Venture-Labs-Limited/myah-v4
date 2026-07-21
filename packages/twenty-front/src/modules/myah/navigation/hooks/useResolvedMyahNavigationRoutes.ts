@@ -76,7 +76,10 @@ const resolveNativeObjectRoute = (
   sources: MyahNavigationRouteResolutionSources,
 ): ResolvedMyahNavigationRoute => {
   if (
-    !isMetadataLoaded(sources.metadataStoreItems, NATIVE_OBJECT_METADATA_KEYS) ||
+    !isMetadataLoaded(
+      sources.metadataStoreItems,
+      NATIVE_OBJECT_METADATA_KEYS,
+    ) ||
     !sources.isObjectPermissionsLoaded ||
     !sources.isLastVisitedViewDataLoaded
   ) {
@@ -127,7 +130,9 @@ const resolveNativePageLayoutRoute = (
   route: Extract<MyahNavigationRoute, { availability: 'available' }>,
   sources: MyahNavigationRouteResolutionSources,
 ): ResolvedMyahNavigationRoute => {
-  if (!isMetadataLoaded(sources.metadataStoreItems, PAGE_LAYOUT_METADATA_KEYS)) {
+  if (
+    !isMetadataLoaded(sources.metadataStoreItems, PAGE_LAYOUT_METADATA_KEYS)
+  ) {
     return { status: 'pending', route };
   }
 
@@ -183,76 +188,79 @@ export const resolveMyahNavigationRoutes = (
     }
   });
 
-export const useResolvedMyahNavigationRoutes = (): ResolvedMyahNavigationRoute[] => {
-  const objectMetadataStoreItem = useAtomFamilyStateValue(
-    metadataStoreState,
-    'objectMetadataItems',
-  );
-  const fieldMetadataStoreItem = useAtomFamilyStateValue(
-    metadataStoreState,
-    'fieldMetadataItems',
-  );
-  const viewsMetadataStoreItem = useAtomFamilyStateValue(
-    metadataStoreState,
-    'views',
-  );
-  const viewFieldsMetadataStoreItem = useAtomFamilyStateValue(
-    metadataStoreState,
-    'viewFields',
-  );
-  const pageLayoutsMetadataStoreItem = useAtomFamilyStateValue(
-    metadataStoreState,
-    'pageLayouts',
-  );
-  const pageLayoutTabsMetadataStoreItem = useAtomFamilyStateValue(
-    metadataStoreState,
-    'pageLayoutTabs',
-  );
-  const pageLayoutWidgetsMetadataStoreItem = useAtomFamilyStateValue(
-    metadataStoreState,
-    'pageLayoutWidgets',
-  );
-  const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
-  const pageLayouts = useAtomStateValue(pageLayoutsWithRelationsSelector);
-  const lastVisitedViewIdByObjectMetadataId = useAtomStateValue(
-    lastVisitedViewPerObjectMetadataItemState,
-  );
-  const currentUserWorkspace = useAtomStateValue(currentUserWorkspaceState);
-  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+export const useResolvedMyahNavigationRoutes =
+  (): ResolvedMyahNavigationRoute[] => {
+    const metadataStoreObjectMetadataItems = useAtomFamilyStateValue(
+      metadataStoreState,
+      'objectMetadataItems',
+    );
+    const metadataStoreFieldMetadataItems = useAtomFamilyStateValue(
+      metadataStoreState,
+      'fieldMetadataItems',
+    );
+    const metadataStoreViews = useAtomFamilyStateValue(
+      metadataStoreState,
+      'views',
+    );
+    const metadataStoreViewFields = useAtomFamilyStateValue(
+      metadataStoreState,
+      'viewFields',
+    );
+    const metadataStorePageLayouts = useAtomFamilyStateValue(
+      metadataStoreState,
+      'pageLayouts',
+    );
+    const metadataStorePageLayoutTabs = useAtomFamilyStateValue(
+      metadataStoreState,
+      'pageLayoutTabs',
+    );
+    const metadataStorePageLayoutWidgets = useAtomFamilyStateValue(
+      metadataStoreState,
+      'pageLayoutWidgets',
+    );
+    const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
+    const pageLayoutsWithRelations = useAtomStateValue(
+      pageLayoutsWithRelationsSelector,
+    );
+    const lastVisitedViewPerObjectMetadataItem = useAtomStateValue(
+      lastVisitedViewPerObjectMetadataItemState,
+    );
+    const currentUserWorkspace = useAtomStateValue(currentUserWorkspaceState);
+    const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
 
-  return useMemo(
-    () =>
-      resolveMyahNavigationRoutes(MYAH_NAVIGATION_ROUTES, {
-        metadataStoreItems: {
-          objectMetadataItems: objectMetadataStoreItem,
-          fieldMetadataItems: fieldMetadataStoreItem,
-          views: viewsMetadataStoreItem,
-          viewFields: viewFieldsMetadataStoreItem,
-          pageLayouts: pageLayoutsMetadataStoreItem,
-          pageLayoutTabs: pageLayoutTabsMetadataStoreItem,
-          pageLayoutWidgets: pageLayoutWidgetsMetadataStoreItem,
-        },
+    return useMemo(
+      () =>
+        resolveMyahNavigationRoutes(MYAH_NAVIGATION_ROUTES, {
+          metadataStoreItems: {
+            objectMetadataItems: metadataStoreObjectMetadataItems,
+            fieldMetadataItems: metadataStoreFieldMetadataItems,
+            views: metadataStoreViews,
+            viewFields: metadataStoreViewFields,
+            pageLayouts: metadataStorePageLayouts,
+            pageLayoutTabs: metadataStorePageLayoutTabs,
+            pageLayoutWidgets: metadataStorePageLayoutWidgets,
+          },
+          objectMetadataItems,
+          pageLayouts: pageLayoutsWithRelations,
+          lastVisitedViewIdByObjectMetadataId:
+            lastVisitedViewPerObjectMetadataItem ?? {},
+          isObjectPermissionsLoaded: currentUserWorkspace !== null,
+          isLastVisitedViewDataLoaded: true,
+          objectPermissionsByObjectMetadataId,
+        }),
+      [
+        metadataStoreObjectMetadataItems,
+        metadataStoreFieldMetadataItems,
+        metadataStoreViews,
+        metadataStoreViewFields,
+        metadataStorePageLayouts,
+        metadataStorePageLayoutTabs,
+        metadataStorePageLayoutWidgets,
         objectMetadataItems,
-        pageLayouts,
-        lastVisitedViewIdByObjectMetadataId:
-          lastVisitedViewIdByObjectMetadataId ?? {},
-        isObjectPermissionsLoaded: currentUserWorkspace !== null,
-        isLastVisitedViewDataLoaded: true,
+        pageLayoutsWithRelations,
+        lastVisitedViewPerObjectMetadataItem,
+        currentUserWorkspace,
         objectPermissionsByObjectMetadataId,
-      }),
-    [
-      objectMetadataStoreItem,
-      fieldMetadataStoreItem,
-      viewsMetadataStoreItem,
-      viewFieldsMetadataStoreItem,
-      pageLayoutsMetadataStoreItem,
-      pageLayoutTabsMetadataStoreItem,
-      pageLayoutWidgetsMetadataStoreItem,
-      objectMetadataItems,
-      pageLayouts,
-      lastVisitedViewIdByObjectMetadataId,
-      currentUserWorkspace,
-      objectPermissionsByObjectMetadataId,
-    ],
-  );
-};
+      ],
+    );
+  };
