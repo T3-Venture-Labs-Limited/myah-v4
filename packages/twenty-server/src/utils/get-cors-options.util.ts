@@ -4,8 +4,8 @@ import {
 } from '@nestjs/common/interfaces/external/cors-options.interface';
 
 type GetCorsOptionsInput = {
-  frontendUrl: string | undefined;
-  serverUrl: string;
+  getFrontendUrl: () => string | undefined;
+  getServerUrl: () => string;
 };
 
 type CorsRequest = {
@@ -15,21 +15,33 @@ type CorsRequest = {
 };
 
 export const getCorsOptions = ({
-  frontendUrl,
-  serverUrl,
+  getFrontendUrl,
+  getServerUrl,
 }: GetCorsOptionsInput): CorsOptionsDelegate<CorsRequest> => {
-  const frontendOrigin = new URL(frontendUrl ?? serverUrl).origin;
-  const frontendOptions: CorsOptions = {
-    credentials: true,
-    exposedHeaders: ['WWW-Authenticate'],
-    origin: frontendOrigin,
-  };
+  let configuredUrl: string | undefined;
+  let frontendOrigin: string | undefined;
+  let frontendOptions: CorsOptions | undefined;
   const otherBrowserClientOptions: CorsOptions = {
     exposedHeaders: ['WWW-Authenticate'],
     origin: true,
   };
 
   return (request, callback) => {
+    const currentConfiguredUrl = getFrontendUrl() ?? getServerUrl();
+
+    if (
+      frontendOptions === undefined ||
+      configuredUrl !== currentConfiguredUrl
+    ) {
+      configuredUrl = currentConfiguredUrl;
+      frontendOrigin = new URL(currentConfiguredUrl).origin;
+      frontendOptions = {
+        credentials: true,
+        exposedHeaders: ['WWW-Authenticate'],
+        origin: frontendOrigin,
+      };
+    }
+
     callback(
       null,
       request.headers.origin === frontendOrigin

@@ -49,8 +49,8 @@ const bootstrap = async () => {
   const twentyConfigService = app.get(TwentyConfigService);
   app.enableCors(
     getCorsOptions({
-      frontendUrl: twentyConfigService.get('FRONTEND_URL'),
-      serverUrl: twentyConfigService.get('SERVER_URL'),
+      getFrontendUrl: () => twentyConfigService.get('FRONTEND_URL'),
+      getServerUrl: () => twentyConfigService.get('SERVER_URL'),
     }),
   );
   const exceptionHandlerService = app.get(ExceptionHandlerService);
