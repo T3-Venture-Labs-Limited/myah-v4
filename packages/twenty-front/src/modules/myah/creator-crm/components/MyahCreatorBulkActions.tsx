@@ -65,10 +65,14 @@ export const MyahCreatorBulkActions = () => {
     skip: pendingTarget === null,
   });
   const target =
-    pendingTarget && targetRecord?.name
+    pendingTarget && targetRecord
       ? {
           ...pendingTarget,
-          label: targetRecord.name,
+          label:
+            targetRecord.name?.trim() ||
+            (pendingTarget.kind === 'creator-list'
+              ? t`Untitled Creator List`
+              : t`Untitled Campaign`),
         }
       : undefined;
 
@@ -127,6 +131,7 @@ export const MyahCreatorBulkActions = () => {
       />
       <ModalStatefulWrapper
         modalInstanceId={CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID}
+        onClose={() => setPendingTarget(null)}
         isClosable
         padding="large"
         narrowWidth
@@ -152,6 +157,7 @@ export const MyahCreatorBulkActions = () => {
           target={target}
           selectedCreatorIds={selectedCreatorIds}
           onSuccess={clearSelectionAfterSuccess}
+          onClose={() => setPendingTarget(null)}
         />
       )}
     </>

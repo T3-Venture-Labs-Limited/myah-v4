@@ -16,10 +16,12 @@ export const CreatorBulkRelationshipDialog = ({
   target,
   selectedCreatorIds,
   onSuccess,
+  onClose,
 }: {
   target: CreatorBulkRelationshipTarget;
   selectedCreatorIds: string[];
   onSuccess?: () => void;
+  onClose?: () => void;
 }) => {
   const preview = useCreatorBulkRelationshipPreview({
     target,
@@ -61,6 +63,7 @@ export const CreatorBulkRelationshipDialog = ({
     <ModalStatefulWrapper
       modalInstanceId={modalInstanceId}
       onEnter={handleConfirm}
+      onClose={onClose}
       isClosable
       padding="large"
       narrowWidth

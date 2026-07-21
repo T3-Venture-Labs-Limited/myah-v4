@@ -48,6 +48,7 @@ export const useCreatorBulkRelationshipPreview = ({
         ],
       },
       recordGqlFields: { id: true, creatorId: true },
+      limit: selectedCreatorIds.length,
       skip: selectedCreatorIds.length === 0,
     },
   );
