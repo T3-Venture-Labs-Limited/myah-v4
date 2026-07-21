@@ -143,6 +143,25 @@ describe('MyahCreatorBulkActions', () => {
       'creator-bulk-relationship-list-a',
     );
   });
+  it('keeps the preview open when the target picker closes after selecting a list', () => {
+    mockUseFindOneRecord.mockReturnValue({
+      record: { id: 'list-a', name: 'Spring creators' },
+    });
+
+    render(<MyahCreatorBulkActions />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Choose a Creator List' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Dismiss target picker' }),
+    );
+
+    expect(screen.getByText('Spring creators')).toBeVisible();
+    expect(mockOpenModal).toHaveBeenCalledWith(
+      'creator-bulk-relationship-list-a',
+    );
+  });
 
   it('does not reopen a dismissed preview after the selection state rerenders', () => {
     mockUseFindOneRecord.mockReturnValue({
