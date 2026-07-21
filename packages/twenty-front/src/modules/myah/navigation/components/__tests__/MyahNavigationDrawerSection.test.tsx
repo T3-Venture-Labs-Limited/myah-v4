@@ -52,6 +52,10 @@ const resolvedRoutes: ResolvedMyahNavigationRoute[] = [
     status: 'soon',
     route: getMyahNavigationRoute('creator-briefs'),
   },
+  {
+    status: 'missing',
+    route: getMyahNavigationRoute('brand-brain'),
+  },
 ];
 
 const renderSection = (initialEntry = '/objects/campaigns') => {
@@ -101,6 +105,13 @@ describe('MyahNavigationDrawerSection', () => {
     expect(creatorBriefsControl).toHaveAttribute('aria-disabled', 'true');
     expect(creatorBriefsControl).toHaveAttribute('tabindex', '-1');
     expect(creatorBriefsControl).not.toHaveAttribute('href');
+    const brandBrainControl = screen.getByRole('button', {
+      name: 'Brand Brain',
+    });
+
+    expect(brandBrainControl).toHaveAttribute('aria-disabled', 'true');
+    expect(brandBrainControl).toHaveAttribute('tabindex', '-1');
+    expect(brandBrainControl).not.toHaveAttribute('href');
   });
 
   it('toggles inactive groups with Enter and Space while keeping active groups open', async () => {

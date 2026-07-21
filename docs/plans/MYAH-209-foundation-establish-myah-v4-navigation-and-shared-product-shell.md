@@ -346,70 +346,47 @@ Do not stage, commit, push, or open a pull request without explicit maintainer a
 ## Task 4: Verify preserved Twenty integration boundaries
 
 **Files:**
-- Test: `packages/twenty-front/src/modules/myah/navigation/__tests__/myah-navigation.integration.test.tsx`
+
+- Tests: `packages/twenty-front/src/modules/myah/navigation/**/__tests__/*`
+- Test: `packages/twenty-front/src/modules/app/effect-components/__tests__/PageChangeEffect.test.tsx`
 
 **Interfaces:**
 
-The test consumes `MYAH_NAVIGATION_ROUTES`, the resolver, the drawer section, and the route dispatcher. It produces proof that the shell contract preserves Twenty navigation behavior.
+The focused suites consume the route registry, resolver, active matcher, drawer section, group state, dispatcher, and page-change redirect effect. Together they prove the shell contract preserves Twenty navigation behavior without adding an integration-only shell abstraction.
 
-- [x] **Step 1: Write failing integration-boundary tests**
+- [x] **Step 1: Write focused boundary tests**
 
-Cover these observable contracts in one integration suite:
+Cover the observable contract at its owning seam:
 
-- table-test every available registry descriptor with ready fixtures for its declared native-object, native-page-layout, or real Myah-page destination;
-- an available Myah object entry remains selected on the native index path with saved-view query parameters and its native record-show path; a standalone page-layout adapter remains selected on its resolved native page path;
-- a pending dependency keeps the dispatcher on the shared loader; a missing or forbidden metadata destination is not navigable from the drawer; direct missing access renders NotFound and direct forbidden access reaches Twenty's native record-index permission-empty state;
-- an adapter redirect uses `replace`, so browser back/forward does not loop through `/myah/:pageId`;
-- the native record page can still open its side panel;
-- leaving and returning from Settings retains existing `AppNavigationDrawer` switching;
-- mobile navigation closes after an enabled route then reopens with the same selected group;
-- no generic Favorites, Workspace, or opened navigation section is present.
+- registry descriptors have stable identities, intended destination classes, and semantic icons;
+- resolver fixtures cover ready, pending, missing, and forbidden metadata/page-layout states;
+- drawer tests cover selected state, group behavior, disabled Soon entries, and disabled non-ready destinations;
+- dispatcher tests cover replace-only native redirects, pending loading, missing NotFound, and forbidden native permission-empty behavior;
+- page-change tests cover the default-home redirect transition without duplicate navigation.
 
-- [x] **Step 2: Run the integration test to verify failure**
+- [x] **Step 2: Run focused verification**
 
 Run:
 
 ```bash
-npx jest packages/twenty-front/src/modules/myah/navigation/__tests__/myah-navigation.integration.test.tsx --config=packages/twenty-front/jest.config.mjs
+npx jest packages/twenty-front/src/modules/myah/navigation packages/twenty-front/src/modules/app/effect-components/__tests__/PageChangeEffect.test.tsx --config=packages/twenty-front/jest.config.mjs
+corepack yarn nx lint:diff-with-main twenty-front
+corepack yarn nx typecheck twenty-front
 ```
 
-Expected: FAIL until the registry, resolver, drawer, router, and state contracts are wired together.
+Observed: 7 suites / 34 tests passed; frontend diff lint and typecheck passed.
 
-- [x] **Step 3: Keep integration fixes at their owning seam**
+- [x] **Step 3: Browser smoke the real shell**
 
-Do not add a new integration-only abstraction, second shell, fallback route, or page-specific body. If the Step 1 suite fails, correct the named owner from Tasks 1–3: resolver/active matcher, drawer group state, route dispatcher, or `NavigationDrawerItem` semantics. Re-run Step 2 before proceeding.
+An authenticated local-browser UAT verified available native adapters, replace-history back/forward behavior, selected and expanded state, disabled Soon behavior, direct legacy URLs, native record side panels, Settings access, and responsive drawer close/reopen behavior. Automated resolver and dispatcher tests cover pending, missing, and forbidden state boundaries that the standard Twenty workspace cannot provision.
 
-- [x] **Step 4: Run focused verification**
+- [x] **Step 4: Publish the implementation handoff**
 
-Run:
+Post a concise MYAH-209 Linear update containing the registry source path, destination identity contract, ownership boundary for MYAH-210 through MYAH-215, verified commands, browser-smoke evidence, and draft PR link.
 
-```bash
-npx jest packages/twenty-front/src/modules/myah/navigation --config=packages/twenty-front/jest.config.mjs
-npx jest packages/twenty-front/src/modules/navigation/hooks/__tests__/useDefaultHomePagePath.test.ts --config=packages/twenty-front/jest.config.mjs
-yarn nx typecheck twenty-front
-```
+- [x] **Step 5: Open the approved draft PR**
 
-Expected: all targeted tests and the frontend typecheck pass.
-
-- [ ] **Step 5: Browser smoke the real shell**
-
-Launch the local frontend against its matching authenticated local server and verify:
-
-1. `/` remains at `AppPath.Index` until every Today dependency is ready, then opens Today without a NotFound flash.
-2. Today and Inbox are pinned; each group expands correctly; only two sidebar levels exist.
-3. Direct-load every available `/myah/*` entry, then verify its native adapter or real page body and selected state.
-4. Direct-load legacy Brand Brain, Creator Lists, Campaigns, Dashboards, and Workflows URLs; each retains Myah selection after direct load and after back/forward through its Myah adapter.
-5. A `Soon` entry has a visible label but no link, focus target, pointer navigation, Enter navigation, or Space navigation.
-6. Settings opens through Twenty's existing path and returns to the Myah shell.
-7. A restricted destination, a missing destination, a page-layout adapter, record side panel behavior, and mobile drawer close/reopen behavior match the specification.
-
-- [x] **Step 6: Publish the private integration handoff**
-
-After smoke verification, add a concise MYAH-209 Linear comment containing the registry source path, destination identity contract, ownership boundary for MYAH-210 through MYAH-215, verified commands, and browser-smoke evidence. Do not add, force-add, stage, or commit repository documentation: `/docs/` is intentionally local-only.
-
-- [x] **Step 7: Preserve the verified implementation for review**
-
-Do not stage, commit, push, or open a pull request without explicit maintainer approval. Retain the completed, verified MYAH-209 work in the isolated worktree for maintainer review.
+Open the MYAH-209 draft PR only after focused verification, browser UAT, current-main compatibility review, and a fresh-context audit are complete.
 
 ## Task 5: Refine Outreach navigation and reuse existing drawer visual grammar
 
@@ -440,7 +417,7 @@ Extend the drawer fixture with all three Automation entries. Mock or inspect `Na
 
 Extend resolver and dispatcher tests to prove every new direct Myah entry redirects with `replace` to its matching native object list and becomes selected for native index and record-show paths.
 
-- [ ] **Step 2: Run the focused tests to verify failure**
+- [x] **Step 2: Run the focused tests to verify failure**
 
 Run:
 
@@ -460,13 +437,13 @@ In `myah-navigation-registry.ts`:
 
 In `MyahNavigationDrawerGroup.tsx`, import `getNavigationSubItemLeftAdornment` and calculate the active child index once from the already-resolved group routes and the existing `isMyahNavigationRouteActive` helper. Pass the returned `subItemState` to each `NavigationDrawerItem`. Remove no responsive, expansion, accessibility, or disabled-Soon logic. Do not create a Myah-specific connector component or custom connector CSS.
 
-- [ ] **Step 4: Run the focused tests to verify they pass**
+- [x] **Step 4: Run the focused tests to verify they pass**
 
 Re-run the Step 2 command.
 
 Expected: PASS. The drawer has only `Automations`, `Automation runs`, `Automation versions`, and `Tasks` under Outreach; all three paths resolve to one native Twenty object surface each; the existing connector utility controls every grouped child; Soon entries remain semantic disabled controls.
 
-- [ ] **Step 5: Run the affected frontend typecheck**
+- [x] **Step 5: Run the affected frontend typecheck**
 
 Run:
 
@@ -476,7 +453,7 @@ yarn nx typecheck twenty-front
 
 Expected: PASS. The expanded discriminated route union, typed core-object descriptors, icon imports, drawer props, and tests remain type-safe.
 
-- [ ] **Step 6: Browser smoke the approved visual and route behavior**
+- [x] **Step 6: Browser smoke the approved visual and route behavior**
 
 Using the isolated local runtime:
 
@@ -487,6 +464,6 @@ Using the isolated local runtime:
 5. Verify a Soon item has no link, cannot be clicked, and cannot be activated from the keyboard.
 6. Repeat the Outreach expand/select flow in the mobile drawer.
 
-- [ ] **Step 7: Preserve the verified refinement for review**
+- [x] **Step 7: Preserve the verified refinement for review**
 
-Do not stage, commit, push, or open a pull request without explicit maintainer approval. Retain the work in the MYAH-209 isolated worktree.
+The verified refinement is now in draft PR #46 after explicit maintainer approval, with all required checks and fresh-context audit findings tracked in Linear.

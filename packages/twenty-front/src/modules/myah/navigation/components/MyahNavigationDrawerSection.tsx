@@ -50,7 +50,7 @@ export const MyahNavigationDrawerSection = () => {
               })}
               to={isReady ? route.route.entryPath : undefined}
               modifier={isSoon ? 'soon' : undefined}
-              disabled={isSoon}
+              disabled={!isReady}
             />
           );
         })}

@@ -117,7 +117,7 @@ export const MyahNavigationDrawerGroup = ({
                 })}
                 to={isReady ? route.route.entryPath : undefined}
                 modifier={isSoon ? 'soon' : undefined}
-                disabled={isSoon}
+                disabled={!isReady}
               />
             );
           })}
