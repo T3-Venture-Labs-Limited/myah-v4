@@ -900,7 +900,7 @@ export class ManagedOpenRouterModelService {
     const status =
       candidate.statusCode ?? candidate.status ?? candidate.response?.status;
 
-    return status === 401 || status === 402 || status === 403;
+    return status === 401 || status === 402 || status === 403 || status === 429;
   }
 
   private wrapUsageStream(
