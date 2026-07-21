@@ -1,8 +1,44 @@
-import { SettingsBillingContent } from '@/settings/billing/components/SettingsBillingContent';
-import { SettingsBillingPageLayout } from '@/settings/billing/components/SettingsBillingPageLayout';
+import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
+import {
+  SettingsWorkspaceBillingContent,
+  type WorkspaceBillingViewModel,
+} from '@/settings/billing/components/SettingsWorkspaceBillingContent';
+import { Trans, useLingui } from '@lingui/react/macro';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath } from 'twenty-shared/utils';
 
-export const SettingsBilling = () => (
-  <SettingsBillingPageLayout>
-    <SettingsBillingContent />
-  </SettingsBillingPageLayout>
-);
+export type SettingsBillingProps = {
+  viewModel?: WorkspaceBillingViewModel;
+};
+
+const NOT_CONNECTED_BILLING_VIEW_MODEL: WorkspaceBillingViewModel = {
+  state: 'unavailable',
+  reason: 'notConnected',
+};
+
+export const SettingsBilling = ({
+  viewModel = NOT_CONNECTED_BILLING_VIEW_MODEL,
+}: SettingsBillingProps) => {
+  const { t } = useLingui();
+
+  return (
+    <SettingsPageLayout
+      title={t`Billing`}
+      links={[
+        {
+          children: <Trans>Workspace</Trans>,
+          href: getSettingsPath(SettingsPath.General),
+        },
+        {
+          children: <Trans>Billing</Trans>,
+          href: getSettingsPath(SettingsPath.Billing),
+        },
+      ]}
+    >
+      <SettingsPageContainer>
+        <SettingsWorkspaceBillingContent viewModel={viewModel} />
+      </SettingsPageContainer>
+    </SettingsPageLayout>
+  );
+};
