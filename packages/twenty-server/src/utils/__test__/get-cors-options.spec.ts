@@ -49,7 +49,38 @@ describe('getCorsOptions', () => {
     ).toEqual({
       credentials: true,
       exposedHeaders: ['WWW-Authenticate'],
-      origin: 'http://localhost:37995',
+      origin: true,
+    });
+  });
+
+  it('allows credentialed requests from frontend workspace subdomains', () => {
+    expect(
+      resolveCorsOptions(
+        createCorsOptions({ frontendUrl: 'http://localhost:37995' }),
+        'http://app.localhost:37995',
+      ),
+    ).toEqual({
+      credentials: true,
+      exposedHeaders: ['WWW-Authenticate'],
+      origin: true,
+    });
+  });
+
+  it.each([
+    'http://localhost.evil.test:37995',
+    'https://app.localhost:37995',
+    'http://app.localhost:37996',
+    'http://app.localhost:37995/path',
+    'not an origin',
+  ])('does not grant credentials to unrelated origin %s', (unrelatedOrigin) => {
+    expect(
+      resolveCorsOptions(
+        createCorsOptions({ frontendUrl: 'http://localhost:37995' }),
+        unrelatedOrigin,
+      ),
+    ).toEqual({
+      exposedHeaders: ['WWW-Authenticate'],
+      origin: true,
     });
   });
 
@@ -59,7 +90,7 @@ describe('getCorsOptions', () => {
     ).toEqual({
       credentials: true,
       exposedHeaders: ['WWW-Authenticate'],
-      origin: 'http://localhost:33395',
+      origin: true,
     });
   });
 
@@ -75,8 +106,35 @@ describe('getCorsOptions', () => {
     expect(resolveCorsOptions(corsOptions, frontendUrl)).toEqual({
       credentials: true,
       exposedHeaders: ['WWW-Authenticate'],
-      origin: frontendUrl,
+      origin: true,
     });
+  });
+
+  it('does not retain credential trust after frontend configuration becomes invalid', () => {
+    let frontendUrl = 'http://localhost:37995';
+    const corsOptions = getCorsOptions({
+      getFrontendUrl: () => frontendUrl,
+      getServerUrl: () => 'http://localhost:33395',
+    });
+    const expectedUntrustedOptions = {
+      exposedHeaders: ['WWW-Authenticate'],
+      origin: true,
+    };
+
+    expect(resolveCorsOptions(corsOptions, frontendUrl)).toEqual({
+      credentials: true,
+      exposedHeaders: ['WWW-Authenticate'],
+      origin: true,
+    });
+
+    frontendUrl = 'not a URL';
+
+    expect(resolveCorsOptions(corsOptions, 'http://localhost:37995')).toEqual(
+      expectedUntrustedOptions,
+    );
+    expect(resolveCorsOptions(corsOptions, 'http://localhost:37995')).toEqual(
+      expectedUntrustedOptions,
+    );
   });
 
   it('preserves non-credentialed access for other browser clients', () => {

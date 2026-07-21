@@ -19,8 +19,12 @@ export const getCorsOptions = ({
   getServerUrl,
 }: GetCorsOptionsInput): CorsOptionsDelegate<CorsRequest> => {
   let configuredUrl: string | undefined;
-  let frontendOrigin: string | undefined;
-  let frontendOptions: CorsOptions | undefined;
+  let frontendUrl: URL | undefined;
+  const frontendOptions: CorsOptions = {
+    credentials: true,
+    exposedHeaders: ['WWW-Authenticate'],
+    origin: true,
+  };
   const otherBrowserClientOptions: CorsOptions = {
     exposedHeaders: ['WWW-Authenticate'],
     origin: true,
@@ -29,24 +33,40 @@ export const getCorsOptions = ({
   return (request, callback) => {
     const currentConfiguredUrl = getFrontendUrl() ?? getServerUrl();
 
-    if (
-      frontendOptions === undefined ||
-      configuredUrl !== currentConfiguredUrl
-    ) {
+    if (configuredUrl !== currentConfiguredUrl) {
+      let nextFrontendUrl: URL | undefined;
+
+      try {
+        nextFrontendUrl = new URL(currentConfiguredUrl);
+      } catch {
+        nextFrontendUrl = undefined;
+      }
+
       configuredUrl = currentConfiguredUrl;
-      frontendOrigin = new URL(currentConfiguredUrl).origin;
-      frontendOptions = {
-        credentials: true,
-        exposedHeaders: ['WWW-Authenticate'],
-        origin: frontendOrigin,
-      };
+      frontendUrl = nextFrontendUrl;
+    }
+
+    const requestOrigin = request.headers.origin;
+    let isFrontendOrigin = false;
+
+    if (requestOrigin !== undefined && frontendUrl !== undefined) {
+      try {
+        const requestUrl = new URL(requestOrigin);
+
+        isFrontendOrigin =
+          requestUrl.origin === requestOrigin &&
+          requestUrl.protocol === frontendUrl.protocol &&
+          requestUrl.port === frontendUrl.port &&
+          (requestUrl.hostname === frontendUrl.hostname ||
+            requestUrl.hostname.endsWith(`.${frontendUrl.hostname}`));
+      } catch {
+        isFrontendOrigin = false;
+      }
     }
 
     callback(
       null,
-      request.headers.origin === frontendOrigin
-        ? frontendOptions
-        : otherBrowserClientOptions,
+      isFrontendOrigin ? frontendOptions : otherBrowserClientOptions,
     );
   };
 };
