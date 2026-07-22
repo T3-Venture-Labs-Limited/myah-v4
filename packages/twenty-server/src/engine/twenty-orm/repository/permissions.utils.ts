@@ -258,6 +258,51 @@ export const validateOperationIsPermittedOrThrow = ({
   }
 };
 
+export const validateReadFieldMetadataIsPermittedOrThrow = ({
+  objectMetadata,
+  fieldMetadata,
+  objectsPermissions,
+  flatFieldMetadataMaps,
+}: {
+  objectMetadata: FlatObjectMetadata;
+  fieldMetadata: FlatFieldMetadata;
+  objectsPermissions: ObjectsPermissions;
+  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+}): void => {
+  const objectMetadataIsSystem = objectMetadata.isSystem === true;
+  const isWorkspaceMemberObject =
+    objectMetadata.universalIdentifier ===
+    WORKSPACE_MEMBER_OBJECT_UNIVERSAL_IDENTIFIER;
+
+  if (objectMetadataIsSystem && !isWorkspaceMemberObject) {
+    return;
+  }
+
+  const permissionsForEntity = objectsPermissions[objectMetadata.id];
+
+  if (!permissionsForEntity?.canReadObjectRecords) {
+    throw new PermissionsException(
+      PermissionsExceptionMessage.PERMISSION_DENIED,
+      PermissionsExceptionCode.PERMISSION_DENIED,
+    );
+  }
+
+  if (
+    permissionsForEntity.restrictedFields[fieldMetadata.id]?.canRead === false
+  ) {
+    throw new PermissionsException(
+      buildFieldPermissionDeniedMessage({
+        action: 'read',
+        column: fieldMetadata.name,
+        fieldMetadataId: fieldMetadata.id,
+        entityName: objectMetadata.nameSingular,
+        flatFieldMetadataMaps,
+      }),
+      PermissionsExceptionCode.PERMISSION_DENIED,
+    );
+  }
+};
+
 type ValidateQueryIsPermittedOrThrowArgs = {
   expressionMap: QueryExpressionMap;
   objectsPermissions: ObjectsPermissions;

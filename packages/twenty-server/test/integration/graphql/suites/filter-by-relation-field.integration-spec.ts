@@ -30,6 +30,26 @@ const TEST_PET_IDS = {
 const ALL_TEST_PERSON_IDS = Object.values(TEST_PERSON_IDS);
 const ALL_TEST_PET_IDS = Object.values(TEST_PET_IDS);
 
+const TEST_CREATOR_IDS = {
+  MATCHING: '20202020-ffff-4000-8000-000000000001',
+  NON_MEMBER: '20202020-ffff-4000-8000-000000000002',
+  ZERO_CHILD: '20202020-ffff-4000-8000-000000000003',
+  SOFT_DELETED_CHILD: '20202020-ffff-4000-8000-000000000004',
+};
+
+const TEST_CREATOR_LIST_IDS = {
+  A: '20202020-ffff-4000-8000-000000000005',
+  B: '20202020-ffff-4000-8000-000000000006',
+};
+
+const TEST_CREATOR_LIST_MEMBER_IDS = {
+  MATCHING_A_1: '20202020-ffff-4000-8000-000000000007',
+  MATCHING_A_2: '20202020-ffff-4000-8000-000000000008',
+  MATCHING_B: '20202020-ffff-4000-8000-000000000009',
+  NON_MEMBER_B: '20202020-ffff-4000-8000-000000000010',
+  SOFT_DELETED_A: '20202020-ffff-4000-8000-000000000011',
+};
+
 describe('Filter by relation field (e2e)', () => {
   beforeAll(async () => {
     const createCompanies = createManyOperationFactory({
@@ -136,6 +156,89 @@ describe('Filter by relation field (e2e)', () => {
     });
 
     await makeGraphqlAPIRequest(createPets);
+
+    await makeGraphqlAPIRequest(
+      createManyOperationFactory({
+        objectMetadataSingularName: 'creator',
+        objectMetadataPluralName: 'creators',
+        gqlFields: 'id',
+        data: [
+          {
+            id: TEST_CREATOR_IDS.MATCHING,
+            name: 'Matching creator',
+            twitterFollowerCount: 100,
+          },
+          {
+            id: TEST_CREATOR_IDS.NON_MEMBER,
+            name: 'Non-member creator',
+            twitterFollowerCount: 200,
+          },
+          {
+            id: TEST_CREATOR_IDS.ZERO_CHILD,
+            name: 'Creator without memberships',
+            twitterFollowerCount: 300,
+          },
+          {
+            id: TEST_CREATOR_IDS.SOFT_DELETED_CHILD,
+            name: 'Creator with a soft-deleted membership',
+            twitterFollowerCount: 400,
+          },
+        ],
+        upsert: true,
+      }),
+    );
+    await makeGraphqlAPIRequest(
+      createManyOperationFactory({
+        objectMetadataSingularName: 'creatorList',
+        objectMetadataPluralName: 'creatorLists',
+        gqlFields: 'id',
+        data: [
+          { id: TEST_CREATOR_LIST_IDS.A, name: 'Creator list A' },
+          { id: TEST_CREATOR_LIST_IDS.B, name: 'Creator list B' },
+        ],
+        upsert: true,
+      }),
+    );
+    await makeGraphqlAPIRequest(
+      createManyOperationFactory({
+        objectMetadataSingularName: 'creatorListMember',
+        objectMetadataPluralName: 'creatorListMembers',
+        gqlFields: 'id',
+        data: [
+          {
+            id: TEST_CREATOR_LIST_MEMBER_IDS.MATCHING_A_1,
+            name: 'Matching membership A 1',
+            creatorId: TEST_CREATOR_IDS.MATCHING,
+            creatorListId: TEST_CREATOR_LIST_IDS.A,
+          },
+          {
+            id: TEST_CREATOR_LIST_MEMBER_IDS.MATCHING_A_2,
+            name: 'Matching membership A 2',
+            creatorId: TEST_CREATOR_IDS.MATCHING,
+            creatorListId: TEST_CREATOR_LIST_IDS.A,
+          },
+          {
+            id: TEST_CREATOR_LIST_MEMBER_IDS.MATCHING_B,
+            name: 'Matching membership B',
+            creatorId: TEST_CREATOR_IDS.MATCHING,
+            creatorListId: TEST_CREATOR_LIST_IDS.B,
+          },
+          {
+            id: TEST_CREATOR_LIST_MEMBER_IDS.NON_MEMBER_B,
+            name: 'Non-member membership B',
+            creatorId: TEST_CREATOR_IDS.NON_MEMBER,
+            creatorListId: TEST_CREATOR_LIST_IDS.B,
+          },
+          {
+            id: TEST_CREATOR_LIST_MEMBER_IDS.SOFT_DELETED_A,
+            name: 'Soft-deleted membership A',
+            creatorId: TEST_CREATOR_IDS.SOFT_DELETED_CHILD,
+            creatorListId: TEST_CREATOR_LIST_IDS.A,
+          },
+        ],
+        upsert: true,
+      }),
+    );
   });
 
   it('should filter people by company name (exact match)', async () => {
@@ -456,5 +559,229 @@ describe('Filter by relation field (e2e)', () => {
     );
 
     expect(ids).toEqual([TEST_PET_IDS.FALCON_PET]);
+  });
+  it('should expose a one-to-many relation as a nested filter without a source join column', async () => {
+    const response = await makeGraphqlAPIRequest({
+      query: gql`
+        query CreatorFilterInput {
+          __type(name: "CreatorFilterInput") {
+            inputFields {
+              name
+            }
+          }
+        }
+      `,
+    });
+
+    expect(response.body.errors).toBeUndefined();
+
+    const fieldNames = response.body.data.__type.inputFields.map(
+      (field: { name: string }) => field.name,
+    );
+
+    expect(fieldNames).toContain('listMemberships');
+    expect(fieldNames).not.toContain('listMembershipsId');
+  });
+
+  it('should return only creators with a matching one-to-many list membership', async () => {
+    const response = await makeGraphqlAPIRequest({
+      query: gql`
+        query Creators($filter: CreatorFilterInput) {
+          creators(filter: $filter, first: 10) {
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
+      `,
+      variables: {
+        filter: {
+          and: [
+            {
+              id: {
+                in: [TEST_CREATOR_IDS.MATCHING, TEST_CREATOR_IDS.NON_MEMBER],
+              },
+            },
+            {
+              listMemberships: {
+                creatorListId: { in: [TEST_CREATOR_LIST_IDS.A] },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(response.body.errors).toBeUndefined();
+    expect(
+      response.body.data.creators.edges.map(
+        (edge: { node: { id: string } }) => edge.node.id,
+      ),
+    ).toEqual([TEST_CREATOR_IDS.MATCHING]);
+  });
+  it('should allow separate one-to-many children to satisfy AND relation predicates', async () => {
+    const response = await makeGraphqlAPIRequest({
+      query: gql`
+        query Creators($filter: CreatorFilterInput) {
+          creators(filter: $filter, first: 10) {
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
+      `,
+      variables: {
+        filter: {
+          and: [
+            { id: { eq: TEST_CREATOR_IDS.MATCHING } },
+            {
+              listMemberships: {
+                creatorListId: { eq: TEST_CREATOR_LIST_IDS.A },
+              },
+            },
+            {
+              listMemberships: {
+                creatorListId: { eq: TEST_CREATOR_LIST_IDS.B },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(response.body.errors).toBeUndefined();
+    expect(
+      response.body.data.creators.edges.map(
+        (edge: { node: { id: string } }) => edge.node.id,
+      ),
+    ).toEqual([TEST_CREATOR_IDS.MATCHING]);
+  });
+
+  it('should include a creator with no children when negating a one-to-many relation filter', async () => {
+    const response = await makeGraphqlAPIRequest({
+      query: gql`
+        query Creators($filter: CreatorFilterInput) {
+          creators(filter: $filter, first: 10) {
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
+      `,
+      variables: {
+        filter: {
+          and: [
+            {
+              id: {
+                in: [
+                  TEST_CREATOR_IDS.MATCHING,
+                  TEST_CREATOR_IDS.NON_MEMBER,
+                  TEST_CREATOR_IDS.ZERO_CHILD,
+                  TEST_CREATOR_IDS.SOFT_DELETED_CHILD,
+                ],
+              },
+            },
+            {
+              not: {
+                listMemberships: {
+                  creatorListId: { eq: TEST_CREATOR_LIST_IDS.A },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(response.body.errors).toBeUndefined();
+    expect(
+      response.body.data.creators.edges
+        .map((edge: { node: { id: string } }) => edge.node.id)
+        .sort(),
+    ).toEqual(
+      [TEST_CREATOR_IDS.NON_MEMBER, TEST_CREATOR_IDS.ZERO_CHILD].sort(),
+    );
+  });
+
+  it('should preserve root aggregate cardinality when multiple children match', async () => {
+    const response = await makeGraphqlAPIRequest({
+      query: gql`
+        query Creators($filter: CreatorFilterInput) {
+          creators(filter: $filter, first: 10) {
+            totalCount
+            sumTwitterFollowerCount
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
+      `,
+      variables: {
+        filter: {
+          and: [
+            { id: { eq: TEST_CREATOR_IDS.MATCHING } },
+            {
+              listMemberships: {
+                creatorListId: { eq: TEST_CREATOR_LIST_IDS.A },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(response.body.errors).toBeUndefined();
+    expect(response.body.data.creators.totalCount).toBe(1);
+    expect(response.body.data.creators.sumTwitterFollowerCount).toBe(100);
+  });
+
+  it('should not match a one-to-many relation through a soft-deleted child', async () => {
+    await makeGraphqlAPIRequest(
+      deleteManyOperationFactory({
+        objectMetadataSingularName: 'creatorListMember',
+        objectMetadataPluralName: 'creatorListMembers',
+        gqlFields: 'id',
+        filter: {
+          id: { eq: TEST_CREATOR_LIST_MEMBER_IDS.SOFT_DELETED_A },
+        },
+      }),
+    );
+
+    const response = await makeGraphqlAPIRequest({
+      query: gql`
+        query Creators($filter: CreatorFilterInput) {
+          creators(filter: $filter, first: 10) {
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
+      `,
+      variables: {
+        filter: {
+          and: [
+            { id: { eq: TEST_CREATOR_IDS.SOFT_DELETED_CHILD } },
+            {
+              listMemberships: {
+                creatorListId: { eq: TEST_CREATOR_LIST_IDS.A },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(response.body.errors).toBeUndefined();
+    expect(response.body.data.creators.edges).toEqual([]);
   });
 });

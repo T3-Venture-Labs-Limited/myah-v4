@@ -63,11 +63,14 @@ export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
 
   applyObjectRecordFilterToQueryBuilder({
     queryBuilder,
-    objectNameSingular: objectMetadata.nameSingular,
+    objectNameSingular: queryBuilder.alias,
     recordFilter,
     fieldParser: new GraphqlQueryFilterFieldParser(
       objectMetadata,
       internalContext.flatFieldMetadataMaps,
+      undefined,
+      0,
+      false,
     ),
     useDirectTableReference: isUpdateOrDeleteQuery,
   });
