@@ -183,6 +183,12 @@ describe('Inbox MessageThread manifest schema', () => {
       universalSettings: { relationType: RelationType.ONE_TO_MANY },
     });
   });
+  it('prevents generic UI editing of Inbox fields', () => {
+    for (const field of inboxFields) {
+      expect(field).toMatchObject({ isUIEditable: false });
+    }
+  });
+
 
   it('uses unique IDs and leaves every Inbox field unindexed', () => {
     const inboxFieldIdentifiers = inboxFields.map(

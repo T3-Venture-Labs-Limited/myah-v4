@@ -16,5 +16,6 @@ export default defineField({
   label: 'Myah reply draft revision',
   icon: 'IconVersions',
   isNullable: false,
+  isUIEditable: false,
   defaultValue: 0,
 });

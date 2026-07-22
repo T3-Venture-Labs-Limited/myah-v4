@@ -18,6 +18,7 @@ export default defineField({
   label: 'Inbox state',
   icon: 'IconProgressCheck',
   isNullable: false,
+  isUIEditable: false,
   defaultValue: "'NEEDS_REPLY'",
   options: [
     {

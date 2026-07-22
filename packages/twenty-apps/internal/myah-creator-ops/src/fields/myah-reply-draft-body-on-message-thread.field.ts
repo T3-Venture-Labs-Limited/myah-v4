@@ -16,4 +16,5 @@ export default defineField({
   label: 'Myah reply draft',
   icon: 'IconMessage',
   isNullable: true,
+  isUIEditable: false,
 });

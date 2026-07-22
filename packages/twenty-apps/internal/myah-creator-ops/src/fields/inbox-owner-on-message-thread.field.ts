@@ -17,6 +17,7 @@ export default defineField({
   label: 'Inbox owner',
   icon: 'IconUser',
   isNullable: true,
+  isUIEditable: false,
   relationTargetObjectMetadataUniversalIdentifier:
     STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember.universalIdentifier,
   relationTargetFieldMetadataUniversalIdentifier:

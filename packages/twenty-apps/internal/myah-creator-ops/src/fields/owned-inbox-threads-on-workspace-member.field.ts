@@ -16,6 +16,7 @@ export default defineField({
   label: 'Owned inbox threads',
   icon: 'IconMail',
   isNullable: true,
+  isUIEditable: false,
   relationTargetObjectMetadataUniversalIdentifier:
     STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.messageThread.universalIdentifier,
   relationTargetFieldMetadataUniversalIdentifier:

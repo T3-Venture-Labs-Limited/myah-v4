@@ -21,6 +21,7 @@ export default defineField({
   label: 'Creator',
   icon: 'IconUserStar',
   isNullable: true,
+  isUIEditable: false,
   relationTargetObjectMetadataUniversalIdentifier:
     CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
   relationTargetFieldMetadataUniversalIdentifier:

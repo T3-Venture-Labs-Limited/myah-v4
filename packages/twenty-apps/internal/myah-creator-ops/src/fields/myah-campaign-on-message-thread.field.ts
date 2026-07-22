@@ -21,6 +21,7 @@ export default defineField({
   label: 'Myah campaign',
   icon: 'IconTargetArrow',
   isNullable: true,
+  isUIEditable: false,
   relationTargetObjectMetadataUniversalIdentifier:
     CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
   relationTargetFieldMetadataUniversalIdentifier:

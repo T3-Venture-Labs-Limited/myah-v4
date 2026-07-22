@@ -15,4 +15,5 @@ export default defineField({
   label: 'Snoozed until',
   icon: 'IconClockPause',
   isNullable: true,
+  isUIEditable: false,
 });
