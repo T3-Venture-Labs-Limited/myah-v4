@@ -108,7 +108,7 @@ export const RecordChip = ({
   }
 
   const shouldFollowLinkOnClick =
-    objectNameSingular === 'creatorList' && isDefined(to);
+    isDefined(to) && /^\/objects\/creators\?creatorListId=[^&#]+$/.test(to);
 
   return (
     <LinkChip
@@ -134,8 +134,7 @@ export const RecordChip = ({
         (!forceDisableClick ? ChipVariant.Highlighted : ChipVariant.Transparent)
       }
       to={to ?? getLinkToShowPage(objectNameSingular, record)}
-      onClick={handleCustomClick}
-      shouldFollowLinkOnClick={shouldFollowLinkOnClick}
+      onClick={shouldFollowLinkOnClick ? undefined : handleCustomClick}
       triggerEvent={triggerEvent}
     />
   );

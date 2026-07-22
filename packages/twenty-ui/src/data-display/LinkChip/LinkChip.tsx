@@ -21,7 +21,6 @@ export type LinkChipProps = Omit<
   onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
   triggerEvent?: TriggerEventType;
   target?: '_blank' | '_self';
-  shouldFollowLinkOnClick?: boolean;
 };
 
 export const LinkChip = ({
@@ -40,13 +39,12 @@ export const LinkChip = ({
   onClick,
   triggerEvent,
   target,
-  shouldFollowLinkOnClick = false,
   emptyLabel,
 }: LinkChipProps) => {
   const { onClick: onClickHandler, onMouseDown: onMouseDownHandler } =
     useMouseDownNavigation({
       to: to,
-      onClick: shouldFollowLinkOnClick ? undefined : onClick,
+      onClick,
       triggerEvent,
     });
 
