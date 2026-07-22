@@ -10,6 +10,7 @@ const mockSetTargetedRecordsRule = jest.fn();
 const mockUseFindOneRecord = jest.fn();
 const mockCreateOneRecord = jest.fn();
 let selectedCreatorIds = ['creator-a'];
+let canCreateTarget = true;
 
 jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
   useRecordIndexContextOrThrow: () => ({ objectNamePlural: 'creators' }),
@@ -48,6 +49,30 @@ jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
 jest.mock('@/object-record/hooks/useCreateOneRecord', () => ({
   useCreateOneRecord: () => ({ createOneRecord: mockCreateOneRecord }),
 }));
+
+jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
+  useObjectMetadataItems: () => ({
+    objectMetadataItems: [
+      {
+        id: 'creator-list-metadata',
+        nameSingular: 'creatorList',
+      },
+    ],
+  }),
+}));
+
+jest.mock('@/object-record/hooks/useObjectPermissions', () => ({
+  useObjectPermissions: () => ({
+    objectPermissionsByObjectMetadataId: { 'creator-list-metadata': {} },
+  }),
+}));
+
+jest.mock(
+  '@/object-record/utils/canCreateRecordsForObjectMetadataItem',
+  () => ({
+    canCreateRecordsForObjectMetadataItem: () => canCreateTarget,
+  }),
+);
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
   useModal: () => ({ openModal: mockOpenModal, closeModal: mockCloseModal }),
@@ -102,12 +127,21 @@ jest.mock(
   () => ({
     SingleRecordPicker: ({
       onMorphItemSelected,
+      onCreate,
     }: {
       onMorphItemSelected: (item: { recordId: string }) => void;
+      onCreate?: (initialName?: string) => void;
     }) => (
-      <button onClick={() => onMorphItemSelected({ recordId: 'list-a' })}>
-        Choose Spring creators
-      </button>
+      <>
+        <button onClick={() => onMorphItemSelected({ recordId: 'list-a' })}>
+          Choose Spring creators
+        </button>
+        {onCreate && (
+          <button onClick={() => onCreate('Spring launch')}>
+            Native create target
+          </button>
+        )}
+      </>
     ),
   }),
 );
@@ -166,6 +200,7 @@ describe('MyahCreatorBulkActions', () => {
     jest.clearAllMocks();
     selectedCreatorIds = ['creator-a'];
     mockUseFindOneRecord.mockReturnValue({ record: undefined });
+    canCreateTarget = true;
   });
 
   it('opens an opaque native list picker', () => {
@@ -179,6 +214,20 @@ describe('MyahCreatorBulkActions', () => {
     expect(
       screen.getByRole('button', { name: 'Create new list' }),
     ).toBeVisible();
+  });
+
+  it('hides named creation when the target object cannot be created', () => {
+    canCreateTarget = false;
+
+    render(<MyahCreatorBulkActions />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+
+    expect(
+      screen.queryByRole('button', { name: 'Create new list' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Native create target' }),
+    ).not.toBeInTheDocument();
   });
 
   it('requires a nonempty name before creating and selecting a new list', async () => {

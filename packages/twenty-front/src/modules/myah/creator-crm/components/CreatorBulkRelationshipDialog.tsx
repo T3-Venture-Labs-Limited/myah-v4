@@ -1,10 +1,13 @@
 import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
 import { useCreatorBulkRelationshipPreview } from '@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview';
 import { type CreatorBulkRelationshipTarget } from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
+import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { t } from '@lingui/core/macro';
 import { useState } from 'react';
+import { Button } from 'twenty-ui/input';
+import { Section, SectionAlignment, SectionFontColor } from 'twenty-ui/layout';
+import { H1Title, H1TitleFontColor } from 'twenty-ui/typography';
 
 export const getCreatorBulkRelationshipDialogId = (
   target: CreatorBulkRelationshipTarget,
@@ -26,7 +29,7 @@ export const CreatorBulkRelationshipDialog = ({
     selectedCreatorIds,
   });
   const { applyCreatorBulkRelationship } = useApplyCreatorBulkRelationship();
-  const { openModal } = useModal();
+  const { closeModal } = useModal();
   const [isApplying, setIsApplying] = useState(false);
   const modalInstanceId = getCreatorBulkRelationshipDialogId(target);
   const targetLabel = target.kind === 'creator-list' ? t`list` : t`campaign`;
@@ -52,25 +55,67 @@ export const CreatorBulkRelationshipDialog = ({
         target,
         creatorIdsToAdd: preview.creatorIdsToAdd,
       });
+      closeModal(modalInstanceId);
       onSuccess?.();
     } catch {
-      // The mutation hook reports errors and the confirmation reopens for retry.
-      openModal(modalInstanceId);
+      // The mutation hook reports errors; leave the confirmation open for retry.
     } finally {
       setIsApplying(false);
     }
   };
 
+  const handleCancel = () => {
+    if (isApplying) {
+      return;
+    }
+
+    closeModal(modalInstanceId);
+    onClose?.();
+  };
+
   return (
-    <ConfirmationModal
+    <ModalStatefulWrapper
       modalInstanceId={modalInstanceId}
-      title={t`Add creators to ${target.label}`}
-      subtitle={subtitle}
-      loading={isConfirmationDisabled}
-      onClose={onClose}
-      onConfirmClick={handleConfirm}
-      confirmButtonAccent="brand"
-      confirmButtonText={t`Add to ${targetLabel}`}
-    />
+      onEnter={handleConfirm}
+      onClose={() => {
+        if (!isApplying) {
+          onClose?.();
+        }
+      }}
+      isClosable
+      shouldCloseModalOnClickOutsideOrEscape={!isApplying}
+      padding="large"
+      overlay="dark"
+      dataGloballyPreventClickOutside
+      narrowWidth
+      autoHeight
+    >
+      <H1Title
+        title={t`Add creators to ${target.label}`}
+        fontColor={H1TitleFontColor.Primary}
+      />
+      <Section
+        alignment={SectionAlignment.Center}
+        fontColor={SectionFontColor.Primary}
+      >
+        {subtitle}
+      </Section>
+      <Button
+        title={t`Cancel`}
+        variant="secondary"
+        onClick={handleCancel}
+        disabled={isApplying}
+        fullWidth
+      />
+      <Button
+        title={t`Add to ${targetLabel}`}
+        variant="primary"
+        accent="brand"
+        onClick={handleConfirm}
+        disabled={isConfirmationDisabled}
+        isLoading={isApplying}
+        fullWidth
+      />
+    </ModalStatefulWrapper>
   );
 };

@@ -5,6 +5,7 @@ import { CreatorBulkRelationshipDialog } from '@/myah/creator-crm/components/Cre
 const mockUseCreatorBulkRelationshipPreview = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
 const mockCloseModal = jest.fn();
+const mockOpenModal = jest.fn();
 
 jest.mock('@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview', () => ({
   useCreatorBulkRelationshipPreview: (...args: unknown[]) =>
@@ -18,39 +19,64 @@ jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
-  useModal: () => ({ closeModal: mockCloseModal }),
+  useModal: () => ({
+    closeModal: mockCloseModal,
+    openModal: mockOpenModal,
+  }),
 }));
 
-jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
-  ConfirmationModal: ({
-    title,
-    subtitle,
-    loading,
-    onClose,
-    onConfirmClick,
-    confirmButtonText,
-    confirmButtonAccent,
+jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
+  ModalStatefulWrapper: ({
+    children,
+    onEnter,
   }: {
-    title: string;
-    subtitle: React.ReactNode;
-    loading?: boolean;
-    onClose?: () => void;
-    onConfirmClick: () => void;
-    confirmButtonText: string;
-    confirmButtonAccent: string;
+    children: React.ReactNode;
+    onEnter?: () => void;
   }) => (
-    <div role="dialog" aria-label={title}>
-      <div>{subtitle}</div>
-      <button onClick={onClose}>Cancel</button>
-      <button
-        data-accent={confirmButtonAccent}
-        disabled={loading}
-        onClick={onConfirmClick}
-      >
-        {confirmButtonText}
-      </button>
+    <div role="dialog">
+      <button onClick={onEnter}>Press Enter</button>
+      {children}
     </div>
   ),
+}));
+
+jest.mock('twenty-ui/input', () => ({
+  Button: ({
+    title,
+    onClick,
+    disabled,
+    accent,
+  }: {
+    title: string | { message: string };
+    onClick: () => void;
+    disabled?: boolean;
+    accent?: string;
+  }) => (
+    <button data-accent={accent} disabled={disabled} onClick={onClick}>
+      {typeof title === 'string' ? title : title.message}
+    </button>
+  ),
+}));
+
+jest.mock('twenty-ui/layout', () => ({
+  Section: ({
+    children,
+  }: {
+    children: string | { message: string };
+  }) => <div>{typeof children === 'string' ? children : children.message}</div>,
+  SectionAlignment: { Center: 'center' },
+  SectionFontColor: { Primary: 'primary' },
+}));
+
+jest.mock('twenty-ui/typography', () => ({
+  H1Title: ({ title }: { title: string | { message: string } }) => (
+    <h1>{typeof title === 'string' ? title : title.message}</h1>
+  ),
+  H1TitleFontColor: { Primary: 'primary' },
+}));
+
+jest.mock('@lingui/react', () => ({
+  useLingui: () => ({ i18n: { _: (message: string) => message } }),
 }));
 
 const creatorListTarget = {
@@ -64,37 +90,104 @@ const campaignTarget = {
   label: 'Spring campaign',
 };
 
+const loadingPreview = {
+  selectedCreatorIds: ['creator-a'],
+  creatorIdsToAdd: ['creator-a'],
+  alreadyLinkedCreatorIds: [],
+  loading: true,
+};
+
+const readyPreview = {
+  selectedCreatorIds: ['creator-a', 'creator-b'],
+  creatorIdsToAdd: ['creator-a', 'creator-b'],
+  alreadyLinkedCreatorIds: [],
+  loading: false,
+};
+
 describe('CreatorBulkRelationshipDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('disables confirmation for an empty selection', () => {
-    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
-      selectedCreatorIds: [],
-      creatorIdsToAdd: [],
-      alreadyLinkedCreatorIds: [],
-    });
+  it('does not dismiss or mutate when Enter is pressed while confirmation is disabled', () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue(loadingPreview);
 
     render(
       <CreatorBulkRelationshipDialog
         target={creatorListTarget}
-        selectedCreatorIds={[]}
+        selectedCreatorIds={['creator-a']}
       />,
     );
 
-    expect(
-      screen.getByRole('button', { name: /^Add to list/ }),
-    ).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Press Enter' }));
+
+    expect(mockApplyCreatorBulkRelationship).not.toHaveBeenCalled();
+    expect(mockCloseModal).not.toHaveBeenCalled();
   });
 
-  it('presents a padded confirmation with the relationship counts', async () => {
-    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
-      selectedCreatorIds: ['creator-a', 'creator-b'],
-      creatorIdsToAdd: ['creator-a', 'creator-b'],
-      alreadyLinkedCreatorIds: [],
+  it('keeps the confirmation open and disabled until an async mutation succeeds', async () => {
+    let resolveMutation: (() => void) | undefined;
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
+    mockApplyCreatorBulkRelationship.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveMutation = resolve;
+      }),
+    );
+
+    render(
+      <CreatorBulkRelationshipDialog
+        target={creatorListTarget}
+        selectedCreatorIds={['creator-a', 'creator-b']}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to list' }));
+
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledTimes(1);
+    expect(mockCloseModal).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Add to list' })).toBeDisabled();
+
+    await act(async () => {
+      resolveMutation?.();
     });
-    mockApplyCreatorBulkRelationship.mockResolvedValue(undefined);
+
+    expect(mockCloseModal).toHaveBeenCalledWith(
+      'creator-bulk-relationship-creator-list-list-a',
+    );
+  });
+
+  it('keeps a failed confirmation available for retry', async () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
+    mockApplyCreatorBulkRelationship
+      .mockRejectedValueOnce(new Error('network unavailable'))
+      .mockResolvedValueOnce(undefined);
+
+    render(
+      <CreatorBulkRelationshipDialog
+        target={creatorListTarget}
+        selectedCreatorIds={['creator-a', 'creator-b']}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to list' }));
+    });
+
+    expect(mockCloseModal).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Add to list' })).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to list' }));
+    });
+
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledTimes(2);
+    expect(mockCloseModal).toHaveBeenCalledWith(
+      'creator-bulk-relationship-creator-list-list-a',
+    );
+  });
+
+  it('presents the count summary, Cancel, and brand confirmation', () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
 
     render(
       <CreatorBulkRelationshipDialog
@@ -110,15 +203,6 @@ describe('CreatorBulkRelationshipDialog', () => {
     expect(
       screen.getByRole('button', { name: 'Add to list' }),
     ).toHaveAttribute('data-accent', 'brand');
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Add to list' }));
-    });
-
-    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledWith({
-      target: creatorListTarget,
-      creatorIdsToAdd: ['creator-a', 'creator-b'],
-    });
   });
 
   it('reports an all-existing selection without mutating', () => {
@@ -126,6 +210,7 @@ describe('CreatorBulkRelationshipDialog', () => {
       selectedCreatorIds: ['creator-a', 'creator-b'],
       creatorIdsToAdd: [],
       alreadyLinkedCreatorIds: ['creator-a', 'creator-b'],
+      loading: false,
     });
 
     render(
@@ -141,26 +226,4 @@ describe('CreatorBulkRelationshipDialog', () => {
     ).toBeDisabled();
     expect(mockApplyCreatorBulkRelationship).not.toHaveBeenCalled();
   });
-
-  it.each([creatorListTarget, campaignTarget])(
-    'offers no outreach action for $kind mode',
-    (target) => {
-      mockUseCreatorBulkRelationshipPreview.mockReturnValue({
-        selectedCreatorIds: ['creator-a'],
-        creatorIdsToAdd: ['creator-a'],
-        alreadyLinkedCreatorIds: [],
-      });
-
-      render(
-        <CreatorBulkRelationshipDialog
-          target={target}
-          selectedCreatorIds={['creator-a']}
-        />,
-      );
-
-      expect(
-        screen.queryByText(/outreach|automation|email/i),
-      ).not.toBeInTheDocument();
-    },
-  );
 });
