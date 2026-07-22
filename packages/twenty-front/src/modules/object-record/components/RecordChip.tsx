@@ -107,6 +107,9 @@ export const RecordChip = ({
     );
   }
 
+  const shouldFollowLinkOnClick =
+    objectNameSingular === 'creatorList' && isDefined(to);
+
   return (
     <LinkChip
       size={size}
@@ -132,6 +135,7 @@ export const RecordChip = ({
       }
       to={to ?? getLinkToShowPage(objectNameSingular, record)}
       onClick={handleCustomClick}
+      shouldFollowLinkOnClick={shouldFollowLinkOnClick}
       triggerEvent={triggerEvent}
     />
   );

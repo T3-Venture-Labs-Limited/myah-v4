@@ -21,6 +21,7 @@ export type LinkChipProps = Omit<
   onMouseDown?: (event: MouseEvent<HTMLElement>) => void;
   triggerEvent?: TriggerEventType;
   target?: '_blank' | '_self';
+  shouldFollowLinkOnClick?: boolean;
 };
 
 export const LinkChip = ({
@@ -39,6 +40,7 @@ export const LinkChip = ({
   onClick,
   triggerEvent,
   target,
+  shouldFollowLinkOnClick = false,
   emptyLabel,
 }: LinkChipProps) => {
   const { onClick: onClickHandler, onMouseDown: onMouseDownHandler } =
@@ -54,7 +56,10 @@ export const LinkChip = ({
         to={to}
         onClick={(event) => {
           event.stopPropagation();
-          onClickHandler(event);
+
+          if (!shouldFollowLinkOnClick) {
+            onClickHandler(event);
+          }
         }}
         onMouseDown={onMouseDownHandler}
         data-click-outside-id={LINK_CHIP_CLICK_OUTSIDE_ID}
