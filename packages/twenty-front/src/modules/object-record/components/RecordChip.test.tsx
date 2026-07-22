@@ -69,6 +69,32 @@ describe('RecordChip identifier navigation', () => {
     expect(openRecordInSidePanel).not.toHaveBeenCalled();
   });
 
+  it('follows a Creator List identifier link without opening the generic side panel in MOUSE_DOWN mode', () => {
+    render(
+      <MemoryRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        initialEntries={['/objects/creator-lists']}
+      >
+        <RecordChip
+          objectNameSingular="creatorList"
+          record={{ id: 'list-id' } as never}
+          to="/objects/creators?creatorListId=list-id"
+          triggerEvent="MOUSE_DOWN"
+          onClick={openGenericRecordInSidePanel}
+        />
+        <CurrentLocation />
+      </MemoryRouter>,
+    );
+
+    fireEvent.mouseDown(screen.getByRole('link', { name: /Creator List/ }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '/objects/creators?creatorListId=list-id',
+    );
+    expect(openGenericRecordInSidePanel).not.toHaveBeenCalled();
+    expect(openRecordInSidePanel).not.toHaveBeenCalled();
+  });
+
   it('retains generic identifier side-panel handling for other objects', () => {
     render(
       <MemoryRouter

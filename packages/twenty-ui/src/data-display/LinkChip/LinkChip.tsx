@@ -46,7 +46,7 @@ export const LinkChip = ({
   const { onClick: onClickHandler, onMouseDown: onMouseDownHandler } =
     useMouseDownNavigation({
       to: to,
-      onClick: onClick,
+      onClick: shouldFollowLinkOnClick ? undefined : onClick,
       triggerEvent,
     });
 
@@ -56,10 +56,7 @@ export const LinkChip = ({
         to={to}
         onClick={(event) => {
           event.stopPropagation();
-
-          if (!shouldFollowLinkOnClick) {
-            onClickHandler(event);
-          }
+          onClickHandler(event);
         }}
         onMouseDown={onMouseDownHandler}
         data-click-outside-id={LINK_CHIP_CLICK_OUTSIDE_ID}
