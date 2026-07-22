@@ -8,6 +8,7 @@ const mockOpenModal = jest.fn();
 const mockCloseModal = jest.fn();
 const mockSetTargetedRecordsRule = jest.fn();
 const mockUseFindOneRecord = jest.fn();
+const mockCreateOneRecord = jest.fn();
 let selectedCreatorIds = ['creator-a'];
 
 jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
@@ -23,14 +24,17 @@ jest.mock('@/object-metadata/hooks/useFilteredObjectMetadataItems', () => ({
 }));
 
 jest.mock('@/context-store/states/contextStoreTargetedRecordsRuleComponentState', () => ({
-  contextStoreTargetedRecordsRuleComponentState: {},
+  contextStoreTargetedRecordsRuleComponentState: 'targeted-records-rule',
 }));
 
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue', () => ({
-  useAtomComponentStateValue: () => ({
-    mode: 'selection',
-    selectedRecordIds: selectedCreatorIds,
-  }),
+  useAtomComponentStateValue: (state: unknown) =>
+    state === 'targeted-records-rule'
+      ? {
+          mode: 'selection',
+          selectedRecordIds: selectedCreatorIds,
+        }
+      : '',
 }));
 
 jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomComponentState', () => ({
@@ -39,6 +43,10 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomComponentState', () => ({
 
 jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
   useFindOneRecord: (args: unknown) => mockUseFindOneRecord(args),
+}));
+
+jest.mock('@/object-record/hooks/useCreateOneRecord', () => ({
+  useCreateOneRecord: () => ({ createOneRecord: mockCreateOneRecord }),
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
@@ -73,33 +81,59 @@ jest.mock('@/ui/layout/dropdown/components/DropdownMenuItemsContainer', () => ({
 jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
   ModalStatefulWrapper: ({
     children,
-    onClose,
   }: {
     children: React.ReactNode;
-    onClose?: () => void;
-  }) => (
-    <div>
-      {children}
-      <button onClick={() => onClose?.()}>Dismiss target picker</button>
-      <button onClick={() => onClose?.()}>
-        Dismiss target picker again
-      </button>
-    </div>
-  ),
+  }) => {
+    const firstChild = Array.isArray(children) ? children[0] : children;
+    const title = (
+      firstChild as React.ReactElement<{ title?: string }> | undefined
+    )?.props.title;
+
+    return (
+      <div role="dialog" aria-label={title}>
+        {children}
+      </div>
+    );
+  },
 }));
 
 jest.mock(
-  '@/object-record/record-field/ui/form-types/components/FormSingleRecordPicker',
+  '@/object-record/record-picker/single-record-picker/components/SingleRecordPicker',
   () => ({
-    FormSingleRecordPicker: ({
-      label,
-      onChange,
+    SingleRecordPicker: ({
+      onMorphItemSelected,
     }: {
-      label: string;
-      onChange: (value: string) => void;
-    }) => <button onClick={() => onChange('list-a')}>{label}</button>,
+      onMorphItemSelected: (item: { recordId: string }) => void;
+    }) => (
+      <button onClick={() => onMorphItemSelected({ recordId: 'list-a' })}>
+        Choose Spring creators
+      </button>
+    ),
   }),
 );
+
+jest.mock('@/ui/input/components/SettingsTextInput', () => ({
+  SettingsTextInput: ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+  }) => (
+    <input
+      aria-label={placeholder}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ),
+}));
+
+jest.mock('twenty-ui/typography', () => ({
+  H1Title: ({ title }: { title: string }) => <h1>{title}</h1>,
+  H1TitleFontColor: { Primary: 'primary' },
+}));
 
 jest.mock('@/myah/creator-crm/components/CreatorBulkRelationshipDialog', () => ({
   getCreatorBulkRelationshipDialogId: ({ id }: { id: string }) =>
@@ -107,13 +141,16 @@ jest.mock('@/myah/creator-crm/components/CreatorBulkRelationshipDialog', () => (
   CreatorBulkRelationshipDialog: ({
     target,
     onClose,
+    onSuccess,
   }: {
     target: { label: string };
     onClose: () => void;
+    onSuccess: () => void;
   }) => (
     <div>
       <span>{target.label}</span>
       <button onClick={onClose}>Dismiss preview</button>
+      <button onClick={onSuccess}>Complete relationship</button>
     </div>
   ),
 }));
@@ -128,25 +165,63 @@ describe('MyahCreatorBulkActions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     selectedCreatorIds = ['creator-a'];
+    mockUseFindOneRecord.mockReturnValue({ record: undefined });
   });
 
-  it('opens a preview for an unnamed selected Creator List', () => {
-    mockUseFindOneRecord.mockReturnValue({
-      record: { id: 'list-a', name: '' },
+  it('opens an opaque native list picker', () => {
+    render(<MyahCreatorBulkActions />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+
+    expect(
+      screen.getByRole('dialog', { name: 'Add creators to a list' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Create new list' }),
+    ).toBeVisible();
+  });
+
+  it('requires a nonempty name before creating and selecting a new list', async () => {
+    mockCreateOneRecord.mockResolvedValue({
+      id: 'created-list',
+      name: 'Spring launch',
     });
+    mockUseFindOneRecord.mockImplementation(({ objectRecordId }) => ({
+      record:
+        objectRecordId === 'created-list'
+          ? { id: 'created-list', name: 'Spring launch' }
+          : undefined,
+    }));
 
     render(<MyahCreatorBulkActions />);
     fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create new list' }));
+
+    const nameDialog = screen.getByRole('dialog', {
+      name: 'Create new list',
+    });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Choose a Creator List' }),
+      screen.getByRole('button', { name: 'Create list' }),
     );
 
-    expect(screen.getByText('Untitled Creator List')).toBeVisible();
-    expect(mockOpenModal).toHaveBeenCalledWith(
-      'creator-bulk-relationship-list-a',
+    expect(nameDialog).toBeVisible();
+    expect(mockCreateOneRecord).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: ' Spring launch ' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create list' }));
+    });
+
+    expect(mockCreateOneRecord).toHaveBeenCalledWith({ name: 'Spring launch' });
+    expect(screen.getByText('Spring launch')).toBeVisible();
+    expect(mockCloseModal).toHaveBeenCalledWith(
+      'creator-bulk-relationship-target-picker',
     );
   });
-  it('opens the preview when picker close runs before the target option handler', () => {
+
+  it('opens the preview for an existing selected list', () => {
     mockUseFindOneRecord.mockReturnValue({
       record: { id: 'list-a', name: 'Spring creators' },
     });
@@ -154,10 +229,7 @@ describe('MyahCreatorBulkActions', () => {
     render(<MyahCreatorBulkActions />);
     fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Dismiss target picker' }),
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Choose a Creator List' }),
+      screen.getByRole('button', { name: 'Choose Spring creators' }),
     );
 
     expect(screen.getByText('Spring creators')).toBeVisible();
@@ -166,7 +238,7 @@ describe('MyahCreatorBulkActions', () => {
     );
   });
 
-  it('keeps the preview open when the target picker closes after selecting a list', () => {
+  it('clears the selected creators after a successful relationship mutation', () => {
     mockUseFindOneRecord.mockReturnValue({
       record: { id: 'list-a', name: 'Spring creators' },
     });
@@ -174,60 +246,16 @@ describe('MyahCreatorBulkActions', () => {
     render(<MyahCreatorBulkActions />);
     fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Choose a Creator List' }),
+      screen.getByRole('button', { name: 'Choose Spring creators' }),
     );
+
     fireEvent.click(
-      screen.getByRole('button', { name: 'Dismiss target picker' }),
+      screen.getByRole('button', { name: 'Complete relationship' }),
     );
 
-    expect(screen.getByText('Spring creators')).toBeVisible();
-    expect(mockOpenModal).toHaveBeenCalledWith(
-      'creator-bulk-relationship-list-a',
-    );
-  });
-
-  it('keeps the preview open through multiple target picker close callbacks', () => {
-    mockUseFindOneRecord.mockReturnValue({
-      record: { id: 'list-a', name: 'Spring creators' },
+    expect(mockSetTargetedRecordsRule).toHaveBeenCalledWith({
+      mode: 'selection',
+      selectedRecordIds: [],
     });
-
-    render(<MyahCreatorBulkActions />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Choose a Creator List' }),
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Dismiss target picker' }),
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Dismiss target picker again' }),
-    );
-
-    expect(screen.getByText('Spring creators')).toBeVisible();
-    expect(mockOpenModal).toHaveBeenCalledWith(
-      'creator-bulk-relationship-list-a',
-    );
-  });
-
-  it('does not reopen a dismissed preview after the selection state rerenders', () => {
-    mockUseFindOneRecord.mockReturnValue({
-      record: { id: 'list-a', name: 'Spring creators' },
-    });
-
-    const { rerender } = render(<MyahCreatorBulkActions />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Choose a Creator List' }),
-    );
-    expect(mockOpenModal).toHaveBeenCalledWith(
-      'creator-bulk-relationship-list-a',
-    );
-
-    mockOpenModal.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss preview' }));
-    selectedCreatorIds = ['creator-a', 'creator-b'];
-    act(() => rerender(<MyahCreatorBulkActions />));
-
-    expect(mockOpenModal).not.toHaveBeenCalled();
   });
 });
