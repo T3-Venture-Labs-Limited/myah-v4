@@ -22,6 +22,17 @@ jest.mock(
   }),
 );
 
+jest.mock(
+  '@/ui/navigation/navigation-drawer/components/NavigationDrawerItemGroup',
+  () => ({
+    NavigationDrawerItemGroup: ({
+      children,
+    }: {
+      children: React.ReactNode;
+    }) => <div data-testid="gapless-navigation-group">{children}</div>,
+  }),
+);
+
 const outreachRoutes: ResolvedMyahNavigationRoute[] = [
   {
     status: 'ready',
@@ -66,6 +77,8 @@ describe('MyahNavigationDrawerGroup', () => {
         </JotaiProvider>
       </MemoryRouter>,
     );
+
+    expect(screen.getByTestId('gapless-navigation-group')).toBeInTheDocument();
 
     expect(screen.getByTestId('Automations')).toHaveAttribute(
       'data-sub-item-state',
