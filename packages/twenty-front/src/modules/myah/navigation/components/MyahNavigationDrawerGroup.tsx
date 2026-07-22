@@ -4,6 +4,7 @@ import {
   type MyahNavigationRouteGroupId,
   type ResolvedMyahNavigationRoute,
 } from '@/myah/navigation/types/MyahNavigationRoute';
+import { NavigationDrawerItemGroup } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerItemGroup';
 import { NavigationDrawerItem } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerItem';
 import { getNavigationSubItemLeftAdornment } from '@/ui/navigation/navigation-drawer/utils/getNavigationSubItemLeftAdornment';
 import { NavigationDrawerSection } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerSection';
@@ -32,12 +33,6 @@ const StyledGroupToggle = styled.button`
     background: ${themeCssVariables.background.transparent.light};
     color: ${themeCssVariables.font.color.primary};
   }
-`;
-
-const StyledItems = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.betweenSiblingsGap};
 `;
 
 type MyahNavigationDrawerGroupProps = {
@@ -93,7 +88,7 @@ export const MyahNavigationDrawerGroup = ({
         containAnimation
         initial={false}
       >
-        <StyledItems>
+        <NavigationDrawerItemGroup>
           {routes.map((route, index) => {
             const isReady = route.status === 'ready';
             const isSoon = route.status === 'soon';
@@ -121,7 +116,7 @@ export const MyahNavigationDrawerGroup = ({
               />
             );
           })}
-        </StyledItems>
+        </NavigationDrawerItemGroup>
       </AnimatedExpandableContainer>
     </NavigationDrawerSection>
   );
