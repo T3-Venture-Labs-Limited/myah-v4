@@ -60,6 +60,17 @@ describe('useRefetchAggregateQueries', () => {
       include: [getAggregateQueryName('creators')],
     });
   });
+  it('does not refetch when no aggregate queries are active', async () => {
+    mockGetObservableQueries.mockReturnValue(new Set());
+
+    const { result } = renderHook(() => useRefetchAggregateQueries());
+
+    await result.current.refetchAggregateQueries({
+      objectMetadataNamePlural: 'creators',
+    });
+
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
+  });
 
   it('should handle errors during refetch', async () => {
     // Arrange
