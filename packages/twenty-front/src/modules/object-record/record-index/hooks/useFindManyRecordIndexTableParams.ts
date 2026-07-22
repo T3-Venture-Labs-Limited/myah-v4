@@ -6,6 +6,7 @@ import { currentRecordFilterGroupsComponentState } from '@/object-record/record-
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
 import { anyFieldFilterValueComponentState } from '@/object-record/record-filter/states/anyFieldFilterValueComponentState';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
+import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
 import { useCurrentRecordGroupDefinition } from '@/object-record/record-group/hooks/useCurrentRecordGroupDefinition';
 import { useRecordGroupFilter } from '@/object-record/record-group/hooks/useRecordGroupFilter';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
@@ -47,6 +48,11 @@ export const useFindManyRecordIndexTableParams = (
     instanceId,
   );
 
+  const queryOnlyRecordFilters = useAtomComponentStateValue(
+    queryOnlyRecordFiltersComponentState,
+    instanceId,
+  );
+
   const { filterValueDependencies } = useFilterValueDependencies();
 
   const flattenedFieldMetadataItems = useAtomStateValue(
@@ -56,7 +62,7 @@ export const useFindManyRecordIndexTableParams = (
   const currentFilters = computeRecordGqlOperationFilter({
     fieldMetadataItems: flattenedFieldMetadataItems,
     recordFilterGroups: currentRecordFilterGroups,
-    recordFilters: currentRecordFilters,
+    recordFilters: [...currentRecordFilters, ...queryOnlyRecordFilters],
     filterValueDependencies,
   });
 
