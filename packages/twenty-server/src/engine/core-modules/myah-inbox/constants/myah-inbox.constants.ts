@@ -1,2 +1,0 @@
-export const MYAH_INBOX_MAX_PAGE_SIZE = 100;
-export const MYAH_INBOX_DEFAULT_PAGE_SIZE = 25;
