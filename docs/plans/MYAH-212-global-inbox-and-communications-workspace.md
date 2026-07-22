@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Begin implementation only after rebasing this branch on a `main` containing merged MYAH-209 and MYAH-210. Current source evidence shows MYAH-210 reserves 2.20 workspace-command timestamps `1784266302003` and `1784266302004`; MYAH-212 therefore uses `1784266302005` and never edits or replays another committed command.
+- User-approved staging: MYAH-209 is rebased from `origin/main`; while MYAH-210 remains unmerged, build only Inbox server/frontend contracts whose unit tests do not require Creator/Campaign metadata. Do not introduce MessageThread metadata, `1784266302005`, metadata GraphQL generation, database integration, or runtime/browser-UAT claims until MYAH-210 merges. Then rebase onto `origin/main`, complete Tasks 1–2 and the deferred integration gates, and run the full local UAT. MYAH-210 reserves `1784266302003` and `1784266302004`; MYAH-212 uses `1784266302005` and never edits or replays another committed command.
 - Preserve MYAH-209’s route ID `inbox`, entry path `/myah/inbox`, drawer hierarchy, labels, active-state semantics, responsive drawer, and existing dispatcher. Changing its existing destination to `kind: 'myah-page'` is the feature-body registration mechanism explicitly provided by that contract.
 - Use one native `MessageThread` per Inbox row. Native `Message`, `MessageParticipant`, `MessageChannelMessageAssociation`, Task, and Note records remain source of truth.
 - Add Myah fields only through the existing `myah-creator-ops` app manifest and source-controlled standard-metadata/workspace-command path. Do not use raw SQL, TypeORM migrations, direct database writes, a sidecar Inbox object, or a second email table.
@@ -22,7 +22,7 @@
 - Browser code never receives provider credentials and never performs provider I/O. MYAH-184, MYAH-168, and MYAH-169 retain mailbox connection, send/receipt, inbound sync/reopen, and follow-up scheduling.
 - AI returns a schema-validated proposal only. It neither persists a draft nor sends. The current Inbox owner explicitly applies a proposal through the same draft mutation.
 - MYAH-224 and MYAH-225 own future sidebar-agent triage and draft mutations. MYAH-212’s sidebar agent may read Inbox context and request a reply proposal only.
-- Use Yarn 4. Do not commit, push, deploy, mutate Railway, or create a pull request unless separately instructed.
+- Use Yarn 4. Make one atomic commit after every green task slice. Do not push, merge, deploy, mutate Railway, or create a pull request.
 
 ---
 
