@@ -2,6 +2,7 @@ import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainCo
 import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context-store/states/contextStoreCurrentObjectMetadataItemIdComponentState';
 import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { CreatorListMembershipFilterEffect } from '@/myah/creator-crm/components/CreatorListMembershipFilterEffect';
 import { RecordIndexContainerGater } from '@/object-record/record-index/components/RecordIndexContainerGater';
 import { RecordIndexSkeletonLoader } from '@/object-record/record-index/components/RecordIndexSkeletonLoader';
 import { PageContainer } from '@/ui/layout/page/components/PageContainer';
@@ -37,6 +38,7 @@ export const RecordIndexPage = () => {
         }}
       >
         <RecordIndexContainerGater />
+        <CreatorListMembershipFilterEffect />
       </ContextStoreComponentInstanceContext.Provider>
     </PageContainer>
   );
