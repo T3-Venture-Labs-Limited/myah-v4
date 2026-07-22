@@ -28,10 +28,29 @@ export const OUTREACH_STEP_OBJECT_UNIVERSAL_IDENTIFIER =
 export const OUTREACH_ACTION_OBJECT_UNIVERSAL_IDENTIFIER =
   'b4459926-2c01-560a-8432-fa1974168439';
 
+export const MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS = {
+  creator: '2bab4cc0-d1d8-4394-b506-9c49a8b414a5',
+  myahCampaign: 'f7e38f36-1901-40df-b6c1-cfff373f472f',
+  inboxOwner: 'eb7f2495-3cc2-4db5-9744-1172ab8a44e8',
+  inboxState: '5047d99f-a82c-4a68-ad39-efd9665a182c',
+  snoozedUntil: 'ff39959f-533d-4a41-b022-2744628ada69',
+  myahReplyDraftBody: '8ec8253f-9b54-46d5-9b55-ac1829c10f4f',
+  myahReplyDraftRevision: 'dfcab7eb-b140-48b7-9252-ed4b9b0d5789',
+  ownedInboxThreads: '664b677e-8625-4442-bc1c-c836f541d0d1',
+} as const;
+
+export const MYAH_INBOX_STATE_OPTION_UNIVERSAL_IDENTIFIERS = {
+  needsReply: 'ca66715e-5684-44b2-9057-545cfa34e31b',
+  waitingOnCreator: '880d8de1-a2ad-472c-9b1b-c19e167676ec',
+  snoozed: 'e6b0bcf0-ee3c-42a7-9015-8bed9f11d4e1',
+  closed: '88d301ce-386f-40f2-8cd9-edce0a870ead',
+} as const;
+
 export const CREATOR_RELATION_FIELD_UNIVERSAL_IDENTIFIERS = {
   listMemberships: '32db62ac-6217-5316-89d9-f9d7290dff70',
   campaignCreators: '3b9494ff-0fe7-5492-8b69-c515f79ea437',
   ownedCreators: 'fe31748c-e0e8-40b2-b175-1759c817e54a',
+  inboxThreads: '46def870-48cb-4348-b1e3-50be5104c046',
 } as const;
 
 export const CREATORS_VIEW_UNIVERSAL_IDENTIFIER =
@@ -78,6 +97,7 @@ export const CAMPAIGN_FIELD_UNIVERSAL_IDENTIFIERS = {
   campaignCreators: '894c80f2-a478-5680-8c20-c7a86aa24fde',
   offers: '1d33699f-76f3-5247-98b3-2de588543364',
   outreachSequences: '40b7c827-4699-5f99-bdb8-d8906dd948f5',
+  inboxThreads: '07c0459e-9426-40a6-acdb-3c86824f0d47',
 } as const;
 
 export const CAMPAIGN_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS = {
