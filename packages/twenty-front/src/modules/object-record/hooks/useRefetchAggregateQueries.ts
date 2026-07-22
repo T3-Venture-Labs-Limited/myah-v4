@@ -16,8 +16,26 @@ export const useRefetchAggregateQueries = () => {
       objectMetadataNamePlural,
     });
 
+    const activeQueryNames = new Set(
+      [...apolloCoreClient.getObservableQueries('active')]
+        .map(({ queryName: activeQueryName }) => activeQueryName)
+        .filter((activeQueryName): activeQueryName is string =>
+          Boolean(activeQueryName),
+        ),
+    );
+    const activeAggregateQueryNames = [
+      queryName,
+      groupByAggregateQueryName,
+    ].filter((aggregateQueryName) =>
+      activeQueryNames.has(aggregateQueryName),
+    );
+
+    if (activeAggregateQueryNames.length === 0) {
+      return;
+    }
+
     await apolloCoreClient.refetchQueries({
-      include: [queryName, groupByAggregateQueryName],
+      include: activeAggregateQueryNames,
     });
   };
 
