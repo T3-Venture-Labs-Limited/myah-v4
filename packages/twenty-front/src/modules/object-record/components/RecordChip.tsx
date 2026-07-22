@@ -108,7 +108,9 @@ export const RecordChip = ({
   }
 
   const shouldFollowLinkOnClick =
-    isDefined(to) && /^\/objects\/creators\?creatorListId=[^&#]+$/.test(to);
+    objectNameSingular === 'creatorList' &&
+    isDefined(to) &&
+    /^\/objects\/creators\?creatorListId=[^&#]+$/.test(to);
 
   return (
     <LinkChip
