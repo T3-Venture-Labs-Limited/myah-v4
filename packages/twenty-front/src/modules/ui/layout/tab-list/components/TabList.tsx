@@ -71,7 +71,6 @@ export const TabList = ({
   tabs,
   loading,
   behaveAsLinks = true,
-  ariaLabel,
   isInSidePanel,
   className,
   componentInstanceId,
