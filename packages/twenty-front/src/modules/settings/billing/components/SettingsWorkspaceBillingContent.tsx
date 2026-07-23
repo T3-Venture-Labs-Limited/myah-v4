@@ -32,7 +32,7 @@ const usdFormatter = new Intl.NumberFormat('en-US', {
 const formatUsdCents = (amountCents: number): string =>
   usdFormatter.format(amountCents / 100);
 const WORKSPACE_BILLING_TAB_LIST_ID = 'settings-workspace-billing-tabs';
-const COMPACT_LEDGER_VIEWPORT = 960;
+const COMPACT_LEDGER_VIEWPORT = 1080;
 const WORKSPACE_BILLING_TAB_IDS = {
   USAGE: 'usage',
   BILLING_HISTORY: 'billing-history',
@@ -218,6 +218,7 @@ const StyledResponsiveTableCell = styled(TableCell)`
 `;
 const StyledResponsivePrimaryCell = styled(TableCell)`
   @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
+    height: auto;
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;

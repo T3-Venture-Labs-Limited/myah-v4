@@ -597,6 +597,71 @@ export const TabletLedgerLayout: Story = {
   },
 };
 
+export const WidenedDrawerLedgerLayout: Story = {
+  args: {
+    viewModel: healthyWorkspaceViewModel,
+  },
+  parameters: {
+    componentCanvas: true,
+    layout: 'fullscreen',
+    viewport: {
+      options: {
+        myahWidenedDrawer: {
+          name: 'Myah widened drawer',
+          styles: { width: '1000px', height: '1024px' },
+        },
+      },
+      defaultViewport: 'myahWidenedDrawer',
+    },
+  },
+  render: ({ viewModel }) => (
+    <MemoryRouter>
+      <div
+        data-testid="billing-widened-drawer-canvas"
+        style={{ margin: '0 auto', maxWidth: '586px' }}
+      >
+        <SettingsWorkspaceBillingContent
+          viewModel={viewModel ?? healthyWorkspaceViewModel}
+        />
+      </div>
+    </MemoryRouter>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const widenedDrawerCanvas = await canvas.findByTestId(
+      'billing-widened-drawer-canvas',
+    );
+    await expect(
+      canvas.findByRole('table', { name: 'Usage history' }),
+    ).resolves.toBeVisible();
+    expect(widenedDrawerCanvas.scrollWidth).toBeLessThanOrEqual(
+      widenedDrawerCanvas.clientWidth,
+    );
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Billing history' }),
+    );
+    await expect(
+      canvas.findByRole('table', { name: 'Billing history' }),
+    ).resolves.toBeVisible();
+    expect(widenedDrawerCanvas.scrollWidth).toBeLessThanOrEqual(
+      widenedDrawerCanvas.clientWidth,
+    );
+    const billingHistoryTable = await canvas.findByRole('table', {
+      name: 'Billing history',
+    });
+    const [, firstBillingHistoryRow, secondBillingHistoryRow] =
+      within(billingHistoryTable).getAllByRole('row');
+    expect(
+      firstBillingHistoryRow.getBoundingClientRect().height,
+    ).toBeGreaterThan(32);
+    expect(
+      secondBillingHistoryRow.getBoundingClientRect().top,
+    ).toBeGreaterThanOrEqual(
+      firstBillingHistoryRow.getBoundingClientRect().bottom,
+    );
+  },
+};
+
 export const MobileAutomaticTopUp: Story = {
   args: {
     viewModel: {
