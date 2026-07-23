@@ -8,7 +8,11 @@ import {
   TabContent,
   type TabContentProps,
 } from '@ui/input/TabButton/parts/TabContent';
-import { type AriaRole, type ReactElement } from 'react';
+import {
+  type AriaRole,
+  type KeyboardEventHandler,
+  type ReactElement,
+} from 'react';
 
 import styles from './TabButton.module.scss';
 
@@ -22,10 +26,13 @@ type TabButtonProps = {
   to?: string;
   role?: AriaRole;
   ariaSelected?: boolean;
+  'aria-controls'?: string;
+  tabIndex?: number;
   LeftIcon?: IconComponent;
   className?: string;
   title?: string;
   onClick?: () => void;
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
   logo?: string;
   RightIcon?: IconComponent;
   pill?: string | ReactElement;
@@ -41,10 +48,13 @@ export const TabButton = ({
   to,
   role,
   ariaSelected,
+  'aria-controls': ariaControls,
+  tabIndex,
   LeftIcon,
   className,
   title,
   onClick,
+  onKeyDown,
   logo,
   RightIcon,
   pill,
@@ -55,16 +65,20 @@ export const TabButton = ({
   const tabElementId = `tab-${id}`;
 
   return (
-    <div key={id} id={tabElementId} className={styles.tabTooltipWrapper}>
+    <div className={styles.tabTooltipWrapper}>
       <StyledTabButton
+        id={tabElementId}
         role={role}
         aria-selected={ariaSelected}
+        aria-controls={ariaControls}
+        tabIndex={tabIndex}
         data-testid={disableTestId ? undefined : `tab-${id}`}
         active={active}
         disabled={disabled}
         to={to}
         className={className}
         onClick={onClick}
+        onKeyDown={onKeyDown}
       >
         <TabContent
           id={id}

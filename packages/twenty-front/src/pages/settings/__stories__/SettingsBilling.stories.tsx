@@ -207,14 +207,27 @@ export const HealthyFundedWorkspace: Story = {
     ).resolves.toBeVisible();
     await expect(canvas.findByText('Last 30 days')).resolves.toBeVisible();
 
-    const usageTab = await canvas.findByRole('button', {
+    const billingHistoryTabList = await canvas.findByRole('tablist', {
+      name: 'Billing history views',
+    });
+    const usageTab = await within(billingHistoryTabList).findByRole('tab', {
       name: 'Usage history',
     });
-    const billingHistoryTab = await canvas.findByRole('button', {
-      name: 'Billing history',
-    });
-    await expect(usageTab).toHaveAttribute('data-active', 'true');
-    await expect(billingHistoryTab).not.toHaveAttribute('data-active', 'true');
+    const billingHistoryTab = await within(billingHistoryTabList).findByRole(
+      'tab',
+      {
+        name: 'Billing history',
+      },
+    );
+    await expect(usageTab).toHaveAttribute('aria-selected', 'true');
+    await expect(usageTab).toHaveAttribute(
+      'aria-controls',
+      'workspace-billing-panel-usage',
+    );
+    await expect(billingHistoryTab).toHaveAttribute('aria-selected', 'false');
+    await expect(
+      canvas.findByRole('tabpanel', { name: 'Usage history' }),
+    ).resolves.toBeVisible();
 
     const usageTable = await canvas.findByRole('table', {
       name: 'Usage history',
@@ -244,6 +257,11 @@ export const HealthyFundedWorkspace: Story = {
     await expect(
       within(usageTable).findAllByRole('cell', { name: 'AI chat' }),
     ).resolves.toHaveLength(2);
+    await userEvent.click(usageTab);
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(billingHistoryTab).toHaveAttribute('aria-selected', 'true');
+    await expect(billingHistoryTab).toHaveFocus();
+    await userEvent.click(usageTab);
 
     await userEvent.click(await canvas.findByText('Last 30 days'));
     const sevenDaysOption = await within(document.body).findByText(
@@ -252,10 +270,12 @@ export const HealthyFundedWorkspace: Story = {
     await userEvent.click(sevenDaysOption);
     await expect(canvas.findByText('Last 7 days')).resolves.toBeVisible();
 
-    expect(canvas.queryByRole('tablist')).not.toBeInTheDocument();
     await userEvent.click(billingHistoryTab);
-    await expect(billingHistoryTab).toHaveAttribute('data-active', 'true');
-    await expect(usageTab).not.toHaveAttribute('data-active', 'true');
+    await expect(billingHistoryTab).toHaveAttribute('aria-selected', 'true');
+    await expect(usageTab).toHaveAttribute('aria-selected', 'false');
+    await expect(
+      canvas.findByRole('tabpanel', { name: 'Billing history' }),
+    ).resolves.toBeVisible();
     const billingHistoryTable = await canvas.findByRole('table', {
       name: 'Billing history',
     });
@@ -586,7 +606,7 @@ export const TabletLedgerLayout: Story = {
       tabletCanvas.clientWidth,
     );
     await userEvent.click(
-      await canvas.findByRole('button', { name: 'Billing history' }),
+      await canvas.findByRole('tab', { name: 'Billing history' }),
     );
     await expect(
       canvas.findByRole('table', { name: 'Billing history' }),
@@ -638,7 +658,7 @@ export const WidenedDrawerLedgerLayout: Story = {
       widenedDrawerCanvas.clientWidth,
     );
     await userEvent.click(
-      await canvas.findByRole('button', { name: 'Billing history' }),
+      await canvas.findByRole('tab', { name: 'Billing history' }),
     );
     await expect(
       canvas.findByRole('table', { name: 'Billing history' }),
@@ -833,7 +853,7 @@ export const NoBillingHistory: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
-      await canvas.findByRole('button', { name: 'Billing history' }),
+      await canvas.findByRole('tab', { name: 'Billing history' }),
     );
     await expect(
       canvas.findByText('No billing events yet'),
