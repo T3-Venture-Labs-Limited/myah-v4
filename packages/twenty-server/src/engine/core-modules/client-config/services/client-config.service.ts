@@ -101,7 +101,15 @@ export class ClientConfigService {
       },
     );
 
-    if (aiModels.length > 0) {
+    const hasResolvableDefaultModel = workspaceId
+      ? aiModels.length > 0
+      : this.aiModelRegistryService
+          .getAvailableModelsForWorkspace()
+          .some((model) =>
+            this.aiModelRegistryService.isModelAdminAllowed(model.modelId),
+          );
+
+    if (aiModels.length > 0 && hasResolvableDefaultModel) {
       const defaultSpeedModel =
         this.aiModelRegistryService.getDefaultSpeedModel(workspaceId);
       const defaultSpeedModelConfig =

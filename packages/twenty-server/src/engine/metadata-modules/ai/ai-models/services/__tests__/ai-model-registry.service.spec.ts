@@ -109,7 +109,7 @@ describe('AiModelRegistryService', () => {
     expect(service.getModel('openrouter-custom/custom-model')).toBeDefined();
   });
 
-  it('fails closed for global client selectors without workspace identity', () => {
+  it('publishes admin-enabled managed models in the global client selector', () => {
     jest.spyOn(service, 'getAvailableModels').mockReturnValue([
       {
         modelId: 'openrouter/managed-model',
@@ -127,7 +127,7 @@ describe('AiModelRegistryService', () => {
 
     expect(
       service.getAdminFilteredModels().map(({ modelId }) => modelId),
-    ).toEqual(['openai/gpt-4']);
+    ).toEqual(['openrouter/managed-model', 'openai/gpt-4']);
   });
 
   it('should return effective model config for AUTO_SELECT_SMART_MODEL_ID when models are available', () => {
