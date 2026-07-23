@@ -123,6 +123,22 @@ describe('CreatorBulkRelationshipDialog', () => {
     expect(mockCloseModal).not.toHaveBeenCalled();
   });
 
+  it('does not create relationships when the duplicate preview is unavailable', () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      ...readyPreview,
+      isPreviewUnavailable: true,
+    });
+
+    render(
+      <CreatorBulkRelationshipDialog
+        target={creatorListTarget}
+        selectedCreatorIds={['creator-a', 'creator-b']}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Add to list' })).toBeDisabled();
+  });
+
   it('keeps the confirmation open and disabled until an async mutation succeeds', async () => {
     let resolveMutation: (() => void) | undefined;
     mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);

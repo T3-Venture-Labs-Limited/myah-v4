@@ -34,22 +34,23 @@ export const useCreatorBulkRelationshipPreview = ({
   const targetFieldName =
     target.kind === 'creator-list' ? 'creatorListId' : 'campaignId';
 
-  const { records, loading, refetch } = useFindManyRecords<{
-    id: string;
-    __typename: string;
-    creatorId: string;
-  }>({
-    objectNameSingular,
-    filter: {
-      and: [
-        { [targetFieldName]: { eq: target.id } },
-        { creatorId: { in: selectedCreatorIds } },
-      ],
-    },
-    recordGqlFields: { id: true, creatorId: true },
-    limit: selectedCreatorIds.length,
-    skip: selectedCreatorIds.length === 0,
-  });
+  const { records, loading, error, hasReadPermission, refetch } =
+    useFindManyRecords<{
+      id: string;
+      __typename: string;
+      creatorId: string;
+    }>({
+      objectNameSingular,
+      filter: {
+        and: [
+          { [targetFieldName]: { eq: target.id } },
+          { creatorId: { in: selectedCreatorIds } },
+        ],
+      },
+      recordGqlFields: { id: true, creatorId: true },
+      limit: selectedCreatorIds.length,
+      skip: selectedCreatorIds.length === 0,
+    });
 
   const preview = useMemo(
     () =>
@@ -60,5 +61,12 @@ export const useCreatorBulkRelationshipPreview = ({
     [records, selectedCreatorIds],
   );
 
-  return { ...preview, loading, refetch };
+  return {
+    ...preview,
+    loading,
+    isPreviewUnavailable:
+      selectedCreatorIds.length > 0 &&
+      (!hasReadPermission || error !== undefined),
+    refetch,
+  };
 };

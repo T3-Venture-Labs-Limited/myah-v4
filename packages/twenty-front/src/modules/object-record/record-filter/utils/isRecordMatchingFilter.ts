@@ -100,11 +100,13 @@ export const isRecordMatchingFilter = ({
   filter,
   objectMetadataItem,
   objectMetadataItems,
+  shouldMatchUnloadedOneToManyRelations,
 }: {
   record: any;
   filter: RecordGqlOperationFilter;
   objectMetadataItem: EnrichedObjectMetadataItem;
   objectMetadataItems?: EnrichedObjectMetadataItem[];
+  shouldMatchUnloadedOneToManyRelations?: boolean;
 }): boolean => {
   if (Object.keys(filter).length === 0 && record.deletedAt === null) {
     return true;
@@ -117,6 +119,7 @@ export const isRecordMatchingFilter = ({
         filter: { [filterKey]: value },
         objectMetadataItem,
         objectMetadataItems,
+        shouldMatchUnloadedOneToManyRelations,
       }),
     );
   }
@@ -138,6 +141,7 @@ export const isRecordMatchingFilter = ({
           filter: andFilter,
           objectMetadataItem,
           objectMetadataItems,
+          shouldMatchUnloadedOneToManyRelations,
         }),
       )
     );
@@ -155,6 +159,7 @@ export const isRecordMatchingFilter = ({
             filter: orFilter,
             objectMetadataItem,
             objectMetadataItems,
+            shouldMatchUnloadedOneToManyRelations,
           }),
         )
       );
@@ -167,6 +172,7 @@ export const isRecordMatchingFilter = ({
         filter: filterValue,
         objectMetadataItem,
         objectMetadataItems,
+        shouldMatchUnloadedOneToManyRelations,
       });
     }
 
@@ -187,6 +193,11 @@ export const isRecordMatchingFilter = ({
         filter: filterValue,
         objectMetadataItem,
         objectMetadataItems,
+        shouldMatchUnloadedOneToManyRelations: isDefined(
+          shouldMatchUnloadedOneToManyRelations,
+        )
+          ? !shouldMatchUnloadedOneToManyRelations
+          : undefined,
       })
     );
   }
@@ -460,10 +471,11 @@ export const isRecordMatchingFilter = ({
               objectMetadataField.relation?.targetObjectMetadata.nameSingular,
           );
 
-          if (
-            !isDefined(relationRecords) ||
-            !isDefined(targetObjectMetadataItem)
-          ) {
+          if (!isDefined(relationRecords)) {
+            return shouldMatchUnloadedOneToManyRelations ?? false;
+          }
+
+          if (!isDefined(targetObjectMetadataItem)) {
             return false;
           }
 
@@ -473,6 +485,7 @@ export const isRecordMatchingFilter = ({
               filter: filterValue as RecordGqlOperationFilter,
               objectMetadataItem: targetObjectMetadataItem,
               objectMetadataItems,
+              shouldMatchUnloadedOneToManyRelations,
             }),
           );
         }

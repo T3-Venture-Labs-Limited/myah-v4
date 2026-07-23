@@ -82,6 +82,15 @@ export const triggerUpdateRecordOptimisticEffect = ({
           objectMetadataItems,
         });
 
+        const updatedRecordMatchesThisRootQueryFilterOrHasUnloadedOneToManyRelation =
+          isRecordMatchingFilter({
+            record: updatedRecord,
+            filter: rootQueryFilter ?? {},
+            objectMetadataItem,
+            objectMetadataItems,
+            shouldMatchUnloadedOneToManyRelations: true,
+          });
+
         const currentRecordIndexInRootQueryEdges = isRecordMatchingFilter({
           record: currentRecord,
           filter: rootQueryFilter ?? {},
@@ -117,7 +126,7 @@ export const triggerUpdateRecordOptimisticEffect = ({
           !updatedRecordFoundInRootQueryEdges;
 
         const updatedRecordShouldBeRemovedFromRootQueryEdges =
-          !updatedRecordMatchesThisRootQueryFilter &&
+          !updatedRecordMatchesThisRootQueryFilterOrHasUnloadedOneToManyRelation &&
           updatedRecordFoundInRootQueryEdges;
 
         if (updatedRecordShouldBeAddedToRootQueryEdges) {

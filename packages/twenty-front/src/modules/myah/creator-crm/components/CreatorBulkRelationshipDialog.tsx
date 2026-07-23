@@ -35,11 +35,13 @@ export const CreatorBulkRelationshipDialog = ({
   const targetLabel = target.kind === 'creator-list' ? t`list` : t`campaign`;
   const isConfirmationDisabled =
     preview.loading ||
+    preview.isPreviewUnavailable ||
     isApplying ||
     preview.selectedCreatorIds.length === 0 ||
     preview.creatorIdsToAdd.length === 0;
-  const subtitle =
-    preview.creatorIdsToAdd.length === 0
+  const subtitle = preview.isPreviewUnavailable
+    ? t`Unable to verify existing relationships. Try again.`
+    : preview.creatorIdsToAdd.length === 0
       ? t`${preview.selectedCreatorIds.length} selected · ${preview.creatorIdsToAdd.length} will be added · ${preview.alreadyLinkedCreatorIds.length} already present. No changes will be made.`
       : t`${preview.selectedCreatorIds.length} selected · ${preview.creatorIdsToAdd.length} will be added · ${preview.alreadyLinkedCreatorIds.length} already present.`;
 

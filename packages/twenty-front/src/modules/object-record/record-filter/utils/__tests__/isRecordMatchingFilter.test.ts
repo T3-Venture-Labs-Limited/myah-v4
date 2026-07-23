@@ -650,6 +650,72 @@ describe('isRecordMatchingFilter', () => {
       ).toBe(false);
     });
 
+    it('preserves an unloaded one-to-many relation when requested by an optimistic update', () => {
+      const companyWithoutPeople = {
+        ...companiesMock[0],
+        people: undefined,
+      };
+      const peopleFilter = {
+        people: {
+          companyId: { in: [companyWithoutPeople.id] },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithoutPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+          shouldMatchUnloadedOneToManyRelations: true,
+        }),
+      ).toBe(true);
+    });
+
+    it('preserves an unloaded one-to-many relation through a negated filter when requested by an optimistic update', () => {
+      const companyWithoutPeople = {
+        ...companiesMock[0],
+        people: undefined,
+      };
+      const peopleFilter = {
+        not: {
+          people: {
+            companyId: { in: [companyWithoutPeople.id] },
+          },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithoutPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+          shouldMatchUnloadedOneToManyRelations: true,
+        }),
+      ).toBe(true);
+    });
+
+    it('keeps default unloaded-relation semantics through a negated filter', () => {
+      const companyWithoutPeople = {
+        ...companiesMock[0],
+        people: undefined,
+      };
+      const peopleFilter = {
+        not: {
+          people: {
+            companyId: { in: [companyWithoutPeople.id] },
+          },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithoutPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+        }),
+      ).toBe(true);
+    });
+
     it('matches a loaded one-to-many relation filter', () => {
       const companyWithPeople = {
         ...companiesMock[0],

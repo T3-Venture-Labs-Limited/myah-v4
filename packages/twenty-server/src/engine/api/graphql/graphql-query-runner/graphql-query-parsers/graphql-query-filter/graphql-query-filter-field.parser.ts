@@ -246,6 +246,7 @@ export class GraphqlQueryFilterFieldParser {
           targetEntity,
           targetAlias,
         );
+      targetQueryBuilder.select(`${targetAlias}.id`);
       const childConditionParser = new GraphqlQueryFilterConditionParser(
         targetObjectMetadata,
         this.flatFieldMetadataMaps,

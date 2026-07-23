@@ -96,6 +96,8 @@ describe('useCreatorBulkRelationshipPreview', () => {
       })),
       loading: false,
       refetch: jest.fn(),
+      error: undefined,
+      hasReadPermission: true,
     });
 
     const { result } = renderHook(() =>
@@ -114,6 +116,30 @@ describe('useCreatorBulkRelationshipPreview', () => {
     );
     expect(result.current.creatorIdsToAdd).toEqual([]);
     expect(result.current.alreadyLinkedCreatorIds).toEqual(selectedCreatorIds);
+    expect(result.current.isPreviewUnavailable).toBe(false);
+  });
+
+  it('marks the preview unavailable when the relationship query fails', () => {
+    mockUseFindManyRecords.mockReturnValue({
+      records: [],
+      loading: false,
+      error: new Error('network unavailable'),
+      hasReadPermission: true,
+      refetch: jest.fn(),
+    });
+
+    const { result } = renderHook(() =>
+      useCreatorBulkRelationshipPreview({
+        target: {
+          kind: 'creator-list',
+          id: 'list-a',
+          label: 'Spring creators',
+        },
+        selectedCreatorIds: ['creator-a'],
+      }),
+    );
+
+    expect(result.current.isPreviewUnavailable).toBe(true);
   });
 });
 
