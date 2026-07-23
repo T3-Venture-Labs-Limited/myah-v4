@@ -452,12 +452,8 @@ export class AiModelRegistryService {
   }
 
   getAdminFilteredModels(): RegisteredAiModel[] {
-    // Client config has no workspace identity. Fail closed instead of
-    // publishing managed-only models to every workspace's selector.
-    return this.getAvailableModels().filter(
-      (model) =>
-        model.providerName !== MANAGED_OPENROUTER_PROVIDER_NAME &&
-        this.isModelAdminAllowed(model.modelId),
+    return this.getAvailableModels().filter((model) =>
+      this.isModelAdminAllowed(model.modelId),
     );
   }
   getAllModelsWithStatus(): Array<{

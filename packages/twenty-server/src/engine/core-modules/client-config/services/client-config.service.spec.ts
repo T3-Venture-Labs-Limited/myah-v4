@@ -1,4 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
+import type { LanguageModel } from 'ai';
 
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 import { SupportDriver } from 'src/engine/core-modules/twenty-config/interfaces/support.interface';
@@ -15,6 +16,7 @@ describe('ClientConfigService', () => {
   let service: ClientConfigService;
   let twentyConfigService: TwentyConfigService;
   let domainServerConfigService: DomainServerConfigService;
+  let aiModelRegistryService: AiModelRegistryService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -37,6 +39,8 @@ describe('ClientConfigService', () => {
           provide: AiModelRegistryService,
           useValue: {
             getAdminFilteredModels: jest.fn().mockReturnValue([]),
+            getAvailableModelsForWorkspace: jest.fn().mockReturnValue([]),
+            isModelAdminAllowed: jest.fn().mockReturnValue(true),
             getRecommendedModelIds: jest.fn().mockReturnValue(new Set()),
             getModelConfig: jest.fn().mockReturnValue(undefined),
             getResolvedProvidersForAdmin: jest.fn().mockReturnValue({}),
@@ -57,6 +61,9 @@ describe('ClientConfigService', () => {
     twentyConfigService = module.get<TwentyConfigService>(TwentyConfigService);
     domainServerConfigService = module.get<DomainServerConfigService>(
       DomainServerConfigService,
+    );
+    aiModelRegistryService = module.get<AiModelRegistryService>(
+      AiModelRegistryService,
     );
   });
 
@@ -191,6 +198,41 @@ describe('ClientConfigService', () => {
         isCloudflareIntegrationEnabled: false,
         isClickHouseConfigured: false,
       });
+    });
+
+    it('publishes managed models without unresolvable auto-select defaults', async () => {
+      jest
+        .spyOn(aiModelRegistryService, 'getAdminFilteredModels')
+        .mockReturnValue([
+          {
+            modelId: 'openrouter/deepseek/deepseek-v4-flash',
+            providerName: 'openrouter',
+            sdkPackage: '@ai-sdk/openai-compatible',
+            model: {} as LanguageModel,
+          },
+        ]);
+      jest
+        .spyOn(aiModelRegistryService, 'getDefaultSpeedModel')
+        .mockImplementation(() => {
+          throw new Error('No AI models are available');
+        });
+      jest
+        .spyOn(aiModelRegistryService, 'getDefaultPerformanceModel')
+        .mockImplementation(() => {
+          throw new Error('No AI models are available');
+        });
+
+      const result = await service.getClientConfig();
+
+      expect(result.aiModels.map(({ modelId }) => modelId)).toEqual([
+        'openrouter/deepseek/deepseek-v4-flash',
+      ]);
+      expect(
+        aiModelRegistryService.getDefaultSpeedModel,
+      ).not.toHaveBeenCalled();
+      expect(
+        aiModelRegistryService.getDefaultPerformanceModel,
+      ).not.toHaveBeenCalled();
     });
 
     it('should handle production environment correctly', async () => {
