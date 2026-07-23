@@ -483,7 +483,10 @@ describe('Myah standard metadata contract', () => {
       ]),
     );
 
-    for (const [objectMetadataUniversalIdentifier, fieldMetadataUniversalIdentifier] of [
+    for (const [
+      objectMetadataUniversalIdentifier,
+      fieldMetadataUniversalIdentifier,
+    ] of [
       [
         MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier,
