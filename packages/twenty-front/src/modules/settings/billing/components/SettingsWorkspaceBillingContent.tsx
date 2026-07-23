@@ -32,6 +32,7 @@ const usdFormatter = new Intl.NumberFormat('en-US', {
 const formatUsdCents = (amountCents: number): string =>
   usdFormatter.format(amountCents / 100);
 const WORKSPACE_BILLING_TAB_LIST_ID = 'settings-workspace-billing-tabs';
+const COMPACT_LEDGER_VIEWPORT = 960;
 const WORKSPACE_BILLING_TAB_IDS = {
   USAGE: 'usage',
   BILLING_HISTORY: 'billing-history',
@@ -192,7 +193,7 @@ const StyledDocumentLink = styled.a`
   color: ${themeCssVariables.font.color.primary};
 `;
 const StyledResponsiveTableRow = styled(TableRow)`
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
+  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
     grid-template-columns: minmax(96px, 0.9fr) minmax(0, 1.5fr) minmax(
         88px,
         0.8fr
@@ -200,7 +201,7 @@ const StyledResponsiveTableRow = styled(TableRow)`
   }
 `;
 const StyledResponsiveTableHeader = styled(TableHeader)`
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
+  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
     &:nth-child(3),
     &:nth-child(4) {
       display: none;
@@ -208,7 +209,7 @@ const StyledResponsiveTableHeader = styled(TableHeader)`
   }
 `;
 const StyledResponsiveTableCell = styled(TableCell)`
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
+  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
     &:nth-child(3),
     &:nth-child(4) {
       display: none;
@@ -216,7 +217,7 @@ const StyledResponsiveTableCell = styled(TableCell)`
   }
 `;
 const StyledResponsivePrimaryCell = styled(TableCell)`
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
+  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;
@@ -226,7 +227,7 @@ const StyledResponsiveMetadata = styled.span`
   color: ${themeCssVariables.font.color.secondary};
   display: none;
   font-size: 12px;
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
+  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
     display: block;
   }
 `;

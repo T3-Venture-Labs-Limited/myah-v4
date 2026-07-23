@@ -547,6 +547,56 @@ export const DisablingAutomaticTopUpWithInvalidRequiredDraft: Story = {
   },
 };
 
+export const TabletLedgerLayout: Story = {
+  args: {
+    viewModel: healthyWorkspaceViewModel,
+  },
+  parameters: {
+    componentCanvas: true,
+    layout: 'fullscreen',
+    viewport: {
+      options: {
+        myahTablet: {
+          name: 'Myah tablet',
+          styles: { width: '834px', height: '1024px' },
+        },
+      },
+      defaultViewport: 'myahTablet',
+    },
+  },
+  render: ({ viewModel }) => (
+    <MemoryRouter>
+      <div
+        data-testid="billing-tablet-canvas"
+        style={{ margin: '0 auto', maxWidth: '550px' }}
+      >
+        <SettingsWorkspaceBillingContent
+          viewModel={viewModel ?? healthyWorkspaceViewModel}
+        />
+      </div>
+    </MemoryRouter>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const tabletCanvas = await canvas.findByTestId('billing-tablet-canvas');
+    await expect(
+      canvas.findByRole('table', { name: 'Usage history' }),
+    ).resolves.toBeVisible();
+    expect(tabletCanvas.scrollWidth).toBeLessThanOrEqual(
+      tabletCanvas.clientWidth,
+    );
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Billing history' }),
+    );
+    await expect(
+      canvas.findByRole('table', { name: 'Billing history' }),
+    ).resolves.toBeVisible();
+    expect(tabletCanvas.scrollWidth).toBeLessThanOrEqual(
+      tabletCanvas.clientWidth,
+    );
+  },
+};
+
 export const MobileAutomaticTopUp: Story = {
   args: {
     viewModel: {
