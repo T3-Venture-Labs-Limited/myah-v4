@@ -225,9 +225,24 @@ export const HealthyFundedWorkspace: Story = {
       'workspace-billing-panel-usage',
     );
     await expect(billingHistoryTab).toHaveAttribute('aria-selected', 'false');
+    await expect(billingHistoryTab).toHaveAttribute(
+      'aria-controls',
+      'workspace-billing-panel-billing-history',
+    );
     await expect(
       canvas.findByRole('tabpanel', { name: 'Usage history' }),
     ).resolves.toBeVisible();
+    const inactiveBillingHistoryPanel = canvasElement.querySelector(
+      '#workspace-billing-panel-billing-history',
+    );
+    if (inactiveBillingHistoryPanel === null) {
+      throw new Error('The Billing history panel must remain in the DOM');
+    }
+    await expect(inactiveBillingHistoryPanel).toHaveAttribute('hidden');
+    await expect(inactiveBillingHistoryPanel).toHaveAttribute(
+      'aria-labelledby',
+      'tab-workspace-billing-tab-billing-history',
+    );
 
     const usageTable = await canvas.findByRole('table', {
       name: 'Usage history',
@@ -300,7 +315,9 @@ export const HealthyFundedWorkspace: Story = {
         name: 'View receipt from July 1, 2026',
       }),
     ).resolves.toBeVisible();
-    expect(canvas.queryByText('AI chat')).not.toBeInTheDocument();
+    expect(
+      canvas.queryByRole('table', { name: 'Usage history' }),
+    ).not.toBeInTheDocument();
     await expect(canvas.findByText('Payment settings')).resolves.toBeVisible();
     await expect(canvas.findByText(/Visa.*4242/)).resolves.toBeVisible();
     await expect(canvas.findByText('Expires 12/28')).resolves.toBeVisible();

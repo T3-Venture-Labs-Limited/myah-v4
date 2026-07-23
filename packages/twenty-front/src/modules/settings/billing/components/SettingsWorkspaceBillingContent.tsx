@@ -776,139 +776,142 @@ export const SettingsWorkspaceBillingContent = ({
         </StyledBillingTabList>
         <div
           role="tabpanel"
-          id={`workspace-billing-panel-${displayedTabId}`}
-          aria-labelledby={`tab-workspace-billing-tab-${displayedTabId}`}
+          id="workspace-billing-panel-usage"
+          aria-labelledby="tab-workspace-billing-tab-usage"
+          hidden={displayedTabId !== WORKSPACE_BILLING_TAB_IDS.USAGE}
         >
-          {displayedTabId === WORKSPACE_BILLING_TAB_IDS.USAGE && (
-            <>
-              <Select
-                label={t`Usage period`}
-                dropdownId="workspace-billing-usage-period"
-                value={usagePeriod}
-                options={[
-                  { value: '7d', label: t`Last 7 days` },
-                  { value: '30d', label: t`Last 30 days` },
-                  { value: '90d', label: t`Last 90 days` },
-                ]}
-                onChange={(value) => setUsagePeriod(value as UsagePeriod)}
-              />
-              {viewModel.usageHistory.length === 0 ? (
-                <StyledBillingEmptyState>
-                  <strong>{t`No usage yet`}</strong>
-                  <StyledEmptyCopy>
-                    {t`Managed service activity will appear here when your workspace starts using it.`}
-                  </StyledEmptyCopy>
-                </StyledBillingEmptyState>
-              ) : (
-                <Table role="table" aria-label={t`Usage history`}>
-                  <StyledResponsiveTableRow
-                    role="row"
-                    gridTemplateColumns={usageColumns}
-                  >
-                    <StyledResponsiveTableHeader role="columnheader">{t`Date`}</StyledResponsiveTableHeader>
-                    <StyledResponsiveTableHeader role="columnheader">{t`Activity`}</StyledResponsiveTableHeader>
-                    <StyledResponsiveTableHeader role="columnheader">{t`Member`}</StyledResponsiveTableHeader>
-                    <StyledResponsiveTableHeader role="columnheader">{t`Status`}</StyledResponsiveTableHeader>
-                    <StyledResponsiveTableHeader
-                      role="columnheader"
-                      align="right"
-                    >{t`Amount`}</StyledResponsiveTableHeader>
-                  </StyledResponsiveTableRow>
-                  {viewModel.usageHistory.map((entry) => (
-                    <StyledResponsiveTableRow
-                      key={entry.id}
-                      role="row"
-                      gridTemplateColumns={usageColumns}
-                    >
-                      <StyledResponsiveTableCell role="cell">
-                        {new Date(entry.occurredAt).toLocaleString()}
-                      </StyledResponsiveTableCell>
-                      <StyledResponsivePrimaryCell role="cell">
-                        {entry.activity}
-                        <StyledResponsiveMetadata>
-                          {t`${entry.member} · ${getUsageStatus(entry.status).label}`}
-                        </StyledResponsiveMetadata>
-                      </StyledResponsivePrimaryCell>
-                      <StyledResponsiveTableCell role="cell">
-                        {entry.member}
-                      </StyledResponsiveTableCell>
-                      <StyledResponsiveTableCell role="cell">
-                        {getUsageStatus(entry.status).label}
-                      </StyledResponsiveTableCell>
-                      <StyledResponsiveTableCell role="cell" align="right">
-                        {getUsageAmount(entry.status, entry.chargeCents)}
-                      </StyledResponsiveTableCell>
-                    </StyledResponsiveTableRow>
-                  ))}
-                </Table>
-              )}
-            </>
-          )}
-          {displayedTabId === WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY &&
-            (viewModel.billingHistory.length === 0 ? (
-              <StyledBillingEmptyState>
-                <strong>{t`No billing events yet`}</strong>
-                <StyledEmptyCopy>
-                  {t`Funding events will appear here when funds are added or adjusted.`}
-                </StyledEmptyCopy>
-              </StyledBillingEmptyState>
-            ) : (
-              <Table role="table" aria-label={t`Billing history`}>
+          <Select
+            label={t`Usage period`}
+            dropdownId="workspace-billing-usage-period"
+            value={usagePeriod}
+            options={[
+              { value: '7d', label: t`Last 7 days` },
+              { value: '30d', label: t`Last 30 days` },
+              { value: '90d', label: t`Last 90 days` },
+            ]}
+            onChange={(value) => setUsagePeriod(value as UsagePeriod)}
+          />
+          {viewModel.usageHistory.length === 0 ? (
+            <StyledBillingEmptyState>
+              <strong>{t`No usage yet`}</strong>
+              <StyledEmptyCopy>
+                {t`Managed service activity will appear here when your workspace starts using it.`}
+              </StyledEmptyCopy>
+            </StyledBillingEmptyState>
+          ) : (
+            <Table role="table" aria-label={t`Usage history`}>
+              <StyledResponsiveTableRow
+                role="row"
+                gridTemplateColumns={usageColumns}
+              >
+                <StyledResponsiveTableHeader role="columnheader">{t`Date`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Activity`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Member`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Status`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader
+                  role="columnheader"
+                  align="right"
+                >{t`Amount`}</StyledResponsiveTableHeader>
+              </StyledResponsiveTableRow>
+              {viewModel.usageHistory.map((entry) => (
                 <StyledResponsiveTableRow
+                  key={entry.id}
+                  role="row"
+                  gridTemplateColumns={usageColumns}
+                >
+                  <StyledResponsiveTableCell role="cell">
+                    {new Date(entry.occurredAt).toLocaleString()}
+                  </StyledResponsiveTableCell>
+                  <StyledResponsivePrimaryCell role="cell">
+                    {entry.activity}
+                    <StyledResponsiveMetadata>
+                      {t`${entry.member} · ${getUsageStatus(entry.status).label}`}
+                    </StyledResponsiveMetadata>
+                  </StyledResponsivePrimaryCell>
+                  <StyledResponsiveTableCell role="cell">
+                    {entry.member}
+                  </StyledResponsiveTableCell>
+                  <StyledResponsiveTableCell role="cell">
+                    {getUsageStatus(entry.status).label}
+                  </StyledResponsiveTableCell>
+                  <StyledResponsiveTableCell role="cell" align="right">
+                    {getUsageAmount(entry.status, entry.chargeCents)}
+                  </StyledResponsiveTableCell>
+                </StyledResponsiveTableRow>
+              ))}
+            </Table>
+          )}
+        </div>
+        <div
+          role="tabpanel"
+          id="workspace-billing-panel-billing-history"
+          aria-labelledby="tab-workspace-billing-tab-billing-history"
+          hidden={displayedTabId !== WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY}
+        >
+          {viewModel.billingHistory.length === 0 ? (
+            <StyledBillingEmptyState>
+              <strong>{t`No billing events yet`}</strong>
+              <StyledEmptyCopy>
+                {t`Funding events will appear here when funds are added or adjusted.`}
+              </StyledEmptyCopy>
+            </StyledBillingEmptyState>
+          ) : (
+            <Table role="table" aria-label={t`Billing history`}>
+              <StyledResponsiveTableRow
+                role="row"
+                gridTemplateColumns={billingHistoryColumns}
+              >
+                <StyledResponsiveTableHeader role="columnheader">{t`Date`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Event`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Type`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader role="columnheader">{t`Document`}</StyledResponsiveTableHeader>
+                <StyledResponsiveTableHeader
+                  role="columnheader"
+                  align="right"
+                >{t`Amount`}</StyledResponsiveTableHeader>
+              </StyledResponsiveTableRow>
+              {viewModel.billingHistory.map((entry) => (
+                <StyledResponsiveTableRow
+                  key={entry.id}
                   role="row"
                   gridTemplateColumns={billingHistoryColumns}
                 >
-                  <StyledResponsiveTableHeader role="columnheader">{t`Date`}</StyledResponsiveTableHeader>
-                  <StyledResponsiveTableHeader role="columnheader">{t`Event`}</StyledResponsiveTableHeader>
-                  <StyledResponsiveTableHeader role="columnheader">{t`Type`}</StyledResponsiveTableHeader>
-                  <StyledResponsiveTableHeader role="columnheader">{t`Document`}</StyledResponsiveTableHeader>
-                  <StyledResponsiveTableHeader
-                    role="columnheader"
-                    align="right"
-                  >{t`Amount`}</StyledResponsiveTableHeader>
-                </StyledResponsiveTableRow>
-                {viewModel.billingHistory.map((entry) => (
-                  <StyledResponsiveTableRow
-                    key={entry.id}
-                    role="row"
-                    gridTemplateColumns={billingHistoryColumns}
-                  >
-                    <StyledResponsiveTableCell role="cell">
-                      {new Date(entry.occurredAt).toLocaleString()}
-                    </StyledResponsiveTableCell>
-                    <StyledResponsivePrimaryCell role="cell">
-                      {entry.description}
-                      <StyledResponsiveMetadata>
-                        {getBillingHistoryTypeLabel(entry.type)}
-                        {entry.document !== undefined && (
-                          <>
-                            {' · '}
-                            <StyledDocumentLink href={entry.document.url}>
-                              {entry.document.label}
-                            </StyledDocumentLink>
-                          </>
-                        )}
-                      </StyledResponsiveMetadata>
-                    </StyledResponsivePrimaryCell>
-                    <StyledResponsiveTableCell role="cell">
+                  <StyledResponsiveTableCell role="cell">
+                    {new Date(entry.occurredAt).toLocaleString()}
+                  </StyledResponsiveTableCell>
+                  <StyledResponsivePrimaryCell role="cell">
+                    {entry.description}
+                    <StyledResponsiveMetadata>
                       {getBillingHistoryTypeLabel(entry.type)}
-                    </StyledResponsiveTableCell>
-                    <StyledResponsiveTableCell role="cell">
-                      {entry.document === undefined ? (
-                        EM_DASH
-                      ) : (
-                        <StyledDocumentLink href={entry.document.url}>
-                          {entry.document.label}
-                        </StyledDocumentLink>
+                      {entry.document !== undefined && (
+                        <>
+                          {' · '}
+                          <StyledDocumentLink href={entry.document.url}>
+                            {entry.document.label}
+                          </StyledDocumentLink>
+                        </>
                       )}
-                    </StyledResponsiveTableCell>
-                    <StyledResponsiveTableCell role="cell" align="right">
-                      {formatSignedUsdCents(entry.amountCents)}
-                    </StyledResponsiveTableCell>
-                  </StyledResponsiveTableRow>
-                ))}
-              </Table>
-            ))}
+                    </StyledResponsiveMetadata>
+                  </StyledResponsivePrimaryCell>
+                  <StyledResponsiveTableCell role="cell">
+                    {getBillingHistoryTypeLabel(entry.type)}
+                  </StyledResponsiveTableCell>
+                  <StyledResponsiveTableCell role="cell">
+                    {entry.document === undefined ? (
+                      EM_DASH
+                    ) : (
+                      <StyledDocumentLink href={entry.document.url}>
+                        {entry.document.label}
+                      </StyledDocumentLink>
+                    )}
+                  </StyledResponsiveTableCell>
+                  <StyledResponsiveTableCell role="cell" align="right">
+                    {formatSignedUsdCents(entry.amountCents)}
+                  </StyledResponsiveTableCell>
+                </StyledResponsiveTableRow>
+              ))}
+            </Table>
+          )}
         </div>
       </Section>
     </>
