@@ -44,7 +44,6 @@ const TEST_CREATOR_LIST_IDS = {
 
 const TEST_CREATOR_LIST_MEMBER_IDS = {
   MATCHING_A_1: '20202020-ffff-4000-8000-000000000007',
-  MATCHING_A_2: '20202020-ffff-4000-8000-000000000008',
   MATCHING_B: '20202020-ffff-4000-8000-000000000009',
   NON_MEMBER_B: '20202020-ffff-4000-8000-000000000010',
   SOFT_DELETED_A: '20202020-ffff-4000-8000-000000000011',
@@ -208,12 +207,6 @@ describe('Filter by relation field (e2e)', () => {
           {
             id: TEST_CREATOR_LIST_MEMBER_IDS.MATCHING_A_1,
             name: 'Matching membership A 1',
-            creatorId: TEST_CREATOR_IDS.MATCHING,
-            creatorListId: TEST_CREATOR_LIST_IDS.A,
-          },
-          {
-            id: TEST_CREATOR_LIST_MEMBER_IDS.MATCHING_A_2,
-            name: 'Matching membership A 2',
             creatorId: TEST_CREATOR_IDS.MATCHING,
             creatorListId: TEST_CREATOR_LIST_IDS.A,
           },
@@ -730,7 +723,9 @@ describe('Filter by relation field (e2e)', () => {
             { id: { eq: TEST_CREATOR_IDS.MATCHING } },
             {
               listMemberships: {
-                creatorListId: { eq: TEST_CREATOR_LIST_IDS.A },
+                creatorListId: {
+                  in: [TEST_CREATOR_LIST_IDS.A, TEST_CREATOR_LIST_IDS.B],
+                },
               },
             },
           ],
