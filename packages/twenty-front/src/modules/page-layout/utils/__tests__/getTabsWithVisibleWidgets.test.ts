@@ -8,7 +8,8 @@ import {
 describe('getTabsWithVisibleWidgets', () => {
   const createMockWidget = (
     id: string,
-    conditionalDisplay?: any,
+    conditionalDisplay?: unknown,
+    type: WidgetType = WidgetType.FIELDS,
   ): PageLayoutTab['widgets'][0] => ({
     __typename: 'PageLayoutWidget',
     id,
@@ -16,7 +17,7 @@ describe('getTabsWithVisibleWidgets', () => {
     isActive: true,
     pageLayoutTabId: 'tab-1',
     title: `Widget ${id}`,
-    type: WidgetType.FIELDS,
+    type,
     objectMetadataId: null,
     gridPosition: {
       __typename: 'GridPosition',
@@ -99,6 +100,27 @@ describe('getTabsWithVisibleWidgets', () => {
       expect(result).toHaveLength(1);
       expect(result[0].widgets).toHaveLength(1);
       expect(result[0].widgets[0].id).toBe('widget-1');
+    });
+
+    it('filters widgets unavailable for the target record', () => {
+      const tabs = [
+        createMockTab('tab-1', [
+          createMockWidget('widget-fields'),
+          createMockWidget('widget-tasks', undefined, WidgetType.TASKS),
+        ]),
+      ];
+
+      const result = getTabsWithVisibleWidgets({
+        tabs,
+        isMobile: false,
+        isInSidePanel: false,
+        isEditMode: false,
+        hiddenWidgetTypes: new Set([WidgetType.TASKS]),
+      });
+
+      expect(result[0].widgets).toEqual([
+        expect.objectContaining({ id: 'widget-fields' }),
+      ]);
     });
 
     it('should return first tab when all tabs have no visible widgets', () => {
@@ -205,6 +227,27 @@ describe('getTabsWithVisibleWidgets', () => {
       expect(result[0].widgets).toHaveLength(2); // All widgets kept in edit mode
       expect(result[0].widgets[0].id).toBe('widget-1');
       expect(result[0].widgets[1].id).toBe('widget-2');
+    });
+
+    it('hides widgets unavailable for the target record in edit mode', () => {
+      const tabs = [
+        createMockTab('tab-1', [
+          createMockWidget('widget-fields'),
+          createMockWidget('widget-tasks', undefined, WidgetType.TASKS),
+        ]),
+      ];
+
+      const result = getTabsWithVisibleWidgets({
+        tabs,
+        isMobile: false,
+        isInSidePanel: false,
+        isEditMode: true,
+        hiddenWidgetTypes: new Set([WidgetType.TASKS]),
+      });
+
+      expect(result[0].widgets).toEqual([
+        expect.objectContaining({ id: 'widget-fields' }),
+      ]);
     });
 
     it('should keep tabs with no widgets', () => {

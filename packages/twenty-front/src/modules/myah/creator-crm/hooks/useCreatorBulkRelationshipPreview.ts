@@ -38,20 +38,18 @@ export const useCreatorBulkRelationshipPreview = ({
     id: string;
     __typename: string;
     creatorId: string;
-  }>(
-    {
-      objectNameSingular,
-      filter: {
-        and: [
-          { [targetFieldName]: { eq: target.id } },
-          { creatorId: { in: selectedCreatorIds } },
-        ],
-      },
-      recordGqlFields: { id: true, creatorId: true },
-      limit: selectedCreatorIds.length,
-      skip: selectedCreatorIds.length === 0,
+  }>({
+    objectNameSingular,
+    filter: {
+      and: [
+        { [targetFieldName]: { eq: target.id } },
+        { creatorId: { in: selectedCreatorIds } },
+      ],
     },
-  );
+    recordGqlFields: { id: true, creatorId: true },
+    limit: selectedCreatorIds.length,
+    skip: selectedCreatorIds.length === 0,
+  });
 
   const preview = useMemo(
     () =>

@@ -15,7 +15,7 @@ import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { t } from '@lingui/core/macro';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { IconForbid } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
@@ -48,11 +48,11 @@ export const CreatorBulkRelationshipTargetPickerDialog = ({
   const objectNameSingular =
     kind === 'creator-list' ? 'creatorList' : 'campaign';
   const pickerInstanceId = `creator-bulk-relationship-target-picker-${kind}`;
-  const searchFilter = useAtomComponentStateValue(
+  const singleRecordPickerSearchFilter = useAtomComponentStateValue(
     singleRecordPickerSearchFilterComponentState,
     pickerInstanceId,
   );
-  const setSearchFilter = useSetAtomComponentState(
+  const setSingleRecordPickerSearchFilter = useSetAtomComponentState(
     singleRecordPickerSearchFilterComponentState,
     pickerInstanceId,
   );
@@ -80,9 +80,9 @@ export const CreatorBulkRelationshipTargetPickerDialog = ({
   });
   const { createOneRecord } = useCreateOneRecord({ objectNameSingular });
 
-  const resetPickerSearch = () => {
-    setSearchFilter('');
-  };
+  const resetPickerSearch = useCallback(() => {
+    setSingleRecordPickerSearchFilter('');
+  }, [setSingleRecordPickerSearchFilter]);
 
   useEffect(() => {
     const label = selectedTargetRecord?.name?.trim();
@@ -94,7 +94,14 @@ export const CreatorBulkRelationshipTargetPickerDialog = ({
     onTargetSelected({ kind, id: selectedTargetId, label });
     resetPickerSearch();
     closeModal(CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID);
-  }, [closeModal, kind, onTargetSelected, selectedTargetId, selectedTargetRecord]);
+  }, [
+    closeModal,
+    kind,
+    onTargetSelected,
+    resetPickerSearch,
+    selectedTargetId,
+    selectedTargetRecord,
+  ]);
 
   const handleCancel = () => {
     resetPickerSearch();
@@ -120,10 +127,6 @@ export const CreatorBulkRelationshipTargetPickerDialog = ({
     }
 
     const createdTarget = await createOneRecord({ name });
-
-    if (!createdTarget) {
-      return;
-    }
 
     onTargetSelected({ kind, id: createdTarget.id, label: name });
     setInitialTargetName(null);
@@ -157,7 +160,9 @@ export const CreatorBulkRelationshipTargetPickerDialog = ({
           onCreate={
             canCreateTarget
               ? (initialName) =>
-                  openTargetNameDialog(initialName ?? searchFilter)
+                  openTargetNameDialog(
+                    initialName ?? singleRecordPickerSearchFilter,
+                  )
               : undefined
           }
           objectNameSingulars={[objectNameSingular]}
@@ -168,7 +173,7 @@ export const CreatorBulkRelationshipTargetPickerDialog = ({
             ariaLabel={t`Create new ${targetLabel}`}
             title={t`Create new ${targetLabel}`}
             variant="secondary"
-            onClick={() => openTargetNameDialog(searchFilter)}
+            onClick={() => openTargetNameDialog(singleRecordPickerSearchFilter)}
             fullWidth
           />
         )}

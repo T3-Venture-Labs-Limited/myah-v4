@@ -1,3 +1,5 @@
+import { InMemoryCache } from '@apollo/client/cache';
+import gql from 'graphql-tag';
 import { renderHook } from '@testing-library/react';
 
 import {
@@ -11,6 +13,10 @@ const mockUseBatchCreateManyRecords = jest.fn((_args: unknown) => ({
   batchCreateManyRecords: mockBatchCreateManyRecords,
 }));
 const mockRefetchQueries = jest.fn();
+const mockApolloCoreClient = {
+  cache: new InMemoryCache(),
+  refetchQueries: mockRefetchQueries,
+};
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockUseFindManyRecords = jest.fn();
 
@@ -20,7 +26,7 @@ jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
 }));
 
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
-  useApolloCoreClient: () => ({ refetchQueries: mockRefetchQueries }),
+  useApolloCoreClient: () => mockApolloCoreClient,
 }));
 
 jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
@@ -115,10 +121,49 @@ describe('useApplyCreatorBulkRelationship', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockBatchCreateManyRecords.mockResolvedValue([]);
+    mockApolloCoreClient.cache = new InMemoryCache();
     mockRefetchQueries.mockResolvedValue([]);
   });
 
-  it('creates only missing creator-list membership rows', async () => {
+  it('invalidates a cached inactive Creator List query after creating memberships', async () => {
+    const inactiveCreatorListQuery = gql`
+      query FindManyCreators($filter: CreatorFilterInput) {
+        creators(filter: $filter) {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    `;
+    const variables = {
+      filter: {
+        listMemberships: {
+          some: {
+            creatorListId: {
+              eq: 'list-a',
+            },
+          },
+        },
+      },
+    };
+
+    mockApolloCoreClient.cache.writeQuery({
+      query: inactiveCreatorListQuery,
+      variables,
+      data: {
+        creators: {
+          __typename: 'CreatorConnection',
+          edges: [],
+        },
+      },
+    });
+    mockRefetchQueries.mockImplementationOnce(({ updateCache }) => {
+      updateCache(mockApolloCoreClient.cache);
+      return Promise.resolve([]);
+    });
+
     const { result } = renderHook(() => useApplyCreatorBulkRelationship());
 
     await result.current.applyCreatorBulkRelationship({
@@ -136,7 +181,18 @@ describe('useApplyCreatorBulkRelationship', () => {
         { name: '', creatorId: 'creator-c', creatorListId: 'list-a' },
       ],
     });
-    expect(mockRefetchQueries).toHaveBeenCalled();
+    expect(
+      mockApolloCoreClient.cache.diff({
+        query: inactiveCreatorListQuery,
+        variables,
+        optimistic: false,
+        returnPartialData: true,
+      }).complete,
+    ).toBe(false);
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      include: ['FindManyCreators', 'FindManyCreatorListMembers'],
+      updateCache: expect.any(Function),
+    });
   });
 
   it('keeps the successful creation lifecycle when cache refresh fails', async () => {

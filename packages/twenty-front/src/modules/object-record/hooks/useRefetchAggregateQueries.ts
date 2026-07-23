@@ -26,9 +26,7 @@ export const useRefetchAggregateQueries = () => {
     const activeAggregateQueryNames = [
       queryName,
       groupByAggregateQueryName,
-    ].filter((aggregateQueryName) =>
-      activeQueryNames.has(aggregateQueryName),
-    );
+    ].filter((aggregateQueryName) => activeQueryNames.has(aggregateQueryName));
 
     if (activeAggregateQueryNames.length === 0) {
       return;

@@ -5,6 +5,7 @@ import { CreatorListMembershipFilterEffect } from '@/myah/creator-crm/components
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
 import { useRecordIndexIdFromCurrentContextStore } from '@/object-record/record-index/hooks/useRecordIndexIdFromCurrentContextStore';
+import { recordIndexContextualViewNameComponentState } from '@/object-record/record-index/states/recordIndexContextualViewNameComponentState';
 import { useApplyCurrentViewFiltersToCurrentRecordFilters } from '@/views/hooks/useApplyCurrentViewFiltersToCurrentRecordFilters';
 import { useSaveRecordFiltersAndGroupFiltersToViewFiltersAndGroupFilters } from '@/views/hooks/useSaveRecordFiltersAndGroupFiltersToViewFiltersAndGroupFilters';
 import { setTestViewsInMetadataStore } from '~/testing/utils/setTestViewsInMetadataStore';
@@ -12,6 +13,7 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { getJestMetadataAndApolloMocksAndCommandMenuWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksAndCommandMenuWrapper';
 import { FieldMetadataType, ViewFilterOperand } from 'twenty-shared/types';
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
+import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 
 const creatorObjectMetadataItem = {
   id: 'creator-object',
@@ -55,38 +57,31 @@ jest.mock('react-router-dom', () => ({
   useSearchParams: jest.fn(),
 }));
 
-
 const mockPerformViewFilterAPICreate = jest.fn();
 const mockPerformViewFilterAPIUpdate = jest.fn();
 const mockPerformViewFilterAPIDestroy = jest.fn();
 
-jest.mock(
-  '@/views/hooks/internal/usePerformViewFilterAPIPersist',
-  () => ({
-    usePerformViewFilterAPIPersist: () => ({
-      performViewFilterAPICreate: mockPerformViewFilterAPICreate,
-      performViewFilterAPIUpdate: mockPerformViewFilterAPIUpdate,
-      performViewFilterAPIDestroy: mockPerformViewFilterAPIDestroy,
-    }),
+jest.mock('@/views/hooks/internal/usePerformViewFilterAPIPersist', () => ({
+  usePerformViewFilterAPIPersist: () => ({
+    performViewFilterAPICreate: mockPerformViewFilterAPICreate,
+    performViewFilterAPIUpdate: mockPerformViewFilterAPIUpdate,
+    performViewFilterAPIDestroy: mockPerformViewFilterAPIDestroy,
   }),
-);
+}));
 
-jest.mock(
-  '@/views/hooks/internal/usePerformViewFilterGroupAPIPersist',
-  () => ({
-    usePerformViewFilterGroupAPIPersist: () => ({
-      performViewFilterGroupAPICreate: jest.fn().mockResolvedValue({
-        status: 'success',
-      }),
-      performViewFilterGroupAPIUpdate: jest.fn().mockResolvedValue({
-        status: 'success',
-      }),
-      performViewFilterGroupAPIDestroy: jest.fn().mockResolvedValue({
-        status: 'success',
-      }),
+jest.mock('@/views/hooks/internal/usePerformViewFilterGroupAPIPersist', () => ({
+  usePerformViewFilterGroupAPIPersist: () => ({
+    performViewFilterGroupAPICreate: jest.fn().mockResolvedValue({
+      status: 'success',
+    }),
+    performViewFilterGroupAPIUpdate: jest.fn().mockResolvedValue({
+      status: 'success',
+    }),
+    performViewFilterGroupAPIDestroy: jest.fn().mockResolvedValue({
+      status: 'success',
     }),
   }),
-);
+}));
 jest.mock('@/views/hooks/useCanPersistViewChanges', () => ({
   useCanPersistViewChanges: () => ({ canPersistChanges: true }),
 }));
@@ -108,6 +103,10 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   }),
 }));
 
+jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
+  useFindOneRecord: jest.fn(),
+}));
+
 const QueryFilterState = () => {
   const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
@@ -121,6 +120,19 @@ const QueryFilterState = () => {
   return (
     <output data-testid="filter-state">
       {JSON.stringify({ currentRecordFilters, queryOnlyRecordFilters })}
+    </output>
+  );
+};
+
+const ContextualViewNameState = () => {
+  const recordIndexContextualViewName = useAtomComponentStateValue(
+    recordIndexContextualViewNameComponentState,
+    'creator-index',
+  );
+
+  return (
+    <output data-testid="contextual-view-name">
+      {recordIndexContextualViewName ?? ''}
     </output>
   );
 };
@@ -216,6 +228,9 @@ describe('CreatorListMembershipFilterEffect', () => {
       recordIndexId: 'creator-index',
       objectMetadataItem: creatorObjectMetadataItem,
     });
+    (useFindOneRecord as jest.Mock).mockReturnValue({
+      record: { id: 'list-id', name: 'MYAH-210 UAT List' },
+    });
   });
 
   it('adds a Creator list-membership relation traversal only to query state', () => {
@@ -233,6 +248,42 @@ describe('CreatorListMembershipFilterEffect', () => {
         }),
       ],
     });
+  });
+
+  it('names the URL-scoped Creator List applied view without persisting it', () => {
+    render(
+      <>
+        <CreatorListMembershipFilterEffect />
+        <ContextualViewNameState />
+      </>,
+      {
+        wrapper: getJestMetadataAndApolloMocksWrapper({ apolloMocks: [] }),
+      },
+    );
+
+    expect(screen.getByTestId('contextual-view-name')).toHaveTextContent(
+      'List: MYAH-210 UAT List',
+    );
+    expect(mockPerformViewFilterAPICreate).not.toHaveBeenCalled();
+  });
+
+  it('withholds the contextual label until it can install the membership filter', () => {
+    (useRecordIndexIdFromCurrentContextStore as jest.Mock).mockReturnValue({
+      recordIndexId: 'creator-index',
+      objectMetadataItem: { ...creatorObjectMetadataItem, fields: [] },
+    });
+
+    render(
+      <>
+        <CreatorListMembershipFilterEffect />
+        <ContextualViewNameState />
+      </>,
+      {
+        wrapper: getJestMetadataAndApolloMocksWrapper({ apolloMocks: [] }),
+      },
+    );
+
+    expect(screen.getByTestId('contextual-view-name')).toBeEmptyDOMElement();
   });
 
   it('excludes the membership filter from native save and retains it after native reset', async () => {
@@ -290,9 +341,7 @@ describe('CreatorListMembershipFilterEffect', () => {
       ),
     ).toEqual({
       currentRecordFilters: [],
-      queryOnlyRecordFilters: [
-        expect.objectContaining({ value: 'list-id' }),
-      ],
+      queryOnlyRecordFilters: [expect.objectContaining({ value: 'list-id' })],
     });
   });
 
@@ -328,10 +377,20 @@ describe('CreatorListMembershipFilterEffect', () => {
   });
 
   it.each([
-    ['the active index is not Creators', nonCreatorObjectMetadataItem, 'creatorListId=list-id'],
-    ['the Creator List query parameter is absent', creatorObjectMetadataItem, ''],
+    [
+      'the active index is not Creators',
+      nonCreatorObjectMetadataItem,
+      'creatorListId=list-id',
+    ],
+    [
+      'the Creator List query parameter is absent',
+      creatorObjectMetadataItem,
+      '',
+    ],
   ])('does not add a filter when %s', (_reason, objectMetadataItem, query) => {
-    (useSearchParams as jest.Mock).mockReturnValue([new URLSearchParams(query)]);
+    (useSearchParams as jest.Mock).mockReturnValue([
+      new URLSearchParams(query),
+    ]);
     (useRecordIndexIdFromCurrentContextStore as jest.Mock).mockReturnValue({
       recordIndexId: 'creator-index',
       objectMetadataItem,

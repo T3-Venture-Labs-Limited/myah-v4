@@ -6,14 +6,6 @@ import { useCallback } from 'react';
 
 import { type CreatorBulkRelationshipTarget } from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
 
-const CREATOR_BULK_RELATIONSHIP_QUERY_NAMES = [
-  'FindManyCreators',
-  'FindManyCreatorLists',
-  'FindManyCampaigns',
-  'FindManyCreatorListMembers',
-  'FindManyCampaignCreators',
-];
-
 export const useApplyCreatorBulkRelationship = () => {
   const { batchCreateManyRecords: batchCreateCreatorListMembers } =
     useBatchCreateManyRecords({
@@ -57,9 +49,22 @@ export const useApplyCreatorBulkRelationship = () => {
         throw new Error('Creator bulk relationship creation failed');
       }
 
+      const relationshipObjectNamePlural =
+        target.kind === 'creator-list'
+          ? 'creatorListMembers'
+          : 'campaignCreators';
+      const relationshipFindManyQueryName =
+        target.kind === 'creator-list'
+          ? 'FindManyCreatorListMembers'
+          : 'FindManyCampaignCreators';
+
       try {
         await apolloCoreClient.refetchQueries({
-          include: CREATOR_BULK_RELATIONSHIP_QUERY_NAMES,
+          include: ['FindManyCreators', relationshipFindManyQueryName],
+          updateCache: (cache) => {
+            cache.evict({ fieldName: 'creators' });
+            cache.evict({ fieldName: relationshipObjectNamePlural });
+          },
         });
       } catch {
         enqueueErrorSnackBar({

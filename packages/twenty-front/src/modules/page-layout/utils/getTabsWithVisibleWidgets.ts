@@ -1,12 +1,14 @@
 import { type PageLayoutTab } from '@/page-layout/types/PageLayoutTab';
 import { buildWidgetVisibilityContext } from '@/page-layout/utils/buildWidgetVisibilityContext';
 import { filterVisibleWidgets } from '@/page-layout/utils/filterVisibleWidgets';
+import { type WidgetType } from '~/generated-metadata/graphql';
 
 type GetTabsWithVisibleWidgetsParams = {
   tabs: PageLayoutTab[];
   isMobile: boolean;
   isInSidePanel: boolean;
   isEditMode: boolean;
+  hiddenWidgetTypes?: Set<WidgetType>;
 };
 
 export const getTabsWithVisibleWidgets = ({
@@ -14,8 +16,16 @@ export const getTabsWithVisibleWidgets = ({
   isMobile,
   isInSidePanel,
   isEditMode,
+  hiddenWidgetTypes,
 }: GetTabsWithVisibleWidgetsParams): PageLayoutTab[] => {
-  const activeTabs = tabs.filter((tab) => tab.isActive);
+  const activeTabs = tabs
+    .filter((tab) => tab.isActive)
+    .map((tab) => ({
+      ...tab,
+      widgets: tab.widgets.filter(
+        (widget) => !hiddenWidgetTypes?.has(widget.type),
+      ),
+    }));
 
   if (isEditMode) {
     return activeTabs;

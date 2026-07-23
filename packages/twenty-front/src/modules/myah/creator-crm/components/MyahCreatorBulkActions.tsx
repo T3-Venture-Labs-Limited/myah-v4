@@ -33,11 +33,11 @@ export const MyahCreatorBulkActions = () => {
     useFilteredObjectMetadataItems();
   const objectMetadataItem =
     findObjectMetadataItemByNamePlural(objectNamePlural);
-  const targetedRecordsRule = useAtomComponentStateValue(
+  const contextStoreTargetedRecordsRule = useAtomComponentStateValue(
     contextStoreTargetedRecordsRuleComponentState,
     MAIN_CONTEXT_STORE_INSTANCE_ID,
   );
-  const setTargetedRecordsRule = useSetAtomComponentState(
+  const setContextStoreTargetedRecordsRule = useSetAtomComponentState(
     contextStoreTargetedRecordsRuleComponentState,
     MAIN_CONTEXT_STORE_INSTANCE_ID,
   );
@@ -47,8 +47,8 @@ export const MyahCreatorBulkActions = () => {
   const [target, setTarget] = useState<CreatorBulkRelationshipTarget>();
 
   const selectedCreatorIds =
-    targetedRecordsRule.mode === 'selection'
-      ? targetedRecordsRule.selectedRecordIds
+    contextStoreTargetedRecordsRule.mode === 'selection'
+      ? contextStoreTargetedRecordsRule.selectedRecordIds
       : [];
 
   useEffect(() => {
@@ -84,7 +84,10 @@ export const MyahCreatorBulkActions = () => {
   };
 
   const clearSelectionAfterSuccess = () => {
-    setTargetedRecordsRule({ mode: 'selection', selectedRecordIds: [] });
+    setContextStoreTargetedRecordsRule({
+      mode: 'selection',
+      selectedRecordIds: [],
+    });
     clearTarget();
   };
 

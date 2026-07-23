@@ -59,11 +59,9 @@ jest.mock('twenty-ui/input', () => ({
 }));
 
 jest.mock('twenty-ui/layout', () => ({
-  Section: ({
-    children,
-  }: {
-    children: string | { message: string };
-  }) => <div>{typeof children === 'string' ? children : children.message}</div>,
+  Section: ({ children }: { children: string | { message: string } }) => (
+    <div>{typeof children === 'string' ? children : children.message}</div>
+  ),
   SectionAlignment: { Center: 'center' },
   SectionFontColor: { Primary: 'primary' },
 }));
@@ -200,9 +198,10 @@ describe('CreatorBulkRelationshipDialog', () => {
     expect(screen.getByText(/2 will be added/)).toBeVisible();
     expect(screen.getByText(/0 already present/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Add to list' }),
-    ).toHaveAttribute('data-accent', 'brand');
+    expect(screen.getByRole('button', { name: 'Add to list' })).toHaveAttribute(
+      'data-accent',
+      'brand',
+    );
   });
 
   it('reports an all-existing selection without mutating', () => {

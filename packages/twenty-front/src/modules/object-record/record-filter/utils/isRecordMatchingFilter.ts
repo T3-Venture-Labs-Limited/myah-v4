@@ -2,6 +2,7 @@ import { isObject } from '@sniptt/guards';
 
 import {
   FieldMetadataType,
+  RelationType,
   type ActorFilter,
   type AddressFilter,
   type AndObjectRecordFilter,
@@ -98,10 +99,12 @@ export const isRecordMatchingFilter = ({
   record,
   filter,
   objectMetadataItem,
+  objectMetadataItems,
 }: {
   record: any;
   filter: RecordGqlOperationFilter;
   objectMetadataItem: EnrichedObjectMetadataItem;
+  objectMetadataItems?: EnrichedObjectMetadataItem[];
 }): boolean => {
   if (Object.keys(filter).length === 0 && record.deletedAt === null) {
     return true;
@@ -113,6 +116,7 @@ export const isRecordMatchingFilter = ({
         record,
         filter: { [filterKey]: value },
         objectMetadataItem,
+        objectMetadataItems,
       }),
     );
   }
@@ -133,6 +137,7 @@ export const isRecordMatchingFilter = ({
           record,
           filter: andFilter,
           objectMetadataItem,
+          objectMetadataItems,
         }),
       )
     );
@@ -149,6 +154,7 @@ export const isRecordMatchingFilter = ({
             record,
             filter: orFilter,
             objectMetadataItem,
+            objectMetadataItems,
           }),
         )
       );
@@ -160,6 +166,7 @@ export const isRecordMatchingFilter = ({
         record,
         filter: filterValue,
         objectMetadataItem,
+        objectMetadataItems,
       });
     }
 
@@ -179,6 +186,7 @@ export const isRecordMatchingFilter = ({
         record,
         filter: filterValue,
         objectMetadataItem,
+        objectMetadataItems,
       })
     );
   }
@@ -432,6 +440,45 @@ export const isRecordMatchingFilter = ({
             uuidFilter: filterValue as UUIDFilter,
             value: record[filterKey],
           });
+        }
+
+        if (
+          objectMetadataField.settings?.relationType ===
+          RelationType.ONE_TO_MANY
+        ) {
+          const relationValue = record[filterKey];
+          const relationRecords: unknown[] | undefined = Array.isArray(
+            relationValue,
+          )
+            ? relationValue
+            : isObject(relationValue) && Array.isArray(relationValue.edges)
+              ? relationValue.edges.map((edge: { node: unknown }) => edge.node)
+              : undefined;
+          const targetObjectMetadataItem = objectMetadataItems?.find(
+            (item) =>
+              item.nameSingular ===
+              objectMetadataField.relation?.targetObjectMetadata.nameSingular,
+          );
+
+          if (
+            !isDefined(relationRecords) ||
+            !isDefined(targetObjectMetadataItem)
+          ) {
+            return false;
+          }
+
+          return relationRecords.some((relationRecord) =>
+            isRecordMatchingFilter({
+              record: relationRecord,
+              filter: filterValue as RecordGqlOperationFilter,
+              objectMetadataItem: targetObjectMetadataItem,
+              objectMetadataItems,
+            }),
+          );
+        }
+
+        if (record[filterKey] === undefined) {
+          return false;
         }
 
         return isMatchingUUIDFilter({

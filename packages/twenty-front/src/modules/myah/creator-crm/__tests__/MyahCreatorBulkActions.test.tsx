@@ -24,19 +24,25 @@ jest.mock('@/object-metadata/hooks/useFilteredObjectMetadataItems', () => ({
   }),
 }));
 
-jest.mock('@/context-store/states/contextStoreTargetedRecordsRuleComponentState', () => ({
-  contextStoreTargetedRecordsRuleComponentState: 'targeted-records-rule',
-}));
+jest.mock(
+  '@/context-store/states/contextStoreTargetedRecordsRuleComponentState',
+  () => ({
+    contextStoreTargetedRecordsRuleComponentState: 'targeted-records-rule',
+  }),
+);
 
-jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue', () => ({
-  useAtomComponentStateValue: (state: unknown) =>
-    state === 'targeted-records-rule'
-      ? {
-          mode: 'selection',
-          selectedRecordIds: selectedCreatorIds,
-        }
-      : '',
-}));
+jest.mock(
+  '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue',
+  () => ({
+    useAtomComponentStateValue: (state: unknown) =>
+      state === 'targeted-records-rule'
+        ? {
+            mode: 'selection',
+            selectedRecordIds: selectedCreatorIds,
+          }
+        : '',
+  }),
+);
 
 jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomComponentState', () => ({
   useSetAtomComponentState: () => mockSetTargetedRecordsRule,
@@ -94,7 +100,9 @@ jest.mock('@/ui/layout/dropdown/components/Dropdown', () => ({
 }));
 
 jest.mock('@/ui/layout/dropdown/components/DropdownContent', () => ({
-  DropdownContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownContent: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
 jest.mock('@/ui/layout/dropdown/components/DropdownMenuItemsContainer', () => ({
@@ -104,11 +112,7 @@ jest.mock('@/ui/layout/dropdown/components/DropdownMenuItemsContainer', () => ({
 }));
 
 jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
-  ModalStatefulWrapper: ({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) => {
+  ModalStatefulWrapper: ({ children }: { children: React.ReactNode }) => {
     const firstChild = Array.isArray(children) ? children[0] : children;
     const title = (
       firstChild as React.ReactElement<{ title?: string }> | undefined
@@ -169,25 +173,28 @@ jest.mock('twenty-ui/typography', () => ({
   H1TitleFontColor: { Primary: 'primary' },
 }));
 
-jest.mock('@/myah/creator-crm/components/CreatorBulkRelationshipDialog', () => ({
-  getCreatorBulkRelationshipDialogId: ({ id }: { id: string }) =>
-    `creator-bulk-relationship-${id}`,
-  CreatorBulkRelationshipDialog: ({
-    target,
-    onClose,
-    onSuccess,
-  }: {
-    target: { label: string };
-    onClose: () => void;
-    onSuccess: () => void;
-  }) => (
-    <div>
-      <span>{target.label}</span>
-      <button onClick={onClose}>Dismiss preview</button>
-      <button onClick={onSuccess}>Complete relationship</button>
-    </div>
-  ),
-}));
+jest.mock(
+  '@/myah/creator-crm/components/CreatorBulkRelationshipDialog',
+  () => ({
+    getCreatorBulkRelationshipDialogId: ({ id }: { id: string }) =>
+      `creator-bulk-relationship-${id}`,
+    CreatorBulkRelationshipDialog: ({
+      target,
+      onClose,
+      onSuccess,
+    }: {
+      target: { label: string };
+      onClose: () => void;
+      onSuccess: () => void;
+    }) => (
+      <div>
+        <span>{target.label}</span>
+        <button onClick={onClose}>Dismiss preview</button>
+        <button onClick={onSuccess}>Complete relationship</button>
+      </div>
+    ),
+  }),
+);
 
 jest.mock('twenty-ui/navigation', () => ({
   MenuItem: ({ text, onClick }: { text: string; onClick: () => void }) => (
@@ -206,7 +213,9 @@ describe('MyahCreatorBulkActions', () => {
   it('opens an opaque native list picker', () => {
     render(<MyahCreatorBulkActions />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add to Creator List' }),
+    );
 
     expect(
       screen.getByRole('dialog', { name: 'Add creators to a list' }),
@@ -220,7 +229,9 @@ describe('MyahCreatorBulkActions', () => {
     canCreateTarget = false;
 
     render(<MyahCreatorBulkActions />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add to Creator List' }),
+    );
 
     expect(
       screen.queryByRole('button', { name: 'Create new list' }),
@@ -243,15 +254,15 @@ describe('MyahCreatorBulkActions', () => {
     }));
 
     render(<MyahCreatorBulkActions />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add to Creator List' }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Create new list' }));
 
     const nameDialog = screen.getByRole('dialog', {
       name: 'Create new list',
     });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Create list' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Create list' }));
 
     expect(nameDialog).toBeVisible();
     expect(mockCreateOneRecord).not.toHaveBeenCalled();
@@ -276,7 +287,9 @@ describe('MyahCreatorBulkActions', () => {
     });
 
     render(<MyahCreatorBulkActions />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add to Creator List' }),
+    );
     fireEvent.click(
       screen.getByRole('button', { name: 'Choose Spring creators' }),
     );
@@ -293,7 +306,9 @@ describe('MyahCreatorBulkActions', () => {
     });
 
     render(<MyahCreatorBulkActions />);
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Creator List' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add to Creator List' }),
+    );
     fireEvent.click(
       screen.getByRole('button', { name: 'Choose Spring creators' }),
     );

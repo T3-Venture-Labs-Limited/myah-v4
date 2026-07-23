@@ -17,6 +17,7 @@ import { parseApolloStoreFieldName } from '~/utils/parseApolloStoreFieldName';
 type TriggerUpdateGroupByQueriesOptimisticEffectArgs = {
   cache: ApolloCache;
   objectMetadataItem: EnrichedObjectMetadataItem;
+  objectMetadataItems?: EnrichedObjectMetadataItem[];
   operation: 'create' | 'update' | 'delete';
   records: RecordGqlNode[];
   shouldMatchRootQueryFilter?: boolean;
@@ -26,6 +27,7 @@ export const triggerUpdateGroupByQueriesOptimisticEffect = ({
   cache,
   objectMetadataItem,
   operation,
+  objectMetadataItems,
   records,
   shouldMatchRootQueryFilter = false,
 }: TriggerUpdateGroupByQueriesOptimisticEffectArgs) => {
@@ -86,6 +88,7 @@ export const triggerUpdateGroupByQueriesOptimisticEffect = ({
                   : [],
                 groupByConfig,
                 objectMetadataItem,
+                objectMetadataItems,
                 readField,
                 toReference,
               });
@@ -122,6 +125,7 @@ export const triggerUpdateGroupByQueriesOptimisticEffect = ({
               record,
               filter: queryFilter ?? {},
               objectMetadataItem,
+              objectMetadataItems,
             });
 
             if (
