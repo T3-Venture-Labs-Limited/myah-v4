@@ -43,7 +43,7 @@ const getAdminTestToken = async (): Promise<string> => {
       }
     }`,
     {
-      email: 'tim@apple.dev',
+      email: 'jane.austen@apple.dev',
       password: 'tim@apple.dev',
       origin: TEST_ORIGIN,
     },
