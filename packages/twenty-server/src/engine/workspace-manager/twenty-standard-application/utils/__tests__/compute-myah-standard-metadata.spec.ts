@@ -507,4 +507,50 @@ describe('Myah standard metadata contract', () => {
       ).toHaveLength(1);
     }
   });
+  it('enforces one active membership for each Creator List and Campaign relationship', () => {
+    const expectedIndexes = [
+      {
+        universalIdentifier: '6fd4b1ae-5a6c-4bf6-9cf9-bad4a3eaf9a1',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
+        fieldMetadataUniversalIdentifiers: [
+          MYAH_STANDARD_OBJECTS.creatorListMember.fields.creator
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.creatorListMember.fields.creatorList
+            .universalIdentifier,
+        ],
+      },
+      {
+        universalIdentifier: '6a1b09a7-0f81-4eb6-a5d2-3ba7951fac0d',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+        fieldMetadataUniversalIdentifiers: [
+          MYAH_STANDARD_OBJECTS.campaignCreator.fields.creator
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.campaignCreator.fields.campaign
+            .universalIdentifier,
+        ],
+      },
+    ];
+
+    for (const expectedIndex of expectedIndexes) {
+      const actualIndex =
+        result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[
+          expectedIndex.universalIdentifier
+        ];
+
+      expect(actualIndex).toMatchObject({
+        objectMetadataUniversalIdentifier:
+          expectedIndex.objectMetadataUniversalIdentifier,
+        isUnique: true,
+        indexWhereClause: '"deletedAt" IS NULL',
+      });
+      expect(
+        actualIndex?.universalFlatIndexFieldMetadatas.map(
+          ({ fieldMetadataUniversalIdentifier }) =>
+            fieldMetadataUniversalIdentifier,
+        ),
+      ).toEqual(expectedIndex.fieldMetadataUniversalIdentifiers);
+    }
+  });
 });

@@ -492,7 +492,11 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: 'e9b9d246-f49e-5200-9819-0a4c9cd0d19a',
       },
     },
-    indexes: {},
+    indexes: {
+      creatorCampaignUniqueIndex: {
+        universalIdentifier: '6a1b09a7-0f81-4eb6-a5d2-3ba7951fac0d',
+      },
+    },
     views: {},
   },
   campaign: {
@@ -600,7 +604,11 @@ export const MYAH_STANDARD_OBJECTS = {
       source: { universalIdentifier: 'cec1e32c-db2c-53fa-b0ad-4bbbce951ae2' },
       notes: { universalIdentifier: 'bb1651d8-de78-5a22-8ac3-7c1f4d631819' },
     },
-    indexes: {},
+    indexes: {
+      creatorListUniqueIndex: {
+        universalIdentifier: '6fd4b1ae-5a6c-4bf6-9cf9-bad4a3eaf9a1',
+      },
+    },
     views: {},
   },
   creatorList: {
