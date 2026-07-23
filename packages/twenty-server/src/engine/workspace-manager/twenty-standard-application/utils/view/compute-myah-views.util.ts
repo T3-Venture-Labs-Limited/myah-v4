@@ -80,6 +80,18 @@ export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
       icon: 'IconUserStar',
     },
   }),
+  qualifiedCreatorsWithEmail: createStandardViewFlatMetadata({
+    ...args,
+    objectName: 'creator',
+    context: {
+      viewName: 'qualifiedCreatorsWithEmail',
+      name: 'Qualified creators with email',
+      type: ViewType.TABLE,
+      key: null,
+      position: 1,
+      icon: 'IconUsers',
+    },
+  }),
 });
 export const computeMyahBrandBrainPageViews = (args: Args) =>
   Object.fromEntries(
@@ -110,6 +122,6 @@ export const computeMyahCreatorListViews = (args: Args) =>
 export const computeMyahCreatorViews = (args: Args) =>
   Object.fromEntries(
     Object.entries(computeMyahViews(args)).filter(
-      ([key]) => key === 'creators',
+      ([key]) => key === 'creators' || key === 'qualifiedCreatorsWithEmail',
     ),
   );

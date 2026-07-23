@@ -1,6 +1,7 @@
 import { usePageLayoutContentContext } from '@/page-layout/contexts/PageLayoutContentContext';
 import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageLayoutOrThrow';
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
+import { usePageLayoutHiddenWidgetTypes } from '@/page-layout/hooks/usePageLayoutHiddenWidgetTypes';
 import { getTabsByDisplayMode } from '@/page-layout/utils/getTabsByDisplayMode';
 import { getTabsWithVisibleWidgets } from '@/page-layout/utils/getTabsWithVisibleWidgets';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
@@ -15,12 +16,14 @@ export const useIsInPinnedTab = () => {
   const { currentPageLayout } = useCurrentPageLayoutOrThrow();
 
   const isPageLayoutInEditMode = useIsPageLayoutInEditMode();
+  const hiddenWidgetTypes = usePageLayoutHiddenWidgetTypes();
 
   const tabsWithVisibleWidgets = getTabsWithVisibleWidgets({
     tabs: currentPageLayout.tabs,
     isMobile,
     isInSidePanel,
     isEditMode: isPageLayoutInEditMode,
+    hiddenWidgetTypes,
   });
 
   const { pinnedLeftTab } = getTabsByDisplayMode({

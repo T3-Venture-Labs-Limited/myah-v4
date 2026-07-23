@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import ts from 'typescript';
+import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 
 type Value = string | Value[] | { [key: string]: Value } | undefined;
@@ -20,6 +21,12 @@ type Declaration = {
 };
 
 const root = resolve(__dirname, '../../../../../../../../');
+const standardObjectUniversalIdentifiers = Object.fromEntries(
+  Object.entries(STANDARD_OBJECTS).map(([name, { universalIdentifier }]) => [
+    name,
+    { universalIdentifier },
+  ]),
+) as Record<string, { universalIdentifier: string }>;
 const brand = 'packages/twenty-apps/fixtures/brand-brain-record-wiki-mvp/src';
 const creatorOps = 'packages/twenty-apps/internal/myah-creator-ops/src';
 const modules = (folder: string, names: readonly string[]) =>
@@ -43,16 +50,19 @@ const objectPaths = [
     'creator.object.ts',
   ]),
 ];
-const fieldPaths = modules(`${brand}/fields`, [
-  'target-page-links-on-brand-brain-page.field.ts',
-  'target-page-on-brand-brain-link.field.ts',
-  'target-page-on-brand-brain-update-proposal.field.ts',
-  'update-proposals-on-brand-brain-page.field.ts',
-  'child-pages-on-brand-brain-page.field.ts',
-  'parent-page-on-brand-brain-page.field.ts',
-  'source-page-links-on-brand-brain-page.field.ts',
-  'source-page-on-brand-brain-link.field.ts',
-]);
+const fieldPaths = [
+  ...modules(`${brand}/fields`, [
+    'target-page-links-on-brand-brain-page.field.ts',
+    'target-page-on-brand-brain-link.field.ts',
+    'target-page-on-brand-brain-update-proposal.field.ts',
+    'update-proposals-on-brand-brain-page.field.ts',
+    'child-pages-on-brand-brain-page.field.ts',
+    'parent-page-on-brand-brain-page.field.ts',
+    'source-page-links-on-brand-brain-page.field.ts',
+    'source-page-on-brand-brain-link.field.ts',
+  ]),
+  `${creatorOps}/fields/owned-creators-on-workspace-member.field.ts`,
+];
 const viewPaths = [
   ...modules(`${brand}/views`, [
     'brand-brain-page-record-page-fields.view.ts',
@@ -63,6 +73,7 @@ const viewPaths = [
     'campaigns.view.ts',
     'creator-lists.view.ts',
     'creators.view.ts',
+    'qualified-creators-with-email.view.ts',
   ]),
 ];
 const navigationPaths = [
@@ -135,6 +146,8 @@ const evalExpr = (node: ts.Node, source: string): Value => {
       : undefined;
   }
   if (ts.isIdentifier(node)) {
+    if (node.text === 'STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS')
+      return standardObjectUniversalIdentifiers as unknown as Value;
     const sf = file(source);
     const importDeclaration = sf.statements.find(
       (statement): statement is ts.ImportDeclaration =>

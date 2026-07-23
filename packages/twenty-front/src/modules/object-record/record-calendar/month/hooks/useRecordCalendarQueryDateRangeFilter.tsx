@@ -2,9 +2,9 @@ import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/fl
 import { useRecordCalendarContextOrThrow } from '@/object-record/record-calendar/contexts/RecordCalendarContext';
 import { useRecordCalendarMonthDaysRange } from '@/object-record/record-calendar/month/hooks/useRecordCalendarMonthDaysRange';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
+import { useEffectiveRecordFilters } from '@/object-record/record-filter/hooks/useEffectiveRecordFilters';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
 import { anyFieldFilterValueComponentState } from '@/object-record/record-filter/states/anyFieldFilterValueComponentState';
-import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { RecordFilterOperand } from '@/object-record/record-filter/types/RecordFilterOperand';
 import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUserTimezone';
@@ -41,10 +41,7 @@ export const useRecordCalendarQueryDateRangeFilter = (
     viewBarInstanceId,
   );
 
-  const currentRecordFilters = useAtomComponentStateValue(
-    currentRecordFiltersComponentState,
-    viewBarInstanceId,
-  );
+  const effectiveRecordFilters = useEffectiveRecordFilters(viewBarInstanceId);
 
   const { filterValueDependencies } = useFilterValueDependencies();
 
@@ -101,7 +98,7 @@ export const useRecordCalendarQueryDateRangeFilter = (
   };
 
   const calendarRecordFilters = [
-    ...currentRecordFilters,
+    ...effectiveRecordFilters,
     dateRangeFilterAfter,
     dateRangeFilterBefore,
   ];

@@ -137,6 +137,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
     records,
     totalCount,
     loading,
+    hasReadPermission,
     error,
     fetchMoreRecords,
     queryIdentifier,

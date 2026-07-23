@@ -79,12 +79,23 @@ export const triggerUpdateRecordOptimisticEffect = ({
           record: updatedRecord,
           filter: rootQueryFilter ?? {},
           objectMetadataItem,
+          objectMetadataItems,
         });
+
+        const updatedRecordMatchesThisRootQueryFilterOrHasUnloadedOneToManyRelation =
+          isRecordMatchingFilter({
+            record: updatedRecord,
+            filter: rootQueryFilter ?? {},
+            objectMetadataItem,
+            objectMetadataItems,
+            shouldMatchUnloadedOneToManyRelations: true,
+          });
 
         const currentRecordIndexInRootQueryEdges = isRecordMatchingFilter({
           record: currentRecord,
           filter: rootQueryFilter ?? {},
           objectMetadataItem,
+          objectMetadataItems,
         });
 
         const totalCount = readField<number | undefined>(
@@ -115,7 +126,7 @@ export const triggerUpdateRecordOptimisticEffect = ({
           !updatedRecordFoundInRootQueryEdges;
 
         const updatedRecordShouldBeRemovedFromRootQueryEdges =
-          !updatedRecordMatchesThisRootQueryFilter &&
+          !updatedRecordMatchesThisRootQueryFilterOrHasUnloadedOneToManyRelation &&
           updatedRecordFoundInRootQueryEdges;
 
         if (updatedRecordShouldBeAddedToRootQueryEdges) {
@@ -160,6 +171,7 @@ export const triggerUpdateRecordOptimisticEffect = ({
   triggerUpdateGroupByQueriesOptimisticEffect({
     cache,
     objectMetadataItem,
+    objectMetadataItems,
     operation: 'update',
     records: [updatedRecord],
     shouldMatchRootQueryFilter: true,

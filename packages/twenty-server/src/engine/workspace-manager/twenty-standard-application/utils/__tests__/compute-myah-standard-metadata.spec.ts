@@ -300,6 +300,36 @@ describe('Myah standard metadata contract', () => {
             .universalIdentifier,
       }),
     );
+    expect(creatorFields).toContainEqual(
+      expect.objectContaining({
+        name: 'owner',
+        universalIdentifier: '654e0df0-0c1f-4083-bc30-f85252269092',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+        relationTargetObjectMetadataUniversalIdentifier:
+          STANDARD_OBJECTS.workspaceMember.universalIdentifier,
+        relationTargetFieldMetadataUniversalIdentifier:
+          'fe31748c-e0e8-40b2-b175-1759c817e54a',
+      }),
+    );
+    expect(contract.relations).toContainEqual({
+      sourceField:
+        MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
+      sourceObject: MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+      targetObject: STANDARD_OBJECTS.workspaceMember.universalIdentifier,
+      targetField:
+        STANDARD_OBJECTS.workspaceMember.fields.ownedCreators
+          .universalIdentifier,
+    });
+    expect(
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
+    ).toHaveProperty('19483764-6f84-4d09-8f03-945e7d0a4b28');
+    expect(
+      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+    ).toHaveProperty('03ddcbb7-42dd-4078-bc0a-c985c6a9c131');
+    expect(
+      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+    ).toHaveProperty('d1319af0-eeb2-4ca3-8afc-31e66c8a4277');
   });
 
   it('normalizes select option positions and defaults', () => {
@@ -425,6 +455,102 @@ describe('Myah standard metadata contract', () => {
           canUpdateFieldValue: false,
         }),
       );
+    }
+  });
+
+  it('materializes search metadata for the native Creator CRM records', () => {
+    const searchFieldMetadata = Object.values(
+      result.allFlatEntityMaps.flatSearchFieldMetadataMaps
+        .byUniversalIdentifier,
+    ).filter(isDefined);
+    const creatorSearchFieldMetadata = searchFieldMetadata.filter(
+      ({ objectMetadataUniversalIdentifier }) =>
+        objectMetadataUniversalIdentifier ===
+        MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+    );
+
+    expect(creatorSearchFieldMetadata).toHaveLength(2);
+    expect(creatorSearchFieldMetadata).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
+        }),
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
+        }),
+      ]),
+    );
+
+    for (const [
+      objectMetadataUniversalIdentifier,
+      fieldMetadataUniversalIdentifier,
+    ] of [
+      [
+        MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier,
+      ],
+      [
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
+      ],
+    ]) {
+      expect(
+        searchFieldMetadata.filter(
+          (searchFieldMetadata) =>
+            searchFieldMetadata.objectMetadataUniversalIdentifier ===
+              objectMetadataUniversalIdentifier &&
+            searchFieldMetadata.fieldMetadataUniversalIdentifier ===
+              fieldMetadataUniversalIdentifier,
+        ),
+      ).toHaveLength(1);
+    }
+  });
+  it('enforces one active membership for each Creator List and Campaign relationship', () => {
+    const expectedIndexes = [
+      {
+        universalIdentifier: '6fd4b1ae-5a6c-4bf6-9cf9-bad4a3eaf9a1',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
+        fieldMetadataUniversalIdentifiers: [
+          MYAH_STANDARD_OBJECTS.creatorListMember.fields.creator
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.creatorListMember.fields.creatorList
+            .universalIdentifier,
+        ],
+      },
+      {
+        universalIdentifier: '6a1b09a7-0f81-4eb6-a5d2-3ba7951fac0d',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+        fieldMetadataUniversalIdentifiers: [
+          MYAH_STANDARD_OBJECTS.campaignCreator.fields.creator
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.campaignCreator.fields.campaign
+            .universalIdentifier,
+        ],
+      },
+    ];
+
+    for (const expectedIndex of expectedIndexes) {
+      const actualIndex =
+        result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[
+          expectedIndex.universalIdentifier
+        ];
+
+      expect(actualIndex).toMatchObject({
+        objectMetadataUniversalIdentifier:
+          expectedIndex.objectMetadataUniversalIdentifier,
+        isUnique: true,
+        indexWhereClause: '"deletedAt" IS NULL',
+      });
+      expect(
+        actualIndex?.universalFlatIndexFieldMetadatas.map(
+          ({ fieldMetadataUniversalIdentifier }) =>
+            fieldMetadataUniversalIdentifier,
+        ),
+      ).toEqual(expectedIndex.fieldMetadataUniversalIdentifiers);
     }
   });
 });

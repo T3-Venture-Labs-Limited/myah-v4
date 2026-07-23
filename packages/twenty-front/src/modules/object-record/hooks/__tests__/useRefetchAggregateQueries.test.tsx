@@ -10,12 +10,19 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
 
 describe('useRefetchAggregateQueries', () => {
   const mockRefetchQueries = jest.fn();
+  const mockGetObservableQueries = jest.fn();
   const mockApolloClient = {
     refetchQueries: mockRefetchQueries,
+    getObservableQueries: mockGetObservableQueries,
   };
-
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetObservableQueries.mockReturnValue(
+      new Set([
+        { queryName: getAggregateQueryName('opportunities') },
+        { queryName: 'OpportunitiesGroupByAggregates' },
+      ]),
+    );
     (useApolloCoreClient as jest.Mock).mockReturnValue(mockApolloClient);
   });
 
@@ -36,6 +43,33 @@ describe('useRefetchAggregateQueries', () => {
     expect(mockRefetchQueries).toHaveBeenCalledWith({
       include: [expectedQueryName, expectedQueryNameGroupBy],
     });
+  });
+
+  it('refetches only aggregate queries that are active', async () => {
+    mockGetObservableQueries.mockReturnValue(
+      new Set([{ queryName: getAggregateQueryName('creators') }]),
+    );
+
+    const { result } = renderHook(() => useRefetchAggregateQueries());
+
+    await result.current.refetchAggregateQueries({
+      objectMetadataNamePlural: 'creators',
+    });
+
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      include: [getAggregateQueryName('creators')],
+    });
+  });
+  it('does not refetch when no aggregate queries are active', async () => {
+    mockGetObservableQueries.mockReturnValue(new Set());
+
+    const { result } = renderHook(() => useRefetchAggregateQueries());
+
+    await result.current.refetchAggregateQueries({
+      objectMetadataNamePlural: 'creators',
+    });
+
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
   });
 
   it('should handle errors during refetch', async () => {

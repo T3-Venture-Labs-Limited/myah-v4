@@ -11,10 +11,10 @@ const companiesMock = mockedCompanyRecords.map((record) =>
   getRecordFromRecordNode<Company>({ recordNode: record }),
 );
 
-const companyMockObjectMetadataItem =
-  getTestEnrichedObjectMetadataItemsMock().find(
-    (item) => item.nameSingular === 'company',
-  )!;
+const objectMetadataItems = getTestEnrichedObjectMetadataItemsMock();
+const companyMockObjectMetadataItem = objectMetadataItems.find(
+  (item) => item.nameSingular === 'company',
+)!;
 
 describe('isRecordMatchingFilter', () => {
   describe('Empty Filters', () => {
@@ -595,6 +595,22 @@ describe('isRecordMatchingFilter', () => {
       ).toBe(false);
     });
 
+    it('does not match an unloaded to-one relation as empty', () => {
+      const companyWithUnloadedAccountOwner = {
+        ...companiesMock[0],
+        accountOwner: undefined,
+        accountOwnerId: undefined,
+      };
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithUnloadedAccountOwner,
+          filter: { accountOwner: { is: 'NULL' } },
+          objectMetadataItem: companyMockObjectMetadataItem,
+        }),
+      ).toBe(false);
+    });
+
     it('matches an "in" filter on a relation field by its related record id', () => {
       expect(
         isRecordMatchingFilter({
@@ -611,6 +627,137 @@ describe('isRecordMatchingFilter', () => {
           objectMetadataItem: companyMockObjectMetadataItem,
         }),
       ).toBe(false);
+    });
+
+    it('does not match an unloaded one-to-many relation filter', () => {
+      const companyWithoutPeople = {
+        ...companiesMock[0],
+        people: undefined,
+      };
+
+      const peopleFilter = {
+        people: {
+          companyId: { in: [companyWithoutPeople.id] },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithoutPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+        }),
+      ).toBe(false);
+    });
+
+    it('preserves an unloaded one-to-many relation when requested by an optimistic update', () => {
+      const companyWithoutPeople = {
+        ...companiesMock[0],
+        people: undefined,
+      };
+      const peopleFilter = {
+        people: {
+          companyId: { in: [companyWithoutPeople.id] },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithoutPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+          shouldMatchUnloadedOneToManyRelations: true,
+        }),
+      ).toBe(true);
+    });
+
+    it('preserves an unloaded one-to-many relation through a negated filter when requested by an optimistic update', () => {
+      const companyWithoutPeople = {
+        ...companiesMock[0],
+        people: undefined,
+      };
+      const peopleFilter = {
+        not: {
+          people: {
+            companyId: { in: [companyWithoutPeople.id] },
+          },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithoutPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+          shouldMatchUnloadedOneToManyRelations: true,
+        }),
+      ).toBe(true);
+    });
+
+    it('keeps default unloaded-relation semantics through a negated filter', () => {
+      const companyWithoutPeople = {
+        ...companiesMock[0],
+        people: undefined,
+      };
+      const peopleFilter = {
+        not: {
+          people: {
+            companyId: { in: [companyWithoutPeople.id] },
+          },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithoutPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+        }),
+      ).toBe(true);
+    });
+
+    it('matches a loaded one-to-many relation filter', () => {
+      const companyWithPeople = {
+        ...companiesMock[0],
+        people: [{ id: 'person-1', name: 'Taylor' }],
+      };
+      const peopleFilter = {
+        people: {
+          name: { eq: 'Taylor' },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+          objectMetadataItems,
+        } as Parameters<typeof isRecordMatchingFilter>[0]),
+      ).toBe(true);
+    });
+
+    it('matches a loaded one-to-many relation connection filter', () => {
+      const companyWithPeople = {
+        ...companiesMock[0],
+        people: {
+          edges: [{ node: { id: 'person-1', name: 'Taylor' } }],
+        },
+      };
+      const peopleFilter = {
+        people: {
+          name: { eq: 'Taylor' },
+        },
+      } as unknown as RecordGqlOperationFilter;
+
+      expect(
+        isRecordMatchingFilter({
+          record: companyWithPeople,
+          filter: peopleFilter,
+          objectMetadataItem: companyMockObjectMetadataItem,
+          objectMetadataItems,
+        } as Parameters<typeof isRecordMatchingFilter>[0]),
+      ).toBe(true);
     });
 
     it('still matches the relation join column field', () => {

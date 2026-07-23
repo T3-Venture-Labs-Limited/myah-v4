@@ -44,7 +44,7 @@ export const LinkChip = ({
   const { onClick: onClickHandler, onMouseDown: onMouseDownHandler } =
     useMouseDownNavigation({
       to: to,
-      onClick: onClick,
+      onClick,
       triggerEvent,
     });
 

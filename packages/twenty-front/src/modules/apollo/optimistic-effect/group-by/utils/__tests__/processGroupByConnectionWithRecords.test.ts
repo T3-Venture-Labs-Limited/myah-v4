@@ -8,6 +8,7 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 import { type RecordGqlRefEdge } from '@/object-record/cache/types/RecordGqlRefEdge';
 import { type RecordGqlNode } from '@/object-record/graphql/types/RecordGqlNode';
 
+import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 import { processGroupByConnectionWithRecords } from '@/apollo/optimistic-effect/group-by/utils/processGroupByConnectionWithRecords';
 
 describe('processGroupByConnectionWithRecords', () => {
@@ -117,5 +118,47 @@ describe('processGroupByConnectionWithRecords', () => {
 
     expect(result.totalCountDelta).toBe(-1);
     expect(result.nextEdges.length).toBe(0);
+  });
+
+  it('keeps a cached record on update when its filtered one-to-many relation is unloaded', () => {
+    const creatorObjectMetadataItem = {
+      ...mockObjectMetadataItem,
+      nameSingular: 'creator',
+      namePlural: 'creators',
+      fields: [
+        {
+          name: 'listMemberships',
+          type: FieldMetadataType.RELATION,
+          settings: { relationType: RelationType.ONE_TO_MANY },
+        },
+      ],
+    } as EnrichedObjectMetadataItem;
+    const cachedEdge: RecordGqlRefEdge = {
+      __typename: 'CreatorEdge',
+      node: mockReference,
+      cursor: 'cursor123',
+    };
+
+    const result = processGroupByConnectionWithRecords({
+      cachedEdges: [cachedEdge],
+      cachedPageInfo: {
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      records: [{ ...mockRecord, __typename: 'Creator' }],
+      operation: 'update',
+      queryFilter: {
+        listMemberships: { creatorList: { eq: 'creator-list-id' } },
+      },
+      shouldMatchRootQueryFilter: false,
+      groupByDimensionValues: [],
+      groupByConfig: undefined,
+      objectMetadataItem: creatorObjectMetadataItem,
+      readField: mockReadField,
+      toReference: mockToReference,
+    });
+
+    expect(result.nextEdges).toEqual([cachedEdge]);
+    expect(result.totalCountDelta).toBe(0);
   });
 });

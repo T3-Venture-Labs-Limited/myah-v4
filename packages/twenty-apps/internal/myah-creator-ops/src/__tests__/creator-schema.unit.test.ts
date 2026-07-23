@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { FieldType } from 'twenty-sdk/define';
+import {
+  FieldType,
+  OnDeleteAction,
+  RelationType,
+  STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
+} from 'twenty-sdk/define';
 import {
   CAMPAIGN_CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
   CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
+  CREATOR_FIELD_UNIVERSAL_IDENTIFIERS,
   CREATOR_LIST_MEMBER_OBJECT_UNIVERSAL_IDENTIFIER,
   CREATOR_LIST_OBJECT_UNIVERSAL_IDENTIFIER,
   CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+  CREATOR_RELATION_FIELD_UNIVERSAL_IDENTIFIERS,
   OFFER_OBJECT_UNIVERSAL_IDENTIFIER,
   OUTREACH_ACTION_OBJECT_UNIVERSAL_IDENTIFIER,
   OUTREACH_SEQUENCE_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -14,6 +21,7 @@ import {
 } from 'src/constants/universal-identifiers';
 
 import creatorObjectResult from 'src/objects/creator.object';
+import ownedCreatorsOnWorkspaceMemberResult from 'src/fields/owned-creators-on-workspace-member.field';
 import defaultRoleResult from 'src/default-role';
 
 const unwrapValidationResult = <T>(result: {
@@ -30,6 +38,9 @@ const unwrapValidationResult = <T>(result: {
 
 const creatorObject = unwrapValidationResult(creatorObjectResult);
 const defaultRole = unwrapValidationResult(defaultRoleResult);
+const ownedCreatorsOnWorkspaceMember = unwrapValidationResult(
+  ownedCreatorsOnWorkspaceMemberResult,
+);
 
 const expectedFieldNames = [
   'name',
@@ -158,6 +169,7 @@ const numberFieldNames = [
   'twitchTotalFollowers',
 ];
 
+
 describe('Creator object schema', () => {
   it('should expose wide import fields directly on Creator', () => {
     expect(creatorObject.nameSingular).toBe('creator');
@@ -184,6 +196,35 @@ describe('Creator object schema', () => {
         creatorObject.fields.find((field) => field.name === fieldName)?.type,
       ).toBe(FieldType.NUMBER);
     }
+  });
+
+  it('relates optional Creator owners to WorkspaceMembers', () => {
+    expect(
+      creatorObject.fields.find((field) => field.name === 'owner'),
+    ).toMatchObject({
+      type: FieldType.RELATION,
+      isNullable: true,
+      relationTargetObjectMetadataUniversalIdentifier:
+        STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember.universalIdentifier,
+      relationTargetFieldMetadataUniversalIdentifier:
+        CREATOR_RELATION_FIELD_UNIVERSAL_IDENTIFIERS.ownedCreators,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'ownerId',
+      },
+    });
+    expect(ownedCreatorsOnWorkspaceMember).toMatchObject({
+      type: FieldType.RELATION,
+      isNullable: true,
+      objectUniversalIdentifier:
+        STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember.universalIdentifier,
+      relationTargetObjectMetadataUniversalIdentifier:
+        CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.owner,
+      universalSettings: { relationType: RelationType.ONE_TO_MANY },
+    });
   });
 
   it('scopes the default role and protects all creator identity fields', () => {
