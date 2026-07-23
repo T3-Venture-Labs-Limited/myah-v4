@@ -3,7 +3,6 @@ import { FeatureFlagKey, SettingsPath } from 'twenty-shared/types';
 import { useAuth } from '@/auth/hooks/useAuth';
 import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
-import { billingState } from '@/client-config/states/billingState';
 import { supportChatState } from '@/client-config/states/supportChatState';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 import { getDocumentationUrl } from '@/support/utils/getDocumentationUrl';
@@ -58,12 +57,10 @@ export type SettingsNavigationItem = {
 };
 
 const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
-  const billing = useAtomStateValue(billingState);
   const { signOut } = useAuth();
   const supportChat = useAtomStateValue(supportChatState);
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
 
-  const isBillingEnabled = billing?.isBillingEnabled ?? false;
   const isMyahTeamUser = useIsMyahTeamUser();
   const isSupportChatConfigured =
     supportChat?.supportDriver === 'FRONT' &&
@@ -128,6 +125,12 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           isHidden: !permissionMap[PermissionFlagType.WORKSPACE],
         },
         {
+          label: t`Billing`,
+          path: SettingsPath.Billing,
+          Icon: IconCurrencyDollar,
+          isHidden: !permissionMap[PermissionFlagType.WORKSPACE],
+        },
+        {
           label: t`Data model`,
           path: SettingsPath.Objects,
           Icon: IconHierarchy2,
@@ -144,13 +147,6 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           path: SettingsPath.WorkspaceMembersPage,
           Icon: IconUsers,
           isHidden: !permissionMap[PermissionFlagType.WORKSPACE_MEMBERS],
-        },
-        {
-          label: t`Billing`,
-          path: SettingsPath.Billing,
-          Icon: IconCurrencyDollar,
-          isHidden:
-            !isBillingEnabled || !permissionMap[PermissionFlagType.WORKSPACE],
         },
         {
           label: t`MCP & APIs`,

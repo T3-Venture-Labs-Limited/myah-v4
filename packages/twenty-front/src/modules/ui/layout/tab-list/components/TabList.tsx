@@ -157,7 +157,6 @@ export const TabList = ({
             onMoreButtonWidthChange={onMoreButtonWidthChange}
           />
         )}
-
         <StyledContainer className={className}>
           <StyledNodeDimension onDimensionChange={onContainerWidthChange}>
             <StyledInnerContainer>
@@ -182,7 +181,6 @@ export const TabList = ({
                   />
                 ))}
               </StyledTabContainer>
-
               {hasHiddenTabs && (
                 <StyledDropdownContainer>
                   <TabListDropdown
