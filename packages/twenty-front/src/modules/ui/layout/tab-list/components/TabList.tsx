@@ -158,11 +158,7 @@ export const TabList = ({
             onMoreButtonWidthChange={onMoreButtonWidthChange}
           />
         )}
-        <StyledContainer
-          className={className}
-          role={behaveAsLinks ? undefined : 'tablist'}
-          aria-label={behaveAsLinks ? undefined : ariaLabel}
-        >
+        <StyledContainer className={className}>
           <StyledNodeDimension onDimensionChange={onContainerWidthChange}>
             <StyledInnerContainer>
               <StyledTabContainer>
@@ -176,10 +172,6 @@ export const TabList = ({
                     active={tab.id === activeTabId}
                     disabled={tab.disabled ?? loading}
                     pill={tab.pill}
-                    role={behaveAsLinks ? undefined : 'tab'}
-                    ariaSelected={
-                      behaveAsLinks ? undefined : tab.id === activeTabId
-                    }
                     to={behaveAsLinks ? `#${tab.id}` : undefined}
                     tooltipContent={tab.tooltipContent}
                     onClick={

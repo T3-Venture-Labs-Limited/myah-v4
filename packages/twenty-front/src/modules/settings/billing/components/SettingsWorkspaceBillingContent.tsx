@@ -399,6 +399,14 @@ const WorkspacePaymentSettings = ({
   );
   const thresholdCents = parseUsdCents(threshold);
   const topUpAmountCents = parseUsdCents(topUpAmount);
+  const submittedThresholdCents =
+    enabled || thresholdCents !== null
+      ? thresholdCents
+      : initialSettings.thresholdCents;
+  const submittedTopUpAmountCents =
+    enabled || topUpAmountCents !== null
+      ? topUpAmountCents
+      : initialSettings.topUpAmountCents;
   const monthlyLimitCents =
     monthlyLimit.trim() === '' ? null : parseUsdCents(monthlyLimit);
   const thresholdError =
@@ -413,8 +421,8 @@ const WorkspacePaymentSettings = ({
     monthlyLimit.trim() !== '' && monthlyLimitCents === null
       ? t`Enter a valid monthly limit.`
       : monthlyLimitCents !== null &&
-          topUpAmountCents !== null &&
-          monthlyLimitCents < topUpAmountCents
+          submittedTopUpAmountCents !== null &&
+          monthlyLimitCents < submittedTopUpAmountCents
         ? t`Monthly limit must be at least the top-up amount.`
         : undefined;
   const hasPaymentMethod = paymentSettings.defaultPaymentMethod !== null;
@@ -431,19 +439,25 @@ const WorkspacePaymentSettings = ({
     thresholdError === undefined &&
     topUpAmountError === undefined &&
     monthlyLimitError === undefined &&
-    thresholdCents !== null &&
-    topUpAmountCents !== null;
+    submittedThresholdCents !== null &&
+    submittedTopUpAmountCents !== null;
   const paymentMethodActionLabel =
     paymentSettings.defaultPaymentMethod === null
       ? t`Add payment method`
       : t`Manage payment method`;
 
   const saveChanges = () => {
-    if (!canSave) return;
+    if (
+      !canSave ||
+      submittedThresholdCents === null ||
+      submittedTopUpAmountCents === null
+    ) {
+      return;
+    }
     onSaveAutomaticTopUp({
       enabled,
-      thresholdCents,
-      topUpAmountCents,
+      thresholdCents: submittedThresholdCents,
+      topUpAmountCents: submittedTopUpAmountCents,
       monthlyLimitCents,
     });
   };
@@ -671,7 +685,6 @@ export const SettingsWorkspaceBillingContent = ({
       )}
       <Section>
         <TabList
-          ariaLabel={t`Billing records`}
           componentInstanceId={WORKSPACE_BILLING_TAB_LIST_ID}
           behaveAsLinks={false}
           tabs={[

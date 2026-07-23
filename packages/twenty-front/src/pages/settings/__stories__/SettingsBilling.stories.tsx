@@ -207,18 +207,14 @@ export const HealthyFundedWorkspace: Story = {
     ).resolves.toBeVisible();
     await expect(canvas.findByText('Last 30 days')).resolves.toBeVisible();
 
-    const tabList = await canvas.findByRole('tablist', {
-      name: 'Billing records',
-    });
-    await expect(tabList).toBeVisible();
-    const usageTab = within(tabList).getByRole('tab', {
+    const usageTab = await canvas.findByRole('button', {
       name: 'Usage history',
     });
-    const billingHistoryTab = within(tabList).getByRole('tab', {
+    const billingHistoryTab = await canvas.findByRole('button', {
       name: 'Billing history',
     });
-    await expect(usageTab).toHaveAttribute('aria-selected', 'true');
-    await expect(billingHistoryTab).toHaveAttribute('aria-selected', 'false');
+    await expect(usageTab).toHaveAttribute('data-active', 'true');
+    await expect(billingHistoryTab).not.toHaveAttribute('data-active', 'true');
 
     const usageTable = await canvas.findByRole('table', {
       name: 'Usage history',
@@ -256,9 +252,10 @@ export const HealthyFundedWorkspace: Story = {
     await userEvent.click(sevenDaysOption);
     await expect(canvas.findByText('Last 7 days')).resolves.toBeVisible();
 
+    expect(canvas.queryByRole('tablist')).not.toBeInTheDocument();
     await userEvent.click(billingHistoryTab);
-    await expect(billingHistoryTab).toHaveAttribute('aria-selected', 'true');
-    await expect(usageTab).toHaveAttribute('aria-selected', 'false');
+    await expect(billingHistoryTab).toHaveAttribute('data-active', 'true');
+    await expect(usageTab).not.toHaveAttribute('data-active', 'true');
     const billingHistoryTable = await canvas.findByRole('table', {
       name: 'Billing history',
     });
@@ -508,6 +505,48 @@ export const AutomaticTopUpValidation: Story = {
   },
 };
 
+export const DisablingAutomaticTopUpWithInvalidRequiredDraft: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      paymentSettings: {
+        ...healthyWorkspaceViewModel.paymentSettings,
+        automaticTopUp: {
+          enabled: true,
+          thresholdCents: 1000,
+          topUpAmountCents: 5000,
+          monthlyLimitCents: 20000,
+        },
+      },
+    },
+    onSaveAutomaticTopUp: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const threshold = await canvas.findByRole('textbox', {
+      name: 'Balance threshold',
+    });
+    await userEvent.clear(threshold);
+    await expect(
+      canvas.findByText('Enter a valid balance threshold.'),
+    ).resolves.toBeVisible();
+    await userEvent.click(
+      await canvas.findByRole('switch', { name: 'Automatic top-up' }),
+    );
+    const saveButton = await canvas.findByRole('button', {
+      name: 'Save changes',
+    });
+    await expect(saveButton).toBeEnabled();
+    await userEvent.click(saveButton);
+    await expect(args.onSaveAutomaticTopUp).toHaveBeenCalledWith({
+      enabled: false,
+      thresholdCents: 1000,
+      topUpAmountCents: 5000,
+      monthlyLimitCents: 20000,
+    });
+  },
+};
+
 export const MobileAutomaticTopUp: Story = {
   args: {
     viewModel: {
@@ -679,7 +718,7 @@ export const NoBillingHistory: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
-      await canvas.findByRole('tab', { name: 'Billing history' }),
+      await canvas.findByRole('button', { name: 'Billing history' }),
     );
     await expect(
       canvas.findByText('No billing events yet'),
