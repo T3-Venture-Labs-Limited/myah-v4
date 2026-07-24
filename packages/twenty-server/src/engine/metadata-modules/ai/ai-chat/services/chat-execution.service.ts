@@ -156,7 +156,7 @@ export class ChatExecutionService {
     managedProviderRequestIdRoot,
     conversationSizeTokens,
   }: ChatExecutionOptions): Promise<ChatExecutionResult> {
-    const { actorContext, roleId, userId, userContext } =
+    const { actorContext, authContext, roleId, userId, userContext } =
       await this.agentActorContextService.buildUserAndAgentActorContext(
         userWorkspaceId,
         workspace.id,
@@ -167,6 +167,7 @@ export class ChatExecutionService {
     const toolContext = {
       workspaceId: workspace.id,
       roleId,
+      authContext,
       actorContext,
       userId,
       userWorkspaceId,
@@ -178,7 +179,7 @@ export class ChatExecutionService {
     const toolCatalog = await this.toolRegistry.buildToolIndex(
       workspace.id,
       roleId,
-      { userId, userWorkspaceId, locale },
+      { authContext, actorContext, userId, userWorkspaceId, locale },
     );
 
     const skillCatalog = await this.skillService.findAllFlatSkills(

@@ -156,6 +156,8 @@ export class ToolRegistryService {
     workspaceId: string,
     roleId: string,
     options?: {
+      authContext?: ToolContext['authContext'];
+      actorContext?: ToolContext['actorContext'];
       userId?: string;
       userWorkspaceId?: string;
       locale?: keyof typeof APP_LOCALES;
@@ -164,6 +166,8 @@ export class ToolRegistryService {
     const context = this.buildContextFromToolContext({
       workspaceId,
       roleId,
+      authContext: options?.authContext,
+      actorContext: options?.actorContext,
       userId: options?.userId,
       userWorkspaceId: options?.userWorkspaceId,
       locale: options?.locale,

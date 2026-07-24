@@ -42,6 +42,7 @@ const createResolver = () => {
   const resolver = new MyahInboxResolver(
     { listThreads: jest.fn() } as never,
     { updateMyahInboxThread, saveMyahInboxDraft } as never,
+    {} as never,
   );
 
   return { resolver, updateMyahInboxThread, saveMyahInboxDraft };

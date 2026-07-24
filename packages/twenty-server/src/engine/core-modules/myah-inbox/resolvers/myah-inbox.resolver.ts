@@ -4,13 +4,16 @@ import { Args, Mutation, Query } from '@nestjs/graphql';
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
+import { GenerateMyahInboxReplyProposalInput } from 'src/engine/core-modules/myah-inbox/dtos/generate-myah-inbox-reply-proposal.input';
 import { MyahInboxDraftSaveResult } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-draft-save-result.dto';
+import { MyahInboxReplyProposal } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-proposal.dto';
 import { MyahInboxThreadConnection } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-connection.dto';
 import { MyahInboxThreadsInput } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 import { SaveMyahInboxDraftInput } from 'src/engine/core-modules/myah-inbox/dtos/save-myah-inbox-draft.input';
 import { MyahInboxThreadSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
 import { UpdateMyahInboxThreadInput } from 'src/engine/core-modules/myah-inbox/dtos/update-myah-inbox-thread.input';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
+import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace-member-id.decorator';
@@ -25,6 +28,7 @@ export class MyahInboxResolver {
   constructor(
     private readonly myahInboxQueryService: MyahInboxQueryService,
     private readonly myahInboxMutationService: MyahInboxMutationService,
+    private readonly myahInboxReplyProposalService: MyahInboxReplyProposalService,
   ) {}
 
   @Query(() => MyahInboxThreadConnection)
@@ -75,6 +79,29 @@ export class MyahInboxResolver {
       user,
       workspace,
       workspaceMemberId,
+    });
+  }
+
+  @Mutation(() => MyahInboxReplyProposal)
+  async generateMyahInboxReplyProposal(
+    @Args('input') input: GenerateMyahInboxReplyProposalInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() workspaceMemberId: string,
+  ): Promise<MyahInboxReplyProposal> {
+    const { authContext } = this.getAuthenticatedUserContext();
+
+    if (
+      authContext.workspace.id !== workspace.id ||
+      authContext.workspaceMemberId !== workspaceMemberId
+    ) {
+      throw new ForbiddenException(
+        'Reply proposal authentication context does not match',
+      );
+    }
+
+    return this.myahInboxReplyProposalService.generateReplyProposal({
+      ...input,
+      authContext,
     });
   }
 

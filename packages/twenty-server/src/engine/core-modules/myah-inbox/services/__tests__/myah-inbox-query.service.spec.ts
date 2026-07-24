@@ -636,6 +636,26 @@ describe('MyahInboxQueryService', () => {
     expect(calls.limit).toBe(2);
   });
 
+  it('enters proposal/tool thread reads with the real caller user auth context, never system auth', async () => {
+    const { service, globalWorkspaceOrmManager } = createService({
+      rows: [row(tiedThreadAId, '2026-07-21T10:00:00.000Z')],
+    });
+
+    await service.getThreadSummary({
+      ...listInput(),
+      threadId: tiedThreadAId,
+    });
+
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext,
+    ).toHaveBeenCalledWith(expect.any(Function), userAuthContext);
+    expect(
+      globalWorkspaceOrmManager.executeInWorkspaceContext.mock.calls.some(
+        (call) => (call[1] as { type?: string } | undefined)?.type === 'system',
+      ),
+    ).toBe(false);
+  });
+
   it('fails closed when an exact thread has no policy-visible native message', async () => {
     const { service } = createService();
 

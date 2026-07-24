@@ -1,0 +1,3 @@
+export const MYAH_INBOX_TOOL_SERVICE_TOKEN = Symbol(
+  'MYAH_INBOX_TOOL_SERVICE_TOKEN',
+);

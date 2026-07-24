@@ -53,6 +53,14 @@ const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
       roleId: 'role-id',
       userId: 'user-id',
       userContext: { locale: 'en' },
+      authContext: {
+        type: 'user',
+        workspace: { id: 'workspace-id' },
+        userWorkspaceId: 'user-workspace-id',
+        user: { id: 'user-id' },
+        workspaceMemberId: 'workspace-member-id',
+        workspaceMember: { id: 'workspace-member-id' },
+      },
     }),
   };
   const workspaceDomainsService = {
@@ -151,8 +159,12 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
   });
 
   it('injects Brand Brain preflight context before streaming the model response', async () => {
-    const { service, brandBrainPreflightService, metricsService } =
-      buildService();
+    const {
+      service,
+      brandBrainPreflightService,
+      metricsService,
+      toolRegistry,
+    } = buildService();
 
     await service.streamChat({
       workspace: {
@@ -183,6 +195,23 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
     expect(brandBrainPreflightService.run).toHaveBeenCalledWith(
       expect.objectContaining({
         lastUserMessageText: 'Draft creator outreach for Acme Beauty Labs.',
+        toolContext: expect.objectContaining({
+          authContext: expect.objectContaining({
+            type: 'user',
+            userWorkspaceId: 'user-workspace-id',
+          }),
+        }),
+      }),
+    );
+    expect(toolRegistry.buildToolIndex).toHaveBeenCalledWith(
+      'workspace-id',
+      'role-id',
+      expect.objectContaining({
+        authContext: expect.objectContaining({
+          type: 'user',
+          userWorkspaceId: 'user-workspace-id',
+        }),
+        actorContext: { source: 'USER' },
       }),
     );
     expect(

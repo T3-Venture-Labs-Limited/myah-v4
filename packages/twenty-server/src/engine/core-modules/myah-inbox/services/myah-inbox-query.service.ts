@@ -42,7 +42,7 @@ import {
 export type MyahInboxListThreadsInput = MyahInboxThreadsInput & {
   authContext: WorkspaceAuthContext;
   user: AuthContextUser;
-  workspace: WorkspaceEntity;
+  workspace: Pick<WorkspaceEntity, 'id'>;
   workspaceMemberId: string;
   threadId?: string;
 };

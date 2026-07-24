@@ -46,6 +46,7 @@ describe('MyahInboxResolver', () => {
     const resolver = new MyahInboxResolver(
       { listThreads } as never,
       {} as never,
+      {} as never,
     );
 
     await expect(
@@ -77,6 +78,7 @@ describe('MyahInboxResolver', () => {
     const listThreads = jest.fn();
     const resolver = new MyahInboxResolver(
       { listThreads } as never,
+      {} as never,
       {} as never,
     );
 
