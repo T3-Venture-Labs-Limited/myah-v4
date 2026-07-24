@@ -10,6 +10,7 @@ import { useAgentChatModelId } from '@/ai/hooks/useAgentChatModelId';
 import { useGetBrowsingContext } from '@/ai/hooks/useBrowsingContext';
 import { agentChatDisplayedThreadState } from '@/ai/states/agentChatDisplayedThreadState';
 import { agentChatErrorComponentFamilyState } from '@/ai/states/agentChatErrorComponentFamilyState';
+import { agentChatLastSentBrowsingContextFamilyState } from '@/ai/states/agentChatLastSentBrowsingContextFamilyState';
 import { agentChatIsAwaitingFirstChunkComponentFamilyState } from '@/ai/states/agentChatIsAwaitingFirstChunkComponentFamilyState';
 import { dispatchBrowserEvent } from '@/browser-event/utils/dispatchBrowserEvent';
 
@@ -41,16 +42,23 @@ export const useRetryChatMessage = () => {
     store.set(isAwaitingFirstChunkAtom, true);
 
     const browsingContext = getBrowsingContext();
+    const lastSentBrowsingContext = store.get(
+      agentChatLastSentBrowsingContextFamilyState.atomFamily(threadId),
+    );
+    const inboxSelectionForRetry =
+      browsingContext?.type === 'myahInboxThreadSelection' &&
+      lastSentBrowsingContext?.type === 'myahInboxThreadSelection' &&
+      browsingContext.workspaceId === lastSentBrowsingContext.workspaceId &&
+      browsingContext.threadId === lastSentBrowsingContext.threadId
+        ? lastSentBrowsingContext
+        : null;
 
     try {
       await apolloClient.mutate({
         mutation: RETRY_CHAT_MESSAGE,
         variables: {
           threadId,
-          browsingContext:
-            browsingContext?.type === 'myahInboxThreadSelection'
-              ? browsingContext
-              : null,
+          browsingContext: inboxSelectionForRetry,
           modelId: modelIdForRequest ?? undefined,
         },
       });

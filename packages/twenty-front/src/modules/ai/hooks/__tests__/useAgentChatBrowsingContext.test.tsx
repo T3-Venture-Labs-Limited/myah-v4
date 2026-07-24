@@ -4,6 +4,7 @@ import { type PropsWithChildren } from 'react';
 
 import { useAgentChat } from '@/ai/hooks/useAgentChat';
 import { useRetryChatMessage } from '@/ai/hooks/useRetryChatMessage';
+import { agentChatLastSentBrowsingContextFamilyState } from '@/ai/states/agentChatLastSentBrowsingContextFamilyState';
 import { agentChatDisplayedThreadState } from '@/ai/states/agentChatDisplayedThreadState';
 import { agentChatInputState } from '@/ai/states/agentChatInputState';
 import { currentAiChatThreadState } from '@/ai/states/currentAiChatThreadState';
@@ -121,14 +122,28 @@ describe('agent chat trusted Inbox browsing context', () => {
     expect(mockMutate.mock.calls[1][0].variables.browsingContext).toBeNull();
   });
 
-  it('sends only the current dedicated Inbox selection when retrying', async () => {
+  it('retries only with the unchanged last-sent dedicated Inbox selection', async () => {
     const store = createStore();
     store.set(agentChatDisplayedThreadState.atom, THREAD_ID);
+    store.set(
+      agentChatLastSentBrowsingContextFamilyState.atomFamily(THREAD_ID),
+      inboxSelection,
+    );
     mockGetBrowsingContext
       .mockReturnValueOnce(inboxSelection)
-      .mockReturnValueOnce(null);
+      .mockReturnValueOnce({
+        ...inboxSelection,
+        threadId: '943d5975-e716-4ad3-b5f2-adb41d8299dc',
+      })
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce({
+        ...inboxSelection,
+        workspaceId: 'workspace-b',
+      });
     const { result } = renderWithStore(() => useRetryChatMessage(), store);
 
+    await act(async () => result.current.retryChatMessage());
+    await act(async () => result.current.retryChatMessage());
     await act(async () => result.current.retryChatMessage());
     await act(async () => result.current.retryChatMessage());
 
@@ -136,5 +151,7 @@ describe('agent chat trusted Inbox browsing context', () => {
       inboxSelection,
     );
     expect(mockMutate.mock.calls[1][0].variables.browsingContext).toBeNull();
+    expect(mockMutate.mock.calls[2][0].variables.browsingContext).toBeNull();
+    expect(mockMutate.mock.calls[3][0].variables.browsingContext).toBeNull();
   });
 });
