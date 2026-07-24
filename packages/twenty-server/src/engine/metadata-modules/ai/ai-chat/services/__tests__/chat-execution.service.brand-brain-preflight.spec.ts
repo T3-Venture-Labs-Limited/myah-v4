@@ -1,5 +1,6 @@
 import { streamText } from 'ai';
 
+import { createExecuteToolTool } from 'src/engine/core-modules/tool-provider/tools/execute-tool.tool';
 import { MANAGED_AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { ChatExecutionService } from 'src/engine/metadata-modules/ai/ai-chat/services/chat-execution.service';
@@ -16,6 +17,19 @@ jest.mock('ai', () => ({
     steps: Promise.resolve([]),
   })),
 }));
+jest.mock(
+  'src/engine/core-modules/tool-provider/tools/execute-tool.tool',
+  () => {
+    const actual = jest.requireActual(
+      'src/engine/core-modules/tool-provider/tools/execute-tool.tool',
+    );
+
+    return {
+      ...actual,
+      createExecuteToolTool: jest.fn(actual.createExecuteToolTool),
+    };
+  },
+);
 
 const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
   const toolRegistry = {
@@ -240,6 +254,65 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
           cacheHit: 'false',
         }),
       }),
+    );
+  });
+
+  it('keeps only the two read/propose Inbox tools executable before approval', async () => {
+    const { service, toolRegistry } = buildService();
+    const toolEntry = (name: string) => ({
+      name,
+      label: name,
+      description: name,
+      category: 'MYAH_INBOX',
+      executionRef: { kind: 'static', toolId: name },
+    });
+
+    toolRegistry.buildToolIndex.mockResolvedValue([
+      toolEntry('get_myah_inbox_thread_context'),
+      toolEntry('generate_myah_inbox_reply_proposal'),
+      toolEntry('save_myah_inbox_draft'),
+      toolEntry('send_myah_inbox_reply'),
+    ]);
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'thread-id',
+      browsingContext: null,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'message-id',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Propose a reply.' }],
+        },
+      ],
+    });
+    const executeToolCalls = jest.mocked(createExecuteToolTool).mock.calls;
+    const options = executeToolCalls[executeToolCalls.length - 1]?.[2];
+    const allowedTools = [...(options?.allowedTools ?? [])];
+    const excludedTools = [...(options?.excludeTools ?? [])];
+
+    expect(allowedTools).toEqual(
+      expect.arrayContaining([
+        'get_myah_inbox_thread_context',
+        'generate_myah_inbox_reply_proposal',
+      ]),
+    );
+    expect(excludedTools).not.toContain('get_myah_inbox_thread_context');
+    expect(excludedTools).not.toContain(
+      'generate_myah_inbox_reply_proposal',
+    );
+    expect(excludedTools).toEqual(
+      expect.arrayContaining([
+        'save_myah_inbox_draft',
+        'send_myah_inbox_reply',
+      ]),
     );
   });
 

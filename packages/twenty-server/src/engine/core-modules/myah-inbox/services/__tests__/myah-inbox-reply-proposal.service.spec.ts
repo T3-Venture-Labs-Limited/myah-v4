@@ -2,6 +2,7 @@ import { type LanguageModel } from 'ai';
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
+import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 
 const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
@@ -191,6 +192,46 @@ describe('MyahInboxReplyProposalService', () => {
     expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
     expect(setup.messageProviderSend).not.toHaveBeenCalled();
     expect(Object.keys(result)).toEqual(['subject', 'body']);
+  });
+
+  it('lets the real Brand Brain preflight extract the operator-provided permitted brand', async () => {
+    const proposal = {
+      subject: 'Re: Partnership timing',
+      body: { markdown: 'Warm reply', blocknote: null },
+    };
+    const setup = createService(proposal);
+    const resolveAndExecute = jest.fn().mockResolvedValue({
+      success: true,
+      message: 'ok',
+      result: {
+        brandSlug: 'acme-beauty-labs',
+        pageCount: 1,
+        hasRoot: true,
+        hasIndex: true,
+        hasLog: true,
+        contextMarkdown: 'Use a warm voice.',
+      },
+    });
+    const realPreflight = new BrandBrainPreflightService({
+      get: jest.fn().mockReturnValue({ resolveAndExecute }),
+    } as never);
+
+    setup.brandBrainPreflightService.run.mockImplementation((input) =>
+      realPreflight.run(input as never),
+    );
+
+    await setup.service.generateReplyProposal({
+      ...request,
+      operatorInstructions:
+        'Write creator outreach for Acme Beauty Labs with a warm voice.',
+    });
+
+    expect(resolveAndExecute).toHaveBeenCalledWith(
+      'app_brand_brain_get_context',
+      expect.objectContaining({ brandNameOrSlug: 'Acme Beauty Labs' }),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('rejects malformed structured model output instead of returning or persisting it', async () => {

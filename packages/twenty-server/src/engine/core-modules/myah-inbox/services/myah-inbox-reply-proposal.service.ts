@@ -85,11 +85,9 @@ export class MyahInboxReplyProposalService {
       threadId: parsedInput.threadId,
     });
     const brandTask = [
-      `Generate a reply proposal for the selected Myah Inbox thread.`,
-      `Creator: ${thread.creator?.name ?? 'unlinked'}.`,
-      `Campaign: ${thread.campaign?.name ?? 'unlinked'}.`,
-      `Operator instructions: ${parsedInput.operatorInstructions}`,
-    ].join(' ');
+      parsedInput.operatorInstructions,
+      `Selected permitted context. Creator: ${thread.creator?.name ?? 'unlinked'}. Campaign: ${thread.campaign?.name ?? 'unlinked'}.`,
+    ].join('\n');
     const brandBrain = await this.brandBrainPreflightService.run({
       lastUserMessageText: brandTask,
       toolContext: {
