@@ -1,3 +1,4 @@
+import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
 import {
   type MyahNavigationPageId,
   type MyahNavigationRoute,
@@ -56,11 +57,8 @@ export const MYAH_NAVIGATION_ROUTES = [
     entryPath: '/myah/inbox',
     availability: 'available',
     destination: {
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.MessageThread,
-      },
+      kind: 'myah-page',
+      Component: MyahInboxPage,
     },
   },
   {

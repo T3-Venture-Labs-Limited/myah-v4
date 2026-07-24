@@ -9,6 +9,9 @@ import { getMyahNavigationRoute } from '@/myah/navigation/myah-navigation-regist
 import { type ResolvedMyahNavigationRoute } from '@/myah/navigation/types/MyahNavigationRoute';
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
 
+jest.mock('@/myah/inbox/components/MyahInboxPage', () => ({
+  MyahInboxPage: () => <div>Myah Inbox</div>,
+}));
 jest.mock('@/myah/navigation/hooks/useResolvedMyahNavigationRoutes');
 jest.mock('~/pages/not-found/NotFound', () => ({
   NotFound: () => <div>Not Found</div>,
