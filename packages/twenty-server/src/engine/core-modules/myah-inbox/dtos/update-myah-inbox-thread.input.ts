@@ -1,11 +1,6 @@
 import { Field, InputType } from '@nestjs/graphql';
 
-import {
-  IsEnum,
-  IsISO8601,
-  IsOptional,
-  IsUUID,
-} from 'class-validator';
+import { IsEnum, IsISO8601, IsOptional, IsUUID } from 'class-validator';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { MyahInboxState } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';

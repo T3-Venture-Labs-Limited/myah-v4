@@ -43,8 +43,8 @@ export type MyahInboxMutationRequest = {
   workspaceMemberId: string;
 };
 
-export type UpdateMyahInboxThreadMutationInput =
-  UpdateMyahInboxThreadInput & MyahInboxMutationRequest;
+export type UpdateMyahInboxThreadMutationInput = UpdateMyahInboxThreadInput &
+  MyahInboxMutationRequest;
 export type SaveMyahInboxDraftMutationInput = SaveMyahInboxDraftInput &
   MyahInboxMutationRequest;
 
@@ -71,12 +71,7 @@ type MutationRepositories = {
   workspaceMember: WorkspaceRepository<ContextRecord>;
 };
 
-const hasOwnInputField = (
-  input: UpdateMyahInboxThreadInput,
-  field: keyof UpdateMyahInboxThreadInput,
-): boolean => Object.prototype.hasOwnProperty.call(input, field);
 const MYAH_INBOX_TRIAGE_UPDATE_MAX_ATTEMPTS = 3;
-
 
 @Injectable()
 export class MyahInboxMutationService {
@@ -92,66 +87,63 @@ export class MyahInboxMutationService {
     this.assertValidTriageInput(input);
     await this.assertPolicyVisibleThread(input);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const { rolePermissionConfig, repositories } =
-          await this.loadRepositories(input);
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const { rolePermissionConfig, repositories } =
+        await this.loadRepositories(input);
 
-        await repositories.messageThread.manager.transaction(async (manager) => {
-          const transactionalRepositories = this.getTransactionalRepositories(
-            manager as WorkspaceEntityManager,
-            repositories,
-            rolePermissionConfig,
-            input.authContext,
+      await repositories.messageThread.manager.transaction(async (manager) => {
+        const transactionalRepositories = this.getTransactionalRepositories(
+          manager as WorkspaceEntityManager,
+          repositories,
+          rolePermissionConfig,
+          input.authContext,
+        );
+
+        await this.assertReadableCurrentMember(
+          transactionalRepositories.workspaceMember,
+          input.workspaceMemberId,
+        );
+        let thread = await this.loadReadableThread(
+          transactionalRepositories.messageThread,
+          input.threadId,
+        );
+
+        await this.assertReplyEligible(
+          transactionalRepositories.message,
+          input.threadId,
+        );
+        await this.assertReadableRelationTargets(
+          transactionalRepositories,
+          input,
+        );
+
+        for (
+          let attempt = 0;
+          attempt < MYAH_INBOX_TRIAGE_UPDATE_MAX_ATTEMPTS;
+          attempt++
+        ) {
+          const patch = this.buildTriagePatch(input, thread);
+          const result = await transactionalRepositories.messageThread.update(
+            { id: input.threadId, inboxState: thread.inboxState },
+            patch,
+            { returning: ['id'] },
           );
 
-          await this.assertReadableCurrentMember(
-            transactionalRepositories.workspaceMember,
-            input.workspaceMemberId,
-          );
-          let thread = await this.loadReadableThread(
+          if (result.affected || result.raw.length > 0) {
+            return;
+          }
+
+          thread = await this.loadReadableThread(
             transactionalRepositories.messageThread,
             input.threadId,
           );
+        }
 
-          await this.assertReplyEligible(
-            transactionalRepositories.message,
-            input.threadId,
-          );
-          await this.assertReadableRelationTargets(
-            transactionalRepositories,
-            input,
-          );
-
-          for (
-            let attempt = 0;
-            attempt < MYAH_INBOX_TRIAGE_UPDATE_MAX_ATTEMPTS;
-            attempt++
-          ) {
-            const patch = this.buildTriagePatch(input, thread);
-            const result = await transactionalRepositories.messageThread.update(
-              { id: input.threadId, inboxState: thread.inboxState },
-              patch,
-              { returning: ['id'] },
-            );
-
-            if (result.affected || result.raw.length > 0) {
-              return;
-            }
-
-            thread = await this.loadReadableThread(
-              transactionalRepositories.messageThread,
-              input.threadId,
-            );
-          }
-
-          throw new ConflictException(
-            'Inbox thread changed while applying triage update',
-          );
-        });
-      },
-      input.authContext,
-    );
+        throw new ConflictException(
+          'Inbox thread changed while applying triage update',
+        );
+      });
+    }, input.authContext);
 
     return this.myahInboxQueryService.getThreadSummary({
       authContext: input.authContext,
@@ -174,76 +166,76 @@ export class MyahInboxMutationService {
         const { rolePermissionConfig, repositories } =
           await this.loadRepositories(input);
 
-        return repositories.messageThread.manager.transaction(async (manager) => {
-          const transactionalRepositories = this.getTransactionalRepositories(
-            manager as WorkspaceEntityManager,
-            repositories,
-            rolePermissionConfig,
-            input.authContext,
-          );
+        return repositories.messageThread.manager.transaction(
+          async (manager) => {
+            const transactionalRepositories = this.getTransactionalRepositories(
+              manager as WorkspaceEntityManager,
+              repositories,
+              rolePermissionConfig,
+              input.authContext,
+            );
 
-          await this.assertReadableCurrentMember(
-            transactionalRepositories.workspaceMember,
-            input.workspaceMemberId,
-          );
-          const thread = await this.loadReadableThread(
-            transactionalRepositories.messageThread,
-            input.threadId,
-          );
+            await this.assertReadableCurrentMember(
+              transactionalRepositories.workspaceMember,
+              input.workspaceMemberId,
+            );
+            const thread = await this.loadReadableThread(
+              transactionalRepositories.messageThread,
+              input.threadId,
+            );
 
-          await this.assertReplyEligible(
-            transactionalRepositories.message,
-            input.threadId,
-          );
-          this.assertDraftOwner(thread, input.workspaceMemberId);
+            await this.assertReplyEligible(
+              transactionalRepositories.message,
+              input.threadId,
+            );
+            this.assertDraftOwner(thread, input.workspaceMemberId);
 
-          const draftPatch = {
-            myahReplyDraftBody: input.body,
-            myahReplyDraftRevision: () => '"myahReplyDraftRevision" + 1',
-          } as unknown as QueryDeepPartialEntity<InboxThreadRecord>;
+            const draftPatch = {
+              myahReplyDraftBody: input.body,
+              myahReplyDraftRevision: () => '"myahReplyDraftRevision" + 1',
+            } as unknown as QueryDeepPartialEntity<InboxThreadRecord>;
 
-          const result = await transactionalRepositories.messageThread.update(
-            {
-              id: input.threadId,
-              inboxOwnerId: input.workspaceMemberId,
-              myahReplyDraftRevision: input.expectedRevision,
-            },
-            draftPatch,
-            {
-              returning: [
-                'myahReplyDraftBody',
-                'myahReplyDraftRevision',
-              ],
-            },
-          );
-          const saved = (result.raw[0] ??
-            result.generatedMaps[0]) as InboxThreadRecord | undefined;
+            const result = await transactionalRepositories.messageThread.update(
+              {
+                id: input.threadId,
+                inboxOwnerId: input.workspaceMemberId,
+                myahReplyDraftRevision: input.expectedRevision,
+              },
+              draftPatch,
+              {
+                returning: ['myahReplyDraftBody', 'myahReplyDraftRevision'],
+              },
+            );
+            const saved = (result.raw[0] ?? result.generatedMaps[0]) as
+              | InboxThreadRecord
+              | undefined;
 
-          if (saved) {
+            if (saved) {
+              return {
+                status: MyahInboxDraftSaveStatus.SAVED,
+                revision: saved.myahReplyDraftRevision,
+                body: input.body,
+              };
+            }
+
+            const current = await this.loadReadableThread(
+              transactionalRepositories.messageThread,
+              input.threadId,
+            );
+
+            this.assertDraftOwner(current, input.workspaceMemberId);
+
+            if (current.myahReplyDraftRevision === input.expectedRevision) {
+              throw new ForbiddenException('Inbox draft is not writable');
+            }
+
             return {
-              status: MyahInboxDraftSaveStatus.SAVED,
-              revision: saved.myahReplyDraftRevision,
-              body: input.body,
+              status: MyahInboxDraftSaveStatus.CONFLICT,
+              revision: current.myahReplyDraftRevision,
+              body: this.toDraftBody(current),
             };
-          }
-
-          const current = await this.loadReadableThread(
-            transactionalRepositories.messageThread,
-            input.threadId,
-          );
-
-          this.assertDraftOwner(current, input.workspaceMemberId);
-
-          if (current.myahReplyDraftRevision === input.expectedRevision) {
-            throw new ForbiddenException('Inbox draft is not writable');
-          }
-
-          return {
-            status: MyahInboxDraftSaveStatus.CONFLICT,
-            revision: current.myahReplyDraftRevision,
-            body: this.toDraftBody(current),
-          };
-        });
+          },
+        );
       },
       input.authContext,
     );
@@ -270,7 +262,10 @@ export class MyahInboxMutationService {
   }
 
   private async assertPolicyVisibleThread(
-    input: MyahInboxMutationRequest & { threadId: string; user: AuthContextUser },
+    input: MyahInboxMutationRequest & {
+      threadId: string;
+      user: AuthContextUser;
+    },
   ): Promise<void> {
     await this.myahInboxQueryService.getThreadSummary({
       authContext: input.authContext,
@@ -281,9 +276,7 @@ export class MyahInboxMutationService {
     });
   }
 
-  private assertValidTriageInput(
-    input: UpdateMyahInboxThreadInput,
-  ): void {
+  private assertValidTriageInput(input: UpdateMyahInboxThreadInput): void {
     const mutableFields: Array<keyof UpdateMyahInboxThreadInput> = [
       'creatorId',
       'campaignId',
@@ -300,10 +293,10 @@ export class MyahInboxMutationService {
     if (
       !isValidUuid(input.threadId) ||
       relationIds.some((id) => !isValidUuid(id)) ||
-      !mutableFields.some((field) => hasOwnInputField(input, field)) ||
+      !mutableFields.some((field) => input[field] !== undefined) ||
       (isDefined(input.inboxState) &&
         !Object.values(MyahInboxState).includes(input.inboxState)) ||
-      (hasOwnInputField(input, 'snoozedUntil') &&
+      (input.snoozedUntil !== undefined &&
         !isDefined(input.snoozedUntil) &&
         (!isDefined(input.inboxState) ||
           input.inboxState === MyahInboxState.SNOOZED)) ||
@@ -333,8 +326,7 @@ export class MyahInboxMutationService {
       input.body.markdown.length > MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH ||
       (input.body.blocknote !== null &&
         (typeof input.body.blocknote !== 'string' ||
-          input.body.blocknote.length >
-            MYAH_INBOX_MAX_DRAFT_BLOCKNOTE_LENGTH))
+          input.body.blocknote.length > MYAH_INBOX_MAX_DRAFT_BLOCKNOTE_LENGTH))
     ) {
       throw new BadRequestException('Invalid Myah inbox draft body');
     }
@@ -558,15 +550,15 @@ export class MyahInboxMutationService {
   ): Partial<InboxThreadRecord> {
     const patch: Partial<InboxThreadRecord> = {};
 
-    if (hasOwnInputField(input, 'creatorId')) {
+    if (input.creatorId !== undefined) {
       patch.creatorId = input.creatorId ?? null;
     }
 
-    if (hasOwnInputField(input, 'campaignId')) {
+    if (input.campaignId !== undefined) {
       patch.myahCampaignId = input.campaignId ?? null;
     }
 
-    if (hasOwnInputField(input, 'inboxOwnerId')) {
+    if (input.inboxOwnerId !== undefined) {
       patch.inboxOwnerId = input.inboxOwnerId ?? null;
     }
 
@@ -593,10 +585,7 @@ export class MyahInboxMutationService {
         patch.snoozedUntil = input.snoozedUntil;
       }
     } else {
-      if (
-        !isDefined(input.inboxState) &&
-        hasOwnInputField(input, 'snoozedUntil')
-      ) {
+      if (!isDefined(input.inboxState) && input.snoozedUntil !== undefined) {
         throw new BadRequestException(
           'A snooze timestamp requires the SNOOZED state',
         );

@@ -76,15 +76,16 @@ type MobilePanel = 'list' | 'thread' | 'context';
 
 export const MyahInboxPage = () => {
   const isMobile = useIsMobile();
-  const [filters, setFilters] = useAtomState(myahInboxFiltersState);
-  const [selectedThreadId, setSelectedThreadId] = useAtomState(
-    myahInboxSelectedThreadIdState,
+  const [myahInboxFilters, setMyahInboxFilters] = useAtomState(
+    myahInboxFiltersState,
   );
+  const [myahInboxSelectedThreadId, setMyahInboxSelectedThreadId] =
+    useAtomState(myahInboxSelectedThreadIdState);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('list');
-  const inbox = useMyahInboxThreads(filters);
+  const inbox = useMyahInboxThreads(myahInboxFilters);
 
   const selectedThread =
-    inbox.threads.find(({ id }) => id === selectedThreadId) ?? null;
+    inbox.threads.find(({ id }) => id === myahInboxSelectedThreadId) ?? null;
 
   useEffect(() => {
     if (inbox.loading) {
@@ -92,17 +93,22 @@ export const MyahInboxPage = () => {
     }
 
     if (inbox.threads.length === 0) {
-      setSelectedThreadId(null);
+      setMyahInboxSelectedThreadId(null);
       return;
     }
 
-    if (!inbox.threads.some(({ id }) => id === selectedThreadId)) {
-      setSelectedThreadId(inbox.threads[0].id);
+    if (!inbox.threads.some(({ id }) => id === myahInboxSelectedThreadId)) {
+      setMyahInboxSelectedThreadId(inbox.threads[0].id);
     }
-  }, [inbox.loading, inbox.threads, selectedThreadId, setSelectedThreadId]);
+  }, [
+    inbox.loading,
+    inbox.threads,
+    myahInboxSelectedThreadId,
+    setMyahInboxSelectedThreadId,
+  ]);
 
   const handleSelectThread = (threadId: string) => {
-    setSelectedThreadId(threadId);
+    setMyahInboxSelectedThreadId(threadId);
 
     if (isMobile) {
       setMobilePanel('thread');
@@ -112,14 +118,14 @@ export const MyahInboxPage = () => {
   const threadList = (
     <MyahInboxThreadList
       threads={inbox.threads}
-      filters={filters}
-      selectedThreadId={selectedThreadId}
+      filters={myahInboxFilters}
+      selectedThreadId={myahInboxSelectedThreadId}
       loading={inbox.loading}
       loadingMore={inbox.loadingMore}
       error={inbox.error}
       hasNextPage={inbox.hasNextPage}
       onSelectThread={handleSelectThread}
-      onFiltersChange={setFilters}
+      onFiltersChange={setMyahInboxFilters}
       onLoadMore={inbox.loadMore}
       onRetry={() => void inbox.refetch()}
     />

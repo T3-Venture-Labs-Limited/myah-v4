@@ -23,6 +23,11 @@ jest.mock('twenty-ui/theme-constants', () => ({
 const mockUpdateThread = jest.fn();
 const mockUseFindOneRecord = jest.fn();
 let mockCurrentWorkspaceMember: { id: string } | null = { id: 'member-1' };
+let mockObjectMetadataItems = [
+  { nameSingular: 'creator' },
+  { nameSingular: 'campaign' },
+  { nameSingular: 'workspaceMember' },
+];
 
 jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
   useMyahInboxThreadMutations: () => ({
@@ -32,6 +37,12 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
 
 jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
   useFindOneRecord: (...args: unknown[]) => mockUseFindOneRecord(...args),
+}));
+
+jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
+  useObjectMetadataItems: () => ({
+    objectMetadataItems: mockObjectMetadataItems,
+  }),
 }));
 
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
@@ -217,6 +228,11 @@ describe('MyahInboxContextPanel', () => {
     jest.clearAllMocks();
     mockUpdateThread.mockReset();
     mockCurrentWorkspaceMember = { id: 'member-1' };
+    mockObjectMetadataItems = [
+      { nameSingular: 'creator' },
+      { nameSingular: 'campaign' },
+      { nameSingular: 'workspaceMember' },
+    ];
     mockUseFindOneRecord.mockReturnValue({
       record: {
         id: 'thread-1',
@@ -225,6 +241,15 @@ describe('MyahInboxContextPanel', () => {
       },
       loading: false,
     });
+  });
+
+  it('waits for record metadata before mounting native triage pickers', () => {
+    mockObjectMetadataItems = [];
+
+    render(<MyahInboxContextPanel thread={thread} />);
+
+    expect(screen.getByText('Loading triage controls')).toBeVisible();
+    expect(screen.queryByLabelText('Campaign')).not.toBeInTheDocument();
   });
 
   it('saves creator, campaign, owner, state, and snooze triage together', async () => {

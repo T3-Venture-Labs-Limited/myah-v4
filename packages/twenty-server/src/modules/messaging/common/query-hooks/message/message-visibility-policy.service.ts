@@ -67,9 +67,13 @@ export class MessageVisibilityPolicyService {
               deletedAt: IsNull(),
             },
           })
-        ).filter(({ deletedAt }) => deletedAt === null || deletedAt === undefined);
+        ).filter(
+          ({ deletedAt }) => deletedAt === null || deletedAt === undefined,
+        );
         const messageChannelIds = [
-          ...new Set(associations.map(({ messageChannelId }) => messageChannelId)),
+          ...new Set(
+            associations.map(({ messageChannelId }) => messageChannelId),
+          ),
         ];
         const messageChannels = (
           messageChannelIds.length === 0

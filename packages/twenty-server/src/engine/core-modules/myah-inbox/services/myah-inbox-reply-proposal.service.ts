@@ -186,7 +186,9 @@ export class MyahInboxReplyProposalService {
       actor.actorContext.workspaceMemberId !==
         input.authContext.workspaceMemberId
     ) {
-      throw new ForbiddenException('Reply proposal actor context does not match');
+      throw new ForbiddenException(
+        'Reply proposal actor context does not match',
+      );
     }
 
     const thread = await this.myahInboxQueryService.getThreadSummary({

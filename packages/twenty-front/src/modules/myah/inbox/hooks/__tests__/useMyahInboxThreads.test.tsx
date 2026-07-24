@@ -3,9 +3,14 @@ import { act, renderHook } from '@testing-library/react';
 import { useMyahInboxThreads } from '@/myah/inbox/hooks/useMyahInboxThreads';
 
 const mockUseQuery = jest.fn();
+const mockApolloCoreClient = { name: 'core-client' };
 
 jest.mock('@apollo/client/react', () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
+}));
+
+jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
+  useApolloCoreClient: () => mockApolloCoreClient,
 }));
 
 jest.mock('~/generated/graphql', () => ({
@@ -69,6 +74,7 @@ describe('useMyahInboxThreads', () => {
           search: 'Ada',
         },
         notifyOnNetworkStatusChange: true,
+        client: mockApolloCoreClient,
       },
     );
     expect(result.current.threads).toEqual([thread]);
@@ -179,6 +185,7 @@ describe('useMyahInboxThreads', () => {
           search: undefined,
         },
         notifyOnNetworkStatusChange: true,
+        client: mockApolloCoreClient,
       },
     );
   });

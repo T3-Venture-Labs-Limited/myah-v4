@@ -1,10 +1,12 @@
 import { useQuery } from '@apollo/client/react';
 import { useCallback } from 'react';
 
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+
 import { type MyahInboxFilters } from '@/myah/inbox/states/myahInboxSelectionState';
 import {
-  MyahInboxQueue,
-  MyahInboxState,
+  type MyahInboxQueue,
+  type MyahInboxState,
   MyahInboxThreadsDocument,
 } from '~/generated/graphql';
 
@@ -22,7 +24,9 @@ export type MyahInboxThread = {
 };
 
 export const useMyahInboxThreads = (filters: MyahInboxFilters) => {
+  const apolloCoreClient = useApolloCoreClient();
   const query = useQuery(MyahInboxThreadsDocument, {
+    client: apolloCoreClient,
     variables: {
       first: 50,
       queue: filters.queue as MyahInboxQueue,
@@ -47,10 +51,6 @@ export const useMyahInboxThreads = (filters: MyahInboxFilters) => {
     await query.fetchMore({
       variables: { after: connection.pageInfo.endCursor },
       updateQuery: (previous, { fetchMoreResult }) => {
-        if (!fetchMoreResult) {
-          return previous;
-        }
-
         return {
           myahInboxThreads: {
             ...fetchMoreResult.myahInboxThreads,

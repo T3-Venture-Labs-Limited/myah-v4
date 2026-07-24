@@ -100,13 +100,13 @@ const StyledMeta = styled.span`
 `;
 
 const StyledPreview = styled.span`
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   color: ${themeCssVariables.font.color.tertiary};
   display: -webkit-box;
   font-size: ${themeCssVariables.font.size.xs};
   line-clamp: 2;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 `;
 
 const StyledState = styled.span`
@@ -182,6 +182,7 @@ export const MyahInboxThreadList = ({
   onLoadMore,
   onRetry,
 }: MyahInboxThreadListProps) => {
+  // oxlint-disable-next-line twenty/no-state-useref -- DOM refs coordinate roving keyboard focus.
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const handleRowKeyDown = (

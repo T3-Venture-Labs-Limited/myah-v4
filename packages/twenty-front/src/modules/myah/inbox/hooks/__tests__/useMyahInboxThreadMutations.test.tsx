@@ -7,9 +7,14 @@ const mockUseMutation = jest.fn();
 const mockUpdate = jest.fn();
 const mockSave = jest.fn();
 const mockGenerate = jest.fn();
+const mockApolloCoreClient = { name: 'core-client' };
 
 jest.mock('@apollo/client/react', () => ({
   useMutation: (...args: unknown[]) => mockUseMutation(...args),
+}));
+
+jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
+  useApolloCoreClient: () => mockApolloCoreClient,
 }));
 
 jest.mock('~/generated/graphql', () => ({
@@ -47,6 +52,14 @@ describe('useMyahInboxThreadMutations', () => {
     mockSave.mockResolvedValue({ data: { saveMyahInboxDraft: savedDraft } });
 
     const { result } = renderHook(() => useMyahInboxThreadMutations());
+    expect(mockUseMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'UpdateMyahInboxThread' }),
+      { client: mockApolloCoreClient },
+    );
+    expect(mockUseMutation).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'SaveMyahInboxDraft' }),
+      { client: mockApolloCoreClient },
+    );
 
     let updateResult;
     await act(async () => {

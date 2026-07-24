@@ -1,3 +1,4 @@
+/* oxlint-disable react/jsx-props-no-spreading -- Tests reuse a typed baseline prop fixture. */
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 

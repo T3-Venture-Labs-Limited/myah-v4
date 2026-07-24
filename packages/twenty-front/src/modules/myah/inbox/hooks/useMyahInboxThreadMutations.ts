@@ -1,5 +1,7 @@
 import { useMutation } from '@apollo/client/react';
 
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+
 import {
   GenerateMyahInboxReplyProposalDocument,
   SaveMyahInboxDraftDocument,
@@ -10,10 +12,16 @@ import {
 } from '~/generated/graphql';
 
 export const useMyahInboxThreadMutations = () => {
-  const [updateThreadMutation] = useMutation(UpdateMyahInboxThreadDocument);
-  const [saveDraftMutation] = useMutation(SaveMyahInboxDraftDocument);
+  const apolloCoreClient = useApolloCoreClient();
+  const [updateThreadMutation] = useMutation(UpdateMyahInboxThreadDocument, {
+    client: apolloCoreClient,
+  });
+  const [saveDraftMutation] = useMutation(SaveMyahInboxDraftDocument, {
+    client: apolloCoreClient,
+  });
   const [generateProposalMutation] = useMutation(
     GenerateMyahInboxReplyProposalDocument,
+    { client: apolloCoreClient },
   );
 
   const updateThread = async (input: UpdateMyahInboxThreadInput) => {

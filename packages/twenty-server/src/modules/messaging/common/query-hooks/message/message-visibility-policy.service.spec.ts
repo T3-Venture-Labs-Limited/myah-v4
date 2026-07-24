@@ -142,9 +142,7 @@ describe('MessageVisibilityPolicyService', () => {
           connectedAccountId: 'other-account',
         },
       ],
-      accounts: [
-        { id: 'owned-account', workspaceId, userWorkspaceId },
-      ],
+      accounts: [{ id: 'owned-account', workspaceId, userWorkspaceId }],
     });
 
     await expect(
@@ -273,13 +271,11 @@ describe('MessageVisibilityPolicyService', () => {
     expect(projection.expression).toContain(
       'connectedAccount."userWorkspaceId" = :messageVisibilityUserWorkspaceId',
     );
-    expect(projection.expression.indexOf(':messageVisibilityFull')).toBeLessThan(
-      projection.expression.indexOf(':messageVisibilitySubject'),
-    );
+    expect(
+      projection.expression.indexOf(':messageVisibilityFull'),
+    ).toBeLessThan(projection.expression.indexOf(':messageVisibilitySubject'));
     expect(
       projection.expression.indexOf(':messageVisibilitySubject'),
-    ).toBeLessThan(
-      projection.expression.indexOf(':messageVisibilityMetadata'),
-    );
+    ).toBeLessThan(projection.expression.indexOf(':messageVisibilityMetadata'));
   });
 });

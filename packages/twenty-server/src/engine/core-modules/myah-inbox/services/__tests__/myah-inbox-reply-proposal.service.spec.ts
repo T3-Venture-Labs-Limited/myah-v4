@@ -30,7 +30,10 @@ const thread = {
   state: 'NEEDS_REPLY',
   snoozedUntil: null,
   creator: { id: '20202020-f7c5-4e2f-a44a-240b2d3a9d02', name: 'Ada Creator' },
-  campaign: { id: '20202020-f7c5-4e2f-a44a-240b2d3a9d03', name: 'Autumn Launch' },
+  campaign: {
+    id: '20202020-f7c5-4e2f-a44a-240b2d3a9d03',
+    name: 'Autumn Launch',
+  },
   inboxOwner: { id: workspaceMemberId, name: 'Owner' },
 };
 
@@ -89,7 +92,8 @@ const createService = (modelOutput: unknown) => {
     run: jest.fn().mockResolvedValue({
       required: true,
       called: true,
-      contextPart: '<brand_brain_context>Use a warm, concise voice.</brand_brain_context>',
+      contextPart:
+        '<brand_brain_context>Use a warm, concise voice.</brand_brain_context>',
     }),
   };
   const aiModelRegistryService = {
@@ -161,10 +165,9 @@ describe('MyahInboxReplyProposalService', () => {
 
     expect(result).toEqual(proposal);
 
-    expect(setup.actorContextService.buildUserAndAgentActorContext).toHaveBeenCalledWith(
-      userWorkspaceId,
-      workspaceId,
-    );
+    expect(
+      setup.actorContextService.buildUserAndAgentActorContext,
+    ).toHaveBeenCalledWith(userWorkspaceId, workspaceId);
     expect(setup.queryService.getThreadSummary).toHaveBeenCalledWith({
       authContext: userAuthContext,
       user: userAuthContext.user,
@@ -185,10 +188,12 @@ describe('MyahInboxReplyProposalService', () => {
       }),
     );
     expect(setup.fakeModel.doGenerate).toHaveBeenCalledTimes(1);
-    expect(setup.billingUsageService.hasAvailableCreditsOrThrow).toHaveBeenCalledWith(
-      workspaceId,
+    expect(
+      setup.billingUsageService.hasAvailableCreditsOrThrow,
+    ).toHaveBeenCalledWith(workspaceId);
+    expect(setup.aiBillingService.calculateAndBillUsage).toHaveBeenCalledTimes(
+      1,
     );
-    expect(setup.aiBillingService.calculateAndBillUsage).toHaveBeenCalledTimes(1);
     expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
     expect(setup.messageProviderSend).not.toHaveBeenCalled();
     expect(Object.keys(result)).toEqual(['subject', 'body']);

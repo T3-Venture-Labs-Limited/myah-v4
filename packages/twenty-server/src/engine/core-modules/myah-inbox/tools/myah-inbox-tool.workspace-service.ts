@@ -11,7 +11,10 @@ import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/
 
 const threadContextInputSchema = z
   .object({
-    threadId: z.string().uuid().describe('The selected native MessageThread UUID'),
+    threadId: z
+      .string()
+      .uuid()
+      .describe('The selected native MessageThread UUID'),
   })
   .strict();
 
@@ -40,7 +43,9 @@ export class MyahInboxToolWorkspaceService {
       description:
         'Read the selected policy-visible Myah Inbox MessageThread and its readable Creator/Campaign context. This tool never mutates the thread.',
       inputSchema: threadContextInputSchema,
-      execute: async ({ threadId }: z.infer<typeof threadContextInputSchema>) => {
+      execute: async ({
+        threadId,
+      }: z.infer<typeof threadContextInputSchema>) => {
         const result =
           await this.myahInboxReplyProposalService.getThreadContext({
             authContext,

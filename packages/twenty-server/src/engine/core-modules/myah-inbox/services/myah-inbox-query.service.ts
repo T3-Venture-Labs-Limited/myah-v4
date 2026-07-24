@@ -143,7 +143,9 @@ export class MyahInboxQueryService {
         });
 
         if (!currentWorkspaceMember) {
-          throw new ForbiddenException('Inbox workspace member is not readable');
+          throw new ForbiddenException(
+            'Inbox workspace member is not readable',
+          );
         }
 
         if (input.campaignId) {
@@ -283,10 +285,9 @@ export class MyahInboxQueryService {
         }
 
         if (input.states?.length) {
-          queryBuilder.andWhere(
-            'message_thread."inboxState" IN (:...states)',
-            { states: input.states },
-          );
+          queryBuilder.andWhere('message_thread."inboxState" IN (:...states)', {
+            states: input.states,
+          });
         }
 
         const search = input.search?.trim();
@@ -426,7 +427,9 @@ export class MyahInboxQueryService {
       ...new Set(rows.map(({ campaignId }) => campaignId).filter(isDefined)),
     ];
     const workspaceMemberIds = [
-      ...new Set(rows.map(({ inboxOwnerId }) => inboxOwnerId).filter(isDefined)),
+      ...new Set(
+        rows.map(({ inboxOwnerId }) => inboxOwnerId).filter(isDefined),
+      ),
     ];
     const [creators, campaigns, workspaceMembers] = await Promise.all([
       creatorIds.length === 0
@@ -478,7 +481,10 @@ export class MyahInboxQueryService {
         : FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED;
 
     return {
-      cursor: this.encodeCursor({ receivedAt: lastActivityAt, threadId: row.id }),
+      cursor: this.encodeCursor({
+        receivedAt: lastActivityAt,
+        threadId: row.id,
+      }),
       node: {
         id: row.id,
         lastActivityAt,
@@ -497,9 +503,7 @@ export class MyahInboxQueryService {
           ? this.toContext(contexts.campaignById.get(row.campaignId))
           : null,
         inboxOwner: row.inboxOwnerId
-          ? this.toContext(
-              contexts.workspaceMemberById.get(row.inboxOwnerId),
-            )
+          ? this.toContext(contexts.workspaceMemberById.get(row.inboxOwnerId))
           : null,
       } satisfies MyahInboxThreadSummary,
     };

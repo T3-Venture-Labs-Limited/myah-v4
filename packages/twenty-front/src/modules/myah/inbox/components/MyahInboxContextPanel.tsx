@@ -12,7 +12,10 @@ import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { FormDateTimeFieldInput } from '@/object-record/record-field/ui/form-types/components/FormDateTimeFieldInput';
 import { FormSingleRecordPicker } from '@/object-record/record-field/ui/form-types/components/FormSingleRecordPicker';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
+import { SidePanelProvider } from '@/ui/layout/side-panel/contexts/SidePanelContext';
+import { TabListComponentInstanceContext } from '@/ui/layout/tab-list/states/contexts/TabListComponentInstanceContext';
 import { Select } from '@/ui/input/components/Select';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
@@ -103,6 +106,14 @@ export const MyahInboxContextPanel = ({
   onTriageSaved,
 }: MyahInboxContextPanelProps) => {
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const areTriageControlsReady = [
+    'creator',
+    'campaign',
+    'workspaceMember',
+  ].every((nameSingular) =>
+    objectMetadataItems.some((item) => item.nameSingular === nameSingular),
+  );
   const { updateThread } = useMyahInboxThreadMutations();
   const { record: draftRecord, loading: draftLoading } =
     useFindOneRecord<MyahInboxDraftRecord>({
@@ -124,6 +135,7 @@ export const MyahInboxContextPanel = ({
   const [snoozedUntil, setSnoozedUntil] = useState(
     thread?.snoozedUntil ?? null,
   );
+  // oxlint-disable-next-line twenty/no-state-useref -- Async saves compare the submitted snooze with the latest edit.
   const snoozedUntilRef = useRef(snoozedUntil);
   const [snoozeInputVersion, setSnoozeInputVersion] = useState(0);
   const [isSavingTriage, setIsSavingTriage] = useState(false);
@@ -209,51 +221,57 @@ export const MyahInboxContextPanel = ({
     <StyledContextPanel aria-label="Conversation context">
       <StyledSection>
         <StyledHeading>Triage</StyledHeading>
-        <StyledControls>
-          <FormSingleRecordPicker
-            label="Creator"
-            objectNameSingulars={['creator']}
-            defaultValue={creatorId}
-            onChange={setCreatorId}
-          />
-          <FormSingleRecordPicker
-            label="Campaign"
-            objectNameSingulars={['campaign']}
-            defaultValue={campaignId}
-            onChange={setCampaignId}
-          />
-          <FormSingleRecordPicker
-            label="Owner"
-            objectNameSingulars={['workspaceMember']}
-            defaultValue={ownerId}
-            onChange={setOwnerId}
-          />
-          <Select
-            dropdownId={`myah-inbox-state-${thread.id}`}
-            label="Inbox state"
-            fullWidth
-            value={inboxState}
-            options={INBOX_STATE_OPTIONS}
-            onChange={(state) =>
-              setInboxState(state as MyahInboxThread['state'])
-            }
-          />
-          <FormDateTimeFieldInput
-            key={`${thread.id}-${snoozeInputVersion}`}
-            label="Snooze until"
-            defaultValue={snoozedUntil ?? undefined}
-            onChange={handleSnoozedUntilChange}
-          />
-        </StyledControls>
-        <StyledActions>
-          <Button
-            title={isSavingTriage ? 'Saving triage' : 'Save triage'}
-            variant="secondary"
-            size="small"
-            disabled={isSavingTriage}
-            onClick={handleSaveTriage}
-          />
-        </StyledActions>
+        {areTriageControlsReady ? (
+          <>
+            <StyledControls>
+              <FormSingleRecordPicker
+                label="Creator"
+                objectNameSingulars={['creator']}
+                defaultValue={creatorId}
+                onChange={setCreatorId}
+              />
+              <FormSingleRecordPicker
+                label="Campaign"
+                objectNameSingulars={['campaign']}
+                defaultValue={campaignId}
+                onChange={setCampaignId}
+              />
+              <FormSingleRecordPicker
+                label="Owner"
+                objectNameSingulars={['workspaceMember']}
+                defaultValue={ownerId}
+                onChange={setOwnerId}
+              />
+              <Select
+                dropdownId={`myah-inbox-state-${thread.id}`}
+                label="Inbox state"
+                fullWidth
+                value={inboxState}
+                options={INBOX_STATE_OPTIONS}
+                onChange={(state) =>
+                  setInboxState(state as MyahInboxThread['state'])
+                }
+              />
+              <FormDateTimeFieldInput
+                key={`${thread.id}-${snoozeInputVersion}`}
+                label="Snooze until"
+                defaultValue={snoozedUntil ?? undefined}
+                onChange={handleSnoozedUntilChange}
+              />
+            </StyledControls>
+            <StyledActions>
+              <Button
+                title={isSavingTriage ? 'Saving triage' : 'Save triage'}
+                variant="secondary"
+                size="small"
+                disabled={isSavingTriage}
+                onClick={handleSaveTriage}
+              />
+            </StyledActions>
+          </>
+        ) : (
+          <StyledStatus role="status">Loading triage controls</StyledStatus>
+        )}
         {triageStatus && (
           <StyledStatus role="status">{triageStatus}</StyledStatus>
         )}
@@ -270,23 +288,29 @@ export const MyahInboxContextPanel = ({
               isInSidePanel: false,
             }}
           >
-            <StyledTabs aria-label="Related work">
-              <Button
-                title="Tasks"
-                variant={activityTab === 'tasks' ? 'primary' : 'secondary'}
-                size="small"
-                onClick={() => setActivityTab('tasks')}
-              />
-              <Button
-                title="Notes"
-                variant={activityTab === 'notes' ? 'primary' : 'secondary'}
-                size="small"
-                onClick={() => setActivityTab('notes')}
-              />
-            </StyledTabs>
-            <StyledActivitySurface>
-              {activityTab === 'tasks' ? <TasksCard /> : <NotesCard />}
-            </StyledActivitySurface>
+            <TabListComponentInstanceContext.Provider
+              value={{ instanceId: `myah-inbox-work-${thread.id}` }}
+            >
+              <SidePanelProvider value={{ isInSidePanel: false }}>
+                <StyledTabs aria-label="Related work">
+                  <Button
+                    title="Tasks"
+                    variant={activityTab === 'tasks' ? 'primary' : 'secondary'}
+                    size="small"
+                    onClick={() => setActivityTab('tasks')}
+                  />
+                  <Button
+                    title="Notes"
+                    variant={activityTab === 'notes' ? 'primary' : 'secondary'}
+                    size="small"
+                    onClick={() => setActivityTab('notes')}
+                  />
+                </StyledTabs>
+                <StyledActivitySurface>
+                  {activityTab === 'tasks' ? <TasksCard /> : <NotesCard />}
+                </StyledActivitySurface>
+              </SidePanelProvider>
+            </TabListComponentInstanceContext.Provider>
           </LayoutRenderingProvider>
         ) : (
           <StyledStatus>

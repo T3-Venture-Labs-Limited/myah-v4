@@ -189,12 +189,14 @@ const createService = ({
   };
   const workspaceMemberRepository = {
     find: jest.fn().mockResolvedValue(workspaceMemberRecords),
-    findOne: jest.fn().mockImplementation(({ where }: { where: { id: string } }) => {
-      if (where.id === workspaceMemberId) {
-        return Promise.resolve(workspaceMemberRecords[0] ?? null);
-      }
-      return Promise.resolve(ownerFilterRecord ?? null);
-    }),
+    findOne: jest
+      .fn()
+      .mockImplementation(({ where }: { where: { id: string } }) => {
+        if (where.id === workspaceMemberId) {
+          return Promise.resolve(workspaceMemberRecords[0] ?? null);
+        }
+        return Promise.resolve(ownerFilterRecord ?? null);
+      }),
   };
   const repositories = {
     messageThread: messageThreadRepository,
@@ -267,7 +269,9 @@ describe('MyahInboxQueryService', () => {
       ],
     });
 
-    await expect(service.listThreads(listInput({ first: 1 }))).resolves.toMatchObject({
+    await expect(
+      service.listThreads(listInput({ first: 1 })),
+    ).resolves.toMatchObject({
       edges: [
         {
           node: {
@@ -377,16 +381,19 @@ describe('MyahInboxQueryService', () => {
   it.each([
     ['Campaign', { campaignId: 'not-a-uuid' }],
     ['owner', { owner: 'not-a-uuid' }],
-  ])('rejects an invalid explicit %s id before querying', async (_label, filter) => {
-    const { service, globalWorkspaceOrmManager } = createService();
+  ])(
+    'rejects an invalid explicit %s id before querying',
+    async (_label, filter) => {
+      const { service, globalWorkspaceOrmManager } = createService();
 
-    await expect(
-      service.listThreads(listInput(filter)),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(
-      globalWorkspaceOrmManager.executeInWorkspaceContext,
-    ).not.toHaveBeenCalled();
-  });
+      await expect(
+        service.listThreads(listInput(filter)),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(
+        globalWorkspaceOrmManager.executeInWorkspaceContext,
+      ).not.toHaveBeenCalled();
+    },
+  );
 
   it('applies Creator, owner, Campaign, state, and policy-aware search filters before limit', async () => {
     const campaignId = '20202020-f7c5-4e2f-a44a-240b2d3a9d02';
@@ -416,7 +423,9 @@ describe('MyahInboxQueryService', () => {
     expect(whereSql).toContain('latest_message.text ILIKE :search');
     expect(whereSql).toContain(':messageVisibilitySubject');
     expect(whereSql).toContain(':messageVisibilityFull');
-    expect(whereSql).not.toContain(':messageVisibilityMetadata) AND latest_message.text');
+    expect(whereSql).not.toContain(
+      ':messageVisibilityMetadata) AND latest_message.text',
+    );
     expect(calls.operations.lastIndexOf('where')).toBeLessThan(
       calls.operations.indexOf('limit'),
     );
@@ -434,8 +443,12 @@ describe('MyahInboxQueryService', () => {
     await service.listThreads(listInput({ owner: ownerId }));
 
     expect(allWhereSql(calls)).toContain('message_thread."creatorId" IS NULL');
-    expect(allWhereSql(calls)).toContain('message_thread."inboxOwnerId" IS NULL');
-    expect(allWhereSql(calls)).toContain('message_thread."inboxOwnerId" = :inboxOwnerId');
+    expect(allWhereSql(calls)).toContain(
+      'message_thread."inboxOwnerId" IS NULL',
+    );
+    expect(allWhereSql(calls)).toContain(
+      'message_thread."inboxOwnerId" = :inboxOwnerId',
+    );
   });
 
   it('clamps oversized service callers to MYAH_INBOX_MAX_PAGE_SIZE', async () => {
@@ -496,7 +509,9 @@ describe('MyahInboxQueryService', () => {
     const joinSql = allJoinSql(calls);
     const selectSql = allSelectSql(calls);
 
-    expect(joinSql).toContain('candidateMessage."messageThreadId" = message_thread.id');
+    expect(joinSql).toContain(
+      'candidateMessage."messageThreadId" = message_thread.id',
+    );
     expect(joinSql).toContain(
       `${fullVisibilityExpression} <> :messageVisibilityHidden`,
     );
@@ -579,20 +594,23 @@ describe('MyahInboxQueryService', () => {
         workspaceMember: { id: workspaceMemberId },
       },
     ],
-  ])('rejects %s auth before querying the Inbox', async (_label, authContext) => {
-    const { service, globalWorkspaceOrmManager } = createService();
+  ])(
+    'rejects %s auth before querying the Inbox',
+    async (_label, authContext) => {
+      const { service, globalWorkspaceOrmManager } = createService();
 
-    await expect(
-      service.listThreads(
-        listInput({
-          authContext: authContext as unknown as WorkspaceAuthContext,
-        }),
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(
-      globalWorkspaceOrmManager.executeInWorkspaceContext,
-    ).not.toHaveBeenCalled();
-  });
+      await expect(
+        service.listThreads(
+          listInput({
+            authContext: authContext as unknown as WorkspaceAuthContext,
+          }),
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(
+        globalWorkspaceOrmManager.executeInWorkspaceContext,
+      ).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects user auth whose workspace or member does not match resolver context', async () => {
     const { service } = createService();

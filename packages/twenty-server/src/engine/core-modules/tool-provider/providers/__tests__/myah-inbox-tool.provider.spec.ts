@@ -109,15 +109,17 @@ describe('MyahInboxToolProvider', () => {
   it('catalogues only the two read/propose tools and executes through the workspace service', async () => {
     const { provider, workspaceService } = createProvider();
 
-    await expect(provider.generateDescriptors(context as never)).resolves.toEqual(
+    await expect(
+      provider.generateDescriptors(context as never),
+    ).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'get_myah_inbox_thread_context' }),
         expect.objectContaining({ name: 'generate_myah_inbox_reply_proposal' }),
       ]),
     );
-    const names = (
-      await provider.generateDescriptors(context as never)
-    ).map(({ name }) => name);
+    const names = (await provider.generateDescriptors(context as never)).map(
+      ({ name }) => name,
+    );
 
     expect(names.sort()).toEqual([
       'generate_myah_inbox_reply_proposal',
@@ -156,7 +158,11 @@ describe('MyahInboxToolProvider', () => {
       MODULE_METADATA.PROVIDERS,
       ToolProviderModule,
     ) as Array<
-      | { provide?: symbol; inject?: unknown[]; useFactory?: (...args: unknown[]) => unknown[] }
+      | {
+          provide?: symbol;
+          inject?: unknown[];
+          useFactory?: (...args: unknown[]) => unknown[];
+        }
       | unknown
     >;
     const tokenBinding = inboxProviders.find(

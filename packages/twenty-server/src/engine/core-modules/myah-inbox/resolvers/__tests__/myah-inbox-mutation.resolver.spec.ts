@@ -3,9 +3,7 @@ import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
 import { validate } from 'class-validator';
 
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
-import {
-  MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH,
-} from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
+import { MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 import { SaveMyahInboxDraftInput } from 'src/engine/core-modules/myah-inbox/dtos/save-myah-inbox-draft.input';
 import { UpdateMyahInboxThreadInput } from 'src/engine/core-modules/myah-inbox/dtos/update-myah-inbox-thread.input';
 import { MyahInboxModule } from 'src/engine/core-modules/myah-inbox/myah-inbox.module';
@@ -50,9 +48,9 @@ const createResolver = () => {
 
 describe('MyahInboxResolver mutations', () => {
   beforeEach(() => {
-    jest.mocked(getWorkspaceAuthContext).mockReturnValue(
-      userAuthContext as never,
-    );
+    jest
+      .mocked(getWorkspaceAuthContext)
+      .mockReturnValue(userAuthContext as never);
   });
 
   it('passes authenticated request context to the separate triage mutation service method', async () => {

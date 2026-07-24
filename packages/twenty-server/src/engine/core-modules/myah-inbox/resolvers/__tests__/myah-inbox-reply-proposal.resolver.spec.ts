@@ -30,9 +30,9 @@ const proposal = {
 
 describe('MyahInboxResolver reply proposal', () => {
   beforeEach(() => {
-    jest.mocked(getWorkspaceAuthContext).mockReturnValue(
-      userAuthContext as never,
-    );
+    jest
+      .mocked(getWorkspaceAuthContext)
+      .mockReturnValue(userAuthContext as never);
   });
 
   it('calls the shared proposal service with only the authenticated user/workspace context and operator request', async () => {

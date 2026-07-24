@@ -28,7 +28,10 @@ const userAuthContext = {
 
 const proposal = {
   subject: 'Re: Partnership timing',
-  body: { markdown: 'Tuesday works. Please send the final assets.', blocknote: null },
+  body: {
+    markdown: 'Tuesday works. Please send the final assets.',
+    blocknote: null,
+  },
 };
 
 const executeProposalTool = async (toolSet: ToolSet) => {
@@ -127,8 +130,12 @@ describe('Myah Inbox reply proposal direct/tool integration', () => {
           .fn()
           .mockReturnValue({ modelId: 'fake/reply-model' }),
       } as never,
-      { hasAvailableCreditsOrThrow: jest.fn().mockResolvedValue(undefined) } as never,
-      { calculateAndBillUsage: jest.fn().mockResolvedValue(undefined) } as never,
+      {
+        hasAvailableCreditsOrThrow: jest.fn().mockResolvedValue(undefined),
+      } as never,
+      {
+        calculateAndBillUsage: jest.fn().mockResolvedValue(undefined),
+      } as never,
       {
         isManagedModel: jest.fn().mockReturnValue(false),
         wrapModel: jest.fn(({ model: inputModel }) => inputModel),
@@ -145,9 +152,9 @@ describe('Myah Inbox reply proposal direct/tool integration', () => {
     );
     const toolService = new MyahInboxToolWorkspaceService(proposalService);
 
-    jest.mocked(getWorkspaceAuthContext).mockReturnValue(
-      userAuthContext as never,
-    );
+    jest
+      .mocked(getWorkspaceAuthContext)
+      .mockReturnValue(userAuthContext as never);
 
     const directResult = await resolver.generateMyahInboxReplyProposal(
       { threadId, operatorInstructions: 'Confirm Tuesday.' },

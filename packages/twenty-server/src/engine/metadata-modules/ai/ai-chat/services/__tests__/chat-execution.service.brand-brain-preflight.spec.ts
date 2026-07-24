@@ -305,9 +305,7 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
       ]),
     );
     expect(excludedTools).not.toContain('get_myah_inbox_thread_context');
-    expect(excludedTools).not.toContain(
-      'generate_myah_inbox_reply_proposal',
-    );
+    expect(excludedTools).not.toContain('generate_myah_inbox_reply_proposal');
     expect(excludedTools).toEqual(
       expect.arrayContaining([
         'save_myah_inbox_draft',

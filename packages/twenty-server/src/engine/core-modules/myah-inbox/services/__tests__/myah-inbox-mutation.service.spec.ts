@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 import {
   type UserWorkspaceAuthContext,
@@ -117,18 +114,17 @@ const createService = ({
 
   const messageThreadRepository = {
     target: targets.messageThread,
-    findOne: jest.fn().mockImplementation(({ where }: { where: { id: string } }) =>
-      Promise.resolve(
-        persistedThread?.id === where.id ? { ...persistedThread } : null,
+    findOne: jest
+      .fn()
+      .mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(
+          persistedThread?.id === where.id ? { ...persistedThread } : null,
+        ),
       ),
-    ),
     update: jest
       .fn()
       .mockImplementation(
-        (
-          criteria: Partial<ThreadRecord>,
-          patch: Record<string, unknown>,
-        ) => {
+        (criteria: Partial<ThreadRecord>, patch: Record<string, unknown>) => {
           if (
             !persistedThread ||
             criteria.id !== persistedThread.id ||
@@ -167,33 +163,39 @@ const createService = ({
   };
   const creatorRepository = {
     target: targets.creator,
-    findOne: jest.fn().mockImplementation(({ where }: { where: { id: string } }) =>
-      Promise.resolve(
-        readableCreatorIds.includes(where.id)
-          ? { id: where.id, name: 'Creator' }
-          : null,
+    findOne: jest
+      .fn()
+      .mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(
+          readableCreatorIds.includes(where.id)
+            ? { id: where.id, name: 'Creator' }
+            : null,
+        ),
       ),
-    ),
   };
   const campaignRepository = {
     target: targets.campaign,
-    findOne: jest.fn().mockImplementation(({ where }: { where: { id: string } }) =>
-      Promise.resolve(
-        readableCampaignIds.includes(where.id)
-          ? { id: where.id, name: 'Campaign' }
-          : null,
+    findOne: jest
+      .fn()
+      .mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(
+          readableCampaignIds.includes(where.id)
+            ? { id: where.id, name: 'Campaign' }
+            : null,
+        ),
       ),
-    ),
   };
   const workspaceMemberRepository = {
     target: targets.workspaceMember,
-    findOne: jest.fn().mockImplementation(({ where }: { where: { id: string } }) =>
-      Promise.resolve(
-        readableMemberIds.includes(where.id)
-          ? { id: where.id, name: { firstName: where.id, lastName: '' } }
-          : null,
+    findOne: jest
+      .fn()
+      .mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(
+          readableMemberIds.includes(where.id)
+            ? { id: where.id, name: { firstName: where.id, lastName: '' } }
+            : null,
+        ),
       ),
-    ),
   };
   const repositories = {
     messageThread: messageThreadRepository,
@@ -213,8 +215,9 @@ const createService = ({
   };
   const transaction = jest
     .fn()
-    .mockImplementation((run: (manager: typeof transactionManager) => unknown) =>
-      run(transactionManager),
+    .mockImplementation(
+      (run: (manager: typeof transactionManager) => unknown) =>
+        run(transactionManager),
     );
   Object.assign(messageThreadRepository, { manager: { transaction } });
   const globalWorkspaceOrmManager = {
@@ -336,6 +339,30 @@ describe('MyahInboxMutationService', () => {
       inboxOwnerId: null,
       myahReplyDraftBody: originalBody,
       myahReplyDraftRevision: originalRevision,
+    });
+  });
+
+  it('preserves relations omitted as own undefined GraphQL input properties', async () => {
+    const setup = createService({
+      thread: {
+        ...initialThread(),
+        creatorId,
+        myahCampaignId: campaignId,
+      },
+    });
+
+    await setup.service.updateMyahInboxThread({
+      ...request(),
+      threadId,
+      creatorId: undefined,
+      campaignId: undefined,
+      inboxOwnerId: otherMemberId,
+    });
+
+    expect(setup.persistedThread).toMatchObject({
+      creatorId,
+      myahCampaignId: campaignId,
+      inboxOwnerId: otherMemberId,
     });
   });
 
@@ -493,8 +520,6 @@ describe('MyahInboxMutationService', () => {
     });
   });
 
-
-
   it.each([
     ['Creator', { creatorId }, { readableCreatorIds: [] }],
     ['Campaign', { campaignId }, { readableCampaignIds: [] }],
@@ -548,14 +573,20 @@ describe('MyahInboxMutationService', () => {
       threadId,
       campaignId,
     });
-    expect(setup.persistedThread).toMatchObject({ creatorId, myahCampaignId: campaignId });
+    expect(setup.persistedThread).toMatchObject({
+      creatorId,
+      myahCampaignId: campaignId,
+    });
 
     await setup.service.updateMyahInboxThread({
       ...request(),
       threadId,
       campaignId: null,
     });
-    expect(setup.persistedThread).toMatchObject({ creatorId, myahCampaignId: null });
+    expect(setup.persistedThread).toMatchObject({
+      creatorId,
+      myahCampaignId: null,
+    });
   });
 
   it('returns the persisted body and revision on a stale compare-and-set without overwriting', async () => {
@@ -754,7 +785,11 @@ describe('MyahInboxMutationService', () => {
       body: { markdown: 'local only', blocknote: null },
     });
 
-    expect(setup.globalWorkspaceOrmManager.getRepository.mock.calls.map((call) => call[1])).toEqual(
+    expect(
+      setup.globalWorkspaceOrmManager.getRepository.mock.calls.map(
+        (call) => call[1],
+      ),
+    ).toEqual(
       expect.arrayContaining([
         'messageThread',
         'message',

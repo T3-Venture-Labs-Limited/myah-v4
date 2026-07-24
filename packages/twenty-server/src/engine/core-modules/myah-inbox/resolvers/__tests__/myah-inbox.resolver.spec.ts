@@ -33,9 +33,9 @@ const userAuthContext = {
 
 describe('MyahInboxResolver', () => {
   beforeEach(() => {
-    jest.mocked(getWorkspaceAuthContext).mockReturnValue(
-      userAuthContext as never,
-    );
+    jest
+      .mocked(getWorkspaceAuthContext)
+      .mockReturnValue(userAuthContext as never);
   });
 
   it('passes the authenticated user, workspace, member, and request auth context to the query', async () => {
@@ -83,7 +83,11 @@ describe('MyahInboxResolver', () => {
     );
 
     await expect(
-      resolver.myahInboxThreads({} as never, workspace as never, workspaceMemberId),
+      resolver.myahInboxThreads(
+        {} as never,
+        workspace as never,
+        workspaceMemberId,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(listThreads).not.toHaveBeenCalled();
   });
