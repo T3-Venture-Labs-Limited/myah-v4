@@ -102,7 +102,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
               workspace,
             ]
           : mutation === 'retryChatMessage'
-            ? ['thread-id', modelId, 'user-workspace-id', workspace]
+            ? ['thread-id', null, modelId, 'user-workspace-id', workspace]
             : mutation === 'answerAgentChatQuestion'
               ? [
                   'thread-id',
@@ -153,7 +153,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
             workspace,
           ]
         : mutation === 'retryChatMessage'
-          ? ['thread-id', modelId, 'user-workspace-id', workspace]
+          ? ['thread-id', null, modelId, 'user-workspace-id', workspace]
           : mutation === 'answerAgentChatQuestion'
             ? [
                 'thread-id',
@@ -193,6 +193,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
 
     await resolver.retryChatMessage(
       'thread-id',
+      null,
       AUTO_SELECT_SMART_MODEL_ID,
       'user-workspace-id',
       autoWorkspace,
@@ -205,5 +206,29 @@ describe('AgentChatResolver managed provider credit preflight', () => {
     expect(
       billingUsageService.hasAvailableCreditsOrThrow,
     ).not.toHaveBeenCalled();
+  });
+  it('forwards the current browsing context when retrying', async () => {
+    const { resolver, streaming } = buildResolver(true);
+    const browsingContext = {
+      type: 'myahInboxThreadSelection',
+      workspaceId: 'workspace-id',
+      threadId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+    } as never;
+
+    await resolver.retryChatMessage(
+      'thread-id',
+      browsingContext,
+      modelId,
+      'user-workspace-id',
+      workspace,
+    );
+
+    expect(streaming.retryLastFailedTurn).toHaveBeenCalledWith({
+      threadId: 'thread-id',
+      browsingContext,
+      modelId,
+      userWorkspaceId: 'user-workspace-id',
+      workspace,
+    });
   });
 });

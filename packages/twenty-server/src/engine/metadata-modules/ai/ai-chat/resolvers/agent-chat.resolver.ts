@@ -285,6 +285,8 @@ export class AgentChatResolver {
   @Mutation(() => SendChatMessageResultDTO)
   async retryChatMessage(
     @Args('threadId', { type: () => UUIDScalarType }) threadId: string,
+    @Args('browsingContext', { type: () => GraphQLJSON, nullable: true })
+    browsingContext: BrowsingContextType | null,
     @Args('modelId', { type: () => String, nullable: true })
     modelId: string | undefined,
     @AuthUserWorkspaceId() userWorkspaceId: string,
@@ -308,6 +310,7 @@ export class AgentChatResolver {
 
     const result = await this.agentChatStreamingService.retryLastFailedTurn({
       threadId,
+      browsingContext: browsingContext ?? null,
       userWorkspaceId,
       workspace,
       modelId,

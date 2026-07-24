@@ -265,11 +265,13 @@ export class AgentChatStreamingService {
     threadId,
     userWorkspaceId,
     workspace,
+    browsingContext,
     modelId,
   }: {
     threadId: string;
     userWorkspaceId: string;
     workspace: WorkspaceEntity;
+    browsingContext: BrowsingContextType | null;
     modelId?: string;
   }): Promise<{ streamId: string; messageId: string }> {
     const thread = await this.threadRepository.findOne(workspace.id, {
@@ -355,7 +357,7 @@ export class AgentChatStreamingService {
           userWorkspaceId,
           workspaceId: workspace.id,
           messages,
-          browsingContext: null,
+          browsingContext,
           modelId,
           lastUserMessageText: textPart?.text ?? '',
           lastUserMessageParts: retriedMessage.parts,
