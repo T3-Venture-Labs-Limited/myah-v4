@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
@@ -9,6 +10,7 @@ import { IsNull, Not, type ObjectLiteral } from 'typeorm';
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
 
+import { validateRichTextFieldOrThrow } from 'src/engine/api/common/common-args-processors/data-arg-processor/validator-utils/validate-rich-text-field-or-throw.util';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
@@ -73,6 +75,8 @@ const hasOwnInputField = (
   input: UpdateMyahInboxThreadInput,
   field: keyof UpdateMyahInboxThreadInput,
 ): boolean => Object.prototype.hasOwnProperty.call(input, field);
+const MYAH_INBOX_TRIAGE_UPDATE_MAX_ATTEMPTS = 3;
+
 
 @Injectable()
 export class MyahInboxMutationService {
@@ -105,7 +109,7 @@ export class MyahInboxMutationService {
             transactionalRepositories.workspaceMember,
             input.workspaceMemberId,
           );
-          const thread = await this.loadReadableThread(
+          let thread = await this.loadReadableThread(
             transactionalRepositories.messageThread,
             input.threadId,
           );
@@ -119,16 +123,31 @@ export class MyahInboxMutationService {
             input,
           );
 
-          const patch = this.buildTriagePatch(input, thread);
-          const result = await transactionalRepositories.messageThread.update(
-            { id: input.threadId },
-            patch,
-            { returning: ['id'] },
-          );
+          for (
+            let attempt = 0;
+            attempt < MYAH_INBOX_TRIAGE_UPDATE_MAX_ATTEMPTS;
+            attempt++
+          ) {
+            const patch = this.buildTriagePatch(input, thread);
+            const result = await transactionalRepositories.messageThread.update(
+              { id: input.threadId, inboxState: thread.inboxState },
+              patch,
+              { returning: ['id'] },
+            );
 
-          if (!result.affected && result.raw.length === 0) {
-            throw new ForbiddenException('Inbox thread is not writable');
+            if (result.affected || result.raw.length > 0) {
+              return;
+            }
+
+            thread = await this.loadReadableThread(
+              transactionalRepositories.messageThread,
+              input.threadId,
+            );
           }
+
+          throw new ConflictException(
+            'Inbox thread changed while applying triage update',
+          );
         });
       },
       input.authContext,
@@ -284,6 +303,8 @@ export class MyahInboxMutationService {
       !mutableFields.some((field) => hasOwnInputField(input, field)) ||
       (isDefined(input.inboxState) &&
         !Object.values(MyahInboxState).includes(input.inboxState)) ||
+      (hasOwnInputField(input, 'snoozedUntil') &&
+        !isDefined(input.snoozedUntil)) ||
       (isDefined(input.snoozedUntil) &&
         !isISO8601(input.snoozedUntil, { strict: true }))
     ) {
@@ -316,18 +337,10 @@ export class MyahInboxMutationService {
       throw new BadRequestException('Invalid Myah inbox draft body');
     }
 
-    if (input.body.blocknote !== null) {
-      try {
-        if (!Array.isArray(JSON.parse(input.body.blocknote))) {
-          throw new BadRequestException('Invalid Myah inbox draft body');
-        }
-      } catch (error) {
-        if (error instanceof BadRequestException) {
-          throw error;
-        }
-
-        throw new BadRequestException('Invalid Myah inbox draft body');
-      }
+    try {
+      validateRichTextFieldOrThrow(input.body, 'myahReplyDraftBody');
+    } catch {
+      throw new BadRequestException('Invalid Myah inbox draft body');
     }
   }
 

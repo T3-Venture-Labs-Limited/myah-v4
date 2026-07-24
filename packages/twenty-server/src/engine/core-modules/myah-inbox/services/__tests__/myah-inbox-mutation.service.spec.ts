@@ -424,6 +424,53 @@ describe('MyahInboxMutationService', () => {
       snoozedUntil: null,
     });
   });
+  it('state-CASes a relation-only patch so a concurrent snooze keeps its timestamp', async () => {
+    const future = '2099-01-01T00:00:00.000Z';
+    const setup = createService({
+      thread: {
+        ...initialThread(),
+        inboxState: MyahInboxState.SNOOZED,
+        snoozedUntil: future,
+      },
+    });
+
+    await setup.service.updateMyahInboxThread({
+      ...request(),
+      threadId,
+      creatorId,
+    });
+
+    expect(setup.repositories.messageThread.update).toHaveBeenCalledWith(
+      expect.objectContaining({ inboxState: MyahInboxState.SNOOZED }),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(setup.persistedThread).toMatchObject({
+      creatorId,
+      inboxState: MyahInboxState.SNOOZED,
+      snoozedUntil: future,
+    });
+  });
+
+  it('rejects an explicit null snooze on an already-SNOOZED thread before update', async () => {
+    const setup = createService({
+      thread: {
+        ...initialThread(),
+        inboxState: MyahInboxState.SNOOZED,
+        snoozedUntil: '2099-01-01T00:00:00.000Z',
+      },
+    });
+
+    await expect(
+      setup.service.updateMyahInboxThread({
+        ...request(),
+        threadId,
+        snoozedUntil: null,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
+  });
+
 
   it.each([
     ['Creator', { creatorId }, { readableCreatorIds: [] }],
@@ -653,6 +700,24 @@ describe('MyahInboxMutationService', () => {
         },
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects dangerous blocknote URLs before any draft write', async () => {
+    const setup = createService();
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: {
+          markdown: 'unsafe link',
+          blocknote:
+            '[{"type":"paragraph","content":[{"type":"link","href":"javascript:alert(1)"}]}]',
+        },
+      }),
+    ).rejects.toThrow();
     expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
   });
 

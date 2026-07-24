@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import gql from 'graphql-tag';
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 
@@ -269,6 +271,87 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
       myahReplyDraftBodyBlocknote: null,
       myahReplyDraftRevision: 4,
     });
+  });
+
+  it('serializes relation-only triage with a concurrent SNOOZED transition', async () => {
+    const queryRunner = global.testDataSource.createQueryRunner();
+    const future = '2099-01-01T00:00:00.000Z';
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const [{ blockerPid }] = (await queryRunner.query(
+        'SELECT pg_backend_pid() AS "blockerPid"',
+      )) as Array<{ blockerPid: number }>;
+
+      await queryRunner.query(
+        `SELECT "id" FROM "${schemaName}"."messageThread"
+          WHERE "id" = $1 FOR UPDATE`,
+        [threadId],
+      );
+
+      const mutationPromise = makeGraphqlAPIRequest({
+        query: updateThreadMutation,
+        variables: { input: { threadId, creatorId } },
+      }).then((response) => response);
+
+      let mutationIsBlocked = false;
+
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const [{ blocked }] = (await global.testDataSource.query(
+          `SELECT EXISTS (
+             SELECT 1
+               FROM pg_stat_activity
+              WHERE $1 = ANY(pg_blocking_pids(pid))
+           ) AS "blocked"`,
+          [blockerPid],
+        )) as Array<{ blocked: boolean }>;
+
+        if (blocked) {
+          mutationIsBlocked = true;
+          break;
+        }
+
+        await sleep(20);
+      }
+
+      expect(mutationIsBlocked).toBe(true);
+
+      await queryRunner.query(
+        `UPDATE "${schemaName}"."messageThread"
+            SET "inboxState" = 'SNOOZED', "snoozedUntil" = $2
+          WHERE "id" = $1`,
+        [threadId, future],
+      );
+      await queryRunner.commitTransaction();
+
+      const response = await mutationPromise;
+
+      expect(response.body.errors).toBeUndefined();
+
+      const [persisted] = (await global.testDataSource.query(
+        `SELECT "creatorId", "inboxState", "snoozedUntil"
+           FROM "${schemaName}"."messageThread" WHERE "id" = $1`,
+        [threadId],
+      )) as Array<{
+        creatorId: string | null;
+        inboxState: string;
+        snoozedUntil: Date | null;
+      }>;
+
+      expect(persisted).toMatchObject({
+        creatorId,
+        inboxState: 'SNOOZED',
+      });
+      expect(persisted.snoozedUntil?.toISOString()).toBe(future);
+    } finally {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+
+      await queryRunner.release();
+    }
   });
 
   it('links and clears Creator and Campaign independently in the real workspace schema', async () => {
