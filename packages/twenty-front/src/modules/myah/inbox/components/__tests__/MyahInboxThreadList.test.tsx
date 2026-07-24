@@ -174,6 +174,9 @@ const defaultProps = {
   onLoadMore: jest.fn(),
   onRetry: jest.fn(),
 };
+afterEach(() => {
+  jest.useRealTimers();
+});
 
 describe('MyahInboxThreadList', () => {
   beforeEach(() => {
@@ -307,6 +310,37 @@ describe('MyahInboxThreadList', () => {
     expect(expiredRow).toHaveTextContent('Attention needed');
     expect(futureRow).toHaveTextContent('snoozed');
     expect(futureRow).not.toHaveTextContent('due');
+  });
+  it('changes a visible snooze to due when its deadline passes', () => {
+    jest.useFakeTimers({
+      now: new Date('2026-07-24T12:00:00.000Z'),
+    });
+    render(
+      <MyahInboxThreadList
+        {...defaultProps}
+        threads={[
+          {
+            ...threads[0],
+            state: 'SNOOZED',
+            snoozedUntil: '2026-07-24T12:00:01.000Z',
+          },
+        ]}
+      />,
+    );
+
+    const row = screen.getByRole('option', {
+      name: /First conversation/,
+    });
+
+    expect(row).toHaveTextContent('snoozed');
+    expect(row).not.toHaveTextContent('due');
+
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    expect(row).toHaveTextContent('Snooze due');
+    expect(row).toHaveTextContent('Attention needed');
   });
 
   it('keeps the load-more control focused while deferred pagination is loading', async () => {

@@ -179,6 +179,7 @@ export const MyahInboxPage = () => {
     <MyahInboxContextPanel
       key={selectedThread?.id ?? 'empty-context'}
       thread={selectedThread}
+      onTriageSaveStarted={() => setTriageStatus(null)}
       onTriageSaved={handleTriageSaved}
     />
   );

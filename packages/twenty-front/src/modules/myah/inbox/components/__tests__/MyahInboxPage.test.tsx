@@ -91,17 +91,27 @@ jest.mock('@/myah/inbox/components/MyahInboxThreadPanel', () => ({
 jest.mock('@/myah/inbox/components/MyahInboxContextPanel', () => ({
   MyahInboxContextPanel: ({
     thread,
+    onTriageSaveStarted,
     onTriageSaved,
   }: {
     thread: { id: string; subject: string | null } | null;
+    onTriageSaveStarted?: () => void;
     onTriageSaved?: (message: string) => void;
   }) => (
     <div>
       Context panel {thread?.id ?? 'none'}
       {thread && (
-        <button onClick={() => onTriageSaved?.('Triage saved')}>
-          Save triage test double
-        </button>
+        <>
+          <button
+            onClick={() => {
+              onTriageSaveStarted?.();
+              onTriageSaved?.('Triage saved');
+            }}
+          >
+            Save triage test double
+          </button>
+          <button onClick={onTriageSaveStarted}>Fail triage test double</button>
+        </>
       )}
     </div>
   ),
@@ -318,6 +328,25 @@ describe('MyahInboxPage', () => {
       expect(screen.getByText('Context panel none')).toBeVisible(),
     );
     expect(screen.getByText('Triage saved')).toHaveAttribute('role', 'status');
+  });
+  it('clears a previous triage success when the next save starts', async () => {
+    renderPage();
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Save triage test double' }),
+      ).toBeVisible(),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save triage test double' }),
+    );
+    expect(screen.getByText('Triage saved')).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Fail triage test double' }),
+    );
+
+    expect(screen.queryByText('Triage saved')).not.toBeInTheDocument();
   });
 
   it('provides narrow-screen access to list, conversation, and context panels', async () => {

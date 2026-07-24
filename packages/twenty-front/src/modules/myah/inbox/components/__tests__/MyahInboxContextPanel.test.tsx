@@ -349,13 +349,20 @@ describe('MyahInboxContextPanel', () => {
 
   it('keeps controls available and reports a failed triage save', async () => {
     mockUpdateThread.mockRejectedValue(new Error('network unavailable'));
+    const onTriageSaveStarted = jest.fn();
 
-    render(<MyahInboxContextPanel thread={thread} />);
+    render(
+      <MyahInboxContextPanel
+        thread={thread}
+        onTriageSaveStarted={onTriageSaveStarted}
+      />,
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save triage' }));
     });
 
+    expect(onTriageSaveStarted).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Could not save triage. Try again.',
     );

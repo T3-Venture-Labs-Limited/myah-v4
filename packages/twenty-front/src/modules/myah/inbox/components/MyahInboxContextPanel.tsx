@@ -98,11 +98,13 @@ type MyahInboxDraftRecord = {
 
 type MyahInboxContextPanelProps = {
   thread: MyahInboxThread | null;
+  onTriageSaveStarted?: () => void;
   onTriageSaved?: (message: string) => void;
 };
 
 export const MyahInboxContextPanel = ({
   thread,
+  onTriageSaveStarted,
   onTriageSaved,
 }: MyahInboxContextPanelProps) => {
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
@@ -163,6 +165,7 @@ export const MyahInboxContextPanel = ({
   };
 
   const handleSaveTriage = async () => {
+    onTriageSaveStarted?.();
     setIsSavingTriage(true);
     setTriageStatus(null);
     setTriageError(null);
