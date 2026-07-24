@@ -14,6 +14,7 @@ const messageThreadObjectId = '20202020-0b5c-4178-bed7-d371f6411eac';
 const userId = '20202020-1234-4678-9012-345678901235';
 const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
 const workspaceMemberId = '20202020-0b5c-4178-bed7-d371f6411eaa';
+const threadId = '20202020-0b5c-4178-bed7-d371f6411ea1';
 const userAuthContext = {
   type: 'user',
   workspace: { id: workspaceId },
@@ -36,6 +37,10 @@ const context = {
     name: 'Operator',
     context: {},
   },
+  myahInboxSelection: {
+    workspaceId,
+    threadId,
+  },
 };
 
 const createProvider = ({ canRead = true }: { canRead?: boolean } = {}) => {
@@ -44,13 +49,15 @@ const createProvider = ({ canRead = true }: { canRead?: boolean } = {}) => {
       get_myah_inbox_thread_context: {
         name: 'get_myah_inbox_thread_context',
         description: 'get_myah_inbox_thread_context',
-        inputSchema: z.object({ threadId: z.string().uuid() }),
+        inputSchema: z.object({}).strict(),
         execute: jest.fn(),
       },
       generate_myah_inbox_reply_proposal: {
         name: 'generate_myah_inbox_reply_proposal',
         description: 'generate_myah_inbox_reply_proposal',
-        inputSchema: z.object({ threadId: z.string().uuid() }),
+        inputSchema: z
+          .object({ operatorInstructions: z.string().min(1) })
+          .strict(),
         execute: jest.fn(),
       },
     }),
@@ -102,6 +109,21 @@ describe('MyahInboxToolProvider', () => {
       readable.provider.isAvailable({
         ...context,
         actorContext: undefined,
+      } as never),
+    ).resolves.toBe(false);
+    await expect(
+      readable.provider.isAvailable({
+        ...context,
+        myahInboxSelection: undefined,
+      } as never),
+    ).resolves.toBe(false);
+    await expect(
+      readable.provider.isAvailable({
+        ...context,
+        myahInboxSelection: {
+          workspaceId: '20202020-1c25-4d02-bf25-6aeccf7ea420',
+          threadId,
+        },
       } as never),
     ).resolves.toBe(false);
   });

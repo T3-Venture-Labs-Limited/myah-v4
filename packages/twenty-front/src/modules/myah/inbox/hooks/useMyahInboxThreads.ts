@@ -23,7 +23,10 @@ export type MyahInboxThread = {
   inboxOwner: { id: string; name: string | null } | null;
 };
 
-export const useMyahInboxThreads = (filters: MyahInboxFilters) => {
+export const useMyahInboxThreads = (
+  filters: MyahInboxFilters,
+  currentWorkspaceId: string | null,
+) => {
   const apolloCoreClient = useApolloCoreClient();
   const query = useQuery(MyahInboxThreadsDocument, {
     client: apolloCoreClient,
@@ -31,7 +34,10 @@ export const useMyahInboxThreads = (filters: MyahInboxFilters) => {
       first: 50,
       queue: filters.queue as MyahInboxQueue,
       owner: filters.owner || undefined,
-      campaignId: filters.campaignId ?? undefined,
+      campaignId:
+        filters.campaignWorkspaceId === currentWorkspaceId
+          ? (filters.campaignId ?? undefined)
+          : undefined,
       states:
         filters.states.length > 0
           ? (filters.states as MyahInboxState[])

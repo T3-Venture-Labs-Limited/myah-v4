@@ -3,6 +3,7 @@ import { createStore, Provider as JotaiProvider } from 'jotai';
 
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
 import {
+  myahInboxFiltersState,
   myahInboxSelectionWorkspaceIdState,
   myahInboxSelectedThreadIdState,
 } from '@/myah/inbox/states/myahInboxSelectionState';
@@ -241,6 +242,14 @@ describe('MyahInboxPage', () => {
 
   it('scopes the sidebar thread bridge to selection, page, and workspace', async () => {
     const store = createStore();
+    store.set(myahInboxFiltersState.atom, {
+      queue: 'UNMATCHED',
+      owner: 'ME',
+      campaignId: 'campaign-1',
+      campaignWorkspaceId: 'workspace-1',
+      states: ['CLOSED'],
+      search: 'Ada',
+    } as never);
     const { rerender, unmount } = renderPage(store);
 
     await waitFor(() =>
@@ -264,11 +273,30 @@ describe('MyahInboxPage', () => {
         <MyahInboxPage />
       </JotaiProvider>,
     );
+    expect(mockUseMyahInboxThreads.mock.lastCall).toEqual([
+      {
+        queue: 'UNMATCHED',
+        owner: 'ME',
+        campaignId: null,
+        campaignWorkspaceId: null,
+        states: ['CLOSED'],
+        search: 'Ada',
+      },
+      'workspace-2',
+    ]);
 
     await waitFor(() =>
       expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull(),
     );
     expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
+    expect(store.get(myahInboxFiltersState.atom)).toEqual({
+      queue: 'UNMATCHED',
+      owner: 'ME',
+      campaignId: null,
+      campaignWorkspaceId: null,
+      states: ['CLOSED'],
+      search: 'Ada',
+    });
 
     mockUseMyahInboxThreads.mockReturnValue({
       threads,

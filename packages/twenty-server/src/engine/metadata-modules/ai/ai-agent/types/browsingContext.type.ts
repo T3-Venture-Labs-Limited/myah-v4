@@ -12,4 +12,9 @@ export type BrowsingContextType =
       viewId: string;
       viewName: string;
       filterDescriptions: string[];
+    }
+  | {
+      type: 'myahInboxThreadSelection';
+      workspaceId: string;
+      threadId: string;
     };

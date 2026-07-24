@@ -155,6 +155,7 @@ const filters = {
   queue: 'CREATOR_LINKED' as const,
   owner: '',
   campaignId: null,
+  campaignWorkspaceId: null,
   states: [] as Array<
     'NEEDS_REPLY' | 'WAITING_ON_CREATOR' | 'SNOOZED' | 'CLOSED'
   >,

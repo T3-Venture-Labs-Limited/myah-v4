@@ -44,7 +44,7 @@ export class ToolRegistryService {
       }),
     );
 
-    return this.preferNativeBrandBrainDescriptors(results.flat());
+    return this.preferNativeDescriptors(results.flat());
   }
 
   async resolveSchemas({
@@ -161,6 +161,7 @@ export class ToolRegistryService {
       userId?: string;
       userWorkspaceId?: string;
       locale?: keyof typeof APP_LOCALES;
+      myahInboxSelection?: ToolContext['myahInboxSelection'];
     },
   ): Promise<ToolIndexEntry[]> {
     const context = this.buildContextFromToolContext({
@@ -171,6 +172,7 @@ export class ToolRegistryService {
       userId: options?.userId,
       userWorkspaceId: options?.userWorkspaceId,
       locale: options?.locale,
+      myahInboxSelection: options?.myahInboxSelection,
     });
 
     return this.getCatalog(context);
@@ -371,7 +373,7 @@ export class ToolRegistryService {
         }),
     );
 
-    const descriptors = this.preferNativeBrandBrainDescriptors(
+    const descriptors = this.preferNativeDescriptors(
       results.flat() as ToolDescriptor[],
     );
 
@@ -398,19 +400,23 @@ export class ToolRegistryService {
     return toolSet;
   }
 
-  private preferNativeBrandBrainDescriptors<
-    T extends ToolIndexEntry | ToolDescriptor,
-  >(descriptors: T[]): T[] {
-    const nativeBrandBrainToolNames = new Set(
+  private preferNativeDescriptors<T extends ToolIndexEntry | ToolDescriptor>(
+    descriptors: T[],
+  ): T[] {
+    const nativeToolNames = new Set(
       descriptors
-        .filter((descriptor) => descriptor.category === 'BRAND_BRAIN')
+        .filter(
+          (descriptor) =>
+            descriptor.category === 'BRAND_BRAIN' ||
+            descriptor.category === 'MYAH_INBOX',
+        )
         .map((descriptor) => descriptor.name),
     );
 
     return descriptors.filter(
       (descriptor) =>
         descriptor.category !== 'LOGIC_FUNCTION' ||
-        !nativeBrandBrainToolNames.has(descriptor.name),
+        !nativeToolNames.has(descriptor.name),
     );
   }
 
@@ -432,6 +438,7 @@ export class ToolRegistryService {
       threadId: context.threadId,
       locale: context.locale,
       onCodeExecutionUpdate: context.onCodeExecutionUpdate,
+      myahInboxSelection: context.myahInboxSelection,
     };
   }
 }

@@ -280,6 +280,10 @@ describe('MyahInboxReplyProposalService', () => {
         name: 'Operator',
         context: {},
       },
+      myahInboxSelection: {
+        workspaceId,
+        threadId,
+      },
     } as never);
     const proposalTool = toolSet[
       'generate_myah_inbox_reply_proposal'
@@ -289,7 +293,6 @@ describe('MyahInboxReplyProposalService', () => {
       }>;
     };
     const toolResult = await proposalTool.execute({
-      threadId,
       operatorInstructions: request.operatorInstructions,
     });
     const modelRequests = setup.fakeModel.doGenerate.mock.calls.map((call) =>

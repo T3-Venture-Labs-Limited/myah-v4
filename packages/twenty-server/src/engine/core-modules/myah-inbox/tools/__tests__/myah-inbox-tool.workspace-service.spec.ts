@@ -7,6 +7,7 @@ const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
 const userId = '20202020-1234-4678-9012-345678901235';
 const workspaceMemberId = '20202020-0b5c-4178-bed7-d371f6411eaa';
 const threadId = '20202020-0b5c-4178-bed7-d371f6411ea1';
+const foreignThreadId = '20202020-0b5c-4178-bed7-d371f6411ea2';
 const workspace = { id: workspaceId };
 const userAuthContext = {
   type: 'user',
@@ -29,6 +30,10 @@ const context = {
     workspaceMemberId,
     name: 'Operator',
     context: {},
+  },
+  myahInboxSelection: {
+    workspaceId,
+    threadId,
   },
 };
 
@@ -89,7 +94,9 @@ describe('MyahInboxToolWorkspaceService', () => {
     const toolSet = await service.generateMyahInboxTools(context as never);
 
     await expect(
-      executeTool(toolSet, 'get_myah_inbox_thread_context', { threadId }),
+      executeTool(toolSet, 'get_myah_inbox_thread_context', {
+        threadId: foreignThreadId,
+      }),
     ).resolves.toEqual({
       success: true,
       message: 'Retrieved Myah Inbox thread context',
@@ -97,7 +104,7 @@ describe('MyahInboxToolWorkspaceService', () => {
     });
     await expect(
       executeTool(toolSet, 'generate_myah_inbox_reply_proposal', {
-        threadId,
+        threadId: foreignThreadId,
         operatorInstructions: 'Thank them and confirm Tuesday.',
       }),
     ).resolves.toEqual({

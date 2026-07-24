@@ -11,6 +11,7 @@ export type MyahInboxFilters = {
   queue: MyahInboxQueueFilter;
   owner: string;
   campaignId: string | null;
+  campaignWorkspaceId: string | null;
   states: MyahInboxStateFilter[];
   search: string;
 };
@@ -19,6 +20,7 @@ export const DEFAULT_MYAH_INBOX_FILTERS: MyahInboxFilters = {
   queue: 'CREATOR_LINKED',
   owner: '',
   campaignId: null,
+  campaignWorkspaceId: null,
   states: [],
   search: '',
 };

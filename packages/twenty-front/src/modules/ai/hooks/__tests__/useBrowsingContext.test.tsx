@@ -15,7 +15,7 @@ import {
 const SELECTED_THREAD_ID = '3ceef358-55fc-4d47-a7a8-2d8ac543641b';
 
 describe('useGetBrowsingContext Inbox bridge', () => {
-  it('exposes only the current workspace selected thread as native record context', () => {
+  it('exposes only the current workspace selected thread as trusted Inbox context', () => {
     const store = createStore();
 
     store.set(currentWorkspaceState.atom, {
@@ -31,9 +31,9 @@ describe('useGetBrowsingContext Inbox bridge', () => {
     });
 
     expect(result.current.getBrowsingContext()).toEqual({
-      type: 'recordPage',
-      objectNameSingular: 'messageThread',
-      recordId: SELECTED_THREAD_ID,
+      type: 'myahInboxThreadSelection',
+      workspaceId: 'workspace-1',
+      threadId: SELECTED_THREAD_ID,
     });
 
     store.set(myahInboxSelectedThreadIdState.atom, null);

@@ -18,14 +18,16 @@ export const PRE_APPROVAL_READ_ONLY_TOOL_NAMES = new Set([
 ]);
 
 // These bounded native tools perform no provider messaging I/O. The Instagram
-// action creates only a reviewable local draft; the Inbox tools only read or
-// propose. They cannot deliver a message, and all generic writes stay denied.
+// action creates only a reviewable local draft; all generic writes stay denied.
 export const PRE_APPROVAL_SAFE_TOOL_NAMES = new Set([
   ...PRE_APPROVAL_READ_ONLY_TOOL_NAMES,
   'prepare_instagram_reply_draft',
+]);
+
+export const MYAH_INBOX_SELECTION_TOOL_NAMES = [
   'get_myah_inbox_thread_context',
   'generate_myah_inbox_reply_proposal',
-]);
+] as const;
 
 export const getPreApprovalExcludedToolNames = (
   toolCatalog: ToolIndexEntry[],

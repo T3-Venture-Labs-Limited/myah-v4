@@ -24,6 +24,7 @@ const filters = {
   queue: 'CREATOR_LINKED' as const,
   owner: 'ME',
   campaignId: 'campaign-1',
+  campaignWorkspaceId: 'workspace-1',
   states: ['NEEDS_REPLY' as const],
   search: 'Ada',
 };
@@ -60,7 +61,9 @@ describe('useMyahInboxThreads', () => {
       refetch: jest.fn(),
     });
 
-    const { result } = renderHook(() => useMyahInboxThreads(filters));
+    const { result } = renderHook(() =>
+      useMyahInboxThreads(filters, 'workspace-1'),
+    );
 
     expect(mockUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'MyahInboxThreadsDocument' }),
@@ -96,7 +99,9 @@ describe('useMyahInboxThreads', () => {
       refetch: jest.fn(),
     });
 
-    const { result } = renderHook(() => useMyahInboxThreads(filters));
+    const { result } = renderHook(() =>
+      useMyahInboxThreads(filters, 'workspace-1'),
+    );
 
     await act(async () => {
       await result.current.loadMore();
@@ -147,7 +152,9 @@ describe('useMyahInboxThreads', () => {
       refetch: jest.fn(),
     });
 
-    const { result } = renderHook(() => useMyahInboxThreads(filters));
+    const { result } = renderHook(() =>
+      useMyahInboxThreads(filters, 'workspace-1'),
+    );
 
     expect(result.current.loading).toBe(false);
     expect(result.current.loadingMore).toBe(true);
@@ -164,13 +171,17 @@ describe('useMyahInboxThreads', () => {
     });
 
     renderHook(() =>
-      useMyahInboxThreads({
-        queue: 'UNMATCHED',
-        owner: '',
-        campaignId: null,
-        states: [],
-        search: '',
-      }),
+      useMyahInboxThreads(
+        {
+          queue: 'UNMATCHED',
+          owner: '',
+          campaignId: null,
+          campaignWorkspaceId: null,
+          states: [],
+          search: '',
+        },
+        'workspace-1',
+      ),
     );
 
     expect(mockUseQuery).toHaveBeenCalledWith(
@@ -187,6 +198,46 @@ describe('useMyahInboxThreads', () => {
         notifyOnNetworkStatusChange: true,
         client: mockApolloCoreClient,
       },
+    );
+  });
+
+  it('never submits a campaign selected in another workspace', () => {
+    mockUseQuery.mockReturnValue({
+      data: undefined,
+      loading: true,
+      error: undefined,
+      fetchMore: jest.fn(),
+      refetch: jest.fn(),
+    });
+    const scopedFilters = {
+      ...filters,
+      campaignWorkspaceId: 'workspace-1',
+    };
+    const { rerender } = renderHook(
+      ({ workspaceId }: { workspaceId: string }) =>
+        useMyahInboxThreads(scopedFilters, workspaceId),
+      { initialProps: { workspaceId: 'workspace-1' } },
+    );
+
+    expect(mockUseQuery.mock.lastCall?.[1]).toEqual(
+      expect.objectContaining({
+        variables: expect.objectContaining({ campaignId: 'campaign-1' }),
+      }),
+    );
+
+    rerender({ workspaceId: 'workspace-2' });
+
+    expect(mockUseQuery.mock.lastCall?.[1]).toEqual(
+      expect.objectContaining({
+        variables: {
+          first: 50,
+          queue: 'CREATOR_LINKED',
+          owner: 'ME',
+          campaignId: undefined,
+          states: ['NEEDS_REPLY'],
+          search: 'Ada',
+        },
+      }),
     );
   });
 });

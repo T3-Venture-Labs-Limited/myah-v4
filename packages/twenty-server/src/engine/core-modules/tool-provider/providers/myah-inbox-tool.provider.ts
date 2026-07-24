@@ -6,7 +6,7 @@ import {
   type ObjectsPermissions,
   type ObjectsPermissionsByRoleId,
 } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, isValidUuid } from 'twenty-shared/utils';
 
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { MYAH_INBOX_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-tool-service.token';
@@ -36,6 +36,9 @@ export class MyahInboxToolProvider implements ToolProvider {
 
   async isAvailable(context: ToolProviderContext): Promise<boolean> {
     if (
+      !context.myahInboxSelection ||
+      context.myahInboxSelection.workspaceId !== context.workspaceId ||
+      !isValidUuid(context.myahInboxSelection.threadId) ||
       !context.authContext ||
       !isUserAuthContext(context.authContext) ||
       !context.authContext.user ||

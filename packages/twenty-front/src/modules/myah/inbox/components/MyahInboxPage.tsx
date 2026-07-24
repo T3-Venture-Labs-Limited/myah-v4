@@ -4,6 +4,7 @@ import { MyahInboxThreadList } from '@/myah/inbox/components/MyahInboxThreadList
 import { MyahInboxThreadPanel } from '@/myah/inbox/components/MyahInboxThreadPanel';
 import { useMyahInboxThreads } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import {
+  type MyahInboxFilters,
   myahInboxFiltersState,
   myahInboxSelectionWorkspaceIdState,
   myahInboxSelectedThreadIdState,
@@ -91,27 +92,39 @@ export const MyahInboxPage = () => {
   const [myahInboxFilters, setMyahInboxFilters] = useAtomState(
     myahInboxFiltersState,
   );
-  const [storedMyahInboxSelectedThreadId, setStoredMyahInboxSelectedThreadId] =
+  const [myahInboxSelectedThreadId, setMyahInboxSelectedThreadId] =
     useAtomState(myahInboxSelectedThreadIdState);
-  const [selectionWorkspaceId, setSelectionWorkspaceId] = useAtomState(
-    myahInboxSelectionWorkspaceIdState,
-  );
+  const [myahInboxSelectionWorkspaceId, setMyahInboxSelectionWorkspaceId] =
+    useAtomState(myahInboxSelectionWorkspaceIdState);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('list');
   const [triageStatus, setTriageStatus] = useState<string | null>(null);
-  const inbox = useMyahInboxThreads(myahInboxFilters);
-  const myahInboxSelectedThreadId =
-    selectionWorkspaceId === workspaceId
-      ? storedMyahInboxSelectedThreadId
+  const workspaceScopedFilters =
+    myahInboxFilters.campaignWorkspaceId === workspaceId
+      ? myahInboxFilters
+      : {
+          ...myahInboxFilters,
+          campaignId: null,
+          campaignWorkspaceId: null,
+        };
+  const inbox = useMyahInboxThreads(workspaceScopedFilters, workspaceId);
+  const currentWorkspaceSelectedThreadId =
+    myahInboxSelectionWorkspaceId === workspaceId
+      ? myahInboxSelectedThreadId
       : null;
   const selectedThread =
-    inbox.threads.find(({ id }) => id === myahInboxSelectedThreadId) ?? null;
+    inbox.threads.find(({ id }) => id === currentWorkspaceSelectedThreadId) ??
+    null;
 
   useEffect(
     () => () => {
-      setStoredMyahInboxSelectedThreadId(null);
-      setSelectionWorkspaceId(null);
+      setMyahInboxSelectedThreadId(null);
+      setMyahInboxSelectionWorkspaceId(null);
     },
-    [setSelectionWorkspaceId, setStoredMyahInboxSelectedThreadId, workspaceId],
+    [
+      setMyahInboxSelectedThreadId,
+      setMyahInboxSelectionWorkspaceId,
+      workspaceId,
+    ],
   );
 
   useEffect(() => {
@@ -119,26 +132,41 @@ export const MyahInboxPage = () => {
   }, [workspaceId]);
 
   useEffect(() => {
+    if (
+      myahInboxFilters.campaignWorkspaceId !== null &&
+      myahInboxFilters.campaignWorkspaceId !== workspaceId
+    ) {
+      setMyahInboxFilters({
+        ...myahInboxFilters,
+        campaignId: null,
+        campaignWorkspaceId: null,
+      });
+    }
+  }, [myahInboxFilters, setMyahInboxFilters, workspaceId]);
+
+  useEffect(() => {
     if (inbox.loading || !workspaceId) {
       return;
     }
 
     if (inbox.threads.length === 0) {
-      setStoredMyahInboxSelectedThreadId(null);
-      setSelectionWorkspaceId(null);
+      setMyahInboxSelectedThreadId(null);
+      setMyahInboxSelectionWorkspaceId(null);
       return;
     }
 
-    if (!inbox.threads.some(({ id }) => id === myahInboxSelectedThreadId)) {
-      setStoredMyahInboxSelectedThreadId(inbox.threads[0].id);
-      setSelectionWorkspaceId(workspaceId);
+    if (
+      !inbox.threads.some(({ id }) => id === currentWorkspaceSelectedThreadId)
+    ) {
+      setMyahInboxSelectedThreadId(inbox.threads[0].id);
+      setMyahInboxSelectionWorkspaceId(workspaceId);
     }
   }, [
     inbox.loading,
     inbox.threads,
-    myahInboxSelectedThreadId,
-    setSelectionWorkspaceId,
-    setStoredMyahInboxSelectedThreadId,
+    currentWorkspaceSelectedThreadId,
+    setMyahInboxSelectedThreadId,
+    setMyahInboxSelectionWorkspaceId,
     workspaceId,
   ]);
 
@@ -147,8 +175,8 @@ export const MyahInboxPage = () => {
       return;
     }
 
-    setStoredMyahInboxSelectedThreadId(threadId);
-    setSelectionWorkspaceId(workspaceId);
+    setMyahInboxSelectedThreadId(threadId);
+    setMyahInboxSelectionWorkspaceId(workspaceId);
 
     if (isMobile) {
       setMobilePanel('thread');
@@ -159,17 +187,31 @@ export const MyahInboxPage = () => {
     setTriageStatus(message);
     void inbox.refetch();
   };
+  const handleFiltersChange = (nextFilters: MyahInboxFilters) => {
+    const campaignChanged =
+      nextFilters.campaignId !== myahInboxFilters.campaignId;
+
+    setMyahInboxFilters({
+      ...nextFilters,
+      campaignWorkspaceId: campaignChanged
+        ? nextFilters.campaignId && workspaceId
+          ? workspaceId
+          : null
+        : nextFilters.campaignWorkspaceId,
+    });
+  };
+
   const threadList = (
     <MyahInboxThreadList
       threads={inbox.threads}
       filters={myahInboxFilters}
-      selectedThreadId={myahInboxSelectedThreadId}
+      selectedThreadId={currentWorkspaceSelectedThreadId}
       loading={inbox.loading}
       loadingMore={inbox.loadingMore}
       error={inbox.error}
       hasNextPage={inbox.hasNextPage}
       onSelectThread={handleSelectThread}
-      onFiltersChange={setMyahInboxFilters}
+      onFiltersChange={handleFiltersChange}
       onLoadMore={inbox.loadMore}
       onRetry={() => void inbox.refetch()}
     />

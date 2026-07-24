@@ -42,9 +42,9 @@ export const useGetBrowsingContext = () => {
       inboxSelectionWorkspaceId === currentWorkspace?.id
     ) {
       return {
-        type: 'recordPage',
-        objectNameSingular: 'messageThread',
-        recordId: selectedInboxThreadId,
+        type: 'myahInboxThreadSelection',
+        workspaceId: inboxSelectionWorkspaceId,
+        threadId: selectedInboxThreadId,
       };
     }
 

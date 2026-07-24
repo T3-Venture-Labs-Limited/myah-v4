@@ -89,7 +89,7 @@ describe('approval tool availability', () => {
     expect(excluded.has('app_myah_send_instagram_reply')).toBe(true);
   });
 
-  it('allows only the two read/propose Myah Inbox tools before approval', () => {
+  it('keeps Myah Inbox tools excluded until a trusted selection enables them', () => {
     const excluded = getPreApprovalExcludedToolNames([
       logicFunctionToolEntry('get_myah_inbox_thread_context'),
       logicFunctionToolEntry('generate_myah_inbox_reply_proposal'),
@@ -98,6 +98,8 @@ describe('approval tool availability', () => {
     ]);
 
     expect([...excluded].sort()).toEqual([
+      'generate_myah_inbox_reply_proposal',
+      'get_myah_inbox_thread_context',
       'save_myah_inbox_draft',
       'send_myah_inbox_reply',
     ]);

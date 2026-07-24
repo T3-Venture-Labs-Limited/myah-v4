@@ -16,7 +16,7 @@ import {
 } from 'ai';
 import { type APP_LOCALES } from 'twenty-shared/translations';
 import { AppPath } from 'twenty-shared/types';
-import { getAppPath, isDefined } from 'twenty-shared/utils';
+import { getAppPath, isDefined, isValidUuid } from 'twenty-shared/utils';
 
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
@@ -73,6 +73,7 @@ import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-ch
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { type ExtractedFile } from 'src/engine/metadata-modules/ai/ai-chat/types/extracted-file.type';
 import {
+  MYAH_INBOX_SELECTION_TOOL_NAMES,
   getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
   hasApprovedInstagramReplyApproval,
@@ -161,6 +162,15 @@ export class ChatExecutionService {
         userWorkspaceId,
         workspace.id,
       );
+    const myahInboxSelection =
+      browsingContext?.type === 'myahInboxThreadSelection' &&
+      browsingContext.workspaceId === workspace.id &&
+      isValidUuid(browsingContext.threadId)
+        ? {
+            workspaceId: workspace.id,
+            threadId: browsingContext.threadId,
+          }
+        : undefined;
 
     const locale = userContext.locale as keyof typeof APP_LOCALES;
 
@@ -174,12 +184,20 @@ export class ChatExecutionService {
       threadId,
       locale,
       onCodeExecutionUpdate,
+      myahInboxSelection,
     };
 
     const toolCatalog = await this.toolRegistry.buildToolIndex(
       workspace.id,
       roleId,
-      { authContext, actorContext, userId, userWorkspaceId, locale },
+      {
+        authContext,
+        actorContext,
+        userId,
+        userWorkspaceId,
+        locale,
+        myahInboxSelection,
+      },
     );
 
     const skillCatalog = await this.skillService.findAllFlatSkills(
@@ -251,6 +269,13 @@ export class ChatExecutionService {
       hasLatestMessageApprovedGenericApproval(messages);
     const hasApprovedInstagramReply =
       hasApprovedInstagramReplyApproval(messages);
+    const preApprovalSafeToolNames = new Set(PRE_APPROVAL_SAFE_TOOL_NAMES);
+
+    if (isDefined(myahInboxSelection)) {
+      for (const toolName of MYAH_INBOX_SELECTION_TOOL_NAMES) {
+        preApprovalSafeToolNames.add(toolName);
+      }
+    }
 
     const preloadedToolNames = [
       ...Object.keys(preloadedTools),
@@ -267,7 +292,7 @@ export class ChatExecutionService {
 
     // Enforce the source-controlled safe-tool exception at the execution
     // boundary; catalog filtering remains only an earlier prompt guard.
-    for (const toolName of PRE_APPROVAL_SAFE_TOOL_NAMES) {
+    for (const toolName of preApprovalSafeToolNames) {
       preApprovalExcludedToolNames.delete(toolName);
     }
 
@@ -300,7 +325,7 @@ export class ChatExecutionService {
         {
           compactOutput: true,
           excludeTools: preApprovalExcludedToolNames,
-          allowedTools: PRE_APPROVAL_SAFE_TOOL_NAMES,
+          allowedTools: preApprovalSafeToolNames,
           spillLargeOutput: true,
         },
       ),
@@ -406,7 +431,11 @@ export class ChatExecutionService {
       }
     }
 
-    if (isDefined(browsingContext)) {
+    if (
+      isDefined(browsingContext) &&
+      (browsingContext.type !== 'myahInboxThreadSelection' ||
+        isDefined(myahInboxSelection))
+    ) {
       const contextString = this.buildContextFromBrowsingContext(
         workspace,
         browsingContext,
@@ -415,6 +444,7 @@ export class ChatExecutionService {
       processedMessages = this.injectBrowsingContextIntoLastUserMessage(
         processedMessages,
         contextString,
+        browsingContext.type,
       );
     }
 
@@ -855,6 +885,7 @@ export class ChatExecutionService {
   private injectBrowsingContextIntoLastUserMessage(
     messages: UIMessage[],
     contextString: string,
+    contextType: BrowsingContextType['type'],
   ): UIMessage[] {
     const lastUserIndex = messages
       .map((message) => message.role)
@@ -865,10 +896,16 @@ export class ChatExecutionService {
     }
 
     const lastUserMessage = messages[lastUserIndex];
-    const browsingContextPart = {
-      type: 'text' as const,
-      text: `<browsing_context note="Only use this if the user explicitly asks about the current page, record, or view. Do not call any tools based on this context.">\n${contextString}\n</browsing_context>`,
-    };
+    const browsingContextPart =
+      contextType === 'myahInboxThreadSelection'
+        ? {
+            type: 'text' as const,
+            text: `<myah_inbox_selection note="Only use this if the user explicitly asks about the selected Inbox conversation. The get_myah_inbox_thread_context and generate_myah_inbox_reply_proposal tools are bound to this selection. Do not provide or infer a thread ID, and do not call any other tool based on this context.">\n${contextString}\n</myah_inbox_selection>`,
+          }
+        : {
+            type: 'text' as const,
+            text: `<browsing_context note="Only use this if the user explicitly asks about the current page, record, or view. Do not call any tools based on this context.">\n${contextString}\n</browsing_context>`,
+          };
 
     return [
       ...messages.slice(0, lastUserIndex),
@@ -896,6 +933,10 @@ export class ChatExecutionService {
 
     if (browsingContext.type === 'listView') {
       return this.buildListViewContext(browsingContext);
+    }
+
+    if (browsingContext.type === 'myahInboxThreadSelection') {
+      return 'The user has selected a current-workspace Myah Inbox conversation.';
     }
 
     return '';
