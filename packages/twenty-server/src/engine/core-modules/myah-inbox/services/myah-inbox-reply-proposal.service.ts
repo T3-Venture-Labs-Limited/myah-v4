@@ -14,7 +14,10 @@ import {
   MyahInboxReplyProposalSchema,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-proposal.dto';
 import { type MyahInboxThreadSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
-import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
+import {
+  type MyahInboxThreadProposalContext,
+  MyahInboxQueryService,
+} from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import {
   type AgentActorContext,
@@ -39,9 +42,8 @@ export type GenerateMyahInboxReplyProposalRequest =
     operatorInstructions: string;
   };
 
-type AuthorizedProposalContext = {
+type AuthorizedProposalContext = MyahInboxThreadProposalContext & {
   actor: AgentActorContext;
-  thread: MyahInboxThreadSummary;
 };
 
 const proposalRequestSchema = z
@@ -80,7 +82,7 @@ export class MyahInboxReplyProposalService {
       threadId: input.threadId,
       operatorInstructions: input.operatorInstructions,
     });
-    const { actor, thread } = await this.loadAuthorizedContext({
+    const { actor, thread, history } = await this.loadAuthorizedContext({
       authContext: input.authContext,
       threadId: parsedInput.threadId,
     });
@@ -133,7 +135,7 @@ export class MyahInboxReplyProposalService {
       system:
         'Propose an email reply only. Do not claim to save, apply, or send it. Return only the requested subject and rich-text body schema.',
       prompt: [
-        `Selected policy-visible thread context:\n${JSON.stringify(thread)}`,
+        `Selected policy-visible thread history:\n${JSON.stringify(history)}`,
         `Operator instructions:\n${parsedInput.operatorInstructions}`,
         `Permission-appropriate Brand Brain context:\n${brandBrain.contextPart ?? 'No additional Brand Brain context is available.'}`,
       ].join('\n\n'),
@@ -191,14 +193,15 @@ export class MyahInboxReplyProposalService {
       );
     }
 
-    const thread = await this.myahInboxQueryService.getThreadSummary({
-      authContext: input.authContext,
-      user: input.authContext.user,
-      workspace: input.authContext.workspace,
-      workspaceMemberId: input.authContext.workspaceMemberId,
-      threadId: input.threadId,
-    });
+    const { thread, history } =
+      await this.myahInboxQueryService.getThreadProposalContext({
+        authContext: input.authContext,
+        user: input.authContext.user,
+        workspace: input.authContext.workspace,
+        workspaceMemberId: input.authContext.workspaceMemberId,
+        threadId: input.threadId,
+      });
 
-    return { actor, thread };
+    return { actor, thread, history };
   }
 }

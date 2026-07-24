@@ -27,6 +27,12 @@ export const myahInboxSelectedThreadIdState = createAtomState<string | null>({
   key: 'myahInboxSelectedThreadIdState',
   defaultValue: null,
 });
+export const myahInboxSelectionWorkspaceIdState = createAtomState<
+  string | null
+>({
+  key: 'myahInboxSelectionWorkspaceIdState',
+  defaultValue: null,
+});
 
 export const myahInboxFiltersState = createAtomState<MyahInboxFilters>({
   key: 'myahInboxFiltersState',

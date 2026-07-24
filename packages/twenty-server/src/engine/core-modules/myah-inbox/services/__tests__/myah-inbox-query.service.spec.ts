@@ -6,6 +6,10 @@ import {
   type UserWorkspaceAuthContext,
   type WorkspaceAuthContext,
 } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { MYAH_INBOX_MAX_PAGE_SIZE } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 import {
@@ -50,6 +54,7 @@ const userAuthContext = {
 } as unknown as UserWorkspaceAuthContext;
 
 const fullVisibilityExpression = 'policy_visibility(latestMessage.id)';
+const historyVisibilityExpression = 'policy_visibility(message.id)';
 
 const row = (
   id: string,
@@ -161,6 +166,7 @@ const createQueryBuilder = (rows: unknown[]) => {
 
 const createService = ({
   rows = [],
+  historyRows = [],
   creatorRecords = [],
   campaignRecords = [],
   workspaceMemberRecords = [
@@ -168,23 +174,37 @@ const createService = ({
   ],
   campaignFilterRecord,
   ownerFilterRecord,
+  creatorFindError,
+  campaignFindError,
 }: {
   rows?: unknown[];
+  historyRows?: unknown[];
   creatorRecords?: unknown[];
   campaignRecords?: unknown[];
   workspaceMemberRecords?: unknown[];
   campaignFilterRecord?: unknown;
   ownerFilterRecord?: unknown;
+  creatorFindError?: Error;
+  campaignFindError?: Error;
 } = {}) => {
   const { queryBuilder, calls } = createQueryBuilder(rows);
+  const { queryBuilder: historyQueryBuilder, calls: historyCalls } =
+    createQueryBuilder(historyRows);
   const messageThreadRepository = {
     createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
   };
+  const messageRepository = {
+    createQueryBuilder: jest.fn().mockReturnValue(historyQueryBuilder),
+  };
   const creatorRepository = {
-    find: jest.fn().mockResolvedValue(creatorRecords),
+    find: creatorFindError
+      ? jest.fn().mockRejectedValue(creatorFindError)
+      : jest.fn().mockResolvedValue(creatorRecords),
   };
   const campaignRepository = {
-    find: jest.fn().mockResolvedValue(campaignRecords),
+    find: campaignFindError
+      ? jest.fn().mockRejectedValue(campaignFindError)
+      : jest.fn().mockResolvedValue(campaignRecords),
     findOne: jest.fn().mockResolvedValue(campaignFilterRecord),
   };
   const workspaceMemberRepository = {
@@ -200,6 +220,7 @@ const createService = ({
   };
   const repositories = {
     messageThread: messageThreadRepository,
+    message: messageRepository,
     creator: creatorRepository,
     campaign: campaignRepository,
     workspaceMember: workspaceMemberRepository,
@@ -214,15 +235,22 @@ const createService = ({
     ),
   };
   const visibilityPolicy = {
-    buildSqlVisibilityProjection: jest.fn().mockReturnValue({
-      expression: fullVisibilityExpression,
-      parameters: {
-        messageVisibilityFull: MessageVisibilityAccess.FULL,
-        messageVisibilitySubject: MessageVisibilityAccess.SUBJECT,
-        messageVisibilityMetadata: MessageVisibilityAccess.METADATA,
-        messageVisibilityHidden: MessageVisibilityAccess.HIDDEN,
-      },
-    }),
+    buildSqlVisibilityProjection: jest
+      .fn()
+      .mockImplementation(
+        ({ messageIdExpression }: { messageIdExpression: string }) => ({
+          expression:
+            messageIdExpression === 'message.id'
+              ? historyVisibilityExpression
+              : fullVisibilityExpression,
+          parameters: {
+            messageVisibilityFull: MessageVisibilityAccess.FULL,
+            messageVisibilitySubject: MessageVisibilityAccess.SUBJECT,
+            messageVisibilityMetadata: MessageVisibilityAccess.METADATA,
+            messageVisibilityHidden: MessageVisibilityAccess.HIDDEN,
+          },
+        }),
+      ),
   };
 
   return {
@@ -231,6 +259,7 @@ const createService = ({
       visibilityPolicy as never,
     ),
     calls,
+    historyCalls,
     queryBuilder,
     globalWorkspaceOrmManager,
     visibilityPolicy,
@@ -551,6 +580,45 @@ describe('MyahInboxQueryService', () => {
     });
   });
 
+  it('degrades denied optional Creator and Campaign hydration to null without failing the thread list', async () => {
+    const creatorPermissionDenied = new PermissionsException(
+      'Creator field read denied',
+      PermissionsExceptionCode.PERMISSION_DENIED,
+    );
+    const campaignPermissionDenied = new PermissionsException(
+      'Campaign object read denied',
+      PermissionsExceptionCode.PERMISSION_DENIED,
+    );
+    const { service, creatorRepository, campaignRepository } = createService({
+      rows: [
+        row('thread-id', '2026-07-21T10:00:00.000Z', {
+          creatorId: 'unreadable-creator-id',
+          campaignId: 'unreadable-campaign-id',
+        }),
+      ],
+      creatorFindError: creatorPermissionDenied,
+      campaignFindError: campaignPermissionDenied,
+    });
+
+    await expect(service.listThreads(listInput())).resolves.toMatchObject({
+      edges: [
+        {
+          node: {
+            id: 'thread-id',
+            creator: null,
+            campaign: null,
+          },
+        },
+      ],
+    });
+    expect(creatorRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({ select: { id: true, name: true } }),
+    );
+    expect(campaignRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({ select: { id: true, name: true } }),
+    );
+  });
+
   it('uses role-scoped repositories and rejects unreadable relation filter ids', async () => {
     const campaignId = '20202020-f7c5-4e2f-a44a-240b2d3a9d02';
     const { service, globalWorkspaceOrmManager } = createService({
@@ -652,6 +720,61 @@ describe('MyahInboxQueryService', () => {
     });
     expect(allWhereSql(calls)).toContain('message_thread.id = :threadId');
     expect(calls.limit).toBe(2);
+  });
+
+  it('loads bounded full-visibility native history before ordering and pagination for proposal context', async () => {
+    const { service, historyCalls } = createService({
+      rows: [row(tiedThreadAId, '2026-07-21T10:00:00.000Z')],
+      historyRows: [
+        {
+          receivedAt: '2026-07-21T10:00:00.000Z',
+          sender: 'operator@example.com',
+          subject: 'Re: Partnership',
+          text: 'The launch date works.',
+        },
+        {
+          receivedAt: '2026-07-21T09:00:00.000Z',
+          sender: 'creator@example.com',
+          subject: 'Partnership',
+          text: 'Can we launch Tuesday?',
+        },
+      ],
+    });
+
+    await expect(
+      service.getThreadProposalContext({
+        ...listInput(),
+        threadId: tiedThreadAId,
+      }),
+    ).resolves.toMatchObject({
+      thread: { id: tiedThreadAId },
+      history: [
+        {
+          sender: 'creator@example.com',
+          text: 'Can we launch Tuesday?',
+        },
+        {
+          sender: 'operator@example.com',
+          text: 'The launch date works.',
+        },
+      ],
+    });
+
+    const historyWhereSql = allWhereSql(historyCalls);
+
+    expect(historyWhereSql).toContain('message."messageThreadId" = :threadId');
+    expect(historyWhereSql).toContain(
+      `${historyVisibilityExpression} = :messageVisibilityFull`,
+    );
+    expect(historyWhereSql).not.toContain(':messageVisibilitySubject');
+    expect(historyWhereSql).not.toContain(':messageVisibilityMetadata');
+    expect(historyCalls.operations.indexOf('where')).toBeLessThan(
+      historyCalls.operations.indexOf('order'),
+    );
+    expect(historyCalls.operations.indexOf('order')).toBeLessThan(
+      historyCalls.operations.indexOf('limit'),
+    );
+    expect(historyCalls.limit).toBe(MYAH_INBOX_MAX_PAGE_SIZE);
   });
 
   it('enters proposal/tool thread reads with the real caller user auth context, never system auth', async () => {

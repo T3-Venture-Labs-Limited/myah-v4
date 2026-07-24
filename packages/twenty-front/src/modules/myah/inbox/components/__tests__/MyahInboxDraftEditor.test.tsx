@@ -50,15 +50,19 @@ jest.mock(
       readonly?: boolean;
     }) => {
       const [capturedReadonly] = React.useState(readonly);
+      const [value, setValue] = React.useState(defaultValue);
 
       return (
         <label>
           {label}
           <textarea
             aria-label={label}
-            value={defaultValue}
+            value={value}
             disabled={capturedReadonly}
-            onChange={(event) => onChange(event.target.value)}
+            onChange={(event) => {
+              setValue(event.target.value);
+              onChange(event.target.value);
+            }}
           />
         </label>
       );
@@ -122,6 +126,53 @@ describe('MyahInboxDraftEditor', () => {
     });
     expect(screen.getByRole('status')).toHaveTextContent(
       'Draft saved at revision 3',
+    );
+  });
+
+  it('saves an emptied editor as rich text rather than clearing implicitly', async () => {
+    mockSaveDraft.mockResolvedValue({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: '', blocknote: null },
+    });
+
+    render(<MyahInboxDraftEditor {...defaultProps} />);
+
+    fireEvent.change(screen.getByLabelText('Shared reply draft'), {
+      target: { value: '' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    });
+
+    expect(mockSaveDraft).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      expectedRevision: 2,
+      body: { markdown: '', blocknote: null },
+    });
+  });
+
+  it('clears the shared draft explicitly with a null body', async () => {
+    mockSaveDraft.mockResolvedValue({
+      status: 'SAVED',
+      revision: 3,
+      body: null,
+    });
+
+    render(<MyahInboxDraftEditor {...defaultProps} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Clear draft' }));
+    });
+
+    expect(mockSaveDraft).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      expectedRevision: 2,
+      body: null,
+    });
+    expect(screen.getByLabelText('Shared reply draft')).toHaveValue('');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Draft cleared at revision 3',
     );
   });
 
@@ -212,6 +263,43 @@ describe('MyahInboxDraftEditor', () => {
     expect(
       screen.queryByText('Draft conflict at revision 4'),
     ).not.toBeInTheDocument();
+  });
+
+  it('remounts proposal text after a conflict reload with the same proposal counter', async () => {
+    mockSaveDraft.mockResolvedValue({
+      status: 'CONFLICT',
+      revision: 4,
+      body: { markdown: 'newer server draft', blocknote: null },
+    });
+    const { rerender } = render(
+      <MyahInboxDraftEditor {...defaultProps} appliedProposal={null} />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Shared reply draft'), {
+      target: { value: 'my unsaved local draft' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Reload and discard local changes',
+      }),
+    );
+
+    rerender(
+      <MyahInboxDraftEditor
+        {...defaultProps}
+        appliedProposal={{
+          applicationId: 1,
+          body: { markdown: 'first proposed reply', blocknote: null },
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText('Shared reply draft')).toHaveValue(
+      'first proposed reply',
+    );
   });
 
   it('keeps local text after a failed save and exposes a retryable error', async () => {

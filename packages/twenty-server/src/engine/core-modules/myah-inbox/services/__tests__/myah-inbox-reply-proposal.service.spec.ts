@@ -1,8 +1,17 @@
-import { type LanguageModel } from 'ai';
+import { type LanguageModel, type ToolSet } from 'ai';
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { MyahInboxResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox.resolver';
 
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
+import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
 import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
+
+jest.mock(
+  'src/engine/core-modules/auth/storage/workspace-auth-context.storage',
+  () => ({
+    getWorkspaceAuthContext: jest.fn(() => userAuthContext),
+  }),
+);
 
 const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
@@ -37,6 +46,21 @@ const thread = {
   inboxOwner: { id: workspaceMemberId, name: 'Owner' },
 };
 
+const history = [
+  {
+    receivedAt: '2026-07-24T09:00:00.000Z',
+    sender: 'creator@example.com',
+    subject: 'Partnership timing',
+    text: 'Can we launch next Tuesday?',
+  },
+  {
+    receivedAt: '2026-07-24T10:00:00.000Z',
+    sender: 'operator@example.com',
+    subject: 'Re: Partnership timing',
+    text: 'Tuesday is possible once final assets arrive.',
+  },
+];
+
 const usage = {
   inputTokens: { total: 12, noCache: 12, cacheRead: 0, cacheWrite: 0 },
   outputTokens: { total: 8, text: 8, reasoning: 0 },
@@ -67,6 +91,7 @@ const createService = (modelOutput: unknown) => {
   const fakeModel = createFakeModel(modelOutput);
   const queryService = {
     getThreadSummary: jest.fn().mockResolvedValue(thread),
+    getThreadProposalContext: jest.fn().mockResolvedValue({ thread, history }),
   };
   const actorContextService = {
     buildUserAndAgentActorContext: jest.fn().mockResolvedValue({
@@ -168,13 +193,14 @@ describe('MyahInboxReplyProposalService', () => {
     expect(
       setup.actorContextService.buildUserAndAgentActorContext,
     ).toHaveBeenCalledWith(userWorkspaceId, workspaceId);
-    expect(setup.queryService.getThreadSummary).toHaveBeenCalledWith({
+    expect(setup.queryService.getThreadProposalContext).toHaveBeenCalledWith({
       authContext: userAuthContext,
       user: userAuthContext.user,
       workspace,
       workspaceMemberId,
       threadId,
     });
+    expect(setup.queryService.getThreadSummary).not.toHaveBeenCalled();
     expect(setup.brandBrainPreflightService.run).toHaveBeenCalledWith(
       expect.objectContaining({
         lastUserMessageText: expect.stringContaining('Ada Creator'),
@@ -188,6 +214,12 @@ describe('MyahInboxReplyProposalService', () => {
       }),
     );
     expect(setup.fakeModel.doGenerate).toHaveBeenCalledTimes(1);
+    const modelRequest = JSON.stringify(setup.fakeModel.doGenerate.mock.calls);
+
+    expect(modelRequest).toContain('Can we launch next Tuesday?');
+    expect(modelRequest).toContain(
+      'Tuesday is possible once final assets arrive.',
+    );
     expect(
       setup.billingUsageService.hasAvailableCreditsOrThrow,
     ).toHaveBeenCalledWith(workspaceId);
@@ -197,6 +229,86 @@ describe('MyahInboxReplyProposalService', () => {
     expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
     expect(setup.messageProviderSend).not.toHaveBeenCalled();
     expect(Object.keys(result)).toEqual(['subject', 'body']);
+  });
+
+  it('passes the same multi-message history and no masked summary content through GraphQL and sidebar tool prompts', async () => {
+    const proposal = {
+      subject: 'Re: Partnership timing',
+      body: {
+        markdown: 'Tuesday works for us. Please send the final assets.',
+        blocknote: null,
+      },
+    };
+    const maskedSubject = 'MASKED_SUBJECT_MUST_NOT_ENTER';
+    const hiddenPreview = 'HIDDEN_PREVIEW_MUST_NOT_ENTER';
+    const setup = createService(proposal);
+
+    setup.queryService.getThreadProposalContext.mockResolvedValue({
+      thread: {
+        ...thread,
+        subject: maskedSubject,
+        lastMessagePreview: hiddenPreview,
+      },
+      history,
+    });
+
+    const resolver = new MyahInboxResolver(
+      {} as never,
+      {} as never,
+      setup.service,
+    );
+    const directResult = await resolver.generateMyahInboxReplyProposal(
+      {
+        threadId,
+        operatorInstructions: request.operatorInstructions,
+      },
+      workspace as never,
+      workspaceMemberId,
+    );
+    const toolSet = new MyahInboxToolWorkspaceService(
+      setup.service,
+    ).generateMyahInboxTools({
+      workspaceId,
+      roleId,
+      rolePermissionConfig: { unionOf: [roleId] },
+      authContext: userAuthContext,
+      userId,
+      userWorkspaceId,
+      actorContext: {
+        source: 'AGENT',
+        workspaceMemberId,
+        name: 'Operator',
+        context: {},
+      },
+    } as never);
+    const proposalTool = toolSet[
+      'generate_myah_inbox_reply_proposal'
+    ] as ToolSet[string] & {
+      execute: (input: Record<string, unknown>) => Promise<{
+        result: typeof proposal;
+      }>;
+    };
+    const toolResult = await proposalTool.execute({
+      threadId,
+      operatorInstructions: request.operatorInstructions,
+    });
+    const modelRequests = setup.fakeModel.doGenerate.mock.calls.map((call) =>
+      JSON.stringify(call),
+    );
+
+    expect(directResult).toEqual(proposal);
+    expect(toolResult.result).toEqual(proposal);
+    expect(modelRequests).toHaveLength(2);
+    for (const modelRequest of modelRequests) {
+      expect(modelRequest).toContain('Can we launch next Tuesday?');
+      expect(modelRequest).toContain(
+        'Tuesday is possible once final assets arrive.',
+      );
+      expect(modelRequest).not.toContain(maskedSubject);
+      expect(modelRequest).not.toContain(hiddenPreview);
+    }
+    expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
+    expect(setup.messageProviderSend).not.toHaveBeenCalled();
   });
 
   it('lets the real Brand Brain preflight extract the operator-provided permitted brand', async () => {

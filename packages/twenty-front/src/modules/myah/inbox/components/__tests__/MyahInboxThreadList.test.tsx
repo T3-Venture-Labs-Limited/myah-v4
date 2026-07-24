@@ -12,7 +12,12 @@ jest.mock('twenty-ui/theme-constants', () => ({
     },
     border: { color: { light: 'lightgray', medium: 'gray' } },
     font: {
-      color: { primary: 'black', secondary: 'dimgray', tertiary: 'gray' },
+      color: {
+        danger: 'darkred',
+        primary: 'black',
+        secondary: 'dimgray',
+        tertiary: 'gray',
+      },
       family: 'sans-serif',
       size: { sm: '13px', xs: '11px' },
       weight: { medium: 500 },
@@ -270,6 +275,38 @@ describe('MyahInboxThreadList', () => {
     expect(
       screen.getByText('Threads without a creator match will appear here.'),
     ).toBeVisible();
+  });
+
+  it('surfaces an expired snooze as due while leaving future snoozes snoozed', () => {
+    render(
+      <MyahInboxThreadList
+        {...defaultProps}
+        threads={[
+          {
+            ...threads[0],
+            state: 'SNOOZED',
+            snoozedUntil: '2000-01-01T00:00:00.000Z',
+          },
+          {
+            ...threads[1],
+            state: 'SNOOZED',
+            snoozedUntil: '2999-01-01T00:00:00.000Z',
+          },
+        ]}
+      />,
+    );
+
+    const expiredRow = screen.getByRole('option', {
+      name: /First conversation/,
+    });
+    const futureRow = screen.getByRole('option', {
+      name: /Second conversation/,
+    });
+
+    expect(expiredRow).toHaveTextContent('Snooze due');
+    expect(expiredRow).toHaveTextContent('Attention needed');
+    expect(futureRow).toHaveTextContent('snoozed');
+    expect(futureRow).not.toHaveTextContent('due');
   });
 
   it('keeps the load-more control focused while deferred pagination is loading', async () => {

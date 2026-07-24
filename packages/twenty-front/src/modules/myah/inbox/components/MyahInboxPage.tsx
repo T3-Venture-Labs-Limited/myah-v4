@@ -1,9 +1,11 @@
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxContextPanel } from '@/myah/inbox/components/MyahInboxContextPanel';
 import { MyahInboxThreadList } from '@/myah/inbox/components/MyahInboxThreadList';
 import { MyahInboxThreadPanel } from '@/myah/inbox/components/MyahInboxThreadPanel';
 import { useMyahInboxThreads } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import {
   myahInboxFiltersState,
+  myahInboxSelectionWorkspaceIdState,
   myahInboxSelectedThreadIdState,
 } from '@/myah/inbox/states/myahInboxSelectionState';
 import { PageBody } from '@/ui/layout/page/components/PageBody';
@@ -11,6 +13,7 @@ import { PageContainer } from '@/ui/layout/page/components/PageContainer';
 import { PageHeader } from '@/ui/layout/page/components/PageHeader';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { useEffect, useState } from 'react';
 import { IconInbox } from 'twenty-ui/icon';
@@ -71,50 +74,91 @@ const StyledSelectionStatus = styled.div`
   font-size: ${themeCssVariables.font.size.xs};
   padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
 `;
+const StyledPageStatus = styled.div`
+  background: ${themeCssVariables.background.primary};
+  border-bottom: 1px solid ${themeCssVariables.border.color.light};
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.xs};
+  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
+`;
 
 type MobilePanel = 'list' | 'thread' | 'context';
 
 export const MyahInboxPage = () => {
   const isMobile = useIsMobile();
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const workspaceId = currentWorkspace?.id ?? null;
   const [myahInboxFilters, setMyahInboxFilters] = useAtomState(
     myahInboxFiltersState,
   );
-  const [myahInboxSelectedThreadId, setMyahInboxSelectedThreadId] =
+  const [storedMyahInboxSelectedThreadId, setStoredMyahInboxSelectedThreadId] =
     useAtomState(myahInboxSelectedThreadIdState);
+  const [selectionWorkspaceId, setSelectionWorkspaceId] = useAtomState(
+    myahInboxSelectionWorkspaceIdState,
+  );
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('list');
+  const [triageStatus, setTriageStatus] = useState<string | null>(null);
   const inbox = useMyahInboxThreads(myahInboxFilters);
-
+  const myahInboxSelectedThreadId =
+    selectionWorkspaceId === workspaceId
+      ? storedMyahInboxSelectedThreadId
+      : null;
   const selectedThread =
     inbox.threads.find(({ id }) => id === myahInboxSelectedThreadId) ?? null;
 
+  useEffect(
+    () => () => {
+      setStoredMyahInboxSelectedThreadId(null);
+      setSelectionWorkspaceId(null);
+    },
+    [setSelectionWorkspaceId, setStoredMyahInboxSelectedThreadId, workspaceId],
+  );
+
   useEffect(() => {
-    if (inbox.loading) {
+    setTriageStatus(null);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (inbox.loading || !workspaceId) {
       return;
     }
 
     if (inbox.threads.length === 0) {
-      setMyahInboxSelectedThreadId(null);
+      setStoredMyahInboxSelectedThreadId(null);
+      setSelectionWorkspaceId(null);
       return;
     }
 
     if (!inbox.threads.some(({ id }) => id === myahInboxSelectedThreadId)) {
-      setMyahInboxSelectedThreadId(inbox.threads[0].id);
+      setStoredMyahInboxSelectedThreadId(inbox.threads[0].id);
+      setSelectionWorkspaceId(workspaceId);
     }
   }, [
     inbox.loading,
     inbox.threads,
     myahInboxSelectedThreadId,
-    setMyahInboxSelectedThreadId,
+    setSelectionWorkspaceId,
+    setStoredMyahInboxSelectedThreadId,
+    workspaceId,
   ]);
 
   const handleSelectThread = (threadId: string) => {
-    setMyahInboxSelectedThreadId(threadId);
+    if (!workspaceId) {
+      return;
+    }
+
+    setStoredMyahInboxSelectedThreadId(threadId);
+    setSelectionWorkspaceId(workspaceId);
 
     if (isMobile) {
       setMobilePanel('thread');
     }
   };
 
+  const handleTriageSaved = (message: string) => {
+    setTriageStatus(message);
+    void inbox.refetch();
+  };
   const threadList = (
     <MyahInboxThreadList
       threads={inbox.threads}
@@ -135,13 +179,18 @@ export const MyahInboxPage = () => {
     <MyahInboxContextPanel
       key={selectedThread?.id ?? 'empty-context'}
       thread={selectedThread}
-      onTriageSaved={() => void inbox.refetch()}
+      onTriageSaved={handleTriageSaved}
     />
   );
 
   return (
     <StyledPageContainer>
       <PageHeader title="Inbox" Icon={IconInbox} />
+      {triageStatus && (
+        <StyledPageStatus role="status" aria-live="polite">
+          {triageStatus}
+        </StyledPageStatus>
+      )}
       <StyledPageBody>
         {isMobile ? (
           <StyledMobileWorkspace>

@@ -109,10 +109,14 @@ const StyledPreview = styled.span`
   overflow: hidden;
 `;
 
-const StyledState = styled.span`
-  color: ${themeCssVariables.font.color.secondary};
+const StyledState = styled.span<{ isAttentionNeeded: boolean }>`
+  color: ${({ isAttentionNeeded }) =>
+    isAttentionNeeded
+      ? themeCssVariables.font.color.danger
+      : themeCssVariables.font.color.secondary};
   font-size: ${themeCssVariables.font.size.xs};
-  text-transform: lowercase;
+  font-weight: ${({ isAttentionNeeded }) =>
+    isAttentionNeeded ? themeCssVariables.font.weight.medium : 'inherit'};
 `;
 
 const StyledStatus = styled.div`
@@ -251,6 +255,10 @@ export const MyahInboxThreadList = ({
       <StyledList role="listbox" aria-label="Inbox conversations">
         {threads.map((thread, index) => {
           const isSelected = selectedThreadId === thread.id;
+          const isSnoozeDue =
+            thread.state === 'SNOOZED' &&
+            thread.snoozedUntil !== null &&
+            Date.parse(thread.snoozedUntil) <= Date.now();
 
           return (
             <StyledThreadRow
@@ -279,7 +287,11 @@ export const MyahInboxThreadList = ({
               <StyledPreview>
                 {thread.lastMessagePreview || 'No message preview'}
               </StyledPreview>
-              <StyledState>{thread.state.replaceAll('_', ' ')}</StyledState>
+              <StyledState isAttentionNeeded={isSnoozeDue}>
+                {isSnoozeDue
+                  ? 'Snooze due · Attention needed'
+                  : thread.state.replaceAll('_', ' ').toLowerCase()}
+              </StyledState>
             </StyledThreadRow>
           );
         })}

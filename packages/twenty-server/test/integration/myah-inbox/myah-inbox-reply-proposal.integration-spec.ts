@@ -260,5 +260,21 @@ describe('Myah Inbox reply proposal Nest integration', () => {
     expect(messagePersistenceBoundary).not.toHaveBeenCalled();
     expect(afterMessageCount).toBe(beforeMessageCount);
     expect(doGenerate).toHaveBeenCalledTimes(2);
+    const modelRequests = doGenerate.mock.calls.map((call) =>
+      JSON.stringify(call),
+    );
+
+    expect(modelRequests).toHaveLength(2);
+    for (const modelRequest of modelRequests) {
+      expect(modelRequest).toContain(fixture.markers.draftPriorBody);
+      expect(modelRequest).toContain('Task 7 shared draft source message');
+      expect(modelRequest.indexOf(fixture.markers.draftPriorBody)).toBeLessThan(
+        modelRequest.indexOf('Task 7 shared draft source message'),
+      );
+      expect(modelRequest).not.toContain(fixture.markers.draftMaskedSubject);
+      expect(modelRequest).not.toContain(fixture.markers.draftMaskedBody);
+      expect(modelRequest).not.toContain(fixture.markers.draftHiddenSubject);
+      expect(modelRequest).not.toContain(fixture.markers.draftHiddenBody);
+    }
   });
 });

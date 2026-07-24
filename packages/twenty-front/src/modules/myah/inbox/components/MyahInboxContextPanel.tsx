@@ -98,7 +98,7 @@ type MyahInboxDraftRecord = {
 
 type MyahInboxContextPanelProps = {
   thread: MyahInboxThread | null;
-  onTriageSaved?: () => void;
+  onTriageSaved?: (message: string) => void;
 };
 
 export const MyahInboxContextPanel = ({
@@ -193,8 +193,11 @@ export const MyahInboxContextPanel = ({
         setSnoozedUntil(normalizedSnoozedUntil);
         setSnoozeInputVersion((version) => version + 1);
       }
-      setTriageStatus('Triage saved');
-      onTriageSaved?.();
+      if (onTriageSaved) {
+        onTriageSaved('Triage saved');
+      } else {
+        setTriageStatus('Triage saved');
+      }
     } catch {
       setTriageError('Could not save triage. Try again.');
     } finally {

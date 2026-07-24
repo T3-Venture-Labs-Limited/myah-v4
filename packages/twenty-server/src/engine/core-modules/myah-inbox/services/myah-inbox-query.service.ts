@@ -29,6 +29,10 @@ import {
   type MyahInboxThreadContext,
   type MyahInboxThreadSummary,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
@@ -45,6 +49,18 @@ export type MyahInboxListThreadsInput = MyahInboxThreadsInput & {
   workspace: Pick<WorkspaceEntity, 'id'>;
   workspaceMemberId: string;
   threadId?: string;
+};
+
+export type MyahInboxThreadProposalHistoryEntry = {
+  receivedAt: string;
+  sender: string | null;
+  subject: string | null;
+  text: string | null;
+};
+
+export type MyahInboxThreadProposalContext = {
+  thread: MyahInboxThreadSummary;
+  history: MyahInboxThreadProposalHistoryEntry[];
 };
 
 type MyahInboxCursor = {
@@ -64,6 +80,13 @@ type MyahInboxThreadRaw = {
   creatorId: string | null;
   campaignId: string | null;
   inboxOwnerId: string | null;
+};
+
+type MyahInboxThreadProposalHistoryRaw = Omit<
+  MyahInboxThreadProposalHistoryEntry,
+  'receivedAt'
+> & {
+  receivedAt: Date | string;
 };
 
 type ContextRecord = {
@@ -366,6 +389,87 @@ export class MyahInboxQueryService {
     return summary;
   }
 
+  async getThreadProposalContext(
+    input: Omit<MyahInboxListThreadsInput, 'threadId'> & { threadId: string },
+  ): Promise<MyahInboxThreadProposalContext> {
+    const thread = await this.getThreadSummary(input);
+    const history = await this.loadThreadProposalHistory(input);
+
+    return { thread, history };
+  }
+
+  private async loadThreadProposalHistory(
+    input: Omit<MyahInboxListThreadsInput, 'threadId'> & { threadId: string },
+  ): Promise<MyahInboxThreadProposalHistoryEntry[]> {
+    this.assertUserRequest(input);
+    this.assertValidFilterIds(input);
+
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const workspaceContext = getWorkspaceContext();
+        const rolePermissionConfig = resolveRolePermissionConfig({
+          authContext: input.authContext,
+          userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+          apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+        });
+
+        if (!rolePermissionConfig) {
+          throw new ForbiddenException('Inbox role permissions are required');
+        }
+
+        const messageRepository =
+          await this.globalWorkspaceOrmManager.getRepository<
+            Record<string, unknown>
+          >(input.workspace.id, 'message', rolePermissionConfig);
+        const visibility =
+          this.messageVisibilityPolicyService.buildSqlVisibilityProjection({
+            workspaceId: input.workspace.id,
+            userWorkspaceId: input.authContext.userWorkspaceId,
+            messageIdExpression: 'message.id',
+          });
+        const workspaceSchemaName = getWorkspaceSchemaName(input.workspace.id);
+        const rows = await messageRepository
+          .createQueryBuilder('message')
+          .select('message."receivedAt"', 'receivedAt')
+          .addSelect('message.subject', 'subject')
+          .addSelect('message.text', 'text')
+          .addSelect(
+            `(SELECT messageParticipant.handle
+              FROM "${workspaceSchemaName}"."messageParticipant" messageParticipant
+              WHERE messageParticipant."messageId" = message.id
+                AND messageParticipant."deletedAt" IS NULL
+                AND messageParticipant.role = :fromParticipantRole
+              ORDER BY messageParticipant.id ASC
+              LIMIT 1)`,
+            'sender',
+          )
+          .where('message."messageThreadId" = :threadId', {
+            threadId: input.threadId,
+          })
+          .andWhere('message."deletedAt" IS NULL')
+          .andWhere('message."receivedAt" IS NOT NULL')
+          .andWhere(`${visibility.expression} = :messageVisibilityFull`)
+          .setParameters({
+            ...visibility.parameters,
+            fromParticipantRole: MessageParticipantRole.FROM,
+          })
+          .orderBy('message."receivedAt"', 'DESC')
+          .addOrderBy('message.id', 'DESC')
+          .limit(MYAH_INBOX_MAX_PAGE_SIZE)
+          .getRawMany<MyahInboxThreadProposalHistoryRaw>();
+
+        return rows.reverse().map((message) => ({
+          ...message,
+          receivedAt:
+            message.receivedAt instanceof Date
+              ? message.receivedAt.toISOString()
+              : message.receivedAt,
+        }));
+      },
+      input.authContext,
+    );
+  }
+
   private assertUserRequest(
     input: MyahInboxListThreadsInput,
   ): asserts input is MyahInboxListThreadsInput & {
@@ -403,6 +507,33 @@ export class MyahInboxQueryService {
     }
   }
 
+  private async loadOptionalContextRecords(
+    repository: {
+      find: (options: unknown) => Promise<ContextRecord[]>;
+    },
+    ids: string[],
+  ): Promise<ContextRecord[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    try {
+      return await repository.find({
+        where: { id: In(ids), deletedAt: IsNull() },
+        select: { id: true, name: true },
+      });
+    } catch (error) {
+      if (
+        error instanceof PermissionsException &&
+        error.code === PermissionsExceptionCode.PERMISSION_DENIED
+      ) {
+        return [];
+      }
+
+      throw error;
+    }
+  }
+
   private async loadContextRecords({
     rows,
     creatorRepository,
@@ -432,16 +563,8 @@ export class MyahInboxQueryService {
       ),
     ];
     const [creators, campaigns, workspaceMembers] = await Promise.all([
-      creatorIds.length === 0
-        ? []
-        : creatorRepository.find({
-            where: { id: In(creatorIds), deletedAt: IsNull() },
-          }),
-      campaignIds.length === 0
-        ? []
-        : campaignRepository.find({
-            where: { id: In(campaignIds), deletedAt: IsNull() },
-          }),
+      this.loadOptionalContextRecords(creatorRepository, creatorIds),
+      this.loadOptionalContextRecords(campaignRepository, campaignIds),
       workspaceMemberIds.length === 0
         ? []
         : workspaceMemberRepository.find({

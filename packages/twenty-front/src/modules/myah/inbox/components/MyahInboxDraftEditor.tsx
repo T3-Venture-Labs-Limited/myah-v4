@@ -107,7 +107,7 @@ export const MyahInboxDraftEditor = ({
     setConflict(null);
     setError(null);
     setStatus('Proposal applied. Save the draft to keep it.');
-    setEditorVersion(appliedProposal.applicationId);
+    setEditorVersion((version) => version + 1);
   }, [appliedProposal]);
 
   const normalizeRichText = (
@@ -117,11 +117,14 @@ export const MyahInboxDraftEditor = ({
       ? { markdown: body.markdown, blocknote: body.blocknote ?? null }
       : null;
 
-  const handleSave = async () => {
+  const persistDraft = async (
+    submittedBody: MyahInboxRichText | null,
+    completedAction: 'saved' | 'cleared',
+  ) => {
     setIsSaving(true);
     setError(null);
     setStatus(null);
-    const submittedBody = draftBody;
+    const localBodyAtSubmit = draftBody;
 
     try {
       const result = await saveDraft({
@@ -138,13 +141,14 @@ export const MyahInboxDraftEditor = ({
 
       setConfirmedRevision(result.revision);
       setDraftBody((currentBody) =>
-        currentBody.markdown === submittedBody.markdown &&
-        currentBody.blocknote === submittedBody.blocknote
+        currentBody.markdown === localBodyAtSubmit.markdown &&
+        currentBody.blocknote === localBodyAtSubmit.blocknote
           ? (savedBody ?? EMPTY_DRAFT)
           : currentBody,
       );
       setConflict(null);
-      setStatus(`Draft saved at revision ${result.revision}`);
+      setStatus(`Draft ${completedAction} at revision ${result.revision}`);
+      setEditorVersion((version) => version + 1);
     } catch {
       setError('Could not save the draft. Your changes are still here.');
     } finally {
@@ -186,11 +190,18 @@ export const MyahInboxDraftEditor = ({
       {readOnlyReason && <StyledHint>{readOnlyReason}</StyledHint>}
       <StyledActions>
         <Button
+          title="Clear draft"
+          variant="secondary"
+          size="small"
+          disabled={!canEdit || isSaving || conflict !== null}
+          onClick={() => void persistDraft(null, 'cleared')}
+        />
+        <Button
           title={isSaving ? 'Saving draft' : 'Save draft'}
           variant="primary"
           size="small"
           disabled={!canEdit || isSaving || conflict !== null}
-          onClick={handleSave}
+          onClick={() => void persistDraft(draftBody, 'saved')}
         />
       </StyledActions>
       {status && <StyledStatus role="status">{status}</StyledStatus>}
