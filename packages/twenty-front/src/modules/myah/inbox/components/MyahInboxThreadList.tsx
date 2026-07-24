@@ -282,20 +282,21 @@ export const MyahInboxThreadList = ({
             </StyledThreadRow>
           );
         })}
-        <StyledLoadMore>
-          {loadingMore ? (
-            <span role="status">Loading more conversations</span>
-          ) : (
-            hasNextPage && (
-              <Button
-                title="Load more conversations"
-                variant="secondary"
-                size="small"
-                onClick={onLoadMore}
-              />
-            )
-          )}
-        </StyledLoadMore>
+        {(hasNextPage || loadingMore) && (
+          <StyledLoadMore role={loadingMore ? 'status' : undefined}>
+            <Button
+              title={
+                loadingMore
+                  ? 'Loading more conversations'
+                  : 'Load more conversations'
+              }
+              variant="secondary"
+              size="small"
+              disabled={loadingMore}
+              onClick={onLoadMore}
+            />
+          </StyledLoadMore>
+        )}
       </StyledList>
     );
   };

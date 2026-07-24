@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 
 import { MyahInboxThreadList } from '@/myah/inbox/components/MyahInboxThreadList';
 
@@ -270,19 +271,55 @@ describe('MyahInboxThreadList', () => {
     ).toBeVisible();
   });
 
-  it('keeps rows and focus mounted while the next page is loading', () => {
-    render(<MyahInboxThreadList {...defaultProps} loadingMore />);
-
-    const firstRow = screen.getByRole('option', {
-      name: /First conversation/,
+  it('keeps the load-more control focused while deferred pagination is loading', async () => {
+    let resolveFetchMore: () => void = () => {};
+    const fetchMorePromise = new Promise<void>((resolve) => {
+      resolveFetchMore = resolve;
     });
-    firstRow.focus();
+    const fetchMore = jest.fn(() => fetchMorePromise);
+    const Harness = () => {
+      const [loadingMore, setLoadingMore] = useState(false);
 
-    expect(firstRow).toBeVisible();
-    expect(firstRow).toHaveFocus();
+      const handleLoadMore = async () => {
+        setLoadingMore(true);
+        await fetchMore();
+        setLoadingMore(false);
+      };
+
+      return (
+        <MyahInboxThreadList
+          {...defaultProps}
+          hasNextPage
+          loadingMore={loadingMore}
+          onLoadMore={() => void handleLoadMore()}
+        />
+      );
+    };
+
+    render(<Harness />);
+
+    const loadMoreButton = screen.getByRole('button', {
+      name: 'Load more conversations',
+    });
+    loadMoreButton.focus();
+    fireEvent.click(loadMoreButton);
+
+    expect(fetchMore).toHaveBeenCalledTimes(1);
+    expect(loadMoreButton).toHaveFocus();
+    expect(loadMoreButton).toBeDisabled();
+    expect(loadMoreButton).toHaveTextContent('Loading more conversations');
     expect(screen.getByRole('status')).toHaveTextContent(
       'Loading more conversations',
     );
+
+    await act(async () => {
+      resolveFetchMore();
+      await fetchMorePromise;
+    });
+
+    expect(loadMoreButton).toHaveFocus();
+    expect(loadMoreButton).toBeEnabled();
+    expect(loadMoreButton).toHaveTextContent('Load more conversations');
   });
 
   it('shows loading and retryable error states without presenting stale rows', () => {
