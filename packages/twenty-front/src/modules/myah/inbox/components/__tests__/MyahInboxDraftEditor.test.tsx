@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import type * as ReactType from 'react';
 
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
 
@@ -33,8 +34,10 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
 
 jest.mock(
   '@/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput',
-  () => ({
-    FormAdvancedTextFieldInput: ({
+  () => {
+    const React = jest.requireActual('react') as typeof ReactType;
+
+    const FormAdvancedTextFieldInput = ({
       label,
       defaultValue,
       onChange,
@@ -44,18 +47,24 @@ jest.mock(
       defaultValue: string;
       onChange: (value: string) => void;
       readonly?: boolean;
-    }) => (
-      <label>
-        {label}
-        <textarea
-          aria-label={label}
-          value={defaultValue}
-          disabled={readonly}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </label>
-    ),
-  }),
+    }) => {
+      const [capturedReadonly] = React.useState(readonly);
+
+      return (
+        <label>
+          {label}
+          <textarea
+            aria-label={label}
+            value={defaultValue}
+            disabled={capturedReadonly}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </label>
+      );
+    };
+
+    return { FormAdvancedTextFieldInput };
+  },
 );
 
 jest.mock('twenty-ui/input', () => ({
@@ -86,6 +95,7 @@ const defaultProps = {
 describe('MyahInboxDraftEditor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSaveDraft.mockReset();
   });
 
   it('saves with the last confirmed revision and announces success', async () => {
@@ -112,6 +122,55 @@ describe('MyahInboxDraftEditor', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Draft saved at revision 3',
     );
+  });
+
+  it('preserves edits made while save is in flight and saves them against the confirmed revision', async () => {
+    type DraftSaveResult = {
+      status: 'SAVED';
+      revision: number;
+      body: { markdown: string; blocknote: null };
+    };
+    let resolveFirstSave: (result: DraftSaveResult) => void = () => {};
+    const firstSave = new Promise<DraftSaveResult>((resolve) => {
+      resolveFirstSave = resolve;
+    });
+    mockSaveDraft.mockReturnValueOnce(firstSave).mockResolvedValueOnce({
+      status: 'SAVED',
+      revision: 4,
+      body: { markdown: 'newer local edit', blocknote: null },
+    });
+
+    render(<MyahInboxDraftEditor {...defaultProps} />);
+
+    fireEvent.change(screen.getByLabelText('Shared reply draft'), {
+      target: { value: 'submitted snapshot' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    fireEvent.change(screen.getByLabelText('Shared reply draft'), {
+      target: { value: 'newer local edit' },
+    });
+
+    await act(async () => {
+      resolveFirstSave({
+        status: 'SAVED',
+        revision: 3,
+        body: { markdown: 'submitted snapshot', blocknote: null },
+      });
+      await firstSave;
+    });
+
+    expect(screen.getByLabelText('Shared reply draft')).toHaveValue(
+      'newer local edit',
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    });
+    expect(mockSaveDraft).toHaveBeenLastCalledWith({
+      threadId: 'thread-1',
+      expectedRevision: 3,
+      body: { markdown: 'newer local edit', blocknote: null },
+    });
   });
 
   it('retains unsaved local text on conflict and shows the current server body and revision', async () => {
@@ -189,6 +248,22 @@ describe('MyahInboxDraftEditor', () => {
     expect(screen.getByLabelText('Shared reply draft')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeDisabled();
     expect(screen.getByText(readOnlyReason)).toBeVisible();
+  });
+
+  it('remounts the native editor when assignment changes editability', () => {
+    const { rerender } = render(
+      <MyahInboxDraftEditor
+        {...defaultProps}
+        canEdit={false}
+        readOnlyReason="Only Grace can edit this shared draft."
+      />,
+    );
+
+    expect(screen.getByLabelText('Shared reply draft')).toBeDisabled();
+
+    rerender(<MyahInboxDraftEditor {...defaultProps} canEdit />);
+
+    expect(screen.getByLabelText('Shared reply draft')).toBeEnabled();
   });
 
   it('copies an applied proposal into the editor without saving it', () => {

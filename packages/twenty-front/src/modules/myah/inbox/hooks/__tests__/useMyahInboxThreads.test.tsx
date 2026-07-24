@@ -127,6 +127,27 @@ describe('useMyahInboxThreads', () => {
     });
   });
 
+  it('reports incremental loading without replacing existing rows', () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        myahInboxThreads: {
+          edges: [{ cursor: 'cursor-1', node: thread }],
+          pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
+        },
+      },
+      loading: true,
+      error: undefined,
+      fetchMore: jest.fn(),
+      refetch: jest.fn(),
+    });
+
+    const { result } = renderHook(() => useMyahInboxThreads(filters));
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.loadingMore).toBe(true);
+    expect(result.current.threads).toEqual([thread]);
+  });
+
   it('omits empty optional filters instead of sending empty server values', () => {
     mockUseQuery.mockReturnValue({
       data: undefined,

@@ -14,7 +14,7 @@ import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { styled } from '@linaria/react';
 import { useEffect, useState } from 'react';
 import { IconInbox } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
+import { SegmentedControl } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledPageContainer = styled(PageContainer)`
@@ -115,6 +115,7 @@ export const MyahInboxPage = () => {
       filters={filters}
       selectedThreadId={selectedThreadId}
       loading={inbox.loading}
+      loadingMore={inbox.loadingMore}
       error={inbox.error}
       hasNextPage={inbox.hasNextPage}
       onSelectThread={handleSelectThread}
@@ -139,25 +140,23 @@ export const MyahInboxPage = () => {
         {isMobile ? (
           <StyledMobileWorkspace>
             <StyledMobileNavigation aria-label="Inbox panels">
-              <Button
-                title="Threads"
-                variant={mobilePanel === 'list' ? 'primary' : 'secondary'}
-                size="small"
-                onClick={() => setMobilePanel('list')}
-              />
-              <Button
-                title="Conversation"
-                variant={mobilePanel === 'thread' ? 'primary' : 'secondary'}
-                size="small"
-                disabled={!selectedThread}
-                onClick={() => setMobilePanel('thread')}
-              />
-              <Button
-                title="Context"
-                variant={mobilePanel === 'context' ? 'primary' : 'secondary'}
-                size="small"
-                disabled={!selectedThread}
-                onClick={() => setMobilePanel('context')}
+              <SegmentedControl
+                ariaLabel="Inbox panels"
+                value={mobilePanel}
+                options={[
+                  { label: 'Threads', value: 'list' },
+                  {
+                    label: 'Conversation',
+                    value: 'thread',
+                    disabled: !selectedThread,
+                  },
+                  {
+                    label: 'Context',
+                    value: 'context',
+                    disabled: !selectedThread,
+                  },
+                ]}
+                onChange={setMobilePanel}
               />
             </StyledMobileNavigation>
             <StyledSelectionStatus role="status" aria-live="polite">

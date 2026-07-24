@@ -159,6 +159,7 @@ const defaultProps = {
   filters,
   selectedThreadId: 'thread-1',
   loading: false,
+  loadingMore: false,
   error: undefined,
   hasNextPage: false,
   onSelectThread: jest.fn(),
@@ -267,6 +268,21 @@ describe('MyahInboxThreadList', () => {
     expect(
       screen.getByText('Threads without a creator match will appear here.'),
     ).toBeVisible();
+  });
+
+  it('keeps rows and focus mounted while the next page is loading', () => {
+    render(<MyahInboxThreadList {...defaultProps} loadingMore />);
+
+    const firstRow = screen.getByRole('option', {
+      name: /First conversation/,
+    });
+    firstRow.focus();
+
+    expect(firstRow).toBeVisible();
+    expect(firstRow).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading more conversations',
+    );
   });
 
   it('shows loading and retryable error states without presenting stale rows', () => {

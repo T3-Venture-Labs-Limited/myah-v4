@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import type * as ReactType from 'react';
 
 import { MyahInboxContextPanel } from '@/myah/inbox/components/MyahInboxContextPanel';
 
@@ -98,8 +99,10 @@ jest.mock(
 
 jest.mock(
   '@/object-record/record-field/ui/form-types/components/FormDateTimeFieldInput',
-  () => ({
-    FormDateTimeFieldInput: ({
+  () => {
+    const React = jest.requireActual('react') as typeof ReactType;
+
+    const FormDateTimeFieldInput = ({
       label,
       defaultValue,
       onChange,
@@ -107,17 +110,27 @@ jest.mock(
       label: string;
       defaultValue?: string;
       onChange: (value: string | null) => void;
-    }) => (
-      <label>
-        {label}
-        <input
-          aria-label={label}
-          value={defaultValue ?? ''}
-          onChange={(event) => onChange(event.target.value || null)}
-        />
-      </label>
-    ),
-  }),
+    }) => {
+      const [value, setValue] = React.useState(defaultValue ?? '');
+
+      return (
+        <label>
+          {label}
+          <input
+            aria-label={label}
+            value={value}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setValue(nextValue);
+              onChange(nextValue || null);
+            }}
+          />
+        </label>
+      );
+    };
+
+    return { FormDateTimeFieldInput };
+  },
 );
 
 jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
@@ -202,6 +215,7 @@ const thread = {
 describe('MyahInboxContextPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUpdateThread.mockReset();
     mockCurrentWorkspaceMember = { id: 'member-1' };
     mockUseFindOneRecord.mockReturnValue({
       record: {
@@ -253,6 +267,59 @@ describe('MyahInboxContextPanel', () => {
       snoozedUntil: '2026-07-25T12:00:00.000Z',
     });
     expect(screen.getByText('Triage saved')).toHaveAttribute('role', 'status');
+  });
+
+  it('uses the normalized snooze returned by triage save instead of resending a stale timestamp', async () => {
+    const threadWithSnooze = {
+      ...thread,
+      snoozedUntil: '2026-07-25T12:00:00.000Z',
+    };
+    mockUpdateThread.mockResolvedValue({
+      ...threadWithSnooze,
+      snoozedUntil: null,
+    });
+
+    render(<MyahInboxContextPanel thread={threadWithSnooze} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save triage' }));
+    });
+
+    expect(screen.getByLabelText('Snooze until')).toHaveValue('');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save triage' }));
+    });
+    expect(mockUpdateThread).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snoozedUntil: null }),
+    );
+  });
+
+  it('does not overwrite a newer snooze edit when an earlier save returns', async () => {
+    const threadWithSnooze = {
+      ...thread,
+      snoozedUntil: '2026-07-25T12:00:00.000Z',
+    };
+    let resolveUpdate: (value: unknown) => void = () => {};
+    const update = new Promise<unknown>((resolve) => {
+      resolveUpdate = resolve;
+    });
+    mockUpdateThread.mockReturnValue(update);
+
+    render(<MyahInboxContextPanel thread={threadWithSnooze} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save triage' }));
+    fireEvent.change(screen.getByLabelText('Snooze until'), {
+      target: { value: '2026-07-26T12:00:00.000Z' },
+    });
+    await act(async () => {
+      resolveUpdate({ ...threadWithSnooze, snoozedUntil: null });
+      await update;
+    });
+
+    expect(screen.getByLabelText('Snooze until')).toHaveValue(
+      '2026-07-26T12:00:00.000Z',
+    );
   });
 
   it('keeps controls available and reports a failed triage save', async () => {

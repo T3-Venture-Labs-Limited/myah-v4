@@ -121,12 +121,13 @@ export const MyahInboxDraftEditor = ({
     setIsSaving(true);
     setError(null);
     setStatus(null);
+    const submittedBody = draftBody;
 
     try {
       const result = await saveDraft({
         threadId,
         expectedRevision: confirmedRevision,
-        body: draftBody,
+        body: submittedBody,
       });
       const savedBody = normalizeRichText(result.body);
 
@@ -136,7 +137,12 @@ export const MyahInboxDraftEditor = ({
       }
 
       setConfirmedRevision(result.revision);
-      setDraftBody(savedBody ?? EMPTY_DRAFT);
+      setDraftBody((currentBody) =>
+        currentBody.markdown === submittedBody.markdown &&
+        currentBody.blocknote === submittedBody.blocknote
+          ? (savedBody ?? EMPTY_DRAFT)
+          : currentBody,
+      );
       setConflict(null);
       setStatus(`Draft saved at revision ${result.revision}`);
     } catch {
@@ -163,7 +169,7 @@ export const MyahInboxDraftEditor = ({
     <StyledDraftEditor aria-label="Shared reply draft editor">
       <StyledHeading>Shared reply draft</StyledHeading>
       <FormAdvancedTextFieldInput
-        key={`${threadId}-${editorVersion}`}
+        key={`${threadId}-${editorVersion}-${canEdit ? 'editable' : 'readonly'}`}
         label="Shared reply draft"
         defaultValue={draftBody.markdown}
         placeholder="Write a reply draft"

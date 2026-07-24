@@ -13,18 +13,29 @@ jest.mock('twenty-ui/theme-constants', () => ({
 }));
 
 jest.mock('twenty-ui/input', () => ({
-  Button: ({
-    title,
-    onClick,
-    disabled,
+  SegmentedControl: ({
+    ariaLabel,
+    value,
+    options,
+    onChange,
   }: {
-    title: string;
-    onClick: () => void;
-    disabled?: boolean;
+    ariaLabel: string;
+    value: string;
+    options: Array<{ label: string; value: string; disabled?: boolean }>;
+    onChange: (value: string) => void;
   }) => (
-    <button disabled={disabled} onClick={onClick}>
-      {title}
-    </button>
+    <div role="group" aria-label={ariaLabel}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          aria-pressed={option.value === value}
+          disabled={option.disabled}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   ),
 }));
 
@@ -202,6 +213,17 @@ describe('MyahInboxPage', () => {
     expect(screen.getByRole('button', { name: 'Threads' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Conversation' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Context' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Threads' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Conversation' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Context' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
 
     await waitFor(() =>
       expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
@@ -212,6 +234,9 @@ describe('MyahInboxPage', () => {
       screen.getByRole('button', { name: 'Select First conversation' }),
     );
     expect(screen.getByText('Conversation panel thread-1')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Conversation' }),
+    ).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
     expect(screen.getByRole('status')).toHaveTextContent(
       'Selected: First conversation',
@@ -219,8 +244,16 @@ describe('MyahInboxPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Context' }));
     expect(screen.getByText('Context panel thread-1')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Context' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Threads' }));
     expect(screen.getByLabelText('Thread list test double')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Threads' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });

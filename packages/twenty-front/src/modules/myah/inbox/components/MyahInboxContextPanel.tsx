@@ -16,7 +16,7 @@ import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingCon
 import { Select } from '@/ui/input/components/Select';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { type PageLayoutType } from '~/generated-metadata/graphql';
@@ -124,6 +124,8 @@ export const MyahInboxContextPanel = ({
   const [snoozedUntil, setSnoozedUntil] = useState(
     thread?.snoozedUntil ?? null,
   );
+  const snoozedUntilRef = useRef(snoozedUntil);
+  const [snoozeInputVersion, setSnoozeInputVersion] = useState(0);
   const [isSavingTriage, setIsSavingTriage] = useState(false);
   const [triageStatus, setTriageStatus] = useState<string | null>(null);
   const [triageError, setTriageError] = useState<string | null>(null);
@@ -143,10 +145,16 @@ export const MyahInboxContextPanel = ({
     );
   }
 
+  const handleSnoozedUntilChange = (value: string | null) => {
+    snoozedUntilRef.current = value;
+    setSnoozedUntil(value);
+  };
+
   const handleSaveTriage = async () => {
     setIsSavingTriage(true);
     setTriageStatus(null);
     setTriageError(null);
+    const submittedSnoozedUntil = snoozedUntilRef.current;
 
     try {
       const updated = await updateThread({
@@ -155,7 +163,7 @@ export const MyahInboxContextPanel = ({
         campaignId,
         inboxOwnerId: ownerId,
         inboxState: inboxState as UpdateMyahInboxThreadInput['inboxState'],
-        snoozedUntil,
+        snoozedUntil: submittedSnoozedUntil,
       });
 
       setSavedOwner(
@@ -166,6 +174,13 @@ export const MyahInboxContextPanel = ({
             }
           : null,
       );
+      if (snoozedUntilRef.current === submittedSnoozedUntil) {
+        const normalizedSnoozedUntil = updated.snoozedUntil ?? null;
+
+        snoozedUntilRef.current = normalizedSnoozedUntil;
+        setSnoozedUntil(normalizedSnoozedUntil);
+        setSnoozeInputVersion((version) => version + 1);
+      }
       setTriageStatus('Triage saved');
       onTriageSaved?.();
     } catch {
@@ -224,9 +239,10 @@ export const MyahInboxContextPanel = ({
             }
           />
           <FormDateTimeFieldInput
+            key={`${thread.id}-${snoozeInputVersion}`}
             label="Snooze until"
             defaultValue={snoozedUntil ?? undefined}
-            onChange={setSnoozedUntil}
+            onChange={handleSnoozedUntilChange}
           />
         </StyledControls>
         <StyledActions>

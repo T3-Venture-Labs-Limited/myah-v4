@@ -160,6 +160,7 @@ type MyahInboxThreadListProps = {
   filters: MyahInboxFilters;
   selectedThreadId: string | null;
   loading: boolean;
+  loadingMore: boolean;
   error: { message: string } | undefined;
   hasNextPage: boolean;
   onSelectThread: (threadId: string) => void;
@@ -173,6 +174,7 @@ export const MyahInboxThreadList = ({
   filters,
   selectedThreadId,
   loading,
+  loadingMore,
   error,
   hasNextPage,
   onSelectThread,
@@ -280,16 +282,20 @@ export const MyahInboxThreadList = ({
             </StyledThreadRow>
           );
         })}
-        {hasNextPage && (
-          <StyledLoadMore>
-            <Button
-              title="Load more conversations"
-              variant="secondary"
-              size="small"
-              onClick={onLoadMore}
-            />
-          </StyledLoadMore>
-        )}
+        <StyledLoadMore>
+          {loadingMore ? (
+            <span role="status">Loading more conversations</span>
+          ) : (
+            hasNextPage && (
+              <Button
+                title="Load more conversations"
+                variant="secondary"
+                size="small"
+                onClick={onLoadMore}
+              />
+            )
+          )}
+        </StyledLoadMore>
       </StyledList>
     );
   };

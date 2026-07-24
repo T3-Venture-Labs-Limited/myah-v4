@@ -67,7 +67,8 @@ export const useMyahInboxThreads = (filters: MyahInboxFilters) => {
   return {
     threads:
       connection?.edges?.map(({ node }) => node as MyahInboxThread) ?? [],
-    loading: query.loading,
+    loading: query.loading && connection === undefined,
+    loadingMore: query.loading && connection !== undefined,
     error: query.error,
     hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
     loadMore,
