@@ -7,7 +7,9 @@ import { findManyOperationFactory } from 'test/integration/graphql/utils/find-ma
 import { findOneOperationFactory } from 'test/integration/graphql/utils/find-one-operation-factory.util';
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import {
+  cleanupMyahInboxTask7Fixture,
   seedMyahInboxTask7Fixture,
+  type MyahInboxTask7CleanupEvidence,
   type MyahInboxTask7Fixture,
 } from 'test/integration/myah-inbox/utils/seed-myah-inbox-task-7-fixture.util';
 
@@ -145,22 +147,53 @@ const fetchNativeMessages = async (token: string, threadId: string) => {
   );
 };
 
+const expectFixtureAbsent = (
+  cleanupEvidence: MyahInboxTask7CleanupEvidence,
+) => {
+  expect(cleanupEvidence).toEqual({
+    fixtureGraphqlRecordsRemaining: [],
+    fixtureChannelIdsRemaining: [],
+    foreignCreatorRemaining: false,
+  });
+};
+
+describe('Myah Inbox Task 7 fixture failure cleanup', () => {
+  it('removes every partially seeded fixture resource after setup fails', async () => {
+    const operatorAccessToken = APPLE_JANE_ADMIN_ACCESS_TOKEN;
+    const injectedFailure = new Error('Injected Task 7 seed failure');
+
+    try {
+      await seedMyahInboxTask7Fixture({
+        operatorAccessToken,
+        afterNativeRecordsSeeded: () => {
+          throw injectedFailure;
+        },
+      });
+      throw new Error('Expected Task 7 fixture seeding to fail');
+    } catch (error) {
+      expect(error).toBe(injectedFailure);
+    } finally {
+      expectFixtureAbsent(
+        await cleanupMyahInboxTask7Fixture({ operatorAccessToken }),
+      );
+    }
+  });
+});
+
 describe('Myah Inbox Task 7 isolated integration', () => {
+  let cleanupFixture: () => Promise<MyahInboxTask7CleanupEvidence>;
   let fixture: MyahInboxTask7Fixture;
   let operatorAccessToken: string;
 
   beforeAll(async () => {
     operatorAccessToken = APPLE_JANE_ADMIN_ACCESS_TOKEN;
+    cleanupFixture = () =>
+      cleanupMyahInboxTask7Fixture({ operatorAccessToken });
     fixture = await seedMyahInboxTask7Fixture({ operatorAccessToken });
   });
 
   afterAll(async () => {
-    if (!fixture) {
-      return;
-    }
-    const cleanupEvidence = await fixture.cleanup();
-
-    expect(cleanupEvidence.fixtureChannelIdsRemaining).toEqual([]);
+    expectFixtureAbsent(await cleanupFixture());
   });
 
   it('keeps tied-timestamp cursor pages stable and filters linked, unmatched, owner, campaign, and state queues', async () => {
@@ -222,10 +255,15 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       search: fixture.markers.prefix,
     });
 
-    expect(linked.edges.length).toBeGreaterThan(0);
-    expect(
-      linked.edges.every(({ node }) => node.creator?.id === fixture.creatorId),
-    ).toBe(true);
+    expect(linked.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.hiddenVisibleAfter,
+      fixture.threadIds.hiddenVisibleBefore,
+      fixture.threadIds.tiedLinked,
+      fixture.threadIds.sharedFallback,
+      fixture.threadIds.owner,
+      fixture.threadIds.draft,
+      fixture.threadIds.subject,
+    ]);
     expect(unmatched.edges.map(({ node }) => node.id)).toEqual([
       fixture.threadIds.tiedUnmatched,
     ]);

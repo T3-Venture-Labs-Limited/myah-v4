@@ -537,9 +537,9 @@
 
   Observed on 2026-07-24 against the isolated MYAH-212 runtime:
 
-  - Task 7 integration passed 3/3 cases, including tied cursor pages, native visibility/masking parity, search-oracle denial, relation validation, reassignment, draft CAS conflict, Tasks/Notes relations, and unchanged Message count.
+  - Task 7 integration passed 4/4 cases, including partial-seed cleanup; exact Creator-linked, Unmatched, Me, Unassigned, and Campaign fixture IDs; tied and hidden-row cursor pages; native visibility/masking parity; search-oracle denial; relation validation; reassignment; draft CAS conflict; Tasks/Notes relations; and unchanged Message count. The nonempty hidden-window page retains its final edge cursor; only its exhausted empty follow-up page has `endCursor=null`.
   - Browser-real evidence covered native thread/history selection; Inbox and Unmatched queues; Me, Unassigned, Campaign, and state filters; search; 50-to-56 cursor pagination; linking an Unmatched thread; Campaign/owner/state/snooze saves; Task and Note creation; owner draft save; and a second authenticated session's visible stale conflict.
-  - Proposal generation alone used a one-shot interception scoped to `GenerateMyahInboxReplyProposal` on the local GraphQL endpoint. Apply changed only the local editor, interception was removed, and explicit Save used the real revision-protected GraphQL mutation. Task 5's fake-model integration separately proves server orchestration and unchanged Message count.
+  - Proposal generation alone used a one-shot interception scoped to `GenerateMyahInboxReplyProposal` on the local GraphQL endpoint. Apply changed only the local editor, interception was removed, and explicit Save used the real revision-protected GraphQL mutation. A separate hermetic integration boots its own Nest app, invokes the actual resolver and tool through one fake-model proposal service, counts Messages through the same datastore, and observes zero injected send/provider-dispatch/persistence calls.
   - Keyboard ArrowDown moved DOM focus and `aria-selected`; save/conflict statuses were announced; the 390x844 Context view exposed triage, Tasks/Notes, draft, and proposal controls without obstruction.
   - Network capture showed local API GraphQL requests only. No send, provider, or external-model request occurred.
 

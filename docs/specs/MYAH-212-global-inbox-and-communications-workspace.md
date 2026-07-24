@@ -188,11 +188,11 @@ MYAH-224 defers sidebar-agent triage mutation tools. MYAH-225 defers sidebar-age
 
 - [x] Native `/myah/inbox` three-panel desktop and responsive Context layouts rendered inside the existing Myah shell.
 - [x] Isolated integration matched Inbox rows and native selected-thread reads across owner, `SHARE_EVERYTHING`, `SUBJECT`, `METADATA`, and hidden/deleted-association cases, including masked-search denial.
-- [x] Integration and browser-real checks covered Creator-linked/Unmatched, Me/Unassigned, Campaign, state, search, and stable tied-timestamp and 50-to-56 cursor pagination.
+- [x] Integration and browser-real checks covered exact fixture ID sets for Creator-linked, Unmatched, Me, Unassigned, and Campaign, plus state and search filters and stable tied-timestamp and 50-to-56 cursor pagination. The nonempty hidden-window page returns its final edge cursor; its exhausted empty follow-up returns `endCursor=null`.
 - [x] Browser-real triage linked an Unmatched thread and saved Creator, Campaign, owner, state, and snooze; native Tasks and Notes were created and rendered in Creator context.
 - [x] Browser-real owner Save persisted a shared draft; a second authenticated session received a visible revision conflict without overwriting the newer body.
-- [x] Task 5 fake-model integration proved proposal orchestration and unchanged Message count. Browser proposal generation was explicitly intercepted only for the local `GenerateMyahInboxReplyProposal` operation; Apply was local and explicit Save was real.
-- [x] Focused service/integration suites covered workspace-scoped relations, permission/owner gates, reply eligibility, revision checks, and bounded inputs.
+- [x] A hermetic fake-model integration booted its own Nest app and invoked the actual Inbox resolver and tool through one proposal service. The same app's datastore had an unchanged Message count, and its injected send/provider-dispatch/persistence services recorded zero calls. Browser proposal generation was intercepted only for the local `GenerateMyahInboxReplyProposal` operation; Apply was local and explicit Save was real.
+- [x] Focused service/integration suites covered workspace-scoped relations, permission/owner gates, reply eligibility, revision checks, bounded inputs, and cleanup after injected partial seed failure. Teardown verified every fixture GraphQL record, MessageChannel, and foreign-workspace Creator absent.
 - [x] Integration asserted unchanged native Message count; browser network capture contained local GraphQL only, with no send, provider, external-model, credential, or other external request.
 - [x] Browser-real ArrowDown focus/selection, labelled controls, announced save/conflict statuses, Task/Note creation, and 390x844 responsive Context access were observed.
 - [x] Task 3–7 focused suites, GraphQL generation against the isolated API, both typechecks, targeted formatting, and front/server diff lint passed.

@@ -79,8 +79,13 @@ const channelIds = {
   owner: '21270000-5004-4000-8000-000000000004',
 } as const;
 
-type MyahInboxTask7CleanupEvidence = {
+export type MyahInboxTask7CleanupEvidence = {
+  fixtureGraphqlRecordsRemaining: Array<{
+    objectName: string;
+    id: string;
+  }>;
   fixtureChannelIdsRemaining: string[];
+  foreignCreatorRemaining: boolean;
 };
 
 export type MyahInboxTask7Fixture = {
@@ -93,11 +98,11 @@ export type MyahInboxTask7Fixture = {
   markers: typeof markers;
   timestamps: typeof timestamps;
   threadIds: typeof threadIds;
-  cleanup: () => Promise<MyahInboxTask7CleanupEvidence>;
 };
 
 type SeedMyahInboxTask7FixtureArgs = {
   operatorAccessToken: string;
+  afterNativeRecordsSeeded?: () => void | Promise<void>;
 };
 
 type MessageFixture = {
@@ -250,6 +255,30 @@ const messageFixtures: MessageFixture[] = [
     receivedAt: timestamps.hiddenVisibleBefore,
   },
 ];
+const graphqlFixtureRecords = [
+  ...messageFixtures.flatMap((message) => [
+    ...(message.deletedAssociation
+      ? []
+      : [
+          {
+            objectName: 'messageChannelMessageAssociation',
+            id: message.associationId,
+          },
+        ]),
+    { objectName: 'messageParticipant', id: message.participantId },
+    { objectName: 'message', id: message.id },
+  ]),
+  ...Object.values(threadIds).map((id) => ({
+    objectName: 'messageThread',
+    id,
+  })),
+  { objectName: 'taskTarget', id: taskTargetId },
+  { objectName: 'noteTarget', id: noteTargetId },
+  { objectName: 'task', id: taskId },
+  { objectName: 'note', id: noteId },
+  { objectName: 'campaign', id: campaignId },
+  { objectName: 'creator', id: creatorId },
+] as const;
 
 const updateThreadMutation = gql`
   mutation SeedTask7UpdateThread($input: UpdateMyahInboxThreadInput!) {
@@ -345,7 +374,7 @@ type AppModuleRef = {
   providers: Map<unknown, ProviderWrapper>;
 };
 
-const getDomainService = <T>(serviceName: string): T => {
+export const getDomainService = <T>(serviceName: string): T => {
   const appContainer = (
     global.app as typeof global.app & {
       container: { getModules: () => Map<unknown, AppModuleRef> };
@@ -495,6 +524,37 @@ const seedNativeRecords = async (operatorAccessToken: string) => {
   }
 };
 
+const fixtureRecordExists = async ({
+  objectName,
+  id,
+  token,
+}: {
+  objectName: string;
+  id: string;
+  token: string;
+}) => {
+  const response = await makeGraphqlAPIRequest(
+    findOneOperationFactory({
+      objectMetadataSingularName: objectName,
+      gqlFields: 'id',
+      filter: { id: { eq: id } },
+    }),
+    token,
+  );
+  const errors = response.body.errors as Array<{ message: string }> | undefined;
+  const unexpectedError = errors?.find(
+    ({ message }) => message !== 'Record not found',
+  );
+
+  if (unexpectedError) {
+    throw new Error(
+      `Could not verify Task 7 ${objectName} fixture: ${unexpectedError.message}`,
+    );
+  }
+
+  return Boolean(response.body.data?.[objectName]);
+};
+
 const destroyRecord = async ({
   objectName,
   id,
@@ -504,16 +564,7 @@ const destroyRecord = async ({
   id: string;
   token: string;
 }) => {
-  const existing = await makeGraphqlAPIRequest(
-    findOneOperationFactory({
-      objectMetadataSingularName: objectName,
-      gqlFields: 'id',
-      filter: { id: { eq: id } },
-    }),
-    token,
-  );
-
-  if (!existing.body.data?.[objectName]) {
+  if (!(await fixtureRecordExists({ objectName, id, token }))) {
     return;
   }
 
@@ -591,92 +642,210 @@ const destroyForeignCreator = async () => {
     await creatorRepository.delete({ id: foreignCreatorId });
   }, buildSystemAuthContext(SEED_YCOMBINATOR_WORKSPACE_ID));
 };
+const foreignCreatorExists = async () => {
+  const workspaceOrmManager = getDomainService<GlobalWorkspaceOrmManager>(
+    'GlobalWorkspaceOrmManager',
+  );
 
-const cleanupFixture = async ({
+  return workspaceOrmManager.executeInWorkspaceContext(async () => {
+    const creatorRepository =
+      await workspaceOrmManager.getRepository<ForeignCreatorRecord>(
+        SEED_YCOMBINATOR_WORKSPACE_ID,
+        'creator',
+        { shouldBypassPermissionChecks: true },
+      );
+
+    return Boolean(
+      await creatorRepository.findOne({ where: { id: foreignCreatorId } }),
+    );
+  }, buildSystemAuthContext(SEED_YCOMBINATOR_WORKSPACE_ID));
+};
+
+class Task7FixtureCleanupError extends Error {
+  readonly errors: Error[];
+
+  constructor(errors: Error[]) {
+    super(
+      [
+        'Task 7 fixture cleanup did not complete',
+        ...errors.map((error) => error.message),
+      ].join('\n'),
+    );
+    this.name = 'Task7FixtureCleanupError';
+    this.errors = errors;
+  }
+}
+
+const collectCleanupError = async (
+  errors: Error[],
+  label: string,
+  operation: () => Promise<void>,
+) => {
+  try {
+    await operation();
+  } catch (error) {
+    errors.push(
+      new Error(
+        `${label}: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    );
+  }
+};
+
+export const cleanupMyahInboxTask7Fixture = async ({
   operatorAccessToken,
 }: {
   operatorAccessToken: string;
 }): Promise<MyahInboxTask7CleanupEvidence> => {
-  for (const message of [...messageFixtures].reverse()) {
-    if (!message.deletedAssociation) {
-      await destroyRecord({
-        objectName: 'messageChannelMessageAssociation',
-        id: message.associationId,
-        token: operatorAccessToken,
-      });
-    }
-    await destroyRecord({
-      objectName: 'messageParticipant',
-      id: message.participantId,
-      token: operatorAccessToken,
-    });
-    await destroyRecord({
-      objectName: 'message',
-      id: message.id,
-      token: operatorAccessToken,
-    });
+  const cleanupErrors: Error[] = [];
+
+  for (const { objectName, id } of graphqlFixtureRecords) {
+    await collectCleanupError(
+      cleanupErrors,
+      `destroy ${objectName} ${id}`,
+      () => destroyRecord({ objectName, id, token: operatorAccessToken }),
+    );
   }
 
-  for (const id of Object.values(threadIds).reverse()) {
-    await destroyRecord({
-      objectName: 'messageThread',
-      id,
-      token: operatorAccessToken,
-    });
-  }
-
-  for (const [objectName, id] of [
-    ['taskTarget', taskTargetId],
-    ['noteTarget', noteTargetId],
-    ['task', taskId],
-    ['note', noteId],
-    ['campaign', campaignId],
-    ['creator', creatorId],
-  ]) {
-    await destroyRecord({ objectName, id, token: operatorAccessToken });
-  }
-
-  await destroyForeignCreator();
-
-  const channelService = getDomainService<MessageChannelMetadataService>(
-    'MessageChannelMetadataService',
+  await collectCleanupError(
+    cleanupErrors,
+    `destroy foreign Creator ${foreignCreatorId}`,
+    destroyForeignCreator,
   );
 
-  for (const { id } of [...channelFixtures].reverse()) {
-    if (
-      await channelService.findById({
-        id,
-        workspaceId: SEED_APPLE_WORKSPACE_ID,
-      })
-    ) {
-      await channelService.delete({
-        id,
-        workspaceId: SEED_APPLE_WORKSPACE_ID,
-      });
+  let channelService: MessageChannelMetadataService | undefined;
+
+  try {
+    channelService = getDomainService<MessageChannelMetadataService>(
+      'MessageChannelMetadataService',
+    );
+  } catch (error) {
+    cleanupErrors.push(
+      new Error(
+        `resolve MessageChannel cleanup service: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      ),
+    );
+  }
+
+  if (channelService) {
+    for (const { id } of [...channelFixtures].reverse()) {
+      await collectCleanupError(
+        cleanupErrors,
+        `destroy MessageChannel ${id}`,
+        async () => {
+          if (
+            await channelService.findById({
+              id,
+              workspaceId: SEED_APPLE_WORKSPACE_ID,
+            })
+          ) {
+            await channelService.delete({
+              id,
+              workspaceId: SEED_APPLE_WORKSPACE_ID,
+            });
+          }
+        },
+      );
     }
+  }
+
+  const fixtureGraphqlRecordsRemaining: Array<{
+    objectName: string;
+    id: string;
+  }> = [];
+
+  for (const { objectName, id } of graphqlFixtureRecords) {
+    await collectCleanupError(
+      cleanupErrors,
+      `verify ${objectName} ${id} absent`,
+      async () => {
+        if (
+          await fixtureRecordExists({
+            objectName,
+            id,
+            token: operatorAccessToken,
+          })
+        ) {
+          fixtureGraphqlRecordsRemaining.push({ objectName, id });
+        }
+      },
+    );
   }
 
   const fixtureChannelIdsRemaining: string[] = [];
 
-  for (const { id } of channelFixtures) {
-    if (
-      await channelService.findById({
-        id,
-        workspaceId: SEED_APPLE_WORKSPACE_ID,
-      })
-    ) {
-      fixtureChannelIdsRemaining.push(id);
+  if (channelService) {
+    for (const { id } of channelFixtures) {
+      await collectCleanupError(
+        cleanupErrors,
+        `verify MessageChannel ${id} absent`,
+        async () => {
+          if (
+            await channelService.findById({
+              id,
+              workspaceId: SEED_APPLE_WORKSPACE_ID,
+            })
+          ) {
+            fixtureChannelIdsRemaining.push(id);
+          }
+        },
+      );
     }
   }
 
-  return { fixtureChannelIdsRemaining };
+  let foreignCreatorRemaining = false;
+
+  await collectCleanupError(
+    cleanupErrors,
+    `verify foreign Creator ${foreignCreatorId} absent`,
+    async () => {
+      foreignCreatorRemaining = await foreignCreatorExists();
+    },
+  );
+
+  if (fixtureGraphqlRecordsRemaining.length > 0) {
+    cleanupErrors.push(
+      new Error(
+        `Task 7 GraphQL fixtures remain: ${fixtureGraphqlRecordsRemaining
+          .map(({ objectName, id }) => `${objectName}:${id}`)
+          .join(', ')}`,
+      ),
+    );
+  }
+  if (fixtureChannelIdsRemaining.length > 0) {
+    cleanupErrors.push(
+      new Error(
+        `Task 7 MessageChannels remain: ${fixtureChannelIdsRemaining.join(
+          ', ',
+        )}`,
+      ),
+    );
+  }
+  if (foreignCreatorRemaining) {
+    cleanupErrors.push(
+      new Error(`Task 7 foreign Creator remains: ${foreignCreatorId}`),
+    );
+  }
+  if (cleanupErrors.length > 0) {
+    throw new Task7FixtureCleanupError(cleanupErrors);
+  }
+
+  return {
+    fixtureGraphqlRecordsRemaining,
+    fixtureChannelIdsRemaining,
+    foreignCreatorRemaining,
+  };
 };
 
 export const seedMyahInboxTask7Fixture = async ({
   operatorAccessToken,
+  afterNativeRecordsSeeded,
 }: SeedMyahInboxTask7FixtureArgs): Promise<MyahInboxTask7Fixture> => {
   await createForeignCreator();
   await seedNativeRecords(operatorAccessToken);
+  await afterNativeRecordsSeeded?.();
   await ensureRecord({
     objectName: 'creator',
     gqlFields: 'id name email',
@@ -846,6 +1015,5 @@ export const seedMyahInboxTask7Fixture = async ({
     markers,
     timestamps,
     threadIds,
-    cleanup: () => cleanupFixture({ operatorAccessToken }),
   };
 };
