@@ -1,5 +1,9 @@
 import { ForbiddenException } from '@nestjs/common';
 import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
+import { validate } from 'class-validator';
+
+import { MYAH_INBOX_MAX_PAGE_SIZE } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
+import { MyahInboxThreadsInput } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
 import { CoreEngineModule } from 'src/engine/core-modules/core-engine.module';
@@ -74,6 +78,14 @@ describe('MyahInboxResolver', () => {
       resolver.myahInboxThreads({} as never, workspace as never, workspaceMemberId),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(listThreads).not.toHaveBeenCalled();
+  });
+
+  it('accepts oversized public page requests for the service clamp', async () => {
+    const input = Object.assign(new MyahInboxThreadsInput(), {
+      first: MYAH_INBOX_MAX_PAGE_SIZE + 1,
+    });
+
+    await expect(validate(input)).resolves.toEqual([]);
   });
 
   it('requires workspace, user, and custom permission guards', () => {

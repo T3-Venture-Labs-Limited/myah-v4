@@ -6,11 +6,8 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  Max,
   Min,
 } from 'class-validator';
-
-import { MYAH_INBOX_MAX_PAGE_SIZE } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 
 export enum MyahInboxQueue {
   CREATOR_LINKED = 'CREATOR_LINKED',
@@ -33,7 +30,6 @@ export class MyahInboxThreadsInput {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(MYAH_INBOX_MAX_PAGE_SIZE)
   first?: number;
 
   @Field(() => String, { nullable: true })
