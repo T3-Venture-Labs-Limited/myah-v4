@@ -62,6 +62,18 @@ const fieldPaths = [
     'source-page-on-brand-brain-link.field.ts',
   ]),
   `${creatorOps}/fields/owned-creators-on-workspace-member.field.ts`,
+  ...modules(`${creatorOps}/fields`, [
+    'creator-on-message-thread.field.ts',
+    'myah-campaign-on-message-thread.field.ts',
+    'inbox-owner-on-message-thread.field.ts',
+    'inbox-state-on-message-thread.field.ts',
+    'snoozed-until-on-message-thread.field.ts',
+    'myah-reply-draft-body-on-message-thread.field.ts',
+    'myah-reply-draft-revision-on-message-thread.field.ts',
+    'inbox-threads-on-creator.field.ts',
+    'inbox-threads-on-campaign.field.ts',
+    'owned-inbox-threads-on-workspace-member.field.ts',
+  ]),
 ];
 const viewPaths = [
   ...modules(`${brand}/views`, [

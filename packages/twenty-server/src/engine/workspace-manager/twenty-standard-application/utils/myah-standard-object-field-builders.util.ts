@@ -2419,6 +2419,28 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        inboxThreads: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'inboxThreads',
+            label: 'Inbox threads',
+            description: 'Inbox threads',
+            icon: 'IconMail',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'messageThread',
+            targetFieldName: 'myahCampaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         noteTargets: createStandardRelationFieldFlatMetadata({
           objectName: 'campaign',
           workspaceId: args.workspaceId,
@@ -4186,6 +4208,28 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        inboxThreads: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'inboxThreads',
+            label: 'Inbox threads',
+            description: 'Inbox threads',
+            icon: 'IconMail',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'messageThread',
+            targetFieldName: 'creator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         noteTargets: createStandardRelationFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
@@ -4236,4 +4280,4 @@ export const buildMyahStandardFlatFieldMetadatas = ({
       return {};
   }
 };
-export const MYAH_RELATION_FIELD_COUNT = 34;
+export const MYAH_RELATION_FIELD_COUNT = 36;

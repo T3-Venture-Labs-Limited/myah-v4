@@ -2,7 +2,7 @@ import { Command } from 'nest-commander';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { In, type DataSource } from 'typeorm';
 
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { MYAH_STANDARD_OBJECTS, STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 
@@ -34,6 +34,12 @@ const MYAH_ROLE_UNIVERSAL_IDENTIFIERS = new Set<string>([
   STANDARD_ROLE.brandBrainAdmin.universalIdentifier,
   STANDARD_ROLE.creatorOpsDefault.universalIdentifier,
 ]);
+
+const MYAH_NATIVE_OBJECT_FIELD_EXTENSION_UNIVERSAL_IDENTIFIERS =
+  new Set<string>([
+    STANDARD_OBJECTS.messageThread.universalIdentifier,
+    STANDARD_OBJECTS.workspaceMember.universalIdentifier,
+  ]);
 
 const LEGACY_MYAH_APPLICATION_UNIVERSAL_IDENTIFIERS = [
   '2f7d88d6-c6c9-4ed2-87e2-c1f9f13f3991',
@@ -156,13 +162,17 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         ({ universalIdentifier }) => universalIdentifier,
       ),
     );
+    const fieldOwnerObjectUniversalIdentifiers = new Set([
+      ...objectUniversalIdentifiers,
+      ...MYAH_NATIVE_OBJECT_FIELD_EXTENSION_UNIVERSAL_IDENTIFIERS,
+    ]);
     const standardFields = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     );
     const fieldUniversalIdentifiers = toUniversalIdentifiers(
       standardFields.filter(
         (field) =>
-          objectUniversalIdentifiers.has(
+          fieldOwnerObjectUniversalIdentifiers.has(
             field.objectMetadataUniversalIdentifier ?? '',
           ) ||
           objectUniversalIdentifiers.has(

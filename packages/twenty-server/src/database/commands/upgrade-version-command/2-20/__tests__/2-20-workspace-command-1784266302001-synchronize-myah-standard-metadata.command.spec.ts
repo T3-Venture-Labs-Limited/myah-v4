@@ -2,6 +2,7 @@ import {
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
+import { isDefined } from 'twenty-shared/utils';
 import type { DataSource } from 'typeorm';
 
 
@@ -16,6 +17,26 @@ import type { WorkspaceMetadataVersionService } from 'src/engine/metadata-module
 import type { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 
+type TwentyStandardApplicationAllFlatEntityMapsModule = {
+  computeTwentyStandardApplicationAllFlatEntityMaps: typeof computeTwentyStandardApplicationAllFlatEntityMaps;
+};
+
+jest.mock(
+  'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant',
+  () => {
+    const actual =
+      jest.requireActual<TwentyStandardApplicationAllFlatEntityMapsModule>(
+        'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant',
+      );
+
+    return {
+      ...actual,
+      computeTwentyStandardApplicationAllFlatEntityMaps: jest.fn(
+        actual.computeTwentyStandardApplicationAllFlatEntityMaps,
+      ),
+    };
+  },
+);
 const WORKSPACE_ID = '20202020-0000-0000-0000-000000000001';
 const STANDARD_APPLICATION_ID = '20202020-0000-0000-0000-000000000002';
 const STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER = '20202020-0000-0000-0000-000000000003';
@@ -32,6 +53,17 @@ type StandardFieldIdentifiers = Record<
   string,
   { universalIdentifier: string }
 >;
+
+const MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS = {
+  creator: '2bab4cc0-d1d8-4394-b506-9c49a8b414a5',
+  myahCampaign: 'f7e38f36-1901-40df-b6c1-cfff373f472f',
+  inboxOwner: 'eb7f2495-3cc2-4db5-9744-1172ab8a44e8',
+  inboxState: '5047d99f-a82c-4a68-ad39-efd9665a182c',
+  snoozedUntil: 'ff39959f-533d-4a41-b022-2744628ada69',
+  myahReplyDraftBody: '8ec8253f-9b54-46d5-9b55-ac1829c10f4f',
+  myahReplyDraftRevision: 'dfcab7eb-b140-48b7-9252-ed4b9b0d5789',
+  ownedInboxThreads: '664b677e-8625-4442-bc1c-c836f541d0d1',
+} as const;
 
 describe('SynchronizeMyahStandardMetadataCommand', () => {
   let command: SynchronizeMyahStandardMetadataCommand;
@@ -199,6 +231,184 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         noteTargetFields.targetBrandBrainPage.universalIdentifier
       ],
     ).toBeDefined();
+  });
+
+  it('includes native MessageThread and WorkspaceMember Inbox field extensions without native object operations', async () => {
+    const actualComputeTwentyStandardApplicationAllFlatEntityMaps =
+      jest.requireActual<TwentyStandardApplicationAllFlatEntityMapsModule>(
+        'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant',
+      ).computeTwentyStandardApplicationAllFlatEntityMaps;
+
+    jest
+      .mocked(computeTwentyStandardApplicationAllFlatEntityMaps)
+      .mockImplementationOnce((args) => {
+        const computed =
+          actualComputeTwentyStandardApplicationAllFlatEntityMaps(args);
+        const fieldMaps =
+          computed.allFlatEntityMaps.flatFieldMetadataMaps;
+        const template =
+          fieldMaps.byUniversalIdentifier[
+            STANDARD_OBJECTS.messageThread.fields.subject.universalIdentifier
+          ];
+
+        if (!isDefined(template)) {
+          throw new Error('Expected the native MessageThread subject field');
+        }
+
+        const messageThreadUniversalIdentifier =
+          STANDARD_OBJECTS.messageThread.universalIdentifier;
+        const workspaceMemberUniversalIdentifier =
+          STANDARD_OBJECTS.workspaceMember.universalIdentifier;
+        const inboxFields = [
+          {
+            universalIdentifier:
+              MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.creator,
+            objectMetadataUniversalIdentifier:
+              messageThreadUniversalIdentifier,
+            relationTargetObjectMetadataUniversalIdentifier:
+              MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+          },
+          {
+            universalIdentifier:
+              MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.myahCampaign,
+            objectMetadataUniversalIdentifier:
+              messageThreadUniversalIdentifier,
+            relationTargetObjectMetadataUniversalIdentifier:
+              MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+          },
+          {
+            universalIdentifier:
+              MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.inboxOwner,
+            objectMetadataUniversalIdentifier:
+              messageThreadUniversalIdentifier,
+            relationTargetObjectMetadataUniversalIdentifier:
+              workspaceMemberUniversalIdentifier,
+          },
+          {
+            universalIdentifier:
+              MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.inboxState,
+            objectMetadataUniversalIdentifier:
+              messageThreadUniversalIdentifier,
+          },
+          {
+            universalIdentifier:
+              MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.snoozedUntil,
+            objectMetadataUniversalIdentifier:
+              messageThreadUniversalIdentifier,
+          },
+          {
+            universalIdentifier:
+              MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.myahReplyDraftBody,
+            objectMetadataUniversalIdentifier:
+              messageThreadUniversalIdentifier,
+          },
+          {
+            universalIdentifier:
+              MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.myahReplyDraftRevision,
+            objectMetadataUniversalIdentifier:
+              messageThreadUniversalIdentifier,
+          },
+          {
+            universalIdentifier:
+              MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.ownedInboxThreads,
+            objectMetadataUniversalIdentifier:
+              workspaceMemberUniversalIdentifier,
+            relationTargetObjectMetadataUniversalIdentifier:
+              messageThreadUniversalIdentifier,
+          },
+        ];
+
+        for (const [index, inboxField] of inboxFields.entries()) {
+          const id = `20202020-0000-4000-8000-${String(index + 10).padStart(12, '0')}`;
+          const field = {
+            ...template,
+            ...inboxField,
+            id,
+            name: `inboxField${index}`,
+            relationTargetFieldMetadataUniversalIdentifier: null,
+            universalSettings: null,
+          };
+
+          fieldMaps.byUniversalIdentifier[field.universalIdentifier] = field;
+          fieldMaps.universalIdentifierById[id] = field.universalIdentifier;
+        }
+
+        return computed;
+      });
+
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const fieldMetadataMaps = migrationInput.fromToAllFlatEntityMaps
+      .flatFieldMetadataMaps as {
+      from: {
+        byUniversalIdentifier: Record<string, TestFlatEntity | undefined>;
+      };
+      to: {
+        byUniversalIdentifier: Record<string, TestFlatEntity | undefined>;
+      };
+    };
+    const fieldMetadataOperations = {
+      flatEntityToCreate: Object.values(
+        fieldMetadataMaps.to.byUniversalIdentifier,
+      )
+        .filter(isDefined)
+        .filter(
+          ({ universalIdentifier }) =>
+            fieldMetadataMaps.from.byUniversalIdentifier[
+              universalIdentifier
+            ] === undefined,
+        ),
+    };
+
+    expect(
+      fieldMetadataOperations.flatEntityToCreate.map(
+        ({ universalIdentifier }) => universalIdentifier,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.creator,
+        MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.inboxOwner,
+        MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS.myahReplyDraftRevision,
+      ]),
+    );
+
+    const objectMetadataMaps =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps;
+    const fromObjectUniversalIdentifiers = Object.keys(
+      objectMetadataMaps.from.byUniversalIdentifier,
+    );
+    const toObjectUniversalIdentifiers = Object.keys(
+      objectMetadataMaps.to.byUniversalIdentifier,
+    );
+    const objectMetadataOperations = {
+      flatEntityToCreate: toObjectUniversalIdentifiers.filter(
+        (universalIdentifier) =>
+          objectMetadataMaps.from.byUniversalIdentifier[universalIdentifier] ===
+          undefined,
+      ),
+      flatEntityToUpdate: toObjectUniversalIdentifiers.filter(
+        (universalIdentifier) =>
+          objectMetadataMaps.from.byUniversalIdentifier[universalIdentifier] !==
+          undefined,
+      ),
+      flatEntityToDelete: fromObjectUniversalIdentifiers.filter(
+        (universalIdentifier) =>
+          objectMetadataMaps.to.byUniversalIdentifier[universalIdentifier] ===
+          undefined,
+      ),
+    };
+    const nativeObjectUniversalIdentifiers = [
+      STANDARD_OBJECTS.messageThread.universalIdentifier,
+      STANDARD_OBJECTS.workspaceMember.universalIdentifier,
+    ];
+
+    for (const operation of Object.values(objectMetadataOperations)) {
+      expect(operation).not.toEqual(
+        expect.arrayContaining(nativeObjectUniversalIdentifiers),
+      );
+    }
   });
 
   it('provides isolated retained standard objects as migration dependencies', async () => {

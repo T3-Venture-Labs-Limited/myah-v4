@@ -550,6 +550,9 @@ export const MYAH_STANDARD_OBJECTS = {
       taskTargets: {
         universalIdentifier: '0d27b024-e6c3-4b61-9d7f-f9c4c69760b7',
       },
+      inboxThreads: {
+        universalIdentifier: '07c0459e-9426-40a6-acdb-3c86824f0d47',
+      },
     },
     indexes: {},
     views: {
@@ -903,6 +906,9 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       campaignCreators: {
         universalIdentifier: '3b9494ff-0fe7-5492-8b69-c515f79ea437',
+      },
+      inboxThreads: {
+        universalIdentifier: '46def870-48cb-4348-b1e3-50be5104c046',
       },
       patreonUrl: {
         universalIdentifier: 'd68083f5-0db1-5c77-ac35-640a2fdb1f3f',
