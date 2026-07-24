@@ -1,9 +1,13 @@
 import { type LanguageModel, type ToolSet } from 'ai';
+import request from 'supertest';
 
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
 import { MyahInboxResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox.resolver';
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
+import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
+import { SendEmailService } from 'src/modules/messaging/message-outbound-manager/services/send-email.service';
+import { SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
 
 jest.mock(
   'src/engine/core-modules/auth/storage/workspace-auth-context.storage',
@@ -50,13 +54,107 @@ const executeProposalTool = async (toolSet: ToolSet) => {
   });
 };
 
+const serverUrl = 'http://127.0.0.1:3072';
+const serverClient = request(serverUrl);
+
+const getOperatorAccessToken = async () => {
+  const origin = serverUrl;
+  const loginResponse = await serverClient.post('/metadata').send({
+    query: `
+      mutation Login($email: String!, $password: String!, $origin: String!) {
+        getLoginTokenFromCredentials(
+          email: $email
+          password: $password
+          origin: $origin
+        ) {
+          loginToken {
+            token
+          }
+        }
+      }
+    `,
+    variables: {
+      email: 'jane.austen@apple.dev',
+      password: 'tim@apple.dev',
+      origin,
+    },
+  });
+
+  expect(loginResponse.status).toBe(200);
+  expect(loginResponse.body.errors).toBeUndefined();
+
+  const tokenResponse = await serverClient.post('/metadata').send({
+    query: `
+      mutation Exchange($loginToken: String!, $origin: String!) {
+        getAuthTokensFromLoginToken(
+          loginToken: $loginToken
+          origin: $origin
+        ) {
+          tokens {
+            accessOrWorkspaceAgnosticToken {
+              token
+            }
+          }
+        }
+      }
+    `,
+    variables: {
+      loginToken:
+        loginResponse.body.data.getLoginTokenFromCredentials.loginToken.token,
+      origin,
+    },
+  });
+
+  expect(tokenResponse.status).toBe(200);
+  expect(tokenResponse.body.errors).toBeUndefined();
+
+  return tokenResponse.body.data.getAuthTokensFromLoginToken.tokens
+    .accessOrWorkspaceAgnosticToken.token as string;
+};
+
+const countNativeMessages = async (accessToken: string) => {
+  let after: string | undefined;
+  let count = 0;
+  let hasNextPage: boolean;
+
+  do {
+    const response = await serverClient
+      .post('/graphql')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        query: `
+          query Messages($first: Int, $after: String) {
+            messages(first: $first, after: $after) {
+              edges {
+                node {
+                  id
+                }
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+        `,
+        variables: { first: 100, after },
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.errors).toBeUndefined();
+
+    count += response.body.data.messages.edges.length;
+    hasNextPage = response.body.data.messages.pageInfo.hasNextPage;
+    after = response.body.data.messages.pageInfo.endCursor ?? undefined;
+  } while (hasNextPage);
+
+  return count;
+};
+
 describe('Myah Inbox reply proposal direct/tool integration', () => {
-  it('returns the same validated proposal through GraphQL and the sidebar tool without changing the draft revision', async () => {
-    let draftRevision = 7;
-    const draftRepositoryUpdate = jest.fn(() => {
-      draftRevision += 1;
-    });
-    const messageProviderSend = jest.fn();
+  it('invokes the shared resolver/service graph without sending, calling a provider, persisting a Message, or changing Message count', async () => {
+    const operatorAccessToken = await getOperatorAccessToken();
+    const beforeMessageCount = await countNativeMessages(operatorAccessToken);
     const doGenerate = jest.fn().mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify(proposal) }],
       finishReason: { unified: 'stop', raw: 'stop' },
@@ -141,6 +239,7 @@ describe('Myah Inbox reply proposal direct/tool integration', () => {
         wrapModel: jest.fn(({ model: inputModel }) => inputModel),
       } as never,
     );
+    const toolService = new MyahInboxToolWorkspaceService(proposalService);
     const mutationService = {
       updateMyahInboxThread: jest.fn(),
       saveMyahInboxDraft: jest.fn(),
@@ -150,7 +249,22 @@ describe('Myah Inbox reply proposal direct/tool integration', () => {
       mutationService as never,
       proposalService,
     );
-    const toolService = new MyahInboxToolWorkspaceService(proposalService);
+    const proposalServiceInvocation = jest.spyOn(
+      proposalService,
+      'generateReplyProposal',
+    );
+    const sendEmailBoundary = jest.spyOn(
+      SendEmailService.prototype,
+      'sendComposedEmail',
+    );
+    const providerDispatchBoundary = jest.spyOn(
+      MessagingMessageOutboundService.prototype,
+      'sendMessage',
+    );
+    const messagePersistenceBoundary = jest.spyOn(
+      SentMessagePersistenceService.prototype,
+      'persistSentMessage',
+    );
 
     jest
       .mocked(getWorkspaceAuthContext)
@@ -177,6 +291,8 @@ describe('Myah Inbox reply proposal direct/tool integration', () => {
     } as never);
     const toolResult = await executeProposalTool(toolSet);
 
+    const afterMessageCount = await countNativeMessages(operatorAccessToken);
+
     expect(directResult).toEqual(proposal);
     expect(toolResult).toEqual({
       success: true,
@@ -184,11 +300,13 @@ describe('Myah Inbox reply proposal direct/tool integration', () => {
       result: proposal,
     });
     expect(toolResult.result).toEqual(directResult);
-    expect(draftRevision).toBe(7);
-    expect(draftRepositoryUpdate).not.toHaveBeenCalled();
+    expect(proposalServiceInvocation).toHaveBeenCalledTimes(2);
     expect(mutationService.updateMyahInboxThread).not.toHaveBeenCalled();
     expect(mutationService.saveMyahInboxDraft).not.toHaveBeenCalled();
-    expect(messageProviderSend).not.toHaveBeenCalled();
+    expect(sendEmailBoundary).not.toHaveBeenCalled();
+    expect(providerDispatchBoundary).not.toHaveBeenCalled();
+    expect(messagePersistenceBoundary).not.toHaveBeenCalled();
+    expect(afterMessageCount).toBe(beforeMessageCount);
     expect(doGenerate).toHaveBeenCalledTimes(2);
   });
 });

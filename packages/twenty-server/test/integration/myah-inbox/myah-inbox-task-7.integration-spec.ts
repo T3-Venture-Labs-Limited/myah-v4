@@ -154,6 +154,15 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     fixture = await seedMyahInboxTask7Fixture({ operatorAccessToken });
   });
 
+  afterAll(async () => {
+    if (!fixture) {
+      return;
+    }
+    const cleanupEvidence = await fixture.cleanup();
+
+    expect(cleanupEvidence.fixtureChannelIdsRemaining).toEqual([]);
+  });
+
   it('keeps tied-timestamp cursor pages stable and filters linked, unmatched, owner, campaign, and state queues', async () => {
     const firstPage = await fetchInbox(operatorAccessToken, {
       first: 1,
@@ -200,7 +209,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     const unassigned = await fetchInbox(operatorAccessToken, {
       first: 20,
       owner: 'UNASSIGNED',
-      search: fixture.markers.prefix,
+      campaignId: fixture.campaignId,
     });
     const campaign = await fetchInbox(operatorAccessToken, {
       first: 20,
@@ -220,20 +229,19 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     expect(unmatched.edges.map(({ node }) => node.id)).toEqual([
       fixture.threadIds.tiedUnmatched,
     ]);
-    expect(
-      mine.edges.every(
-        ({ node }) =>
-          node.inboxOwner?.id === WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
-      ),
-    ).toBe(true);
-    expect(unassigned.edges.every(({ node }) => node.inboxOwner === null)).toBe(
-      true,
-    );
-    expect(
-      campaign.edges.every(
-        ({ node }) => node.campaign?.id === fixture.campaignId,
-      ),
-    ).toBe(true);
+    expect(mine.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.owner,
+      fixture.threadIds.draft,
+    ]);
+    expect(unassigned.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.sharedFallback,
+      fixture.threadIds.metadata,
+    ]);
+    expect(campaign.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.tiedLinked,
+      fixture.threadIds.sharedFallback,
+      fixture.threadIds.draft,
+    ]);
     expect(waiting.edges.map(({ node }) => node.id)).toContain(
       fixture.threadIds.tiedUnmatched,
     );
@@ -322,6 +330,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       fixture.markers.metadataMaskedBody,
       fixture.markers.hiddenSubject,
       fixture.markers.hiddenBody,
+      fixture.markers.hiddenOnly,
     ]) {
       const result = await fetchInbox(operatorAccessToken, {
         first: 20,
@@ -343,6 +352,52 @@ describe('Myah Inbox Task 7 isolated integration', () => {
         fixture.threadIds.sharedFallback,
       ),
     ).toHaveLength(1);
+    expect(
+      await fetchNativeMessages(
+        operatorAccessToken,
+        fixture.threadIds.hiddenOnly,
+      ),
+    ).toEqual([]);
+
+    const hiddenWindow = await fetchInbox(operatorAccessToken, {
+      first: 20,
+      search: fixture.markers.hiddenWindow,
+    });
+    const hiddenWindowFirstPage = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      search: fixture.markers.hiddenWindow,
+    });
+    const hiddenWindowSecondPage = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      after: hiddenWindowFirstPage.pageInfo.endCursor,
+      search: fixture.markers.hiddenWindow,
+    });
+    const afterHiddenWindow = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      after: hiddenWindowSecondPage.pageInfo.endCursor,
+      search: fixture.markers.hiddenWindow,
+    });
+
+    expect(hiddenWindow.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.hiddenVisibleAfter,
+      fixture.threadIds.hiddenVisibleBefore,
+    ]);
+    expect(hiddenWindow.pageInfo).toEqual({
+      hasNextPage: false,
+      endCursor: hiddenWindow.edges[1].cursor,
+    });
+    expect(hiddenWindowFirstPage.edges[0].node.id).toBe(
+      fixture.threadIds.hiddenVisibleAfter,
+    );
+    expect(hiddenWindowFirstPage.pageInfo.hasNextPage).toBe(true);
+    expect(hiddenWindowSecondPage.edges[0].node.id).toBe(
+      fixture.threadIds.hiddenVisibleBefore,
+    );
+    expect(hiddenWindowSecondPage.pageInfo.hasNextPage).toBe(false);
+    expect(afterHiddenWindow).toEqual({
+      edges: [],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    });
   });
 
   it('keeps relations workspace-scoped, reassigns owner, preserves a newer draft on stale save, and creates no Message', async () => {
@@ -356,7 +411,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
         variables: {
           input: {
             threadId: fixture.threadIds.draft,
-            creatorId: fixture.unreadableCreatorId,
+            creatorId: fixture.foreignCreatorId,
           },
         },
       },

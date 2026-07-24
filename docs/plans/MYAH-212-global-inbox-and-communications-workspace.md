@@ -517,7 +517,7 @@
 
 - [x] **Step 2: Run scenarios and observe RED**
 
-  Run the focused integration/browser suites against a fresh isolated runtime. Expected: FAIL because the Inbox feature is absent.
+  Run the focused integration/browser suites against a fresh isolated runtime. Task 6 was already present, so feature absence was not an expected failure. Observed RED defects were omitted GraphQL relations being cleared by `undefined`, Inbox hooks using the wrong Apollo client, and native metadata/activity contexts mounting before their prerequisites; the later fixture-proof review also exposed shared-seed contamination and under-specified hidden-row/filter assertions.
 
 - [x] **Step 3: Make only the already-tested production changes needed for green**
 
