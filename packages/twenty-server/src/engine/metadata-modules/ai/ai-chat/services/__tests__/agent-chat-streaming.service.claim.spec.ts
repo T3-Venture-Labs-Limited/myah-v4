@@ -112,6 +112,24 @@ describe('AgentChatStreamingService claim & reap', () => {
       expect(messageQueueService.add).not.toHaveBeenCalled();
     });
 
+    it('rejects a selected Inbox message instead of queueing after a lost claim race', async () => {
+      const { service, agentChatService } = buildService({
+        claimAffected: 0,
+      });
+
+      await expect(
+        service.streamAgentChat({
+          ...sendArguments,
+          browsingContext: {
+            type: 'myahInboxThreadSelection',
+            workspaceId: 'workspace-id',
+            threadId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+          },
+        }),
+      ).rejects.toThrow('Selected Inbox messages cannot be queued');
+      expect(agentChatService.queueMessage).not.toHaveBeenCalled();
+    });
+
     it('queues behind a halted backlog and kicks the drain from the front', async () => {
       const { service, agentChatService } = buildService({
         queuedMessages: [

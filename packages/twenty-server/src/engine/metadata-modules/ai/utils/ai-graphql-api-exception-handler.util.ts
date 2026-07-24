@@ -37,6 +37,7 @@ export const aiGraphqlApiExceptionHandler = (error: Error) => {
         throw new UserInputError(error);
       case AiExceptionCode.AGENT_ALREADY_EXISTS:
       case AiExceptionCode.NO_FAILED_TURN_TO_RETRY:
+      case AiExceptionCode.INBOX_SELECTION_CANNOT_BE_QUEUED:
         throw new ConflictError(error);
       case AiExceptionCode.AGENT_IS_STANDARD:
       case AiExceptionCode.ROLE_CANNOT_BE_ASSIGNED_TO_AGENTS:

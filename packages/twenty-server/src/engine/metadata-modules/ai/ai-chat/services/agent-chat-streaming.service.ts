@@ -182,6 +182,13 @@ export class AgentChatStreamingService {
       }));
 
     if (!claimed) {
+      if (browsingContext?.type === 'myahInboxThreadSelection') {
+        throw new AiException(
+          'Selected Inbox messages cannot be queued',
+          AiExceptionCode.INBOX_SELECTION_CANNOT_BE_QUEUED,
+        );
+      }
+
       const queuedMessage = await this.agentChatService.queueMessage({
         threadId,
         text,

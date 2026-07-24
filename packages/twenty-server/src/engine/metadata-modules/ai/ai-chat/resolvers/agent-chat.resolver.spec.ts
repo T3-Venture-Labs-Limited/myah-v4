@@ -231,4 +231,26 @@ describe('AgentChatResolver managed provider credit preflight', () => {
       workspace,
     });
   });
+  it('rejects a selected Inbox message instead of queueing behind an active stream', async () => {
+    const { resolver, agentChatService, streaming } = buildResolver(true);
+
+    await expect(
+      resolver.sendChatMessage(
+        'thread-id',
+        'Read this selection',
+        'message-id',
+        {
+          type: 'myahInboxThreadSelection',
+          workspaceId: 'workspace-id',
+          threadId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+        },
+        modelId,
+        null,
+        'user-workspace-id',
+        workspace,
+      ),
+    ).rejects.toThrow('Selected Inbox messages cannot be queued');
+    expect(agentChatService.queueMessage).not.toHaveBeenCalled();
+    expect(streaming.streamAgentChat).not.toHaveBeenCalled();
+  });
 });
