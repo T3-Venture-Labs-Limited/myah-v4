@@ -137,6 +137,9 @@ describe('CreatorBulkRelationshipDialog', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Add to list' })).toBeDisabled();
+    expect(
+      screen.getByText('Unable to verify existing relationships. Try again.'),
+    ).toBeVisible();
   });
 
   it('keeps the confirmation open and disabled until an async mutation succeeds', async () => {
@@ -159,7 +162,7 @@ describe('CreatorBulkRelationshipDialog', () => {
 
     expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledTimes(1);
     expect(mockCloseModal).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Add to list' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Adding' })).toBeDisabled();
 
     await act(async () => {
       resolveMutation?.();
@@ -200,7 +203,7 @@ describe('CreatorBulkRelationshipDialog', () => {
     );
   });
 
-  it('presents the count summary, Cancel, and brand confirmation', () => {
+  it('presents the selected compact review rows and brand confirmation', () => {
     mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
 
     render(
@@ -210,13 +213,52 @@ describe('CreatorBulkRelationshipDialog', () => {
       />,
     );
 
-    expect(screen.getByText(/2 selected/)).toBeVisible();
-    expect(screen.getByText(/2 will be added/)).toBeVisible();
-    expect(screen.getByText(/0 already present/)).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Confirm addition' }),
+    ).toBeVisible();
+    expect(screen.getByText('Target').parentElement).toHaveTextContent(
+      'TargetSpring creators',
+    );
+    expect(screen.getByText('Selected').parentElement).toHaveTextContent(
+      'Selected2 creators',
+    );
+    expect(screen.getByText('Will be added').parentElement).toHaveTextContent(
+      'Will be added2 creators',
+    );
+    expect(screen.getByText('Already present').parentElement).toHaveTextContent(
+      'Already present0 creators',
+    );
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add to list' })).toHaveAttribute(
       'data-accent',
       'brand',
+    );
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('uses singular creator copy for one selected creator', () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      selectedCreatorIds: ['creator-a'],
+      creatorIdsToAdd: ['creator-a'],
+      alreadyLinkedCreatorIds: [],
+      loading: false,
+    });
+
+    render(
+      <CreatorBulkRelationshipDialog
+        target={creatorListTarget}
+        selectedCreatorIds={['creator-a']}
+      />,
+    );
+
+    expect(screen.getByText('Selected').parentElement).toHaveTextContent(
+      /^Selected1 creator$/,
+    );
+    expect(screen.getByText('Will be added').parentElement).toHaveTextContent(
+      /^Will be added1 creator$/,
+    );
+    expect(screen.getByText('Already present').parentElement).toHaveTextContent(
+      /^Already present0 creators$/,
     );
   });
 
@@ -236,6 +278,12 @@ describe('CreatorBulkRelationshipDialog', () => {
     );
 
     expect(screen.getByText(/No changes will be made/)).toBeVisible();
+    expect(screen.getByText('Target').parentElement).toHaveTextContent(
+      'TargetSpring campaign',
+    );
+    expect(screen.getByText('Will be added').parentElement).toHaveTextContent(
+      'Will be added0 creators',
+    );
     expect(
       screen.getByRole('button', { name: /^Add to campaign/ }),
     ).toBeDisabled();
