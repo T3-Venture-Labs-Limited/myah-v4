@@ -6,7 +6,6 @@ import {
 import { type MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
-import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
 import {
   createStandardFieldFlatMetadata,
   type CreateStandardFieldArgs,
@@ -2720,6 +2719,60 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        gender: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'gender',
+            type: FieldMetadataType.SELECT,
+            label: 'Gender',
+            description: 'Gender',
+            icon: 'IconGenderBigender',
+            options: [
+              {
+                id: '08c80e6b-3bb8-480d-a96f-ab5200289ad2',
+                value: 'FEMALE',
+                label: 'Female',
+                position: 0,
+                color: 'pink',
+              },
+              {
+                id: '8d5af3fe-88b9-4204-947e-048b1845cdf0',
+                value: 'MALE',
+                label: 'Male',
+                position: 1,
+                color: 'blue',
+              },
+              {
+                id: '5afa8fb4-f3f6-4ab0-8dbd-18989c280c38',
+                value: 'NON_BINARY',
+                label: 'Non-binary',
+                position: 2,
+                color: 'purple',
+              },
+              {
+                id: 'ac6e6123-7cbe-41a6-bfd1-5ab5fe7a3df1',
+                value: 'OTHER',
+                label: 'Other',
+                position: 3,
+                color: 'orange',
+              },
+              {
+                id: '00277c36-b012-4fea-b50a-fbf54c209f24',
+                value: 'UNKNOWN',
+                label: 'Unknown',
+                position: 4,
+                color: 'gray',
+              },
+            ],
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         language: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
@@ -3103,14 +3156,14 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
-        instagramUrl: createMyahStandardFieldFlatMetadata({
+        instagramLink: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
           context: {
-            fieldName: 'instagramUrl',
-            type: FieldMetadataType.TEXT,
-            label: 'Instagram URL',
-            description: 'Instagram URL',
+            fieldName: 'instagramLink',
+            type: FieldMetadataType.LINKS,
+            label: 'Instagram',
+            description: 'Instagram',
             icon: 'IconBrandInstagram',
             isNullable: true,
           },
@@ -3342,14 +3395,14 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
-        tiktokUrl: createMyahStandardFieldFlatMetadata({
+        tiktokLink: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
           context: {
-            fieldName: 'tiktokUrl',
-            type: FieldMetadataType.TEXT,
-            label: 'TikTok URL',
-            description: 'TikTok URL',
+            fieldName: 'tiktokLink',
+            type: FieldMetadataType.LINKS,
+            label: 'TikTok',
+            description: 'TikTok',
             icon: 'IconBrandTiktok',
             isNullable: true,
           },
@@ -3548,14 +3601,14 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             now: args.now,
           },
         ),
-        youtubeUrl: createMyahStandardFieldFlatMetadata({
+        youtubeLink: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
           context: {
-            fieldName: 'youtubeUrl',
-            type: FieldMetadataType.TEXT,
-            label: 'YouTube URL',
-            description: 'YouTube URL',
+            fieldName: 'youtubeLink',
+            type: FieldMetadataType.LINKS,
+            label: 'YouTube',
+            description: 'YouTube',
             icon: 'IconBrandYoutube',
             isNullable: true,
           },
@@ -3855,14 +3908,14 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
-        twitterUrl: createMyahStandardFieldFlatMetadata({
+        twitterLink: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
           context: {
-            fieldName: 'twitterUrl',
-            type: FieldMetadataType.TEXT,
-            label: 'Twitter URL',
-            description: 'Twitter URL',
+            fieldName: 'twitterLink',
+            type: FieldMetadataType.LINKS,
+            label: 'Twitter/X',
+            description: 'Twitter/X',
             icon: 'IconBrandX',
             isNullable: true,
           },

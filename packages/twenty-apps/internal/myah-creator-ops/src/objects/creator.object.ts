@@ -61,6 +61,52 @@ export default defineObject({
       isNullable: true,
     },
     {
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.gender,
+      type: FieldType.SELECT,
+      name: 'gender',
+      label: 'Gender',
+      icon: 'IconGenderBigender',
+      isNullable: true,
+      isUIEditable: true,
+      options: [
+        {
+          id: '08c80e6b-3bb8-480d-a96f-ab5200289ad2',
+          value: 'FEMALE',
+          label: 'Female',
+          position: 0,
+          color: 'pink',
+        },
+        {
+          id: '8d5af3fe-88b9-4204-947e-048b1845cdf0',
+          value: 'MALE',
+          label: 'Male',
+          position: 1,
+          color: 'blue',
+        },
+        {
+          id: '5afa8fb4-f3f6-4ab0-8dbd-18989c280c38',
+          value: 'NON_BINARY',
+          label: 'Non-binary',
+          position: 2,
+          color: 'purple',
+        },
+        {
+          id: 'ac6e6123-7cbe-41a6-bfd1-5ab5fe7a3df1',
+          value: 'OTHER',
+          label: 'Other',
+          position: 3,
+          color: 'orange',
+        },
+        {
+          id: '00277c36-b012-4fea-b50a-fbf54c209f24',
+          value: 'UNKNOWN',
+          label: 'Unknown',
+          position: 4,
+          color: 'gray',
+        },
+      ],
+    },
+    {
       universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.language,
       type: FieldType.TEXT,
       name: 'language',
@@ -159,7 +205,8 @@ export default defineObject({
       icon: 'IconUserCircle',
       isNullable: true,
       relationTargetObjectMetadataUniversalIdentifier:
-        STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember.universalIdentifier,
+        STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.workspaceMember
+          .universalIdentifier,
       relationTargetFieldMetadataUniversalIdentifier:
         CREATOR_RELATION_FIELD_UNIVERSAL_IDENTIFIERS.ownedCreators,
       universalSettings: {
@@ -217,7 +264,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.promotesAffiliateLinks,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.promotesAffiliateLinks,
       type: FieldType.BOOLEAN,
       name: 'promotesAffiliateLinks',
       label: 'Promotes affiliate links',
@@ -281,15 +329,16 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUrl,
-      type: FieldType.TEXT,
-      name: 'instagramUrl',
-      label: 'Instagram URL',
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramLink,
+      type: FieldType.LINKS,
+      name: 'instagramLink',
+      label: 'Instagram',
       icon: 'IconBrandInstagram',
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
       type: FieldType.TEXT,
       name: 'instagramUsername',
       label: 'Instagram username',
@@ -305,7 +354,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramFollowerCount,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramFollowerCount,
       type: FieldType.NUMBER,
       name: 'instagramFollowerCount',
       label: 'Instagram follower count',
@@ -313,7 +363,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramEngagementPercent,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramEngagementPercent,
       type: FieldType.NUMBER,
       name: 'instagramEngagementPercent',
       label: 'Instagram engagement percent',
@@ -321,7 +372,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramMostRecentPostDate,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramMostRecentPostDate,
       type: FieldType.DATE,
       name: 'instagramMostRecentPostDate',
       label: 'Instagram most recent post date',
@@ -329,7 +381,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramMediaCount,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramMediaCount,
       type: FieldType.NUMBER,
       name: 'instagramMediaCount',
       label: 'Instagram media count',
@@ -337,7 +390,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramAvgLikes,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramAvgLikes,
       type: FieldType.NUMBER,
       name: 'instagramAvgLikes',
       label: 'Instagram average likes',
@@ -345,7 +399,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramAvgComments,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramAvgComments,
       type: FieldType.NUMBER,
       name: 'instagramAvgComments',
       label: 'Instagram average comments',
@@ -353,7 +408,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramReelsPercent,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramReelsPercent,
       type: FieldType.NUMBER,
       name: 'instagramReelsPercent',
       label: 'Instagram reels percent',
@@ -361,7 +417,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramReelsAvgViewCount,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramReelsAvgViewCount,
       type: FieldType.NUMBER,
       name: 'instagramReelsAvgViewCount',
       label: 'Instagram reels average view count',
@@ -369,7 +426,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramPostingFrequencyRecentMonths,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramPostingFrequencyRecentMonths,
       type: FieldType.NUMBER,
       name: 'instagramPostingFrequencyRecentMonths',
       label: 'Instagram posting frequency recent months',
@@ -377,7 +435,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramEstimatedIncomeMin,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramEstimatedIncomeMin,
       type: FieldType.NUMBER,
       name: 'instagramEstimatedIncomeMin',
       label: 'Instagram estimated income min',
@@ -385,7 +444,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramEstimatedIncomeMax,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramEstimatedIncomeMax,
       type: FieldType.NUMBER,
       name: 'instagramEstimatedIncomeMax',
       label: 'Instagram estimated income max',
@@ -393,10 +453,10 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokUrl,
-      type: FieldType.TEXT,
-      name: 'tiktokUrl',
-      label: 'TikTok URL',
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokLink,
+      type: FieldType.LINKS,
+      name: 'tiktokLink',
+      label: 'TikTok',
       icon: 'IconBrandTiktok',
       isNullable: true,
     },
@@ -417,7 +477,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokFollowerCount,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokFollowerCount,
       type: FieldType.NUMBER,
       name: 'tiktokFollowerCount',
       label: 'TikTok follower count',
@@ -425,7 +486,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokMostRecentPostDate,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokMostRecentPostDate,
       type: FieldType.DATE,
       name: 'tiktokMostRecentPostDate',
       label: 'TikTok most recent post date',
@@ -433,7 +495,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokEngagementPercent,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokEngagementPercent,
       type: FieldType.NUMBER,
       name: 'tiktokEngagementPercent',
       label: 'TikTok engagement percent',
@@ -449,7 +512,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokPlayCountMedian,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokPlayCountMedian,
       type: FieldType.NUMBER,
       name: 'tiktokPlayCountMedian',
       label: 'TikTok median play count',
@@ -465,7 +529,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokAvgComments,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokAvgComments,
       type: FieldType.NUMBER,
       name: 'tiktokAvgComments',
       label: 'TikTok average comments',
@@ -473,7 +538,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokAvgDownloads,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokAvgDownloads,
       type: FieldType.NUMBER,
       name: 'tiktokAvgDownloads',
       label: 'TikTok average downloads',
@@ -481,7 +547,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokPostingFrequencyRecentMonths,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokPostingFrequencyRecentMonths,
       type: FieldType.NUMBER,
       name: 'tiktokPostingFrequencyRecentMonths',
       label: 'TikTok posting frequency recent months',
@@ -489,10 +556,10 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeUrl,
-      type: FieldType.TEXT,
-      name: 'youtubeUrl',
-      label: 'YouTube URL',
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeLink,
+      type: FieldType.LINKS,
+      name: 'youtubeLink',
+      label: 'YouTube',
       icon: 'IconBrandYoutube',
       isNullable: true,
     },
@@ -513,7 +580,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeDescription,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeDescription,
       type: FieldType.TEXT,
       name: 'youtubeDescription',
       label: 'YouTube description',
@@ -521,7 +589,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeTopicDetails,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeTopicDetails,
       type: FieldType.TEXT,
       name: 'youtubeTopicDetails',
       label: 'YouTube topic details',
@@ -529,7 +598,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeSubscriberCount,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeSubscriberCount,
       type: FieldType.NUMBER,
       name: 'youtubeSubscriberCount',
       label: 'YouTube subscriber count',
@@ -537,7 +607,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeLastUploadDate,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeLastUploadDate,
       type: FieldType.DATE,
       name: 'youtubeLastUploadDate',
       label: 'YouTube last upload date',
@@ -545,7 +616,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeLastStreamUploadDate,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeLastStreamUploadDate,
       type: FieldType.DATE,
       name: 'youtubeLastStreamUploadDate',
       label: 'YouTube last stream upload date',
@@ -553,7 +625,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeShortsPercentage,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeShortsPercentage,
       type: FieldType.NUMBER,
       name: 'youtubeShortsPercentage',
       label: 'YouTube Shorts percentage',
@@ -561,7 +634,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeVideoCount,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeVideoCount,
       type: FieldType.NUMBER,
       name: 'youtubeVideoCount',
       label: 'YouTube video count',
@@ -569,7 +643,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeEngagementPercent,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeEngagementPercent,
       type: FieldType.NUMBER,
       name: 'youtubeEngagementPercent',
       label: 'YouTube engagement percent',
@@ -577,7 +652,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeAvgViewsLong,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeAvgViewsLong,
       type: FieldType.NUMBER,
       name: 'youtubeAvgViewsLong',
       label: 'YouTube average long views',
@@ -585,7 +661,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeAvgViewsShorts,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeAvgViewsShorts,
       type: FieldType.NUMBER,
       name: 'youtubeAvgViewsShorts',
       label: 'YouTube average Shorts views',
@@ -593,7 +670,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeAvgStreamViews,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeAvgStreamViews,
       type: FieldType.NUMBER,
       name: 'youtubeAvgStreamViews',
       label: 'YouTube average stream views',
@@ -601,7 +679,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeAvgStreamDuration,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeAvgStreamDuration,
       type: FieldType.NUMBER,
       name: 'youtubeAvgStreamDuration',
       label: 'YouTube average stream duration',
@@ -609,7 +688,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubePostingFrequencyRecentMonths,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubePostingFrequencyRecentMonths,
       type: FieldType.NUMBER,
       name: 'youtubePostingFrequencyRecentMonths',
       label: 'YouTube posting frequency recent months',
@@ -617,7 +697,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeEstimatedIncomeMin,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeEstimatedIncomeMin,
       type: FieldType.NUMBER,
       name: 'youtubeEstimatedIncomeMin',
       label: 'YouTube estimated income min',
@@ -625,7 +706,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeEstimatedIncomeMax,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeEstimatedIncomeMax,
       type: FieldType.NUMBER,
       name: 'youtubeEstimatedIncomeMax',
       label: 'YouTube estimated income max',
@@ -633,10 +715,10 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterUrl,
-      type: FieldType.TEXT,
-      name: 'twitterUrl',
-      label: 'Twitter URL',
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterLink,
+      type: FieldType.LINKS,
+      name: 'twitterLink',
+      label: 'Twitter/X',
       icon: 'IconBrandX',
       isNullable: true,
     },
@@ -657,7 +739,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterFollowerCount,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterFollowerCount,
       type: FieldType.NUMBER,
       name: 'twitterFollowerCount',
       label: 'Twitter follower count',
@@ -665,7 +748,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterEngagementPercent,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterEngagementPercent,
       type: FieldType.NUMBER,
       name: 'twitterEngagementPercent',
       label: 'Twitter engagement percent',
@@ -689,7 +773,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitchDisplayName,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitchDisplayName,
       type: FieldType.TEXT,
       name: 'twitchDisplayName',
       label: 'Twitch display name',
@@ -697,7 +782,8 @@ export default defineObject({
       isNullable: true,
     },
     {
-      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitchTotalFollowers,
+      universalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitchTotalFollowers,
       type: FieldType.NUMBER,
       name: 'twitchTotalFollowers',
       label: 'Twitch total followers',

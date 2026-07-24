@@ -17,57 +17,93 @@ export default defineView({
   fields: [
     {
       universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.name,
-      fieldMetadataUniversalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
       position: 0,
       isVisible: true,
       size: 220,
+    },
+    {
+      universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.email,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
+      position: 1,
+      isVisible: true,
+      size: 200,
+    },
+    {
+      universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.gender,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.gender,
+      position: 2,
+      isVisible: true,
+      size: 140,
+    },
+    {
+      universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.location,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.location,
+      position: 3,
+      isVisible: true,
+      size: 180,
+    },
+    {
+      universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.phone,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.phone,
+      position: 4,
+      isVisible: true,
+      size: 160,
+    },
+    {
+      universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.tiktokLink,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokLink,
+      position: 5,
+      isVisible: true,
+      size: 180,
+    },
+    {
+      universalIdentifier:
+        CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.instagramLink,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramLink,
+      position: 6,
+      isVisible: true,
+      size: 180,
+    },
+    {
+      universalIdentifier:
+        CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.youtubeLink,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeLink,
+      position: 7,
+      isVisible: true,
+      size: 180,
+    },
+    {
+      universalIdentifier:
+        CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.twitterLink,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterLink,
+      position: 8,
+      isVisible: true,
+      size: 180,
     },
     {
       universalIdentifier:
         CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.creatorStatus,
       fieldMetadataUniversalIdentifier:
         CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.creatorStatus,
-      position: 1,
+      position: 9,
       isVisible: true,
       size: 140,
-    },
-    {
-      universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.owner,
-      fieldMetadataUniversalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.owner,
-      position: 2,
-      isVisible: true,
-      size: 180,
-    },
-    {
-      universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.email,
-      fieldMetadataUniversalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
-      position: 3,
-      isVisible: true,
-      size: 160,
-    },
-    {
-      universalIdentifier:
-        CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
-      fieldMetadataUniversalIdentifier:
-        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
-      position: 4,
-      isVisible: true,
-      size: 160,
-    },
-    {
-      universalIdentifier:
-        CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.instagramFollowerCount,
-      fieldMetadataUniversalIdentifier:
-        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramFollowerCount,
-      position: 5,
-      isVisible: true,
-      size: 160,
     },
     {
       universalIdentifier: CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.source,
       fieldMetadataUniversalIdentifier:
         CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.source,
-      position: 6,
+      position: 10,
       isVisible: true,
       size: 160,
     },

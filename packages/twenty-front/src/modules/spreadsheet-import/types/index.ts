@@ -12,6 +12,10 @@ export type {
   SpreadsheetImportSelect,
 } from './SpreadsheetImportFieldType';
 export type {
+  SpreadsheetImportHeaderAlias,
+  SpreadsheetImportHeaderProfile,
+} from './SpreadsheetImportHeaderProfile';
+export type {
   SpreadsheetImportFieldValidationDefinition,
   SpreadsheetImportFunctionValidation,
   SpreadsheetImportObjectValidation,

@@ -36,6 +36,8 @@ export const CREATOR_RELATION_FIELD_UNIVERSAL_IDENTIFIERS = {
 
 export const CREATORS_VIEW_UNIVERSAL_IDENTIFIER =
   'a5abdae3-d86a-51d3-9b04-2dc21c172c3e';
+export const CREATOR_METRICS_VIEW_UNIVERSAL_IDENTIFIER =
+  'd1758d79-a3e7-48e7-b960-2103a7a3be19';
 export const QUALIFIED_CREATORS_WITH_EMAIL_VIEW_UNIVERSAL_IDENTIFIER =
   '19483764-6f84-4d09-8f03-945e7d0a4b28';
 export const CREATOR_LISTS_VIEW_UNIVERSAL_IDENTIFIER =
@@ -146,16 +148,34 @@ export const CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS = {
   creatorStatus: 'f2d9c0cc-7838-477b-88fb-38a3f9a552ea',
   owner: 'cc5ed450-05fd-4c8e-b488-edae3cbd6586',
   email: 'd779e826-cf8c-5e36-9685-0f9a6989142d',
+  gender: '32b1c350-f11e-4118-8d22-531a631b4147',
+  phone: '9d5a2863-7216-4889-a6ee-91aacbf7158f',
   location: '566647f6-312a-5357-adb9-a98c084989b3',
-  instagramUsername: '77c1fa17-1566-59d6-9a1f-6597537c72c0',
+  instagramLink: '99404764-56ea-4f25-bea5-fb746c77c97b',
   instagramFollowerCount: '2856cfb7-33c3-5441-a871-85c09cd34688',
-  tiktokUsername: 'b9998544-50cc-50a0-af98-598c3922ab11',
+  tiktokLink: '4f4a0263-7e5f-4f5e-826d-d642ae5197af',
   tiktokFollowerCount: '0025c07e-7109-5f5f-b9ef-694abb133ec8',
-  youtubeTitle: '7c46192c-272b-504b-aa1d-1048151b9943',
+  youtubeLink: '6f715c13-46b7-4939-8ec7-9b41259ac3de',
+  twitterLink: 'c6b9840c-7684-4889-9f24-3592febefe57',
   youtubeSubscriberCount: 'eeebe69a-8c33-55ad-8375-ae0f7c68f9c5',
   hasBrandDeals: 'd5777661-6233-54e2-b073-6328a904d139',
   promotesAffiliateLinks: '72826aa0-29d6-5363-83d9-353819828b71',
   source: 'c2581172-2575-532c-8975-a79e55188fab',
+} as const;
+
+export const CREATOR_METRICS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS = {
+  name: '721888aa-6983-4c7f-8593-60afdf75a088',
+  instagramFollowerCount: 'e957624d-df26-4d29-9f84-9d53149924e3',
+  instagramEngagementPercent: '122472c1-39f1-49e9-9309-7053cf91f80d',
+  tiktokFollowerCount: '8dee3cc3-373a-4dd1-937e-3cf2ff15acee',
+  tiktokEngagementPercent: '7fa03bfe-0ab3-4979-a7ec-5c7a4e4acecd',
+  tiktokPlayCountMedian: 'c7c4b4fb-a3e3-49ca-92f8-877350668c6c',
+  youtubeSubscriberCount: '0923a836-29f9-4d9f-9c1b-978af2bee1f9',
+  youtubeEngagementPercent: 'bd10a7d9-acdd-415e-b172-af6a88b4d04e',
+  youtubeAvgViewsLong: 'd0ccee20-d308-45b5-b6f5-de04b33bdbb7',
+  hasBrandDeals: '84ebcf92-7c3f-423f-af6d-062216402fa6',
+  promotesAffiliateLinks: '45ba4f40-035e-49fa-bc9e-26540d8298c3',
+  source: '82e70d56-2b81-4311-bcc4-b68d1182d19c',
 } as const;
 
 export const QUALIFIED_CREATORS_WITH_EMAIL_VIEW_FIELD_UNIVERSAL_IDENTIFIERS = {
@@ -163,7 +183,7 @@ export const QUALIFIED_CREATORS_WITH_EMAIL_VIEW_FIELD_UNIVERSAL_IDENTIFIERS = {
   creatorStatus: 'b3c7407a-07be-42e3-8663-e06fe7389c84',
   owner: '1d0ec242-c56a-4942-959d-de1c8621221c',
   email: '1c53246e-fd62-46ef-9484-2003d1a90040',
-  instagramUsername: '6a3edac7-0b7c-4874-861a-965efd4b873c',
+  instagramLink: 'c9178a1f-2c30-4ab2-aa6c-a208223d1250',
   instagramFollowerCount: '82068ee3-064a-43ea-8e8b-5cdca0e3d53e',
   source: '81c5939d-eb4c-43b9-8f91-3c3214d3161d',
 } as const;

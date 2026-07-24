@@ -19,6 +19,7 @@ import {
   type SetStateAction,
   useCallback,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { ModalContent } from 'twenty-ui/surfaces';
@@ -120,6 +121,8 @@ export const ValidationStep = ({
     onSubmit,
     rowHook,
     tableHook,
+    beforeSubmitHook,
+    getSubmissionBlockReason,
   } = useSpreadsheetImportInternal();
 
   const [data, setData] = useState<
@@ -131,6 +134,13 @@ export const ValidationStep = ({
       [],
     ),
   );
+  // Keeps the asynchronously refreshed rows current before React commits state.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const dataRef = useRef(data);
+  // Guards duplicate submissions synchronously before React commits state.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const isSubmittingRef = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedRows, setSelectedRows] = useState<
     ReadonlySet<number | string>
   >(new Set());
@@ -138,7 +148,15 @@ export const ValidationStep = ({
 
   const updateData = useCallback(
     (rows: typeof data) => {
-      setData(addErrorsAndRunHooks(rows, fields, rowHook, tableHook));
+      const validatedRows = addErrorsAndRunHooks(
+        rows,
+        fields,
+        rowHook,
+        tableHook,
+      );
+
+      dataRef.current = validatedRows;
+      setData(validatedRows);
     },
     [setData, rowHook, tableHook, fields],
   );
@@ -223,8 +241,8 @@ export const ValidationStep = ({
     [],
   );
 
-  const submitData = async () => {
-    const calculatedData = data.reduce(
+  const submitData = async (rows: typeof data) => {
+    const calculatedData = rows.reduce(
       (acc, value) => {
         const { __index, __errors, ...values } = value;
         if (isDefined(__errors)) {
@@ -245,7 +263,7 @@ export const ValidationStep = ({
       {
         validStructuredRows: [] as ImportedStructuredRow[],
         invalidStructuredRows: [] as ImportedStructuredRow[],
-        allStructuredRows: data,
+        allStructuredRows: rows,
       } satisfies SpreadsheetImportImportValidationResult,
     );
 
@@ -258,31 +276,73 @@ export const ValidationStep = ({
     await onSubmit(calculatedData, file);
     onClose();
   };
-  const onContinue = () => {
-    const invalidData = data.find((value) => {
-      if (isDefined(value?.__errors)) {
-        return !!Object.values(value.__errors)?.filter(
-          (err) => err.level === 'error',
-        ).length;
+  const onContinue = async () => {
+    if (isSubmittingRef.current) {
+      return;
+    }
+
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+
+    try {
+      await beforeSubmitHook?.(dataRef.current);
+
+      const refreshedRows = addErrorsAndRunHooks(
+        dataRef.current,
+        fields,
+        rowHook,
+        tableHook,
+      );
+
+      dataRef.current = refreshedRows;
+      setData(refreshedRows);
+
+      const submissionBlockReason = getSubmissionBlockReason?.(refreshedRows);
+
+      if (isDefined(submissionBlockReason)) {
+        enqueueDialog({
+          title: t`Import blocked`,
+          message: submissionBlockReason,
+          buttons: [{ title: t`Return` }],
+        });
+        return;
       }
-      return false;
-    });
-    if (!invalidData) {
-      submitData();
-    } else {
-      enqueueDialog({
-        title: t`Finish flow with errors`,
-        message: t`There are still some rows that contain errors. Rows with errors will be ignored when submitting.`,
-        buttons: [
-          { title: t`Cancel` },
-          {
-            title: t`Submit`,
-            variant: 'primary',
-            onClick: submitData,
-            role: 'confirm',
-          },
-        ],
+
+      const invalidData = refreshedRows.find((value) => {
+        if (isDefined(value?.__errors)) {
+          return !!Object.values(value.__errors)?.filter(
+            (err) => err.level === 'error',
+          ).length;
+        }
+        return false;
       });
+
+      if (!invalidData) {
+        await submitData(refreshedRows);
+      } else {
+        enqueueDialog({
+          title: t`Finish flow with errors`,
+          message: t`There are still some rows that contain errors. Rows with errors will be ignored when submitting.`,
+          buttons: [
+            { title: t`Cancel` },
+            {
+              title: t`Submit`,
+              variant: 'primary',
+              onClick: () => submitData(refreshedRows),
+              role: 'confirm',
+            },
+          ],
+        });
+      }
+    } catch {
+      enqueueDialog({
+        title: t`Unable to validate import`,
+        message: t`The import could not be refreshed. Please try again.`,
+        buttons: [{ title: t`Return` }],
+      });
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -343,6 +403,7 @@ export const ValidationStep = ({
         onContinue={onContinue}
         onBack={onBack}
         continueTitle={t`Confirm`}
+        isLoading={isSubmitting}
       />
     </>
   );

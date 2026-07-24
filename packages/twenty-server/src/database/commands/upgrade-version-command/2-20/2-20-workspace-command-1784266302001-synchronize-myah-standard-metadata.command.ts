@@ -68,6 +68,14 @@ const toUniversalIdentifiers = (
 ) => new Set(entities.map(({ universalIdentifier }) => universalIdentifier));
 
 type SyncableFlatEntityMaps = FlatEntityMaps<SyncableFlatEntity>;
+type TwentyStandardMetadataName =
+  (typeof TWENTY_STANDARD_ALL_METADATA_NAME)[number];
+
+export type SynchronizeMyahStandardMetadataOptions = {
+  explicitObsoleteUniversalIdentifiersByMetadataName?: Partial<
+    Record<TwentyStandardMetadataName, ReadonlySet<string>>
+  >;
+};
 
 
 @RegisteredWorkspaceCommand('2.20.0', 1784266302001)
@@ -89,11 +97,14 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     super(workspaceIteratorService);
   }
 
-  override async runOnWorkspace({
-    workspaceId,
-    options,
-  }: RunOnWorkspaceArgs): Promise<void> {
+  override runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    return this.synchronizeWorkspace(args);
+  }
 
+  async synchronizeWorkspace(
+    { workspaceId, options }: RunOnWorkspaceArgs,
+    syncOptions: SynchronizeMyahStandardMetadataOptions = {},
+  ): Promise<void> {
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow({
         workspaceId,
@@ -309,6 +320,13 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       'navigationMenuItem',
       navigationMenuItemUniversalIdentifiers,
     );
+    const hasExplicitObsoleteUniversalIdentifiers =
+      TWENTY_STANDARD_ALL_METADATA_NAME.some(
+        (metadataName) =>
+          (syncOptions.explicitObsoleteUniversalIdentifiersByMetadataName?.[
+            metadataName
+          ]?.size ?? 0) > 0,
+      );
     const hasCompleteNativeMyahGraph =
       TWENTY_STANDARD_ALL_METADATA_NAME.every((metadataName) => {
         const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
@@ -334,14 +352,18 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         );
       });
 
-    if (!hasLegacyMyahApplication && hasCompleteNativeMyahGraph) {
+    if (
+      !hasLegacyMyahApplication &&
+      hasCompleteNativeMyahGraph &&
+      !hasExplicitObsoleteUniversalIdentifiers
+    ) {
       this.logger.log(
         `Skipping Myah standard metadata synchronization for workspace ${workspaceId}: native metadata graph is already complete`,
       );
 
       return;
     }
-    const obsoleteUniversalIdentifiersByMetadataName =
+    const legacyObsoleteUniversalIdentifiersByMetadataName =
       hasLegacyMyahApplication
         ? getReplacedTwentyCrmMetadataUniversalIdentifiers(
             fromAllFlatEntityMaps as TwentyStandardAllFlatEntityMaps,
@@ -366,7 +388,11 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       )[flatEntityMapsKey] = structuredClone(fromFlatEntityMaps);
       const universalIdentifiers = new Set([
         ...Object.keys(toFlatEntityMaps.byUniversalIdentifier),
-        ...(obsoleteUniversalIdentifiersByMetadataName[metadataName] ?? []),
+        ...(legacyObsoleteUniversalIdentifiersByMetadataName[metadataName] ??
+          []),
+        ...(syncOptions.explicitObsoleteUniversalIdentifiersByMetadataName?.[
+          metadataName
+        ] ?? []),
       ]);
 
       const fromFlatEntitySubMaps =
