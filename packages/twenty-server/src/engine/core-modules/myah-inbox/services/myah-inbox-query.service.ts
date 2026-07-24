@@ -1,0 +1,525 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
+
+import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
+import { MessageParticipantRole } from 'twenty-shared/types';
+import { isDefined, isValidUuid } from 'twenty-shared/utils';
+import { In, IsNull } from 'typeorm';
+
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  MYAH_INBOX_DEFAULT_PAGE_SIZE,
+  MYAH_INBOX_MAX_PAGE_SIZE,
+} from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
+import {
+  type MyahInboxThreadConnection,
+  type MyahInboxThreadEdge,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-connection.dto';
+import {
+  MyahInboxQueue,
+  MyahInboxState,
+  type MyahInboxThreadsInput,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
+import {
+  type MyahInboxThreadContext,
+  type MyahInboxThreadSummary,
+} from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
+import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import {
+  MessageVisibilityAccess,
+  MessageVisibilityPolicyService,
+} from 'src/modules/messaging/common/query-hooks/message/message-visibility-policy.service';
+
+export type MyahInboxListThreadsInput = MyahInboxThreadsInput & {
+  authContext: WorkspaceAuthContext;
+  user: AuthContextUser;
+  workspace: WorkspaceEntity;
+  workspaceMemberId: string;
+};
+
+type MyahInboxCursor = {
+  receivedAt: string;
+  threadId: string;
+};
+
+type MyahInboxThreadRaw = {
+  id: string;
+  lastActivityAt: Date | string;
+  subject: string | null;
+  lastMessagePreview: string | null;
+  lastMessageSender: string | null;
+  messageVisibility: MessageVisibilityAccess;
+  state: MyahInboxState;
+  snoozedUntil: Date | string | null;
+  creatorId: string | null;
+  campaignId: string | null;
+  inboxOwnerId: string | null;
+};
+
+type ContextRecord = {
+  id: string;
+  name?: string | { firstName?: string; lastName?: string } | null;
+};
+
+type ContextRecords = {
+  creatorById: Map<string, ContextRecord>;
+  campaignById: Map<string, ContextRecord>;
+  workspaceMemberById: Map<string, ContextRecord>;
+};
+
+@Injectable()
+export class MyahInboxQueryService {
+  constructor(
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly messageVisibilityPolicyService: MessageVisibilityPolicyService,
+  ) {}
+
+  async listThreads(
+    input: MyahInboxListThreadsInput,
+  ): Promise<MyahInboxThreadConnection> {
+    this.assertUserRequest(input);
+    this.assertValidFilterIds(input);
+
+    const pageSize = Math.min(
+      input.first ?? MYAH_INBOX_DEFAULT_PAGE_SIZE,
+      MYAH_INBOX_MAX_PAGE_SIZE,
+    );
+    const cursor = input.after ? this.decodeCursor(input.after) : undefined;
+
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const workspaceContext = getWorkspaceContext();
+        const rolePermissionConfig = resolveRolePermissionConfig({
+          authContext: input.authContext,
+          userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+          apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+        });
+
+        if (!rolePermissionConfig) {
+          throw new ForbiddenException('Inbox role permissions are required');
+        }
+
+        const [
+          messageThreadRepository,
+          creatorRepository,
+          campaignRepository,
+          workspaceMemberRepository,
+        ] = await Promise.all([
+          this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
+            input.workspace.id,
+            'messageThread',
+            rolePermissionConfig,
+          ),
+          this.globalWorkspaceOrmManager.getRepository<ContextRecord>(
+            input.workspace.id,
+            'creator',
+            rolePermissionConfig,
+          ),
+          this.globalWorkspaceOrmManager.getRepository<ContextRecord>(
+            input.workspace.id,
+            'campaign',
+            rolePermissionConfig,
+          ),
+          this.globalWorkspaceOrmManager.getRepository<ContextRecord>(
+            input.workspace.id,
+            'workspaceMember',
+            rolePermissionConfig,
+          ),
+        ]);
+
+        const currentWorkspaceMember = await workspaceMemberRepository.findOne({
+          where: { id: input.workspaceMemberId },
+          select: { id: true },
+        });
+
+        if (!currentWorkspaceMember) {
+          throw new ForbiddenException('Inbox workspace member is not readable');
+        }
+
+        if (input.campaignId) {
+          const campaign = await campaignRepository.findOne({
+            where: { id: input.campaignId },
+            select: { id: true },
+          });
+
+          if (!campaign) {
+            throw new ForbiddenException('Inbox Campaign is not readable');
+          }
+        }
+
+        if (
+          input.owner &&
+          input.owner !== 'ME' &&
+          input.owner !== 'UNASSIGNED'
+        ) {
+          const owner = await workspaceMemberRepository.findOne({
+            where: { id: input.owner },
+            select: { id: true },
+          });
+
+          if (!owner) {
+            throw new ForbiddenException('Inbox owner is not readable');
+          }
+        }
+
+        const workspaceSchemaName = getWorkspaceSchemaName(input.workspace.id);
+        const candidateVisibility =
+          this.messageVisibilityPolicyService.buildSqlVisibilityProjection({
+            workspaceId: input.workspace.id,
+            userWorkspaceId: input.authContext.userWorkspaceId,
+            messageIdExpression: 'candidateMessage.id',
+          });
+        const latestMessageVisibility =
+          this.messageVisibilityPolicyService.buildSqlVisibilityProjection({
+            workspaceId: input.workspace.id,
+            userWorkspaceId: input.authContext.userWorkspaceId,
+            messageIdExpression: 'latestMessage.id',
+          });
+        const latestMessageJoinCondition = `latestMessage.id = (
+          SELECT candidateMessage.id
+          FROM "${workspaceSchemaName}"."message" candidateMessage
+          WHERE candidateMessage."messageThreadId" = messageThread.id
+            AND candidateMessage."deletedAt" IS NULL
+            AND candidateMessage."receivedAt" IS NOT NULL
+            AND ${candidateVisibility.expression} <> :messageVisibilityHidden
+          ORDER BY candidateMessage."receivedAt" DESC, candidateMessage.id DESC LIMIT 1
+        )`;
+        const queryBuilder = messageThreadRepository
+          .createQueryBuilder('messageThread')
+          .select('messageThread.id', 'id')
+          .addSelect('latestMessage.receivedAt', 'lastActivityAt')
+          .addSelect(latestMessageVisibility.expression, 'messageVisibility')
+          .addSelect(
+            `CASE
+              WHEN ${latestMessageVisibility.expression} IN (:messageVisibilityFull, :messageVisibilitySubject)
+                THEN latestMessage.subject
+              WHEN ${latestMessageVisibility.expression} = :messageVisibilityMetadata
+                THEN :restrictedMessageContent
+              ELSE NULL
+            END`,
+            'subject',
+          )
+          .addSelect(
+            `CASE
+              WHEN ${latestMessageVisibility.expression} = :messageVisibilityFull
+                THEN latestMessage.text
+              WHEN ${latestMessageVisibility.expression} IN (:messageVisibilitySubject, :messageVisibilityMetadata)
+                THEN :restrictedMessageContent
+              ELSE NULL
+            END`,
+            'lastMessagePreview',
+          )
+          .addSelect(
+            `(SELECT messageParticipant.handle
+              FROM "${workspaceSchemaName}"."messageParticipant" messageParticipant
+              WHERE messageParticipant."messageId" = latestMessage.id
+                AND messageParticipant."deletedAt" IS NULL
+                AND messageParticipant.role = :fromParticipantRole
+              ORDER BY messageParticipant.id ASC
+              LIMIT 1)`,
+            'lastMessageSender',
+          )
+          .addSelect('messageThread.inboxState', 'state')
+          .addSelect('messageThread.snoozedUntil', 'snoozedUntil')
+          .addSelect('messageThread.creatorId', 'creatorId')
+          .addSelect('messageThread.myahCampaignId', 'campaignId')
+          .addSelect('messageThread.inboxOwnerId', 'inboxOwnerId')
+          .innerJoin(
+            'messageThread.messages',
+            'latestMessage',
+            latestMessageJoinCondition,
+          )
+          .where('messageThread.deletedAt IS NULL')
+          .andWhere('latestMessage.deletedAt IS NULL')
+          .setParameters({
+            ...candidateVisibility.parameters,
+            ...latestMessageVisibility.parameters,
+            restrictedMessageContent:
+              FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
+            fromParticipantRole: MessageParticipantRole.FROM,
+          });
+
+        if (input.queue === MyahInboxQueue.CREATOR_LINKED) {
+          queryBuilder.andWhere('messageThread.creatorId IS NOT NULL');
+        } else if (input.queue === MyahInboxQueue.UNMATCHED) {
+          queryBuilder.andWhere('messageThread.creatorId IS NULL');
+        }
+
+        if (input.owner === 'ME') {
+          queryBuilder.andWhere(
+            'messageThread.inboxOwnerId = :inboxOwnerId',
+            { inboxOwnerId: input.workspaceMemberId },
+          );
+        } else if (input.owner === 'UNASSIGNED') {
+          queryBuilder.andWhere('messageThread.inboxOwnerId IS NULL');
+        } else if (input.owner) {
+          queryBuilder.andWhere(
+            'messageThread.inboxOwnerId = :inboxOwnerId',
+            { inboxOwnerId: input.owner },
+          );
+        }
+
+        if (input.campaignId) {
+          queryBuilder.andWhere(
+            'messageThread.myahCampaignId = :campaignId',
+            { campaignId: input.campaignId },
+          );
+        }
+
+        if (input.states?.length) {
+          queryBuilder.andWhere(
+            'messageThread.inboxState IN (:...states)',
+            { states: input.states },
+          );
+        }
+
+        const search = input.search?.trim();
+
+        if (search) {
+          queryBuilder.andWhere(
+            `(
+              (${latestMessageVisibility.expression} IN (:messageVisibilityFull, :messageVisibilitySubject)
+                AND latestMessage.subject ILIKE :search)
+              OR (${latestMessageVisibility.expression} = :messageVisibilityFull
+                AND latestMessage.text ILIKE :search)
+            )`,
+            { search: `%${search}%` },
+          );
+        }
+
+        if (cursor) {
+          queryBuilder.andWhere(
+            `(
+              latestMessage.receivedAt < :cursorReceivedAt
+              OR (
+                latestMessage.receivedAt = :cursorReceivedAt
+                AND messageThread.id < :cursorThreadId
+              )
+            )`,
+            {
+              cursorReceivedAt: cursor.receivedAt,
+              cursorThreadId: cursor.threadId,
+            },
+          );
+        }
+
+        const rows = await queryBuilder
+          .orderBy('latestMessage.receivedAt', 'DESC')
+          .addOrderBy('messageThread.id', 'DESC')
+          .limit(pageSize + 1)
+          .getRawMany<MyahInboxThreadRaw>();
+        const hasNextPage = rows.length > pageSize;
+        const pageRows = rows.slice(0, pageSize);
+        const contextRecords = await this.loadContextRecords({
+          rows: pageRows,
+          creatorRepository,
+          campaignRepository,
+          workspaceMemberRepository,
+        });
+        const edges = pageRows.map((thread) =>
+          this.toEdge(thread, contextRecords),
+        );
+
+        return {
+          edges,
+          pageInfo: {
+            hasNextPage,
+            endCursor: edges[edges.length - 1]?.cursor ?? null,
+          },
+        };
+      },
+      input.authContext,
+    );
+  }
+
+  private assertUserRequest(
+    input: MyahInboxListThreadsInput,
+  ): asserts input is MyahInboxListThreadsInput & {
+    authContext: Extract<WorkspaceAuthContext, { type: 'user' }>;
+  } {
+    if (
+      !isUserAuthContext(input.authContext) ||
+      !isDefined(input.authContext.user) ||
+      !isDefined(input.user) ||
+      input.authContext.user.id !== input.user.id ||
+      input.authContext.workspace.id !== input.workspace.id ||
+      input.authContext.workspaceMemberId !== input.workspaceMemberId
+    ) {
+      throw new ForbiddenException(
+        'The Myah Inbox requires matching authenticated user context',
+      );
+    }
+  }
+
+  private assertValidFilterIds(input: MyahInboxThreadsInput): void {
+    const hasInvalidCampaignId =
+      isDefined(input.campaignId) && !isValidUuid(input.campaignId);
+    const hasInvalidOwnerId =
+      isDefined(input.owner) &&
+      input.owner !== 'ME' &&
+      input.owner !== 'UNASSIGNED' &&
+      !isValidUuid(input.owner);
+
+    if (hasInvalidCampaignId || hasInvalidOwnerId) {
+      throw new BadRequestException('Invalid Myah inbox relation filter');
+    }
+  }
+
+  private async loadContextRecords({
+    rows,
+    creatorRepository,
+    campaignRepository,
+    workspaceMemberRepository,
+  }: {
+    rows: MyahInboxThreadRaw[];
+    creatorRepository: {
+      find: (options: unknown) => Promise<ContextRecord[]>;
+    };
+    campaignRepository: {
+      find: (options: unknown) => Promise<ContextRecord[]>;
+    };
+    workspaceMemberRepository: {
+      find: (options: unknown) => Promise<ContextRecord[]>;
+    };
+  }): Promise<ContextRecords> {
+    const creatorIds = [
+      ...new Set(rows.map(({ creatorId }) => creatorId).filter(isDefined)),
+    ];
+    const campaignIds = [
+      ...new Set(rows.map(({ campaignId }) => campaignId).filter(isDefined)),
+    ];
+    const workspaceMemberIds = [
+      ...new Set(rows.map(({ inboxOwnerId }) => inboxOwnerId).filter(isDefined)),
+    ];
+    const [creators, campaigns, workspaceMembers] = await Promise.all([
+      creatorIds.length === 0
+        ? []
+        : creatorRepository.find({
+            where: { id: In(creatorIds), deletedAt: IsNull() },
+          }),
+      campaignIds.length === 0
+        ? []
+        : campaignRepository.find({
+            where: { id: In(campaignIds), deletedAt: IsNull() },
+          }),
+      workspaceMemberIds.length === 0
+        ? []
+        : workspaceMemberRepository.find({
+            where: { id: In(workspaceMemberIds), deletedAt: IsNull() },
+          }),
+    ]);
+
+    return {
+      creatorById: new Map(creators.map((record) => [record.id, record])),
+      campaignById: new Map(campaigns.map((record) => [record.id, record])),
+      workspaceMemberById: new Map(
+        workspaceMembers.map((record) => [record.id, record]),
+      ),
+    };
+  }
+
+  private toEdge(
+    row: MyahInboxThreadRaw,
+    contexts: ContextRecords,
+  ): MyahInboxThreadEdge {
+    if (row.messageVisibility === MessageVisibilityAccess.HIDDEN) {
+      throw new ForbiddenException('Inbox visibility projection failed closed');
+    }
+
+    const lastActivityAt =
+      row.lastActivityAt instanceof Date
+        ? row.lastActivityAt.toISOString()
+        : row.lastActivityAt;
+    const subject =
+      row.messageVisibility === MessageVisibilityAccess.FULL ||
+      row.messageVisibility === MessageVisibilityAccess.SUBJECT
+        ? row.subject
+        : FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED;
+    const lastMessagePreview =
+      row.messageVisibility === MessageVisibilityAccess.FULL
+        ? row.lastMessagePreview
+        : FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED;
+
+    return {
+      cursor: this.encodeCursor({ receivedAt: lastActivityAt, threadId: row.id }),
+      node: {
+        id: row.id,
+        lastActivityAt,
+        subject,
+        lastMessagePreview,
+        lastMessageSender: row.lastMessageSender,
+        state: row.state,
+        snoozedUntil:
+          row.snoozedUntil instanceof Date
+            ? row.snoozedUntil.toISOString()
+            : row.snoozedUntil,
+        creator: row.creatorId
+          ? this.toContext(contexts.creatorById.get(row.creatorId))
+          : null,
+        campaign: row.campaignId
+          ? this.toContext(contexts.campaignById.get(row.campaignId))
+          : null,
+        inboxOwner: row.inboxOwnerId
+          ? this.toContext(
+              contexts.workspaceMemberById.get(row.inboxOwnerId),
+            )
+          : null,
+      } satisfies MyahInboxThreadSummary,
+    };
+  }
+
+  private toContext(
+    record: ContextRecord | undefined,
+  ): MyahInboxThreadContext | null {
+    if (!record) {
+      return null;
+    }
+
+    const name =
+      typeof record.name === 'string'
+        ? record.name
+        : [record.name?.firstName, record.name?.lastName]
+            .filter(isDefined)
+            .join(' ') || null;
+
+    return { id: record.id, name };
+  }
+
+  private encodeCursor(cursor: MyahInboxCursor): string {
+    return Buffer.from(JSON.stringify(cursor)).toString('base64url');
+  }
+
+  private decodeCursor(cursor: string): MyahInboxCursor {
+    try {
+      const decoded = JSON.parse(
+        Buffer.from(cursor, 'base64url').toString('utf8'),
+      ) as Partial<MyahInboxCursor>;
+
+      const receivedAt = new Date(decoded.receivedAt ?? '');
+
+      if (
+        Number.isNaN(receivedAt.getTime()) ||
+        typeof decoded.threadId !== 'string' ||
+        !isValidUuid(decoded.threadId)
+      ) {
+        throw new Error('cursor fields are invalid');
+      }
+
+      return {
+        receivedAt: receivedAt.toISOString(),
+        threadId: decoded.threadId,
+      };
+    } catch {
+      throw new BadRequestException('Invalid Myah inbox cursor');
+    }
+  }
+}
