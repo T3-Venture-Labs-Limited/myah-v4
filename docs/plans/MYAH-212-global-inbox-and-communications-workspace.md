@@ -13,6 +13,7 @@
 - User-approved staging: MYAH-209 is rebased from `origin/main`. Before MYAH-210 merges, Task 1’s source-controlled `myah-creator-ops` manifest declarations and manifest-only unit tests may proceed because current `MYAH_STANDARD_OBJECTS.creator` and `.campaign` identifiers are stable baseline metadata. Do not sync the app, run `1784266302005`, generate metadata GraphQL, expose an Inbox endpoint, run database integration, or claim runtime/browser UAT. After MYAH-210 merges, rebase onto `origin/main`, complete Task 2 and its metadata synchronization gate, then execute Tasks 3–7 and the full local UAT. MYAH-210 reserves `1784266302003` and `1784266302004`; MYAH-212 uses `1784266302005` and never edits or replays another committed command.
 - Preserve MYAH-209’s route ID `inbox`, entry path `/myah/inbox`, drawer hierarchy, labels, active-state semantics, responsive drawer, and existing dispatcher. Changing its existing destination to `kind: 'myah-page'` is the feature-body registration mechanism explicitly provided by that contract.
 - Use one native `MessageThread` per Inbox row. Native `Message`, `MessageParticipant`, `MessageChannelMessageAssociation`, Task, and Note records remain source of truth.
+- The Inbox projection must reuse one shared native-message visibility policy before latest-message selection, text search, ordering, cursor creation, and page limiting. Connected-account owner or `SHARE_EVERYTHING` permits subject/body, `SUBJECT` masks body, `METADATA` masks subject/body, and unknown/no-association messages are hidden. Hidden or masked content must not influence matches, counts, `pageInfo`, ordering, or cursors. User auth is required; never synthesize system auth for this user-facing read.
 - Add Myah fields only through the existing `myah-creator-ops` app manifest and source-controlled standard-metadata/workspace-command path. Do not use raw SQL, TypeORM migrations, direct database writes, a sidecar Inbox object, or a second email table.
 - The `MessageThread` extension contract is exact: `creator`, `myahCampaign`, `inboxOwner`, `inboxState`, `snoozedUntil`, `myahReplyDraftBody`, and `myahReplyDraftRevision`.
 - `creator = null` means Unmatched. Do not use `MessageParticipant.person`; the Myah metadata replacement removes that standard CRM relation.
@@ -38,6 +39,7 @@
 | `packages/twenty-server/src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302005-synchronize-myah-inbox-metadata.command.ts` | Forward-only existing-workspace synchronization of the MYAH-212 metadata slice. |
 | `packages/twenty-server/src/database/commands/upgrade-version-command/2-20/__tests__/2-20-workspace-command-1784266302005-synchronize-myah-inbox-metadata.command.spec.ts` | Command selection, idempotency, and foreign-relation regression coverage. |
 | `packages/twenty-server/src/engine/core-modules/myah-inbox/` | Nest module, typed GraphQL DTOs, cursor codec, query service, mutation service, proposal service, resolver, and unit/integration tests. |
+| `packages/twenty-server/src/modules/messaging/common/query-hooks/message/*visibility*` | Shared user/channel message-visibility policy used by native Message hooks and the Inbox pre-pagination projection. |
 | `packages/twenty-server/src/engine/core-modules/tool-provider/providers/myah-inbox-tool.provider.ts` | Read/propose-only sidebar-agent tool descriptors using the existing actor/role tool context. |
 | `packages/twenty-server/src/engine/core-modules/tool-provider/tool-provider.module.ts` | Registers only the MYAH-212 proposal tool provider; no write tools. |
 | `packages/twenty-front/src/modules/myah/inbox/` | Page composition, query/mutation hooks, thread-list state, panels, draft conflict UI, proposal preview, and focused tests. |
@@ -203,6 +205,10 @@
 ## Task 3: Build the workspace-global Inbox read projection
 
 **Files:**
+- Create or extract: `packages/twenty-server/src/modules/messaging/common/query-hooks/message/message-visibility-policy.service.ts`
+- Modify: `packages/twenty-server/src/modules/messaging/common/query-hooks/message/apply-messages-visibility-restrictions.service.ts`
+- Modify: `packages/twenty-server/src/modules/messaging/common/query-hooks/messaging-query-hook.module.ts`
+- Create or modify: focused shared visibility-policy and native-hook equivalence tests beside those sources.
 - Create: `packages/twenty-server/src/engine/core-modules/myah-inbox/constants/myah-inbox.constants.ts`
 - Create: `packages/twenty-server/src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto.ts`
 - Create: `packages/twenty-server/src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-connection.dto.ts`
@@ -245,6 +251,12 @@
   - soft-deleted native rows excluded;
   - Creator/Campaign missing after a prior relation deletion represented as null context;
   - page-size clamp to the explicit `MYAH_INBOX_MAX_PAGE_SIZE` constant.
+  - authenticated connected-account owner and `SHARE_EVERYTHING` expose subject/body;
+  - `SUBJECT` masks body, `METADATA` masks subject/body, and unknown/no-association messages are hidden;
+  - a hidden newest database message falls back to the newest policy-visible message or omits the thread consistently;
+  - masked/hidden subject or body cannot change search matches, counts, `pageInfo`, ordering, or cursor movement;
+  - channel/account records from another workspace never grant visibility;
+  - API-key, application, missing-user, or synthesized system auth cannot enter the member Inbox projection.
 
   Use exact expectation shape:
 
@@ -269,7 +281,11 @@
 
 - [ ] **Step 3: Implement the bounded query, GraphQL resolver, and module registration**
 
-  Use the same authenticated custom-query shape as `TimelineCalendarEventResolver`: `WorkspaceAuthGuard`, `CustomPermissionGuard`, `@AuthWorkspace()`, and `@AuthWorkspaceMemberId()`. Query workspace-local repositories only. Derive last-message preview/sender/time with a grouped native Message subquery or lateral join; do not hydrate whole threads or issue per-row message queries. Encode both ordering keys in an opaque base64 cursor.
+  Use the authenticated messaging shape: `WorkspaceAuthGuard`, `UserAuthGuard`, and `CustomPermissionGuard`, recognizing that `CustomPermissionGuard` is only a marker and performs no authorization itself. Pass the authenticated user, workspace, workspace member, and current request auth context into the service. Execute repositories in that request context with the resolved role permission configuration; never construct system auth from a caller-supplied workspace ID.
+
+  First extract a deep shared message-visibility policy from `ApplyMessagesVisibilityRestrictionsService`. Native Message post-query hooks and the Inbox projection must consume the same ownership, association, visibility-precedence, masking, and hidden-message rules. The policy interface must support constraining the Inbox candidate query before search/order/limit as well as classifying/redacting materialized native Message rows; do not fork a second Myah-only policy.
+
+  Derive the latest policy-visible associated Message per thread with a permission-aware grouped/lateral query or equivalent bounded query. Search subject only where the policy permits subject visibility and body only where it permits full visibility. A hidden or masked value must not act as a boolean oracle through membership, count, `pageInfo`, order, or cursor. Explicitly scope workspace-global channel/account lookups and soft-delete predicates. Validate Creator, Campaign, and WorkspaceMember context through permission-aware repositories; system-object status does not grant email payload access. Encode the visible message timestamp and thread ID in the opaque base64 cursor.
 
   Add `MyahInboxModule` to the static `imports` array in `CoreEngineModule` next to the other core modules; Nest has no module discovery, so this registration is required for `MyahInboxResolver` to enter the GraphQL schema.
 
@@ -287,6 +303,7 @@
 - [ ] **Step 4: Verify green behavior and prove the query shape**
 
   Re-run Step 2. Add an integration fixture with tied timestamps and at least two cursor pages. Run its focused test plus an `EXPLAIN (ANALYZE, BUFFERS)` against an isolated seeded workspace. Add an index only if that evidence identifies a repeated filter/order bottleneck; put that index in Task 2’s source-controlled metadata slice and assert it in the command test.
+  Add equivalence regressions against native Message visibility for owner, `SHARE_EVERYTHING`, `SUBJECT`, `METADATA`, mixed associations, unknown/no association, hidden-newest-message fallback, and cross-workspace channels. Prove search and pagination reveal no masked/hidden-content oracle before recording query-plan evidence.
 
 ## Task 4: Implement triage and shared-draft mutations with optimistic concurrency
 
@@ -496,7 +513,7 @@
 
 - [ ] **Step 1: Write failing integration/browser scenarios**
 
-  Scenarios must prove: cursor pages with tied latest-message timestamps; Creator-linked/Unmatched filtering; same-workspace relation validation; owner reassignment; stale draft conflict from a second browser session; proposal generation/application; keyboard selection and focus transfer; narrow-layout context access; provider network mutation absence.
+  Scenarios must prove: cursor pages with tied latest-message timestamps; Creator-linked/Unmatched filtering; owner/`SHARE_EVERYTHING`/`SUBJECT`/`METADATA` masking parity with native selected-thread reads; no masked/hidden-content search, count, order, or cursor oracle; same-workspace relation validation; owner reassignment; stale draft conflict from a second browser session; proposal generation/application; keyboard selection and focus transfer; narrow-layout context access; provider network mutation absence.
 
 - [ ] **Step 2: Run scenarios and observe RED**
 

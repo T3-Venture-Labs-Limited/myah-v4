@@ -1,6 +1,6 @@
 # MYAH-212 — Global Inbox and communications workspace
 
-**Status:** Product decisions approved 2026-07-21; implementation plan pending source-level integration trace  
+**Status:** Product decisions and implementation plan approved; implementation resumed 2026-07-24 after MYAH-210 merged  
 **Linear:** [MYAH-212](https://linear.app/t3labs/issue/MYAH-212/core-mvp-build-global-inbox-and-communications-workspace)  
 **Scope:** Core MVP email-only Inbox. No send, provider mutation, production deployment, merge, or new dependency.
 
@@ -87,6 +87,8 @@ The mutation uses the existing source-controlled Myah metadata and workspace-com
 
 A server-owned workspace-global projection returns cursor-paginated thread summaries. It derives sender, preview, latest activity, and display timestamps from native Message data and joins only the Myah Inbox fields above.
 
+The projection must enforce the same per-message connected-account and channel-visibility policy as native Message reads **before** latest-message selection, search, ordering, cursor creation, and page limiting. The first release requires authenticated user context; it does not silently treat API-key, application, or system auth as an Inbox operator. A connected-account owner or `SHARE_EVERYTHING` may see subject and body, `SUBJECT` may expose only the subject, `METADATA` masks both subject and body, and messages with no valid association or visibility are omitted. Masked or hidden content must not influence search matches, result counts, `pageInfo`, ordering, or cursor movement.
+
 Required query behavior:
 
 - stable ordering: `lastActivity DESC, threadId DESC`;
@@ -141,7 +143,7 @@ MYAH-224 defers sidebar-agent triage mutation tools. MYAH-225 defers sidebar-age
 | Responsive shell, loading/error conventions, controls | existing Twenty frontend modules and `twenty-ui` | Reuse directly |
 | AI streaming, tools, model/billing/permission controls | server AI chat and Vercel AI SDK | Reuse directly |
 
-**Deviation rationale: workspace-global Inbox projection and local draft.** Twenty's existing email-thread query is record-scoped and offset-paginated; it cannot drive an operator-wide triage queue with Inbox-specific filters without duplicating the projection in the browser. Native `Message.isDraft` is provider-synced and cannot safely hold a local shared draft. MYAH-212 therefore adds only (1) a cursor-paginated read projection over native data and (2) the narrow revision-protected server draft required for collaborative operator editing. It does not create a separate mailbox, conversation payload store, chat framework, or send path.
+**Deviation rationale: workspace-global Inbox projection and local draft.** Twenty's existing email-thread query is record-scoped and offset-paginated; it cannot drive an operator-wide triage queue with Inbox-specific filters without duplicating the projection in the browser. Native `Message.isDraft` is provider-synced and cannot safely hold a local shared draft. MYAH-212 therefore adds only (1) a cursor-paginated read projection over native data, backed by a shared message-visibility policy also consumed by native Message reads, and (2) the narrow revision-protected server draft required for collaborative operator editing. It does not create a separate mailbox, conversation payload store, chat framework, or send path.
 
 ## Scope boundaries
 
@@ -172,7 +174,7 @@ MYAH-224 defers sidebar-agent triage mutation tools. MYAH-225 defers sidebar-age
 ## Acceptance criteria
 
 1. `/myah/inbox` renders the three-panel, email-thread workflow while retaining the MYAH-209 shared shell.
-2. Every Inbox row represents one native email thread; message history and preview data are derived from native records without duplicate payload storage.
+2. Every Inbox row represents one native email thread; message history and preview data are derived from native records without duplicate payload storage, and list visibility/masking agrees with the native selected-thread read for the same authenticated operator.
 3. Operators can use Creator-linked, Unmatched, owner/unassigned, campaign, and triage-state queues with stable cursor pagination and search.
 4. Operators can explicitly link/unlink Creator, set/clear Campaign and owner, transition triage state, snooze/unsnooze, and use Tasks and Notes as the canonical follow-up context.
 5. The current owner alone can create, edit, or clear the one shared reply draft; stale writes have a visible conflict and never overwrite newer work.
@@ -187,8 +189,9 @@ MYAH-224 defers sidebar-agent triage mutation tools. MYAH-225 defers sidebar-age
 1. Start each backend/frontend slice with targeted failing tests for its observable contract.
 2. Verify migration/metadata behavior for both fresh and existing workspaces using the repository-supported workspace-command path; do not replay MYAH-210's committed command.
 3. Exercise GraphQL generation if the schema changes and run targeted server/frontend typechecks after the relevant slice.
-4. Seed an isolated local workspace with native email threads, Creator-linked and Unmatched queues, owners, campaigns, Tasks, Notes, and competing draft writers.
-5. Browser-smoke the Inbox: select/filter/paginate threads; link an Unmatched thread; change owner/state/snooze; save and conflict a shared draft; generate and explicitly apply a proposal; confirm no provider network mutation occurs.
+4. Verify owner, `SHARE_EVERYTHING`, `SUBJECT`, `METADATA`, unknown/no-association, mixed-association, and cross-workspace visibility cases. Prove masked or hidden content cannot affect search matches, counts, ordering, pagination, or cursors.
+5. Seed an isolated local workspace with native email threads, Creator-linked and Unmatched queues, owners, campaigns, Tasks, Notes, and competing draft writers.
+6. Browser-smoke the Inbox: select/filter/paginate threads; link an Unmatched thread; change owner/state/snooze; save and conflict a shared draft; generate and explicitly apply a proposal; confirm no provider network mutation occurs.
 
 ## Risks and mitigations
 
