@@ -43,7 +43,10 @@ describe('MyahInboxResolver', () => {
       edges: [],
       pageInfo: { endCursor: null, hasNextPage: false },
     });
-    const resolver = new MyahInboxResolver({ listThreads } as never);
+    const resolver = new MyahInboxResolver(
+      { listThreads } as never,
+      {} as never,
+    );
 
     await expect(
       resolver.myahInboxThreads(
@@ -72,7 +75,10 @@ describe('MyahInboxResolver', () => {
       workspace,
     } as never);
     const listThreads = jest.fn();
-    const resolver = new MyahInboxResolver({ listThreads } as never);
+    const resolver = new MyahInboxResolver(
+      { listThreads } as never,
+      {} as never,
+    );
 
     await expect(
       resolver.myahInboxThreads({} as never, workspace as never, workspaceMemberId),

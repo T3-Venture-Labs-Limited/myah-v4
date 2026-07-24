@@ -279,14 +279,14 @@ describe('MyahInboxQueryService', () => {
       pageInfo: { hasNextPage: true },
     });
     expect(calls.order).toEqual([
-      ['latestMessage.receivedAt', 'DESC'],
-      ['messageThread.id', 'DESC'],
+      ['latest_message."receivedAt"', 'DESC'],
+      ['message_thread.id', 'DESC'],
     ]);
     expect(calls.limit).toBe(2);
     expect(allJoinSql(calls)).toContain(fullVisibilityExpression);
     expect(allJoinSql(calls)).toContain('candidateMessage."deletedAt" IS NULL');
-    expect(allWhereSql(calls)).toContain('messageThread.deletedAt IS NULL');
-    expect(allWhereSql(calls)).toContain('latestMessage.deletedAt IS NULL');
+    expect(allWhereSql(calls)).toContain('message_thread."deletedAt" IS NULL');
+    expect(allWhereSql(calls)).toContain('latest_message."deletedAt" IS NULL');
     expect(calls.operations.indexOf('join')).toBeLessThan(
       calls.operations.indexOf('order'),
     );
@@ -315,13 +315,13 @@ describe('MyahInboxQueryService', () => {
       pageInfo: { hasNextPage: false },
     });
     expect(allWhereSql(secondPage.calls)).toContain(
-      'latestMessage.receivedAt < :cursorReceivedAt',
+      'latest_message."receivedAt" < :cursorReceivedAt',
     );
     expect(allWhereSql(secondPage.calls)).toContain(
-      'messageThread.id < :cursorThreadId',
+      'message_thread.id < :cursorThreadId',
     );
     expect(secondPage.calls.where).toContainEqual([
-      expect.stringContaining('messageThread.id < :cursorThreadId'),
+      expect.stringContaining('message_thread.id < :cursorThreadId'),
       expect.objectContaining({
         cursorReceivedAt: '2026-07-21T10:00:00.000Z',
         cursorThreadId: tiedThreadBId,
@@ -366,7 +366,7 @@ describe('MyahInboxQueryService', () => {
     await service.listThreads(listInput({ after: cursor }));
 
     expect(calls.where).toContainEqual([
-      expect.stringContaining('messageThread.id < :cursorThreadId'),
+      expect.stringContaining('message_thread.id < :cursorThreadId'),
       expect.objectContaining({
         cursorReceivedAt: '2026-07-21T10:00:00.000Z',
         cursorThreadId: tiedThreadBId,
@@ -407,16 +407,16 @@ describe('MyahInboxQueryService', () => {
 
     const whereSql = allWhereSql(calls);
 
-    expect(whereSql).toContain('messageThread.creatorId IS NOT NULL');
-    expect(whereSql).toContain('messageThread.inboxOwnerId = :inboxOwnerId');
-    expect(whereSql).toContain('messageThread.myahCampaignId = :campaignId');
-    expect(whereSql).toContain('messageThread.inboxState IN (:...states)');
+    expect(whereSql).toContain('message_thread."creatorId" IS NOT NULL');
+    expect(whereSql).toContain('message_thread."inboxOwnerId" = :inboxOwnerId');
+    expect(whereSql).toContain('message_thread."myahCampaignId" = :campaignId');
+    expect(whereSql).toContain('message_thread."inboxState" IN (:...states)');
     expect(whereSql).toContain(fullVisibilityExpression);
-    expect(whereSql).toContain('latestMessage.subject ILIKE :search');
-    expect(whereSql).toContain('latestMessage.text ILIKE :search');
+    expect(whereSql).toContain('latest_message.subject ILIKE :search');
+    expect(whereSql).toContain('latest_message.text ILIKE :search');
     expect(whereSql).toContain(':messageVisibilitySubject');
     expect(whereSql).toContain(':messageVisibilityFull');
-    expect(whereSql).not.toContain(':messageVisibilityMetadata) AND latestMessage.text');
+    expect(whereSql).not.toContain(':messageVisibilityMetadata) AND latest_message.text');
     expect(calls.operations.lastIndexOf('where')).toBeLessThan(
       calls.operations.indexOf('limit'),
     );
@@ -433,9 +433,9 @@ describe('MyahInboxQueryService', () => {
     );
     await service.listThreads(listInput({ owner: ownerId }));
 
-    expect(allWhereSql(calls)).toContain('messageThread.creatorId IS NULL');
-    expect(allWhereSql(calls)).toContain('messageThread.inboxOwnerId IS NULL');
-    expect(allWhereSql(calls)).toContain('messageThread.inboxOwnerId = :inboxOwnerId');
+    expect(allWhereSql(calls)).toContain('message_thread."creatorId" IS NULL');
+    expect(allWhereSql(calls)).toContain('message_thread."inboxOwnerId" IS NULL');
+    expect(allWhereSql(calls)).toContain('message_thread."inboxOwnerId" = :inboxOwnerId');
   });
 
   it('clamps oversized service callers to MYAH_INBOX_MAX_PAGE_SIZE', async () => {
@@ -496,7 +496,7 @@ describe('MyahInboxQueryService', () => {
     const joinSql = allJoinSql(calls);
     const selectSql = allSelectSql(calls);
 
-    expect(joinSql).toContain('candidateMessage."messageThreadId" = messageThread.id');
+    expect(joinSql).toContain('candidateMessage."messageThreadId" = message_thread.id');
     expect(joinSql).toContain(
       `${fullVisibilityExpression} <> :messageVisibilityHidden`,
     );
@@ -616,6 +616,34 @@ describe('MyahInboxQueryService', () => {
           },
         }),
       ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+  it('loads one exact policy-visible thread summary for mutation responses', async () => {
+    const { service, calls } = createService({
+      rows: [row(tiedThreadAId, '2026-07-21T10:00:00.000Z')],
+    });
+
+    await expect(
+      service.getThreadSummary({
+        ...listInput(),
+        threadId: tiedThreadAId,
+      }),
+    ).resolves.toMatchObject({
+      id: tiedThreadAId,
+      subject: `subject-${tiedThreadAId}`,
+    });
+    expect(allWhereSql(calls)).toContain('message_thread.id = :threadId');
+    expect(calls.limit).toBe(2);
+  });
+
+  it('fails closed when an exact thread has no policy-visible native message', async () => {
+    const { service } = createService();
+
+    await expect(
+      service.getThreadSummary({
+        ...listInput(),
+        threadId: tiedThreadAId,
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

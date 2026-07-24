@@ -44,6 +44,7 @@ export type MyahInboxListThreadsInput = MyahInboxThreadsInput & {
   user: AuthContextUser;
   workspace: WorkspaceEntity;
   workspaceMemberId: string;
+  threadId?: string;
 };
 
 type MyahInboxCursor = {
@@ -182,26 +183,26 @@ export class MyahInboxQueryService {
           this.messageVisibilityPolicyService.buildSqlVisibilityProjection({
             workspaceId: input.workspace.id,
             userWorkspaceId: input.authContext.userWorkspaceId,
-            messageIdExpression: 'latestMessage.id',
+            messageIdExpression: 'latest_message.id',
           });
-        const latestMessageJoinCondition = `latestMessage.id = (
+        const latestMessageJoinCondition = `latest_message.id = (
           SELECT candidateMessage.id
           FROM "${workspaceSchemaName}"."message" candidateMessage
-          WHERE candidateMessage."messageThreadId" = messageThread.id
+          WHERE candidateMessage."messageThreadId" = message_thread.id
             AND candidateMessage."deletedAt" IS NULL
             AND candidateMessage."receivedAt" IS NOT NULL
             AND ${candidateVisibility.expression} <> :messageVisibilityHidden
           ORDER BY candidateMessage."receivedAt" DESC, candidateMessage.id DESC LIMIT 1
         )`;
         const queryBuilder = messageThreadRepository
-          .createQueryBuilder('messageThread')
-          .select('messageThread.id', 'id')
-          .addSelect('latestMessage.receivedAt', 'lastActivityAt')
+          .createQueryBuilder('message_thread')
+          .select('message_thread.id', 'id')
+          .addSelect('latest_message."receivedAt"', 'lastActivityAt')
           .addSelect(latestMessageVisibility.expression, 'messageVisibility')
           .addSelect(
             `CASE
               WHEN ${latestMessageVisibility.expression} IN (:messageVisibilityFull, :messageVisibilitySubject)
-                THEN latestMessage.subject
+                THEN latest_message.subject
               WHEN ${latestMessageVisibility.expression} = :messageVisibilityMetadata
                 THEN :restrictedMessageContent
               ELSE NULL
@@ -211,7 +212,7 @@ export class MyahInboxQueryService {
           .addSelect(
             `CASE
               WHEN ${latestMessageVisibility.expression} = :messageVisibilityFull
-                THEN latestMessage.text
+                THEN latest_message.text
               WHEN ${latestMessageVisibility.expression} IN (:messageVisibilitySubject, :messageVisibilityMetadata)
                 THEN :restrictedMessageContent
               ELSE NULL
@@ -221,25 +222,25 @@ export class MyahInboxQueryService {
           .addSelect(
             `(SELECT messageParticipant.handle
               FROM "${workspaceSchemaName}"."messageParticipant" messageParticipant
-              WHERE messageParticipant."messageId" = latestMessage.id
+              WHERE messageParticipant."messageId" = latest_message.id
                 AND messageParticipant."deletedAt" IS NULL
                 AND messageParticipant.role = :fromParticipantRole
               ORDER BY messageParticipant.id ASC
               LIMIT 1)`,
             'lastMessageSender',
           )
-          .addSelect('messageThread.inboxState', 'state')
-          .addSelect('messageThread.snoozedUntil', 'snoozedUntil')
-          .addSelect('messageThread.creatorId', 'creatorId')
-          .addSelect('messageThread.myahCampaignId', 'campaignId')
-          .addSelect('messageThread.inboxOwnerId', 'inboxOwnerId')
+          .addSelect('message_thread."inboxState"', 'state')
+          .addSelect('message_thread."snoozedUntil"', 'snoozedUntil')
+          .addSelect('message_thread."creatorId"', 'creatorId')
+          .addSelect('message_thread."myahCampaignId"', 'campaignId')
+          .addSelect('message_thread."inboxOwnerId"', 'inboxOwnerId')
           .innerJoin(
-            'messageThread.messages',
-            'latestMessage',
+            'message_thread.messages',
+            'latest_message',
             latestMessageJoinCondition,
           )
-          .where('messageThread.deletedAt IS NULL')
-          .andWhere('latestMessage.deletedAt IS NULL')
+          .where('message_thread."deletedAt" IS NULL')
+          .andWhere('latest_message."deletedAt" IS NULL')
           .setParameters({
             ...candidateVisibility.parameters,
             ...latestMessageVisibility.parameters,
@@ -248,36 +249,42 @@ export class MyahInboxQueryService {
             fromParticipantRole: MessageParticipantRole.FROM,
           });
 
+        if (input.threadId) {
+          queryBuilder.andWhere('message_thread.id = :threadId', {
+            threadId: input.threadId,
+          });
+        }
+
         if (input.queue === MyahInboxQueue.CREATOR_LINKED) {
-          queryBuilder.andWhere('messageThread.creatorId IS NOT NULL');
+          queryBuilder.andWhere('message_thread."creatorId" IS NOT NULL');
         } else if (input.queue === MyahInboxQueue.UNMATCHED) {
-          queryBuilder.andWhere('messageThread.creatorId IS NULL');
+          queryBuilder.andWhere('message_thread."creatorId" IS NULL');
         }
 
         if (input.owner === 'ME') {
           queryBuilder.andWhere(
-            'messageThread.inboxOwnerId = :inboxOwnerId',
+            'message_thread."inboxOwnerId" = :inboxOwnerId',
             { inboxOwnerId: input.workspaceMemberId },
           );
         } else if (input.owner === 'UNASSIGNED') {
-          queryBuilder.andWhere('messageThread.inboxOwnerId IS NULL');
+          queryBuilder.andWhere('message_thread."inboxOwnerId" IS NULL');
         } else if (input.owner) {
           queryBuilder.andWhere(
-            'messageThread.inboxOwnerId = :inboxOwnerId',
+            'message_thread."inboxOwnerId" = :inboxOwnerId',
             { inboxOwnerId: input.owner },
           );
         }
 
         if (input.campaignId) {
           queryBuilder.andWhere(
-            'messageThread.myahCampaignId = :campaignId',
+            'message_thread."myahCampaignId" = :campaignId',
             { campaignId: input.campaignId },
           );
         }
 
         if (input.states?.length) {
           queryBuilder.andWhere(
-            'messageThread.inboxState IN (:...states)',
+            'message_thread."inboxState" IN (:...states)',
             { states: input.states },
           );
         }
@@ -288,9 +295,9 @@ export class MyahInboxQueryService {
           queryBuilder.andWhere(
             `(
               (${latestMessageVisibility.expression} IN (:messageVisibilityFull, :messageVisibilitySubject)
-                AND latestMessage.subject ILIKE :search)
+                AND latest_message.subject ILIKE :search)
               OR (${latestMessageVisibility.expression} = :messageVisibilityFull
-                AND latestMessage.text ILIKE :search)
+                AND latest_message.text ILIKE :search)
             )`,
             { search: `%${search}%` },
           );
@@ -299,10 +306,10 @@ export class MyahInboxQueryService {
         if (cursor) {
           queryBuilder.andWhere(
             `(
-              latestMessage.receivedAt < :cursorReceivedAt
+              latest_message."receivedAt" < :cursorReceivedAt
               OR (
-                latestMessage.receivedAt = :cursorReceivedAt
-                AND messageThread.id < :cursorThreadId
+                latest_message."receivedAt" = :cursorReceivedAt
+                AND message_thread.id < :cursorThreadId
               )
             )`,
             {
@@ -313,8 +320,8 @@ export class MyahInboxQueryService {
         }
 
         const rows = await queryBuilder
-          .orderBy('latestMessage.receivedAt', 'DESC')
-          .addOrderBy('messageThread.id', 'DESC')
+          .orderBy('latest_message."receivedAt"', 'DESC')
+          .addOrderBy('message_thread.id', 'DESC')
           .limit(pageSize + 1)
           .getRawMany<MyahInboxThreadRaw>();
         const hasNextPage = rows.length > pageSize;
@@ -341,6 +348,23 @@ export class MyahInboxQueryService {
     );
   }
 
+  async getThreadSummary(
+    input: Omit<MyahInboxListThreadsInput, 'threadId'> & { threadId: string },
+  ): Promise<MyahInboxThreadSummary> {
+    const connection = await this.listThreads({
+      ...input,
+      first: 1,
+      threadId: input.threadId,
+    });
+    const summary = connection.edges[0]?.node;
+
+    if (!summary) {
+      throw new ForbiddenException('Inbox thread is not readable');
+    }
+
+    return summary;
+  }
+
   private assertUserRequest(
     input: MyahInboxListThreadsInput,
   ): asserts input is MyahInboxListThreadsInput & {
@@ -360,7 +384,11 @@ export class MyahInboxQueryService {
     }
   }
 
-  private assertValidFilterIds(input: MyahInboxThreadsInput): void {
+  private assertValidFilterIds(
+    input: MyahInboxThreadsInput & { threadId?: string },
+  ): void {
+    const hasInvalidThreadId =
+      isDefined(input.threadId) && !isValidUuid(input.threadId);
     const hasInvalidCampaignId =
       isDefined(input.campaignId) && !isValidUuid(input.campaignId);
     const hasInvalidOwnerId =
@@ -369,7 +397,7 @@ export class MyahInboxQueryService {
       input.owner !== 'UNASSIGNED' &&
       !isValidUuid(input.owner);
 
-    if (hasInvalidCampaignId || hasInvalidOwnerId) {
+    if (hasInvalidThreadId || hasInvalidCampaignId || hasInvalidOwnerId) {
       throw new BadRequestException('Invalid Myah inbox relation filter');
     }
   }
