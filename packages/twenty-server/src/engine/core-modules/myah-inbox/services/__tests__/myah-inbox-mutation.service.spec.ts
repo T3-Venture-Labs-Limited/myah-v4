@@ -452,7 +452,7 @@ describe('MyahInboxMutationService', () => {
     });
   });
 
-  it('rejects an explicit null snooze on an already-SNOOZED thread before update', async () => {
+  it('rejects a null-only snooze update before write', async () => {
     const setup = createService({
       thread: {
         ...initialThread(),
@@ -470,6 +470,29 @@ describe('MyahInboxMutationService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
   });
+  it('accepts explicit null while transitioning to a non-SNOOZED state', async () => {
+    const setup = createService({
+      thread: {
+        ...initialThread(),
+        inboxState: MyahInboxState.SNOOZED,
+        snoozedUntil: '2099-01-01T00:00:00.000Z',
+      },
+    });
+
+    await expect(
+      setup.service.updateMyahInboxThread({
+        ...request(),
+        threadId,
+        inboxState: MyahInboxState.CLOSED,
+        snoozedUntil: null,
+      }),
+    ).resolves.toBeDefined();
+    expect(setup.persistedThread).toMatchObject({
+      inboxState: MyahInboxState.CLOSED,
+      snoozedUntil: null,
+    });
+  });
+
 
 
   it.each([

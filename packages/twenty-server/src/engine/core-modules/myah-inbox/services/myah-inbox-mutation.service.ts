@@ -304,7 +304,9 @@ export class MyahInboxMutationService {
       (isDefined(input.inboxState) &&
         !Object.values(MyahInboxState).includes(input.inboxState)) ||
       (hasOwnInputField(input, 'snoozedUntil') &&
-        !isDefined(input.snoozedUntil)) ||
+        !isDefined(input.snoozedUntil) &&
+        (!isDefined(input.inboxState) ||
+          input.inboxState === MyahInboxState.SNOOZED)) ||
       (isDefined(input.snoozedUntil) &&
         !isISO8601(input.snoozedUntil, { strict: true }))
     ) {
