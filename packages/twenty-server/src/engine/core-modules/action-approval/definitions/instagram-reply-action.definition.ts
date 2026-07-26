@@ -246,6 +246,7 @@ export class InstagramReplyActionDefinition {
       contentDigest: binding.contentDigest,
       recipientFingerprint: binding.recipientFingerprint ?? '',
       sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
+      actionContextFingerprint: null,
       inboundMessageId: binding.inboundMessageId ?? '',
       inboundSenderIgsid: binding.inboundSenderIgsid ?? '',
       inboundDirection:
@@ -313,6 +314,7 @@ export class InstagramReplyActionDefinition {
           graph.account.igUserId,
         ]),
       ),
+      actionContextFingerprint: null,
       inboundMessageId: graph.inboundMessageId,
       inboundSenderIgsid: graph.inboundSenderIgsid,
       inboundDirection: graph.inboundDirection,

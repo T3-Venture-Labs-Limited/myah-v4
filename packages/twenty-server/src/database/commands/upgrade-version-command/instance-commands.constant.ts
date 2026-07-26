@@ -107,6 +107,7 @@ import { FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand } from 'src
 import { PendingMigrationCheckFastInstanceCommand } from './2-19/2-19-instance-command-fast-1784112688976-pending-migration-check';
 
 import { CreateManagedProviderBillingFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-create-managed-provider-billing-foundation';
+import { AddActionApprovalContextFingerprintFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1785085300000-add-action-approval-context-fingerprint';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -215,4 +216,5 @@ export const INSTANCE_COMMANDS = [
   CreateManagedProviderBillingFoundationFastInstanceCommand,
   EvolveInstagramApprovalToActionAuthorityFastInstanceCommand,
   FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand,
+  AddActionApprovalContextFingerprintFastInstanceCommand,
 ];

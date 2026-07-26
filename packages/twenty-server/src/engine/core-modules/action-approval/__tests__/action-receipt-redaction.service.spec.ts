@@ -63,4 +63,31 @@ describe('ActionReceiptRedactionService', () => {
       ).toThrow('Unsafe provider outcome');
     }
   });
+
+  it('keeps a safe provider message id internally', () => {
+    expect(
+      service.toAcceptedProviderOutcome({
+        code: 'accepted',
+        acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
+        providerMessageId: '<message@example.com>',
+      }),
+    ).toEqual({
+      code: 'accepted',
+      acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
+      providerMessageId: '<message@example.com>',
+    });
+  });
+
+  it.each(['message\r\nBcc: secret@example.com', 'x'.repeat(999)])(
+    'rejects an unsafe provider message id',
+    (providerMessageId) => {
+      expect(() =>
+        service.toAcceptedProviderOutcome({
+          code: 'accepted',
+          acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
+          providerMessageId,
+        }),
+      ).toThrow('Unsafe provider message id');
+    },
+  );
 });

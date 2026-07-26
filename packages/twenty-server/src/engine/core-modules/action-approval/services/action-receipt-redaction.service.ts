@@ -28,9 +28,21 @@ export class ActionReceiptRedactionService {
       throw new Error('Unsafe provider outcome');
     }
 
+    if (
+      input.providerMessageId !== undefined &&
+      (input.providerMessageId.length === 0 ||
+        input.providerMessageId.length > 998 ||
+        /[\r\n]/.test(input.providerMessageId))
+    ) {
+      throw new Error('Unsafe provider message id');
+    }
+
     return {
       code: input.code,
       acceptedAt: input.acceptedAt,
+      ...(input.providerMessageId === undefined
+        ? {}
+        : { providerMessageId: input.providerMessageId }),
     };
   }
 
