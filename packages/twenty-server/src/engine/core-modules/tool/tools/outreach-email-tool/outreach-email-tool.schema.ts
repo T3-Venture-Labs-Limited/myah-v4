@@ -13,3 +13,11 @@ export const OutreachEmailDraftInputZodSchema = z
 export type OutreachEmailDraftInput = z.infer<
   typeof OutreachEmailDraftInputZodSchema
 >;
+
+export const SendOutreachEmailInputZodSchema = z
+  .object({ actionApprovalBindingId: z.uuid() })
+  .strict();
+
+export type SendOutreachEmailInput = z.infer<
+  typeof SendOutreachEmailInputZodSchema
+>;

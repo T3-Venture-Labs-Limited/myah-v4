@@ -20,6 +20,7 @@ import { PrepareInstagramReplyDraftTool } from 'src/engine/core-modules/tool/too
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 import { NavigateAppTool } from 'src/engine/core-modules/tool/tools/navigate-tool/navigate-app-tool';
 import { PrepareOutreachEmailDraftTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/prepare-outreach-email-draft-tool';
+import { SendOutreachEmailTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/send-outreach-email-tool';
 import { ExtractJsonPathsTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/extract-json-paths-tool';
 import { SearchOutputTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/search-output-tool';
 import { SearchHelpCenterTool } from 'src/engine/core-modules/tool/tools/search-help-center-tool/search-help-center-tool';
@@ -62,6 +63,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     PrepareInstagramReplyDraftTool,
     SendInstagramReplyTool,
     PrepareOutreachEmailDraftTool,
+    SendOutreachEmailTool,
     EmailComposerService,
     SearchHelpCenterTool,
     CodeInterpreterTool,
@@ -80,6 +82,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     PrepareInstagramReplyDraftTool,
     SendInstagramReplyTool,
     PrepareOutreachEmailDraftTool,
+    SendOutreachEmailTool,
     SearchHelpCenterTool,
     CodeInterpreterTool,
     NavigateAppTool,
