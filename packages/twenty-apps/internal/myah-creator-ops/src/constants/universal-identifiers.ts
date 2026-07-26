@@ -136,6 +136,23 @@ export const OUTREACH_ACTION_FIELD_UNIVERSAL_IDENTIFIERS = {
   scheduledAt: 'd11e908c-0cad-54c2-8326-56187dd177f5',
   completedAt: '04638c8a-b191-5030-ad00-810bbca02bbe',
   resultSummary: 'a461116c-dab8-525c-bdd9-4708dcebf433',
+  subject: 'a3ecbb51-442c-589d-b944-4bf5f6ddc93d',
+  body: 'fe19e40a-8f51-54df-b631-390b33a72359',
+  contentDigest: 'ed7d3f38-2ebf-556a-bc7d-7507def97dab',
+  recipientEmail: '21598e0a-077c-519b-b8d4-1a1a95966d90',
+  connectedAccountId: 'df2e43ca-b6b4-50ea-a0db-6edbb46ab391',
+  messageChannelId: 'a0b2e292-21e4-5226-aa88-e732345383e5',
+  senderEmail: 'b9b351b6-7e75-52be-9eaa-21cd6f722c12',
+  senderDisplayName: 'ec41fcc7-25d9-58b6-88a1-6749306e6947',
+  approvalBindingId: '8b5bd6ca-b61f-5a0c-b225-37f515d649ba',
+  executionReceiptId: '81731a47-27a7-5227-869c-284087244fa7',
+  providerDraftExternalId: '63285ab2-bd0c-537e-999b-4e67119b3bcc',
+  sentHeaderMessageId: '31e80297-1638-53b3-a607-3125905a63aa',
+  providerMessageExternalId: '3835066d-3e92-5781-a926-54b01b73d3a2',
+  providerThreadExternalId: 'f9dea5b1-f7a2-5c30-a5fe-8fbf082c87ad',
+  messageId: '9cca420c-78b7-52b9-ac79-c1f797e47846',
+  messageThreadId: '0a05accb-b4ca-5673-87be-41ea7d50c50b',
+  inReplyTo: '8b2b7357-3662-54e7-8433-31b73899051b',
 } as const;
 
 export const CREATORS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS = {

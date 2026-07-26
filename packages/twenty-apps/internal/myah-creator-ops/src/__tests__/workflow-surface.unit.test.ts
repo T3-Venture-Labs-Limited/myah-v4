@@ -159,6 +159,23 @@ describe('Creator Ops workflow object schema', () => {
       'scheduledAt',
       'completedAt',
       'resultSummary',
+      'subject',
+      'body',
+      'contentDigest',
+      'recipientEmail',
+      'connectedAccountId',
+      'messageChannelId',
+      'senderEmail',
+      'senderDisplayName',
+      'approvalBindingId',
+      'executionReceiptId',
+      'providerDraftExternalId',
+      'sentHeaderMessageId',
+      'providerMessageExternalId',
+      'providerThreadExternalId',
+      'messageId',
+      'messageThreadId',
+      'inReplyTo',
     ]);
   });
 
