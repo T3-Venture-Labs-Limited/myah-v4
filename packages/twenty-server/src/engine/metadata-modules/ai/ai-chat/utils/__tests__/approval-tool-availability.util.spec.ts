@@ -1,9 +1,10 @@
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { REQUEST_APPROVAL_TOOL_NAME } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 import {
+  allowRegisteredActionSenders,
   getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
-  hasApprovedInstagramReplyApproval,
+  hasApprovedRegisteredActionApproval,
   hasLatestMessageApprovedGenericApproval,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
 import { ToolCategory } from 'twenty-shared/ai';
@@ -64,6 +65,26 @@ describe('approval tool availability', () => {
         executionRef: { kind: 'static', toolId: 'send_email' },
       } as ToolIndexEntry,
       {
+        name: 'prepare_outreach_email_draft',
+        label: 'Prepare outreach email draft',
+        description: 'Prepare a provider draft without sending it',
+        category: ToolCategory.ACTION,
+        executionRef: {
+          kind: 'static',
+          toolId: 'prepare_outreach_email_draft',
+        },
+      } as ToolIndexEntry,
+      {
+        name: 'send_outreach_email',
+        label: 'Send outreach email',
+        description: 'Send only after registered approval',
+        category: ToolCategory.ACTION,
+        executionRef: {
+          kind: 'static',
+          toolId: 'send_outreach_email',
+        },
+      } as ToolIndexEntry,
+      {
         name: 'prepare_instagram_reply_draft',
         label: 'Prepare Instagram reply draft',
         description: 'Prepare a local draft without provider I/O',
@@ -84,9 +105,23 @@ describe('approval tool availability', () => {
     expect(excluded.has('update_one_company')).toBe(true);
     expect(excluded.has('send_email')).toBe(true);
     expect(excluded.has('prepare_instagram_reply_draft')).toBe(false);
+    expect(excluded.has('prepare_outreach_email_draft')).toBe(false);
+    expect(excluded.has('send_outreach_email')).toBe(true);
     expect(excluded.has('app_myah_list_instagram_conversations')).toBe(false);
     expect(excluded.has('app_myah_list_instagram_messages')).toBe(false);
     expect(excluded.has('app_myah_send_instagram_reply')).toBe(true);
+  });
+
+  it('unlocks exactly both registered action senders after approval', () => {
+    const excluded = new Set([
+      'send_instagram_reply',
+      'send_outreach_email',
+      'send_email',
+    ]);
+
+    allowRegisteredActionSenders(excluded);
+
+    expect(excluded).toEqual(new Set(['send_email']));
   });
 
   it('allows the intentional read-only app function by its generated tool name', () => {
@@ -187,7 +222,7 @@ describe('approval tool availability', () => {
     ];
 
     expect(
-      hasApprovedInstagramReplyApproval(
+      hasApprovedRegisteredActionApproval(
         messagesFor({
           status: 'pending',
           actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca11db',
@@ -195,10 +230,10 @@ describe('approval tool availability', () => {
       ),
     ).toBe(false);
     expect(
-      hasApprovedInstagramReplyApproval(messagesFor({ status: 'resolved' })),
+      hasApprovedRegisteredActionApproval(messagesFor({ status: 'resolved' })),
     ).toBe(false);
     expect(
-      hasApprovedInstagramReplyApproval(
+      hasApprovedRegisteredActionApproval(
         messagesFor({
           status: 'resolved',
           actionApprovalBindingId: 'not-a-uuid',
@@ -206,7 +241,7 @@ describe('approval tool availability', () => {
       ),
     ).toBe(false);
     expect(
-      hasApprovedInstagramReplyApproval(
+      hasApprovedRegisteredActionApproval(
         messagesFor({
           status: 'resolved',
           actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca11db',

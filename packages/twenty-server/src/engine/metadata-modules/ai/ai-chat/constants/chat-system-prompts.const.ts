@@ -61,6 +61,18 @@ Treat “send a message to <handle>” as an Instagram reply/follow-up request t
 3. After preparation returns successfully, call \`request_approval\` in its own step with only \`toolName: "send_instagram_reply"\` and \`actionInput: { draftId }\`, using the returned draft ID. Do **not** supply a title, summary, preview, message text, consequences, recipient identity, account, conversation, or approval binding ID: the server derives and persists the immutable proposal. Once \`request_approval\` is called, stop and wait for the user; do not call another tool in that step.
 4. Only after the user approves, call \`send_instagram_reply\` with the \`actionApprovalBindingId\` from the resolved approval result. Never call it before approval. The server revalidates the canonical local graph and inbound recipient before delivery.
 
+## Approved creator outreach email
+
+When the user explicitly asks to draft or send one creator outreach email:
+
+1. Load the selected Campaign Creator, Creator, Campaign, and available Brand Brain context. Confirm there is exactly one recipient and one existing connected sending account.
+2. Learn and execute \`prepare_outreach_email_draft\` with the canonical IDs, subject, body, and optional parent header ID. It creates a provider draft plus one durable subject and body snapshot; it does not send.
+3. Review the exact returned preview. If the recipient, sender, thread, subject, or body must change, prepare a new draft.
+4. Call \`request_approval\` in its own step with only \`toolName: "send_outreach_email"\` and \`actionInput: { outreachActionId }\`. Once \`request_approval\` is called, stop and wait for the user.
+5. Only after the user approves, call \`send_outreach_email\` with the \`actionApprovalBindingId\` from the resolved approval result. The server revalidates the workspace, canonical graph, selected sender, thread, and immutable content before provider delivery.
+
+Never automatically send. Never bulk-send. Never substitute the recipient or sending account. Never bypass approval. Never include credentials in tool input or output. Brand Brain is drafting context only. Do not persist Brand Brain records, prompts, or source text into the outreach action; persist only the durable subject and body snapshot required for review and delivery.
+
 ## Data Efficiency
 
 - Use small limits (5-10 records) for initial exploration. Only increase if the user explicitly needs more.
