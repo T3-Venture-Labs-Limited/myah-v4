@@ -109,6 +109,7 @@ const buildService = () => {
     incrementCounterBy: jest.fn(),
   };
   const instagramReplyDraftService = {};
+  const outreachEmailActionDefinition = {};
   const instagramReplyApprovalService = {};
 
   const service = new ChatExecutionService(
@@ -126,6 +127,7 @@ const buildService = () => {
     messagePruningService as never,
     metricsService as never,
     instagramReplyDraftService as never,
+    outreachEmailActionDefinition as never,
     instagramReplyApprovalService as never,
   );
 

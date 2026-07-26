@@ -59,7 +59,7 @@ describe('request_approval tool', () => {
     });
   });
 
-  it('persists a registered Instagram authority and returns only its binding UUID', async () => {
+  it('dispatches Instagram only to its definition and returns only the binding UUID', async () => {
     const draftId = '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea';
     const input = {
       toolName: 'send_instagram_reply',
@@ -81,7 +81,74 @@ describe('request_approval tool', () => {
       threadId: 'thread-id',
       evidenceLinks: [],
     };
-    const actionDefinition = {
+    const instagramDefinition = {
+      propose: jest.fn().mockResolvedValue({ expectedActionBinding }),
+    };
+    const outreachDefinition = { propose: jest.fn() };
+    const actionApprovalService = {
+      createPendingBinding: jest
+        .fn()
+        .mockResolvedValue({ id: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b' }),
+    };
+    const factory = createRequestApprovalTool as unknown as (
+      options: unknown,
+    ) => {
+      execute: (value: unknown) => Promise<unknown>;
+    };
+
+    expect(requestApprovalInputSchema.parse(input)).toEqual(input);
+    await expect(
+      factory({
+        workspaceId: 'workspace-id',
+        userWorkspaceId: 'member-id',
+        threadId: 'thread-id',
+        actionDefinitions: {
+          send_instagram_reply: instagramDefinition,
+          send_outreach_email: outreachDefinition,
+        },
+        actionApprovalService,
+      }).execute(input),
+    ).resolves.toEqual({
+      success: true,
+      message: expect.any(String),
+      result: {
+        status: 'pending',
+        actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
+      },
+    });
+    expect(instagramDefinition.propose).toHaveBeenCalledWith({
+      workspaceId: 'workspace-id',
+      initiatorUserWorkspaceId: 'member-id',
+      threadId: 'thread-id',
+      input: { draftId },
+    });
+    expect(outreachDefinition.propose).not.toHaveBeenCalled();
+    expect(actionApprovalService.createPendingBinding).toHaveBeenCalledWith(
+      expectedActionBinding,
+    );
+  });
+
+  it('dispatches outreach only to its definition and returns only the binding UUID', async () => {
+    const outreachActionId = '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea';
+    const input = {
+      toolName: 'send_outreach_email',
+      actionInput: { outreachActionId },
+    };
+    const expectedActionBinding = {
+      workspaceId: 'workspace-id',
+      actionName: 'send_outreach_email',
+      actionVersion: 1,
+      draftId: outreachActionId,
+      contentDigest: 'a'.repeat(64),
+      recipientFingerprint: 'b'.repeat(64),
+      sendingAccountFingerprint: 'c'.repeat(64),
+      actionContextFingerprint: 'd'.repeat(64),
+      initiatorUserWorkspaceId: 'member-id',
+      threadId: 'thread-id',
+      evidenceLinks: [],
+    };
+    const instagramDefinition = { propose: jest.fn() };
+    const outreachDefinition = {
       propose: jest.fn().mockResolvedValue({ expectedActionBinding }),
     };
     const actionApprovalService = {
@@ -101,7 +168,10 @@ describe('request_approval tool', () => {
         workspaceId: 'workspace-id',
         userWorkspaceId: 'member-id',
         threadId: 'thread-id',
-        actionDefinition,
+        actionDefinitions: {
+          send_instagram_reply: instagramDefinition,
+          send_outreach_email: outreachDefinition,
+        },
         actionApprovalService,
       }).execute(input),
     ).resolves.toEqual({
@@ -112,14 +182,70 @@ describe('request_approval tool', () => {
         actionApprovalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
       },
     });
-    expect(actionDefinition.propose).toHaveBeenCalledWith({
+    expect(outreachDefinition.propose).toHaveBeenCalledWith({
       workspaceId: 'workspace-id',
       initiatorUserWorkspaceId: 'member-id',
       threadId: 'thread-id',
-      input: { draftId },
+      input: { outreachActionId },
     });
+    expect(instagramDefinition.propose).not.toHaveBeenCalled();
     expect(actionApprovalService.createPendingBinding).toHaveBeenCalledWith(
       expectedActionBinding,
+    );
+  });
+
+  it.each([
+    {
+      toolName: 'unknown_tool',
+      actionInput: { outreachActionId: '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea' },
+    },
+    {
+      toolName: 'send_outreach_email',
+      actionInput: {
+        outreachActionId: '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea',
+        draftId: '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea',
+      },
+    },
+    {
+      toolName: 'send_outreach_email',
+      actionInput: {
+        outreachActionId: '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea',
+        subject: 'caller supplied',
+      },
+    },
+    {
+      ...validApprovalInput,
+      toolName: 'send_outreach_email',
+    },
+  ])('rejects untrusted or mixed registered approval input', (input) => {
+    expect(requestApprovalInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it('requires authenticated registered approval context', async () => {
+    const factory = createRequestApprovalTool as unknown as (
+      options: unknown,
+    ) => {
+      execute: (value: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      factory({
+        workspaceId: 'workspace-id',
+        userWorkspaceId: undefined,
+        threadId: 'thread-id',
+        actionDefinitions: {
+          send_instagram_reply: { propose: jest.fn() },
+          send_outreach_email: { propose: jest.fn() },
+        },
+        actionApprovalService: { createPendingBinding: jest.fn() },
+      }).execute({
+        toolName: 'send_outreach_email',
+        actionInput: {
+          outreachActionId: '9b05e648-d3f0-4fd7-8e4e-bc6a31b980ea',
+        },
+      }),
+    ).rejects.toThrow(
+      'An authenticated chat thread is required to request registered action approval.',
     );
   });
 

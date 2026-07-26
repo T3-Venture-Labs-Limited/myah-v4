@@ -22,6 +22,7 @@ import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service'
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 
 import { type CodeExecutionStreamEmitter } from 'src/engine/core-modules/tool-provider/interfaces/code-execution-stream-emitter.type';
@@ -133,6 +134,7 @@ export class ChatExecutionService {
     private readonly messagePruningService: MessagePruningService,
     private readonly metricsService: MetricsService,
     private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
+    private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
     private readonly actionApprovalService: ActionApprovalService,
   ) {}
 
@@ -261,7 +263,10 @@ export class ChatExecutionService {
         workspaceId: workspace.id,
         userWorkspaceId,
         threadId,
-        actionDefinition: this.instagramReplyActionDefinition,
+        actionDefinitions: {
+          send_instagram_reply: this.instagramReplyActionDefinition,
+          send_outreach_email: this.outreachEmailActionDefinition,
+        },
         actionApprovalService: this.actionApprovalService,
       }),
       [LEARN_TOOLS_TOOL_NAME]: createLearnToolsTool(

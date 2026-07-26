@@ -318,7 +318,10 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       workspaceId,
       userWorkspaceId: initiatorUserWorkspaceId,
       threadId,
-      actionDefinition,
+      actionDefinitions: {
+        send_instagram_reply: actionDefinition,
+        send_outreach_email: {} as never,
+      },
       actionApprovalService: service,
     }).execute({
       toolName: 'send_instagram_reply',
