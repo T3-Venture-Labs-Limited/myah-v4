@@ -111,6 +111,7 @@ export class MessageChannelResolver {
   ): Promise<MessageChannelDTO> {
     const messageChannel =
       await this.messageChannelMetadataService.verifyOwnership({
+        allowWorkspaceMailbox: false,
         id: input.id,
         userWorkspaceId,
         workspaceId: workspace.id,

@@ -4,9 +4,10 @@ import { msg } from '@lingui/core/macro';
 import { ImapFlow } from 'imapflow';
 import { createTransport } from 'nodemailer';
 import { ACCOUNT_TYPES } from 'twenty-shared/constants';
-import { assertUnreachable } from 'twenty-shared/utils';
+import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 
 import { UserInputError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
+import { EmailConnectionSecurity } from 'src/engine/core-modules/imap-smtp-caldav-connection/enums/email-connection-security.enum';
 import { type EmailAccountConnectionParametersInput } from 'src/engine/core-modules/imap-smtp-caldav-connection/dtos/imap-smtp-caldav-connection.input';
 import { ImapSmtpCaldavValidatorService } from 'src/engine/core-modules/imap-smtp-caldav-connection/services/imap-smtp-caldav-connection-validator.service';
 import {
@@ -17,6 +18,9 @@ import {
 import { buildImapTlsOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-imap-tls-options.util';
 import { buildSmtpTlsOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-smtp-tls-options.util';
 import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
+import { WorkspaceMailboxConnectionException } from 'src/engine/core-modules/myah/exceptions/workspace-mailbox-connection.exception';
+import { type WorkspaceMailboxConnectionErrorCode } from 'src/engine/core-modules/myah/types/workspace-mailbox-connection.type';
+import { getWorkspaceMailboxTlsServername } from 'src/engine/core-modules/myah/utils/get-workspace-mailbox-tls-servername.util';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { CalDavClientService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-client.service';
 import { CalDavFetchEventsService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-fetch-events.service';
@@ -139,6 +143,158 @@ export class ImapSmtpCaldavService {
     }
 
     return true;
+  }
+
+  async validateAndTestWorkspaceMailboxConnection({
+    connectionParameters,
+    handle,
+  }: {
+    connectionParameters: PlaintextImapSmtpCaldavParams;
+    handle: string;
+  }): Promise<PlaintextImapSmtpCaldavParams> {
+    const { IMAP, SMTP, CALDAV } = connectionParameters;
+
+    if (!isDefined(IMAP) || !isDefined(SMTP)) {
+      throw new WorkspaceMailboxConnectionException('INVALID_CONFIGURATION');
+    }
+
+    const allowedSecurityModes = [
+      EmailConnectionSecurity.SSL_TLS,
+      EmailConnectionSecurity.STARTTLS,
+    ];
+
+    if (
+      !allowedSecurityModes.includes(IMAP.connectionSecurity) ||
+      !allowedSecurityModes.includes(SMTP.connectionSecurity)
+    ) {
+      throw new WorkspaceMailboxConnectionException('INSECURE_CONNECTION');
+    }
+
+    if (isDefined(CALDAV)) {
+      throw new WorkspaceMailboxConnectionException('INVALID_CONFIGURATION');
+    }
+
+    await this.testWorkspaceMailboxSmtpConnection(handle, SMTP);
+    await this.testWorkspaceMailboxImapConnection(handle, IMAP);
+
+    return { IMAP, SMTP };
+  }
+
+  private async testWorkspaceMailboxSmtpConnection(
+    handle: string,
+    params: ConnectionParameters,
+  ): Promise<void> {
+    try {
+      const validatedHost = await this.secureHttpClientService.getValidatedHost(
+        params.host,
+      );
+      const transport = createTransport({
+        host: validatedHost,
+        port: params.port,
+        ...buildSmtpTlsOptions(params.connectionSecurity),
+        ...(params.connectionSecurity === EmailConnectionSecurity.STARTTLS
+          ? { requireTLS: true }
+          : {}),
+        auth: {
+          user: params.username ?? handle,
+          pass: params.password,
+        },
+        tls: {
+          rejectUnauthorized: true,
+          servername: getWorkspaceMailboxTlsServername(params.host),
+        },
+      });
+
+      await transport.verify();
+    } catch (error) {
+      this.throwWorkspaceMailboxConnectionError('smtp', error);
+    }
+  }
+
+  private async testWorkspaceMailboxImapConnection(
+    handle: string,
+    params: ConnectionParameters,
+  ): Promise<void> {
+    let client: ImapFlow | undefined;
+
+    try {
+      const validatedHost = await this.secureHttpClientService.getValidatedHost(
+        params.host,
+      );
+
+      client = new ImapFlow({
+        host: validatedHost,
+        port: params.port,
+        ...buildImapTlsOptions(params.connectionSecurity),
+        ...(params.connectionSecurity === EmailConnectionSecurity.STARTTLS
+          ? { doSTARTTLS: true }
+          : {}),
+        auth: {
+          user: params.username ?? handle,
+          pass: params.password,
+        },
+        logger: false,
+        tls: {
+          rejectUnauthorized: true,
+          servername: getWorkspaceMailboxTlsServername(params.host),
+        },
+      });
+      client.on('error', () => {
+        this.logger.warn('workspace_mailbox_imap_transport_error');
+      });
+
+      await client.connect();
+      await client.list();
+    } catch (error) {
+      this.throwWorkspaceMailboxConnectionError('imap', error);
+    } finally {
+      if (client?.authenticated) {
+        try {
+          await client.logout();
+        } catch {
+          this.logger.warn('workspace_mailbox_imap_logout_failed');
+        }
+      }
+    }
+  }
+
+  private throwWorkspaceMailboxConnectionError(
+    protocol: 'imap' | 'smtp',
+    error: unknown,
+  ): never {
+    const errorCode = this.classifyWorkspaceMailboxConnectionError(error);
+
+    this.logger.warn(`workspace_mailbox_${protocol}_validation_failed`, {
+      errorCode,
+    });
+
+    throw new WorkspaceMailboxConnectionException(errorCode, {
+      cause: error,
+    });
+  }
+
+  private classifyWorkspaceMailboxConnectionError(
+    error: unknown,
+  ): WorkspaceMailboxConnectionErrorCode {
+    const errorRecord =
+      typeof error === 'object' && error !== null
+        ? (error as Record<string, unknown>)
+        : {};
+    const code = errorRecord.code;
+
+    if (
+      errorRecord.authenticationFailed === true ||
+      code === 'EAUTH' ||
+      code === 'AUTHENTICATIONFAILED'
+    ) {
+      return 'AUTHENTICATION_FAILED';
+    }
+
+    if (code === 'ECONNREFUSED') {
+      return 'CONNECTION_REFUSED';
+    }
+
+    return 'CONNECTION_UNAVAILABLE';
   }
 
   async testCaldavConnection(

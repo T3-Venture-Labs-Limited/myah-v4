@@ -239,7 +239,7 @@ Cover:
 
 - input uses authenticated `workspaceId` and a valid technical `userWorkspaceId`;
 - a trusted server call may omit `userWorkspaceId` and selects a membership from the same workspace only;
-- the idempotency key must be non-empty but is never persisted as credentials or logged;
+- replay is keyed by the durable workspace mailbox identity and does not expose a no-op request-key field;
 - a different active shared handle returns `MAILBOX_ALREADY_CONNECTED` before persistence;
 - strict validation occurs before encrypted upsert;
 - successful connect calls the upsert with `visibility: 'workspace'` and the stable Myah account marker;

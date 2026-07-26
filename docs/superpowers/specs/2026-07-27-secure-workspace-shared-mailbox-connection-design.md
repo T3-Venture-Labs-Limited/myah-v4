@@ -61,7 +61,6 @@ connectWorkspaceMailbox(input: {
   handle: string;
   accountType: 'IMAP_SMTP';
   connectionParameters: PlaintextImapSmtpCaldavParams;
-  idempotencyKey: string;
 }): Promise<{
   connectedAccountId: string;
   messageChannelId: string;
@@ -118,7 +117,7 @@ This key deliberately excludes `userWorkspaceId`, allowing another authorized me
 
 The service enforces one active workspace-shared outreach mailbox per workspace. After network validation completes, the existing upsert transaction acquires a PostgreSQL advisory transaction lock keyed by the workspace mailbox boundary, then re-reads the account before deciding whether to create or reuse it. This makes both sequential and concurrent requests deterministic without holding a database lock during SMTP/IMAP calls.
 
-A request for the already-connected handle is an idempotent replay. A request for a different handle returns a deterministic `MAILBOX_ALREADY_CONNECTED` error until the existing mailbox is revoked. The supplied idempotency key is validated as a non-empty opaque key and must never contain credentials. The mailbox identity and workspace uniqueness are the durable replay boundary; no separate idempotency ledger is added.
+A request for the already-connected handle is an idempotent replay. A request for a different handle returns a deterministic `MAILBOX_ALREADY_CONNECTED` error until the existing mailbox is revoked. The mailbox identity and workspace uniqueness are the durable replay boundary; no separate idempotency ledger or request-key field is added.
 
 The `MessageChannel` is created in the same transaction by the existing API service. Replay or rotation returns the existing channel rather than creating another one.
 
@@ -193,7 +192,7 @@ Manual fallback is deterministic: the customer is told to verify the provider's 
 
 ### 5.2 Idempotent replay
 
-Repeating or concurrently submitting the same request for the same workspace and handle returns the existing account/channel IDs. The service may revalidate supplied credentials, then serializes only the database upsert with the workspace advisory transaction lock. It must not create duplicate records. A different workspace never participates in the lookup, even if it uses the same handle or idempotency key.
+Repeating or concurrently submitting the same request for the same workspace and handle returns the existing account/channel IDs. The service may revalidate supplied credentials, then serializes only the database upsert with the workspace advisory transaction lock. It must not create duplicate records. A different workspace never participates in the lookup, even if it uses the same handle.
 
 ### 5.3 Rotation
 
@@ -213,7 +212,7 @@ Replay of revoke is safe: an already-absent mailbox returns the same customer-sa
 
 ## 6. Workspace isolation and authorization
 
-Every read and write includes the authenticated `workspaceId`. Account IDs, channel IDs, handles, and idempotency keys never replace tenant scoping.
+Every read and write includes the authenticated `workspaceId`. Account IDs, channel IDs, and handles never replace tenant scoping.
 
 Tests must prove that Workspace A cannot:
 

@@ -20,6 +20,7 @@ import {
 import { EmailingDomainDriver } from 'src/engine/core-modules/emailing-domain/drivers/types/emailing-domain-driver.type';
 import { EmailingDomainService } from 'src/engine/core-modules/emailing-domain/services/emailing-domain.service';
 import { StorageDriverType } from 'src/engine/core-modules/file-storage/interfaces/file-storage.interface';
+import { MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME } from 'src/engine/core-modules/myah/constants/workspace-mailbox-connected-account-name.constant';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
 import { MESSAGE_CHANNEL_DELETED_EVENT } from 'src/engine/metadata-modules/message-channel/constants/message-channel-deleted.constant';
@@ -134,10 +135,12 @@ export class MessageChannelMetadataService {
   }
 
   async verifyOwnership({
+    allowWorkspaceMailbox = true,
     id,
     userWorkspaceId,
     workspaceId,
   }: {
+    allowWorkspaceMailbox?: boolean;
     id: string;
     userWorkspaceId: string;
     workspaceId: string;
@@ -158,6 +161,18 @@ export class MessageChannelMetadataService {
         id: messageChannel.connectedAccountId,
         workspaceId,
       });
+
+    if (
+      connectedAccount?.name ===
+        MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME &&
+      connectedAccount.visibility === 'workspace' &&
+      !allowWorkspaceMailbox
+    ) {
+      throw new MessageChannelException(
+        'Message channel not found',
+        MessageChannelExceptionCode.MESSAGE_CHANNEL_NOT_FOUND,
+      );
+    }
 
     if (connectedAccount?.visibility === 'workspace') {
       return messageChannel;
@@ -203,12 +218,39 @@ export class MessageChannelMetadataService {
     workspaceId: string;
     data: Partial<MessageChannelEntity>;
   }): Promise<MessageChannelDTO> {
+    await this.assertGenericUpdateAllowed({ id, workspaceId });
     await this.repository.update(
       { id, workspaceId },
       data as Record<string, unknown>,
     );
 
     return this.repository.findOneOrFail({ where: { id, workspaceId } });
+  }
+
+  private async assertGenericUpdateAllowed({
+    id,
+    workspaceId,
+  }: {
+    id: string;
+    workspaceId: string;
+  }): Promise<void> {
+    const workspaceMailboxChannel = await this.repository.findOne({
+      where: {
+        connectedAccount: {
+          name: MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME,
+          visibility: 'workspace',
+        },
+        id,
+        workspaceId,
+      },
+    });
+
+    if (workspaceMailboxChannel) {
+      throw new MessageChannelException(
+        'Message channel not found',
+        MessageChannelExceptionCode.MESSAGE_CHANNEL_NOT_FOUND,
+      );
+    }
   }
 
   async createEmailGroupChannel({
