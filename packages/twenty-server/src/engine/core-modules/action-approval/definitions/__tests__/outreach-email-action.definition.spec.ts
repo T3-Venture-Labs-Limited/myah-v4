@@ -105,7 +105,7 @@ const createFixtureState = (reply = false) => {
       name: 'Launch Campaign: Creator Name',
       campaignCreatorId,
       channel: 'EMAIL',
-      status: 'DRAFT',
+      status: 'PENDING',
       subject,
       body,
       contentDigest: computeActionContentDigest(
@@ -456,6 +456,7 @@ describe('OutreachEmailActionDefinition', () => {
 
   it.each<[string, (state: FixtureState) => void]>([
     ['subject', (state) => (state.action.subject = 'Edited subject')],
+    ['status', (state) => (state.action.status = 'DRAFT')],
     ['body', (state) => (state.action.body = 'Edited body')],
     [
       'recipient',

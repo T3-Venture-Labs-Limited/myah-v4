@@ -211,7 +211,7 @@ describe('OutreachEmailDraftService', () => {
         id: authority.outreachActionId,
         campaignCreatorId: CAMPAIGN_CREATOR_ID,
         channel: 'EMAIL',
-        status: 'DRAFT',
+        status: 'PENDING',
         subject: composedEmail.sanitizedSubject,
         body: composedEmail.plainTextBody,
         contentDigest,

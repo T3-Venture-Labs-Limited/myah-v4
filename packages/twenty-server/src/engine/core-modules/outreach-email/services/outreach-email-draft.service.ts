@@ -55,7 +55,7 @@ type OutreachActionRecord = ObjectRecord & {
   name: string;
   campaignCreatorId: string;
   channel: 'EMAIL';
-  status: 'DRAFT';
+  status: 'PENDING';
   subject: string;
   body: string;
   contentDigest: string;
@@ -562,7 +562,7 @@ export class OutreachEmailDraftService {
         name: `${authority.campaignLabel}: ${authority.recipientLabel}`,
         campaignCreatorId: authority.campaignCreatorId,
         channel: 'EMAIL',
-        status: 'DRAFT',
+        status: 'PENDING',
         subject: composedEmail.sanitizedSubject,
         body: composedEmail.plainTextBody,
         contentDigest,

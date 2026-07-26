@@ -625,7 +625,7 @@ export class OutreachEmailActionDefinition {
     if (
       graph.action.id !== outreachActionId ||
       graph.action.channel !== 'EMAIL' ||
-      graph.action.status !== 'DRAFT' ||
+      graph.action.status !== 'PENDING' ||
       !isNonEmptyString(subject) ||
       !isNonEmptyString(body) ||
       graph.action.contentDigest !== expectedContentDigest ||
