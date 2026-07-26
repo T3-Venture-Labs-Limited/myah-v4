@@ -1,9 +1,11 @@
 import { Command } from 'nest-commander';
 
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { TwentyStandardApplicationService } from 'src/engine/workspace-manager/twenty-standard-application/services/twenty-standard-application.service';
 
 @RegisteredWorkspaceCommand('2.19.0', 1810000010000)
@@ -16,6 +18,7 @@ export class ResynchronizeMyahStandardApplicationCommand extends ActiveOrSuspend
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly twentyStandardApplicationService: TwentyStandardApplicationService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
   ) {
     super(workspaceIteratorService);
   }
@@ -24,6 +27,19 @@ export class ResynchronizeMyahStandardApplicationCommand extends ActiveOrSuspend
     workspaceId,
     options,
   }: RunOnWorkspaceArgs): Promise<void> {
+    const { flatObjectMetadataMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'flatObjectMetadataMaps',
+      ]);
+
+    if (
+      flatObjectMetadataMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.outreachAction.universalIdentifier
+      ] === undefined
+    ) {
+      return;
+    }
+
     if (options.dryRun === true) {
       this.logger.log(
         `[DRY RUN] Would resynchronize Myah standard metadata for workspace ${workspaceId}`,

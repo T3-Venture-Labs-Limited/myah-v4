@@ -172,13 +172,16 @@ const createFixtureState = (reply = false) => {
 const buildDefinition = ({
   state = createFixtureState(),
   metadataWorkspaceId = workspaceId,
+  updateAffected = 1,
 }: {
   state?: FixtureState;
   metadataWorkspaceId?: string;
+  updateAffected?: number;
 } = {}) => {
   const repositories = {
     outreachAction: {
       findOneBy: jest.fn(async () => ({ ...state.action })),
+      update: jest.fn().mockResolvedValue({ affected: updateAffected }),
     },
     campaignCreator: {
       findOneBy: jest.fn(async () => ({ ...state.campaignCreator })),
@@ -329,6 +332,7 @@ describe('OutreachEmailActionDefinition', () => {
             connectedAccountId,
             messageChannelId,
             'sender@example.com',
+            'Sender Name',
           ]),
         ),
         actionContextFingerprint: computeActionContentDigest(
@@ -471,6 +475,10 @@ describe('OutreachEmailActionDefinition', () => {
       (state) => (state.action.messageChannelId = otherWorkspaceId),
     ],
     ['sender', (state) => (state.action.senderEmail = 'other@example.com')],
+    [
+      'sender display name',
+      (state) => (state.action.senderDisplayName = 'Changed Sender'),
+    ],
     ['parent', (state) => (state.action.inReplyTo = '<other@example.com>')],
     [
       'workspace message thread',
@@ -508,6 +516,10 @@ describe('OutreachEmailActionDefinition', () => {
       (state) => (state.connectedAccount.handle = 'other@example.com'),
     ],
     [
+      'sender display name',
+      (state) => (state.connectedAccount.name = 'Changed Sender'),
+    ],
+    [
       'parent Message',
       (state) => (state.parentMessage.headerMessageId = '<other@example.com>'),
     ],
@@ -528,6 +540,42 @@ describe('OutreachEmailActionDefinition', () => {
       ).rejects.toThrow('Outreach email source graph is unavailable');
     },
   );
+
+  it('records the approval binding on the unchanged PENDING action', async () => {
+    const { definition, repositories } = buildDefinition();
+    const proposal = await propose(definition);
+    const approvalBindingId = '00000000-0000-4000-8000-000000000013';
+
+    await expect(
+      definition.recordApprovalBinding({
+        expectedActionBinding: proposal.expectedActionBinding,
+        approvalBindingId,
+      }),
+    ).resolves.toBeUndefined();
+    expect(repositories.outreachAction.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: outreachActionId,
+        status: 'PENDING',
+        contentDigest: proposal.expectedActionBinding.contentDigest,
+        connectedAccountId,
+        messageChannelId,
+        senderEmail: 'sender@example.com',
+      }),
+      { approvalBindingId },
+    );
+  });
+
+  it('rejects approval binding projection when the action changed', async () => {
+    const { definition } = buildDefinition({ updateAffected: 0 });
+    const proposal = await propose(definition);
+
+    await expect(
+      definition.recordApprovalBinding({
+        expectedActionBinding: proposal.expectedActionBinding,
+        approvalBindingId: '00000000-0000-4000-8000-000000000013',
+      }),
+    ).rejects.toThrow('Outreach email source graph is unavailable');
+  });
 
   it('rejects metadata from another workspace', async () => {
     const { definition } = buildDefinition({

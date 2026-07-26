@@ -21,6 +21,7 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { ACTION_RECEIPT_PROJECTION_WRITER } from 'src/engine/core-modules/action-approval/types/action-approval.type';
+import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbound-manager/messaging-send-manager.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     GlobalWorkspaceDataSourceModule,
     WorkspaceCacheModule,
     PermissionsModule,
+    MessagingSendManagerModule,
     TypeOrmModule.forFeature([
       ActionApprovalBindingEntity,
       ActionApprovalBindingEvidenceLinkEntity,

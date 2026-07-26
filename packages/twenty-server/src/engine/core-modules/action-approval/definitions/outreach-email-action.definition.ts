@@ -18,6 +18,7 @@ import {
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
@@ -65,6 +66,7 @@ type OutreachEmailActionRecord = ObjectRecord & {
   messageChannelId: string | null;
   senderEmail: string | null;
   senderDisplayName: string | null;
+  approvalBindingId: string | null;
   executionReceiptId: string | null;
   providerDraftExternalId: string | null;
   sentHeaderMessageId: string | null;
@@ -258,6 +260,71 @@ export class OutreachEmailActionDefinition {
     return { expectedActionBinding, canonicalGraph: graph };
   }
 
+  async recordApprovalBinding({
+    expectedActionBinding,
+    approvalBindingId,
+  }: {
+    expectedActionBinding: ExpectedActionBindingWithWorkspace;
+    approvalBindingId: string;
+  }): Promise<void> {
+    if (expectedActionBinding.actionName !== this.actionName) {
+      throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+    }
+
+    const { canonicalGraph: graph } = await this.rebuildExecutionAuthority({
+      workspaceId: expectedActionBinding.workspaceId,
+      binding: expectedActionBinding,
+    });
+    const result =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const actionRepository =
+            await this.globalWorkspaceOrmManager.getRepository<OutreachEmailActionRecord>(
+              expectedActionBinding.workspaceId,
+              'outreachAction',
+            );
+
+          return actionRepository.update(
+            {
+              id: graph.outreachActionId,
+              channel: 'EMAIL',
+              status: 'PENDING',
+              subject: graph.subject,
+              body: graph.body,
+              contentDigest: expectedActionBinding.contentDigest,
+              recipientEmail: graph.recipientEmail,
+              connectedAccountId: graph.connectedAccountId,
+              messageChannelId: graph.messageChannelId,
+              senderEmail: graph.senderEmail,
+              senderDisplayName:
+                graph.senderDisplayName === null
+                  ? IsNull()
+                  : graph.senderDisplayName,
+              providerDraftExternalId: graph.providerDraftExternalId,
+              providerThreadExternalId:
+                graph.providerThreadExternalId === null
+                  ? IsNull()
+                  : graph.providerThreadExternalId,
+              messageThreadId:
+                graph.messageThreadId === null
+                  ? IsNull()
+                  : graph.messageThreadId,
+              inReplyTo: graph.inReplyTo === null ? IsNull() : graph.inReplyTo,
+              approvalBindingId: IsNull(),
+              executionReceiptId: IsNull(),
+              completedAt: IsNull(),
+            },
+            { approvalBindingId } as never,
+          );
+        },
+        buildSystemAuthContext(expectedActionBinding.workspaceId),
+      );
+
+    if (result.affected !== 1) {
+      throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+    }
+  }
+
   async getProposal({
     workspaceId,
     binding,
@@ -379,6 +446,7 @@ export class OutreachEmailActionDefinition {
           graph.connectedAccountId,
           graph.messageChannelId,
           graph.senderEmail,
+          graph.senderDisplayName,
         ]),
       ),
       actionContextFingerprint: computeActionContentDigest(
@@ -609,6 +677,9 @@ export class OutreachEmailActionDefinition {
     const body = graph.action.body?.trim();
     const recipientEmail = graph.action.recipientEmail?.trim();
     const senderEmail = graph.action.senderEmail?.trim();
+    const senderDisplayName = graph.action.senderDisplayName?.trim() || null;
+    const connectedAccountSenderDisplayName =
+      graph.connectedAccount.name?.trim() || null;
     const providerDraftExternalId =
       graph.action.providerDraftExternalId?.trim();
     const providerThreadExternalId =
@@ -633,6 +704,7 @@ export class OutreachEmailActionDefinition {
       !emailSchema.safeParse(recipientEmail).success ||
       !isNonEmptyString(senderEmail) ||
       !emailSchema.safeParse(senderEmail).success ||
+      senderDisplayName !== connectedAccountSenderDisplayName ||
       !isNonEmptyString(providerDraftExternalId) ||
       !isNonEmptyString(recipientLabel) ||
       !isNonEmptyString(campaignLabel) ||
@@ -678,7 +750,7 @@ export class OutreachEmailActionDefinition {
       connectedAccountId: graph.connectedAccount.id,
       messageChannelId: graph.messageChannel.id,
       senderEmail,
-      senderDisplayName: graph.action.senderDisplayName?.trim() || null,
+      senderDisplayName,
       providerDraftExternalId,
       providerThreadExternalId,
       messageThreadId,

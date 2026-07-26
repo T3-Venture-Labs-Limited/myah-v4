@@ -665,7 +665,7 @@ await actionApprovalService.recordProviderAccepted(receipt.id, {
 });
 ```
 
-Then attempt workspace sent-message persistence and receipt projection. Projection failure is swallowed only after provider acceptance because reconciliation replays it without sending. Do not log thrown provider objects or email content.
+After acceptance, persist all safe provider identifiers on the internal receipt, then call receipt projection. Projection owns workspace sent-message persistence/recovery under one action-scoped advisory lock and projects the safe result. Projection failure is swallowed only after provider acceptance because reconciliation replays it without sending. Do not log thrown provider objects or email content.
 
 - [ ] **Step 4: Run send-tool test GREEN**
 
@@ -924,25 +924,27 @@ Add a comment to MYAH-237 containing:
 
 MYAH-168 owns draft, approval, execution, retry safety, receipts, and timeline projection.
 
-MYAH-237 Task 13 may provide only an eligible mailbox selection:
+MYAH-237 Task 13 may determine managed-mailbox eligibility and provide only an eligible `connectedAccountId` to `OutreachEmailDraftService.resolvePreparationAuthority(...)`, alongside the Campaign Creator selected by the owning workflow. The authenticated server context supplies `workspaceId`.
 
-- workspaceId
-- outreachActionId
-- connectedAccountId
-- messageChannelId
-- senderEmail
-- senderDisplayName
+MYAH-168 derives and validates:
+
+- `outreachActionId`
+- `messageChannelId`
+- `senderEmail`
+- `senderDisplayName`
+- recipient identity
+- existing-thread and parent Message identity
 
 Guarantees and requirements:
 
-1. The selected connected account and message channel must already belong to the same workspace and support outbound email.
-2. MYAH-237 never supplies credentials or provider configuration through this contract.
-3. MYAH-168 snapshots account, channel, and sender identity before approval; changing any of them invalidates approval.
-4. Existing threads must keep their stored account, channel, and sender identity.
+1. The selected connected account and exactly one send-enabled message channel must belong to the authenticated workspace.
+2. MYAH-237 never supplies sender identity, message-channel identity, credentials, or provider configuration through this contract.
+3. MYAH-168 snapshots account, channel, sender, recipient, content, and thread identity before approval; changing any bound fact invalidates approval.
+4. Existing threads must keep their stored account, channel, sender, and parent Message identity.
 5. MYAH-237 may determine managed-mailbox eligibility, but it may not create/approve/send/retry/project outreach actions or bypass MYAH-168.
-6. UNKNOWN provider outcomes require reconciliation and are never automatically resent.
+6. `UNKNOWN` provider outcomes require reconciliation and are never automatically resent.
 
-Verified consumer seam: `OutreachMailboxSelection` in `packages/twenty-server/src/engine/core-modules/outreach-email/types/outreach-email.type.ts`.
+Verified consumer seam: `OutreachEmailDraftService.resolvePreparationAuthority(...)` and `OutreachMailboxSelection` in `packages/twenty-server/src/engine/core-modules/outreach-email/`.
 ```
 
 Append exact Linux commands/outcomes, implementation commit IDs, and independent-review verdict. Also comment on MYAH-168 with the implementation handoff and verification evidence.
@@ -950,3 +952,50 @@ Append exact Linux commands/outcomes, implementation commit IDs, and independent
 - [ ] **Step 8: Confirm completion state**
 
 Verify MYAH-168 is still assigned to project `myah` and its Stage 3 milestone. Move it to the repository's review-ready Linear state only after the final commit, verification, and independent review are complete. Do not alter MYAH-237 implementation status from this worktree.
+
+---
+
+## Completion record — 2026-07-27
+
+Implementation is recorded in the auditable commit series `bad22ce3` through `bc4490a8`, preceded by the approved design/plan and the focused generic approval/messaging prerequisites on this branch.
+
+All verification ran on the approved Linux host in:
+
+```text
+/home/superdao/myah-v4/.worktrees/daryll/myah-168-implement-outreach-draft-approval-send-receipt-workflow
+```
+
+The repository was mounted into `node:24.16.0-bookworm`; project commands and observed outcomes:
+
+- `yarn nx jest twenty-server --runInBand <24 affected unit/metadata specs>` — PASS, 24 suites / 220 tests.
+- `yarn --cwd packages/twenty-apps/internal/myah-creator-ops test:unit src/__tests__/workflow-surface.unit.test.ts` — PASS, 1 file / 7 tests.
+- `yarn nx jest twenty-server --config ./jest-integration.config.ts --globals '{"APP_PORT":40168}' --runInBand test/integration/action-approval/action-approval.integration-spec.ts` — PASS, 8 tests.
+- `yarn nx jest twenty-server --config ./jest-integration.config.ts --globals '{"APP_PORT":40168}' --runInBand test/integration/action-approval/outreach-email-workflow.integration-spec.ts` — PASS, 3 tests.
+- `yarn nx typecheck twenty-server` — PASS.
+- `yarn --cwd packages/twenty-apps/internal/myah-creator-ops lint` — PASS, 0 warnings / 0 errors.
+- `yarn nx lint twenty-server` — PASS, 0 errors; two unrelated pre-existing unused-symbol warnings remain in standard role metadata and Brand Brain.
+- `yarn nx build twenty-server` — PASS, 6,874 files compiled.
+- `git diff --check` — PASS.
+
+The metadata parity proof is the passing Creator Ops workflow-surface contract plus `compute-myah-standard-metadata.spec.ts`; no generated artifact was hand-edited. The PostgreSQL smoke uses real workspace/core repositories and a fake provider boundary because external mailbox credentials are intentionally outside MYAH-168. It proves migration row preservation, approval gating, workspace isolation, one provider submission, one durable `SENT` receipt, and replay without resend.
+
+### Final independent-review correction
+
+The final review found three replay defects: incomplete approved-identity revalidation, concurrent Message recovery outside a serialization boundary, and loss of provider external/thread IDs after post-acceptance persistence failure. The correction:
+
+- forwards immutable recipient, sending-account, action-context, and evidence-link authority from the binding into projection;
+- acquires one transaction-scoped advisory lock keyed by authenticated workspace plus Outreach Action before any Message recovery;
+- makes the projection writer the sole post-acceptance Message persistence owner;
+- stores and validates provider header, external-message, and thread identifiers in the internal receipt through an idempotent forward migration; and
+- retains `SENT` receipt/event semantics while storing the canonical Outreach Action terminal status `APPLIED`.
+
+Fresh Linux verification after the correction:
+
+- focused unit/metadata Jest — PASS, 11 suites / 113 tests;
+- Creator Ops workflow surface Vitest — PASS, 1 file / 7 tests;
+- shared action-approval PostgreSQL integration on port `40173` — PASS, 8 tests;
+- outreach PostgreSQL integration on port `40174` — PASS, 4 tests, including two concurrent replay calls, one Message persistence path, one receipt-keyed timeline event, and lossless provider external ID;
+- `yarn nx typecheck twenty-server` — PASS;
+- `yarn nx lint twenty-server` — PASS, 0 errors with the same two unrelated pre-existing warnings;
+- `yarn nx build twenty-server` — PASS, 6,876 files compiled; and
+- final independent follow-up review — **Ready**, confidence 0.98, with no Critical or Important findings.

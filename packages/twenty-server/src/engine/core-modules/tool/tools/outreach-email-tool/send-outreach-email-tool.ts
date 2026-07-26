@@ -13,7 +13,6 @@ import { type ToolExecutionContext } from 'src/engine/core-modules/tool/types/to
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
-import { SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 import { classifyMessageOutboundError } from 'src/modules/messaging/message-outbound-manager/utils/classify-message-outbound-error.util';
 
@@ -29,7 +28,6 @@ export class SendOutreachEmailTool implements Tool {
     private readonly actionApprovalService: ActionApprovalService,
     private readonly actionDefinition: OutreachEmailActionDefinition,
     private readonly messageOutboundService: MessagingMessageOutboundService,
-    private readonly sentMessagePersistenceService: SentMessagePersistenceService,
     private readonly projector: ActionReceiptProjectorService,
   ) {}
 
@@ -116,24 +114,10 @@ export class SendOutreachEmailTool implements Tool {
           code: 'accepted',
           acceptedAt: new Date(),
           providerMessageId: sendResult.headerMessageId,
+          providerExternalMessageId: sendResult.messageExternalId,
+          providerThreadExternalId: sendResult.threadExternalId,
         },
       );
-
-      try {
-        await this.sentMessagePersistenceService.persistSentMessage({
-          sendResult,
-          subject: graph.subject,
-          body: graph.body,
-          recipients: { to: [graph.recipientEmail], cc: [], bcc: [] },
-          connectedAccount: graph.connectedAccount,
-          messageChannelId: graph.messageChannelId,
-          inReplyTo: graph.inReplyTo ?? undefined,
-          parentThreadExternalId: graph.providerThreadExternalId ?? undefined,
-          workspaceId: context.workspaceId,
-        });
-      } catch {
-        // The accepted receipt remains replayable without provider submission.
-      }
 
       try {
         await this.projector.projectReceipt(reservation.receipt.id);

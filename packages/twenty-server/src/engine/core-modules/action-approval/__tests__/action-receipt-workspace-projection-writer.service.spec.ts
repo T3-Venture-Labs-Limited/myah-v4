@@ -25,6 +25,8 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(
       dataSource as never,
+      {} as never,
+      {} as never,
     );
 
     await writer.project({
@@ -67,6 +69,8 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(
       dataSource as never,
+      {} as never,
+      {} as never,
     );
 
     await expect(
@@ -101,23 +105,38 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     const workspaceId = '00000000-0000-4000-8000-000000000012';
     const draftId = '00000000-0000-4000-8000-000000000013';
     const campaignCreatorId = '00000000-0000-4000-8000-000000000014';
+    const campaignCreatorObjectMetadataId =
+      '00000000-0000-4000-8000-000000000020';
     const creatorId = '00000000-0000-4000-8000-000000000015';
     const campaignId = '00000000-0000-4000-8000-000000000016';
     const messageChannelId = '00000000-0000-4000-8000-000000000017';
     const messageId = '00000000-0000-4000-8000-000000000018';
     const messageThreadId = '00000000-0000-4000-8000-000000000019';
     const providerMessageId = '<sent@example.com>';
+    const providerExternalMessageId = 'provider-message-id';
+    const providerThreadExternalId = 'provider-thread-id';
+    const senderDisplayName = 'Sender Name';
     const subject = 'Approved subject';
     const body = 'Approved body';
     let projected = false;
+    let messageAvailable = false;
     const query = jest.fn(async (sql: string, _parameters?: unknown[]) => {
       if (sql.includes('FROM') && sql.includes('"timelineActivity"')) {
         return projected ? [{ id: receiptId }] : [];
       }
-      if (sql.includes('FROM') && sql.includes('"_outreachAction"')) {
+      if (sql.includes('core."objectMetadata"')) {
+        return [{ id: campaignCreatorObjectMetadataId }];
+      }
+      if (
+        sql.includes('FROM') &&
+        sql.includes('"outreachAction"') &&
+        sql.includes('"campaignCreator"') &&
+        sql.includes('"status" = \'PENDING\'')
+      ) {
         return [
           {
             subject,
+            recipientEmail: 'creator@example.com',
             body,
             campaignCreatorId,
             creatorId,
@@ -125,6 +144,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
             connectedAccountId: 'connected-account-id',
             messageChannelId,
             senderEmail: 'sender@example.com',
+            senderDisplayName,
             providerDraftExternalId: 'provider-draft-id',
             providerThreadExternalId: 'provider-thread-id',
             messageThreadId: null,
@@ -133,13 +153,17 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
           },
         ];
       }
-      if (sql.includes('FROM') && sql.includes('"message"')) {
+      if (
+        messageAvailable &&
+        sql.includes('FROM') &&
+        sql.includes('"message"')
+      ) {
         return [
           {
             id: messageId,
             messageThreadId,
-            messageExternalId: 'provider-message-id',
-            messageThreadExternalId: 'provider-thread-id',
+            messageExternalId: providerExternalMessageId,
+            messageThreadExternalId: providerThreadExternalId,
           },
         ];
       }
@@ -156,6 +180,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     const insert = jest.fn(() => ({ into }));
     const createQueryBuilder = jest.fn(() => ({ insert }));
     const dataSource = {
+      query,
       transaction: jest.fn(
         async (
           callback: (manager: {
@@ -165,8 +190,22 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         ) => callback({ query, createQueryBuilder }),
       ),
     };
+    const persistSentMessage = jest.fn(async () => {
+      messageAvailable = true;
+      return { messageId, messageThreadId };
+    });
+    const connectedAccountRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'connected-account-id',
+        workspaceId,
+        handle: 'sender@example.com',
+        archivedAt: null,
+      }),
+    };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(
       dataSource as never,
+      connectedAccountRepository as never,
+      { persistSentMessage } as never,
     );
     const projection = {
       receiptId,
@@ -177,15 +216,56 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       ),
       actionName: 'send_outreach_email',
       providerMessageId,
+      providerExternalMessageId,
+      providerThreadExternalId,
+      recipientFingerprint: computeActionContentDigest(
+        JSON.stringify(['creator@example.com']),
+      ),
+      sendingAccountFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          'connected-account-id',
+          messageChannelId,
+          'sender@example.com',
+          senderDisplayName,
+        ]),
+      ),
+      actionContextFingerprint: computeActionContentDigest(
+        JSON.stringify([null, null, providerThreadExternalId]),
+      ),
+      evidenceLinks: [
+        {
+          objectMetadataId: 'campaign-creator-metadata-id',
+          recordId: campaignCreatorId,
+          role: 'campaign_creator',
+        },
+        {
+          objectMetadataId: 'creator-metadata-id',
+          recordId: creatorId,
+          role: 'creator',
+        },
+        {
+          objectMetadataId: 'campaign-metadata-id',
+          recordId: campaignId,
+          role: 'campaign',
+        },
+      ],
     } as const;
 
     await writer.project(projection);
     await writer.project(projection);
 
-    const actionSelect = query.mock.calls.find(([sql]) =>
-      sql.includes('"_outreachAction"'),
+    expect(query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`outreach-action-projection:${workspaceId}:${draftId}`],
+    );
+    const actionSelect = query.mock.calls.find(
+      ([sql]) =>
+        sql.includes('"outreachAction"') &&
+        sql.includes('"campaignCreator"') &&
+        sql.includes('FOR UPDATE'),
     );
     expect(actionSelect?.[0]).toContain('FOR UPDATE');
+    expect(actionSelect?.[0]).not.toContain('"_outreachAction"');
     const messageSelect = query.mock.calls.find(
       ([sql]) => sql.includes('"message"') && sql.includes('"headerMessageId"'),
     );
@@ -193,15 +273,16 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     const actionUpdate = query.mock.calls.find(
       ([sql]) =>
         String(sql).trimStart().startsWith('UPDATE') &&
-        sql.includes('"_outreachAction"'),
+        sql.includes('"outreachAction"'),
     );
-    expect(actionUpdate?.[0]).toContain('"status" = \'SENT\'');
+    expect(actionUpdate?.[0]).toContain('"status" = \'APPLIED\'');
+    expect(actionUpdate?.[0]).toContain('AND "status" = \'PENDING\'');
     expect(actionUpdate?.[1]).toEqual(
       expect.arrayContaining([
         receiptId,
         providerMessageId,
-        'provider-message-id',
-        'provider-thread-id',
+        providerExternalMessageId,
+        providerThreadExternalId,
         messageId,
         messageThreadId,
         draftId,
@@ -214,7 +295,8 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       expect.objectContaining({
         id: receiptId,
         name: 'outreachAction.sent',
-        targetCampaignCreatorId: campaignCreatorId,
+        linkedRecordId: campaignCreatorId,
+        linkedObjectMetadataId: campaignCreatorObjectMetadataId,
         properties: {
           outreachActionId: draftId,
           creatorId,
@@ -222,6 +304,24 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
           messageId,
           status: 'SENT',
         },
+      }),
+    );
+    expect(values).not.toHaveBeenCalledWith(
+      expect.objectContaining({ targetCampaignCreatorId: expect.anything() }),
+    );
+    expect(persistSentMessage).toHaveBeenCalledTimes(1);
+    expect(persistSentMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sendResult: {
+          headerMessageId: providerMessageId,
+          messageExternalId: providerExternalMessageId,
+          threadExternalId: providerThreadExternalId,
+        },
+        subject,
+        body,
+        recipients: { to: ['creator@example.com'], cc: [], bcc: [] },
+        messageChannelId,
+        workspaceId,
       }),
     );
     expect(orIgnore).toHaveBeenCalledTimes(1);
@@ -243,17 +343,22 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       if (sql.includes('"timelineActivity"')) {
         return [];
       }
-      if (sql.includes('"_outreachAction"')) {
+      if (
+        sql.includes('"outreachAction"') &&
+        sql.includes('"campaignCreator"')
+      ) {
         return [
           {
             subject,
             body: changedContent ? 'Changed body' : body,
+            recipientEmail: 'creator@example.com',
             campaignCreatorId: 'campaign-creator-id',
             creatorId: 'creator-id',
             campaignId: 'campaign-id',
             connectedAccountId: 'connected-account-id',
             messageChannelId: 'message-channel-id',
             senderEmail: 'sender@example.com',
+            senderDisplayName: null,
             providerDraftExternalId: 'provider-draft-id',
             providerThreadExternalId: null,
             messageThreadId: null,
@@ -277,6 +382,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       }),
     }));
     const dataSource = {
+      query,
       transaction: jest.fn(
         async (
           callback: (manager: {
@@ -288,6 +394,8 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(
       dataSource as never,
+      { findOne: jest.fn().mockResolvedValue(null) } as never,
+      { persistSentMessage: jest.fn() } as never,
     );
 
     await expect(
@@ -300,6 +408,39 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         ),
         actionName: 'send_outreach_email',
         providerMessageId: '<sent@example.com>',
+        providerExternalMessageId: null,
+        providerThreadExternalId: null,
+        recipientFingerprint: computeActionContentDigest(
+          JSON.stringify(['creator@example.com']),
+        ),
+        sendingAccountFingerprint: computeActionContentDigest(
+          JSON.stringify([
+            'connected-account-id',
+            'message-channel-id',
+            'sender@example.com',
+            null,
+          ]),
+        ),
+        actionContextFingerprint: computeActionContentDigest(
+          JSON.stringify([null, null, null]),
+        ),
+        evidenceLinks: [
+          {
+            objectMetadataId: 'campaign-creator-metadata-id',
+            recordId: 'campaign-creator-id',
+            role: 'campaign_creator',
+          },
+          {
+            objectMetadataId: 'creator-metadata-id',
+            recordId: 'creator-id',
+            role: 'creator',
+          },
+          {
+            objectMetadataId: 'campaign-metadata-id',
+            recordId: 'campaign-id',
+            role: 'campaign',
+          },
+        ],
       } as never),
     ).rejects.toThrow(
       changedContent

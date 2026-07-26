@@ -14,18 +14,17 @@ Do not create a second campaign executor, approval ledger, email provider abstra
 
 ## Lifecycle
 
-One Outreach Action owns one email lifecycle:
+One Outreach Action owns one email lifecycle, but state remains normalized across the existing records rather than duplicated:
 
-1. `DRAFT`: the selected Campaign Creator, recipient, subject, body, mailbox selection, and optional existing-thread identity are complete.
-2. `AWAITING_APPROVAL`: an immutable approval binding records the exact content, recipient, sender, thread, workspace member, and evidence links.
-3. `APPROVED`: a human approved that exact binding. Any change to a bound fact requires a new binding and approval.
-4. `SENDING`: `ActionApprovalService` reserved the workspace-scoped logical action key.
-5. `SENT`: the provider accepted the message, the execution receipt is durable, and the linked timeline result is projected.
-6. `BLOCKED`: a required precondition was absent before provider submission.
-7. `FAILED`: the provider returned a known rejection.
-8. `UNKNOWN`: provider acceptance cannot be established safely. Automatic retry is prohibited because it could send a duplicate.
+1. `OutreachAction.status = PENDING`: the selected Campaign Creator, recipient, subject, body, mailbox selection, provider draft identity, and optional existing-thread identity are complete.
+2. `ActionApprovalBinding.state = PENDING`: an immutable approval binding records the exact content, recipient, sender, thread, workspace member, and evidence links.
+3. `ActionApprovalBinding.state = APPROVED`: a human approved that exact binding. Any change to a bound fact requires a new binding and approval.
+4. `ActionExecutionReceipt.state = PROCESSING`: `ActionApprovalService` reserved the workspace-scoped logical action key.
+5. `ActionExecutionReceipt.state = SENT` and `OutreachAction.status = APPLIED`: the provider accepted the message, the execution receipt is durable, and the safe send result is projected.
+6. `ActionExecutionReceipt.state = FAILED`: the provider returned a known rejection before acceptance.
+7. `ActionExecutionReceipt.state = UNKNOWN`: provider acceptance cannot be established safely. Automatic retry is prohibited because it could send a duplicate.
 
-A repeated execution request returns the existing receipt. It does not submit the message again.
+A repeated execution request returns the existing receipt. It does not submit the message again. `PENDING` is the canonical stored pre-send Outreach Action value; approval and execution state remain authoritative in their existing binding and receipt tables.
 
 ## Immutable approval binding
 
@@ -63,6 +62,15 @@ Update the canonical Myah object declarations, shared universal-identifier regis
 MYAH-168 owns this narrow server-side contract for MYAH-237 Task 13:
 
 ```ts
+// MYAH-237 supplies only an already-eligible connected account ID.
+type PrepareOutreachMailboxInput = {
+  workspaceId: string; // from authenticated server context
+  campaignCreatorId: string;
+  connectedAccountId: string;
+  inReplyTo?: string;
+};
+
+// MYAH-168 resolves, validates, persists, and later binds this snapshot.
 type OutreachMailboxSelection = {
   workspaceId: string;
   outreachActionId: string;
@@ -73,17 +81,19 @@ type OutreachMailboxSelection = {
 };
 ```
 
-The contract guarantees:
+The implemented seam is `OutreachEmailDraftService.resolvePreparationAuthority(...)`, called by `PrepareOutreachEmailDraftTool`. The contract guarantees:
 
-- selection is resolved and validated inside the workspace-scoped service boundary;
-- the connected account and message channel belong to the same workspace and support outbound email;
-- credentials and provider configuration never enter this contract, GraphQL payloads, logs, jobs, or agent context;
-- account, channel, and sender identity are snapshotted before approval;
-- changing the mailbox or sender invalidates the current approval;
-- an action continuing an existing thread must retain that thread's stored account, channel, and sender identity; and
-- MYAH-237 may later supply an eligible managed mailbox selection, but it may not create drafts, approve, execute, retry, or record outreach sends.
+- MYAH-237 decides managed-mailbox eligibility and passes only `connectedAccountId`; it does not supply sender, channel, workspace, recipient, or provider configuration;
+- MYAH-168 resolves and validates the selection inside the workspace-scoped service boundary;
+- the connected account and exactly one send-enabled message channel belong to the authenticated workspace;
+- sender email/display name are derived from the connected account, never trusted from caller input;
+- credentials and provider configuration never enter the contract, GraphQL payloads, logs, jobs, or agent context;
+- account, channel, and sender identity are snapshotted on Outreach Action before approval and revalidated before provider draft creation;
+- changing the account, channel, sender, recipient, content, or thread invalidates the current approval;
+- an action continuing an existing thread must retain that thread's stored account, channel, sender, and parent Message identity; and
+- MYAH-237 may supply an eligible managed mailbox selection, but it may not create drafts, approve, execute, retry, or record outreach sends.
 
-The contract does not decide managed-mailbox eligibility. MYAH-237 owns that future eligibility rule and must call the MYAH-168 boundary with an already eligible selection.
+MYAH-237 Task 13 must consume this seam rather than create a second campaign executor or sender. It may evolve its own eligibility lookup behind the `connectedAccountId` input without changing MYAH-168's approval or execution authority.
 
 ## Workspace isolation
 
@@ -108,9 +118,9 @@ An exception before provider submission may remain retryable through the same re
 
 ## Public surface
 
-Expose only the narrow mutations/services needed to create/update a draft, request approval, and execute an approved Outreach Action through existing Twenty authorization patterns. No endpoint accepts credentials or a raw provider configuration. No endpoint accepts a caller-supplied approval result as proof; it resolves the durable approval binding server-side.
+The implemented public surface is the existing AI tool path: `prepare_outreach_email_draft` creates one provider-native draft, `request_approval` creates the immutable approval binding, and `send_outreach_email` consumes only an approved matching binding. The services are registered through existing modules; no GraphQL resolver, REST controller, or parallel campaign executor is introduced.
 
-There is no automatic-send, bulk-send, social-outbound, approval-bypass, or agent-owned provisioning surface.
+No tool accepts credentials, raw provider configuration, caller-supplied sender identity, recipient identity, or approval result as proof. There is no automatic-send, bulk-send, social-outbound, approval-bypass, or agent-owned provisioning surface.
 
 ## Tests and verification
 

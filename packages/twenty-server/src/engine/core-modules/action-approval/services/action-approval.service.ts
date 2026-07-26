@@ -517,7 +517,10 @@ export class ActionApprovalService {
       if (receipt.state === ActionExecutionReceiptState.PROVIDER_ACCEPTED) {
         return this.redactionService.toSafeReceipt(receipt);
       }
-      if (receipt.state !== ActionExecutionReceiptState.PROCESSING) {
+      if (
+        receipt.state !== ActionExecutionReceiptState.PROCESSING &&
+        receipt.state !== ActionExecutionReceiptState.UNKNOWN
+      ) {
         throw new Error(
           'Action execution receipt cannot accept a provider result',
         );
@@ -525,6 +528,10 @@ export class ActionApprovalService {
 
       receipt.state = ActionExecutionReceiptState.PROVIDER_ACCEPTED;
       receipt.providerMessageId = acceptedOutcome.providerMessageId ?? null;
+      receipt.providerExternalMessageId =
+        acceptedOutcome.providerExternalMessageId ?? null;
+      receipt.providerThreadExternalId =
+        acceptedOutcome.providerThreadExternalId ?? null;
       receipt.providerCode = acceptedOutcome.code;
       receipt.redactedOutcome = acceptedOutcome.code;
 

@@ -150,6 +150,7 @@ describe('request_approval tool', () => {
     const instagramDefinition = { propose: jest.fn() };
     const outreachDefinition = {
       propose: jest.fn().mockResolvedValue({ expectedActionBinding }),
+      recordApprovalBinding: jest.fn().mockResolvedValue(undefined),
     };
     const actionApprovalService = {
       createPendingBinding: jest
@@ -192,6 +193,10 @@ describe('request_approval tool', () => {
     expect(actionApprovalService.createPendingBinding).toHaveBeenCalledWith(
       expectedActionBinding,
     );
+    expect(outreachDefinition.recordApprovalBinding).toHaveBeenCalledWith({
+      expectedActionBinding,
+      approvalBindingId: 'b24f28a7-64bd-4cb8-ac5f-837536ca1d1b',
+    });
   });
 
   it.each([

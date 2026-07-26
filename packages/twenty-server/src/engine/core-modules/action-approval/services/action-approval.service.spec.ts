@@ -328,4 +328,55 @@ describe('ActionApprovalService outreach authority', () => {
       ),
     ).toHaveLength(1);
   });
+
+  it('records verified provider acceptance while reconciling UNKNOWN', async () => {
+    const receipt = {
+      id: '00000000-0000-4000-8000-000000000020',
+      workspaceId,
+      state: ActionExecutionReceiptState.UNKNOWN,
+      providerMessageId: null,
+      providerExternalMessageId: null,
+      providerThreadExternalId: null,
+      providerCode: 'unknown',
+      redactedOutcome: 'unknown',
+      updatedAt: new Date('2026-07-26T00:00:00.000Z'),
+    };
+    const manager = {
+      findOne: jest.fn().mockResolvedValue(receipt),
+      save: jest.fn(async (_entity, value) => ({
+        ...value,
+        updatedAt: new Date('2026-07-26T01:00:00.000Z'),
+      })),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.recordProviderAccepted(receipt.id, {
+        code: 'accepted',
+        acceptedAt: new Date('2026-07-26T01:00:00.000Z'),
+        providerMessageId: '<verified@example.com>',
+        providerExternalMessageId: 'provider-message-id',
+        providerThreadExternalId: 'provider-thread-id',
+      }),
+    ).resolves.toMatchObject({
+      id: receipt.id,
+      state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      providerCode: 'accepted',
+      outcome: 'accepted',
+    });
+    expect(manager.save).toHaveBeenCalledWith(
+      ActionExecutionReceiptEntity,
+      expect.objectContaining({
+        state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+        providerMessageId: '<verified@example.com>',
+        providerExternalMessageId: 'provider-message-id',
+        providerThreadExternalId: 'provider-thread-id',
+      }),
+    );
+  });
 });

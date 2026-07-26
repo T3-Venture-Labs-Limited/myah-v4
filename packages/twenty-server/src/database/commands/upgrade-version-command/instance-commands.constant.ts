@@ -108,6 +108,7 @@ import { PendingMigrationCheckFastInstanceCommand } from './2-19/2-19-instance-c
 
 import { CreateManagedProviderBillingFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-create-managed-provider-billing-foundation';
 import { AddActionApprovalContextFingerprintFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1785085300000-add-action-approval-context-fingerprint';
+import { AddActionReceiptProviderIdentifiersFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1810000011000-add-action-receipt-provider-identifiers';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -217,4 +218,5 @@ export const INSTANCE_COMMANDS = [
   EvolveInstagramApprovalToActionAuthorityFastInstanceCommand,
   FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand,
   AddActionApprovalContextFingerprintFastInstanceCommand,
+  AddActionReceiptProviderIdentifiersFastInstanceCommand,
 ];

@@ -8,7 +8,6 @@ import { SendOutreachEmailTool } from 'src/engine/core-modules/tool/tools/outrea
 import { SendOutreachEmailInputZodSchema } from 'src/engine/core-modules/tool/tools/outreach-email-tool/outreach-email-tool.schema';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { type MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
-import { type SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 const USER_WORKSPACE_ID = '00000000-0000-4000-8000-000000000002';
@@ -104,13 +103,6 @@ const buildTool = () => {
   const messageOutboundService = {
     sendDraft,
   } as unknown as MessagingMessageOutboundService;
-  const persistSentMessage = jest.fn().mockResolvedValue({
-    messageId: 'workspace-message-id',
-    messageThreadId: 'workspace-thread-id',
-  });
-  const sentMessagePersistenceService = {
-    persistSentMessage,
-  } as unknown as SentMessagePersistenceService;
   const projectReceipt = jest.fn().mockResolvedValue(undefined);
   const projector = {
     projectReceipt,
@@ -124,13 +116,11 @@ const buildTool = () => {
     recordProviderTerminalState,
     rebuildExecutionAuthority,
     sendDraft,
-    persistSentMessage,
     projectReceipt,
     tool: new SendOutreachEmailTool(
       actionApprovalService,
       actionDefinition,
       messageOutboundService,
-      sentMessagePersistenceService,
       projector,
     ),
   };
@@ -156,7 +146,7 @@ describe('SendOutreachEmailTool', () => {
     expect(getApprovedBinding).not.toHaveBeenCalled();
   });
 
-  it('reserves before one exact provider send, records acceptance, persists, and projects', async () => {
+  it('reserves before one exact provider send, records all provider IDs, and projects', async () => {
     const {
       tool,
       getApprovedBinding,
@@ -164,7 +154,6 @@ describe('SendOutreachEmailTool', () => {
       reserveExecutionForBinding,
       recordProviderAccepted,
       sendDraft,
-      persistSentMessage,
       projectReceipt,
     } = buildTool();
 
@@ -203,17 +192,8 @@ describe('SendOutreachEmailTool', () => {
       code: 'accepted',
       acceptedAt: expect.any(Date),
       providerMessageId: '<sent@example.com>',
-    });
-    expect(persistSentMessage).toHaveBeenCalledWith({
-      sendResult,
-      subject: 'Approved subject',
-      body: 'Approved <body> & exact',
-      recipients: { to: ['creator@example.com'], cc: [], bcc: [] },
-      connectedAccount,
-      messageChannelId: MESSAGE_CHANNEL_ID,
-      inReplyTo: undefined,
-      parentThreadExternalId: 'provider-thread-id',
-      workspaceId: WORKSPACE_ID,
+      providerExternalMessageId: 'provider-message-id',
+      providerThreadExternalId: 'provider-thread-id',
     });
     expect(projectReceipt).toHaveBeenCalledWith(RECEIPT_ID);
     expect(getApprovedBinding.mock.invocationCallOrder[0]).toBeLessThan(
@@ -225,14 +205,23 @@ describe('SendOutreachEmailTool', () => {
     expect(reserveExecutionForBinding.mock.invocationCallOrder[0]).toBeLessThan(
       sendDraft.mock.invocationCallOrder[0],
     );
+    expect(recordProviderAccepted.mock.invocationCallOrder[0]).toBeLessThan(
+      projectReceipt.mock.invocationCallOrder[0],
+    );
   });
 
   it.each([
     [
-      'explicit HTTP rejection',
-      { response: { status: 400 }, credential: 'secret' },
+      'explicit SMTP rejection',
+      { responseCode: 550, credential: 'secret' },
       ActionExecutionReceiptState.FAILED,
       'failed',
+    ],
+    [
+      'HTTP ambiguity',
+      { response: { status: 503 }, credential: 'secret' },
+      ActionExecutionReceiptState.UNKNOWN,
+      'unknown',
     ],
     [
       'timeout ambiguity',
@@ -248,7 +237,6 @@ describe('SendOutreachEmailTool', () => {
         sendDraft,
         recordProviderAccepted,
         recordProviderTerminalState,
-        persistSentMessage,
       } = buildTool();
 
       sendDraft.mockRejectedValueOnce(error);
@@ -263,7 +251,6 @@ describe('SendOutreachEmailTool', () => {
         code,
       });
       expect(recordProviderAccepted).not.toHaveBeenCalled();
-      expect(persistSentMessage).not.toHaveBeenCalled();
     },
   );
 
@@ -353,26 +340,33 @@ describe('SendOutreachEmailTool', () => {
     expect(sendDraft).not.toHaveBeenCalled();
   });
 
-  it('does not resend when post-acceptance persistence or projection fails', async () => {
+  it('does not resend when post-acceptance projection fails', async () => {
     const {
       tool,
+      findExecutionReceiptForBinding,
       sendDraft,
       recordProviderAccepted,
-      persistSentMessage,
       projectReceipt,
     } = buildTool();
+    findExecutionReceiptForBinding
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: RECEIPT_ID,
+        state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      });
 
-    persistSentMessage.mockRejectedValueOnce(
-      new Error('workspace save failed'),
-    );
     projectReceipt.mockRejectedValueOnce(new Error('projection failed'));
 
     await expect(tool.execute(input, context)).resolves.toEqual({
       success: true,
       message: 'Outreach email accepted.',
     });
+    await expect(tool.execute(input, context)).resolves.toEqual({
+      success: true,
+      message: 'Outreach email accepted.',
+    });
     expect(sendDraft).toHaveBeenCalledTimes(1);
     expect(recordProviderAccepted).toHaveBeenCalledTimes(1);
-    expect(projectReceipt).toHaveBeenCalledTimes(1);
+    expect(projectReceipt).toHaveBeenCalledTimes(2);
   });
 });

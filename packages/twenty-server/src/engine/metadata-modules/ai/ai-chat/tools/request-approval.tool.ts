@@ -248,6 +248,15 @@ export const createRequestApprovalTool = (
             proposal.expectedActionBinding,
           );
 
+        if (input.toolName === 'send_outreach_email') {
+          await options.actionDefinitions.send_outreach_email.recordApprovalBinding(
+            {
+              expectedActionBinding: proposal.expectedActionBinding,
+              approvalBindingId: binding.id,
+            },
+          );
+        }
+
         return {
           success: true,
           message:

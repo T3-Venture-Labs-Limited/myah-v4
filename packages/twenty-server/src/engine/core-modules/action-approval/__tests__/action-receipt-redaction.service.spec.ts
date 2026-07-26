@@ -64,17 +64,21 @@ describe('ActionReceiptRedactionService', () => {
     }
   });
 
-  it('keeps a safe provider message id internally', () => {
+  it('keeps safe provider identifiers internally', () => {
     expect(
       service.toAcceptedProviderOutcome({
         code: 'accepted',
         acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
         providerMessageId: '<message@example.com>',
+        providerExternalMessageId: 'provider-message-id',
+        providerThreadExternalId: 'provider-thread-id',
       }),
     ).toEqual({
       code: 'accepted',
       acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
       providerMessageId: '<message@example.com>',
+      providerExternalMessageId: 'provider-message-id',
+      providerThreadExternalId: 'provider-thread-id',
     });
   });
 
@@ -90,4 +94,17 @@ describe('ActionReceiptRedactionService', () => {
       ).toThrow('Unsafe provider message id');
     },
   );
+
+  it.each([
+    ['external message', { providerExternalMessageId: 'unsafe\r\nid' }],
+    ['thread', { providerThreadExternalId: 'x'.repeat(999) }],
+  ])('rejects an unsafe provider %s id', (label, identifiers) => {
+    expect(() =>
+      service.toAcceptedProviderOutcome({
+        code: 'accepted',
+        acceptedAt: new Date('2026-07-16T00:00:00.000Z'),
+        ...identifiers,
+      }),
+    ).toThrow(`Unsafe provider ${label} id`);
+  });
 });

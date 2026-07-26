@@ -27,6 +27,7 @@ import {
 } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-approval/services/action-receipt-projector.service';
+import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-modules/action-approval/services/action-receipt-workspace-projection-writer.service';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { SendOutreachEmailTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/send-outreach-email-tool';
 import { CacheStorageNamespace } from 'src/engine/core-modules/cache-storage/types/cache-storage-namespace.enum';
@@ -294,6 +295,13 @@ describe('outreach email approval and send (PostgreSQL)', () => {
   const senderEmail = 'sender@example.com';
   const providerDraftExternalId = 'provider-draft-integration';
   const providerThreadExternalId = 'provider-thread-integration';
+  const persistedMessageId = randomUUID();
+  const persistedMessageThreadId = randomUUID();
+  const persistedAssociationId = randomUUID();
+  const recoveryActionId = randomUUID();
+  const recoveryReceiptId = randomUUID();
+  const recoveryProviderMessageId = '<recovered@example.com>';
+  const recoveryProviderExternalMessageId = 'recovered-provider-message-id';
   let dataSource: DataSource;
   let workspaceId: string;
   let otherWorkspaceId: string;
@@ -302,7 +310,6 @@ describe('outreach email approval and send (PostgreSQL)', () => {
   let approvalBindingId: string;
   let sender: SendOutreachEmailTool;
   let sendDraft: jest.Mock;
-  let persistSentMessage: jest.Mock;
   let project: jest.Mock;
   let approvalDataSource: DataSource;
 
@@ -459,6 +466,65 @@ describe('outreach email approval and send (PostgreSQL)', () => {
               [id],
             )
           )[0] ?? null,
+        update: async (
+          criteria: {
+            id: string;
+            subject: string;
+            body: string;
+            contentDigest: string;
+            recipientEmail: string;
+            connectedAccountId: string;
+            messageChannelId: string;
+            senderEmail: string;
+            senderDisplayName: string;
+            providerDraftExternalId: string;
+            providerThreadExternalId: string | null;
+          },
+          values: { approvalBindingId: string },
+        ) => {
+          const [{ affected }] = await dataSource.query<{ affected: number }[]>(
+            `WITH updated AS (
+               UPDATE "${schemaName}"."outreachAction"
+               SET "approvalBindingId" = $2
+               WHERE "id" = $1
+                 AND "channel" = 'EMAIL'
+                 AND "status" = 'PENDING'
+                 AND "subject" = $3
+                 AND "body" = $4
+                 AND "contentDigest" = $5
+                 AND "recipientEmail" = $6
+                 AND "connectedAccountId" = $7
+                 AND "messageChannelId" = $8
+                 AND "senderEmail" = $9
+                 AND "senderDisplayName" = $10
+                 AND "providerDraftExternalId" = $11
+                 AND "providerThreadExternalId" IS NOT DISTINCT FROM $12
+                 AND "messageThreadId" IS NULL
+                 AND "inReplyTo" IS NULL
+                 AND "approvalBindingId" IS NULL
+                 AND "executionReceiptId" IS NULL
+                 AND "completedAt" IS NULL
+               RETURNING 1
+             )
+             SELECT COUNT(*)::int AS "affected" FROM updated`,
+            [
+              criteria.id,
+              values.approvalBindingId,
+              criteria.subject,
+              criteria.body,
+              criteria.contentDigest,
+              criteria.recipientEmail,
+              criteria.connectedAccountId,
+              criteria.messageChannelId,
+              criteria.senderEmail,
+              criteria.senderDisplayName,
+              criteria.providerDraftExternalId,
+              criteria.providerThreadExternalId,
+            ],
+          );
+
+          return { affected };
+        },
       },
       campaignCreator: {
         findOneBy: async ({ id }: { id: string }) =>
@@ -606,21 +672,26 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       throw new Error('Email approval producer did not return a binding');
     }
     approvalBindingId = approvalOutput.result.actionApprovalBindingId;
+    const [boundAction] = await dataSource.query<
+      { approvalBindingId: string | null }[]
+    >(
+      `SELECT "approvalBindingId"
+       FROM "${schemaName}"."outreachAction"
+       WHERE "id" = $1`,
+      [outreachActionId],
+    );
+
+    expect(boundAction).toEqual({ approvalBindingId });
 
     sendDraft = jest.fn().mockResolvedValue({
       headerMessageId: '<sent@example.com>',
       messageExternalId: 'provider-message-id',
       threadExternalId: providerThreadExternalId,
     });
-    persistSentMessage = jest.fn().mockResolvedValue({
-      messageId: randomUUID(),
-      messageThreadId: randomUUID(),
-    });
     sender = new SendOutreachEmailTool(
       actionApprovalService,
       actionDefinition,
       { sendDraft } as never,
-      { persistSentMessage } as never,
       projector,
     );
   });
@@ -643,6 +714,27 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       [workspaceId, outreachActionId],
     );
     if (schemaName) {
+      await dataSource.query(
+        `DELETE FROM "${schemaName}"."timelineActivity" WHERE "id" = $1`,
+        [recoveryReceiptId],
+      );
+      await dataSource.query(
+        `DELETE FROM "${schemaName}"."messageChannelMessageAssociation"
+         WHERE "id" = $1`,
+        [persistedAssociationId],
+      );
+      await dataSource.query(
+        `DELETE FROM "${schemaName}"."message" WHERE "id" = $1`,
+        [persistedMessageId],
+      );
+      await dataSource.query(
+        `DELETE FROM "${schemaName}"."messageThread" WHERE "id" = $1`,
+        [persistedMessageThreadId],
+      );
+      await dataSource.query(
+        `DELETE FROM "${schemaName}"."outreachAction" WHERE "id" = $1`,
+        [recoveryActionId],
+      );
       await dataSource.query(
         `DELETE FROM "${schemaName}"."outreachAction" WHERE "id" = $1`,
         [outreachActionId],
@@ -729,15 +821,6 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         handle: senderEmail,
       }),
     );
-    expect(persistSentMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        subject,
-        body,
-        messageChannelId,
-        workspaceId,
-        parentThreadExternalId: providerThreadExternalId,
-      }),
-    );
 
     await expect(sender.execute(input, context)).resolves.toMatchObject({
       success: true,
@@ -750,6 +833,186 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       }),
     ).resolves.toEqual([
       expect.objectContaining({ state: ActionExecutionReceiptState.SENT }),
+    ]);
+  });
+
+  it('replays accepted Message persistence and projection without a provider send', async () => {
+    const recoverySubject = 'Recovered partnership subject';
+    const recoveryBody = 'Recovered partnership body';
+    const recoveryContentDigest = computeActionContentDigest(
+      JSON.stringify([recoverySubject, recoveryBody]),
+    );
+
+    await dataSource.query(
+      `INSERT INTO "${schemaName}"."outreachAction" (
+        "id", "name", "campaignCreatorId", "channel", "status",
+        "subject", "body", "contentDigest", "recipientEmail",
+        "connectedAccountId", "messageChannelId", "senderEmail",
+        "senderDisplayName", "providerDraftExternalId",
+        "providerThreadExternalId"
+      ) VALUES (
+        $1, 'Recovery action', $2, 'EMAIL', 'PENDING',
+        $3, $4, $5, $6, $7, $8, $9, 'Approved Sender',
+        'provider-draft-recovery', $10
+      )`,
+      [
+        recoveryActionId,
+        campaignCreatorId,
+        recoverySubject,
+        recoveryBody,
+        recoveryContentDigest,
+        recipientEmail,
+        connectedAccountId,
+        messageChannelId,
+        senderEmail,
+        providerThreadExternalId,
+      ],
+    );
+    const connectedAccountRepository = {
+      findOne: async () =>
+        (
+          await dataSource.query(
+            `SELECT * FROM core."connectedAccount"
+             WHERE "id" = $1 AND "workspaceId" = $2 AND "archivedAt" IS NULL`,
+            [connectedAccountId, workspaceId],
+          )
+        )[0] ?? null,
+    };
+    const recoverPersistence = jest
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(async () => {
+        await dataSource.query(
+          `INSERT INTO "${schemaName}"."messageThread" ("id") VALUES ($1)`,
+          [persistedMessageThreadId],
+        );
+        await dataSource.query(
+          `INSERT INTO "${schemaName}"."message" (
+            "id", "headerMessageId", "messageThreadId"
+          ) VALUES ($1, $2, $3)`,
+          [
+            persistedMessageId,
+            recoveryProviderMessageId,
+            persistedMessageThreadId,
+          ],
+        );
+        await dataSource.query(
+          `INSERT INTO "${schemaName}"."messageChannelMessageAssociation" (
+            "id", "messageId", "messageChannelId",
+            "messageExternalId", "messageThreadExternalId"
+          ) VALUES ($1, $2, $3, $4, $5)`,
+          [
+            persistedAssociationId,
+            persistedMessageId,
+            messageChannelId,
+            recoveryProviderExternalMessageId,
+            providerThreadExternalId,
+          ],
+        );
+
+        return {
+          messageId: persistedMessageId,
+          messageThreadId: persistedMessageThreadId,
+        };
+      });
+    const writer = new ActionReceiptWorkspaceProjectionWriterService(
+      dataSource,
+      connectedAccountRepository as never,
+      { persistSentMessage: recoverPersistence } as never,
+    );
+    const projection = {
+      receiptId: recoveryReceiptId,
+      workspaceId,
+      draftId: recoveryActionId,
+      contentDigest: recoveryContentDigest,
+      actionName: 'send_outreach_email',
+      providerMessageId: recoveryProviderMessageId,
+      providerExternalMessageId: recoveryProviderExternalMessageId,
+      providerThreadExternalId,
+      recipientFingerprint: computeActionContentDigest(
+        JSON.stringify([recipientEmail]),
+      ),
+      sendingAccountFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          connectedAccountId,
+          messageChannelId,
+          senderEmail,
+          'Approved Sender',
+        ]),
+      ),
+      actionContextFingerprint: computeActionContentDigest(
+        JSON.stringify([null, null, providerThreadExternalId]),
+      ),
+      evidenceLinks: [
+        {
+          objectMetadataId: randomUUID(),
+          recordId: campaignCreatorId,
+          role: 'campaign_creator',
+        },
+        {
+          objectMetadataId: randomUUID(),
+          recordId: creatorId,
+          role: 'creator',
+        },
+        {
+          objectMetadataId: randomUUID(),
+          recordId: campaignId,
+          role: 'campaign',
+        },
+      ],
+    } as const;
+
+    await expect(writer.project(projection)).rejects.toThrow(
+      'The sent outreach Message is unavailable for projection',
+    );
+    await expect(
+      Promise.all([writer.project(projection), writer.project(projection)]),
+    ).resolves.toEqual([undefined, undefined]);
+    await expect(writer.project(projection)).resolves.toBeUndefined();
+
+    expect(recoverPersistence).toHaveBeenCalledTimes(2);
+    expect(recoverPersistence).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        sendResult: {
+          headerMessageId: recoveryProviderMessageId,
+          messageExternalId: recoveryProviderExternalMessageId,
+          threadExternalId: providerThreadExternalId,
+        },
+      }),
+    );
+    const [projectedAction] = await dataSource.query<
+      {
+        status: string;
+        executionReceiptId: string | null;
+        messageId: string | null;
+        providerMessageExternalId: string | null;
+      }[]
+    >(
+      `SELECT "status", "executionReceiptId", "messageId",
+              "providerMessageExternalId"
+       FROM "${schemaName}"."outreachAction"
+       WHERE "id" = $1`,
+      [recoveryActionId],
+    );
+    expect(projectedAction).toEqual({
+      status: 'APPLIED',
+      executionReceiptId: recoveryReceiptId,
+      messageId: persistedMessageId,
+      providerMessageExternalId: recoveryProviderExternalMessageId,
+    });
+    await expect(
+      dataSource.query(
+        `SELECT "id", "linkedRecordId", "linkedObjectMetadataId"
+         FROM "${schemaName}"."timelineActivity"
+         WHERE "id" = $1`,
+        [recoveryReceiptId],
+      ),
+    ).resolves.toEqual([
+      {
+        id: recoveryReceiptId,
+        linkedRecordId: campaignCreatorId,
+        linkedObjectMetadataId: expect.any(String),
+      },
     ]);
   });
 });

@@ -41,12 +41,16 @@ export type ProviderAcceptedOutcomeInput = {
   code: string;
   acceptedAt: Date;
   providerMessageId?: string;
+  providerExternalMessageId?: string;
+  providerThreadExternalId?: string;
 };
 
 export type AcceptedProviderOutcome = {
   code: 'accepted' | 'queued';
   acceptedAt: Date;
   providerMessageId?: string;
+  providerExternalMessageId?: string;
+  providerThreadExternalId?: string;
 };
 
 export type ActionApprovalFaultHooks = {
@@ -79,6 +83,12 @@ export type ActionReceiptProjectionWriter = {
     contentDigest: string;
     actionName: ExpectedActionBinding['actionName'];
     providerMessageId: string | null;
+    providerExternalMessageId: string | null;
+    providerThreadExternalId: string | null;
+    recipientFingerprint: string | null;
+    sendingAccountFingerprint: string | null;
+    actionContextFingerprint: string | null;
+    evidenceLinks: readonly ActionEvidenceLinkInput[];
   }) => Promise<void>;
 };
 
