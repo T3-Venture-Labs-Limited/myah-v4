@@ -41,6 +41,10 @@ export class ActionReceiptProjectorService {
       workspaceId: receipt.workspaceId,
       draftId: receipt.actionApprovalBinding.draftId,
       contentDigest: receipt.actionApprovalBinding.contentDigest,
+      actionName: receipt.actionApprovalBinding.actionName as
+        | 'send_instagram_reply'
+        | 'send_outreach_email',
+      providerMessageId: receipt.providerMessageId,
     });
     await faultHooks?.afterWorkspaceProjection?.(receipt.id);
     await this.receiptRepository.update(

@@ -77,6 +77,8 @@ export type ActionReceiptProjectionWriter = {
     workspaceId: string;
     draftId: string;
     contentDigest: string;
+    actionName: ExpectedActionBinding['actionName'];
+    providerMessageId: string | null;
   }) => Promise<void>;
 };
 

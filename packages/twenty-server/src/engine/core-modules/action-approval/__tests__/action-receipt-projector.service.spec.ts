@@ -5,7 +5,9 @@ describe('ActionReceiptProjectorService', () => {
     id: '00000000-0000-4000-8000-000000000001',
     workspaceId: '00000000-0000-4000-8000-000000000002',
     state: 'PROVIDER_ACCEPTED',
+    providerMessageId: '<sent@example.com>',
     actionApprovalBinding: {
+      actionName: 'send_outreach_email',
       draftId: '00000000-0000-4000-8000-000000000003',
       contentDigest: 'a'.repeat(64),
     },
@@ -44,6 +46,14 @@ describe('ActionReceiptProjectorService', () => {
       projected: true,
     });
     expect(writes).toEqual(new Set([receipt.id]));
+    expect(writer.project).toHaveBeenCalledWith({
+      receiptId: receipt.id,
+      workspaceId: receipt.workspaceId,
+      draftId: receipt.actionApprovalBinding.draftId,
+      contentDigest: receipt.actionApprovalBinding.contentDigest,
+      actionName: 'send_outreach_email',
+      providerMessageId: '<sent@example.com>',
+    });
     expect(repository.update).toHaveBeenCalledWith(
       { id: receipt.id, state: 'PROVIDER_ACCEPTED' },
       { state: 'SENT' },
