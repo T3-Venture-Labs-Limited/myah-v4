@@ -18,7 +18,7 @@ const args = {
 } as RunOnWorkspaceArgs;
 
 describe('MigrateMyahCreatorImportMetadataCommand', () => {
-  it('creates, migrates, verifies, and then removes explicit obsolete metadata', async () => {
+  it('creates, migrates, verifies, preserves legacy fields, and removes obsolete view fields', async () => {
     const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
     const migrate = jest
       .fn()
@@ -44,7 +44,6 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
       args,
       {
         explicitObsoleteUniversalIdentifiersByMetadataName: {
-          fieldMetadata: expect.any(Set),
           viewField: expect.any(Set),
         },
       },

@@ -8,7 +8,6 @@ import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/up
 import {
   MigrateMyahCreatorSocialLinksService,
   OBSOLETE_SOURCE_CONTROLLED_CREATOR_VIEW_FIELD_UNIVERSAL_IDENTIFIERS,
-  OLD_CREATOR_SOCIAL_URL_FIELD_UNIVERSAL_IDENTIFIERS,
 } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 
@@ -57,8 +56,6 @@ export class MigrateMyahCreatorImportMetadataCommand extends ActiveOrSuspendedWo
       args,
       {
         explicitObsoleteUniversalIdentifiersByMetadataName: {
-          fieldMetadata:
-            OLD_CREATOR_SOCIAL_URL_FIELD_UNIVERSAL_IDENTIFIERS,
           viewField:
             OBSOLETE_SOURCE_CONTROLLED_CREATOR_VIEW_FIELD_UNIVERSAL_IDENTIFIERS,
         },

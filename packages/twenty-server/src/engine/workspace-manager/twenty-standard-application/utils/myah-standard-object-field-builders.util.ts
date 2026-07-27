@@ -3156,6 +3156,23 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        instagramUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'instagramUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'Instagram URL',
+            description: 'Instagram profile URL',
+            icon: 'IconBrandInstagram',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         instagramLink: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
@@ -3395,6 +3412,23 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        tiktokUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'tiktokUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'TikTok URL',
+            description: 'TikTok profile URL',
+            icon: 'IconBrandTiktok',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         tiktokLink: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
@@ -3601,6 +3635,23 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             now: args.now,
           },
         ),
+        youtubeUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'youtubeUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'YouTube URL',
+            description: 'YouTube profile URL',
+            icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         youtubeLink: createMyahStandardFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
@@ -3900,6 +3951,23 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             label: 'YouTube estimated income max',
             description: 'YouTube estimated income max',
             icon: 'IconBrandYoutube',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        twitterUrl: createMyahStandardFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'twitterUrl',
+            type: FieldMetadataType.TEXT,
+            label: 'Twitter URL',
+            description: 'Twitter/X profile URL',
+            icon: 'IconBrandX',
             isNullable: true,
           },
           standardObjectMetadataRelatedEntityIds:

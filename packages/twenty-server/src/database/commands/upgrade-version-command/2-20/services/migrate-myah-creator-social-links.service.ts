@@ -2,12 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
 
-export const OLD_CREATOR_SOCIAL_URL_FIELD_UNIVERSAL_IDENTIFIERS = new Set([
-  '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b',
-  'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31',
-  'af645cc7-31fc-5175-af8d-427845ebe1ed',
-  'bbfda234-327c-5d9d-ac39-8a33fd06779d',
-]);
 
 export const OBSOLETE_SOURCE_CONTROLLED_CREATOR_VIEW_FIELD_UNIVERSAL_IDENTIFIERS =
   new Set([

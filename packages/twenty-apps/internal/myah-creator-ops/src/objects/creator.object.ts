@@ -329,6 +329,14 @@ export default defineObject({
       isNullable: true,
     },
     {
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUrl,
+      type: FieldType.TEXT,
+      name: 'instagramUrl',
+      label: 'Instagram URL',
+      icon: 'IconBrandInstagram',
+      isNullable: true,
+    },
+    {
       universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramLink,
       type: FieldType.LINKS,
       name: 'instagramLink',
@@ -453,6 +461,14 @@ export default defineObject({
       isNullable: true,
     },
     {
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokUrl,
+      type: FieldType.TEXT,
+      name: 'tiktokUrl',
+      label: 'TikTok URL',
+      icon: 'IconBrandTiktok',
+      isNullable: true,
+    },
+    {
       universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokLink,
       type: FieldType.LINKS,
       name: 'tiktokLink',
@@ -553,6 +569,14 @@ export default defineObject({
       name: 'tiktokPostingFrequencyRecentMonths',
       label: 'TikTok posting frequency recent months',
       icon: 'IconBrandTiktok',
+      isNullable: true,
+    },
+    {
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeUrl,
+      type: FieldType.TEXT,
+      name: 'youtubeUrl',
+      label: 'YouTube URL',
+      icon: 'IconBrandYoutube',
       isNullable: true,
     },
     {
@@ -712,6 +736,14 @@ export default defineObject({
       name: 'youtubeEstimatedIncomeMax',
       label: 'YouTube estimated income max',
       icon: 'IconBrandYoutube',
+      isNullable: true,
+    },
+    {
+      universalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterUrl,
+      type: FieldType.TEXT,
+      name: 'twitterUrl',
+      label: 'Twitter URL',
+      icon: 'IconBrandX',
       isNullable: true,
     },
     {

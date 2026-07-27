@@ -262,7 +262,7 @@ describe('Creator object schema', () => {
     ]);
   });
 
-  it('should define nullable editable Gender options and only native social links', () => {
+  it('should define nullable editable Gender, native social links, and existing URL compatibility fields', () => {
     expect(
       creatorObject.fields.find((field) => field.name === 'gender'),
     ).toMatchObject({
@@ -299,12 +299,15 @@ describe('Creator object schema', () => {
       'twitterUrl',
     ]) {
       expect(
-        creatorObject.fields.some((field) => field.name === fieldName),
-      ).toBe(false);
+        creatorObject.fields.find((field) => field.name === fieldName),
+      ).toMatchObject({
+        type: FieldType.TEXT,
+        isNullable: true,
+      });
     }
   });
 
-  it('keeps default Creator views focused and free of obsolete social URL fields', () => {
+  it('keeps default Creator views focused and free of compatibility URL fields', () => {
     expect(
       creatorsView.fields.map(
         (field) => field.fieldMetadataUniversalIdentifier,
@@ -434,16 +437,20 @@ describe('Creator object schema', () => {
     const protectedFieldNames = [
       'email',
       'phone',
+      'instagramUrl',
       'instagramLink',
       'instagramUsername',
       'instagramBio',
+      'tiktokUrl',
       'tiktokLink',
       'tiktokUsername',
       'tiktokBio',
+      'youtubeUrl',
       'youtubeLink',
       'youtubeCustomUrl',
       'youtubeTitle',
       'youtubeDescription',
+      'twitterUrl',
       'twitterLink',
       'twitterUsername',
       'twitterBio',

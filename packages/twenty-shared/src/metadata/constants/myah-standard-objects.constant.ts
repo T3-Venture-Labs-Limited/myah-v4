@@ -727,6 +727,9 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       niches: { universalIdentifier: '825176a0-bedd-54a5-8fd7-b98b5a81e3d0' },
       notes: { universalIdentifier: '465d4f65-450f-507c-82b3-be142f608885' },
+      instagramUrl: {
+        universalIdentifier: '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b',
+      },
       instagramLink: {
         universalIdentifier: 'f0d18169-7558-487c-bafd-eb0e6adaf63a',
       },
@@ -769,6 +772,9 @@ export const MYAH_STANDARD_OBJECTS = {
       instagramEstimatedIncomeMax: {
         universalIdentifier: '5b4b9184-7df7-54e6-8b10-2b706d6cec26',
       },
+      tiktokUrl: {
+        universalIdentifier: 'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31',
+      },
       tiktokLink: {
         universalIdentifier: '184b0e66-11d9-45bd-8dde-e694355c57f1',
       },
@@ -804,6 +810,9 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       tiktokPostingFrequencyRecentMonths: {
         universalIdentifier: 'cdce06f2-f7d6-5587-8ea9-02e58c0d6b47',
+      },
+      youtubeUrl: {
+        universalIdentifier: 'af645cc7-31fc-5175-af8d-427845ebe1ed',
       },
       youtubeLink: {
         universalIdentifier: 'dcb35d52-cad9-4871-8ae2-8e97e38578f1',
@@ -858,6 +867,9 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       youtubeEstimatedIncomeMax: {
         universalIdentifier: '1ed40657-e379-5a8f-8295-b7e1c072be68',
+      },
+      twitterUrl: {
+        universalIdentifier: 'bbfda234-327c-5d9d-ac39-8a33fd06779d',
       },
       twitterLink: {
         universalIdentifier: '8bb2d28c-cecf-4111-b043-89b6c7255710',

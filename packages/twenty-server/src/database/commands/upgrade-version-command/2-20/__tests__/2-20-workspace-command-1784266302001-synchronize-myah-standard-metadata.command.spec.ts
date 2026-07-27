@@ -19,8 +19,8 @@ import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manag
 const WORKSPACE_ID = '20202020-0000-0000-0000-000000000001';
 const STANDARD_APPLICATION_ID = '20202020-0000-0000-0000-000000000002';
 const STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER = '20202020-0000-0000-0000-000000000003';
-const OBSOLETE_INSTAGRAM_URL_FIELD_UNIVERSAL_IDENTIFIER =
-  '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b';
+const OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER =
+  '00000000-0000-4000-8000-000000000099';
 type TestFlatEntity = {
   id: string;
   universalIdentifier: string;
@@ -104,7 +104,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       total: 1,
     });
 
-  const addObsoleteInstagramField = (
+  const addObsoleteTestField = (
     allFlatEntityMaps: TwentyStandardAllFlatEntityMaps,
   ) => {
     const currentEmailField =
@@ -117,12 +117,12 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     const obsoleteField = {
       ...currentEmailField,
-      id: OBSOLETE_INSTAGRAM_URL_FIELD_UNIVERSAL_IDENTIFIER,
-      universalIdentifier: OBSOLETE_INSTAGRAM_URL_FIELD_UNIVERSAL_IDENTIFIER,
+      id: OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER,
+      universalIdentifier: OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER,
     };
 
     allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
-      OBSOLETE_INSTAGRAM_URL_FIELD_UNIVERSAL_IDENTIFIER
+      OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
     ] = obsoleteField;
   };
 
@@ -380,7 +380,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         now: '2026-07-15T00:00:00.000Z',
       });
 
-    addObsoleteInstagramField(allFlatEntityMaps);
+    addObsoleteTestField(allFlatEntityMaps);
     getOrRecompute.mockResolvedValue({
       ...allFlatEntityMaps,
       featureFlagsMap: {},
@@ -397,7 +397,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     expect(
       fieldMaps.from.byUniversalIdentifier[
-        OBSOLETE_INSTAGRAM_URL_FIELD_UNIVERSAL_IDENTIFIER
+        OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
       ],
     ).toBeUndefined();
   });
@@ -410,7 +410,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         now: '2026-07-15T00:00:00.000Z',
       });
 
-    addObsoleteInstagramField(allFlatEntityMaps);
+    addObsoleteTestField(allFlatEntityMaps);
     getOrRecompute.mockResolvedValue({
       ...allFlatEntityMaps,
       featureFlagsMap: {},
@@ -426,7 +426,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       {
         explicitObsoleteUniversalIdentifiersByMetadataName: {
           fieldMetadata: new Set([
-            OBSOLETE_INSTAGRAM_URL_FIELD_UNIVERSAL_IDENTIFIER,
+            OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER,
           ]),
         },
       },
@@ -438,12 +438,12 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     expect(
       fieldMaps.from.byUniversalIdentifier[
-        OBSOLETE_INSTAGRAM_URL_FIELD_UNIVERSAL_IDENTIFIER
+        OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
       ],
     ).toBeDefined();
     expect(
       fieldMaps.to.byUniversalIdentifier[
-        OBSOLETE_INSTAGRAM_URL_FIELD_UNIVERSAL_IDENTIFIER
+        OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
       ],
     ).toBeUndefined();
   });
