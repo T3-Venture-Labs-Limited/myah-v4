@@ -168,6 +168,38 @@ describe('ValidationStep pre-submit hooks', () => {
     expect(mockOnClose).not.toHaveBeenCalled();
   });
 
+  it('blocks submission when no valid rows remain', async () => {
+    const invalidRows = [
+      {
+        __index: 0,
+        name: '',
+        __errors: {
+          name: { level: 'error', message: 'Enter a Creator Name' },
+        },
+      },
+    ];
+    mockGetSubmissionBlockReason.mockReturnValue(undefined);
+    mockAddErrorsAndRunHooks
+      .mockReset()
+      .mockReturnValueOnce(initialRows)
+      .mockReturnValueOnce(invalidRows);
+
+    renderStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() =>
+      expect(mockEnqueueDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Import blocked',
+          message: 'No valid rows remain to import.',
+          buttons: [{ title: 'Return' }],
+        }),
+      ),
+    );
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+    expect(mockOnClose).not.toHaveBeenCalled();
+  });
+
   it('allows only one asynchronous preflight per submission attempt', async () => {
     let resolvePreflight: (() => void) | undefined;
     mockBeforeSubmitHook.mockReturnValue(

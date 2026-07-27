@@ -308,6 +308,23 @@ export const ValidationStep = ({
         return;
       }
 
+      const hasValidData = refreshedRows.some(
+        (value) =>
+          !isDefined(value.__errors) ||
+          !Object.values(value.__errors).some(
+            (error) => error.level === 'error',
+          ),
+      );
+
+      if (!hasValidData) {
+        enqueueDialog({
+          title: t`Import blocked`,
+          message: t`No valid rows remain to import.`,
+          buttons: [{ title: t`Return` }],
+        });
+        return;
+      }
+
       const invalidData = refreshedRows.find((value) => {
         if (isDefined(value?.__errors)) {
           return !!Object.values(value.__errors)?.filter(
