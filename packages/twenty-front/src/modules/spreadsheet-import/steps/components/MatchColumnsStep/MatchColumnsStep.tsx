@@ -14,6 +14,7 @@ import { setIgnoreColumn } from '@/spreadsheet-import/utils/setIgnoreColumn';
 import { setSubColumn } from '@/spreadsheet-import/utils/setSubColumn';
 import { useDialogManager } from '@/ui/feedback/dialog-manager/hooks/useDialogManager';
 
+import { InlineBanner } from 'twenty-ui/feedback';
 import { ModalContent } from 'twenty-ui/surfaces';
 
 import { DO_NOT_IMPORT_OPTION_KEY } from '@/spreadsheet-import/constants/DoNotImportOptionKey';
@@ -75,14 +76,33 @@ export const MatchColumnsStep = ({
 }: MatchColumnsStepProps) => {
   const { enqueueDialog } = useDialogManager();
   const dataExample = data.slice(0, 2);
-  const { spreadsheetImportFields: fields } = useSpreadsheetImportInternal();
+  const {
+    spreadsheetImportFields: fields,
+    headerProfile,
+    matchColumnsStepHook,
+  } = useSpreadsheetImportInternal();
   const [isLoading, setIsLoading] = useState(false);
+  const [activeHeaderProfileKey, setActiveHeaderProfileKey] = useState<
+    string | undefined
+  >(() => {
+    if (
+      currentStepState.type === SpreadsheetImportStepType.matchColumns &&
+      currentStepState.activeHeaderProfileKey === null
+    ) {
+      return undefined;
+    }
+
+    return currentStepState.type === SpreadsheetImportStepType.matchColumns &&
+      currentStepState.activeHeaderProfileKey !== undefined
+      ? (currentStepState.activeHeaderProfileKey ?? undefined)
+      : headerProfile?.isDetected(headerValues)
+        ? headerProfile.key
+        : undefined;
+  });
   const [columns, setColumns] = useAtomFamilySelectorState(
     initialComputedColumnsSelector,
     headerValues,
   );
-
-  const { matchColumnsStepHook } = useSpreadsheetImportInternal();
 
   const { t } = useLingui();
 
@@ -147,13 +167,25 @@ export const MatchColumnsStep = ({
     ) => {
       try {
         setIsLoading(true);
-        const data = await matchColumnsStepHook(values, rawData, columns);
+        const data = await matchColumnsStepHook(
+          values,
+          rawData,
+          columns,
+          activeHeaderProfileKey,
+        );
         setCurrentStepState({
           type: SpreadsheetImportStepType.validateData,
           data,
           importedColumns: columns,
         });
-        setPreviousStepState(currentStepState);
+        setPreviousStepState(
+          currentStepState.type === SpreadsheetImportStepType.matchColumns
+            ? {
+                ...currentStepState,
+                activeHeaderProfileKey: activeHeaderProfileKey ?? null,
+              }
+            : currentStepState,
+        );
         nextStep();
       } catch (e) {
         onError((e as Error).message);
@@ -166,6 +198,7 @@ export const MatchColumnsStep = ({
       setPreviousStepState,
       setCurrentStepState,
       currentStepState,
+      activeHeaderProfileKey,
     ],
   );
 
@@ -272,6 +305,16 @@ export const MatchColumnsStep = ({
   return (
     <>
       <ModalContent noPadding isVerticallyCentered>
+        {activeHeaderProfileKey === headerProfile?.key && (
+          <InlineBanner
+            color="blue"
+            message={t`Detected format: ${headerProfile.label}`}
+            button={{
+              title: t`Use generic mapping`,
+              onClick: () => setActiveHeaderProfileKey(undefined),
+            }}
+          />
+        )}
         <ScrollWrapper componentInstanceId="scroll-wrapper-modal-content">
           <ColumnGrid
             columns={columns}

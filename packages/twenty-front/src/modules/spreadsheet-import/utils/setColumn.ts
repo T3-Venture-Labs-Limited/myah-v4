@@ -1,6 +1,6 @@
 import { type MatchColumnsStepProps } from '@/spreadsheet-import/steps/components/MatchColumnsStep/MatchColumnsStep';
 
-import { type SpreadsheetImportField } from '@/spreadsheet-import/types';
+import { type SpreadsheetImportFields } from '@/spreadsheet-import/types';
 import { type SpreadsheetColumn } from '@/spreadsheet-import/types/SpreadsheetColumn';
 import { SpreadsheetColumnType } from '@/spreadsheet-import/types/SpreadsheetColumnType';
 import { type SpreadsheetMatchedOptions } from '@/spreadsheet-import/types/SpreadsheetMatchedOptions';
@@ -11,8 +11,9 @@ import { uniqueEntries } from './uniqueEntries';
 
 export const setColumn = (
   oldColumn: SpreadsheetColumn,
-  field?: SpreadsheetImportField,
+  field?: SpreadsheetImportFields[number],
   data?: MatchColumnsStepProps['data'],
+  selectOptionAliases?: Readonly<Record<string, string>>,
 ): SpreadsheetColumn => {
   if (field?.fieldType.type === 'select') {
     const fieldOptions = field.fieldType.options;
@@ -22,10 +23,13 @@ export const setColumn = (
     ) as SpreadsheetMatchedOptions[];
 
     const matchedOptions = uniqueData.map((record) => {
+      const aliasedEntry =
+        selectOptionAliases?.[record.entry.trim().toLocaleLowerCase()] ??
+        record.entry;
       const value = fieldOptions.find(
         (fieldOption) =>
-          fieldOption.value === record.entry ||
-          fieldOption.label === record.entry,
+          fieldOption.value === aliasedEntry ||
+          fieldOption.label === aliasedEntry,
       )?.value;
       return value
         ? ({ ...record, value } as SpreadsheetMatchedOptions)
@@ -71,9 +75,12 @@ export const setColumn = (
     }
 
     const matchedOptions = entries.map((entry) => {
+      const aliasedEntry =
+        selectOptionAliases?.[entry.trim().toLocaleLowerCase()] ?? entry;
       const value = fieldOptions.find(
         (fieldOption) =>
-          fieldOption.value === entry || fieldOption.label === entry,
+          fieldOption.value === aliasedEntry ||
+          fieldOption.label === aliasedEntry,
       )?.value;
       return value
         ? ({ entry, value } as SpreadsheetMatchedOptions)

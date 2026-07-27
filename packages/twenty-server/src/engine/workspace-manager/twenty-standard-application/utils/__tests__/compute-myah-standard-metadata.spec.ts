@@ -35,16 +35,20 @@ const PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS = [
   'c4bccf25-cfd1-5648-918e-bf20b32ed375',
   'ccdc5be6-6c2b-5920-acd8-fa0ad52eeb29',
   '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b',
+  'f0d18169-7558-487c-bafd-eb0e6adaf63a',
   '1186d5b4-385f-5566-a4ba-87b8f65cdee5',
   'd383c2c2-9617-548f-a0ab-266b7dbe0789',
   'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31',
+  '184b0e66-11d9-45bd-8dde-e694355c57f1',
   '3db5e356-13b9-539d-8320-7c6606e3c574',
   '52162ce6-20b6-536d-b6b1-c21271c96006',
   'af645cc7-31fc-5175-af8d-427845ebe1ed',
+  'dcb35d52-cad9-4871-8ae2-8e97e38578f1',
   'cba072b8-6758-5eaa-bc1c-72e94a75b112',
   '6430e3f1-71aa-5b6a-bc7a-b635d4f2c3ab',
   'bdaf9a54-8931-5e51-836f-eb1cf6b11fcb',
   'bbfda234-327c-5d9d-ac39-8a33fd06779d',
+  '8bb2d28c-cecf-4111-b043-89b6c7255710',
   'cba84727-9219-502a-9880-a14bee741515',
   'b286bdf2-3024-575d-b852-adf935061749',
   'fa743d1a-aa43-5976-b6b2-8131a533ae5b',
@@ -300,6 +304,22 @@ describe('Myah standard metadata contract', () => {
             .universalIdentifier,
       }),
     );
+    for (const [name, universalIdentifier] of [
+      ['instagramUrl', '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b'],
+      ['tiktokUrl', 'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31'],
+      ['youtubeUrl', 'af645cc7-31fc-5175-af8d-427845ebe1ed'],
+      ['twitterUrl', 'bbfda234-327c-5d9d-ac39-8a33fd06779d'],
+    ]) {
+      expect(creatorFields).toContainEqual(
+        expect.objectContaining({
+          name,
+          universalIdentifier,
+          type: FieldMetadataType.TEXT,
+          isNullable: true,
+          isUIEditable: true,
+        }),
+      );
+    }
     expect(creatorFields).toContainEqual(
       expect.objectContaining({
         name: 'owner',

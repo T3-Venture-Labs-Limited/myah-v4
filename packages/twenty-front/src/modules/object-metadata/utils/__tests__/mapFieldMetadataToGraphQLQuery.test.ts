@@ -39,6 +39,34 @@ describe('mapFieldMetadataToGraphQLQuery', () => {
 }`),
     );
   });
+  it('should narrow LINKS fields to explicitly requested subfields', async () => {
+    const res = mapFieldMetadataToGraphQLQuery({
+      objectMetadataItems: getTestEnrichedObjectMetadataItemsMock(),
+      relationRecordGqlFields: { primaryLinkUrl: true },
+      gqlField: 'xLink',
+      fieldMetadata: personObjectMetadataItem.fields.find(
+        (field) => field.name === 'xLink',
+      )!,
+      objectPermissionsByObjectMetadataId: {},
+    });
+    expect(res).toContain('primaryLinkUrl');
+    expect(res).not.toContain('primaryLinkLabel');
+    expect(res).not.toContain('secondaryLinks');
+  });
+
+  it('should select all LINKS subfields when none are explicitly requested', async () => {
+    const res = mapFieldMetadataToGraphQLQuery({
+      objectMetadataItems: getTestEnrichedObjectMetadataItemsMock(),
+      gqlField: 'xLink',
+      fieldMetadata: personObjectMetadataItem.fields.find(
+        (field) => field.name === 'xLink',
+      )!,
+      objectPermissionsByObjectMetadataId: {},
+    });
+    expect(res).toContain('primaryLinkUrl');
+    expect(res).toContain('primaryLinkLabel');
+    expect(res).toContain('secondaryLinks');
+  });
 
   it('should return non relation subFields if relation', async () => {
     const res = mapFieldMetadataToGraphQLQuery({

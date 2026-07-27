@@ -14,10 +14,13 @@ import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/workspace-metadata-version/services/workspace-metadata-version.service';
 import type { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
+import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 
 const WORKSPACE_ID = '20202020-0000-0000-0000-000000000001';
 const STANDARD_APPLICATION_ID = '20202020-0000-0000-0000-000000000002';
 const STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER = '20202020-0000-0000-0000-000000000003';
+const OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER =
+  '00000000-0000-4000-8000-000000000099';
 type TestFlatEntity = {
   id: string;
   universalIdentifier: string;
@@ -100,6 +103,28 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       index: 0,
       total: 1,
     });
+
+  const addObsoleteTestField = (
+    allFlatEntityMaps: TwentyStandardAllFlatEntityMaps,
+  ) => {
+    const currentEmailField =
+      allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier
+      ];
+    if (!currentEmailField) {
+      throw new Error('Creator email field fixture is missing');
+    }
+
+    const obsoleteField = {
+      ...currentEmailField,
+      id: OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER,
+      universalIdentifier: OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER,
+    };
+
+    allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+      OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
+    ] = obsoleteField;
+  };
 
   it('builds the migration plan without mutating in dry-run mode', async () => {
     await runOnWorkspace(true);
@@ -345,6 +370,82 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
     expect(createQueryRunner).not.toHaveBeenCalled();
+  });
+
+  it('preserves unlisted obsolete fields during ordinary synchronization', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-07-15T00:00:00.000Z',
+      });
+
+    addObsoleteTestField(allFlatEntityMaps);
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
+
+    await runOnWorkspace();
+
+    const fieldMaps =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+        .fromToAllFlatEntityMaps.flatFieldMetadataMaps;
+
+    expect(
+      fieldMaps.from.byUniversalIdentifier[
+        OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toBeUndefined();
+  });
+
+  it('includes explicit obsolete fields and bypasses the complete-graph skip', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-07-15T00:00:00.000Z',
+      });
+
+    addObsoleteTestField(allFlatEntityMaps);
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+
+    await command.synchronizeWorkspace(
+      {
+        workspaceId: WORKSPACE_ID,
+        options: { dryRun: false },
+        index: 0,
+        total: 1,
+      },
+      {
+        explicitObsoleteUniversalIdentifiersByMetadataName: {
+          fieldMetadata: new Set([
+            OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER,
+          ]),
+        },
+      },
+    );
+
+    const fieldMaps =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+        .fromToAllFlatEntityMaps.flatFieldMetadataMaps;
+
+    expect(
+      fieldMaps.from.byUniversalIdentifier[
+        OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toBeDefined();
+    expect(
+      fieldMaps.to.byUniversalIdentifier[
+        OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
+      ],
+    ).toBeUndefined();
   });
 
   it('uses an already-owned Myah entity as the migration source', async () => {

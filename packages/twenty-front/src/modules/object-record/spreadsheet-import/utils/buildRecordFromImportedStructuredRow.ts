@@ -230,9 +230,18 @@ export const buildRecordFromImportedStructuredRow = ({
           importedStructuredRow,
           COMPOSITE_FIELD_TRANSFORM_CONFIGS[field.type],
         );
-        if (isDefined(compositeData)) {
-          recordToBuild[field.name] = compositeData;
+        if (!isDefined(compositeData)) {
+          break;
         }
+        recordToBuild[field.name] =
+          field.type === FieldMetadataType.LINKS
+            ? {
+                primaryLinkUrl: '',
+                primaryLinkLabel: '',
+                secondaryLinks: [],
+                ...compositeData,
+              }
+            : compositeData;
         break;
       }
       case FieldMetadataType.PHONES: {

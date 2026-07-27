@@ -19,7 +19,8 @@ export default defineView({
     {
       universalIdentifier:
         QUALIFIED_CREATORS_WITH_EMAIL_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.name,
-      fieldMetadataUniversalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
       position: 0,
       isVisible: true,
       size: 220,
@@ -36,7 +37,8 @@ export default defineView({
     {
       universalIdentifier:
         QUALIFIED_CREATORS_WITH_EMAIL_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.owner,
-      fieldMetadataUniversalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.owner,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.owner,
       position: 2,
       isVisible: true,
       size: 180,
@@ -44,19 +46,20 @@ export default defineView({
     {
       universalIdentifier:
         QUALIFIED_CREATORS_WITH_EMAIL_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.email,
-      fieldMetadataUniversalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
       position: 3,
       isVisible: true,
       size: 160,
     },
     {
       universalIdentifier:
-        QUALIFIED_CREATORS_WITH_EMAIL_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
+        QUALIFIED_CREATORS_WITH_EMAIL_VIEW_FIELD_UNIVERSAL_IDENTIFIERS.instagramLink,
       fieldMetadataUniversalIdentifier:
-        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramLink,
       position: 4,
       isVisible: true,
-      size: 160,
+      size: 180,
     },
     {
       universalIdentifier:
@@ -89,7 +92,8 @@ export default defineView({
     {
       universalIdentifier:
         QUALIFIED_CREATORS_WITH_EMAIL_VIEW_FILTER_UNIVERSAL_IDENTIFIERS.email,
-      fieldMetadataUniversalIdentifier: CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
+      fieldMetadataUniversalIdentifier:
+        CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
       operand: ViewFilterOperand.IS_NOT_EMPTY,
       value: [],
     },

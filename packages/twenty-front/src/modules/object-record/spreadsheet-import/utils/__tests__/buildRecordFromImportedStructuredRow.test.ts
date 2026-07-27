@@ -434,6 +434,30 @@ describe('buildRecordFromImportedStructuredRow', () => {
     });
   });
 
+  it('should complete a links value when only its primary URL is imported', () => {
+    const importedStructuredRow: ImportedStructuredRow = {
+      'Link URL (linksField)': 'https://example.com',
+    };
+
+    const result = buildRecordFromImportedStructuredRow({
+      importedStructuredRow,
+      fieldMetadataItems: fields,
+      spreadsheetImportFields: [],
+    });
+
+    expect(result).toEqual({
+      linksField: {
+        primaryLinkUrl: 'https://example.com',
+        primaryLinkLabel: '',
+        secondaryLinks: [],
+      },
+      createdBy: {
+        source: 'IMPORT',
+        context: {},
+      },
+    });
+  });
+
   it('should successfully build a record from imported structured row with primary phone number (without calling code)', () => {
     const importedStructuredRow: ImportedStructuredRow = {
       'Primary Phone Number (phoneField)': '5550123',

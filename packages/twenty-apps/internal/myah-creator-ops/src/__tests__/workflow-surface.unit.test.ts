@@ -19,6 +19,7 @@ import promotedAssetObjectResult from 'src/objects/promoted-asset.object';
 import campaignsViewResult from 'src/views/campaigns.view';
 import creatorListsViewResult from 'src/views/creator-lists.view';
 import creatorsViewResult from 'src/views/creators.view';
+import creatorMetricsViewResult from 'src/views/creator-metrics.view';
 import qualifiedCreatorsWithEmailViewResult from 'src/views/qualified-creators-with-email.view';
 import campaignsNavigationMenuItemResult from 'src/navigation-menu-items/campaigns.navigation-menu-item';
 import creatorListsNavigationMenuItemResult from 'src/navigation-menu-items/creator-lists.navigation-menu-item';
@@ -37,7 +38,9 @@ const unwrapValidationResult = <T>(result: {
 };
 
 const campaignObject = unwrapValidationResult(campaignObjectResult);
-const campaignCreatorObject = unwrapValidationResult(campaignCreatorObjectResult);
+const campaignCreatorObject = unwrapValidationResult(
+  campaignCreatorObjectResult,
+);
 const creatorListObject = unwrapValidationResult(creatorListObjectResult);
 const creatorListMemberObject = unwrapValidationResult(
   creatorListMemberObjectResult,
@@ -52,6 +55,7 @@ const promotedAssetObject = unwrapValidationResult(promotedAssetObjectResult);
 const campaignsView = unwrapValidationResult(campaignsViewResult);
 const creatorListsView = unwrapValidationResult(creatorListsViewResult);
 const creatorsView = unwrapValidationResult(creatorsViewResult);
+const creatorMetricsView = unwrapValidationResult(creatorMetricsViewResult);
 const qualifiedCreatorsWithEmailView = unwrapValidationResult(
   qualifiedCreatorsWithEmailViewResult,
 );
@@ -73,7 +77,10 @@ const getFieldNames = (objectDefinition: {
 const getField = (
   objectDefinition: { fields: { name: string; type: FieldType }[] },
   fieldName: string,
-) => objectDefinition.fields.find((fieldDefinition) => fieldDefinition.name === fieldName);
+) =>
+  objectDefinition.fields.find(
+    (fieldDefinition) => fieldDefinition.name === fieldName,
+  );
 
 const getVisibleFieldUniversalIdentifiers = (viewDefinition: {
   fields: {
@@ -215,29 +222,29 @@ describe('Creator Ops operator views', () => {
       universalIdentifiers.QUALIFIED_CREATORS_WITH_EMAIL_VIEW_UNIVERSAL_IDENTIFIER,
     );
 
-    for (const creatorView of [
-      creatorsView,
-      qualifiedCreatorsWithEmailView,
-    ]) {
-      expect(creatorView.type).toBe(ViewType.TABLE);
-      expect(creatorView.objectUniversalIdentifier).toBe(
-        universalIdentifiers.CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
-      );
-      expect(getVisibleFieldUniversalIdentifiers(creatorView)).toEqual([
-        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
-        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.creatorStatus,
-        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.owner,
-        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
-        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramUsername,
-        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramFollowerCount,
-        universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.source,
-      ]);
-    }
+    expect(creatorsView.type).toBe(ViewType.TABLE);
+    expect(creatorsView.objectUniversalIdentifier).toBe(
+      universalIdentifiers.CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+    );
+    expect(getVisibleFieldUniversalIdentifiers(creatorsView)).toEqual([
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.email,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.gender,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.location,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.phone,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.tiktokLink,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.instagramLink,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.youtubeLink,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.twitterLink,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.creatorStatus,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.source,
+    ]);
 
     expect(qualifiedCreatorsWithEmailView.filters).toEqual([
       expect.objectContaining({
         fieldMetadataUniversalIdentifier:
-          universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.creatorStatus,
+          universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+            .creatorStatus,
         operand: ViewFilterOperand.IS,
         value: ['QUALIFIED'],
       }),
@@ -247,6 +254,39 @@ describe('Creator Ops operator views', () => {
         operand: ViewFilterOperand.IS_NOT_EMPTY,
         value: [],
       }),
+    ]);
+  });
+
+  it('should separate Creator discovery metrics from import-first columns', () => {
+    expect(creatorMetricsView.universalIdentifier).toBe(
+      universalIdentifiers.CREATOR_METRICS_VIEW_UNIVERSAL_IDENTIFIER,
+    );
+    expect(creatorMetricsView.type).toBe(ViewType.TABLE);
+    expect(creatorMetricsView.objectUniversalIdentifier).toBe(
+      universalIdentifiers.CREATOR_OBJECT_UNIVERSAL_IDENTIFIER,
+    );
+    expect(getVisibleFieldUniversalIdentifiers(creatorMetricsView)).toEqual([
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.name,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .instagramFollowerCount,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .instagramEngagementPercent,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .tiktokFollowerCount,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .tiktokEngagementPercent,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .tiktokPlayCountMedian,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .youtubeSubscriberCount,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .youtubeEngagementPercent,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .youtubeAvgViewsLong,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.hasBrandDeals,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS
+        .promotesAffiliateLinks,
+      universalIdentifiers.CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.source,
     ]);
   });
 
