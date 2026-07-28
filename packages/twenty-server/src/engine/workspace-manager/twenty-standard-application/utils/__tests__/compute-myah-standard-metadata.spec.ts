@@ -366,6 +366,12 @@ describe('Myah standard metadata contract', () => {
           MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
         field.name === 'status',
     );
+    const campaignLifecycleStatus = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
+        field.name === 'lifecycleStatus',
+    );
     const campaignOwner = fields.find(
       (field) =>
         field.objectMetadataUniversalIdentifier ===
@@ -395,8 +401,29 @@ describe('Myah standard metadata contract', () => {
           viewField.viewUniversalIdentifier ===
           MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9.universalIdentifier,
       );
+    const campaignTableViewFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (viewField) =>
+          viewField.viewUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.views.view5865bdbf.universalIdentifier,
+      );
 
     expect(campaignStatus).toMatchObject({
+      type: FieldMetadataType.SELECT,
+      isUIEditable: false,
+      options: expect.arrayContaining([
+        expect.objectContaining({ value: 'PENDING' }),
+        expect.objectContaining({ value: 'APPROVED' }),
+        expect.objectContaining({ value: 'REJECTED' }),
+        expect.objectContaining({ value: 'APPLIED' }),
+      ]),
+    });
+    expect(campaignStatus?.options).toHaveLength(4);
+    expect(campaignLifecycleStatus).toMatchObject({
+      universalIdentifier: 'e169ef65-ded7-4060-9c7a-c9b92d359c8a',
       type: FieldMetadataType.SELECT,
       defaultValue: "'DRAFT'",
       options: expect.arrayContaining([
@@ -406,6 +433,7 @@ describe('Myah standard metadata contract', () => {
         expect.objectContaining({ value: 'COMPLETED' }),
       ]),
     });
+    expect(campaignLifecycleStatus?.options).toHaveLength(4);
     expect(campaignOwner).toMatchObject({
       universalIdentifier: '12d7812a-3d11-4704-8e59-d1468ee3026b',
       relationTargetFieldMetadataUniversalIdentifier:
@@ -446,6 +474,25 @@ describe('Myah standard metadata contract', () => {
       ]),
     );
     expect(campaignOverviewViewFields).toHaveLength(3);
+    expect(campaignTableViewFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          universalIdentifier: '39f85537-987b-42e6-b99b-f887373b725d',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus
+              .universalIdentifier,
+          position: 1,
+        }),
+      ]),
+    );
+    expect(campaignTableViewFields).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.status.universalIdentifier,
+        }),
+      ]),
+    );
   });
 
   it('normalizes select option positions and defaults', () => {

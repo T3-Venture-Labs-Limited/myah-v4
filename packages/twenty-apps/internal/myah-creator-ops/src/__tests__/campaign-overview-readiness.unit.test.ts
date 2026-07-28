@@ -60,7 +60,7 @@ const readyDraftSnapshot = {
   id: 'campaign-1',
   name: 'Launch',
   objective: 'Grow awareness',
-  status: 'DRAFT' as const,
+  lifecycleStatus: 'DRAFT' as const,
   effectiveAudienceCount: 1,
 };
 
@@ -154,21 +154,21 @@ describe('CampaignOverviewReadinessView', () => {
     const activeMarkup = renderView({
       loadState: {
         kind: 'loaded',
-        snapshot: { ...readyDraftSnapshot, status: 'ACTIVE' },
+        snapshot: { ...readyDraftSnapshot, lifecycleStatus: 'ACTIVE' },
       },
       onChangeStatus: vi.fn(),
     });
     const pausedMarkup = renderView({
       loadState: {
         kind: 'loaded',
-        snapshot: { ...readyDraftSnapshot, status: 'PAUSED' },
+        snapshot: { ...readyDraftSnapshot, lifecycleStatus: 'PAUSED' },
       },
       onChangeStatus: vi.fn(),
     });
     const completedMarkup = renderView({
       loadState: {
         kind: 'loaded',
-        snapshot: { ...readyDraftSnapshot, status: 'COMPLETED' },
+        snapshot: { ...readyDraftSnapshot, lifecycleStatus: 'COMPLETED' },
       },
       onChangeStatus: vi.fn(),
     });
@@ -187,7 +187,7 @@ describe('CampaignOverviewReadinessView', () => {
     const markup = renderView({
       loadState: {
         kind: 'loaded',
-        snapshot: { ...readyDraftSnapshot, status: 'ACTIVE' },
+        snapshot: { ...readyDraftSnapshot, lifecycleStatus: 'ACTIVE' },
       },
       isSaving: true,
       onChangeStatus: vi.fn(),
@@ -211,7 +211,7 @@ describe('CampaignOverviewReadinessView', () => {
     const conflictMarkup = renderView({
       loadState: {
         kind: 'loaded',
-        snapshot: { ...readyDraftSnapshot, status: 'COMPLETED' },
+        snapshot: { ...readyDraftSnapshot, lifecycleStatus: 'COMPLETED' },
       },
       feedback: {
         kind: 'conflict',
@@ -245,7 +245,7 @@ describe('CampaignOverviewReadinessContent', () => {
           id: 'campaign-1',
           name: '',
           objective: '',
-          status: 'DRAFT',
+          lifecycleStatus: 'DRAFT',
         },
         campaignCreators: { totalCount: 0 },
       })
@@ -254,7 +254,7 @@ describe('CampaignOverviewReadinessContent', () => {
           id: 'campaign-1',
           name: 'Launch',
           objective: 'Grow awareness',
-          status: 'DRAFT',
+          lifecycleStatus: 'DRAFT',
         },
         campaignCreators: { totalCount: 1 },
       })
@@ -263,7 +263,7 @@ describe('CampaignOverviewReadinessContent', () => {
           id: 'campaign-1',
           name: '',
           objective: '',
-          status: 'DRAFT',
+          lifecycleStatus: 'DRAFT',
         },
         campaignCreators: { totalCount: 0 },
       })
@@ -273,7 +273,7 @@ describe('CampaignOverviewReadinessContent', () => {
           id: 'campaign-1',
           name: 'Launch',
           objective: 'Grow awareness',
-          status: 'DRAFT',
+          lifecycleStatus: 'DRAFT',
         },
         campaignCreators: { totalCount: 1 },
       });

@@ -25,7 +25,7 @@ export const deriveCampaignOverviewState = (
   }
 
   return {
-    status: snapshot.status,
+    lifecycleStatus: snapshot.lifecycleStatus,
     hasName,
     hasObjective,
     hasAudience,

@@ -524,6 +524,9 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       name: { universalIdentifier: '63c56aea-35db-5733-9d3a-d062544ac897' },
       status: { universalIdentifier: '9d3c6d96-896d-51d1-b6d2-5d6b2e333e87' },
+      lifecycleStatus: {
+        universalIdentifier: 'e169ef65-ded7-4060-9c7a-c9b92d359c8a',
+      },
       objective: {
         universalIdentifier: 'e22687bb-2633-573f-bd80-c4b13e80d966',
       },
@@ -560,8 +563,8 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: '5865bdbf-be33-5457-9d91-184885276b94',
         viewFields: {
           name: { universalIdentifier: 'ead80d6b-300a-5edc-b03e-7cce7f3fecc4' },
-          status: {
-            universalIdentifier: '8ce2c107-f484-5525-8f45-b7f4c9d32683',
+          lifecycleStatus: {
+            universalIdentifier: '39f85537-987b-42e6-b99b-f887373b725d',
           },
           objective: {
             universalIdentifier: '4d438e45-9995-5b0f-b9eb-ed916870f280',

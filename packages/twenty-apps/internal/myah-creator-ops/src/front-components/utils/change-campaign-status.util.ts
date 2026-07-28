@@ -11,7 +11,7 @@ const updateCampaignsResponseSchema = z.object({
     .array(
       z.object({
         id: z.string(),
-        status: z.enum(CAMPAIGN_STATUSES),
+        lifecycleStatus: z.enum(CAMPAIGN_STATUSES),
       }),
     )
     .max(1),
@@ -31,10 +31,10 @@ export const changeCampaignStatus = async ({
       updateCampaigns: {
         __args: {
           filter: { id: { in: [campaignId] } },
-          data: { status: targetStatus },
+          data: { lifecycleStatus: targetStatus },
         },
         id: true,
-        status: true,
+        lifecycleStatus: true,
       },
     }),
   );

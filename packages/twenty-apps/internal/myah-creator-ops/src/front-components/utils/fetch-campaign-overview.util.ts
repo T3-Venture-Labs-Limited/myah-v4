@@ -10,7 +10,7 @@ const campaignOverviewResponseSchema = z.object({
       id: z.string(),
       name: z.string().nullable(),
       objective: z.string().nullable(),
-      status: z.enum(CAMPAIGN_STATUSES),
+      lifecycleStatus: z.enum(CAMPAIGN_STATUSES),
     })
     .nullable(),
   campaignCreators: z.object({
@@ -32,7 +32,7 @@ export const fetchCampaignOverview = async ({
         id: true,
         name: true,
         objective: true,
-        status: true,
+        lifecycleStatus: true,
       },
       campaignCreators: {
         __args: {

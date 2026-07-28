@@ -117,8 +117,8 @@ export const CampaignOverviewReadinessView = ({
 
   const { snapshot } = loadState;
   const readiness = deriveCampaignOverviewState(snapshot);
-  const actions = getCampaignLifecycleActions(snapshot.status);
-  const statusPresentation = statusPresentationByStatus[snapshot.status];
+  const actions = getCampaignLifecycleActions(snapshot.lifecycleStatus);
+  const statusPresentation = statusPresentationByStatus[snapshot.lifecycleStatus];
   const checklistItems = [
     { label: 'Name', complete: readiness.hasName },
     { label: 'Objective', complete: readiness.hasObjective },

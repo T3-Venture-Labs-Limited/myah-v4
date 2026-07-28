@@ -76,7 +76,7 @@ const hookCases: HookCase[] = [
     hookClass: MyahCampaignUpdateOnePreQueryHook,
     serviceMethod: 'validateStatusBearingUpdateOne',
     decoratorKey: 'campaign.updateOne',
-    payload: { id: 'campaign-1', data: { status: 'PAUSED' } },
+    payload: { id: 'campaign-1', data: { lifecycleStatus: 'PAUSED' } },
   },
   {
     hookClass: MyahCampaignUpdateManyPreQueryHook,
@@ -84,7 +84,7 @@ const hookCases: HookCase[] = [
     decoratorKey: 'campaign.updateMany',
     payload: {
       filter: { id: { eq: 'campaign-1' } },
-      data: { status: 'PAUSED' },
+      data: { lifecycleStatus: 'PAUSED' },
     },
   },
 ];
@@ -205,13 +205,13 @@ describe('Campaign lifecycle compare-and-set regression', () => {
       id: 'campaign-1',
       name: 'Launch',
       objective: 'Goal',
-      status: 'ACTIVE',
+      lifecycleStatus: 'ACTIVE',
       ownerId: null,
     });
 
     return service.prepareUpdateMany(authContext, objectName, {
       filter: { id: { eq: 'campaign-1' } },
-      data: { status: targetStatus },
+      data: { lifecycleStatus: targetStatus },
     });
   };
 
@@ -221,12 +221,12 @@ describe('Campaign lifecycle compare-and-set regression', () => {
   ): string => {
     const observedStatus = (
       preparedPayload.filter.and as Array<{
-        status?: { eq?: string };
+        lifecycleStatus?: { eq?: string };
       }>
-    )[1].status?.eq;
+    )[1].lifecycleStatus?.eq;
 
     return currentStatus === observedStatus
-      ? (preparedPayload.data.status as string)
+      ? (preparedPayload.data.lifecycleStatus as string)
       : currentStatus;
   };
 
@@ -240,10 +240,16 @@ describe('Campaign lifecycle compare-and-set regression', () => {
       const secondPrepared = await prepareFromActive(secondTarget);
 
       expect(firstPrepared.filter).toEqual({
-        and: [{ id: { eq: 'campaign-1' } }, { status: { eq: 'ACTIVE' } }],
+        and: [
+          { id: { eq: 'campaign-1' } },
+          { lifecycleStatus: { eq: 'ACTIVE' } },
+        ],
       });
       expect(secondPrepared.filter).toEqual({
-        and: [{ id: { eq: 'campaign-1' } }, { status: { eq: 'ACTIVE' } }],
+        and: [
+          { id: { eq: 'campaign-1' } },
+          { lifecycleStatus: { eq: 'ACTIVE' } },
+        ],
       });
 
       let storedStatus = 'ACTIVE';
@@ -265,7 +271,10 @@ describe('Campaign lifecycle compare-and-set regression', () => {
     storedStatus = applyPreparedWrite(storedStatus, idempotentPrepared);
 
     expect(idempotentPrepared.filter).toEqual({
-      and: [{ id: { eq: 'campaign-1' } }, { status: { eq: 'ACTIVE' } }],
+      and: [
+        { id: { eq: 'campaign-1' } },
+        { lifecycleStatus: { eq: 'ACTIVE' } },
+      ],
     });
     expect(storedStatus).toBe('COMPLETED');
   });

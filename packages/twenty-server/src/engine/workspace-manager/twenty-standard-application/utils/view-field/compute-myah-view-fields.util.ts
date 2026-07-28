@@ -205,8 +205,8 @@ const campaignFields = [
   },
   {
     viewName: 'view5865bdbf',
-    viewFieldName: 'status',
-    fieldName: 'status',
+    viewFieldName: 'lifecycleStatus',
+    fieldName: 'lifecycleStatus',
     position: 1,
     isVisible: true,
     size: 160,

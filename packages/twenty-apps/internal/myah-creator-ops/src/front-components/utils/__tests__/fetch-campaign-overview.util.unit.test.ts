@@ -6,7 +6,7 @@ const campaignResponse = {
   id: 'campaign-1',
   name: 'Launch',
   objective: 'Grow awareness',
-  status: 'DRAFT',
+  lifecycleStatus: 'DRAFT',
 };
 
 describe('fetchCampaignOverview', () => {
@@ -30,7 +30,7 @@ describe('fetchCampaignOverview', () => {
         id: true,
         name: true,
         objective: true,
-        status: true,
+        lifecycleStatus: true,
       },
       campaignCreators: {
         __args: {

@@ -2,12 +2,12 @@ export type CampaignWorkspaceRecord = {
   id: string;
   name: string | null;
   objective: string | null;
-  status: string | null;
+  lifecycleStatus: string | null;
   ownerId: string | null;
 };
 
 export type CampaignMutationData = Partial<CampaignWorkspaceRecord> & {
-  status?: unknown;
+  lifecycleStatus?: unknown;
 };
 
 export type CampaignUpdateFilter = {

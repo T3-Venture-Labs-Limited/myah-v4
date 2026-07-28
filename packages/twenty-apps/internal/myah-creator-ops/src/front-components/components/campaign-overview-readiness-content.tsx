@@ -153,7 +153,7 @@ export const CampaignOverviewReadinessContent = ({
         kind: 'loaded',
         snapshot: {
           ...observedSnapshot,
-          status: result.campaign.status,
+          lifecycleStatus: result.campaign.lifecycleStatus,
         },
       });
 

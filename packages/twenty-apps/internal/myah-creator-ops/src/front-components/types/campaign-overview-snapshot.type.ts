@@ -4,6 +4,6 @@ export type CampaignOverviewSnapshot = {
   id: string;
   name: string | null;
   objective: string | null;
-  status: CampaignStatus;
+  lifecycleStatus: CampaignStatus;
   effectiveAudienceCount: number;
 };

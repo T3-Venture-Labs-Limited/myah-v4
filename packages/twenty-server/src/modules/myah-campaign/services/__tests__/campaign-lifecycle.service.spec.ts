@@ -155,7 +155,7 @@ describe('CampaignLifecycleService', () => {
       id: campaignId,
       name: 'Launch',
       objective: 'Grow awareness',
-      status: 'DRAFT',
+      lifecycleStatus: 'DRAFT',
       ownerId: 'workspace-member-1',
     });
     campaignCreatorRepository.exists.mockResolvedValue(true);
@@ -172,15 +172,21 @@ describe('CampaignLifecycleService', () => {
       getWorkspaceContextMock.mockReturnValue(
         createWorkspaceContext({ includeCampaign: false }),
       );
-      const createOnePayload = { data: { status: 'ACTIVE' }, upsert: true };
-      const createManyPayload = {
-        data: [{ status: 'ACTIVE' }],
+      const createOnePayload = {
+        data: { lifecycleStatus: 'ACTIVE' },
         upsert: true,
       };
-      const updateOnePayload = { id: campaignId, data: { status: 'ACTIVE' } };
+      const createManyPayload = {
+        data: [{ lifecycleStatus: 'ACTIVE' }],
+        upsert: true,
+      };
+      const updateOnePayload = {
+        id: campaignId,
+        data: { lifecycleStatus: 'ACTIVE' },
+      };
       const updateManyPayload = {
         filter: { id: { eq: campaignId } },
-        data: { status: 'ACTIVE' },
+        data: { lifecycleStatus: 'ACTIVE' },
       };
 
       await expect(
@@ -209,7 +215,7 @@ describe('CampaignLifecycleService', () => {
       ).resolves.toBe(updateManyPayload);
 
       expect(createOnePayload).toEqual({
-        data: { status: 'ACTIVE' },
+        data: { lifecycleStatus: 'ACTIVE' },
         upsert: true,
       });
       expect(getRepository).not.toHaveBeenCalled();
@@ -226,7 +232,7 @@ describe('CampaignLifecycleService', () => {
 
       expect(payload.data).toEqual({
         name: 'Launch',
-        status: 'DRAFT',
+        lifecycleStatus: 'DRAFT',
         ownerId: 'workspace-member-1',
       });
       expect(getRepository).not.toHaveBeenCalled();
@@ -251,13 +257,15 @@ describe('CampaignLifecycleService', () => {
     ])(
       'defaults Draft without inventing an owner for $type auth',
       async (authContext) => {
-        const payload: { data: { status?: string; ownerId?: string } } = {
+        const payload: {
+          data: { lifecycleStatus?: string; ownerId?: string };
+        } = {
           data: {},
         };
 
         await service.prepareCreateOne(authContext, 'campaign', payload);
 
-        expect(payload.data).toEqual({ status: 'DRAFT' });
+        expect(payload.data).toEqual({ lifecycleStatus: 'DRAFT' });
       },
     );
 
@@ -265,13 +273,14 @@ describe('CampaignLifecycleService', () => {
       getWorkspaceContextMock.mockReturnValue(
         createWorkspaceContext({ includeOwner: false }),
       );
-      const payload: { data: { status?: string; ownerId?: string } } = {
-        data: {},
-      };
+      const payload: { data: { lifecycleStatus?: string; ownerId?: string } } =
+        {
+          data: {},
+        };
 
       await service.prepareCreateOne(userAuthContext, 'campaign', payload);
 
-      expect(payload.data).toEqual({ status: 'DRAFT' });
+      expect(payload.data).toEqual({ lifecycleStatus: 'DRAFT' });
     });
 
     it.each([' draft ', 'draft', 'Draft', 'READY', '0'])(
@@ -279,7 +288,7 @@ describe('CampaignLifecycleService', () => {
       async (status) => {
         await expectLifecycleError(
           service.prepareCreateOne(userAuthContext, 'campaign', {
-            data: { status },
+            data: { lifecycleStatus: status },
           }),
           'Campaign status is invalid.',
         );
@@ -289,11 +298,11 @@ describe('CampaignLifecycleService', () => {
     it.each([undefined, null, ''])(
       'normalizes %p status to Draft',
       async (status) => {
-        const payload = { data: { status } };
+        const payload = { data: { lifecycleStatus: status } };
 
         await service.prepareCreateOne(userAuthContext, 'campaign', payload);
 
-        expect(payload.data.status).toBe('DRAFT');
+        expect(payload.data.lifecycleStatus).toBe('DRAFT');
       },
     );
 
@@ -310,34 +319,34 @@ describe('CampaignLifecycleService', () => {
     });
 
     it('rejects createMany upsert before mutating any row', async () => {
-      const payload = { data: [{}, { status: null }], upsert: true };
+      const payload = { data: [{}, { lifecycleStatus: null }], upsert: true };
 
       await expectLifecycleError(
         service.prepareCreateMany(userAuthContext, 'campaign', payload),
         'Campaign upsert is not supported; use create or update.',
       );
 
-      expect(payload.data).toEqual([{}, { status: null }]);
+      expect(payload.data).toEqual([{}, { lifecycleStatus: null }]);
       expect(getRepository).not.toHaveBeenCalled();
     });
 
     it('defaults every createMany row', async () => {
       const payload: {
-        data: Array<{ status?: string; ownerId?: string }>;
-      } = { data: [{}, { status: '' }] };
+        data: Array<{ lifecycleStatus?: string; ownerId?: string }>;
+      } = { data: [{}, { lifecycleStatus: '' }] };
 
       await service.prepareCreateMany(userAuthContext, 'campaign', payload);
 
       expect(payload.data).toEqual([
-        { status: 'DRAFT', ownerId: 'workspace-member-1' },
-        { status: 'DRAFT', ownerId: 'workspace-member-1' },
+        { lifecycleStatus: 'DRAFT', ownerId: 'workspace-member-1' },
+        { lifecycleStatus: 'DRAFT', ownerId: 'workspace-member-1' },
       ]);
     });
 
     it('permits incomplete Draft creation without repository reads', async () => {
       await expect(
         service.prepareCreateOne(userAuthContext, 'campaign', {
-          data: { status: 'DRAFT', name: '', objective: null },
+          data: { lifecycleStatus: 'DRAFT', name: '', objective: null },
         }),
       ).resolves.toBeDefined();
       expect(getRepository).not.toHaveBeenCalled();
@@ -346,13 +355,13 @@ describe('CampaignLifecycleService', () => {
     it('checks Name then Objective then Audience for direct Active creation', async () => {
       await expectLifecycleError(
         service.prepareCreateOne(userAuthContext, 'campaign', {
-          data: { status: 'ACTIVE' },
+          data: { lifecycleStatus: 'ACTIVE' },
         }),
         'Campaign name is required before activation.',
       );
       await expectLifecycleError(
         service.prepareCreateOne(userAuthContext, 'campaign', {
-          data: { status: 'ACTIVE', name: 'Launch' },
+          data: { lifecycleStatus: 'ACTIVE', name: 'Launch' },
         }),
         'Campaign objective is required before activation.',
       );
@@ -361,7 +370,7 @@ describe('CampaignLifecycleService', () => {
         service.prepareCreateOne(userAuthContext, 'campaign', {
           data: {
             id: campaignId,
-            status: 'ACTIVE',
+            lifecycleStatus: 'ACTIVE',
             name: 'Launch',
             objective: 'Grow awareness',
           },
@@ -396,7 +405,7 @@ describe('CampaignLifecycleService', () => {
           id: campaignId,
           name: 'Launch',
           objective: 'Grow awareness',
-          status: observedStatus,
+          lifecycleStatus: observedStatus,
         });
         const originalFilter = {
           id: { eq: campaignId },
@@ -404,7 +413,7 @@ describe('CampaignLifecycleService', () => {
         };
         const payload = {
           filter: originalFilter,
-          data: { status: targetStatus },
+          data: { lifecycleStatus: targetStatus },
         };
 
         const result = await service.prepareUpdateMany(
@@ -415,7 +424,7 @@ describe('CampaignLifecycleService', () => {
 
         expect(result.data).toBe(payload.data);
         expect(result.filter).toEqual({
-          and: [originalFilter, { status: { eq: observedStatus } }],
+          and: [originalFilter, { lifecycleStatus: { eq: observedStatus } }],
         });
       },
     );
@@ -427,13 +436,13 @@ describe('CampaignLifecycleService', () => {
           id: campaignId,
           name: 'Launch',
           objective: 'Grow awareness',
-          status: observedStatus,
+          lifecycleStatus: observedStatus,
         });
 
         await expectLifecycleError(
           service.prepareUpdateMany(userAuthContext, 'campaign', {
             filter: { id: { eq: campaignId } },
-            data: { status: targetStatus },
+            data: { lifecycleStatus: targetStatus },
           }),
           'This Campaign status change is not allowed.',
         );
@@ -445,11 +454,11 @@ describe('CampaignLifecycleService', () => {
         id: campaignId,
         name: null,
         objective: null,
-        status: 'ACTIVE',
+        lifecycleStatus: 'ACTIVE',
       });
       const payload = {
         filter: { id: { eq: campaignId } },
-        data: { status: 'ACTIVE' },
+        data: { lifecycleStatus: 'ACTIVE' },
       };
 
       const result = await service.prepareUpdateMany(
@@ -460,10 +469,10 @@ describe('CampaignLifecycleService', () => {
 
       expect(campaignRepository.findOne).toHaveBeenCalledWith({
         where: { id: campaignId },
-        select: { id: true, status: true },
+        select: { id: true, lifecycleStatus: true },
       });
       expect(result.filter).toEqual({
-        and: [payload.filter, { status: { eq: 'ACTIVE' } }],
+        and: [payload.filter, { lifecycleStatus: { eq: 'ACTIVE' } }],
       });
       expect(campaignCreatorRepository.exists).not.toHaveBeenCalled();
     });
@@ -471,7 +480,7 @@ describe('CampaignLifecycleService', () => {
     it.each([
       {
         observedStatus: 'DRAFT',
-        data: { status: 'ACTIVE' as const },
+        data: { lifecycleStatus: 'ACTIVE' as const },
         select: {
           id: true,
           name: true,
@@ -480,7 +489,7 @@ describe('CampaignLifecycleService', () => {
       },
       {
         observedStatus: 'DRAFT',
-        data: { status: 'ACTIVE' as const, name: 'Updated launch' },
+        data: { lifecycleStatus: 'ACTIVE' as const, name: 'Updated launch' },
         select: {
           id: true,
           objective: true,
@@ -489,30 +498,30 @@ describe('CampaignLifecycleService', () => {
       {
         observedStatus: 'DRAFT',
         data: {
-          status: 'ACTIVE' as const,
+          lifecycleStatus: 'ACTIVE' as const,
           name: 'Updated launch',
           objective: 'Updated objective',
         },
-        select: { id: true, status: true },
+        select: { id: true, lifecycleStatus: true },
       },
       {
         observedStatus: 'ACTIVE',
-        data: { status: 'PAUSED' as const },
-        select: { id: true, status: true },
+        data: { lifecycleStatus: 'PAUSED' as const },
+        select: { id: true, lifecycleStatus: true },
       },
       {
         observedStatus: 'ACTIVE',
-        data: { status: 'COMPLETED' as const },
-        select: { id: true, status: true },
+        data: { lifecycleStatus: 'COMPLETED' as const },
+        select: { id: true, lifecycleStatus: true },
       },
     ])(
-      'selects only persisted fields required for $data.status without the optional owner column',
+      'selects only persisted fields required for $data.lifecycleStatus without the optional owner column',
       async ({ observedStatus, data, select }) => {
         campaignRepository.findOne.mockResolvedValue({
           id: campaignId,
           name: 'Launch',
           objective: 'Grow awareness',
-          status: observedStatus,
+          lifecycleStatus: observedStatus,
         });
 
         await service.prepareUpdateMany(userAuthContext, 'campaign', {
@@ -555,7 +564,7 @@ describe('CampaignLifecycleService', () => {
       await expectLifecycleError(
         service.validateStatusBearingUpdateOne(userAuthContext, 'campaign', {
           id: campaignId,
-          data: { status: 'PAUSED' },
+          data: { lifecycleStatus: 'PAUSED' },
         }),
         'Change Campaign status from Campaign Overview.',
       );
@@ -573,7 +582,7 @@ describe('CampaignLifecycleService', () => {
       await expectLifecycleError(
         service.prepareUpdateMany(userAuthContext, 'campaign', {
           filter,
-          data: { status: 'PAUSED' },
+          data: { lifecycleStatus: 'PAUSED' },
         }),
         'Change one Campaign status at a time.',
       );
@@ -585,39 +594,43 @@ describe('CampaignLifecycleService', () => {
         id: campaignId,
         name: 'Launch',
         objective: 'Grow awareness',
-        status: 'ACTIVE',
+        lifecycleStatus: 'ACTIVE',
       });
       const filter = { id: { in: [campaignId] } };
 
       const result = await service.prepareUpdateMany(
         userAuthContext,
         'campaign',
-        { filter, data: { status: 'PAUSED' } },
+        { filter, data: { lifecycleStatus: 'PAUSED' } },
       );
 
       expect(result.filter).toEqual({
-        and: [filter, { status: { eq: 'ACTIVE' } }],
+        and: [filter, { lifecycleStatus: { eq: 'ACTIVE' } }],
       });
     });
 
     it.each([
       {
-        persisted: { name: null, objective: 'Goal', status: 'DRAFT' },
-        data: { status: 'ACTIVE' },
+        persisted: { name: null, objective: 'Goal', lifecycleStatus: 'DRAFT' },
+        data: { lifecycleStatus: 'ACTIVE' },
         message: 'Campaign name is required before activation.',
       },
       {
-        persisted: { name: 'Launch', objective: null, status: 'DRAFT' },
-        data: { status: 'ACTIVE' },
+        persisted: {
+          name: 'Launch',
+          objective: null,
+          lifecycleStatus: 'DRAFT',
+        },
+        data: { lifecycleStatus: 'ACTIVE' },
         message: 'Campaign objective is required before activation.',
       },
       {
         persisted: {
           name: 'Launch',
           objective: 'Goal',
-          status: 'PAUSED',
+          lifecycleStatus: 'PAUSED',
         },
-        data: { status: 'ACTIVE', name: '   ' },
+        data: { lifecycleStatus: 'ACTIVE', name: '   ' },
         message: 'Campaign name is required before activation.',
       },
     ])(
@@ -643,12 +656,12 @@ describe('CampaignLifecycleService', () => {
         id: campaignId,
         name: 'Launch',
         objective: 'Goal',
-        status: 'DRAFT',
+        lifecycleStatus: 'DRAFT',
       });
 
       await service.prepareUpdateMany(userAuthContext, 'campaign', {
         filter: { id: { eq: campaignId } },
-        data: { status: 'ACTIVE' },
+        data: { lifecycleStatus: 'ACTIVE' },
       });
 
       expect(campaignCreatorRepository.exists).toHaveBeenCalledTimes(1);
@@ -669,14 +682,14 @@ describe('CampaignLifecycleService', () => {
         id: campaignId,
         name: 'Launch',
         objective: 'Goal',
-        status: 'DRAFT',
+        lifecycleStatus: 'DRAFT',
       });
       campaignCreatorRepository.exists.mockResolvedValue(false);
 
       await expectLifecycleError(
         service.prepareUpdateMany(userAuthContext, 'campaign', {
           filter: { id: { eq: campaignId } },
-          data: { status: 'ACTIVE' },
+          data: { lifecycleStatus: 'ACTIVE' },
         }),
         'Add at least one creator before activating this campaign.',
       );
@@ -687,12 +700,12 @@ describe('CampaignLifecycleService', () => {
         id: campaignId,
         name: null,
         objective: null,
-        status: 'ACTIVE',
+        lifecycleStatus: 'ACTIVE',
       });
 
       await service.prepareUpdateMany(userAuthContext, 'campaign', {
         filter: { id: { eq: campaignId } },
-        data: { status: 'PAUSED' },
+        data: { lifecycleStatus: 'PAUSED' },
       });
 
       expect(getRepository).toHaveBeenCalledTimes(1);
@@ -709,13 +722,13 @@ describe('CampaignLifecycleService', () => {
         id: campaignId,
         name: 'Launch',
         objective: 'Goal',
-        status: 'DRAFT',
+        lifecycleStatus: 'DRAFT',
       });
 
       await expectLifecycleError(
         service.prepareUpdateMany(userAuthContext, 'campaign', {
           filter: { id: { eq: campaignId } },
-          data: { status: 'ACTIVE' },
+          data: { lifecycleStatus: 'ACTIVE' },
         }),
         'Add at least one creator before activating this campaign.',
       );
@@ -732,7 +745,7 @@ describe('CampaignLifecycleService', () => {
       await expectLifecycleError(
         service.prepareUpdateMany(userAuthContext, 'campaign', {
           filter: { id: { eq: campaignId } },
-          data: { status: 'active' },
+          data: { lifecycleStatus: 'active' },
         }),
         'Campaign status is invalid.',
       );
@@ -740,12 +753,12 @@ describe('CampaignLifecycleService', () => {
         id: campaignId,
         name: 'Launch',
         objective: 'Goal',
-        status: 'UNKNOWN',
+        lifecycleStatus: 'UNKNOWN',
       });
       await expectLifecycleError(
         service.prepareUpdateMany(userAuthContext, 'campaign', {
           filter: { id: { eq: campaignId } },
-          data: { status: 'ACTIVE' },
+          data: { lifecycleStatus: 'ACTIVE' },
         }),
         'Campaign status is invalid.',
       );
@@ -758,12 +771,12 @@ describe('CampaignLifecycleService', () => {
         id: campaignId,
         name: 'Launch',
         objective: 'Goal',
-        status: 'DRAFT',
+        lifecycleStatus: 'DRAFT',
       });
 
       await service.prepareUpdateMany(userAuthContext, 'campaign', {
         filter: { id: { eq: campaignId } },
-        data: { status: 'ACTIVE' },
+        data: { lifecycleStatus: 'ACTIVE' },
       });
 
       expect(getRepository).toHaveBeenNthCalledWith(
@@ -783,14 +796,14 @@ describe('CampaignLifecycleService', () => {
     it('uses only the standard system bypass config', async () => {
       campaignRepository.findOne.mockResolvedValue({
         id: campaignId,
-        status: 'ACTIVE',
+        lifecycleStatus: 'ACTIVE',
         name: null,
         objective: null,
       });
 
       await service.prepareUpdateMany(systemAuthContext, 'campaign', {
         filter: { id: { eq: campaignId } },
-        data: { status: 'PAUSED' },
+        data: { lifecycleStatus: 'PAUSED' },
       });
 
       expect(getRepository).toHaveBeenCalledWith(workspaceId, 'campaign', {
@@ -813,7 +826,7 @@ describe('CampaignLifecycleService', () => {
         await expect(
           service.prepareUpdateMany(authContext, 'campaign', {
             filter: { id: { eq: campaignId } },
-            data: { status: 'PAUSED' },
+            data: { lifecycleStatus: 'PAUSED' },
           }),
         ).rejects.toMatchObject({
           code: CommonQueryRunnerExceptionCode.INVALID_AUTH_CONTEXT,
@@ -829,7 +842,7 @@ describe('CampaignLifecycleService', () => {
       await expect(
         service.prepareUpdateMany(userAuthContext, 'campaign', {
           filter: { id: { eq: campaignId } },
-          data: { status: 'PAUSED' },
+          data: { lifecycleStatus: 'PAUSED' },
         }),
       ).rejects.toBe(permissionError);
     });
@@ -837,14 +850,14 @@ describe('CampaignLifecycleService', () => {
     it('acquires repositories only for the authenticated workspace', async () => {
       campaignRepository.findOne.mockResolvedValue({
         id: campaignId,
-        status: 'ACTIVE',
+        lifecycleStatus: 'ACTIVE',
         name: null,
         objective: null,
       });
 
       await service.prepareUpdateMany(userAuthContext, 'campaign', {
         filter: { id: { eq: campaignId } },
-        data: { status: 'PAUSED' },
+        data: { lifecycleStatus: 'PAUSED' },
       });
 
       expect(getRepository).toHaveBeenCalledWith(

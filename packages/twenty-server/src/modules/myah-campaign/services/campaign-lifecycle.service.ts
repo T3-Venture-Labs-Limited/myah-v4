@@ -172,7 +172,7 @@ export class CampaignLifecycleService {
       authContext,
       payload,
       callback: () => {
-        if (!hasOwn(payload.data, 'status')) {
+        if (!hasOwn(payload.data, 'lifecycleStatus')) {
           return payload;
         }
 
@@ -190,11 +190,11 @@ export class CampaignLifecycleService {
       authContext,
       payload,
       callback: async (workspaceContext) => {
-        if (!hasOwn(payload.data, 'status')) {
+        if (!hasOwn(payload.data, 'lifecycleStatus')) {
           return payload;
         }
 
-        const targetStatus = payload.data.status;
+        const targetStatus = payload.data.lifecycleStatus;
 
         if (!isCampaignStatus(targetStatus)) {
           return throwBadRequest(LIFECYCLE_ERRORS.invalidStatus);
@@ -213,14 +213,14 @@ export class CampaignLifecycleService {
           );
         const campaign = await campaignRepository.findOne({
           where: { id: campaignId },
-          select: { id: true, status: true },
+          select: { id: true, lifecycleStatus: true },
         });
 
         if (!isDefined(campaign)) {
           return throwBadRequest(LIFECYCLE_ERRORS.transition);
         }
 
-        const observedStatus = campaign.status;
+        const observedStatus = campaign.lifecycleStatus;
 
         if (!isCampaignStatus(observedStatus)) {
           return throwBadRequest(LIFECYCLE_ERRORS.invalidStatus);
@@ -273,7 +273,7 @@ export class CampaignLifecycleService {
         return {
           ...payload,
           filter: {
-            and: [payload.filter, { status: { eq: observedStatus } }],
+            and: [payload.filter, { lifecycleStatus: { eq: observedStatus } }],
           },
         };
       },
@@ -322,15 +322,15 @@ export class CampaignLifecycleService {
     data: CampaignMutationData;
   }): Promise<void> {
     if (
-      !hasOwn(data, 'status') ||
-      data.status === undefined ||
-      data.status === null ||
-      data.status === ''
+      !hasOwn(data, 'lifecycleStatus') ||
+      data.lifecycleStatus === undefined ||
+      data.lifecycleStatus === null ||
+      data.lifecycleStatus === ''
     ) {
-      data.status = 'DRAFT';
+      data.lifecycleStatus = 'DRAFT';
     }
 
-    if (!isCampaignStatus(data.status)) {
+    if (!isCampaignStatus(data.lifecycleStatus)) {
       return throwBadRequest(LIFECYCLE_ERRORS.invalidStatus);
     }
 
@@ -342,7 +342,7 @@ export class CampaignLifecycleService {
       data.ownerId = authContext.workspaceMemberId;
     }
 
-    if (data.status === 'ACTIVE') {
+    if (data.lifecycleStatus === 'ACTIVE') {
       await this.validateActivationReadiness({
         authContext,
         workspaceContext,

@@ -32,12 +32,12 @@ describe('deriveCampaignOverviewState', () => {
         id: 'campaign-1',
         name,
         objective,
-        status: 'DRAFT',
+        lifecycleStatus: 'DRAFT',
         effectiveAudienceCount: count,
       });
 
       expect(state).toEqual({
-        status: 'DRAFT',
+        lifecycleStatus: 'DRAFT',
         hasName: !missing.includes('name'),
         hasObjective: !missing.includes('objective'),
         hasAudience: !missing.includes('audience'),
@@ -57,11 +57,11 @@ describe('deriveCampaignOverviewState', () => {
           id: 'campaign-1',
           name: 'Campaign',
           objective: 'Goal',
-          status,
+          lifecycleStatus: status,
           effectiveAudienceCount: 1,
         }),
       ).toMatchObject({
-        status,
+        lifecycleStatus: status,
         isActivationReady: true,
       });
     },

@@ -4,7 +4,7 @@ import { type CampaignStatus } from 'src/front-components/types/campaign-status.
 export type ChangeCampaignStatusResult =
   | {
       kind: 'updated';
-      campaign: { id: string; status: CampaignStatus };
+      campaign: { id: string; lifecycleStatus: CampaignStatus };
     }
   | {
       kind: 'conflict';

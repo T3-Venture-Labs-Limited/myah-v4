@@ -6,13 +6,13 @@ const actualCampaign = {
   id: 'campaign-1',
   name: 'Launch',
   objective: 'Grow awareness',
-  status: 'COMPLETED',
+  lifecycleStatus: 'COMPLETED',
 };
 
 describe('changeCampaignStatus', () => {
   it('returns the one updated Campaign without refetching', async () => {
     const mutation = vi.fn().mockResolvedValue({
-      updateCampaigns: [{ id: 'campaign-1', status: 'ACTIVE' }],
+      updateCampaigns: [{ id: 'campaign-1', lifecycleStatus: 'ACTIVE' }],
     });
     const query = vi.fn();
     const client = { query, mutation };
@@ -25,7 +25,7 @@ describe('changeCampaignStatus', () => {
       }),
     ).resolves.toEqual({
       kind: 'updated',
-      campaign: { id: 'campaign-1', status: 'ACTIVE' },
+      campaign: { id: 'campaign-1', lifecycleStatus: 'ACTIVE' },
     });
 
     expect(mutation).toHaveBeenCalledOnce();
@@ -33,10 +33,10 @@ describe('changeCampaignStatus', () => {
       updateCampaigns: {
         __args: {
           filter: { id: { in: ['campaign-1'] } },
-          data: { status: 'ACTIVE' },
+          data: { lifecycleStatus: 'ACTIVE' },
         },
         id: true,
-        status: true,
+        lifecycleStatus: true,
       },
     });
     expect(query).not.toHaveBeenCalled();
