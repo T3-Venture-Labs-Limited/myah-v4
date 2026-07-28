@@ -23,11 +23,14 @@ export const resolveRoleIdFromAuthContext = ({
     return apiKeyRoleMap[authContext.apiKey.id];
   }
 
-  if (
-    isApplicationAuthContext(authContext) &&
-    isDefined(authContext.application.defaultRoleId)
-  ) {
-    return authContext.application.defaultRoleId;
+  if (isApplicationAuthContext(authContext)) {
+    if (isDefined(authContext.userWorkspaceId)) {
+      return userWorkspaceRoleMap[authContext.userWorkspaceId];
+    }
+
+    if (isDefined(authContext.application.defaultRoleId)) {
+      return authContext.application.defaultRoleId;
+    }
   }
 
   return undefined;

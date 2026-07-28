@@ -6,6 +6,7 @@ import { type ObjectLiteral } from 'typeorm';
 import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/workspace-internal-context.interface';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { isApplicationAuthContext } from 'src/engine/core-modules/auth/guards/is-application-auth-context.guard';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import {
@@ -57,7 +58,9 @@ export const validateRLSPredicatesForRecords = <T extends ObjectLiteral>({
     roleId,
     workspaceMember: isUserAuthContext(authContext)
       ? authContext.workspaceMember
-      : undefined,
+      : isApplicationAuthContext(authContext)
+        ? authContext.workspaceMember
+        : undefined,
   });
 
   if (!recordFilter || Object.keys(recordFilter).length === 0) {

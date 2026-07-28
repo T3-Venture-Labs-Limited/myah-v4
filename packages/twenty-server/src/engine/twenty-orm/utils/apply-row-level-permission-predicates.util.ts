@@ -11,6 +11,7 @@ import { type FeatureFlagMap } from 'src/engine/core-modules/feature-flag/interf
 import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/workspace-internal-context.interface';
 
 import { GraphqlQueryFilterFieldParser } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query-filter/graphql-query-filter-field.parser';
+import { isApplicationAuthContext } from 'src/engine/core-modules/auth/guards/is-application-auth-context.guard';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
@@ -49,7 +50,9 @@ export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
     roleId,
     workspaceMember: isUserAuthContext(authContext)
       ? authContext.workspaceMember
-      : undefined,
+      : isApplicationAuthContext(authContext)
+        ? authContext.workspaceMember
+        : undefined,
   });
 
   if (!recordFilter || Object.keys(recordFilter).length === 0) {

@@ -4,6 +4,10 @@ import { type ApplicationWorkspaceAuthContext } from 'src/engine/core-modules/au
 type ApplicationAuthContextInput = {
   workspace: NonNullable<RawAuthContext['workspace']>;
   application: NonNullable<RawAuthContext['application']>;
+  userWorkspaceId?: RawAuthContext['userWorkspaceId'];
+  user?: RawAuthContext['user'];
+  workspaceMemberId?: RawAuthContext['workspaceMemberId'];
+  workspaceMember?: RawAuthContext['workspaceMember'];
   workspaceMetadataVersion?: string;
 };
 
@@ -14,6 +18,10 @@ export const buildApplicationAuthContext = (
     type: 'application',
     workspace: input.workspace,
     application: input.application,
+    userWorkspaceId: input.userWorkspaceId,
+    user: input.user ?? undefined,
+    workspaceMemberId: input.workspaceMemberId,
+    workspaceMember: input.workspaceMember,
     workspaceMetadataVersion: input.workspaceMetadataVersion,
   };
 };
