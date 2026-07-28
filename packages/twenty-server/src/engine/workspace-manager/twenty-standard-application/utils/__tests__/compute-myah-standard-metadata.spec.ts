@@ -2,7 +2,11 @@ import {
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
-import { FieldMetadataType } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  ViewOpenRecordIn,
+  ViewType,
+} from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { v5 as uuidv5 } from 'uuid';
 
@@ -350,6 +354,98 @@ describe('Myah standard metadata contract', () => {
     expect(
       result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
     ).toHaveProperty('d1319af0-eeb2-4ca3-8afc-31e66c8a4277');
+  });
+
+  it('materializes the Campaign lifecycle and owner contract', () => {
+    const fields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const campaignStatus = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
+        field.name === 'status',
+    );
+    const campaignOwner = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
+        field.name === 'owner',
+    );
+    const ownedCampaigns = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          STANDARD_OBJECTS.workspaceMember.universalIdentifier &&
+        field.name === 'ownedCampaigns',
+    );
+    const campaignView =
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaign.views.view5865bdbf.universalIdentifier
+      ];
+    const campaignOverviewView =
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9.universalIdentifier
+      ];
+    const campaignOverviewViewFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (viewField) =>
+          viewField.viewUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9.universalIdentifier,
+      );
+
+    expect(campaignStatus).toMatchObject({
+      type: FieldMetadataType.SELECT,
+      defaultValue: "'DRAFT'",
+      options: expect.arrayContaining([
+        expect.objectContaining({ value: 'DRAFT' }),
+        expect.objectContaining({ value: 'ACTIVE' }),
+        expect.objectContaining({ value: 'PAUSED' }),
+        expect.objectContaining({ value: 'COMPLETED' }),
+      ]),
+    });
+    expect(campaignOwner).toMatchObject({
+      universalIdentifier: '12d7812a-3d11-4704-8e59-d1468ee3026b',
+      relationTargetFieldMetadataUniversalIdentifier:
+        'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',
+    });
+    expect(ownedCampaigns).toMatchObject({
+      universalIdentifier: 'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',
+      relationTargetFieldMetadataUniversalIdentifier:
+        '12d7812a-3d11-4704-8e59-d1468ee3026b',
+    });
+    expect(campaignView).toMatchObject({
+      openRecordIn: ViewOpenRecordIn.RECORD_PAGE,
+    });
+    expect(campaignOverviewView).toMatchObject({
+      name: 'Campaign Overview Fields',
+      type: ViewType.FIELDS_WIDGET,
+    });
+    expect(campaignOverviewViewFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          universalIdentifier: '16a078ac-9f6f-4dbb-993e-ac1ce932eb98',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
+          position: 0,
+        }),
+        expect.objectContaining({
+          universalIdentifier: 'f7f89fa5-b524-4e5f-abaa-3fae7cb791f3',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.objective.universalIdentifier,
+          position: 1,
+        }),
+        expect.objectContaining({
+          universalIdentifier: 'daec24c3-ee6f-4287-8608-e3520149dc4b',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.owner.universalIdentifier,
+          position: 2,
+        }),
+      ]),
+    );
+    expect(campaignOverviewViewFields).toHaveLength(3);
   });
 
   it('normalizes select option positions and defaults', () => {

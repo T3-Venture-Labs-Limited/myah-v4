@@ -527,6 +527,9 @@ export const MYAH_STANDARD_OBJECTS = {
       objective: {
         universalIdentifier: 'e22687bb-2633-573f-bd80-c4b13e80d966',
       },
+      owner: {
+        universalIdentifier: '12d7812a-3d11-4704-8e59-d1468ee3026b',
+      },
       targetPlatforms: {
         universalIdentifier: '877f9622-775c-52c1-9869-4abf14161de0',
       },
@@ -568,6 +571,20 @@ export const MYAH_STANDARD_OBJECTS = {
           },
           icpGoal: {
             universalIdentifier: 'dacf7682-7297-5319-b86d-6cb137f9ddb2',
+          },
+        },
+      },
+      view6bfee1b9: {
+        universalIdentifier: '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
+        viewFields: {
+          name: {
+            universalIdentifier: '16a078ac-9f6f-4dbb-993e-ac1ce932eb98',
+          },
+          objective: {
+            universalIdentifier: 'f7f89fa5-b524-4e5f-abaa-3fae7cb791f3',
+          },
+          owner: {
+            universalIdentifier: 'daec24c3-ee6f-4287-8608-e3520149dc4b',
           },
         },
       },

@@ -236,6 +236,32 @@ const campaignFields = [
     size: 160,
   },
 ] satisfies readonly Spec<'campaign', 'view5865bdbf'>[];
+const campaignOverviewFields = [
+  {
+    viewName: 'view6bfee1b9',
+    viewFieldName: 'name',
+    fieldName: 'name',
+    position: 0,
+    isVisible: true,
+    size: 150,
+  },
+  {
+    viewName: 'view6bfee1b9',
+    viewFieldName: 'objective',
+    fieldName: 'objective',
+    position: 1,
+    isVisible: true,
+    size: 150,
+  },
+  {
+    viewName: 'view6bfee1b9',
+    viewFieldName: 'owner',
+    fieldName: 'owner',
+    position: 2,
+    isVisible: true,
+    size: 150,
+  },
+] satisfies readonly Spec<'campaign', 'view6bfee1b9'>[];
 const creatorListFields = [
   {
     viewName: 'view1bc58554',
@@ -517,6 +543,7 @@ export const computeMyahViewFields = (
   ...buildForObject(args, 'brandBrainPage', allBrandBrainPageFields),
   ...buildForObject(args, 'brandBrainUpdateProposal', pendingProposalFields),
   ...buildForObject(args, 'campaign', campaignFields),
+  ...buildForObject(args, 'campaign', campaignOverviewFields),
   ...buildForObject(args, 'creatorList', creatorListFields),
   ...buildForObject(args, 'creator', creatorFields),
   ...buildForObject(args, 'creator', creatorMetricsFields),

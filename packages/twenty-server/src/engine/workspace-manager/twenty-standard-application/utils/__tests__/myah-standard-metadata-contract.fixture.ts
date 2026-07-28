@@ -1,302 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import ts from 'typescript';
-import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
-
-type Value = string | Value[] | { [key: string]: Value } | undefined;
-type Declaration = {
-  universalIdentifier?: string;
-  objectUniversalIdentifier?: string;
-  fieldUniversalIdentifier?: string;
-  relationTargetObjectMetadataUniversalIdentifier?: string;
-  relationTargetFieldMetadataUniversalIdentifier?: string;
-  fields?: Declaration[];
-  filters?: Declaration[];
-  options?: { id?: string }[];
-  tabs?: {
-    universalIdentifier?: string;
-    widgets?: { universalIdentifier?: string }[];
-  }[];
-};
-
-const root = resolve(__dirname, '../../../../../../../../');
-const standardObjectUniversalIdentifiers = Object.fromEntries(
-  Object.entries(STANDARD_OBJECTS).map(([name, { universalIdentifier }]) => [
-    name,
-    { universalIdentifier },
-  ]),
-) as Record<string, { universalIdentifier: string }>;
-const brand = 'packages/twenty-apps/fixtures/brand-brain-record-wiki-mvp/src';
-const creatorOps = 'packages/twenty-apps/internal/myah-creator-ops/src';
-const modules = (folder: string, names: readonly string[]) =>
-  names.map((name) => `${folder}/${name}`);
-const objectPaths = [
-  ...modules(`${brand}/objects`, [
-    'brand-brain-link.object.ts',
-    'brand-brain-page.object.ts',
-    'brand-brain-update-proposal.object.ts',
-  ]),
-  ...modules(`${creatorOps}/objects`, [
-    'offer.object.ts',
-    'outreach-action.object.ts',
-    'outreach-sequence.object.ts',
-    'outreach-step.object.ts',
-    'promoted-asset.object.ts',
-    'campaign-creator.object.ts',
-    'campaign.object.ts',
-    'creator-list-member.object.ts',
-    'creator-list.object.ts',
-    'creator.object.ts',
-  ]),
-];
-const fieldPaths = [
-  ...modules(`${brand}/fields`, [
-    'target-page-links-on-brand-brain-page.field.ts',
-    'target-page-on-brand-brain-link.field.ts',
-    'target-page-on-brand-brain-update-proposal.field.ts',
-    'update-proposals-on-brand-brain-page.field.ts',
-    'child-pages-on-brand-brain-page.field.ts',
-    'parent-page-on-brand-brain-page.field.ts',
-    'source-page-links-on-brand-brain-page.field.ts',
-    'source-page-on-brand-brain-link.field.ts',
-  ]),
-  `${creatorOps}/fields/owned-creators-on-workspace-member.field.ts`,
-];
-const viewPaths = [
-  ...modules(`${brand}/views`, [
-    'brand-brain-page-record-page-fields.view.ts',
-    'pending-brand-brain-proposals.view.ts',
-    'all-brand-brain-pages.view.ts',
-  ]),
-  ...modules(`${creatorOps}/views`, [
-    'campaigns.view.ts',
-    'creator-lists.view.ts',
-    'creators.view.ts',
-    'qualified-creators-with-email.view.ts',
-  ]),
-];
-const navigationPaths = [
-  `${brand}/navigation-menu-items/brand-brain-pages.navigation-menu-item.ts`,
-  ...modules(`${creatorOps}/navigation-menu-items`, [
-    'campaigns.navigation-menu-item.ts',
-    'creator-lists.navigation-menu-item.ts',
-    'creators.navigation-menu-item.ts',
-  ]),
-];
-const layoutPaths = [
-  `${brand}/page-layouts/brand-brain-page-record-page.page-layout.ts`,
-];
-const indexPaths = [
-  `${brand}/indexes/brand-brain-page-canonical-path.index.ts`,
-];
-const rolePaths = [
-  `${brand}/roles/brand-brain-admin.role.ts`,
-  `${creatorOps}/default-role.ts`,
-];
-
-const fileCache = new Map<string, ts.SourceFile>();
-const file = (path: string) =>
-  fileCache.get(path) ??
-  (fileCache.set(
-    path,
-    ts.createSourceFile(
-      path,
-      readFileSync(resolve(root, path), 'utf8'),
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    ),
-  ),
-  fileCache.get(path)!);
-const resolveImport = (from: string, spec: string) =>
-  spec.startsWith('src/')
-    ? `${from.split('/src/')[0]}/${spec}.ts`
-    : spec.startsWith('.')
-      ? `${join(dirname(from), spec)}.ts`
-      : undefined;
-
-const evalExpr = (node: ts.Node, source: string): Value => {
-  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-    return node.text;
-  if (
-    ts.isAsExpression(node) ||
-    ts.isParenthesizedExpression(node) ||
-    ts.isTypeAssertionExpression(node)
-  )
-    return evalExpr(node.expression, source);
-  if (ts.isArrayLiteralExpression(node))
-    return node.elements.map((element) => evalExpr(element, source));
-  if (ts.isObjectLiteralExpression(node)) {
-    const out: Record<string, Value> = {};
-    for (const property of node.properties) {
-      if (!ts.isPropertyAssignment(property)) continue;
-      const name =
-        ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
-          ? property.name.text
-          : undefined;
-      if (name) out[name] = evalExpr(property.initializer, source);
-    }
-    return out;
-  }
-  if (ts.isPropertyAccessExpression(node)) {
-    const base = evalExpr(node.expression, source);
-    return base && typeof base === 'object' && !Array.isArray(base)
-      ? (base as Record<string, Value>)[node.name.text]
-      : undefined;
-  }
-  if (ts.isIdentifier(node)) {
-    if (node.text === 'STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS')
-      return standardObjectUniversalIdentifiers as unknown as Value;
-    const sf = file(source);
-    const importDeclaration = sf.statements.find(
-      (statement): statement is ts.ImportDeclaration =>
-        Boolean(
-          ts.isImportDeclaration(statement) &&
-          ts.isStringLiteral(statement.moduleSpecifier) &&
-          statement.importClause?.namedBindings &&
-          ts.isNamedImports(statement.importClause.namedBindings) &&
-          statement.importClause.namedBindings.elements.some(
-            (element) => element.name.text === node.text,
-          ),
-        ),
-    );
-    if (
-      importDeclaration &&
-      ts.isStringLiteral(importDeclaration.moduleSpecifier)
-    ) {
-      const element = (
-        importDeclaration.importClause!.namedBindings as ts.NamedImports
-      ).elements.find((item) => item.name.text === node.text)!;
-      const target = resolveImport(
-        source,
-        importDeclaration.moduleSpecifier.text,
-      );
-      if (!target) return undefined;
-      const exportedName = element.propertyName?.text ?? node.text;
-      const declaration = file(target)
-        .statements.flatMap((statement) =>
-          ts.isVariableStatement(statement)
-            ? [...statement.declarationList.declarations]
-            : [],
-        )
-        .find(
-          (item) =>
-            ts.isIdentifier(item.name) && item.name.text === exportedName,
-        );
-      return declaration?.initializer
-        ? evalExpr(declaration.initializer, target)
-        : undefined;
-    }
-    const declaration = sf.statements
-      .flatMap((statement) =>
-        ts.isVariableStatement(statement)
-          ? [...statement.declarationList.declarations]
-          : [],
-      )
-      .find(
-        (item) => ts.isIdentifier(item.name) && item.name.text === node.text,
-      );
-    return declaration?.initializer
-      ? evalExpr(declaration.initializer, source)
-      : undefined;
-  }
-  return undefined;
-};
-
-const declaration = (path: string, callee: string): Declaration => {
-  const sf = file(path);
-  let result: Declaration | undefined;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === callee &&
-      node.arguments[0]
-    )
-      result = evalExpr(node.arguments[0], path) as Declaration;
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
-  if (!result) throw new Error(`Missing ${callee} declaration in ${path}`);
-  return result;
-};
-
-const requireId = (value: string | undefined, description: string): string => {
-  if (!value)
-    throw new Error(`Missing universal identifier for ${description}`);
-  return value;
-};
-const unique = (values: readonly string[]) => [...new Set(values)];
-const objects = objectPaths.map((path) => declaration(path, 'defineObject'));
-const standaloneFields = fieldPaths.map((path) =>
-  declaration(path, 'defineField'),
-);
-const views = viewPaths.map((path) => declaration(path, 'defineView'));
-const nav = navigationPaths.map((path) =>
-  declaration(path, 'defineNavigationMenuItem'),
-);
-const layouts = layoutPaths.map((path) =>
-  declaration(path, 'definePageLayout'),
-);
-const indexes = indexPaths.map((path) => declaration(path, 'defineIndex'));
-const roles = rolePaths.flatMap((path) =>
-  ['defineRole', 'defineApplicationRole'].flatMap((callee) => {
-    const sf = file(path);
-    return sf.getFullText().includes(callee) ? [declaration(path, callee)] : [];
-  }),
-);
-
-const objectIds = objects.map((object) =>
-  requireId(object.universalIdentifier, 'object'),
-);
-const objectFields = objects.flatMap((object) =>
-  (object.fields ?? []).map((field) => ({
-    ...field,
-    objectUniversalIdentifier: requireId(
-      object.universalIdentifier,
-      'object field parent',
-    ),
-  })),
-);
-const fields = [...objectFields, ...standaloneFields].map((field) =>
-  requireId(field.universalIdentifier, 'field'),
-);
-const nestedOptionUniversalIdentifiers = unique(
-  objectFields.flatMap((field) =>
-    (field.options ?? []).map((option) =>
-      requireId(option.id, 'select option'),
-    ),
-  ),
-);
-const viewIds = views.map((view) =>
-  requireId(view.universalIdentifier, 'view'),
-);
-const viewFieldIds = views.flatMap((view) =>
-  (view.fields ?? []).map((field) =>
-    requireId(field.universalIdentifier, 'view field'),
-  ),
-);
-const viewFilterIds = views.flatMap((view) =>
-  (view.filters ?? []).map((filter) =>
-    requireId(filter.universalIdentifier, 'view filter'),
-  ),
-);
-const layoutIds = layouts.map((layout) =>
-  requireId(layout.universalIdentifier, 'page layout'),
-);
-const layoutTabIds = layouts.flatMap((layout) =>
-  (layout.tabs ?? []).map((tab) =>
-    requireId(tab.universalIdentifier, 'page layout tab'),
-  ),
-);
-const layoutWidgetIds = layouts.flatMap((layout) =>
-  (layout.tabs ?? []).flatMap((tab) =>
-    (tab.widgets ?? []).map((widget) =>
-      requireId(widget.universalIdentifier, 'page layout widget'),
-    ),
-  ),
-);
 
 export type RelationContract = Readonly<{
   sourceField: string;
@@ -304,30 +6,11 @@ export type RelationContract = Readonly<{
   targetObject: string;
   targetField: string;
 }>;
-const relationFields = [...objectFields, ...standaloneFields].filter(
-  (field) =>
-    field.relationTargetObjectMetadataUniversalIdentifier ||
-    field.relationTargetFieldMetadataUniversalIdentifier,
-);
-const relations: RelationContract[] = relationFields.map((field) => ({
-  sourceField: requireId(field.universalIdentifier, 'relation source field'),
-  sourceObject: requireId(
-    field.objectUniversalIdentifier,
-    'relation source object',
-  ),
-  targetObject: requireId(
-    field.relationTargetObjectMetadataUniversalIdentifier,
-    'relation target object',
-  ),
-  targetField: requireId(
-    field.relationTargetFieldMetadataUniversalIdentifier,
-    'relation target field',
-  ),
-}));
 
 type FlatContract = {
   readonly [K in keyof TwentyStandardAllFlatEntityMaps]: readonly string[];
 };
+
 export type MyahStandardMetadataContract = FlatContract &
   Readonly<{
     relations: readonly RelationContract[];
@@ -338,47 +21,559 @@ export type MyahStandardMetadataContract = FlatContract &
       field: string;
     }>;
   }>;
-const canonicalIndex = indexes[0];
-const canonicalIndexField = canonicalIndex.fields?.[0];
-export const buildMyahStandardMetadataContract =
-  (): MyahStandardMetadataContract => ({
-    flatObjectMetadataMaps: unique(objectIds),
-    flatFieldMetadataMaps: unique(fields),
-    flatIndexMaps: unique(
-      indexes.map((index) => requireId(index.universalIdentifier, 'index')),
-    ),
-    flatSearchFieldMetadataMaps: [],
-    flatViewMaps: unique(viewIds),
-    flatViewGroupMaps: [],
-    flatViewFilterMaps: unique(viewFilterIds),
-    flatViewFieldGroupMaps: [],
-    flatViewFieldMaps: unique(viewFieldIds),
-    flatRoleMaps: unique(
-      roles.map((role) => requireId(role.universalIdentifier, 'role')),
-    ),
-    flatPermissionFlagMaps: [],
-    flatFieldPermissionMaps: [],
-    flatObjectPermissionMaps: [],
-    flatAgentMaps: [],
-    flatSkillMaps: [],
-    flatPageLayoutMaps: unique(layoutIds),
-    flatPageLayoutTabMaps: unique(layoutTabIds),
-    flatPageLayoutWidgetMaps: unique(layoutWidgetIds),
-    flatNavigationMenuItemMaps: unique(
-      nav.map((item) => requireId(item.universalIdentifier, 'navigation item')),
-    ),
-    flatCommandMenuItemMaps: [],
-    relations,
-    nestedOptionUniversalIdentifiers,
-    canonicalPathIndex: {
-      index: requireId(canonicalIndex.universalIdentifier, 'canonical index'),
-      object: requireId(
-        canonicalIndex.objectUniversalIdentifier,
-        'canonical index object',
-      ),
-      field: requireId(
-        canonicalIndexField?.fieldUniversalIdentifier,
-        'canonical index field',
-      ),
+
+// Frozen server-owned contract. Creator Ops applications extend this metadata;
+// they are not the source of truth for tenant-scoped objects or permissions.
+const MYAH_STANDARD_METADATA_CONTRACT = {
+  flatObjectMetadataMaps: [
+    'f99ff6bc-3b56-4600-beb3-cfc2c23364f6',
+    '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+    'facac4a1-0a2f-469f-9f1f-81ef01f06578',
+    'fd8a37b8-72db-5069-902a-a1763ddc63f7',
+    'b4459926-2c01-560a-8432-fa1974168439',
+    '0446497e-3240-5a78-a02f-e08594e5c2af',
+    'c25bfef3-4636-5864-a777-705238c91326',
+    '843aa6c8-36af-5906-8241-4017c4188df7',
+    'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
+    '9a09d54a-d464-5692-ac74-70527fb00ddd',
+    'e004c4b4-b1e1-59d9-b096-9fc57875d47f',
+    'd51f2758-055b-5367-8250-859cb3f58631',
+    '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
+  ],
+  flatFieldMetadataMaps: [
+    '56a8c222-bc15-48e2-a608-4c40a791ac4b',
+    '806a4b82-1fc8-43c4-b965-e5271c73b7bb',
+    '9688a814-290f-460f-9604-d5ffea3c78ac',
+    'e6b1d0d8-99b9-4b74-b6cc-21a31a3baf8d',
+    '8e9bbffa-807a-4e0d-9fb1-f3deec6183cf',
+    '4452d201-44a5-46fc-bf11-e26fa85cc3b2',
+    '3b78e6d5-d9ed-432f-b3f6-d5d6bdb82d99',
+    'b044e1f3-94f4-4d65-93a3-5082e317f5e1',
+    '531d9732-7614-472c-ae02-8fc806d92c0a',
+    'f9194806-a2c6-4f03-a351-09b4546ce2ed',
+    '7f963c23-90c8-44b3-b488-b137e6e358a9',
+    '322e4f8d-a9b7-4293-a596-5df62e3961e9',
+    '0a3cd691-7971-45c3-8e8d-996d9b631c84',
+    '24d415b8-fc54-4c18-8cd8-0b5575d39e88',
+    'e4418f8c-6f74-4d03-8c61-93c17848c2dc',
+    '5601c017-6a85-4211-b2b2-9fda0bf9f0c6',
+    '5d00b029-7a0d-4320-acf4-036a634a44ab',
+    '6a5f0131-32c8-41a2-968c-1dd429071f18',
+    'cf1caf3f-e423-43e6-bd47-62a27bb513e2',
+    '31fe27f7-a5cb-4590-95a0-f9247f490bb2',
+    'b7706308-8a6a-5613-ac37-d5e8ce848be2',
+    'f8ea43b0-33f8-5071-9e6d-5b787fb4e043',
+    '00c95791-84b2-50cc-89aa-68faf18011eb',
+    '0923fd4e-7f50-587b-af7f-f2cebf5293ec',
+    '45e45dbb-b54a-57bf-a901-215aa193b42c',
+    'ee119d6e-9d38-5ab8-9382-70498edc9688',
+    '05ca2ea3-5833-5192-a2f2-9dc7b53ca89f',
+    '5fcb14fe-bed2-513d-9cd8-7c6ecb15bf0b',
+    '8044d22e-fba7-5af4-9b9f-28ccc0779801',
+    'e3165e19-e1b8-51d2-9451-5caa4c398bd6',
+    '64617f40-1f95-54cf-be64-ff57c72df280',
+    '09c835f8-9137-5b97-bc2c-a76139fd270c',
+    'f1c1b41f-a1be-548b-a7b2-9d4c8863f74b',
+    'f41a5820-bb50-537d-ae28-e2824cd7aa36',
+    'd11e908c-0cad-54c2-8326-56187dd177f5',
+    '04638c8a-b191-5030-ad00-810bbca02bbe',
+    'a461116c-dab8-525c-bdd9-4708dcebf433',
+    '3f5fd643-d5ba-5db2-8cad-528b51189994',
+    '75b56b0d-b69d-50fd-8f36-bfd3fa8d9237',
+    '4298980f-fa5b-5e2a-8f80-1790cc7ec1da',
+    '3278eed0-5897-54e0-a58d-fc237d64f4ea',
+    '79efc6cb-48f5-5569-9759-255825e287e0',
+    'f9a7ec56-5aa0-5341-830a-5ab108c6b73c',
+    '9fd2575c-ca82-59bb-8f10-4907b104e6cb',
+    'a9469f6f-7cb8-5ed9-b171-15d65d7a47ea',
+    'b5fe44f8-8d01-573f-a3bb-920399c8f9bb',
+    '8bef3b6c-0347-5389-98d2-263ab99f2377',
+    '7b114005-6089-5a22-b172-f74bc93ef9b9',
+    '766d505d-d6ac-54d2-940d-201a47e29c3a',
+    'd68a67a8-b5b3-5dd0-a1a5-82ed7561eb4e',
+    '3891a76c-3119-52cc-84cd-abce75920db7',
+    '3c7bb78a-3a42-590a-aca9-f4d966fd691f',
+    'f90326b9-e045-578b-8d76-c513bb3c1890',
+    '38cf3b6d-bce8-5eca-9db0-232ebe8ea702',
+    '809800a3-fa41-591e-8d4e-7e9fd0daf322',
+    '31b163a4-99d9-5015-bcee-dc8ae5229ee3',
+    '730b323f-fae3-57e2-8e2e-62963106850a',
+    '27ecf86e-08a4-5084-91d7-d305ab3363e1',
+    '427aad82-7fe4-516d-99b3-8d00161534f6',
+    'b002caa0-6fb6-54a3-8111-a6dadf09e4ca',
+    '3d5adbfb-9e02-5583-95ea-bfe72e65106f',
+    '6f38f371-8915-55be-a96c-a94e4fc293af',
+    '12b6b77e-31a8-508f-bf3c-f7b3077dcbd3',
+    '640d0d05-246d-5005-b592-a28889852fbd',
+    'e9b9d246-f49e-5200-9819-0a4c9cd0d19a',
+    '63c56aea-35db-5733-9d3a-d062544ac897',
+    '9d3c6d96-896d-51d1-b6d2-5d6b2e333e87',
+    'e22687bb-2633-573f-bd80-c4b13e80d966',
+    '12d7812a-3d11-4704-8e59-d1468ee3026b',
+    '877f9622-775c-52c1-9869-4abf14161de0',
+    '3e4bc999-fad4-59c2-9e38-046c33e26f2b',
+    '86ac6e3d-ef0e-5ee3-a8b6-e8a22756f81c',
+    '97377e2b-ec51-5fef-891e-b2202cc69512',
+    '894c80f2-a478-5680-8c20-c7a86aa24fde',
+    '1d33699f-76f3-5247-98b3-2de588543364',
+    '40b7c827-4699-5f99-bdb8-d8906dd948f5',
+    '7924764c-9378-5299-8b68-7757e6af35c2',
+    'a8014e8c-e50a-547a-9f01-973d685314ec',
+    'c84e31a5-ba66-5773-a2da-2b1c357257c5',
+    'cec1e32c-db2c-53fa-b0ad-4bbbce951ae2',
+    'bb1651d8-de78-5a22-8ac3-7c1f4d631819',
+    'e19694f0-0c78-566e-ab95-63f0488848f3',
+    '1b27dc7c-0f11-5b2a-b81f-708dc785b6fa',
+    '1a4485a2-1e44-51af-bfdc-666cdcf17223',
+    'ade71f2b-7f9d-5e4d-9d0b-3f20ce4d15df',
+    'c3d4cafc-73ec-5d13-8fe9-cbcbd0eca899',
+    'c4bccf25-cfd1-5648-918e-bf20b32ed375',
+    'ccdc5be6-6c2b-5920-acd8-fa0ad52eeb29',
+    '48ea973f-0a2b-5650-910b-6e0c5b4b34ce',
+    '14a9ada5-6439-4ea8-8557-e6a2ca815330',
+    '54971f3a-9443-51e1-94d7-ca76e9889f08',
+    'ec240f13-8462-54ad-be55-b27275f0f58a',
+    'b887feac-6623-5e8f-b84e-bd502abb8972',
+    '654e0df0-0c1f-4083-bc30-f85252269092',
+    '22ad8e62-9b3c-5321-b1a1-8120a7566cd4',
+    'e1f69ece-5d51-5819-82d0-eff0eb752396',
+    '7ad7da3b-3d4f-5ebb-9f40-e4eaf5d01b5b',
+    '364b7d34-15e8-54f5-896c-c7d871dc3626',
+    'c6e8a5e1-5efd-5c91-a5ba-e5d0a30c7bbc',
+    'c4493bec-5da6-57bc-8a5c-bcad9d57cc86',
+    'c9e348e1-803d-5e62-bd76-d3fe4f371b1e',
+    'e0ec78f5-8453-58ef-ba4d-c6ff1c2dae76',
+    '5f918fd0-dbea-5c96-ac19-8cf69e358ae5',
+    '27e916a0-3331-5239-8e46-2aa0461fc9f8',
+    'f06e2a81-794f-5afd-ae94-f02df347b5a0',
+    'f2b6b04b-c3a7-5440-9915-52deef3d0f17',
+    '825176a0-bedd-54a5-8fd7-b98b5a81e3d0',
+    '465d4f65-450f-507c-82b3-be142f608885',
+    '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b',
+    'f0d18169-7558-487c-bafd-eb0e6adaf63a',
+    '1186d5b4-385f-5566-a4ba-87b8f65cdee5',
+    'd383c2c2-9617-548f-a0ab-266b7dbe0789',
+    '8b74efdb-518f-5826-bacf-a0fdc34e19ff',
+    'b2eaec35-b0ef-57cf-8010-e6c51ee3caba',
+    '6f73e724-4e44-5663-a0f7-596cb363ad9b',
+    '3d47e3bd-dbcb-5204-b5f0-a42b002ac95c',
+    '3574c8db-eb8f-58af-853e-fdc6e049a0d3',
+    '663c7e77-5a0b-5aa5-877b-def51bcc81dc',
+    '1be6555f-4544-53cc-95bb-d196fa6cf820',
+    '53db1f45-e030-5dbd-8f87-e124dcbe3786',
+    'e7525fa2-b583-5602-bafb-d93f68257a3c',
+    '8568c880-be20-52fb-ae4d-d93520f77fc2',
+    '5b4b9184-7df7-54e6-8b10-2b706d6cec26',
+    'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31',
+    '184b0e66-11d9-45bd-8dde-e694355c57f1',
+    '3db5e356-13b9-539d-8320-7c6606e3c574',
+    '52162ce6-20b6-536d-b6b1-c21271c96006',
+    '37078d35-ad1a-5804-bd6c-b7b6b7a332f7',
+    '4d1c28ec-c011-5aea-a13e-3d75ac6c6447',
+    'e56f72b8-cf14-5549-9d5c-9f9ff8c8bc02',
+    'b4d417cb-9a24-50fb-b0f5-8d98732f54b6',
+    '4d8bee01-c6bb-5c0c-8943-5233c01e2489',
+    '535a8720-43ea-5b25-9cac-4bcf26fddc7b',
+    'a0bf2b36-21a3-5d68-84e2-d5c8ae256593',
+    '414e5ecf-cca5-55f7-89c6-3aa94b78b954',
+    'cdce06f2-f7d6-5587-8ea9-02e58c0d6b47',
+    'af645cc7-31fc-5175-af8d-427845ebe1ed',
+    'dcb35d52-cad9-4871-8ae2-8e97e38578f1',
+    'cba072b8-6758-5eaa-bc1c-72e94a75b112',
+    '6430e3f1-71aa-5b6a-bc7a-b635d4f2c3ab',
+    'bdaf9a54-8931-5e51-836f-eb1cf6b11fcb',
+    'f82741c8-5e43-5ac0-bebc-75b0edb2e3a2',
+    '047c19e7-43aa-557c-b1a9-5b1824a26c5e',
+    '7ce4f52f-6963-5b4c-b012-21dbdd723048',
+    '4cc3ad51-3ca3-5044-b09f-1b57ba0c927e',
+    '784644f6-24bb-5955-b2bc-557b17f6f07c',
+    '162a494a-9981-5b6f-b131-3ff7dae5cc95',
+    '77684c8c-d06b-50a9-a404-ea58ca2d8fd3',
+    '536e5718-d023-58e8-99b7-35d5f2759e69',
+    '8077992b-d61d-5176-a166-c6933469b56b',
+    '296f47d1-e288-5d15-95b9-ea750532c05a',
+    '972f8c77-ffe7-5385-9b38-4128a8ac5d98',
+    '7a7775dd-23ba-58d3-a9c6-455cdee72e72',
+    '461e1478-1109-58b6-b9bf-ae2d6aa7cb99',
+    '1ed40657-e379-5a8f-8295-b7e1c072be68',
+    'bbfda234-327c-5d9d-ac39-8a33fd06779d',
+    '8bb2d28c-cecf-4111-b043-89b6c7255710',
+    'cba84727-9219-502a-9880-a14bee741515',
+    'b286bdf2-3024-575d-b852-adf935061749',
+    '269f07b6-b2a8-551c-b23e-b44dd95e1e36',
+    '701fa901-6773-5637-b5d2-c85fdd4a34e7',
+    'fa743d1a-aa43-5976-b6b2-8131a533ae5b',
+    '789717de-3c12-59c3-b91a-ca4a70d00886',
+    'f10ed5aa-ff19-5cbe-b176-ae4bf642edf1',
+    'a996b7a6-aeee-523a-b90f-30416891e37e',
+    '32db62ac-6217-5316-89d9-f9d7290dff70',
+    '3b9494ff-0fe7-5492-8b69-c515f79ea437',
+    'd68083f5-0db1-5c77-ac35-640a2fdb1f3f',
+    '3cb59cb6-8ef0-4608-bc1a-872e888a60ed',
+    '93ed2052-7d48-4a60-b43f-f0a07ccdf1ff',
+    'da4861d8-2d29-498d-8a70-62461022dbfd',
+    '4fd149a3-b506-45f8-94c4-970a3106eccf',
+    '0bbf483c-9c52-4286-9427-a14058456611',
+    '62f3e27e-3c6c-4449-9d81-2b24501f5e3f',
+    '776301dc-08a6-4692-b9b8-f427f040085b',
+    '94d2f0e6-0915-40e3-bc40-b1a6336dc16a',
+    'fe31748c-e0e8-40b2-b175-1759c817e54a',
+    'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',
+  ],
+  flatIndexMaps: ['b75fa72e-7365-4da0-a910-b6ef96f306c2'],
+  flatSearchFieldMetadataMaps: [],
+  flatViewMaps: [
+    '2774101b-3c0b-485b-91f5-b92d30bdcb6e',
+    '25d4c1a3-b315-4c2c-b95e-04f3bcb90807',
+    '914bd2ad-17e0-48f2-a6da-38f94b92be9d',
+    '5865bdbf-be33-5457-9d91-184885276b94',
+    '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
+    '1bc58554-efb5-52e4-8e2a-7f522a1c453c',
+    'a5abdae3-d86a-51d3-9b04-2dc21c172c3e',
+    'd1758d79-a3e7-48e7-b960-2103a7a3be19',
+    '19483764-6f84-4d09-8f03-945e7d0a4b28',
+  ],
+  flatViewGroupMaps: [],
+  flatViewFilterMaps: [
+    'bb759248-7330-4730-b4a8-0752df10ab14',
+    '03ddcbb7-42dd-4078-bc0a-c985c6a9c131',
+    'd1319af0-eeb2-4ca3-8afc-31e66c8a4277',
+  ],
+  flatViewFieldGroupMaps: [],
+  flatViewFieldMaps: [
+    'cecbfcb2-318d-48b0-ab64-59a25fb213e5',
+    'cb99eb49-2960-4b98-b4f0-ef70add64f79',
+    '668d5313-ddc4-4815-93f9-d8f60b4fa550',
+    'c42cf06d-eaae-4bfe-8108-20887dd0d8c4',
+    'f0b70304-4119-4a91-aef6-9d7108a332fe',
+    '5658f977-d711-46ce-8563-a73dbe6a8d0b',
+    '79c4d8b0-f4bb-43ff-bb06-c4d374be9130',
+    'c3bde970-bc8e-41d5-bad0-b710c548496d',
+    '16f5c397-468a-47c0-b704-a850d11e87a0',
+    'cbdac244-5a78-4ff0-a28a-011b444b9412',
+    '4f02dd57-6875-449b-a0c5-e6ca23f8f53b',
+    '64c4da41-f1a4-43a8-9f03-a155fa3963bf',
+    '600ea605-7496-4602-a2cb-ddb38c230fd6',
+    '9a3bd420-c63d-479d-bb86-d4d25f7a9832',
+    'f078acbb-e143-46f4-9b27-926315811539',
+    '1118b32e-5e02-4955-9bff-86cc6e3884d3',
+    '7c821735-92b0-417a-a4c6-b1c2d940a813',
+    'fa092416-394c-4d01-8252-452249e445c2',
+    'b57ef565-d393-4777-921c-5aa0a2166033',
+    '3a621e09-bc66-4881-aa7c-d1ed0086de82',
+    'ead80d6b-300a-5edc-b03e-7cce7f3fecc4',
+    '8ce2c107-f484-5525-8f45-b7f4c9d32683',
+    '4d438e45-9995-5b0f-b9eb-ed916870f280',
+    '66f84b3e-c870-5180-b345-490897ce4cd2',
+    'dacf7682-7297-5319-b86d-6cb137f9ddb2',
+    '16a078ac-9f6f-4dbb-993e-ac1ce932eb98',
+    'f7f89fa5-b524-4e5f-abaa-3fae7cb791f3',
+    'daec24c3-ee6f-4287-8608-e3520149dc4b',
+    '8b68fcb0-490d-5414-9b67-abf9e858908b',
+    'ce532f04-7846-52b2-9d6b-cd9305f767e2',
+    'a9084da4-53a4-5af9-b078-480a6878d74c',
+    '1ee6e143-3bf6-58cc-b55c-e7bd8b9cb4d0',
+    'd779e826-cf8c-5e36-9685-0f9a6989142d',
+    '32b1c350-f11e-4118-8d22-531a631b4147',
+    '566647f6-312a-5357-adb9-a98c084989b3',
+    '9d5a2863-7216-4889-a6ee-91aacbf7158f',
+    '4f4a0263-7e5f-4f5e-826d-d642ae5197af',
+    '99404764-56ea-4f25-bea5-fb746c77c97b',
+    '6f715c13-46b7-4939-8ec7-9b41259ac3de',
+    'c6b9840c-7684-4889-9f24-3592febefe57',
+    'f2d9c0cc-7838-477b-88fb-38a3f9a552ea',
+    'c2581172-2575-532c-8975-a79e55188fab',
+    '721888aa-6983-4c7f-8593-60afdf75a088',
+    'e957624d-df26-4d29-9f84-9d53149924e3',
+    '122472c1-39f1-49e9-9309-7053cf91f80d',
+    '8dee3cc3-373a-4dd1-937e-3cf2ff15acee',
+    '7fa03bfe-0ab3-4979-a7ec-5c7a4e4acecd',
+    'c7c4b4fb-a3e3-49ca-92f8-877350668c6c',
+    '0923a836-29f9-4d9f-9c1b-978af2bee1f9',
+    'bd10a7d9-acdd-415e-b172-af6a88b4d04e',
+    'd0ccee20-d308-45b5-b6f5-de04b33bdbb7',
+    '84ebcf92-7c3f-423f-af6d-062216402fa6',
+    '45ba4f40-035e-49fa-bc9e-26540d8298c3',
+    '82e70d56-2b81-4311-bcc4-b68d1182d19c',
+    'dd61ecce-0046-4b14-9cbf-7398f47849d6',
+    'b3c7407a-07be-42e3-8663-e06fe7389c84',
+    '1d0ec242-c56a-4942-959d-de1c8621221c',
+    '1c53246e-fd62-46ef-9484-2003d1a90040',
+    'c9178a1f-2c30-4ab2-aa6c-a208223d1250',
+    '82068ee3-064a-43ea-8e8b-5cdca0e3d53e',
+    '81c5939d-eb4c-43b9-8f91-3c3214d3161d',
+  ],
+  flatRoleMaps: [
+    '8563f1a9-4e02-408a-a5d7-45f68779023a',
+    '802cf87a-e4c5-559b-89c5-2172e3e5cc2f',
+  ],
+  flatPermissionFlagMaps: [],
+  flatFieldPermissionMaps: [],
+  flatObjectPermissionMaps: [],
+  flatAgentMaps: [],
+  flatSkillMaps: [],
+  flatPageLayoutMaps: ['c8e159f8-1815-4138-9203-c29f59703386'],
+  flatPageLayoutTabMaps: [
+    '221532a5-ac54-4a46-ae75-88e095f4633f',
+    '74e295f0-ea2e-4c47-b1b4-6d9a77f8ebc9',
+    '14a3d605-51dc-4197-99b6-1f8415316ac1',
+  ],
+  flatPageLayoutWidgetMaps: [
+    'ca066d67-d7a5-4951-9674-8a25d5710387',
+    '10aef0fb-a7dd-49d2-b818-5f167ba29091',
+    '8c7fb069-9866-4333-895b-5e5ad5d2d835',
+  ],
+  flatNavigationMenuItemMaps: [
+    '43f7a291-b0a4-481d-a5e4-b557e1a8f65d',
+    'a1556a2b-8c0a-570a-a902-38827cadc867',
+    'c124f0aa-7836-5242-ac52-e8667e0ed4f7',
+    'd06225df-32da-5c5d-b5d1-2b8d48fdca1c',
+  ],
+  flatCommandMenuItemMaps: [],
+  relations: [
+    {
+      sourceField: 'f8ea43b0-33f8-5071-9e6d-5b787fb4e043',
+      sourceObject: 'fd8a37b8-72db-5069-902a-a1763ddc63f7',
+      targetObject: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      targetField: '1d33699f-76f3-5247-98b3-2de588543364',
     },
-  });
+    {
+      sourceField: '00c95791-84b2-50cc-89aa-68faf18011eb',
+      sourceObject: 'fd8a37b8-72db-5069-902a-a1763ddc63f7',
+      targetObject: '843aa6c8-36af-5906-8241-4017c4188df7',
+      targetField: '809800a3-fa41-591e-8d4e-7e9fd0daf322',
+    },
+    {
+      sourceField: '64617f40-1f95-54cf-be64-ff57c72df280',
+      sourceObject: 'b4459926-2c01-560a-8432-fa1974168439',
+      targetObject: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
+      targetField: 'e9b9d246-f49e-5200-9819-0a4c9cd0d19a',
+    },
+    {
+      sourceField: '09c835f8-9137-5b97-bc2c-a76139fd270c',
+      sourceObject: 'b4459926-2c01-560a-8432-fa1974168439',
+      targetObject: 'c25bfef3-4636-5864-a777-705238c91326',
+      targetField: 'd68a67a8-b5b3-5dd0-a1a5-82ed7561eb4e',
+    },
+    {
+      sourceField: '75b56b0d-b69d-50fd-8f36-bfd3fa8d9237',
+      sourceObject: '0446497e-3240-5a78-a02f-e08594e5c2af',
+      targetObject: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      targetField: '40b7c827-4699-5f99-bdb8-d8906dd948f5',
+    },
+    {
+      sourceField: '79efc6cb-48f5-5569-9759-255825e287e0',
+      sourceObject: '0446497e-3240-5a78-a02f-e08594e5c2af',
+      targetObject: 'c25bfef3-4636-5864-a777-705238c91326',
+      targetField: '9fd2575c-ca82-59bb-8f10-4907b104e6cb',
+    },
+    {
+      sourceField: '9fd2575c-ca82-59bb-8f10-4907b104e6cb',
+      sourceObject: 'c25bfef3-4636-5864-a777-705238c91326',
+      targetObject: '0446497e-3240-5a78-a02f-e08594e5c2af',
+      targetField: '79efc6cb-48f5-5569-9759-255825e287e0',
+    },
+    {
+      sourceField: 'd68a67a8-b5b3-5dd0-a1a5-82ed7561eb4e',
+      sourceObject: 'c25bfef3-4636-5864-a777-705238c91326',
+      targetObject: 'b4459926-2c01-560a-8432-fa1974168439',
+      targetField: '09c835f8-9137-5b97-bc2c-a76139fd270c',
+    },
+    {
+      sourceField: '809800a3-fa41-591e-8d4e-7e9fd0daf322',
+      sourceObject: '843aa6c8-36af-5906-8241-4017c4188df7',
+      targetObject: 'fd8a37b8-72db-5069-902a-a1763ddc63f7',
+      targetField: '00c95791-84b2-50cc-89aa-68faf18011eb',
+    },
+    {
+      sourceField: '730b323f-fae3-57e2-8e2e-62963106850a',
+      sourceObject: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
+      targetObject: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
+      targetField: '3b9494ff-0fe7-5492-8b69-c515f79ea437',
+    },
+    {
+      sourceField: '27ecf86e-08a4-5084-91d7-d305ab3363e1',
+      sourceObject: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
+      targetObject: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      targetField: '894c80f2-a478-5680-8c20-c7a86aa24fde',
+    },
+    {
+      sourceField: 'e9b9d246-f49e-5200-9819-0a4c9cd0d19a',
+      sourceObject: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
+      targetObject: 'b4459926-2c01-560a-8432-fa1974168439',
+      targetField: '64617f40-1f95-54cf-be64-ff57c72df280',
+    },
+    {
+      sourceField: '12d7812a-3d11-4704-8e59-d1468ee3026b',
+      sourceObject: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      targetObject: '20202020-3319-4234-a34c-82d5c0e881a6',
+      targetField: 'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',
+    },
+    {
+      sourceField: '894c80f2-a478-5680-8c20-c7a86aa24fde',
+      sourceObject: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      targetObject: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
+      targetField: '27ecf86e-08a4-5084-91d7-d305ab3363e1',
+    },
+    {
+      sourceField: '1d33699f-76f3-5247-98b3-2de588543364',
+      sourceObject: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      targetObject: 'fd8a37b8-72db-5069-902a-a1763ddc63f7',
+      targetField: 'f8ea43b0-33f8-5071-9e6d-5b787fb4e043',
+    },
+    {
+      sourceField: '40b7c827-4699-5f99-bdb8-d8906dd948f5',
+      sourceObject: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      targetObject: '0446497e-3240-5a78-a02f-e08594e5c2af',
+      targetField: '75b56b0d-b69d-50fd-8f36-bfd3fa8d9237',
+    },
+    {
+      sourceField: 'a8014e8c-e50a-547a-9f01-973d685314ec',
+      sourceObject: 'e004c4b4-b1e1-59d9-b096-9fc57875d47f',
+      targetObject: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
+      targetField: '32db62ac-6217-5316-89d9-f9d7290dff70',
+    },
+    {
+      sourceField: 'c84e31a5-ba66-5773-a2da-2b1c357257c5',
+      sourceObject: 'e004c4b4-b1e1-59d9-b096-9fc57875d47f',
+      targetObject: 'd51f2758-055b-5367-8250-859cb3f58631',
+      targetField: 'ade71f2b-7f9d-5e4d-9d0b-3f20ce4d15df',
+    },
+    {
+      sourceField: 'ade71f2b-7f9d-5e4d-9d0b-3f20ce4d15df',
+      sourceObject: 'd51f2758-055b-5367-8250-859cb3f58631',
+      targetObject: 'e004c4b4-b1e1-59d9-b096-9fc57875d47f',
+      targetField: 'c84e31a5-ba66-5773-a2da-2b1c357257c5',
+    },
+    {
+      sourceField: '654e0df0-0c1f-4083-bc30-f85252269092',
+      sourceObject: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
+      targetObject: '20202020-3319-4234-a34c-82d5c0e881a6',
+      targetField: 'fe31748c-e0e8-40b2-b175-1759c817e54a',
+    },
+    {
+      sourceField: '32db62ac-6217-5316-89d9-f9d7290dff70',
+      sourceObject: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
+      targetObject: 'e004c4b4-b1e1-59d9-b096-9fc57875d47f',
+      targetField: 'a8014e8c-e50a-547a-9f01-973d685314ec',
+    },
+    {
+      sourceField: '3b9494ff-0fe7-5492-8b69-c515f79ea437',
+      sourceObject: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
+      targetObject: 'f9f0d7a8-7e05-519b-b158-5f543f7a7e9a',
+      targetField: '730b323f-fae3-57e2-8e2e-62963106850a',
+    },
+    {
+      sourceField: '3cb59cb6-8ef0-4608-bc1a-872e888a60ed',
+      sourceObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetObject: 'f99ff6bc-3b56-4600-beb3-cfc2c23364f6',
+      targetField: '93ed2052-7d48-4a60-b43f-f0a07ccdf1ff',
+    },
+    {
+      sourceField: '93ed2052-7d48-4a60-b43f-f0a07ccdf1ff',
+      sourceObject: 'f99ff6bc-3b56-4600-beb3-cfc2c23364f6',
+      targetObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetField: '3cb59cb6-8ef0-4608-bc1a-872e888a60ed',
+    },
+    {
+      sourceField: 'da4861d8-2d29-498d-8a70-62461022dbfd',
+      sourceObject: 'facac4a1-0a2f-469f-9f1f-81ef01f06578',
+      targetObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetField: '4fd149a3-b506-45f8-94c4-970a3106eccf',
+    },
+    {
+      sourceField: '4fd149a3-b506-45f8-94c4-970a3106eccf',
+      sourceObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetObject: 'facac4a1-0a2f-469f-9f1f-81ef01f06578',
+      targetField: 'da4861d8-2d29-498d-8a70-62461022dbfd',
+    },
+    {
+      sourceField: '0bbf483c-9c52-4286-9427-a14058456611',
+      sourceObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetField: '62f3e27e-3c6c-4449-9d81-2b24501f5e3f',
+    },
+    {
+      sourceField: '62f3e27e-3c6c-4449-9d81-2b24501f5e3f',
+      sourceObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetField: '0bbf483c-9c52-4286-9427-a14058456611',
+    },
+    {
+      sourceField: '776301dc-08a6-4692-b9b8-f427f040085b',
+      sourceObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetObject: 'f99ff6bc-3b56-4600-beb3-cfc2c23364f6',
+      targetField: '94d2f0e6-0915-40e3-bc40-b1a6336dc16a',
+    },
+    {
+      sourceField: '94d2f0e6-0915-40e3-bc40-b1a6336dc16a',
+      sourceObject: 'f99ff6bc-3b56-4600-beb3-cfc2c23364f6',
+      targetObject: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+      targetField: '776301dc-08a6-4692-b9b8-f427f040085b',
+    },
+    {
+      sourceField: 'fe31748c-e0e8-40b2-b175-1759c817e54a',
+      sourceObject: '20202020-3319-4234-a34c-82d5c0e881a6',
+      targetObject: '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de',
+      targetField: '654e0df0-0c1f-4083-bc30-f85252269092',
+    },
+    {
+      sourceField: 'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',
+      sourceObject: '20202020-3319-4234-a34c-82d5c0e881a6',
+      targetObject: '9a09d54a-d464-5692-ac74-70527fb00ddd',
+      targetField: '12d7812a-3d11-4704-8e59-d1468ee3026b',
+    },
+  ],
+  nestedOptionUniversalIdentifiers: [
+    '251e1198-0de4-454f-83e7-1d6a451af3a8',
+    'd885992d-2658-4410-8147-c6a7b8399f75',
+    'f77b8f64-7a75-43ac-b65f-918d2db70c9f',
+    '53b7572c-26e9-4f2b-8372-2dfcbfd560ff',
+    '3af080c7-b833-4c1e-923a-1edc70e0e93c',
+    'ee0d2617-4de2-44fb-b56e-7e574890acdf',
+    '1cc61a12-c3f0-43ef-904f-ed58c0a9f3c4',
+    'fc0ad6a2-61f9-4985-a6be-e8978f5733c3',
+    '91ca184c-5274-4e1d-b960-07fe10b4e8f4',
+    'f47b7f64-ee39-4896-a27f-cbc069e712fa',
+    'e6c933f3-111d-4966-a7b2-7e72ee4d4d92',
+    '83e84f56-a98b-4a36-92d7-23b2ea3160f1',
+    '2cf85c0b-8662-4de2-a2c4-63715358f931',
+    '138f5749-c522-4c04-a55b-e23c29c3e188',
+    '7eeae3ef-e85f-431a-8889-562057d78e40',
+    '47617c1b-b0d0-44b4-8b5d-6c1f3dc365a2',
+    'b366dc27-8151-4203-bc8d-55ae2013fbbe',
+    'caebc76e-47f1-4498-b2ad-8a0d6d28a469',
+    'dd5522a7-f3d6-4ce3-a1ea-336f4f0b772f',
+    '4e61f20b-6643-4307-913c-06696947aef8',
+    'b5ab743d-6337-4c51-a7dc-56c28341e697',
+    '08137fbf-127b-472c-b3ea-2255f86a7db5',
+    '51b3a48a-c9ed-4420-80d5-990ee5d0d4c9',
+    '7d4f06a5-8623-46a2-8780-7ab9cd337919',
+    '064cf1aa-f26e-4397-8fd8-15d24b8c0122',
+    '69fdb8eb-6fc3-46fc-a554-edeb13fff56b',
+    'c8de23d7-3b9e-4c63-9c7b-37b901eb5773',
+    'ea5d03c1-d933-468a-8bc8-e3e5fc33cf23',
+    'b30587ac-a851-5d1f-bbd7-3b6752bf6b06',
+    '3da75a71-bb21-584b-a20f-a21f2a9ea385',
+    '1fad4603-50ec-5cf7-b3a1-91660cf401db',
+    '6d675a09-a811-592e-a23d-868ff646e990',
+    '802d87dc-5d1f-5980-884c-b252f1bde49d',
+    'e88ede68-e4c7-52a6-8bfd-8503201d1b6b',
+    '9cd50629-da4e-5f32-be91-74ceb77c538e',
+    '06d55c97-1366-59bc-a205-f679b8e6d8d9',
+    'd7f5c4f0-97a2-527c-91b0-86e42bc2349b',
+    '08c80e6b-3bb8-480d-a96f-ab5200289ad2',
+    '8d5af3fe-88b9-4204-947e-048b1845cdf0',
+    '5afa8fb4-f3f6-4ab0-8dbd-18989c280c38',
+    'ac6e6123-7cbe-41a6-bfd1-5ab5fe7a3df1',
+    '00277c36-b012-4fea-b50a-fbf54c209f24',
+  ],
+  canonicalPathIndex: {
+    index: 'b75fa72e-7365-4da0-a910-b6ef96f306c2',
+    object: '6a8289d7-8034-4f70-b3fa-47bc0e52828f',
+    field: '4452d201-44a5-46fc-bf11-e26fa85cc3b2',
+  },
+} as const satisfies MyahStandardMetadataContract;
+
+export const buildMyahStandardMetadataContract =
+  (): MyahStandardMetadataContract => MYAH_STANDARD_METADATA_CONTRACT;
