@@ -93,6 +93,11 @@ export const useFetchMoreRecordsWithPagination = <
     queryIdentifier,
   );
 
+  const isFetchingMoreRecords = useAtomFamilyStateValue(
+    isFetchingMoreRecordsFamilyState,
+    queryIdentifier,
+  );
+
   const setIsFetchingMoreRecords = useSetAtomFamilyState(
     isFetchingMoreRecordsFamilyState,
     queryIdentifier,
@@ -227,5 +232,6 @@ export const useFetchMoreRecordsWithPagination = <
     totalCount,
     records,
     hasNextPage,
+    isFetchingMoreRecords,
   };
 };

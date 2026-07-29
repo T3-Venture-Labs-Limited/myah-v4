@@ -1,5 +1,5 @@
 import { useActiveFieldMetadataItems } from '@/object-metadata/hooks/useActiveFieldMetadataItems';
-import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
+import { useEffectiveRecordFilters } from '@/object-record/record-filter/hooks/useEffectiveRecordFilters';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { type ObjectRecordOperationUpdateInput } from '@/object-record/types/ObjectRecordOperationUpdateInput';
@@ -18,9 +18,7 @@ export const useGetShouldResetTableVirtualizationForUpdateInputs = () => {
     currentRecordSortsComponentState,
   );
 
-  const currentRecordFilters = useAtomComponentStateValue(
-    currentRecordFiltersComponentState,
-  );
+  const effectiveRecordFilters = useEffectiveRecordFilters();
 
   const getShouldResetTableVirtualizationForUpdateInputs = (
     updateInputs: ObjectRecordOperationUpdateInput[],
@@ -51,9 +49,8 @@ export const useGetShouldResetTableVirtualizationForUpdateInputs = () => {
       const updatedFieldMetadataItemIds =
         updatedFieldMetadataItems.map(mapById);
 
-      const updateOnAFilteredField = currentRecordFilters.some((recordFilter) =>
-        updatedFieldMetadataItemIds.includes(recordFilter.fieldMetadataId),
-      );
+      const updateOnAFilteredField = effectiveRecordFilters.some((recordFilter) =>
+        updatedFieldMetadataItemIds.includes(recordFilter.fieldMetadataId));
 
       const updateOnASortedField = currentRecordSorts.some((recordSort) =>
         updatedFieldMetadataItemIds.includes(recordSort.fieldMetadataId),

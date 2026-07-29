@@ -91,17 +91,13 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
   const hasReadPermission = objectPermissions.canReadObjectRecords;
 
   const { data, loading, error, fetchMore, refetch } =
-    useQuery<RecordGqlOperationFindManyResult>(findManyRecordsQuery, {
-      skip: skip || !isDefined(objectMetadataItem) || !hasReadPermission,
-      variables: {
-        filter: withSoftDeleteFilter,
-        orderBy,
-        lastCursor: cursorFilter?.cursor ?? undefined,
-        limit,
-      },
-      fetchPolicy: fetchPolicy,
-      client: apolloCoreClient,
-    });
+    useQuery<RecordGqlOperationFindManyResult>(findManyRecordsQuery, { skip: skip || !isDefined(objectMetadataItem) || !hasReadPermission,
+    variables: {
+      filter: withSoftDeleteFilter,
+      orderBy,
+      lastCursor: cursorFilter?.cursor ?? undefined,
+      limit,
+    }, fetchPolicy: fetchPolicy, client: apolloCoreClient, });
 
   // TODO: Refactor these useEffects to avoid unnecessary re-renders (see PR #18584 review)
   useEffect(() => {
@@ -116,17 +112,21 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
     }
   }, [error, handleFindManyRecordsError]);
 
-  const { fetchMoreRecords, records, hasNextPage } =
-    useFetchMoreRecordsWithPagination<T>({
-      objectNameSingular,
-      filter: withSoftDeleteFilter,
-      orderBy,
-      limit,
-      fetchMore,
-      data,
-      error,
-      objectMetadataItem,
-    });
+  const {
+    fetchMoreRecords,
+    records,
+    hasNextPage,
+    isFetchingMoreRecords,
+  } = useFetchMoreRecordsWithPagination<T>({
+    objectNameSingular,
+    filter: withSoftDeleteFilter,
+    orderBy,
+    limit,
+    fetchMore,
+    data,
+    error,
+    objectMetadataItem,
+  });
 
   const pageInfo = data?.[objectMetadataItem.namePlural]?.pageInfo;
 
@@ -142,6 +142,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
     fetchMoreRecords,
     queryIdentifier,
     hasNextPage,
+    isFetchingMoreRecords,
     pageInfo,
     refetch,
   };
