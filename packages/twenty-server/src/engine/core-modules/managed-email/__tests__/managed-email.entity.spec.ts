@@ -41,7 +41,11 @@ const expectNamedIndex = (
   );
 };
 
-const expectNamedCheck = (target: Function, name: string, expression: string) => {
+const expectNamedCheck = (
+  target: Function,
+  name: string,
+  expression: string,
+) => {
   expect(metadataFor(target).checks).toEqual(
     expect.arrayContaining([expect.objectContaining({ expression, name })]),
   );
@@ -97,7 +101,9 @@ describe('managed email persistence entities', () => {
       name: 'managedEmailDomain',
       schema: 'core',
     });
-    expect(columnOptions(ManagedEmailDomainEntity, 'workspaceId')).toMatchObject({
+    expect(
+      columnOptions(ManagedEmailDomainEntity, 'workspaceId'),
+    ).toMatchObject({
       type: 'uuid',
       update: false,
     });
@@ -108,24 +114,32 @@ describe('managed email persistence entities', () => {
       'providerType',
       'providerConfigurationKey',
     ]) {
-      expect(columnOptions(ManagedEmailDomainEntity, propertyName)).toMatchObject({
+      expect(
+        columnOptions(ManagedEmailDomainEntity, propertyName),
+      ).toMatchObject({
         type: 'text',
         update: false,
       });
     }
     for (const propertyName of ['providerOrderId', 'providerDomainId']) {
-      expect(columnOptions(ManagedEmailDomainEntity, propertyName)).toMatchObject({
+      expect(
+        columnOptions(ManagedEmailDomainEntity, propertyName),
+      ).toMatchObject({
         nullable: true,
         type: 'text',
       });
-      expect(columnOptions(ManagedEmailDomainEntity, propertyName)?.update).not.toBe(
-        false,
-      );
+      expect(
+        columnOptions(ManagedEmailDomainEntity, propertyName)?.update,
+      ).not.toBe(false);
     }
-    expect(columnOptions(ManagedEmailDomainEntity, 'dnsReadinessFacts')).toMatchObject({
+    expect(
+      columnOptions(ManagedEmailDomainEntity, 'dnsReadinessFacts'),
+    ).toMatchObject({
       type: 'jsonb',
     });
-    expect(columnOptions(ManagedEmailDomainEntity, 'infrastructureState')).toMatchObject({
+    expect(
+      columnOptions(ManagedEmailDomainEntity, 'infrastructureState'),
+    ).toMatchObject({
       type: 'text',
     });
     expect(
@@ -158,12 +172,16 @@ describe('managed email persistence entities', () => {
       ['nextReconciliationAt'],
       { where: '"nextReconciliationAt" IS NOT NULL' },
     );
-    expectNamedIndex(ManagedEmailDomainEntity, 'IDX_MANAGED_EMAIL_DOMAIN_PAID_THROUGH', [
-      'paidThrough',
-    ]);
-    expectNamedIndex(ManagedEmailDomainEntity, 'IDX_MANAGED_EMAIL_DOMAIN_EXPIRY', [
-      'expiresAt',
-    ]);
+    expectNamedIndex(
+      ManagedEmailDomainEntity,
+      'IDX_MANAGED_EMAIL_DOMAIN_PAID_THROUGH',
+      ['paidThrough'],
+    );
+    expectNamedIndex(
+      ManagedEmailDomainEntity,
+      'IDX_MANAGED_EMAIL_DOMAIN_EXPIRY',
+      ['expiresAt'],
+    );
     expectNamedCheck(
       ManagedEmailDomainEntity,
       'CHK_MANAGED_EMAIL_DOMAIN_IDENTITIES_NONEMPTY',
@@ -174,7 +192,9 @@ describe('managed email persistence entities', () => {
   it('maps mailbox ownership, nullable activation links, persona, warmup, and capacity policy', () => {
     const metadata = metadataFor(ManagedEmailMailboxEntity);
     const relationByName = (propertyName: string) =>
-      metadata.relations.find((relation) => relation.propertyName === propertyName);
+      metadata.relations.find(
+        (relation) => relation.propertyName === propertyName,
+      );
 
     expect(metadata.table).toMatchObject({
       name: 'managedEmailMailbox',
@@ -191,22 +211,32 @@ describe('managed email persistence entities', () => {
       'warmupMode',
       'readinessPolicyVersion',
     ]) {
-      expect(columnOptions(ManagedEmailMailboxEntity, propertyName)?.update).toBe(false);
+      expect(
+        columnOptions(ManagedEmailMailboxEntity, propertyName)?.update,
+      ).toBe(false);
     }
-    expect(columnOptions(ManagedEmailMailboxEntity, 'personaVersion')).toMatchObject({
+    expect(
+      columnOptions(ManagedEmailMailboxEntity, 'personaVersion'),
+    ).toMatchObject({
       default: 1,
       type: 'integer',
     });
-    expect(columnOptions(ManagedEmailMailboxEntity, 'personaAuditEventId')).toMatchObject({
+    expect(
+      columnOptions(ManagedEmailMailboxEntity, 'personaAuditEventId'),
+    ).toMatchObject({
       nullable: true,
       type: 'uuid',
     });
     for (const propertyName of ['connectedAccountId', 'messageChannelId']) {
-      expect(columnOptions(ManagedEmailMailboxEntity, propertyName)).toMatchObject({
+      expect(
+        columnOptions(ManagedEmailMailboxEntity, propertyName),
+      ).toMatchObject({
         nullable: true,
         type: 'uuid',
       });
-      expect(relationByName(propertyName.replace(/Id$/, ''))?.options).toMatchObject({
+      expect(
+        relationByName(propertyName.replace(/Id$/, ''))?.options,
+      ).toMatchObject({
         nullable: true,
         onDelete: 'SET NULL',
       });
@@ -226,7 +256,9 @@ describe('managed email persistence entities', () => {
       ]),
     );
     for (const propertyName of ['providerOrderId', 'providerMailboxId']) {
-      expect(columnOptions(ManagedEmailMailboxEntity, propertyName)).toMatchObject({
+      expect(
+        columnOptions(ManagedEmailMailboxEntity, propertyName),
+      ).toMatchObject({
         nullable: true,
         type: 'text',
       });
@@ -235,13 +267,19 @@ describe('managed email persistence entities', () => {
       'metronomeMailboxSubscriptionId',
       'metronomeWarmupSubscriptionId',
     ]) {
-      expect(columnOptions(ManagedEmailMailboxEntity, propertyName)).toMatchObject({
+      expect(
+        columnOptions(ManagedEmailMailboxEntity, propertyName),
+      ).toMatchObject({
         nullable: true,
         type: 'uuid',
       });
     }
-    expect(relationByName('domain')?.options).toMatchObject({ onDelete: 'CASCADE' });
-    expect(columnOptions(ManagedEmailMailboxEntity, 'healthFacts')).toMatchObject({
+    expect(relationByName('domain')?.options).toMatchObject({
+      onDelete: 'CASCADE',
+    });
+    expect(
+      columnOptions(ManagedEmailMailboxEntity, 'healthFacts'),
+    ).toMatchObject({
       type: 'jsonb',
     });
     expect(metadata.uniques).toEqual(
@@ -258,9 +296,11 @@ describe('managed email persistence entities', () => {
       ['providerConfigurationKey', 'providerMailboxId'],
       { unique: true, where: '"providerMailboxId" IS NOT NULL' },
     );
-    expectNamedIndex(ManagedEmailMailboxEntity, 'IDX_MANAGED_EMAIL_MAILBOX_DOMAIN', [
-      'managedEmailDomainId',
-    ]);
+    expectNamedIndex(
+      ManagedEmailMailboxEntity,
+      'IDX_MANAGED_EMAIL_MAILBOX_DOMAIN',
+      ['managedEmailDomainId'],
+    );
     expectNamedIndex(
       ManagedEmailMailboxEntity,
       'IDX_MANAGED_EMAIL_MAILBOX_RECONCILIATION_DUE',
@@ -319,15 +359,22 @@ describe('managed email persistence entities', () => {
       'servicePeriodStart',
       'servicePeriodEnd',
     ]) {
-      expect(columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)?.update).toBe(
-        false,
-      );
+      expect(
+        columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)
+          ?.update,
+      ).toBe(false);
     }
     expect(
-      columnOptions(ManagedEmailAcquisitionOperationEntity, 'expectedAmountCents'),
+      columnOptions(
+        ManagedEmailAcquisitionOperationEntity,
+        'expectedAmountCents',
+      ),
     ).toMatchObject({ type: 'bigint', update: false });
     expect(
-      columnOptions(ManagedEmailAcquisitionOperationEntity, 'metronomeRateCardId'),
+      columnOptions(
+        ManagedEmailAcquisitionOperationEntity,
+        'metronomeRateCardId',
+      ),
     ).toMatchObject({ type: 'uuid', update: false });
     for (const propertyName of [
       'metronomeCustomerId',
@@ -365,14 +412,18 @@ describe('managed email persistence entities', () => {
       'providerReceipt',
       'providerOutcome',
     ]) {
-      expect(columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)?.nullable).toBe(
-        true,
-      );
-      expect(columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)?.update).not.toBe(
-        false,
-      );
+      expect(
+        columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)
+          ?.nullable,
+      ).toBe(true);
+      expect(
+        columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)
+          ?.update,
+      ).not.toBe(false);
     }
-    expect(columnOptions(ManagedEmailAcquisitionOperationEntity, 'state')).toMatchObject({
+    expect(
+      columnOptions(ManagedEmailAcquisitionOperationEntity, 'state'),
+    ).toMatchObject({
       type: 'text',
     });
     expect(
