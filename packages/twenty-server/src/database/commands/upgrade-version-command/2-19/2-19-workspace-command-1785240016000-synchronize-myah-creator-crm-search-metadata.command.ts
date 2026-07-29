@@ -51,6 +51,7 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
         { workspaceId },
       );
     await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+      'flatFieldMetadataMaps',
       'flatSearchFieldMetadataMaps',
     ]);
     const { flatFieldMetadataMaps, flatSearchFieldMetadataMaps } =
@@ -156,6 +157,7 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
     });
 
     await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+      'flatFieldMetadataMaps',
       'flatSearchFieldMetadataMaps',
     ]);
   }

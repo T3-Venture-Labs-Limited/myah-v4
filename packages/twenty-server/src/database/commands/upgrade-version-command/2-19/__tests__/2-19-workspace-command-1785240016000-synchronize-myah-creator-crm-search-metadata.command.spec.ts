@@ -159,11 +159,13 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     expect(
       workspaceCacheService.invalidateAndRecompute,
     ).toHaveBeenNthCalledWith(1, args.workspaceId, [
+      'flatFieldMetadataMaps',
       'flatSearchFieldMetadataMaps',
     ]);
     expect(
       workspaceCacheService.invalidateAndRecompute,
     ).toHaveBeenNthCalledWith(2, args.workspaceId, [
+      'flatFieldMetadataMaps',
       'flatSearchFieldMetadataMaps',
     ]);
     expect(
