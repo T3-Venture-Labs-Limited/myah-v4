@@ -134,24 +134,30 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
         }),
       );
 
-      const searchCreatorsBeforeRepair = await search({
-        searchInput: TEST_CREATOR_NAME,
-        includedObjectNameSingulars: ['creator'],
-        limit: 50,
-        expectToFail: false,
-      });
-      const searchCreatorListsBeforeRepair = await search({
-        searchInput: TEST_CREATOR_LIST_NAME,
-        includedObjectNameSingulars: ['creatorList'],
-        limit: 50,
-        expectToFail: false,
-      });
-      const searchCampaignsBeforeRepair = await search({
-        searchInput: TEST_CAMPAIGN_NAME,
-        includedObjectNameSingulars: ['campaign'],
-        limit: 50,
-        expectToFail: false,
-      });
+      const [
+        searchCreatorsBeforeRepair,
+        searchCreatorListsBeforeRepair,
+        searchCampaignsBeforeRepair,
+      ] = await Promise.all([
+        search({
+          searchInput: TEST_CREATOR_NAME,
+          includedObjectNameSingulars: ['creator'],
+          limit: 50,
+          expectToFail: false,
+        }),
+        search({
+          searchInput: TEST_CREATOR_LIST_NAME,
+          includedObjectNameSingulars: ['creatorList'],
+          limit: 50,
+          expectToFail: false,
+        }),
+        search({
+          searchInput: TEST_CAMPAIGN_NAME,
+          includedObjectNameSingulars: ['campaign'],
+          limit: 50,
+          expectToFail: false,
+        }),
+      ]);
 
       expect(searchCreatorsBeforeRepair.data.search.edges).toEqual([]);
       expect(searchCreatorListsBeforeRepair.data.search.edges).toEqual([]);
@@ -174,24 +180,30 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
 
       expect(restoredSearchFieldMetadatas).toHaveLength(4);
 
-      const searchCreatorsAfterRepair = await search({
-        searchInput: TEST_CREATOR_NAME,
-        includedObjectNameSingulars: ['creator'],
-        limit: 50,
-        expectToFail: false,
-      });
-      const searchCreatorListsAfterRepair = await search({
-        searchInput: TEST_CREATOR_LIST_NAME,
-        includedObjectNameSingulars: ['creatorList'],
-        limit: 50,
-        expectToFail: false,
-      });
-      const searchCampaignsAfterRepair = await search({
-        searchInput: TEST_CAMPAIGN_NAME,
-        includedObjectNameSingulars: ['campaign'],
-        limit: 50,
-        expectToFail: false,
-      });
+      const [
+        searchCreatorsAfterRepair,
+        searchCreatorListsAfterRepair,
+        searchCampaignsAfterRepair,
+      ] = await Promise.all([
+        search({
+          searchInput: TEST_CREATOR_NAME,
+          includedObjectNameSingulars: ['creator'],
+          limit: 50,
+          expectToFail: false,
+        }),
+        search({
+          searchInput: TEST_CREATOR_LIST_NAME,
+          includedObjectNameSingulars: ['creatorList'],
+          limit: 50,
+          expectToFail: false,
+        }),
+        search({
+          searchInput: TEST_CAMPAIGN_NAME,
+          includedObjectNameSingulars: ['campaign'],
+          limit: 50,
+          expectToFail: false,
+        }),
+      ]);
 
       expect(
         searchCreatorsAfterRepair.data.search.edges.map(
