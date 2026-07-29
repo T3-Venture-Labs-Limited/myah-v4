@@ -3,8 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useCreatorListContext } from '@/myah/creator-crm/hooks/useCreatorListContext';
 
-
-
 import { FieldMetadataType } from 'twenty-shared/types';
 
 const creatorObjectMetadataItem = {

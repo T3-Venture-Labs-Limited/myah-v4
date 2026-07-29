@@ -49,8 +49,10 @@ export const useGetShouldResetTableVirtualizationForUpdateInputs = () => {
       const updatedFieldMetadataItemIds =
         updatedFieldMetadataItems.map(mapById);
 
-      const updateOnAFilteredField = effectiveRecordFilters.some((recordFilter) =>
-        updatedFieldMetadataItemIds.includes(recordFilter.fieldMetadataId));
+      const updateOnAFilteredField = effectiveRecordFilters.some(
+        (recordFilter) =>
+          updatedFieldMetadataItemIds.includes(recordFilter.fieldMetadataId),
+      );
 
       const updateOnASortedField = currentRecordSorts.some((recordSort) =>
         updatedFieldMetadataItemIds.includes(recordSort.fieldMetadataId),

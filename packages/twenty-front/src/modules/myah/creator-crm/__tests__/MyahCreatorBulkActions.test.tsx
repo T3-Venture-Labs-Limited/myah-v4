@@ -49,7 +49,10 @@ jest.mock('@/myah/creator-crm/hooks/useCreatorListContext', () => ({
 }));
 
 jest.mock('@/ui/layout/dropdown/components/Dropdown', () => ({
-  Dropdown: ({ clickableComponent, dropdownComponents }: React.PropsWithChildren<{
+  Dropdown: ({
+    clickableComponent,
+    dropdownComponents,
+  }: React.PropsWithChildren<{
     clickableComponent: React.ReactNode;
     dropdownComponents: React.ReactNode;
   }>) => (
@@ -77,7 +80,9 @@ jest.mock('@/ui/layout/dropdown/components/DropdownContent', () => ({
 }));
 
 jest.mock('@/ui/layout/dropdown/components/DropdownMenuItemsContainer', () => ({
-  DropdownMenuItemsContainer: ({ children }: React.PropsWithChildren) => <>{children}</>,
+  DropdownMenuItemsContainer: ({ children }: React.PropsWithChildren) => (
+    <>{children}</>
+  ),
 }));
 
 jest.mock(

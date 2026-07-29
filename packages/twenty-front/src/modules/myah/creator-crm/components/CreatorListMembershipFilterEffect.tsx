@@ -49,8 +49,7 @@ export const CreatorListMembershipFilterEffect = () => {
 
     setQueryOnlyRecordFilters((recordFilters) => [
       ...recordFilters.filter(
-        (recordFilter) =>
-          recordFilter.id !== CREATOR_LIST_MEMBERSHIP_FILTER_ID,
+        (recordFilter) => recordFilter.id !== CREATOR_LIST_MEMBERSHIP_FILTER_ID,
       ),
       {
         id: CREATOR_LIST_MEMBERSHIP_FILTER_ID,
