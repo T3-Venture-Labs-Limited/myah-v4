@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import { plainToClass } from 'class-transformer';
+import { plainToClass, Transform } from 'class-transformer';
 import {
   IsDateString,
   IsDefined,
@@ -15,6 +15,8 @@ import {
   Max,
   ValidateIf,
   IsUUID,
+  ArrayNotEmpty,
+  IsArray,
   type ValidationError,
   validateSync,
 } from 'class-validator';
@@ -64,6 +66,125 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-models/utils/load-default-model-preferences.util';
 
 export class ConfigVariables {
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Enable managed email services',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  MANAGED_EMAIL_ENABLED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Icemail API base URL',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  ICEMAIL_API_BASE_URL = 'https://app.icemail.ai/api/v1';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Icemail API key',
+    isSensitive: true,
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  ICEMAIL_API_KEY = '';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Warmup Inbox API base URL',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  WARMUP_INBOX_API_BASE_URL = 'https://api.warmupinbox.com';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Warmup Inbox API key',
+    isSensitive: true,
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  WARMUP_INBOX_API_KEY = '';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Managed email Metronome rate-card alias',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS = '';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsUUID()
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Metronome Stripe billing-provider configuration ID used for direct invoice delivery',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID = '';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : value,
+  )
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Managed email workspace allowlist',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.ARRAY,
+  })
+  MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS: string[] = [];
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Managed email readiness policy version',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  MANAGED_EMAIL_READINESS_POLICY_VERSION = '';
+
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,
     description: 'Enable or disable password authentication for users',
