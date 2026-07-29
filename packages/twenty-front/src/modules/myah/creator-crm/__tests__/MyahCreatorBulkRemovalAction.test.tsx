@@ -6,6 +6,15 @@ const CREATOR_OBJECT_UNIVERSAL_IDENTIFIER =
   '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de';
 const mockOpenModal = jest.fn();
 const mockSetTargetedRecordsRule = jest.fn();
+let creatorListContext:
+  | {
+      target: { kind: 'creator-list'; id: string; label: string };
+      filter: {
+        fieldMetadataId: string;
+        relationTargetFieldMetadataId: string;
+      };
+    }
+  | undefined;
 
 jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
   useRecordIndexContextOrThrow: () => ({ objectNamePlural: 'creators' }),
@@ -45,7 +54,7 @@ jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
 }));
 
 jest.mock('@/myah/creator-crm/hooks/useCreatorListContext', () => ({
-  useCreatorListContext: () => undefined,
+  useCreatorListContext: () => creatorListContext,
 }));
 
 jest.mock('@/ui/layout/dropdown/components/Dropdown', () => ({
@@ -88,27 +97,7 @@ jest.mock('@/ui/layout/dropdown/components/DropdownMenuItemsContainer', () => ({
 jest.mock(
   '@/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog',
   () => ({
-    CreatorBulkRelationshipTargetPickerDialog: ({
-      onTargetSelected,
-    }: {
-      onTargetSelected: (target: {
-        kind: 'creator-list';
-        id: string;
-        label: string;
-      }) => void;
-    }) => (
-      <button
-        onClick={() =>
-          onTargetSelected({
-            kind: 'creator-list',
-            id: 'list-a',
-            label: 'Spring creators',
-          })
-        }
-      >
-        Choose Spring creators
-      </button>
-    ),
+    CreatorBulkRelationshipTargetPickerDialog: () => null,
     CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID: 'target-picker',
   }),
 );
@@ -125,56 +114,48 @@ jest.mock(
     }) => `creator-bulk-relationship-${operation}-${target.kind}-${target.id}`,
     CreatorBulkRelationshipDialog: ({
       action,
-      onSuccess,
     }: {
       action: { operation: string; target: { label: string } };
-      onSuccess: () => void;
-    }) => (
-      <div>
-        <span>{`${action.operation}:${action.target.label}`}</span>
-        <button onClick={onSuccess}>Complete relationship</button>
-      </div>
-    ),
+    }) => <div data-operation={action.operation}>{action.target.label}</div>,
   }),
 );
 
-describe('MyahCreatorBulkActions', () => {
+describe('MyahCreatorBulkActions removal action', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    creatorListContext = undefined;
   });
 
-  it('keeps the existing add-to-List picker flow and opens an add confirmation', () => {
+  it('does not expose removal outside a validated contextual Creator List', () => {
     render(<MyahCreatorBulkActions />);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Add to Creator List' }),
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Choose Spring creators' }),
-    );
+    expect(
+      screen.queryByRole('button', { name: 'Remove from list' }),
+    ).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByText('add:Spring creators')).toBeVisible();
+  it('opens a List-only removal confirmation using the active filter target', () => {
+    creatorListContext = {
+      target: {
+        kind: 'creator-list',
+        id: 'list-a',
+        label: 'Spring creators',
+      },
+      filter: {
+        fieldMetadataId: 'creator-list-memberships',
+        relationTargetFieldMetadataId: 'creator-list-member-creator-list',
+      },
+    };
+
+    render(<MyahCreatorBulkActions />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from list' }));
+
+    expect(screen.getByText('Spring creators')).toHaveAttribute(
+      'data-operation',
+      'remove',
+    );
     expect(mockOpenModal).toHaveBeenCalledWith(
-      'creator-bulk-relationship-add-creator-list-list-a',
+      'creator-bulk-relationship-remove-creator-list-list-a',
     );
-  });
-
-  it('clears the native selection only after a successful add relationship mutation', () => {
-    render(<MyahCreatorBulkActions />);
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Add to Creator List' }),
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Choose Spring creators' }),
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Complete relationship' }),
-    );
-
-    expect(mockSetTargetedRecordsRule).toHaveBeenCalledWith({
-      mode: 'selection',
-      selectedRecordIds: [],
-    });
   });
 });

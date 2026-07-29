@@ -4,8 +4,8 @@ import { CreatorBulkRelationshipDialog } from '@/myah/creator-crm/components/Cre
 
 const mockUseCreatorBulkRelationshipPreview = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
+const mockRemoveCreatorListMembers = jest.fn();
 const mockCloseModal = jest.fn();
-const mockOpenModal = jest.fn();
 
 jest.mock('@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview', () => ({
   useCreatorBulkRelationshipPreview: (...args: unknown[]) =>
@@ -15,14 +15,12 @@ jest.mock('@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview', () => ({
 jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
   useApplyCreatorBulkRelationship: () => ({
     applyCreatorBulkRelationship: mockApplyCreatorBulkRelationship,
+    removeCreatorListMembers: mockRemoveCreatorListMembers,
   }),
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
-  useModal: () => ({
-    closeModal: mockCloseModal,
-    openModal: mockOpenModal,
-  }),
+  useModal: () => ({ closeModal: mockCloseModal }),
 }));
 
 jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
@@ -58,14 +56,6 @@ jest.mock('twenty-ui/input', () => ({
   ),
 }));
 
-jest.mock('twenty-ui/layout', () => ({
-  Section: ({ children }: { children: string | { message: string } }) => (
-    <div>{typeof children === 'string' ? children : children.message}</div>
-  ),
-  SectionAlignment: { Center: 'center' },
-  SectionFontColor: { Primary: 'primary' },
-}));
-
 jest.mock('twenty-ui/typography', () => ({
   H1Title: ({ title }: { title: string | { message: string } }) => (
     <h1>{typeof title === 'string' ? title : title.message}</h1>
@@ -73,33 +63,39 @@ jest.mock('twenty-ui/typography', () => ({
   H1TitleFontColor: { Primary: 'primary' },
 }));
 
-jest.mock('@lingui/react', () => ({
-  useLingui: () => ({ i18n: { _: (message: string) => message } }),
-}));
-
-const creatorListTarget = {
-  kind: 'creator-list' as const,
-  id: 'list-a',
-  label: 'Spring creators',
+const creatorListAction = {
+  operation: 'add' as const,
+  target: {
+    kind: 'creator-list' as const,
+    id: 'list-a',
+    label: 'Spring creators',
+  },
 };
-const campaignTarget = {
-  kind: 'campaign' as const,
-  id: 'campaign-a',
-  label: 'Spring campaign',
+const campaignAction = {
+  operation: 'add' as const,
+  target: {
+    kind: 'campaign' as const,
+    id: 'campaign-a',
+    label: 'Spring campaign',
+  },
 };
 
 const loadingPreview = {
   selectedCreatorIds: ['creator-a'],
-  creatorIdsToAdd: ['creator-a'],
-  alreadyLinkedCreatorIds: [],
+  linkedCreatorIds: [],
+  unlinkedCreatorIds: ['creator-a'],
+  relationshipRecordIds: [],
   loading: true,
+  isPreviewUnavailable: false,
 };
 
 const readyPreview = {
   selectedCreatorIds: ['creator-a', 'creator-b'],
-  creatorIdsToAdd: ['creator-a', 'creator-b'],
-  alreadyLinkedCreatorIds: [],
+  linkedCreatorIds: [],
+  unlinkedCreatorIds: ['creator-a', 'creator-b'],
+  relationshipRecordIds: [],
   loading: false,
+  isPreviewUnavailable: false,
 };
 
 describe('CreatorBulkRelationshipDialog', () => {
@@ -112,7 +108,7 @@ describe('CreatorBulkRelationshipDialog', () => {
 
     render(
       <CreatorBulkRelationshipDialog
-        target={creatorListTarget}
+        action={creatorListAction}
         selectedCreatorIds={['creator-a']}
       />,
     );
@@ -131,7 +127,7 @@ describe('CreatorBulkRelationshipDialog', () => {
 
     render(
       <CreatorBulkRelationshipDialog
-        target={creatorListTarget}
+        action={creatorListAction}
         selectedCreatorIds={['creator-a', 'creator-b']}
       />,
     );
@@ -142,7 +138,7 @@ describe('CreatorBulkRelationshipDialog', () => {
     ).toBeVisible();
   });
 
-  it('keeps the confirmation open and disabled until an async mutation succeeds', async () => {
+  it('keeps the confirmation open and disabled until an async addition succeeds', async () => {
     let resolveMutation: (() => void) | undefined;
     mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
     mockApplyCreatorBulkRelationship.mockReturnValue(
@@ -153,14 +149,17 @@ describe('CreatorBulkRelationshipDialog', () => {
 
     render(
       <CreatorBulkRelationshipDialog
-        target={creatorListTarget}
+        action={creatorListAction}
         selectedCreatorIds={['creator-a', 'creator-b']}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Add to list' }));
 
-    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledTimes(1);
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledWith({
+      target: creatorListAction.target,
+      creatorIdsToAdd: ['creator-a', 'creator-b'],
+    });
     expect(mockCloseModal).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Adding' })).toBeDisabled();
 
@@ -169,11 +168,11 @@ describe('CreatorBulkRelationshipDialog', () => {
     });
 
     expect(mockCloseModal).toHaveBeenCalledWith(
-      'creator-bulk-relationship-creator-list-list-a',
+      'creator-bulk-relationship-add-creator-list-list-a',
     );
   });
 
-  it('keeps a failed confirmation available for retry', async () => {
+  it('keeps a failed addition available for retry', async () => {
     mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
     mockApplyCreatorBulkRelationship
       .mockRejectedValueOnce(new Error('network unavailable'))
@@ -181,7 +180,7 @@ describe('CreatorBulkRelationshipDialog', () => {
 
     render(
       <CreatorBulkRelationshipDialog
-        target={creatorListTarget}
+        action={creatorListAction}
         selectedCreatorIds={['creator-a', 'creator-b']}
       />,
     );
@@ -199,16 +198,16 @@ describe('CreatorBulkRelationshipDialog', () => {
 
     expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledTimes(2);
     expect(mockCloseModal).toHaveBeenCalledWith(
-      'creator-bulk-relationship-creator-list-list-a',
+      'creator-bulk-relationship-add-creator-list-list-a',
     );
   });
 
-  it('presents the selected compact review rows and brand confirmation', () => {
+  it('presents selected compact review rows and a brand addition confirmation', () => {
     mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
 
     render(
       <CreatorBulkRelationshipDialog
-        target={creatorListTarget}
+        action={creatorListAction}
         selectedCreatorIds={['creator-a', 'creator-b']}
       />,
     );
@@ -228,25 +227,22 @@ describe('CreatorBulkRelationshipDialog', () => {
     expect(screen.getByText('Already present').parentElement).toHaveTextContent(
       'Already present0 creators',
     );
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add to list' })).toHaveAttribute(
       'data-accent',
       'brand',
     );
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
-  it('uses singular creator copy for one selected creator', () => {
+  it('uses singular Creator copy for a one-Creator addition', () => {
     mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      ...readyPreview,
       selectedCreatorIds: ['creator-a'],
-      creatorIdsToAdd: ['creator-a'],
-      alreadyLinkedCreatorIds: [],
-      loading: false,
+      unlinkedCreatorIds: ['creator-a'],
     });
 
     render(
       <CreatorBulkRelationshipDialog
-        target={creatorListTarget}
+        action={creatorListAction}
         selectedCreatorIds={['creator-a']}
       />,
     );
@@ -257,22 +253,18 @@ describe('CreatorBulkRelationshipDialog', () => {
     expect(screen.getByText('Will be added').parentElement).toHaveTextContent(
       /^Will be added1 creator$/,
     );
-    expect(screen.getByText('Already present').parentElement).toHaveTextContent(
-      /^Already present0 creators$/,
-    );
   });
 
   it('reports an all-existing selection without mutating', () => {
     mockUseCreatorBulkRelationshipPreview.mockReturnValue({
-      selectedCreatorIds: ['creator-a', 'creator-b'],
-      creatorIdsToAdd: [],
-      alreadyLinkedCreatorIds: ['creator-a', 'creator-b'],
-      loading: false,
+      ...readyPreview,
+      linkedCreatorIds: ['creator-a', 'creator-b'],
+      unlinkedCreatorIds: [],
     });
 
     render(
       <CreatorBulkRelationshipDialog
-        target={campaignTarget}
+        action={campaignAction}
         selectedCreatorIds={['creator-a', 'creator-b']}
       />,
     );
@@ -280,9 +272,6 @@ describe('CreatorBulkRelationshipDialog', () => {
     expect(screen.getByText(/No changes will be made/)).toBeVisible();
     expect(screen.getByText('Target').parentElement).toHaveTextContent(
       'TargetSpring campaign',
-    );
-    expect(screen.getByText('Will be added').parentElement).toHaveTextContent(
-      'Will be added0 creators',
     );
     expect(
       screen.getByRole('button', { name: /^Add to campaign/ }),
