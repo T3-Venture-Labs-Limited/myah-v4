@@ -129,6 +129,8 @@ const isExactInvoice = (
     invoiceEnd === expectedEnd &&
     invoice.customerId === expected.customerId &&
     invoice.contractId === expected.contractId &&
+    invoice.creditType.id === expected.usdRateCardProof.fiatCreditTypeId &&
+    invoice.creditType.name === expected.usdRateCardProof.fiatCreditTypeName &&
     Number.isSafeInteger(expected.total) &&
     Number.isSafeInteger(invoice.total) &&
     invoice.total === expected.total &&

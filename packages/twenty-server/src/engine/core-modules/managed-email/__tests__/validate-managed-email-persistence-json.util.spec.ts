@@ -70,6 +70,16 @@ describe('managed email persistence JSON validation', () => {
     expect(Object.isFrozen(correlatedLines[0])).toBe(true);
   });
 
+  it('deeply freezes validated children when the root is already frozen', () => {
+    const facts = safeFacts();
+
+    Object.freeze(facts);
+
+    expect(managedEmailSafeFactsTransformer.to(facts)).toBe(facts);
+    expect(Object.isFrozen(facts.facts)).toBe(true);
+    expect(Object.isFrozen(facts.facts[0])).toBe(true);
+  });
+
   it.each([
     ['password', 'secret'],
     ['rawResponse', 'accepted'],

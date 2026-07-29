@@ -33,6 +33,7 @@ const expected: ExpectedPaidMetronomeInvoice = {
 
 const exactInvoice = {
   contractId: 'contract-id',
+  creditType: { id: 'usd-credit-type-id', name: 'USD' },
   customerId: 'customer-id',
   endingBefore: '2026-09-01T00:00:00.000Z',
   externalInvoice: {
@@ -156,6 +157,18 @@ describe('matchExactPaidMetronomeInvoice', () => {
       'external invoiced total',
       (page: MetronomeInvoicePage) => {
         requireExternalInvoice(page).invoicedTotal = 2_999;
+      },
+    ],
+    [
+      'credit type ID',
+      (page: MetronomeInvoicePage) => {
+        page.invoices[0].creditType.id = 'eur-credit-type-id';
+      },
+    ],
+    [
+      'credit type name',
+      (page: MetronomeInvoicePage) => {
+        page.invoices[0].creditType.name = 'EUR';
       },
     ],
   ])('rejects an invoice with a mismatched %s', (_, mutate) => {

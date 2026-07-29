@@ -1793,6 +1793,7 @@ describe('MetronomeClientService', () => {
     const listInvoices = jest.fn().mockResolvedValue({
       data: [
         {
+          credit_type: { id: 'usd-credit-type-id', name: 'USD' },
           contract_id: 'contract-id',
           customer_id: 'customer-id',
           end_timestamp: '2026-09-01T00:00:00.000Z',
@@ -1854,6 +1855,7 @@ describe('MetronomeClientService', () => {
       invoices: [
         {
           contractId: 'contract-id',
+          creditType: { id: 'usd-credit-type-id', name: 'USD' },
           customerId: 'customer-id',
           endingBefore: '2026-09-01T00:00:00.000Z',
           externalInvoice: {
