@@ -1,0 +1,4 @@
+export enum ManagedEmailWarmupMode {
+  PROVIDER_PREWARMED = 'PROVIDER_PREWARMED',
+  MYAH_MANAGED = 'MYAH_MANAGED',
+}
