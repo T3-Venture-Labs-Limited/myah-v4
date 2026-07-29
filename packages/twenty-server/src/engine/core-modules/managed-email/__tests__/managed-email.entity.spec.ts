@@ -135,6 +135,10 @@ describe('managed email persistence entities', () => {
     expect(
       columnOptions(ManagedEmailDomainEntity, 'dnsReadinessFacts'),
     ).toMatchObject({
+      transformer: expect.objectContaining({
+        from: expect.any(Function),
+        to: expect.any(Function),
+      }),
       type: 'jsonb',
     });
     expect(
@@ -280,6 +284,10 @@ describe('managed email persistence entities', () => {
     expect(
       columnOptions(ManagedEmailMailboxEntity, 'healthFacts'),
     ).toMatchObject({
+      transformer: expect.objectContaining({
+        from: expect.any(Function),
+        to: expect.any(Function),
+      }),
       type: 'jsonb',
     });
     expect(metadata.uniques).toEqual(
@@ -331,6 +339,11 @@ describe('managed email persistence entities', () => {
       ManagedEmailMailboxEntity,
       'CHK_MANAGED_EMAIL_MAILBOX_CAPACITIES',
       '"policySafeDailyCapacity" >= 0 AND ("adminDailyCap" IS NULL OR ("adminDailyCap" >= 0 AND "adminDailyCap" <= "policySafeDailyCapacity"))',
+    );
+    expectNamedCheck(
+      ManagedEmailMailboxEntity,
+      'CHK_MANAGED_EMAIL_MAILBOX_IDENTITIES_NONEMPTY',
+      `btrim("address") <> '' AND btrim("normalizedAddress") <> '' AND btrim("providerType") <> '' AND btrim("providerConfigurationKey") <> '' AND btrim("readinessPolicyVersion") <> ''`,
     );
   });
 
@@ -420,6 +433,20 @@ describe('managed email persistence entities', () => {
         columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)
           ?.update,
       ).not.toBe(false);
+    }
+    for (const propertyName of [
+      'resourceSnapshot',
+      'expectedLineItems',
+      'correlatedSubscriptionLines',
+      'providerReceipt',
+    ]) {
+      expect(
+        columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)
+          ?.transformer,
+      ).toMatchObject({
+        from: expect.any(Function),
+        to: expect.any(Function),
+      });
     }
     expect(
       columnOptions(ManagedEmailAcquisitionOperationEntity, 'state'),
