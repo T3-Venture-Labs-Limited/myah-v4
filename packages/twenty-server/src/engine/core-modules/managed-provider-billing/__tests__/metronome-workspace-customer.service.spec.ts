@@ -34,6 +34,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
     customerLookups,
     customers = [],
     installations,
+    managedEmailEnabled = true,
     metronomeEnabled = true,
     rateCard = { aliases: [], id: 'rate-card-id' },
     updateAffected = 1,
@@ -45,6 +46,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
     customerLookups?: MetronomeCustomer[][];
     customers?: MetronomeCustomer[];
     installations: Array<Partial<MyahWorkspaceInstallationEntity> | null>;
+    managedEmailEnabled?: boolean;
     metronomeEnabled?: boolean;
     rateCard?: MetronomeRateCard;
     updateAffected?: number;
@@ -73,6 +75,10 @@ describe('MetronomeWorkspaceCustomerService', () => {
         | 'findCurrentContracts'
         | 'findCustomerByIngestAlias'
         | 'getRateCard'
+        | 'getPrepaidBalance'
+        | 'createCustomerCredit'
+        | 'previewUsage'
+        | 'ingestUsage'
       >
     > = {
       createContract: jest
@@ -84,6 +90,10 @@ describe('MetronomeWorkspaceCustomerService', () => {
       findCurrentContracts: jest.fn().mockResolvedValue(contracts),
       findCustomerByIngestAlias: jest.fn(),
       getRateCard: jest.fn().mockResolvedValue(rateCard),
+      getPrepaidBalance: jest.fn(),
+      createCustomerCredit: jest.fn(),
+      previewUsage: jest.fn(),
+      ingestUsage: jest.fn(),
     };
     lookupResults.forEach((customersForLookup) => {
       metronomeClientService.findCustomerByIngestAlias.mockResolvedValueOnce(
@@ -103,7 +113,12 @@ describe('MetronomeWorkspaceCustomerService', () => {
     const twentyConfigService = {
       get: jest.fn((key: keyof ConfigVariables) => {
         if (key === 'METRONOME_ENABLED') return metronomeEnabled;
+        if (key === 'MANAGED_EMAIL_ENABLED') return managedEmailEnabled;
         if (key === 'METRONOME_RATE_CARD_ALIAS') return 'managed-provider';
+        if (key === 'MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS')
+          return 'managed-email';
+        if (key === 'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID')
+          return 'managed-email-delivery-method';
         throw new Error(`Unexpected config key: ${key}`);
       }),
     } as Pick<TwentyConfigService, 'get'>;
@@ -582,4 +597,210 @@ describe('MetronomeWorkspaceCustomerService', () => {
       message: 'Metronome contract recovery requires reconciliation',
     });
   });
+
+  it('fails closed when managed email is disabled before ensuring the shared customer', async () => {
+    const { installationRepository, metronomeClientService, service } =
+      createService({
+        installations: [
+          { metronomeCustomerId: 'metronome-customer-id', workspaceId },
+        ],
+        managedEmailEnabled: false,
+      });
+
+    await expect(
+      service.ensureWorkspaceManagedEmailContract(workspaceId),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
+    });
+    expect(installationRepository.findOneBy).not.toHaveBeenCalled();
+    expect(metronomeClientService.createContract).not.toHaveBeenCalled();
+  });
+
+  it('creates and verifies the exact managed-email Stripe contract boundary', async () => {
+    const { metronomeClientService, service } = createService({
+      contracts: [
+        {
+          activeBillingProviderConfiguration: {
+            billingProvider: 'stripe',
+            deliveryMethod: 'direct_to_billing_provider',
+            deliveryMethodId: 'managed-email-delivery-method',
+            id: 'billing-config-id',
+          },
+          id: 'created-contract-id',
+          rateCardId: 'managed-email-rate-card-id',
+          startingAt: '2026-07-16T12:00:00.000Z',
+          uniquenessKey: `myah-managed-email-workspace-contract:${workspaceId}`,
+        },
+      ],
+      installations: [
+        { metronomeCustomerId: 'metronome-customer-id', workspaceId },
+      ],
+      rateCard: {
+        aliases: [
+          {
+            endingBefore: null,
+            name: 'managed-email',
+            startingAt: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+        fiatCreditType: { id: 'usd-credit-type-id', name: 'USD' },
+        id: 'managed-email-rate-card-id',
+      },
+    });
+
+    await expect(
+      service.ensureWorkspaceManagedEmailContract(workspaceId),
+    ).resolves.toBe('created-contract-id');
+    expect(metronomeClientService.createContract).toHaveBeenCalledWith({
+      billingProviderConfiguration: {
+        billingProvider: 'stripe',
+        deliveryMethod: 'direct_to_billing_provider',
+      },
+      customerId: 'metronome-customer-id',
+      rateCardAlias: 'managed-email',
+      uniquenessKey: `myah-managed-email-workspace-contract:${workspaceId}`,
+    });
+    expect(metronomeClientService.findCurrentContracts).toHaveBeenCalledWith(
+      'metronome-customer-id',
+    );
+    expect(metronomeClientService.getRateCard).toHaveBeenCalledWith(
+      'managed-email-rate-card-id',
+    );
+    expect(metronomeClientService.getPrepaidBalance).not.toHaveBeenCalled();
+    expect(metronomeClientService.createCustomerCredit).not.toHaveBeenCalled();
+    expect(metronomeClientService.previewUsage).not.toHaveBeenCalled();
+    expect(metronomeClientService.ingestUsage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'wrong rate-card alias',
+      {
+        activeBillingProviderConfiguration: {
+          billingProvider: 'stripe',
+          deliveryMethod: 'direct_to_billing_provider',
+          deliveryMethodId: 'managed-email-delivery-method',
+          id: 'billing-config-id',
+        },
+      },
+      { id: 'usd-credit-type-id', name: 'USD' },
+      'other-alias',
+    ],
+    [
+      'non-USD rate card',
+      {
+        activeBillingProviderConfiguration: {
+          billingProvider: 'stripe',
+          deliveryMethod: 'direct_to_billing_provider',
+          deliveryMethodId: 'managed-email-delivery-method',
+          id: 'billing-config-id',
+        },
+      },
+      { id: 'eur-credit-type-id', name: 'EUR' },
+      'managed-email',
+    ],
+    [
+      'wrong delivery method ID',
+      {
+        activeBillingProviderConfiguration: {
+          billingProvider: 'stripe',
+          deliveryMethod: 'direct_to_billing_provider',
+          deliveryMethodId: 'wrong-delivery-method',
+          id: 'billing-config-id',
+        },
+      },
+      { id: 'usd-credit-type-id', name: 'USD' },
+      'managed-email',
+    ],
+    [
+      'missing active billing configuration',
+      { activeBillingProviderConfiguration: null },
+      { id: 'usd-credit-type-id', name: 'USD' },
+      'managed-email',
+    ],
+  ])(
+    'requires reconciliation for managed email with %s',
+    async (_, contractPatch, fiatCreditType, aliasName) => {
+      const { service } = createService({
+        contracts: [
+          {
+            ...contractPatch,
+            id: 'created-contract-id',
+            rateCardId: 'managed-email-rate-card-id',
+            startingAt: '2026-07-16T12:00:00.000Z',
+            uniquenessKey: `myah-managed-email-workspace-contract:${workspaceId}`,
+          } as MetronomeCurrentContract,
+        ],
+        installations: [
+          { metronomeCustomerId: 'metronome-customer-id', workspaceId },
+        ],
+        rateCard: {
+          aliases: [
+            {
+              endingBefore: null,
+              name: aliasName,
+              startingAt: '2026-07-01T00:00:00.000Z',
+            },
+          ],
+          fiatCreditType,
+          id: 'managed-email-rate-card-id',
+        },
+      });
+
+      await expect(
+        service.ensureWorkspaceManagedEmailContract(workspaceId),
+      ).rejects.toMatchObject({
+        message:
+          'Metronome managed-email contract recovery requires reconciliation',
+      });
+    },
+  );
+
+  it.each([
+    MetronomeClientExceptionCode.CONFLICT,
+    MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+  ])(
+    'recovers and verifies the exact managed-email contract after %s',
+    async (createErrorCode) => {
+      const { metronomeClientService, service } = createService({
+        contracts: [
+          {
+            activeBillingProviderConfiguration: {
+              billingProvider: 'stripe',
+              deliveryMethod: 'direct_to_billing_provider',
+              deliveryMethodId: 'managed-email-delivery-method',
+              id: 'billing-config-id',
+            },
+            id: 'recovered-contract-id',
+            rateCardId: 'managed-email-rate-card-id',
+            startingAt: '2026-07-16T12:00:00.000Z',
+            uniquenessKey: `myah-managed-email-workspace-contract:${workspaceId}`,
+          },
+        ],
+        createContractError: new MetronomeClientException(createErrorCode),
+        installations: [
+          { metronomeCustomerId: 'metronome-customer-id', workspaceId },
+        ],
+        rateCard: {
+          aliases: [
+            {
+              endingBefore: null,
+              name: 'managed-email',
+              startingAt: '2026-07-01T00:00:00.000Z',
+            },
+          ],
+          fiatCreditType: { id: 'usd-credit-type-id', name: 'USD' },
+          id: 'managed-email-rate-card-id',
+        },
+      });
+
+      await expect(
+        service.ensureWorkspaceManagedEmailContract(workspaceId),
+      ).resolves.toBe('recovered-contract-id');
+      expect(metronomeClientService.createContract).toHaveBeenCalledTimes(1);
+      expect(metronomeClientService.findCurrentContracts).toHaveBeenCalledTimes(
+        1,
+      );
+    },
+  );
 });

@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Metronome } from '@metronome/sdk';
-import type { ContractListBalancesResponse } from '@metronome/sdk/resources/v1/contracts';
+import type {
+  ContractCreateParams,
+  ContractListBalancesResponse,
+} from '@metronome/sdk/resources/v1/contracts';
 
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
@@ -10,6 +13,14 @@ import {
 } from '../metronome-client.exception';
 import { toMetronomeHourBoundary } from '../utils/to-metronome-hour-boundary.util';
 import { validateSafeMetronomeEventProperties } from '../utils/validate-safe-metronome-event-properties.util';
+import {
+  type MetronomeAddSubscriptionInput,
+  type MetronomeEndSubscriptionInput,
+  type MetronomeInvoiceListInput,
+  type MetronomeInvoicePage,
+  type MetronomeQuantityUpdateInput,
+  type MetronomeSubscriptionReceipt,
+} from '../types/metronome-subscription.type';
 
 const BALANCE_PAGE_LIMIT = 25;
 
@@ -20,11 +31,21 @@ export type MetronomeCustomerInput = {
 };
 
 export type MetronomeContractInput = {
+  billingProviderConfiguration?: {
+    billingProvider: 'stripe';
+    deliveryMethod: 'direct_to_billing_provider';
+  };
   customerId: string;
   rateCardAlias: string;
   uniquenessKey: string;
 };
 export type MetronomeCurrentContract = {
+  activeBillingProviderConfiguration: {
+    billingProvider: string;
+    deliveryMethod: string;
+    deliveryMethodId: string;
+    id: string;
+  } | null;
   id: string;
   rateCardId: string | null;
   startingAt: string;
@@ -37,6 +58,7 @@ export type MetronomeRateCard = {
     name: string;
     startingAt: string | null;
   }>;
+  fiatCreditType: { id: string; name: string } | null;
   id: string;
 };
 
@@ -146,19 +168,54 @@ export class MetronomeClientService {
     }
   }
 
+  async setStripeBillingConfiguration(
+    customerId: string,
+    stripeCustomerId: string,
+  ): Promise<void> {
+    const client = this.getClient();
+
+    try {
+      await client.v1.customers.billingConfig.create(
+        {
+          billing_provider_customer_id: stripeCustomerId,
+          billing_provider_type: 'stripe',
+          customer_id: customerId,
+          stripe_collection_method: 'charge_automatically',
+        },
+        { maxRetries: 0 },
+      );
+    } catch (error) {
+      throw this.toWriteException(error);
+    }
+  }
+
   async createContract({
+    billingProviderConfiguration,
     customerId,
     rateCardAlias,
     uniquenessKey,
   }: MetronomeContractInput): Promise<{ id: string }> {
     const client = this.getClient();
+    const contractInput: ContractCreateParams = {
+      customer_id: customerId,
+      starting_at: toMetronomeHourBoundary(new Date()).toISOString(),
+      rate_card_alias: rateCardAlias,
+      uniqueness_key: uniquenessKey,
+      ...(billingProviderConfiguration === undefined
+        ? {}
+        : {
+            billing_provider_configuration: {
+              billing_provider: billingProviderConfiguration.billingProvider,
+              delivery_method: billingProviderConfiguration.deliveryMethod,
+            },
+          }),
+    };
+
     try {
-      const response = await client.v1.contracts.create({
-        customer_id: customerId,
-        starting_at: toMetronomeHourBoundary(new Date()).toISOString(),
-        rate_card_alias: rateCardAlias,
-        uniqueness_key: uniquenessKey,
-      });
+      const response =
+        billingProviderConfiguration === undefined
+          ? await client.v1.contracts.create(contractInput)
+          : await client.v1.contracts.create(contractInput, { maxRetries: 0 });
 
       return { id: response.data.id };
     } catch (error) {
@@ -166,10 +223,18 @@ export class MetronomeClientService {
         throw error;
       }
 
+      if (this.isUniquenessConflict(error)) {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.CONFLICT,
+        );
+      }
+
+      if (billingProviderConfiguration !== undefined) {
+        throw this.toWriteException(error);
+      }
+
       throw new MetronomeClientException(
-        this.isUniquenessConflict(error)
-          ? MetronomeClientExceptionCode.CONFLICT
-          : MetronomeClientExceptionCode.REQUEST_FAILED,
+        MetronomeClientExceptionCode.REQUEST_FAILED,
       );
     }
   }
@@ -246,23 +311,208 @@ export class MetronomeClientService {
     }
   }
 
+  async addSubscription(
+    input: MetronomeAddSubscriptionInput,
+  ): Promise<MetronomeSubscriptionReceipt> {
+    this.validatePositiveSubscriptionQuantity(input.quantity);
+    this.validateSubscriptionDate(input.startingAt);
+    if (input.endingBefore !== undefined) {
+      this.validateSubscriptionDate(input.endingBefore);
+    }
+    this.validateProrationRounding(input.proration.rounding);
+
+    const client = this.getClient();
+    try {
+      const response = await client.v2.contracts.edit(
+        {
+          add_subscriptions: [
+            {
+              collection_schedule: 'ADVANCE',
+              ...(input.endingBefore === undefined
+                ? {}
+                : { ending_before: input.endingBefore }),
+              initial_quantity: input.quantity,
+              proration: {
+                invoice_behavior: input.proration.invoiceBehavior,
+                is_prorated: input.proration.isProrated,
+                ...(input.proration.rounding === undefined
+                  ? {}
+                  : {
+                      rounding: {
+                        decimal_places: input.proration.rounding.decimalPlaces,
+                        rounding_method:
+                          input.proration.rounding.roundingMethod,
+                      },
+                    }),
+              },
+              quantity_management_mode: 'QUANTITY_ONLY',
+              starting_at: input.startingAt,
+              subscription_rate: {
+                billing_frequency: input.billingFrequency,
+                product_id: input.productId,
+              },
+            },
+          ],
+          contract_id: input.contractId,
+          customer_id: input.customerId,
+          uniqueness_key: input.uniquenessKey,
+        },
+        { maxRetries: 0 },
+      );
+      const edit = response.data.edit;
+      const subscriptionId =
+        edit?.add_subscriptions?.length === 1
+          ? edit.add_subscriptions[0].id
+          : undefined;
+
+      if (!edit?.id?.trim() || !subscriptionId?.trim()) {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+        );
+      }
+
+      return {
+        metronomeEditId: edit.id,
+        subscriptionId,
+      };
+    } catch (error) {
+      throw this.toWriteException(error);
+    }
+  }
+
+  async scheduleSubscriptionQuantity(
+    input: MetronomeQuantityUpdateInput,
+  ): Promise<MetronomeSubscriptionReceipt> {
+    this.validateNonnegativeSubscriptionQuantity(input.quantity);
+    this.validateSubscriptionDate(input.effectiveAt);
+    this.validateProrationRounding(input.prorationRounding ?? undefined);
+
+    const client = this.getClient();
+    try {
+      const response = await client.v2.contracts.edit(
+        {
+          contract_id: input.contractId,
+          customer_id: input.customerId,
+          uniqueness_key: input.uniquenessKey,
+          update_subscriptions: [
+            {
+              ...(input.prorationRounding === undefined
+                ? {}
+                : {
+                    proration_rounding:
+                      input.prorationRounding === null
+                        ? null
+                        : {
+                            decimal_places:
+                              input.prorationRounding.decimalPlaces,
+                            rounding_method:
+                              input.prorationRounding.roundingMethod,
+                          },
+                  }),
+              quantity_updates: [
+                {
+                  quantity: input.quantity,
+                  starting_at: input.effectiveAt,
+                },
+              ],
+              subscription_id: input.subscriptionId,
+            },
+          ],
+        },
+        { maxRetries: 0 },
+      );
+
+      return this.requireUpdatedSubscriptionReceipt(
+        response.data.edit,
+        input.subscriptionId,
+      );
+    } catch (error) {
+      throw this.toWriteException(error);
+    }
+  }
+
+  async endSubscription(
+    input: MetronomeEndSubscriptionInput,
+  ): Promise<MetronomeSubscriptionReceipt> {
+    this.validateSubscriptionDate(input.endingBefore);
+
+    const client = this.getClient();
+    try {
+      const response = await client.v2.contracts.edit(
+        {
+          contract_id: input.contractId,
+          customer_id: input.customerId,
+          uniqueness_key: input.uniquenessKey,
+          update_subscriptions: [
+            {
+              ending_before: input.endingBefore,
+              subscription_id: input.subscriptionId,
+            },
+          ],
+        },
+        { maxRetries: 0 },
+      );
+
+      return this.requireUpdatedSubscriptionReceipt(
+        response.data.edit,
+        input.subscriptionId,
+      );
+    } catch (error) {
+      throw this.toWriteException(error);
+    }
+  }
+
   async findCurrentContracts(
     customerId: string,
   ): Promise<MetronomeCurrentContract[]> {
     const client = this.getClient();
+    const coveringDate = new Date().toISOString();
     const response = await this.execute(() =>
       client.v2.contracts.list({
         customer_id: customerId,
-        covering_date: new Date().toISOString(),
+        covering_date: coveringDate,
       }),
     );
+    const coveringTime = Date.parse(coveringDate);
 
-    return response.data.map((contract) => ({
-      id: contract.id,
-      rateCardId: contract.rate_card_id ?? null,
-      startingAt: contract.starting_at,
-      uniquenessKey: contract.uniqueness_key ?? null,
-    }));
+    return response.data.map((contract) => {
+      const activeConfigurations = (
+        contract.billing_provider_configuration_schedule ?? []
+      ).filter((entry) => {
+        const effectiveAt = Date.parse(entry.effective_at);
+        const effectiveUntil =
+          entry.effective_until === undefined
+            ? null
+            : Date.parse(entry.effective_until);
+
+        return (
+          Number.isFinite(effectiveAt) &&
+          effectiveAt <= coveringTime &&
+          (effectiveUntil === null ||
+            (Number.isFinite(effectiveUntil) && coveringTime < effectiveUntil))
+        );
+      });
+      const activeConfiguration =
+        activeConfigurations.length === 1
+          ? activeConfigurations[0].billing_provider_configuration
+          : null;
+
+      return {
+        activeBillingProviderConfiguration:
+          activeConfiguration === null
+            ? null
+            : {
+                billingProvider: activeConfiguration.billing_provider,
+                deliveryMethod: activeConfiguration.delivery_method,
+                deliveryMethodId: activeConfiguration.delivery_method_id,
+                id: activeConfiguration.id,
+              },
+        id: contract.id,
+        rateCardId: contract.rate_card_id ?? null,
+        startingAt: contract.starting_at,
+        uniquenessKey: contract.uniqueness_key ?? null,
+      };
+    });
   }
 
   async getRateCard(id: string): Promise<MetronomeRateCard> {
@@ -278,6 +528,13 @@ export class MetronomeClientService {
         name: alias.name,
         startingAt: alias.starting_at ?? null,
       })),
+      fiatCreditType:
+        rateCard.fiat_credit_type === undefined
+          ? null
+          : {
+              id: rateCard.fiat_credit_type.id,
+              name: rateCard.fiat_credit_type.name,
+            },
       id: rateCard.id,
     };
   }
@@ -302,6 +559,60 @@ export class MetronomeClientService {
     );
 
     return [...new Set(billableMetricIds)].sort();
+  }
+
+  async listInvoicesFirstPage({
+    contractId,
+    customerId,
+    endingBefore,
+    startingOn,
+  }: MetronomeInvoiceListInput): Promise<MetronomeInvoicePage> {
+    const client = this.getClient();
+    const response = await this.execute(() =>
+      client.v1.customers.invoices.list({
+        contract_id: contractId,
+        customer_id: customerId,
+        ending_before: endingBefore,
+        starting_on: startingOn,
+      }),
+    );
+
+    return {
+      hasNextPage: response.hasNextPage(),
+      invoices: response.data.map((invoice) => ({
+        contractId: invoice.contract_id ?? null,
+        customerId: invoice.customer_id,
+        endingBefore: invoice.end_timestamp ?? null,
+        externalInvoice:
+          invoice.external_invoice == null
+            ? null
+            : {
+                billingProvider: invoice.external_invoice.billing_provider_type,
+                externalPaymentId:
+                  invoice.external_invoice.external_payment_id ?? null,
+                externalStatus:
+                  invoice.external_invoice.external_status ?? null,
+                invoiceId: invoice.external_invoice.invoice_id ?? null,
+                invoicedTotal: invoice.external_invoice.invoiced_total ?? null,
+              },
+        id: invoice.id,
+        lines: invoice.line_items.map((line) => ({
+          endingBefore: line.ending_before ?? null,
+          hasAppliedCommitOrCredit: line.applied_commit_or_credit !== undefined,
+          isProrated: line.is_prorated ?? null,
+          productId: line.product_id ?? null,
+          quantity: line.quantity ?? null,
+          startingAt: line.starting_at ?? null,
+          subscriptionId: line.subscription_id ?? null,
+          total: line.total,
+          type: line.type,
+          unitPrice: line.unit_price ?? null,
+        })),
+        startingAt: invoice.start_timestamp ?? null,
+        status: invoice.status,
+        total: invoice.total,
+      })),
+    };
   }
 
   async previewUsage({
@@ -517,6 +828,93 @@ export class MetronomeClientService {
       properties: event.properties ?? {},
       transactionId: event.transaction_id,
     }));
+  }
+
+  private requireUpdatedSubscriptionReceipt(
+    edit:
+      | {
+          id?: string;
+          update_subscriptions?: Array<{ id: string }>;
+        }
+      | undefined,
+    expectedSubscriptionId: string,
+  ): MetronomeSubscriptionReceipt {
+    const subscriptionId =
+      edit?.update_subscriptions?.length === 1
+        ? edit.update_subscriptions[0].id
+        : undefined;
+
+    if (
+      edit?.id?.trim() === undefined ||
+      edit.id.trim() === '' ||
+      subscriptionId?.trim() === undefined ||
+      subscriptionId.trim() === '' ||
+      subscriptionId !== expectedSubscriptionId
+    ) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+      );
+    }
+
+    return {
+      metronomeEditId: edit.id,
+      subscriptionId,
+    };
+  }
+
+  private validatePositiveSubscriptionQuantity(quantity: number): void {
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+      throw new Error(
+        'Metronome subscription quantity must be a safe positive integer',
+      );
+    }
+  }
+
+  private validateNonnegativeSubscriptionQuantity(quantity: number): void {
+    if (!Number.isSafeInteger(quantity) || quantity < 0) {
+      throw new Error(
+        'Metronome subscription quantity must be a safe nonnegative integer',
+      );
+    }
+  }
+
+  private validateSubscriptionDate(value: string): void {
+    const parsed = new Date(value);
+
+    if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) {
+      throw new Error('Metronome subscription date must be an ISO instant');
+    }
+  }
+
+  private validateProrationRounding(
+    rounding: { decimalPlaces: number } | undefined,
+  ): void {
+    if (
+      rounding !== undefined &&
+      Number.isSafeInteger(rounding.decimalPlaces) === false
+    ) {
+      throw new Error(
+        'Metronome proration decimal places must be a safe integer',
+      );
+    }
+  }
+
+  private toWriteException(error: unknown): MetronomeClientException {
+    if (error instanceof MetronomeClientException) {
+      return error;
+    }
+
+    const status = this.getErrorStatus(error);
+
+    return new MetronomeClientException(
+      this.isUniquenessConflict(error)
+        ? MetronomeClientExceptionCode.CONFLICT
+        : status === 429
+          ? MetronomeClientExceptionCode.RATE_LIMITED
+          : status === undefined || status >= 500
+            ? MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN
+            : MetronomeClientExceptionCode.REQUEST_FAILED,
+    );
   }
 
   private async execute<T>(operation: () => Promise<T>): Promise<T> {
