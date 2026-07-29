@@ -21,6 +21,12 @@ import {
   type ManagedEmailResourceSnapshot,
   type ManagedEmailSafeFacts,
 } from '../types/managed-email-persistence.type';
+import {
+  managedEmailCorrelatedSubscriptionLinesTransformer,
+  managedEmailExpectedLineItemsTransformer,
+  managedEmailNullableSafeFactsTransformer,
+  managedEmailResourceSnapshotTransformer,
+} from '../utils/validate-managed-email-persistence-json.util';
 
 @Check(
   'CHK_MANAGED_EMAIL_ACQUISITION_REQUIRED_TEXT',
@@ -70,7 +76,11 @@ export class ManagedEmailAcquisitionOperationEntity {
   @Column({ type: 'text', update: false })
   quoteHash: string;
 
-  @Column({ type: 'jsonb', update: false })
+  @Column({
+    transformer: managedEmailResourceSnapshotTransformer,
+    type: 'jsonb',
+    update: false,
+  })
   resourceSnapshot: ManagedEmailResourceSnapshot;
 
   @Column({ type: 'text', update: false })
@@ -82,8 +92,12 @@ export class ManagedEmailAcquisitionOperationEntity {
   @Column({ type: 'text', update: false })
   metronomeRateCardAlias: string;
 
-  @Column({ type: 'jsonb', update: false })
-  expectedLineItems: ManagedEmailExpectedLineItem[];
+  @Column({
+    transformer: managedEmailExpectedLineItemsTransformer,
+    type: 'jsonb',
+    update: false,
+  })
+  expectedLineItems: readonly ManagedEmailExpectedLineItem[];
 
   @Column({ type: 'bigint', update: false })
   expectedAmountCents: string;
@@ -121,13 +135,23 @@ export class ManagedEmailAcquisitionOperationEntity {
   @Column({ nullable: true, type: 'text' })
   paymentStatus: string | null;
 
-  @Column({ nullable: true, type: 'jsonb' })
-  correlatedSubscriptionLines: ManagedEmailCorrelatedSubscriptionLine[] | null;
+  @Column({
+    nullable: true,
+    transformer: managedEmailCorrelatedSubscriptionLinesTransformer,
+    type: 'jsonb',
+  })
+  correlatedSubscriptionLines:
+    | readonly ManagedEmailCorrelatedSubscriptionLine[]
+    | null;
 
   @Column({ nullable: true, type: 'text' })
   providerIntentHash: string | null;
 
-  @Column({ nullable: true, type: 'jsonb' })
+  @Column({
+    nullable: true,
+    transformer: managedEmailNullableSafeFactsTransformer,
+    type: 'jsonb',
+  })
   providerReceipt: ManagedEmailSafeFacts | null;
 
   @Column({ nullable: true, type: 'text' })

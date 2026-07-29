@@ -17,6 +17,7 @@ import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.ent
 import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailInfrastructureState } from '../enums/managed-email-infrastructure-state.enum';
 import { type ManagedEmailSafeFacts } from '../types/managed-email-persistence.type';
+import { managedEmailSafeFactsTransformer } from '../utils/validate-managed-email-persistence-json.util';
 
 @Check(
   'CHK_MANAGED_EMAIL_DOMAIN_IDENTITIES_NONEMPTY',
@@ -75,7 +76,7 @@ export class ManagedEmailDomainEntity {
   @Column({ type: 'text' })
   infrastructureState: ManagedEmailInfrastructureState;
 
-  @Column({ type: 'jsonb' })
+  @Column({ transformer: managedEmailSafeFactsTransformer, type: 'jsonb' })
   dnsReadinessFacts: ManagedEmailSafeFacts;
 
   @Column({ nullable: true, type: 'timestamptz' })

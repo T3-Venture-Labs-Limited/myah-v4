@@ -1,6 +1,8 @@
 import { type QueryRunner } from 'typeorm';
 
-import { CreateManagedEmailFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1785323671025-create-managed-email';
+import { CreateManagedEmailFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1785325829908-create-managed-email';
+import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
+import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
 const TABLE_NAMES = [
   'managedEmailAcquisitionOperation',
@@ -25,6 +27,25 @@ describe('CreateManagedEmailFastInstanceCommand', () => {
 
   beforeEach(() => {
     command = new CreateManagedEmailFastInstanceCommand();
+  });
+
+  it('is registered exactly once for the generated 2.20 command timestamp', () => {
+    expect(
+      INSTANCE_COMMANDS.filter(
+        (instanceCommand) =>
+          instanceCommand === CreateManagedEmailFastInstanceCommand,
+      ),
+    ).toHaveLength(1);
+    expect(
+      getRegisteredInstanceCommandMetadata(
+        CreateManagedEmailFastInstanceCommand,
+      ),
+    ).toEqual({
+      runAfterWorkspace: false,
+      timestamp: 1785325829908,
+      type: 'fast',
+      version: '2.20.0',
+    });
   });
 
   describe('up', () => {
@@ -63,6 +84,9 @@ describe('CreateManagedEmailFastInstanceCommand', () => {
       );
       expect(sql).not.toMatch(
         /actionApproval|actionExecution|instagram|managedProvider|customerAccount/i,
+      );
+      expect(sql).toContain(
+        'CONSTRAINT "CHK_MANAGED_EMAIL_MAILBOX_IDENTITIES_NONEMPTY"',
       );
     });
   });

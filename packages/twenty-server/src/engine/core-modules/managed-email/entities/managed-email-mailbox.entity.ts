@@ -21,9 +21,14 @@ import { ManagedEmailInfrastructureState } from '../enums/managed-email-infrastr
 import { ManagedEmailWarmupMode } from '../enums/managed-email-warmup-mode.enum';
 import { ManagedEmailWarmupState } from '../enums/managed-email-warmup-state.enum';
 import { type ManagedEmailSafeFacts } from '../types/managed-email-persistence.type';
+import { managedEmailSafeFactsTransformer } from '../utils/validate-managed-email-persistence-json.util';
 
 import { ManagedEmailDomainEntity } from './managed-email-domain.entity';
 
+@Check(
+  'CHK_MANAGED_EMAIL_MAILBOX_IDENTITIES_NONEMPTY',
+  `btrim("address") <> '' AND btrim("normalizedAddress") <> '' AND btrim("providerType") <> '' AND btrim("providerConfigurationKey") <> '' AND btrim("readinessPolicyVersion") <> ''`,
+)
 @Check('CHK_MANAGED_EMAIL_MAILBOX_PERSONA_VERSION', '"personaVersion" >= 1')
 @Check(
   'CHK_MANAGED_EMAIL_MAILBOX_CAPACITIES',
@@ -177,7 +182,7 @@ export class ManagedEmailMailboxEntity {
   @Column({ nullable: true, type: 'integer' })
   adminDailyCap: number | null;
 
-  @Column({ type: 'jsonb' })
+  @Column({ transformer: managedEmailSafeFactsTransformer, type: 'jsonb' })
   healthFacts: ManagedEmailSafeFacts;
 
   @Column({ nullable: true, type: 'timestamptz' })
