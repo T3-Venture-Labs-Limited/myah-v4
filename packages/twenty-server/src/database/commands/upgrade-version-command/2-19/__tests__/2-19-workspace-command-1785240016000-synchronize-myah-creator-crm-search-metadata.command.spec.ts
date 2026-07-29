@@ -39,6 +39,12 @@ const args: RunOnWorkspaceArgs = {
 
 describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
   const twentyStandardApplicationId = '20202020-0000-0000-0000-000000000002';
+  const { allFlatEntityMaps: standardApplicationAllFlatEntityMaps } =
+    computeTwentyStandardApplicationAllFlatEntityMaps({
+      now: '2026-07-28T00:00:00.000Z',
+      workspaceId: args.workspaceId,
+      twentyStandardApplicationId,
+    });
   const applicationService = {
     findWorkspaceTwentyStandardAndCustomApplicationOrThrow: jest
       .fn()
@@ -49,7 +55,11 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         },
       }),
   };
-  const createCommand = (flatSearchFieldMetadataMaps: unknown) => {
+  const createCommand = (
+    flatSearchFieldMetadataMaps: unknown,
+    flatFieldMetadataMaps: unknown =
+      standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps,
+  ) => {
     const commandModule = loadCommandModule();
 
     expect(commandModule).toBeDefined();
@@ -60,6 +70,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     const workspaceCacheService = {
       invalidateAndRecompute: jest.fn().mockResolvedValue(undefined),
       getOrRecompute: jest.fn().mockResolvedValue({
+        flatFieldMetadataMaps,
         flatSearchFieldMetadataMaps,
       }),
     };
@@ -147,6 +158,55 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         }),
       ]),
     );
+  });
+
+  it('does not mutate workspace cache in dry-run mode', async () => {
+    const {
+      command,
+      validateBuildAndRunWorkspaceMigration,
+      workspaceCacheService,
+    } = createCommand(createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps);
+
+    await command.runOnWorkspace({
+      ...args,
+      options: { dryRun: true },
+    });
+
+    expect(workspaceCacheService.invalidateAndRecompute).not.toHaveBeenCalled();
+    expect(workspaceCacheService.getOrRecompute).not.toHaveBeenCalled();
+    expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
+  });
+
+  it('creates search metadata only for Creator CRM fields present in the workspace', async () => {
+    const availableFieldMetadataUniversalIdentifier =
+      MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier;
+    const { command, validateBuildAndRunWorkspaceMigration } = createCommand(
+      createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
+      {
+        ...createEmptyAllFlatEntityMaps().flatFieldMetadataMaps,
+        byUniversalIdentifier: {
+          [availableFieldMetadataUniversalIdentifier]:
+            standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps
+              .byUniversalIdentifier[
+              availableFieldMetadataUniversalIdentifier
+            ],
+        },
+      },
+    );
+
+    await command.runOnWorkspace(args);
+
+    const flatEntityToCreate =
+      validateBuildAndRunWorkspaceMigration.mock.calls[0][0]
+        .allFlatEntityOperationByMetadataName.searchFieldMetadata
+        .flatEntityToCreate;
+
+    expect(flatEntityToCreate).toEqual([
+      expect.objectContaining({
+        fieldMetadataUniversalIdentifier:
+          availableFieldMetadataUniversalIdentifier,
+      }),
+    ]);
   });
 
   it('does not create search metadata when all Creator CRM field pairs exist', async () => {

@@ -37,12 +37,20 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
     workspaceId,
     options,
   }: RunOnWorkspaceArgs): Promise<void> {
+    if (options.dryRun) {
+      return;
+    }
+
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
         { workspaceId },
       );
     await this.workspaceCacheService.invalidateAndRecompute(workspaceId, ['flatSearchFieldMetadataMaps']);
-    const { flatSearchFieldMetadataMaps } = await this.workspaceCacheService.getOrRecompute(workspaceId, ['flatSearchFieldMetadataMaps']);
+    const { flatFieldMetadataMaps, flatSearchFieldMetadataMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'flatFieldMetadataMaps',
+        'flatSearchFieldMetadataMaps',
+      ]);
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({
         now: new Date().toISOString(),
@@ -65,6 +73,14 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
     )
       .filter(isDefined)
       .filter(
+        ({ fieldMetadataUniversalIdentifier }) =>
+          isDefined(
+            flatFieldMetadataMaps.byUniversalIdentifier[
+              fieldMetadataUniversalIdentifier
+            ],
+          ),
+      )
+      .filter(
         ({
           objectMetadataUniversalIdentifier,
           fieldMetadataUniversalIdentifier,
@@ -77,7 +93,7 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
           ),
       );
 
-    if (missingSearchFieldMetadatas.length === 0 || options.dryRun) {
+    if (missingSearchFieldMetadatas.length === 0) {
       return;
     }
 
