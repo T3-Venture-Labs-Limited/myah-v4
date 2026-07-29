@@ -8,7 +8,16 @@ import {
 } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-catalog.util';
 import { type ManagedEmailCatalog } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 
-const validCatalog = (): ManagedEmailCatalog => ({
+type Mutable<T> = {
+  -readonly [Key in keyof T]: T[Key];
+};
+
+type MutableManagedEmailCatalog = {
+  version: string;
+  products: Mutable<ManagedEmailCatalog['products'][number]>[];
+};
+
+const validCatalog = (): MutableManagedEmailCatalog => ({
   version: '2026-07-29',
   products: [
     {
@@ -76,35 +85,38 @@ describe('validateManagedEmailCatalog', () => {
   });
 
   it.each([
-    ['blank version', (c: ManagedEmailCatalog) => (c.version = ' ')],
+    ['blank version', (c: MutableManagedEmailCatalog) => (c.version = ' ')],
     [
       'unsafe provider cost',
-      (c: ManagedEmailCatalog) => (c.products[0].providerCostCents = 1.5),
+      (c: MutableManagedEmailCatalog) =>
+        (c.products[0].providerCostCents = 1.5),
     ],
     [
       'zero customer price',
-      (c: ManagedEmailCatalog) => (c.products[0].customerPriceCents = 0),
+      (c: MutableManagedEmailCatalog) => (c.products[0].customerPriceCents = 0),
     ],
     [
       'duplicate keys',
-      (c: ManagedEmailCatalog) => (c.products[1].key = c.products[0].key),
+      (c: MutableManagedEmailCatalog) =>
+        (c.products[1].key = c.products[0].key),
     ],
     [
       'duplicate aliases',
-      (c: ManagedEmailCatalog) => (c.products[1].alias = c.products[0].alias),
+      (c: MutableManagedEmailCatalog) =>
+        (c.products[1].alias = c.products[0].alias),
     ],
     [
       'wrong key assignment',
-      (c: ManagedEmailCatalog) =>
+      (c: MutableManagedEmailCatalog) =>
         (c.products[0].alias = 'myah-managed-mailbox-month'),
     ],
     [
       'wrong cadence',
-      (c: ManagedEmailCatalog) => (c.products[0].cadence = 'MONTHLY'),
+      (c: MutableManagedEmailCatalog) => (c.products[0].cadence = 'MONTHLY'),
     ],
     [
       'AI product identity collision',
-      (c: ManagedEmailCatalog) =>
+      (c: MutableManagedEmailCatalog) =>
         (c.products[0].alias = 'managed-openrouter-credit'),
     ],
   ])('rejects %s', (_name, mutate) => {
