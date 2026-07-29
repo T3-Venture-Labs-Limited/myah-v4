@@ -50,7 +50,9 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
         { workspaceId },
       );
-    await this.workspaceCacheService.invalidateAndRecompute(workspaceId, ['flatSearchFieldMetadataMaps']);
+    await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+      'flatSearchFieldMetadataMaps',
+    ]);
     const { flatFieldMetadataMaps, flatSearchFieldMetadataMaps } =
       await this.workspaceCacheService.getOrRecompute(workspaceId, [
         'flatFieldMetadataMaps',
@@ -77,13 +79,12 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
       allFlatEntityMaps.flatSearchFieldMetadataMaps.byUniversalIdentifier,
     )
       .filter(isDefined)
-      .filter(
-        ({ fieldMetadataUniversalIdentifier }) =>
-          isDefined(
-            flatFieldMetadataMaps.byUniversalIdentifier[
-              fieldMetadataUniversalIdentifier
-            ],
-          ),
+      .filter(({ fieldMetadataUniversalIdentifier }) =>
+        isDefined(
+          flatFieldMetadataMaps.byUniversalIdentifier[
+            fieldMetadataUniversalIdentifier
+          ],
+        ),
       )
       .filter(
         ({
@@ -153,5 +154,9 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
       },
       workspaceId,
     });
+
+    await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+      'flatSearchFieldMetadataMaps',
+    ]);
   }
 }

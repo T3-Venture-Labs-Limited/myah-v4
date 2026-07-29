@@ -20,16 +20,15 @@ type SynchronizeMyahCreatorCrmSearchMetadataCommandModule = {
   SynchronizeMyahCreatorCrmSearchMetadataCommand: SynchronizeMyahCreatorCrmSearchMetadataCommandConstructor;
 };
 
-const loadCommandModule =
-  (): SynchronizeMyahCreatorCrmSearchMetadataCommandModule | undefined => {
-    try {
-      return require(
-        'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016000-synchronize-myah-creator-crm-search-metadata.command',
-      ) as SynchronizeMyahCreatorCrmSearchMetadataCommandModule;
-    } catch {
-      return undefined;
-    }
-  };
+const loadCommandModule = ():
+  | SynchronizeMyahCreatorCrmSearchMetadataCommandModule
+  | undefined => {
+  try {
+    return require('src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016000-synchronize-myah-creator-crm-search-metadata.command') as SynchronizeMyahCreatorCrmSearchMetadataCommandModule;
+  } catch {
+    return undefined;
+  }
+};
 
 const args: RunOnWorkspaceArgs = {
   workspaceId: '20202020-0000-0000-0000-000000000001',
@@ -77,8 +76,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
   };
   const createCommand = (
     flatSearchFieldMetadataMaps: unknown,
-    flatFieldMetadataMaps: unknown =
-      standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps,
+    flatFieldMetadataMaps: unknown = standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps,
   ) => {
     const commandModule = loadCommandModule();
 
@@ -97,13 +95,14 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     const workspaceMigrationRunnerService = {
       run: jest.fn().mockResolvedValue(undefined),
     };
-    const command = new commandModule!.SynchronizeMyahCreatorCrmSearchMetadataCommand(
-      {} as WorkspaceIteratorService,
-      applicationService,
-      { validateBuildAndRunWorkspaceMigration },
-      workspaceCacheService,
-      workspaceMigrationRunnerService,
-    );
+    const command =
+      new commandModule!.SynchronizeMyahCreatorCrmSearchMetadataCommand(
+        {} as WorkspaceIteratorService,
+        applicationService,
+        { validateBuildAndRunWorkspaceMigration },
+        workspaceCacheService,
+        workspaceMigrationRunnerService,
+      );
 
     return {
       command,
@@ -126,8 +125,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
       ...createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
       byUniversalIdentifier: Object.fromEntries(
         Object.values(
-          allFlatEntityMaps.flatSearchFieldMetadataMaps
-            .byUniversalIdentifier,
+          allFlatEntityMaps.flatSearchFieldMetadataMaps.byUniversalIdentifier,
         )
           .filter(isDefined)
           .filter(({ fieldMetadataUniversalIdentifier }) =>
@@ -143,19 +141,40 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     };
   };
 
-  it('refreshes stale search metadata before persisting missing Creator CRM rows', async () => {
+  it('refreshes search metadata before and after persisting missing Creator CRM rows', async () => {
     const {
       command,
       validateBuildAndRunWorkspaceMigration,
       workspaceCacheService,
-    } = createCommand(createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps);
+      workspaceMigrationRunnerService,
+    } = createCommand(
+      createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
+    );
 
     await command.runOnWorkspace(args);
 
-    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledTimes(1);
-    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledWith(
-      args.workspaceId,
-      ['flatSearchFieldMetadataMaps'],
+    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledTimes(
+      2,
+    );
+    expect(
+      workspaceCacheService.invalidateAndRecompute,
+    ).toHaveBeenNthCalledWith(1, args.workspaceId, [
+      'flatSearchFieldMetadataMaps',
+    ]);
+    expect(
+      workspaceCacheService.invalidateAndRecompute,
+    ).toHaveBeenNthCalledWith(2, args.workspaceId, [
+      'flatSearchFieldMetadataMaps',
+    ]);
+    expect(
+      workspaceCacheService.invalidateAndRecompute.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      workspaceMigrationRunnerService.run.mock.invocationCallOrder[0],
+    );
+    expect(
+      workspaceCacheService.invalidateAndRecompute.mock.invocationCallOrder[1],
+    ).toBeGreaterThan(
+      workspaceMigrationRunnerService.run.mock.invocationCallOrder[0],
     );
     expect(validateBuildAndRunWorkspaceMigration).toHaveBeenCalledTimes(1);
     const flatEntityToCreate =
@@ -219,12 +238,34 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     );
   });
 
+  it('does not publish repaired cache metadata when the migration fails', async () => {
+    const {
+      command,
+      validateBuildAndRunWorkspaceMigration,
+      workspaceCacheService,
+      workspaceMigrationRunnerService,
+    } = createCommand(
+      createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
+    );
+    validateBuildAndRunWorkspaceMigration.mockResolvedValue({ status: 'fail' });
+    await expect(command.runOnWorkspace(args)).rejects.toThrow(
+      `Failed to synchronize Creator CRM search metadata for workspace ${args.workspaceId}`,
+    );
+    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(workspaceMigrationRunnerService.run).not.toHaveBeenCalled();
+  });
+
   it('does not mutate workspace cache in dry-run mode', async () => {
     const {
       command,
       validateBuildAndRunWorkspaceMigration,
       workspaceCacheService,
-    } = createCommand(createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps);
+      workspaceMigrationRunnerService,
+    } = createCommand(
+      createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
+    );
 
     await command.runOnWorkspace({
       ...args,
@@ -233,6 +274,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
 
     expect(workspaceCacheService.invalidateAndRecompute).not.toHaveBeenCalled();
     expect(workspaceCacheService.getOrRecompute).not.toHaveBeenCalled();
+    expect(workspaceMigrationRunnerService.run).not.toHaveBeenCalled();
     expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
   });
 
@@ -246,9 +288,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         byUniversalIdentifier: {
           [availableFieldMetadataUniversalIdentifier]:
             standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps
-              .byUniversalIdentifier[
-              availableFieldMetadataUniversalIdentifier
-            ],
+              .byUniversalIdentifier[availableFieldMetadataUniversalIdentifier],
         },
       },
     );
@@ -268,8 +308,13 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     ]);
   });
 
-  it('does not create search metadata when all Creator CRM field pairs exist', async () => {
-    const { command, validateBuildAndRunWorkspaceMigration } = createCommand(
+  it('does not refresh cache after a no-op Creator CRM metadata repair', async () => {
+    const {
+      command,
+      validateBuildAndRunWorkspaceMigration,
+      workspaceCacheService,
+      workspaceMigrationRunnerService,
+    } = createCommand(
       buildExistingSearchFieldMetadataMaps([
         MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
@@ -277,10 +322,12 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
       ]),
     );
-
     await command.runOnWorkspace(args);
-
     expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
+    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(workspaceMigrationRunnerService.run).not.toHaveBeenCalled();
   });
 
   it('creates only missing Creator CRM search metadata field pairs', async () => {
@@ -302,8 +349,11 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     expect(
       flatEntityToCreate
         .map(
-          ({ fieldMetadataUniversalIdentifier }: { fieldMetadataUniversalIdentifier: string }) =>
+          ({
             fieldMetadataUniversalIdentifier,
+          }: {
+            fieldMetadataUniversalIdentifier: string;
+          }) => fieldMetadataUniversalIdentifier,
         )
         .sort(),
     ).toEqual(
