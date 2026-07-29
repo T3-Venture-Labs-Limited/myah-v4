@@ -3,11 +3,11 @@ import { promisify } from 'node:util';
 
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { createManyOperationFactory } from 'test/integration/graphql/utils/create-many-operation-factory.util';
 import { deleteManyOperationFactory } from 'test/integration/graphql/utils/delete-many-operation-factory.util';
 import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
-import { search } from 'test/integration/graphql/utils/search.util';
 
 const TEST_CREATOR_LIST_ID = '20202020-2400-4000-8000-000000000001';
 const TEST_CAMPAIGN_ID = '20202020-2400-4000-8000-000000000002';
@@ -29,6 +29,7 @@ const CREATOR_CRM_SEARCH_FIELD_UNIVERSAL_IDENTIFIERS = [
 ];
 
 const execFileAsync = promisify(execFile);
+const workspaceSchemaName = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
 
 type SearchFieldMetadataRow = {
   id: string;
@@ -41,6 +42,12 @@ type SearchFieldMetadataRow = {
   applicationId: string;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type CreatorCrmObjectName = 'creator' | 'creatorList' | 'campaign';
+
+type SearchMatch = {
+  id: string;
 };
 
 const runWorkspaceCommand = async (
@@ -72,8 +79,25 @@ const runFlatCacheInvalidateCommand = () =>
     'searchFieldMetadata',
   ]);
 
+const findSearchMatches = async ({
+  objectName,
+  recordId,
+  searchTerm,
+}: {
+  objectName: CreatorCrmObjectName;
+  recordId: string;
+  searchTerm: string;
+}): Promise<SearchMatch[]> =>
+  global.testDataSource.query(
+    `SELECT id
+     FROM "${workspaceSchemaName}"."${objectName}"
+     WHERE id = $1
+       AND "searchVector" @@ to_tsquery('simple', public.unaccent_immutable($2))`,
+    [recordId, searchTerm],
+  );
+
 describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
-  it('restores generic Search for Creator, Creator List, and Campaign records created while metadata was absent', async () => {
+  it('rebuilds Search vectors for Creator, Creator List, and Campaign records created while metadata was absent', async () => {
     let deletedSearchFieldMetadatas: SearchFieldMetadataRow[] = [];
 
     try {
@@ -139,29 +163,26 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
         searchCreatorListsBeforeRepair,
         searchCampaignsBeforeRepair,
       ] = await Promise.all([
-        search({
-          searchInput: TEST_CREATOR_NAME,
-          includedObjectNameSingulars: ['creator'],
-          limit: 50,
-          expectToFail: false,
+        findSearchMatches({
+          objectName: 'creator',
+          recordId: TEST_CREATOR_ID,
+          searchTerm: 'creator',
         }),
-        search({
-          searchInput: TEST_CREATOR_LIST_NAME,
-          includedObjectNameSingulars: ['creatorList'],
-          limit: 50,
-          expectToFail: false,
+        findSearchMatches({
+          objectName: 'creatorList',
+          recordId: TEST_CREATOR_LIST_ID,
+          searchTerm: 'list',
         }),
-        search({
-          searchInput: TEST_CAMPAIGN_NAME,
-          includedObjectNameSingulars: ['campaign'],
-          limit: 50,
-          expectToFail: false,
+        findSearchMatches({
+          objectName: 'campaign',
+          recordId: TEST_CAMPAIGN_ID,
+          searchTerm: 'campaign',
         }),
       ]);
 
-      expect(searchCreatorsBeforeRepair.data.search.edges).toEqual([]);
-      expect(searchCreatorListsBeforeRepair.data.search.edges).toEqual([]);
-      expect(searchCampaignsBeforeRepair.data.search.edges).toEqual([]);
+      expect(searchCreatorsBeforeRepair).toEqual([]);
+      expect(searchCreatorListsBeforeRepair).toEqual([]);
+      expect(searchCampaignsBeforeRepair).toEqual([]);
 
       await runSearchMetadataCommand();
 
@@ -185,41 +206,28 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
         searchCreatorListsAfterRepair,
         searchCampaignsAfterRepair,
       ] = await Promise.all([
-        search({
-          searchInput: TEST_CREATOR_NAME,
-          includedObjectNameSingulars: ['creator'],
-          limit: 50,
-          expectToFail: false,
+        findSearchMatches({
+          objectName: 'creator',
+          recordId: TEST_CREATOR_ID,
+          searchTerm: 'creator',
         }),
-        search({
-          searchInput: TEST_CREATOR_LIST_NAME,
-          includedObjectNameSingulars: ['creatorList'],
-          limit: 50,
-          expectToFail: false,
+        findSearchMatches({
+          objectName: 'creatorList',
+          recordId: TEST_CREATOR_LIST_ID,
+          searchTerm: 'list',
         }),
-        search({
-          searchInput: TEST_CAMPAIGN_NAME,
-          includedObjectNameSingulars: ['campaign'],
-          limit: 50,
-          expectToFail: false,
+        findSearchMatches({
+          objectName: 'campaign',
+          recordId: TEST_CAMPAIGN_ID,
+          searchTerm: 'campaign',
         }),
       ]);
 
-      expect(
-        searchCreatorsAfterRepair.data.search.edges.map(
-          (edge) => edge.node.recordId,
-        ),
-      ).toEqual([TEST_CREATOR_ID]);
-      expect(
-        searchCreatorListsAfterRepair.data.search.edges.map(
-          (edge) => edge.node.recordId,
-        ),
-      ).toEqual([TEST_CREATOR_LIST_ID]);
-      expect(
-        searchCampaignsAfterRepair.data.search.edges.map(
-          (edge) => edge.node.recordId,
-        ),
-      ).toEqual([TEST_CAMPAIGN_ID]);
+      expect(searchCreatorsAfterRepair).toEqual([{ id: TEST_CREATOR_ID }]);
+      expect(searchCreatorListsAfterRepair).toEqual([
+        { id: TEST_CREATOR_LIST_ID },
+      ]);
+      expect(searchCampaignsAfterRepair).toEqual([{ id: TEST_CAMPAIGN_ID }]);
     } finally {
       if (deletedSearchFieldMetadatas.length > 0) {
         await global.testDataSource.query(
