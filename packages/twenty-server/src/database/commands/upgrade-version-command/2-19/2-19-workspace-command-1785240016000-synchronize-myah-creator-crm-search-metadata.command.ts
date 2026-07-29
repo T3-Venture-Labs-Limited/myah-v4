@@ -119,5 +119,9 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
         `Failed to synchronize Creator CRM search metadata for workspace ${workspaceId}`,
       );
     }
+
+    await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+      'flatSearchFieldMetadataMaps',
+    ]);
   }
 }
