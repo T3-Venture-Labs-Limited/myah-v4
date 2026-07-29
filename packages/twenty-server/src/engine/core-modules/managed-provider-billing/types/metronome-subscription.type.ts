@@ -72,6 +72,7 @@ export type MetronomeInvoiceLine = {
 
 export type MetronomeInvoice = {
   contractId: string | null;
+  creditType: { id: string; name: string };
   customerId: string;
   endingBefore: string | null;
   externalInvoice: {

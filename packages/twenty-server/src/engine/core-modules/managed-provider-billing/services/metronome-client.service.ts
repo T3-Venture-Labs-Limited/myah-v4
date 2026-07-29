@@ -581,6 +581,10 @@ export class MetronomeClientService {
       hasNextPage: response.hasNextPage(),
       invoices: response.data.map((invoice) => ({
         contractId: invoice.contract_id ?? null,
+        creditType: {
+          id: invoice.credit_type.id,
+          name: invoice.credit_type.name,
+        },
         customerId: invoice.customer_id,
         endingBefore: invoice.end_timestamp ?? null,
         externalInvoice:

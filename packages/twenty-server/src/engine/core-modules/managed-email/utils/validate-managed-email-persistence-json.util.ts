@@ -146,7 +146,7 @@ const isStructuredJsonString = (value: string): boolean => {
 };
 
 const deepFreeze = <T>(value: T): T => {
-  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) {
+  if (typeof value !== 'object' || value === null) {
     return value;
   }
 
@@ -154,7 +154,7 @@ const deepFreeze = <T>(value: T): T => {
     deepFreeze(nestedValue);
   }
 
-  return Object.freeze(value);
+  return Object.isFrozen(value) ? value : Object.freeze(value);
 };
 
 const validateRequired = <T>(
