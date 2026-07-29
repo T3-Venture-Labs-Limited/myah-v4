@@ -4,10 +4,7 @@ import { promisify } from 'node:util';
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
-import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
-import { createManyOperationFactory } from 'test/integration/graphql/utils/create-many-operation-factory.util';
-import { deleteManyOperationFactory } from 'test/integration/graphql/utils/delete-many-operation-factory.util';
-import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { SEED_YCOMBINATOR_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 
 const TEST_CREATOR_LIST_ID = '20202020-2400-4000-8000-000000000001';
 const TEST_CAMPAIGN_ID = '20202020-2400-4000-8000-000000000002';
@@ -29,7 +26,9 @@ const CREATOR_CRM_SEARCH_FIELD_UNIVERSAL_IDENTIFIERS = [
 ];
 
 const execFileAsync = promisify(execFile);
-const workspaceSchemaName = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+const workspaceSchemaName = getWorkspaceSchemaName(
+  SEED_YCOMBINATOR_WORKSPACE_ID,
+);
 
 type SearchFieldMetadataRow = {
   id: string;
@@ -60,7 +59,7 @@ const runWorkspaceCommand = async (
       'dist/command/command.js',
       commandName,
       '--workspace-id',
-      SEED_APPLE_WORKSPACE_ID,
+      SEED_YCOMBINATOR_WORKSPACE_ID,
       ...additionalArgs,
     ],
     { cwd: process.cwd(), env: process.env },
@@ -96,6 +95,46 @@ const findSearchMatches = async ({
     [recordId, searchTerm],
   );
 
+const upsertCreatorCrmRecords = async () => {
+  await Promise.all([
+    global.testDataSource.query(
+      `INSERT INTO "${workspaceSchemaName}"."creator" (id, name)
+       VALUES ($1, $2)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
+      [TEST_CREATOR_ID, TEST_CREATOR_NAME],
+    ),
+    global.testDataSource.query(
+      `INSERT INTO "${workspaceSchemaName}"."creatorList" (id, name)
+       VALUES ($1, $2)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
+      [TEST_CREATOR_LIST_ID, TEST_CREATOR_LIST_NAME],
+    ),
+    global.testDataSource.query(
+      `INSERT INTO "${workspaceSchemaName}"."campaign" (id, name)
+       VALUES ($1, $2)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
+      [TEST_CAMPAIGN_ID, TEST_CAMPAIGN_NAME],
+    ),
+  ]);
+};
+
+const deleteCreatorCrmRecords = async () => {
+  await Promise.all([
+    global.testDataSource.query(
+      `DELETE FROM "${workspaceSchemaName}"."creator" WHERE id = $1`,
+      [TEST_CREATOR_ID],
+    ),
+    global.testDataSource.query(
+      `DELETE FROM "${workspaceSchemaName}"."creatorList" WHERE id = $1`,
+      [TEST_CREATOR_LIST_ID],
+    ),
+    global.testDataSource.query(
+      `DELETE FROM "${workspaceSchemaName}"."campaign" WHERE id = $1`,
+      [TEST_CAMPAIGN_ID],
+    ),
+  ]);
+};
+
 describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
   it('rebuilds Search vectors for Creator, Creator List, and Campaign records created while metadata was absent', async () => {
     let deletedSearchFieldMetadatas: SearchFieldMetadataRow[] = [];
@@ -120,7 +159,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
                      sfm."createdAt",
                      sfm."updatedAt"`,
         [
-          SEED_APPLE_WORKSPACE_ID,
+          SEED_YCOMBINATOR_WORKSPACE_ID,
           CREATOR_CRM_SEARCH_FIELD_UNIVERSAL_IDENTIFIERS,
         ],
       )) as [SearchFieldMetadataRow[], number];
@@ -129,34 +168,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
 
       await runFlatCacheInvalidateCommand();
       await runRecomputeSearchVectorsCommand();
-
-      await makeGraphqlAPIRequest(
-        createManyOperationFactory({
-          objectMetadataSingularName: 'creator',
-          objectMetadataPluralName: 'creators',
-          gqlFields: 'id',
-          data: [{ id: TEST_CREATOR_ID, name: TEST_CREATOR_NAME }],
-          upsert: true,
-        }),
-      );
-      await makeGraphqlAPIRequest(
-        createManyOperationFactory({
-          objectMetadataSingularName: 'creatorList',
-          objectMetadataPluralName: 'creatorLists',
-          gqlFields: 'id',
-          data: [{ id: TEST_CREATOR_LIST_ID, name: TEST_CREATOR_LIST_NAME }],
-          upsert: true,
-        }),
-      );
-      await makeGraphqlAPIRequest(
-        createManyOperationFactory({
-          objectMetadataSingularName: 'campaign',
-          objectMetadataPluralName: 'campaigns',
-          gqlFields: 'id',
-          data: [{ id: TEST_CAMPAIGN_ID, name: TEST_CAMPAIGN_NAME }],
-          upsert: true,
-        }),
-      );
+      await upsertCreatorCrmRecords();
 
       const [
         searchCreatorsBeforeRepair,
@@ -194,7 +206,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
            WHERE fm."workspaceId" = $1
              AND fm."universalIdentifier" = ANY($2::uuid[])`,
           [
-            SEED_APPLE_WORKSPACE_ID,
+            SEED_YCOMBINATOR_WORKSPACE_ID,
             CREATOR_CRM_SEARCH_FIELD_UNIVERSAL_IDENTIFIERS,
           ],
         );
@@ -237,7 +249,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
            AND fm."workspaceId" = $1
            AND fm."universalIdentifier" = ANY($2::uuid[])`,
           [
-            SEED_APPLE_WORKSPACE_ID,
+            SEED_YCOMBINATOR_WORKSPACE_ID,
             CREATOR_CRM_SEARCH_FIELD_UNIVERSAL_IDENTIFIERS,
           ],
         );
@@ -273,30 +285,7 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
         await runSearchMetadataCommand();
       }
 
-      await makeGraphqlAPIRequest(
-        deleteManyOperationFactory({
-          objectMetadataSingularName: 'creator',
-          objectMetadataPluralName: 'creators',
-          gqlFields: 'id',
-          filter: { id: { eq: TEST_CREATOR_ID } },
-        }),
-      );
-      await makeGraphqlAPIRequest(
-        deleteManyOperationFactory({
-          objectMetadataSingularName: 'creatorList',
-          objectMetadataPluralName: 'creatorLists',
-          gqlFields: 'id',
-          filter: { id: { eq: TEST_CREATOR_LIST_ID } },
-        }),
-      );
-      await makeGraphqlAPIRequest(
-        deleteManyOperationFactory({
-          objectMetadataSingularName: 'campaign',
-          objectMetadataPluralName: 'campaigns',
-          gqlFields: 'id',
-          filter: { id: { eq: TEST_CAMPAIGN_ID } },
-        }),
-      );
+      await deleteCreatorCrmRecords();
     }
   });
 });
