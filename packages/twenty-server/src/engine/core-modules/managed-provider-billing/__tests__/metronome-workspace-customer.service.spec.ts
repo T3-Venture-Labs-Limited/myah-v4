@@ -3,7 +3,6 @@ import { type Repository } from 'typeorm';
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
-import { ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
 
 import {
   MetronomeClientException,
@@ -36,7 +35,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
     installations,
     managedEmailEnabled = true,
     metronomeEnabled = true,
-    rateCard = { aliases: [], id: 'rate-card-id' },
+    rateCard = { aliases: [], fiatCreditType: null, id: 'rate-card-id' },
     updateAffected = 1,
     workspace = { displayName: 'Workspace', id: workspaceId },
   }: {
@@ -111,7 +110,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
       );
     }
     const twentyConfigService = {
-      get: jest.fn((key: keyof ConfigVariables) => {
+      get: jest.fn((key: Parameters<TwentyConfigService['get']>[0]) => {
         if (key === 'METRONOME_ENABLED') return metronomeEnabled;
         if (key === 'MANAGED_EMAIL_ENABLED') return managedEmailEnabled;
         if (key === 'METRONOME_RATE_CARD_ALIAS') return 'managed-provider';
@@ -119,7 +118,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
           return 'managed-email';
         if (key === 'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID')
           return 'managed-email-delivery-method';
-        throw new Error(`Unexpected config key: ${key}`);
+        throw new Error(`Unexpected config key: ${String(key)}`);
       }),
     } as Pick<TwentyConfigService, 'get'>;
 
@@ -420,6 +419,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
     const { metronomeClientService, service } = createService({
       contracts: [
         {
+          activeBillingProviderConfiguration: null,
           id: 'recovered-contract-id',
           rateCardId: 'rate-card-id',
           startingAt: '2026-07-16T12:00:00.000Z',
@@ -433,6 +433,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
         { metronomeCustomerId: 'metronome-customer-id', workspaceId },
       ],
       rateCard: {
+        fiatCreditType: null,
         aliases: [
           {
             endingBefore: null,
@@ -471,6 +472,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
     const { service } = createService({
       contracts: [
         {
+          activeBillingProviderConfiguration: null,
           id: 'recovered-contract-id',
           rateCardId: 'rate-card-id',
           startingAt: '2026-07-16T12:00:00.000Z',
@@ -484,6 +486,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
         { metronomeCustomerId: 'metronome-customer-id', workspaceId },
       ],
       rateCard: {
+        fiatCreditType: null,
         aliases: [
           {
             endingBefore,
@@ -515,12 +518,14 @@ describe('MetronomeWorkspaceCustomerService', () => {
       'multiple matching current contracts',
       [
         {
+          activeBillingProviderConfiguration: null,
           id: 'contract-id-1',
           rateCardId: 'rate-card-id',
           startingAt: '2026-07-16T12:00:00.000Z',
           uniquenessKey: `myah-workspace-contract:${workspaceId}`,
         },
         {
+          activeBillingProviderConfiguration: null,
           id: 'contract-id-2',
           rateCardId: 'rate-card-id',
           startingAt: '2026-07-16T12:00:00.000Z',
@@ -532,6 +537,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
       'a missing rate-card ID',
       [
         {
+          activeBillingProviderConfiguration: null,
           id: 'contract-id',
           rateCardId: null,
           startingAt: '2026-07-16T12:00:00.000Z',
@@ -564,6 +570,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
     const { service } = createService({
       contracts: [
         {
+          activeBillingProviderConfiguration: null,
           id: 'contract-id',
           rateCardId: 'expected-rate-card-id',
           startingAt: '2026-07-16T12:00:00.000Z',
@@ -577,6 +584,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
         { metronomeCustomerId: 'metronome-customer-id', workspaceId },
       ],
       rateCard: {
+        fiatCreditType: null,
         aliases: [
           {
             endingBefore: null,
