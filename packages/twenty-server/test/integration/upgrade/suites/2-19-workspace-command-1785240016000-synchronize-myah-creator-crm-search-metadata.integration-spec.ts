@@ -11,10 +11,15 @@ import { search } from 'test/integration/graphql/utils/search.util';
 
 const TEST_CREATOR_LIST_ID = '20202020-2400-4000-8000-000000000001';
 const TEST_CAMPAIGN_ID = '20202020-2400-4000-8000-000000000002';
+const TEST_CREATOR_ID = '20202020-2400-4000-8000-000000000003';
 const TEST_CREATOR_LIST_NAME = 'MYAH-240 searchable Creator List';
 const TEST_CAMPAIGN_NAME = 'MYAH-240 searchable Campaign';
+const TEST_CREATOR_NAME = 'MYAH-240 searchable Creator';
 const SEARCH_METADATA_COMMAND_NAME =
   'upgrade:2-19:synchronize-myah-creator-crm-search-metadata';
+const RECOMPUTE_SEARCH_VECTORS_COMMAND_NAME =
+  'upgrade:2-18:recompute-search-vectors';
+const FLAT_CACHE_INVALIDATE_COMMAND_NAME = 'cache:flat-cache-invalidate';
 
 const CREATOR_CRM_SEARCH_FIELD_UNIVERSAL_IDENTIFIERS = [
   MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
@@ -38,40 +43,37 @@ type SearchFieldMetadataRow = {
   updatedAt: Date;
 };
 
-const runSearchMetadataCommand = async () => {
+const runWorkspaceCommand = async (
+  commandName: string,
+  additionalArgs: string[] = [],
+) => {
   await execFileAsync(
     process.execPath,
     [
       'dist/command/command.js',
-      SEARCH_METADATA_COMMAND_NAME,
+      commandName,
       '--workspace-id',
       SEED_APPLE_WORKSPACE_ID,
+      ...additionalArgs,
     ],
     { cwd: process.cwd(), env: process.env },
   );
 };
 
-describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
-  it('restores generic Search for existing Creator List and Campaign records', async () => {
-    await makeGraphqlAPIRequest(
-      createManyOperationFactory({
-        objectMetadataSingularName: 'creatorList',
-        objectMetadataPluralName: 'creatorLists',
-        gqlFields: 'id',
-        data: [{ id: TEST_CREATOR_LIST_ID, name: TEST_CREATOR_LIST_NAME }],
-        upsert: true,
-      }),
-    );
-    await makeGraphqlAPIRequest(
-      createManyOperationFactory({
-        objectMetadataSingularName: 'campaign',
-        objectMetadataPluralName: 'campaigns',
-        gqlFields: 'id',
-        data: [{ id: TEST_CAMPAIGN_ID, name: TEST_CAMPAIGN_NAME }],
-        upsert: true,
-      }),
-    );
+const runSearchMetadataCommand = () =>
+  runWorkspaceCommand(SEARCH_METADATA_COMMAND_NAME);
 
+const runRecomputeSearchVectorsCommand = () =>
+  runWorkspaceCommand(RECOMPUTE_SEARCH_VECTORS_COMMAND_NAME);
+
+const runFlatCacheInvalidateCommand = () =>
+  runWorkspaceCommand(FLAT_CACHE_INVALIDATE_COMMAND_NAME, [
+    '--metadataName',
+    'searchFieldMetadata',
+  ]);
+
+describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
+  it('restores generic Search for Creator, Creator List, and Campaign records created while metadata was absent', async () => {
     let deletedSearchFieldMetadatas: SearchFieldMetadataRow[] = [];
 
     try {
@@ -101,6 +103,60 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
 
       expect(deletedSearchFieldMetadatas).toHaveLength(4);
 
+      await runFlatCacheInvalidateCommand();
+      await runRecomputeSearchVectorsCommand();
+
+      await makeGraphqlAPIRequest(
+        createManyOperationFactory({
+          objectMetadataSingularName: 'creator',
+          objectMetadataPluralName: 'creators',
+          gqlFields: 'id',
+          data: [{ id: TEST_CREATOR_ID, name: TEST_CREATOR_NAME }],
+          upsert: true,
+        }),
+      );
+      await makeGraphqlAPIRequest(
+        createManyOperationFactory({
+          objectMetadataSingularName: 'creatorList',
+          objectMetadataPluralName: 'creatorLists',
+          gqlFields: 'id',
+          data: [{ id: TEST_CREATOR_LIST_ID, name: TEST_CREATOR_LIST_NAME }],
+          upsert: true,
+        }),
+      );
+      await makeGraphqlAPIRequest(
+        createManyOperationFactory({
+          objectMetadataSingularName: 'campaign',
+          objectMetadataPluralName: 'campaigns',
+          gqlFields: 'id',
+          data: [{ id: TEST_CAMPAIGN_ID, name: TEST_CAMPAIGN_NAME }],
+          upsert: true,
+        }),
+      );
+
+      const searchCreatorsBeforeRepair = await search({
+        searchInput: TEST_CREATOR_NAME,
+        includedObjectNameSingulars: ['creator'],
+        limit: 50,
+        expectToFail: false,
+      });
+      const searchCreatorListsBeforeRepair = await search({
+        searchInput: TEST_CREATOR_LIST_NAME,
+        includedObjectNameSingulars: ['creatorList'],
+        limit: 50,
+        expectToFail: false,
+      });
+      const searchCampaignsBeforeRepair = await search({
+        searchInput: TEST_CAMPAIGN_NAME,
+        includedObjectNameSingulars: ['campaign'],
+        limit: 50,
+        expectToFail: false,
+      });
+
+      expect(searchCreatorsBeforeRepair.data.search.edges).toEqual([]);
+      expect(searchCreatorListsBeforeRepair.data.search.edges).toEqual([]);
+      expect(searchCampaignsBeforeRepair.data.search.edges).toEqual([]);
+
       await runSearchMetadataCommand();
 
       const restoredSearchFieldMetadatas: SearchFieldMetadataRow[] =
@@ -118,6 +174,12 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
 
       expect(restoredSearchFieldMetadatas).toHaveLength(4);
 
+      const searchCreatorsAfterRepair = await search({
+        searchInput: TEST_CREATOR_NAME,
+        includedObjectNameSingulars: ['creator'],
+        limit: 50,
+        expectToFail: false,
+      });
       const searchCreatorListsAfterRepair = await search({
         searchInput: TEST_CREATOR_LIST_NAME,
         includedObjectNameSingulars: ['creatorList'],
@@ -131,6 +193,11 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
         expectToFail: false,
       });
 
+      expect(
+        searchCreatorsAfterRepair.data.search.edges.map(
+          (edge) => edge.node.recordId,
+        ),
+      ).toEqual([TEST_CREATOR_ID]);
       expect(
         searchCreatorListsAfterRepair.data.search.edges.map(
           (edge) => edge.node.recordId,
@@ -186,6 +253,14 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand (integration)', () => {
         await runSearchMetadataCommand();
       }
 
+      await makeGraphqlAPIRequest(
+        deleteManyOperationFactory({
+          objectMetadataSingularName: 'creator',
+          objectMetadataPluralName: 'creators',
+          gqlFields: 'id',
+          filter: { id: { eq: TEST_CREATOR_ID } },
+        }),
+      );
       await makeGraphqlAPIRequest(
         deleteManyOperationFactory({
           objectMetadataSingularName: 'creatorList',

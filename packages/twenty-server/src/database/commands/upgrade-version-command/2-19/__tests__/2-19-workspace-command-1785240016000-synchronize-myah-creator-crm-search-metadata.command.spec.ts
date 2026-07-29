@@ -1,4 +1,5 @@
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -45,6 +46,25 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
       workspaceId: args.workspaceId,
       twentyStandardApplicationId,
     });
+  const creatorCrmObjectUniversalIdentifiers = new Set<string>([
+    MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+    MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+    MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+  ]);
+  const creatorCrmTsVectorFieldUniversalIdentifiers = Object.values(
+    standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps
+      .byUniversalIdentifier,
+  )
+    .filter(isDefined)
+    .filter(
+      ({ objectMetadataUniversalIdentifier, type }) =>
+        type === FieldMetadataType.TS_VECTOR &&
+        creatorCrmObjectUniversalIdentifiers.has(
+          objectMetadataUniversalIdentifier,
+        ),
+    )
+    .map(({ universalIdentifier }) => universalIdentifier)
+    .sort();
   const applicationService = {
     findWorkspaceTwentyStandardAndCustomApplicationOrThrow: jest
       .fn()
@@ -74,17 +94,22 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         flatSearchFieldMetadataMaps,
       }),
     };
+    const workspaceMigrationRunnerService = {
+      run: jest.fn().mockResolvedValue(undefined),
+    };
     const command = new commandModule!.SynchronizeMyahCreatorCrmSearchMetadataCommand(
       {} as WorkspaceIteratorService,
       applicationService,
       { validateBuildAndRunWorkspaceMigration },
       workspaceCacheService,
+      workspaceMigrationRunnerService,
     );
 
     return {
       command,
       validateBuildAndRunWorkspaceMigration,
       workspaceCacheService,
+      workspaceMigrationRunnerService,
     };
   };
   const buildExistingSearchFieldMetadataMaps = (
@@ -127,13 +152,8 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
 
     await command.runOnWorkspace(args);
 
-    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenNthCalledWith(
-      1,
-      args.workspaceId,
-      ['flatSearchFieldMetadataMaps'],
-    );
-    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenNthCalledWith(
-      2,
+    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledTimes(1);
+    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledWith(
       args.workspaceId,
       ['flatSearchFieldMetadataMaps'],
     );
@@ -161,6 +181,39 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
         expect.objectContaining({
           fieldMetadataUniversalIdentifier:
             MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
+        }),
+      ]),
+    );
+  });
+
+  it('rebuilds Creator CRM vectors after persisting missing search metadata', async () => {
+    const { command, workspaceMigrationRunnerService } = createCommand(
+      createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
+    );
+
+    await command.runOnWorkspace(args);
+
+    const rebuildActions =
+      workspaceMigrationRunnerService.run.mock.calls[0][0].workspaceMigration
+        .actions;
+
+    expect(rebuildActions).toHaveLength(
+      creatorCrmTsVectorFieldUniversalIdentifiers.length,
+    );
+    expect(
+      rebuildActions
+        .map(
+          ({ universalIdentifier }: { universalIdentifier: string }) =>
+            universalIdentifier,
+        )
+        .sort(),
+    ).toEqual(creatorCrmTsVectorFieldUniversalIdentifiers);
+    expect(rebuildActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadataName: 'fieldMetadata',
+          rebuildSearchVector: true,
+          update: { universalSettings: null },
         }),
       ]),
     );

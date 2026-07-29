@@ -1,5 +1,6 @@
 import { Command } from 'nest-commander';
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
@@ -10,6 +11,9 @@ import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/deco
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
+import { WorkspaceMigrationRunnerService } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/services/workspace-migration-runner.service';
+import { WORKSPACE_MIGRATION_ACTION_TYPE } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/constants/workspace-migration-action-type.constant';
+import type { UniversalUpdateFieldAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/field/types/workspace-migration-field-action';
 
 const IS_CREATOR_CRM_OBJECT_BY_UNIVERSAL_IDENTIFIER: Record<string, true> = {
   [MYAH_STANDARD_OBJECTS.creator.universalIdentifier]: true,
@@ -29,6 +33,7 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
     private readonly applicationService: ApplicationService,
     private readonly workspaceMigrationValidateBuildAndRunService: WorkspaceMigrationValidateBuildAndRunService,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly workspaceMigrationRunnerService: WorkspaceMigrationRunnerService,
   ) {
     super(workspaceIteratorService);
   }
@@ -120,8 +125,33 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
       );
     }
 
-    await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
-      'flatSearchFieldMetadataMaps',
-    ]);
+    const creatorCrmTsVectorFlatFieldMetadatas = Object.values(
+      flatFieldMetadataMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (flatFieldMetadata) =>
+          flatFieldMetadata.type === FieldMetadataType.TS_VECTOR &&
+          IS_CREATOR_CRM_OBJECT_BY_UNIVERSAL_IDENTIFIER[
+            flatFieldMetadata.objectMetadataUniversalIdentifier
+          ] === true,
+      );
+
+    await this.workspaceMigrationRunnerService.run({
+      workspaceMigration: {
+        applicationUniversalIdentifier:
+          twentyStandardFlatApplication.universalIdentifier,
+        actions: creatorCrmTsVectorFlatFieldMetadatas.map(
+          (flatFieldMetadata): UniversalUpdateFieldAction => ({
+            type: WORKSPACE_MIGRATION_ACTION_TYPE.update,
+            metadataName: 'fieldMetadata',
+            universalIdentifier: flatFieldMetadata.universalIdentifier,
+            update: { universalSettings: null },
+            rebuildSearchVector: true,
+          }),
+        ),
+      },
+      workspaceId,
+    });
   }
 }
