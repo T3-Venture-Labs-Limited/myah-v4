@@ -15,10 +15,13 @@ import { WorkspaceMigrationRunnerService } from 'src/engine/workspace-manager/wo
 import { WORKSPACE_MIGRATION_ACTION_TYPE } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/constants/workspace-migration-action-type.constant';
 import type { UniversalUpdateFieldAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/field/types/workspace-migration-field-action';
 
-const IS_CREATOR_CRM_OBJECT_BY_UNIVERSAL_IDENTIFIER: Record<string, true> = {
-  [MYAH_STANDARD_OBJECTS.creator.universalIdentifier]: true,
-  [MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier]: true,
-  [MYAH_STANDARD_OBJECTS.campaign.universalIdentifier]: true,
+const CREATOR_CRM_SEARCH_SOURCE_FIELD_UNIVERSAL_IDENTIFIER_BY_OBJECT_UNIVERSAL_IDENTIFIER: Record<string, string> = {
+  [MYAH_STANDARD_OBJECTS.creator.universalIdentifier]:
+    MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
+  [MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier]:
+    MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier,
+  [MYAH_STANDARD_OBJECTS.campaign.universalIdentifier]:
+    MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
 };
 
 @RegisteredWorkspaceCommand('2.19.0', 1785240016000)
@@ -92,9 +95,11 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
           objectMetadataUniversalIdentifier,
           fieldMetadataUniversalIdentifier,
         }) =>
-          IS_CREATOR_CRM_OBJECT_BY_UNIVERSAL_IDENTIFIER[
-            objectMetadataUniversalIdentifier
-          ] === true &&
+          isDefined(
+            CREATOR_CRM_SEARCH_SOURCE_FIELD_UNIVERSAL_IDENTIFIER_BY_OBJECT_UNIVERSAL_IDENTIFIER[
+              objectMetadataUniversalIdentifier
+            ],
+          ) &&
           !existingSearchFieldMetadataKeys.has(
             `${objectMetadataUniversalIdentifier}:${fieldMetadataUniversalIdentifier}`,
           ),
@@ -128,16 +133,20 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
     }
 
     const creatorCrmTsVectorFlatFieldMetadatas = Object.values(
-      flatFieldMetadataMaps.byUniversalIdentifier,
+      allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     )
       .filter(isDefined)
       .filter(
         (flatFieldMetadata) =>
           flatFieldMetadata.type === FieldMetadataType.TS_VECTOR &&
-          IS_CREATOR_CRM_OBJECT_BY_UNIVERSAL_IDENTIFIER[
-            flatFieldMetadata.objectMetadataUniversalIdentifier
-          ] === true,
-      );
+          isDefined(
+            flatFieldMetadataMaps.byUniversalIdentifier[
+              CREATOR_CRM_SEARCH_SOURCE_FIELD_UNIVERSAL_IDENTIFIER_BY_OBJECT_UNIVERSAL_IDENTIFIER[
+                flatFieldMetadata.objectMetadataUniversalIdentifier
+              ]
+            ],
+          ),
+      )
 
     await this.workspaceMigrationRunnerService.run({
       workspaceMigration: {

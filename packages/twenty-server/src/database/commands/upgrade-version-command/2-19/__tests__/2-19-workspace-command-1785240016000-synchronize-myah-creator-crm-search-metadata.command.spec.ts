@@ -207,10 +207,35 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     );
   });
 
-  it('rebuilds Creator CRM vectors after persisting missing search metadata', async () => {
+  it('rebuilds canonical Creator CRM vectors when cached maps omit TS vector fields', async () => {
     const { command, workspaceMigrationRunnerService } = createCommand(
       createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
-    );
+      {
+        ...createEmptyAllFlatEntityMaps().flatFieldMetadataMaps,
+        byUniversalIdentifier: {
+          [MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier]:
+            standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps
+              .byUniversalIdentifier[
+              MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier
+            ],
+          [MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier]:
+            standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps
+              .byUniversalIdentifier[
+              MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier
+            ],
+          [MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier]:
+            standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps
+              .byUniversalIdentifier[
+              MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier
+            ],
+          [MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier]:
+            standardApplicationAllFlatEntityMaps.flatFieldMetadataMaps
+              .byUniversalIdentifier[
+              MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier
+            ],
+        },
+      },
+    )
 
     await command.runOnWorkspace(args);
 
