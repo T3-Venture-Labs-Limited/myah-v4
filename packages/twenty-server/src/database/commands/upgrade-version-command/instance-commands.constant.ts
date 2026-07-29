@@ -112,6 +112,7 @@ import { PendingMigrationCheckFastInstanceCommand } from './2-19/2-19-instance-c
 
 import { CreateManagedProviderBillingFoundationFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784112963056-create-managed-provider-billing-foundation';
 import { RepairManagedProviderOperationRetentionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784488000000-repair-managed-provider-operation-retention';
+import { CreateManagedEmailFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1785323671025-create-managed-email';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -225,4 +226,5 @@ export const INSTANCE_COMMANDS = [
   CreateManagedProviderBillingFoundationFastInstanceCommand,
   EvolveInstagramApprovalToActionAuthorityFastInstanceCommand,
   FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand,
+  CreateManagedEmailFastInstanceCommand,
 ];
