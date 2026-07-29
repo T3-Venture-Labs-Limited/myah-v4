@@ -52,7 +52,8 @@ describe('ManagedEmailModule', () => {
       ManagedEmailModule,
     ) as Array<{ module?: unknown }>;
     const controllers =
-      Reflect.getMetadata(MODULE_METADATA.CONTROLLERS, ManagedEmailModule) ?? [];
+      Reflect.getMetadata(MODULE_METADATA.CONTROLLERS, ManagedEmailModule) ??
+      [];
     const exports = Reflect.getMetadata(
       MODULE_METADATA.EXPORTS,
       ManagedEmailModule,
@@ -67,10 +68,20 @@ describe('ManagedEmailModule', () => {
   });
 
   it('is registered and exported exactly once through MyahModule', () => {
-    const imports = Reflect.getMetadata(MODULE_METADATA.IMPORTS, MyahModule) as unknown[];
-    const exports = Reflect.getMetadata(MODULE_METADATA.EXPORTS, MyahModule) as unknown[];
+    const imports = Reflect.getMetadata(
+      MODULE_METADATA.IMPORTS,
+      MyahModule,
+    ) as unknown[];
+    const exports = Reflect.getMetadata(
+      MODULE_METADATA.EXPORTS,
+      MyahModule,
+    ) as unknown[];
 
-    expect(imports.filter((item) => item === ManagedEmailModule)).toHaveLength(1);
-    expect(exports.filter((item) => item === ManagedEmailModule)).toHaveLength(1);
+    expect(imports.filter((item) => item === ManagedEmailModule)).toHaveLength(
+      1,
+    );
+    expect(exports.filter((item) => item === ManagedEmailModule)).toHaveLength(
+      1,
+    );
   });
 });

@@ -43,9 +43,7 @@ import { ManagedEmailDomainEntity } from './managed-email-domain.entity';
 @Index('IDX_MANAGED_EMAIL_MAILBOX_INFRASTRUCTURE_PAID_THROUGH', [
   'infrastructurePaidThrough',
 ])
-@Index('IDX_MANAGED_EMAIL_MAILBOX_WARMUP_PAID_THROUGH', [
-  'warmupPaidThrough',
-])
+@Index('IDX_MANAGED_EMAIL_MAILBOX_WARMUP_PAID_THROUGH', ['warmupPaidThrough'])
 @Index('IDX_MANAGED_EMAIL_MAILBOX_LAST_HEALTH_EVALUATED', [
   'lastHealthEvaluatedAt',
 ])

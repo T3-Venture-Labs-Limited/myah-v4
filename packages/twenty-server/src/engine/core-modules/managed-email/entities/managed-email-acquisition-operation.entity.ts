@@ -122,9 +122,7 @@ export class ManagedEmailAcquisitionOperationEntity {
   paymentStatus: string | null;
 
   @Column({ nullable: true, type: 'jsonb' })
-  correlatedSubscriptionLines:
-    | ManagedEmailCorrelatedSubscriptionLine[]
-    | null;
+  correlatedSubscriptionLines: ManagedEmailCorrelatedSubscriptionLine[] | null;
 
   @Column({ nullable: true, type: 'text' })
   providerIntentHash: string | null;
