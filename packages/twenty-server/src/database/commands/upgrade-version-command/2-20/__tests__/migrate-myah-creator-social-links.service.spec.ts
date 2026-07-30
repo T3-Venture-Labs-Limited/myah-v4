@@ -24,12 +24,17 @@ const instagramColumns = [
   { columnName: 'instagramLinkSecondaryLinks' },
 ];
 
+type WorkspaceMigrationRunnerHarness = {
+  invalidateCache: jest.Mock;
+};
+
 type Harness = {
   service: MigrateMyahCreatorSocialLinksService;
   coreQuery: jest.Mock;
   workspaceQuery: jest.Mock;
   referenceQuery: jest.Mock;
   queryRunner: QueryRunner;
+  workspaceMigrationRunnerService: WorkspaceMigrationRunnerHarness;
 };
 
 const createHarness = (): Harness => {
@@ -58,13 +63,22 @@ const createHarness = (): Harness => {
     .mockResolvedValueOnce([{ count: '0' }])
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([{ count: '0' }]);
+  const workspaceMigrationRunnerService: WorkspaceMigrationRunnerHarness = {
+    invalidateCache: jest.fn().mockResolvedValue(undefined),
+  };
 
   return {
-    service: new MigrateMyahCreatorSocialLinksService(coreDataSource),
+    service: new (
+      MigrateMyahCreatorSocialLinksService as unknown as new (
+        coreDataSource: DataSource,
+        workspaceMigrationRunnerService: WorkspaceMigrationRunnerHarness,
+      ) => MigrateMyahCreatorSocialLinksService
+    )(coreDataSource, workspaceMigrationRunnerService),
     coreQuery,
     workspaceQuery,
     referenceQuery,
     queryRunner,
+    workspaceMigrationRunnerService,
   };
 };
 
@@ -110,6 +124,20 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
 
     expect(permissionCopySql).toContain('INSERT INTO core."fieldPermission"');
     expect(permissionCopySql).toContain('ON CONFLICT ("fieldMetadataId", "roleId") DO NOTHING');
+    expect(
+      harness.workspaceMigrationRunnerService.invalidateCache,
+    ).toHaveBeenCalledWith({
+      allFlatEntityMapsKeys: [
+        'flatFieldPermissionMaps',
+        'flatFieldMetadataMaps',
+        'flatObjectMetadataMaps',
+        'flatRoleMaps',
+        'flatViewFieldMaps',
+        'flatViewFilterMaps',
+        'flatViewSortMaps',
+      ],
+      workspaceId: WORKSPACE_ID,
+    });
   });
   it('materializes missing link companions when the replacement URL already matches old text', async () => {
     const harness = createHarness();
@@ -244,6 +272,39 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: false });
+
+    expect(
+      harness.workspaceMigrationRunnerService.invalidateCache,
+    ).toHaveBeenCalledWith({
+      allFlatEntityMapsKeys: [
+        'flatFieldPermissionMaps',
+        'flatFieldMetadataMaps',
+        'flatObjectMetadataMaps',
+        'flatRoleMaps',
+        'flatViewFieldMaps',
+        'flatViewFilterMaps',
+        'flatViewSortMaps',
+      ],
+      workspaceId: WORKSPACE_ID,
+    });
+  });
+
+  it('preserves successful migration results when cache invalidation fails', async () => {
+    const harness = createHarness();
+
+    harness.workspaceMigrationRunnerService.invalidateCache.mockRejectedValueOnce(
+      new Error('cache unavailable'),
+    );
+
+    await expect(
+      harness.service.migrate({
+        workspaceId: WORKSPACE_ID,
+        workspaceDataSource: {
+          query: harness.workspaceQuery,
+        } as unknown as DataSource,
+        dryRun: false,
+      }),
+    ).resolves.toEqual({ canDeleteOldFields: true });
   });
 
   it('does not enter reference cleanup when copying fails', async () => {
@@ -266,6 +327,57 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     ).rejects.toThrow('copy failed');
 
     expect(harness.referenceQuery).not.toHaveBeenCalled();
+  });
+
+  it('invalidates direct metadata caches after view-reference migration commits', async () => {
+    const harness = createHarness();
+
+    await harness.service.migrate({
+      workspaceId: WORKSPACE_ID,
+      workspaceDataSource: {
+        query: harness.workspaceQuery,
+      } as unknown as DataSource,
+      dryRun: false,
+    });
+
+    expect(
+      harness.workspaceMigrationRunnerService.invalidateCache.mock
+        .invocationCallOrder[0],
+    ).toBeGreaterThan(harness.referenceQuery.mock.invocationCallOrder[0]);
+  });
+
+  it('invalidates direct metadata caches when copying permissions fails', async () => {
+    const harness = createHarness();
+
+    harness.coreQuery
+      .mockReset()
+      .mockResolvedValueOnce(fieldMetadataRows)
+      .mockRejectedValueOnce(new Error('permission copy failed'));
+
+    await expect(
+      harness.service.migrate({
+        workspaceId: WORKSPACE_ID,
+        workspaceDataSource: {
+          query: harness.workspaceQuery,
+        } as unknown as DataSource,
+        dryRun: false,
+      }),
+    ).rejects.toThrow('permission copy failed');
+
+    expect(
+      harness.workspaceMigrationRunnerService.invalidateCache,
+    ).toHaveBeenCalledWith({
+      allFlatEntityMapsKeys: [
+        'flatFieldPermissionMaps',
+        'flatFieldMetadataMaps',
+        'flatObjectMetadataMaps',
+        'flatRoleMaps',
+        'flatViewFieldMaps',
+        'flatViewFilterMaps',
+        'flatViewSortMaps',
+      ],
+      workspaceId: WORKSPACE_ID,
+    });
   });
 
   it('is a no-op after obsolete workspace columns are gone', async () => {

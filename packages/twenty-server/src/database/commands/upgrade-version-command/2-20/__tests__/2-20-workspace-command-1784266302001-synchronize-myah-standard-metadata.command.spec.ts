@@ -4,6 +4,8 @@ import {
 } from 'twenty-shared/metadata';
 import type { DataSource } from 'typeorm';
 
+import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
+
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
@@ -248,45 +250,197 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     ).toBeUndefined();
   });
 
-  it('retains CRM metadata when no legacy Myah application is installed', async () => {
-    const { allFlatEntityMaps } =
-      computeTwentyStandardApplicationAllFlatEntityMaps({
-        workspaceId: WORKSPACE_ID,
-        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
-        now: '2026-07-15T00:00:00.000Z',
-      });
-    const templateObject =
-      allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
-        MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier
-      ] as unknown as TestFlatEntity;
-    const crmObject = {
-      ...templateObject,
-      id: '20202020-0000-0000-0000-000000000004',
-      universalIdentifier: STANDARD_OBJECTS.person.universalIdentifier,
-    };
-    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
-      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
-    ];
+  describe('with a bounded Creator slice', () => {
+    it('limits desired metadata to Creator while retaining CRM metadata without a legacy Myah application', async () => {
+      const { allFlatEntityMaps } =
+        computeTwentyStandardApplicationAllFlatEntityMaps({
+          workspaceId: WORKSPACE_ID,
+          twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+          now: '2026-07-15T00:00:00.000Z',
+        });
+      const templateObject =
+        allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+          MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier
+        ] as unknown as TestFlatEntity;
+      const crmObject = {
+        ...templateObject,
+        id: '20202020-0000-0000-0000-000000000004',
+        universalIdentifier: STANDARD_OBJECTS.person.universalIdentifier,
+      };
+      delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.creator.universalIdentifier
+      ];
 
-    getOrRecompute.mockResolvedValue({
-      ...allFlatEntityMaps,
-      flatObjectMetadataMaps: {
-        ...allFlatEntityMaps.flatObjectMetadataMaps,
-        byUniversalIdentifier: {
-          ...allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
-          [crmObject.universalIdentifier]: crmObject,
+      getOrRecompute.mockResolvedValue({
+        ...allFlatEntityMaps,
+        flatObjectMetadataMaps: {
+          ...allFlatEntityMaps.flatObjectMetadataMaps,
+          byUniversalIdentifier: {
+            ...allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
+            [crmObject.universalIdentifier]: crmObject,
+          },
         },
-      },
-      featureFlagsMap: {},
+        featureFlagsMap: {},
+      });
+
+      await command.synchronizeWorkspace(
+        {
+          workspaceId: WORKSPACE_ID,
+          options: { dryRun: false },
+          index: 0,
+          total: 1,
+        },
+        {
+          targetObjectUniversalIdentifiers: new Set([
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+          ]),
+        },
+      );
+
+      const objectMaps =
+        validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+          .fromToAllFlatEntityMaps.flatObjectMetadataMaps;
+
+      expect(
+        objectMaps.from.byUniversalIdentifier[
+          STANDARD_OBJECTS.person.universalIdentifier
+        ],
+      ).toBeUndefined();
+      expect(
+        objectMaps.to.byUniversalIdentifier[
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier
+        ],
+      ).toBeDefined();
+      expect(
+        objectMaps.to.byUniversalIdentifier[
+          MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier
+        ],
+      ).toBeUndefined();
+      expect(
+          Object.values(
+            validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+              .fromToAllFlatEntityMaps.flatObjectPermissionMaps.to
+              .byUniversalIdentifier,
+          ).every(
+            ({ objectMetadataUniversalIdentifier }) =>
+              objectMetadataUniversalIdentifier ===
+              MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+          ),
+        ).toBe(true);
+
+      const standardFields = Object.values(
+        allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+      ) as Array<{
+        universalIdentifier: string;
+        objectMetadataUniversalIdentifier: string;
+        relationTargetObjectMetadataUniversalIdentifier?: string | null;
+      }>;
+      const outboundCreatorRelation = standardFields.find(
+        (field) =>
+          field.objectMetadataUniversalIdentifier ===
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier &&
+          field.relationTargetObjectMetadataUniversalIdentifier !== null &&
+          field.relationTargetObjectMetadataUniversalIdentifier !== undefined &&
+          field.relationTargetObjectMetadataUniversalIdentifier !==
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+      );
+      const inboundCreatorRelation = standardFields.find(
+        (field) =>
+          field.objectMetadataUniversalIdentifier !==
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier &&
+          field.relationTargetObjectMetadataUniversalIdentifier ===
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+      );
+
+      if (!outboundCreatorRelation || !inboundCreatorRelation) {
+        throw new Error('Creator relation field fixtures are missing');
+      }
+
+      const desiredFields =
+        validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+          .fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+          .byUniversalIdentifier;
+      const desiredRoles =
+        validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+          .fromToAllFlatEntityMaps.flatRoleMaps.to.byUniversalIdentifier;
+
+      expect(
+        desiredFields[outboundCreatorRelation.universalIdentifier],
+      ).toBeUndefined();
+      expect(
+        desiredFields[inboundCreatorRelation.universalIdentifier],
+      ).toBeUndefined();
+      expect(
+        desiredRoles[STANDARD_ROLE.creatorOpsDefault.universalIdentifier],
+      ).toBeDefined();
+      expect(
+        desiredRoles[STANDARD_ROLE.brandBrainAdmin.universalIdentifier],
+      ).toBeUndefined();
+
+      const desiredCreator = objectMaps.to.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.creator.universalIdentifier
+      ] as { fieldUniversalIdentifiers: string[] };
+      const desiredCreatorOpsRole = desiredRoles[
+        STANDARD_ROLE.creatorOpsDefault.universalIdentifier
+      ] as {
+        objectPermissionUniversalIdentifiers: string[];
+        fieldPermissionUniversalIdentifiers: string[];
+      };
+      const desiredObjectPermissions =
+        validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+          .fromToAllFlatEntityMaps.flatObjectPermissionMaps.to
+          .byUniversalIdentifier;
+      const desiredFieldPermissions =
+        validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+          .fromToAllFlatEntityMaps.flatFieldPermissionMaps.to
+          .byUniversalIdentifier;
+
+      expect(
+        desiredCreator.fieldUniversalIdentifiers.every(
+          (fieldUniversalIdentifier) =>
+            desiredFields[fieldUniversalIdentifier] !== undefined,
+        ),
+      ).toBe(true);
+      expect(
+        desiredCreatorOpsRole.objectPermissionUniversalIdentifiers.every(
+          (permissionUniversalIdentifier) =>
+            desiredObjectPermissions[permissionUniversalIdentifier] !== undefined,
+        ),
+      ).toBe(true);
+      expect(
+        desiredCreatorOpsRole.fieldPermissionUniversalIdentifiers.every(
+          (permissionUniversalIdentifier) =>
+            desiredFieldPermissions[permissionUniversalIdentifier] !== undefined,
+        ),
+      ).toBe(true);
     });
 
-    await runOnWorkspace();
+    it('retains only roles referenced by the bounded Creator permission graph', async () => {
+      await command.synchronizeWorkspace(
+        {
+          workspaceId: WORKSPACE_ID,
+          options: { dryRun: false },
+          index: 0,
+          total: 1,
+        },
+        {
+          targetObjectUniversalIdentifiers: new Set([
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+          ]),
+        },
+      );
 
-    expect(
-      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
-        .fromToAllFlatEntityMaps.flatObjectMetadataMaps.from
-        .byUniversalIdentifier[STANDARD_OBJECTS.person.universalIdentifier],
-    ).toBeUndefined();
+      const desiredRoles =
+        validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+          .fromToAllFlatEntityMaps.flatRoleMaps.to.byUniversalIdentifier;
+
+      expect(
+        desiredRoles[STANDARD_ROLE.creatorOpsDefault.universalIdentifier],
+      ).toBeDefined();
+      expect(
+        desiredRoles[STANDARD_ROLE.brandBrainAdmin.universalIdentifier],
+      ).toBeUndefined();
+    });
   });
   it('includes obsolete CRM metadata only in the migration source', async () => {
     const { allFlatEntityMaps } =
@@ -497,7 +651,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     expect(incrementMetadataVersion).toHaveBeenCalledWith(WORKSPACE_ID);
   });
 
-  it('does not transfer ownership in dry-run mode', async () => {
+  it('does not transfer ownership in dry-run mode or when legacy cutover is disabled', async () => {
     findByUniversalIdentifier.mockResolvedValue({
       id: 'legacy-myah-application-id',
     });
@@ -506,6 +660,28 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     expect(createQueryRunner).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
+
+    jest.clearAllMocks();
+
+    await command.synchronizeWorkspace(
+      {
+        workspaceId: WORKSPACE_ID,
+        options: { dryRun: false },
+        index: 0,
+        total: 1,
+      },
+      {
+        targetObjectUniversalIdentifiers: new Set([
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+        ]),
+        migrateLegacyMyahApplication: false,
+      },
+    );
+
+    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(flush).not.toHaveBeenCalled();
+    expect(incrementMetadataVersion).not.toHaveBeenCalled();
   });
   it('does not persist ownership changes before a failed migration', async () => {
     const { allFlatEntityMaps } =

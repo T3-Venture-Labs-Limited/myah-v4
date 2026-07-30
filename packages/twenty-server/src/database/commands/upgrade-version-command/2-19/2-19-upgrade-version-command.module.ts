@@ -6,6 +6,8 @@ import { BackfillWorkspaceCustomApplicationRegistrationCommand } from 'src/datab
 import { BackfillSystemUniqueIndexUniversalIdentifierCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1783093620000-backfill-system-unique-index-universal-identifier.command';
 import { MigrateOpenRouterModelIdentitiesCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1784485121000-migrate-openrouter-model-identities.command';
 import { SynchronizeMyahCreatorCrmSearchMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016000-synchronize-myah-creator-crm-search-metadata.command';
+import { MigrateMyahCreatorImportMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785283200000-migrate-myah-creator-import-metadata.command';
+import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -28,12 +30,14 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     WorkspaceMetadataVersionModule,
     WorkspaceMigrationModule,
     WorkspaceMigrationRunnerModule,
+    V2_20_UpgradeVersionCommandModule,
   ],
   providers: [
     BackfillWorkspaceCustomApplicationRegistrationCommand,
     BackfillSystemUniqueIndexUniversalIdentifierCommand,
     MigrateOpenRouterModelIdentitiesCommand,
     SynchronizeMyahCreatorCrmSearchMetadataCommand,
+    MigrateMyahCreatorImportMetadataCommand,
   ],
 })
 export class V2_19_UpgradeVersionCommandModule {}
