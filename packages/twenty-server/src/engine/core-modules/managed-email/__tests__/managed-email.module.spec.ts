@@ -1,7 +1,15 @@
+import { type DynamicModule } from '@nestjs/common';
 import { MODULE_METADATA } from '@nestjs/common/constants';
-import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
+import { Test } from '@nestjs/testing';
+import {
+  getDataSourceToken,
+  getRepositoryToken,
+  TypeOrmModule,
+} from '@nestjs/typeorm';
 
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
+import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 
 import { ManagedEmailAcquisitionOperationEntity } from '../entities/managed-email-acquisition-operation.entity';
@@ -16,6 +24,29 @@ const ENTITIES = [
   ManagedEmailMailboxEntity,
   ManagedEmailAcquisitionOperationEntity,
 ];
+
+class ManagedEmailTestDependenciesModule {}
+
+const dependencyProviders = [
+  {
+    provide: getDataSourceToken(),
+    useValue: {
+      entityMetadatas: [],
+      getRepository: jest.fn(() => ({})),
+      options: { type: 'postgres' },
+    },
+  },
+  {
+    provide: TwentyConfigService,
+    useValue: { get: jest.fn() },
+  },
+];
+const testDependenciesModule: DynamicModule = {
+  exports: dependencyProviders,
+  global: true,
+  module: ManagedEmailTestDependenciesModule,
+  providers: dependencyProviders,
+};
 
 describe('ManagedEmailModule', () => {
   it('registers TypeORM and workspace-scoped repositories for all three records', () => {
@@ -68,8 +99,13 @@ describe('ManagedEmailModule', () => {
       getWorkspaceScopedRepositoryToken(entity),
     );
 
-    expect(imports).toHaveLength(1);
-    expect(imports[0]?.module).toBe(TypeOrmModule);
+    expect(imports).toHaveLength(2);
+    expect(imports).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ module: TypeOrmModule }),
+        SecureHttpClientModule,
+      ]),
+    );
     expect(controllers).toEqual([]);
     expect(providers.filter((item) => item === IcemailClient)).toHaveLength(1);
     expect(providers.filter((item) => item === WarmupInboxClient)).toHaveLength(
@@ -81,6 +117,17 @@ describe('ManagedEmailModule', () => {
       IcemailClient,
       WarmupInboxClient,
     ]);
+  });
+
+  it('constructs both provider clients through the production module graph', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [testDependenciesModule, ManagedEmailModule],
+    }).compile();
+
+    expect(moduleRef.get(IcemailClient)).toBeInstanceOf(IcemailClient);
+    expect(moduleRef.get(WarmupInboxClient)).toBeInstanceOf(WarmupInboxClient);
+
+    await moduleRef.close();
   });
 
   it('is registered and exported exactly once through MyahModule', () => {

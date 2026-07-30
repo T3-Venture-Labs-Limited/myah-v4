@@ -419,6 +419,47 @@ describe('IcemailClient', () => {
     );
   });
 
+  it('classifies a malformed successful order receipt as write-outcome uncertain', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.post.mockResolvedValue({
+      status: 201,
+      data: {
+        success: true,
+        data: [
+          {
+            import: false,
+            domain_id: 'domain-1',
+            domain_name: 'sender.com',
+            mailbox_type: 'GOOGLE',
+            mailboxes: [],
+          },
+        ],
+      },
+      headers: {},
+    });
+
+    await expectCode(
+      client.createOrdinaryOrder({
+        domains: [
+          {
+            domain: 'sender.com',
+            mailboxes: [
+              {
+                firstName: 'Ada',
+                lastName: 'Lovelace',
+                address: 'ada@sender.com',
+                password: mailboxSecret,
+              },
+            ],
+          },
+        ],
+      }),
+      IcemailExceptionCode.WRITE_OUTCOME_UNCERTAIN,
+    );
+    expect(httpClient.post).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects an ordinary order whose address does not belong to its domain', async () => {
     const { client, httpClient } = createClient();
 

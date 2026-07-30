@@ -12,6 +12,10 @@ import {
   type WarmupInboxSummary,
 } from './warmup-inbox.types';
 
+const MAX_WARMUP_INBOXES = 1_000;
+const MAX_WARMUP_BLACKLISTS = 200;
+const MAX_WARMUP_METRIC_TRENDS = 400;
+
 const malformed = (): never => {
   throw new WarmupInboxException(WarmupInboxExceptionCode.MALFORMED_RESPONSE);
 };
@@ -24,8 +28,8 @@ const asRecord = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
-const asArray = (value: unknown): unknown[] => {
-  if (!Array.isArray(value)) return malformed();
+const asArray = (value: unknown, maximum: number): unknown[] => {
+  if (!Array.isArray(value) || value.length > maximum) return malformed();
 
   return value;
 };
@@ -193,7 +197,9 @@ const mapSummaryRecord = (
 export const mapWarmupInboxList = (value: unknown): WarmupInboxSummary[] => {
   const data = asRecord(value);
 
-  return asArray(data.items).map((item) => mapSummaryRecord(asRecord(item)));
+  return asArray(data.items, MAX_WARMUP_INBOXES).map((item) =>
+    mapSummaryRecord(asRecord(item)),
+  );
 };
 
 export const mapWarmupInboxCapacity = (value: unknown): WarmupInboxCapacity => {
@@ -226,7 +232,10 @@ export const mapWarmupInboxDetail = (value: unknown): WarmupInboxDetail => {
   const dmarc = asRecord(healthCheck.dmarc);
   const domainBlacklists = asRecord(healthCheck.domain_blacklists);
   const warmupDays = asRecord(healthCheck.warmup_days);
-  const blacklists = asArray(domainBlacklists.blacklists);
+  const blacklists = asArray(
+    domainBlacklists.blacklists,
+    MAX_WARMUP_BLACKLISTS,
+  );
   let detectedBlacklists = 0;
 
   for (const blacklistValue of blacklists) {
@@ -279,16 +288,18 @@ export const mapWarmupInboxMetrics = (value: unknown): WarmupInboxMetrics => {
       landedCategory: asCount(landedCategory.value),
       repliesReceived: asCount(main.replies_received),
     },
-    trend: asArray(data.schedule_metrics).map((trendValue) => {
-      const trend = asRecord(trendValue);
-      return {
-        date: asScheduleDate(trend.date),
-        queued: asCount(trend.queued),
-        landedInbox: asCount(trend.inbox),
-        landedCategory: asCount(trend.category),
-        landedSpam: asCount(trend.spam),
-        repliesReceived: asCount(trend.replies_received),
-      };
-    }),
+    trend: asArray(data.schedule_metrics, MAX_WARMUP_METRIC_TRENDS).map(
+      (trendValue) => {
+        const trend = asRecord(trendValue);
+        return {
+          date: asScheduleDate(trend.date),
+          queued: asCount(trend.queued),
+          landedInbox: asCount(trend.inbox),
+          landedCategory: asCount(trend.category),
+          landedSpam: asCount(trend.spam),
+          repliesReceived: asCount(trend.replies_received),
+        };
+      },
+    ),
   };
 };
