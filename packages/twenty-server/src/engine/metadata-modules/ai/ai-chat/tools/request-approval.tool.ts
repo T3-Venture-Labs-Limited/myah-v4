@@ -169,9 +169,10 @@ export const createRequestApprovalTool = (
 ) => ({
   description:
     'Ask the user to approve, reject, or request changes before a consequential side effect. ' +
-    'Use this before external writes, public posts, outbound email, destructive changes, ' +
-    'financial actions, or sensitive internal record writes. Do NOT use it for read-only ' +
-    'lookups or trivial actions. For a prepared Instagram reply, provide only its draft ID as the registered action input. ' +
+    'Generic tools that create, update, or delete CRM records, workflows, or metadata require this approval unless a domain-specific procedure explicitly identifies them as pre-approval safe. ' +
+    '\`prepare_instagram_reply_draft\` is pre-approval safe: it persists only local review state (the verified inbound message, conversation, and draft) and cannot send externally; the later \`send_instagram_reply\` still requires registered approval. ' +
+    'Use this tool before external writes, public posts, outbound email, destructive changes, or financial actions. ' +
+    'Do not use it for read-only lookups. For a prepared Instagram reply, provide only its draft ID as the registered action input. ' +
     'Approval is not execution: after approval, call the real action tool through the normal tool pipeline. ' +
     'If rejected, stop or ask for a safer alternative. Call at most one human-input tool in a single turn.',
   inputSchema: requestApprovalInputSchema,
