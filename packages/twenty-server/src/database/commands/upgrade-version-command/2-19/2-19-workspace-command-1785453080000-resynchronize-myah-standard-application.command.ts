@@ -8,7 +8,7 @@ import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/deco
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { TwentyStandardApplicationService } from 'src/engine/workspace-manager/twenty-standard-application/services/twenty-standard-application.service';
 
-@RegisteredWorkspaceCommand('2.19.0', 1810000010000)
+@RegisteredWorkspaceCommand('2.19.0', 1785453080000)
 @Command({
   name: 'upgrade:2-19:resynchronize-myah-standard-application',
   description:

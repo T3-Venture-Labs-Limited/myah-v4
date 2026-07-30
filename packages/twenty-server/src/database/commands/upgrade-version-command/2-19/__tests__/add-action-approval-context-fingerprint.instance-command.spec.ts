@@ -1,6 +1,6 @@
 import { type QueryRunner } from 'typeorm';
 
-import { AddActionApprovalContextFingerprintFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1785085300000-add-action-approval-context-fingerprint';
+import { AddActionApprovalContextFingerprintFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1785453079000-add-action-approval-context-fingerprint';
 
 describe('AddActionApprovalContextFingerprintFastInstanceCommand', () => {
   let command: AddActionApprovalContextFingerprintFastInstanceCommand;

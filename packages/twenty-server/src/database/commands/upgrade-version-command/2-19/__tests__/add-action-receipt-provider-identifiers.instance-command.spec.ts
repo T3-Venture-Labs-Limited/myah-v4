@@ -1,6 +1,6 @@
 import { type QueryRunner } from 'typeorm';
 
-import { AddActionReceiptProviderIdentifiersFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1810000011000-add-action-receipt-provider-identifiers';
+import { AddActionReceiptProviderIdentifiersFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1785453081000-add-action-receipt-provider-identifiers';
 
 describe('AddActionReceiptProviderIdentifiersFastInstanceCommand', () => {
   let command: AddActionReceiptProviderIdentifiersFastInstanceCommand;
