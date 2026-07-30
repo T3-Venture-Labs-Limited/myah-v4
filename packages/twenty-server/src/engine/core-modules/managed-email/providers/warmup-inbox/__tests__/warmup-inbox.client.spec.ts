@@ -379,6 +379,35 @@ describe('WarmupInboxClient', () => {
     },
   );
 
+  it('preserves uncertainty when a malformed successful create cannot reconcile', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.post.mockResolvedValue({
+      status: 201,
+      data: { code: 'created' },
+      headers: {},
+    });
+    httpClient.get.mockRejectedValue(axiosFailure(500));
+
+    await expectCode(
+      client.createAdvanced({
+        address: 'ada@sender.com',
+        senderFirstName: 'Ada',
+        senderLastName: 'Lovelace',
+        credential: {
+          username: 'ada@sender.com',
+          appPassword: mailboxSecret,
+          smtp: { host: 'smtp.gmail.com', port: 465, secure: true },
+          imap: { host: 'imap.gmail.com', port: 993, secure: true },
+        },
+        policy,
+      }),
+      WarmupInboxExceptionCode.WRITE_OUTCOME_UNCERTAIN,
+    );
+    expect(httpClient.post).toHaveBeenCalledTimes(1);
+    expect(httpClient.get).toHaveBeenCalledTimes(1);
+  });
+
   it('maps customer-safe detail and returns null after delete', async () => {
     const { client, httpClient } = createClient();
 
@@ -421,6 +450,34 @@ describe('WarmupInboxClient', () => {
 
     httpClient.get.mockRejectedValueOnce(axiosFailure(404));
     await expect(client.getInbox('inbox-1')).resolves.toBeNull();
+  });
+
+  it('rejects oversized blacklist evidence before mapping health detail', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        ...detailFixture,
+        health_check: {
+          ...detailFixture.health_check,
+          domain_blacklists: {
+            ...detailFixture.health_check.domain_blacklists,
+            blacklists: Array.from({ length: 201 }, () => ({
+              name: 'Bounded list',
+              url: 'https://list.test',
+              detected: false,
+            })),
+          },
+        },
+      },
+      headers: {},
+    });
+
+    await expectCode(
+      client.getInbox('inbox-1'),
+      WarmupInboxExceptionCode.MALFORMED_RESPONSE,
+    );
   });
 
   it('patches only the Myah-owned policy and omits its version', async () => {
@@ -533,6 +590,79 @@ describe('WarmupInboxClient', () => {
     ).resolves.toBeNull();
   });
 
+  it('normalizes metric ranges to the provider whole-second precision', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        inbox_id: 'inbox-1',
+        start_time: 1_782_864_000,
+        end_time: 1_782_950_400,
+        main_metrics: {
+          total_count: 0,
+          sent: 0,
+          landed_inbox: { value: 0, percent: '0%' },
+          landed_spam: { value: 0, percent: '0%' },
+          landed_category: { value: 0, percent: '0%' },
+          replies_received: 0,
+        },
+        schedule_metrics: [],
+      },
+      headers: {},
+    });
+
+    await expect(
+      client.getMetrics('inbox-1', {
+        from: new Date('2026-07-01T00:00:00.999Z'),
+        to: new Date('2026-07-02T00:00:00.999Z'),
+      }),
+    ).resolves.toMatchObject({
+      from: new Date('2026-07-01T00:00:00.000Z'),
+      to: new Date('2026-07-02T00:00:00.000Z'),
+    });
+    expect(httpClient.get).toHaveBeenCalledWith('/v1/inboxes/inbox-1/metrics', {
+      params: { from: 1_782_864_000, to: 1_782_950_400 },
+    });
+  });
+
+  it('rejects oversized metric trends before mapping rows', async () => {
+    const { client, httpClient } = createClient();
+    const from = new Date('2026-07-01T00:00:00.000Z');
+    const to = new Date('2026-07-02T00:00:00.000Z');
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        inbox_id: 'inbox-1',
+        start_time: 1_782_864_000,
+        end_time: 1_782_950_400,
+        main_metrics: {
+          total_count: 0,
+          sent: 0,
+          landed_inbox: { value: 0, percent: '0%' },
+          landed_spam: { value: 0, percent: '0%' },
+          landed_category: { value: 0, percent: '0%' },
+          replies_received: 0,
+        },
+        schedule_metrics: Array.from({ length: 401 }, () => ({
+          date: 'Jul 01, 2026',
+          queued: 0,
+          inbox: 0,
+          category: 0,
+          spam: 0,
+          replies_received: 0,
+        })),
+      },
+      headers: {},
+    });
+
+    await expectCode(
+      client.getMetrics('inbox-1', { from, to }),
+      WarmupInboxExceptionCode.MALFORMED_RESPONSE,
+    );
+  });
+
   it('rejects invalid metric ranges before the provider call', async () => {
     const { client, httpClient } = createClient();
 
@@ -563,6 +693,26 @@ describe('WarmupInboxClient', () => {
     httpClient.get.mockResolvedValue({
       status: 200,
       data: { items: [{ ...summaryFixture, status: 'unknown' }] },
+      headers: {},
+    });
+
+    await expectCode(
+      client.listInboxes(),
+      WarmupInboxExceptionCode.MALFORMED_RESPONSE,
+    );
+  });
+
+  it('rejects oversized inbox collections before reconciliation mapping', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        items: Array.from({ length: 1_001 }, (_, index) => ({
+          ...summaryFixture,
+          inbox_id: `inbox-${index}`,
+        })),
+      },
       headers: {},
     });
 

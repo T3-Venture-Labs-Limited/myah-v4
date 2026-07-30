@@ -215,12 +215,19 @@ export class WarmupInboxClient {
       throw new WarmupInboxException(WarmupInboxExceptionCode.INVALID_INPUT);
     }
 
+    const fromSeconds = Math.floor(range.from.getTime() / 1_000);
+    const toSeconds = Math.floor(range.to.getTime() / 1_000);
+
+    if (fromSeconds >= toSeconds) {
+      throw new WarmupInboxException(WarmupInboxExceptionCode.INVALID_INPUT);
+    }
+
     return this.executeRead(
       (client) =>
         client.get(`/v1/inboxes/${encodeURIComponent(inboxId)}/metrics`, {
           params: {
-            from: Math.floor(range.from.getTime() / 1_000),
-            to: Math.floor(range.to.getTime() / 1_000),
+            from: fromSeconds,
+            to: toSeconds,
           },
         }),
       (value) => {
@@ -228,8 +235,8 @@ export class WarmupInboxClient {
 
         if (
           metrics.inboxId !== inboxId ||
-          metrics.from.getTime() !== range.from.getTime() ||
-          metrics.to.getTime() !== range.to.getTime()
+          metrics.from.getTime() !== fromSeconds * 1_000 ||
+          metrics.to.getTime() !== toSeconds * 1_000
         ) {
           throw new WarmupInboxException(
             WarmupInboxExceptionCode.MALFORMED_RESPONSE,
@@ -284,16 +291,10 @@ export class WarmupInboxClient {
     map: (value: unknown) => T,
     replayStatuses: number[] = [],
   ): Promise<T> {
+    let response: AxiosResponse<unknown>;
+
     try {
-      const response = await operation(this.createHttpClient(true));
-
-      if (response.status !== expectedStatus) {
-        throw new WarmupInboxException(
-          WarmupInboxExceptionCode.WRITE_OUTCOME_UNCERTAIN,
-        );
-      }
-
-      return map(response.data);
+      response = await operation(this.createHttpClient(true));
     } catch (error) {
       if (error instanceof WarmupInboxException) throw error;
 
@@ -321,6 +322,20 @@ export class WarmupInboxClient {
       }
 
       throw new WarmupInboxException(WarmupInboxExceptionCode.REQUEST_FAILED);
+    }
+
+    if (response.status !== expectedStatus) {
+      throw new WarmupInboxException(
+        WarmupInboxExceptionCode.WRITE_OUTCOME_UNCERTAIN,
+      );
+    }
+
+    try {
+      return map(response.data);
+    } catch {
+      throw new WarmupInboxException(
+        WarmupInboxExceptionCode.WRITE_OUTCOME_UNCERTAIN,
+      );
     }
   }
 

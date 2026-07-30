@@ -261,10 +261,10 @@ export class IcemailClient {
     operation: (client: AxiosInstance) => Promise<AxiosResponse<unknown>>,
     map: (value: unknown) => T,
   ): Promise<T> {
-    try {
-      const response = await operation(this.createHttpClient(true));
+    let response: AxiosResponse<unknown>;
 
-      return map(response.data);
+    try {
+      response = await operation(this.createHttpClient(true));
     } catch (error) {
       if (error instanceof IcemailException) throw error;
 
@@ -292,6 +292,12 @@ export class IcemailClient {
       }
 
       throw new IcemailException(IcemailExceptionCode.REQUEST_FAILED);
+    }
+
+    try {
+      return map(response.data);
+    } catch {
+      throw new IcemailException(IcemailExceptionCode.WRITE_OUTCOME_UNCERTAIN);
     }
   }
 
