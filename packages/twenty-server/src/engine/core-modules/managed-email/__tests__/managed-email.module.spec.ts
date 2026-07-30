@@ -8,6 +8,8 @@ import { ManagedEmailAcquisitionOperationEntity } from '../entities/managed-emai
 import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
 import { ManagedEmailModule } from '../managed-email.module';
+import { IcemailClient } from '../providers/icemail/icemail.client';
+import { WarmupInboxClient } from '../providers/warmup-inbox/warmup-inbox.client';
 
 const ENTITIES = [
   ManagedEmailDomainEntity,
@@ -46,11 +48,15 @@ describe('ManagedEmailModule', () => {
     }
   });
 
-  it('has no speculative imports, controllers, or services', () => {
+  it('registers and exports only repositories and concrete provider clients', () => {
     const imports = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,
       ManagedEmailModule,
     ) as Array<{ module?: unknown }>;
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      ManagedEmailModule,
+    ) as unknown[];
     const controllers =
       Reflect.getMetadata(MODULE_METADATA.CONTROLLERS, ManagedEmailModule) ??
       [];
@@ -58,13 +64,23 @@ describe('ManagedEmailModule', () => {
       MODULE_METADATA.EXPORTS,
       ManagedEmailModule,
     ) as unknown[];
+    const repositoryTokens = ENTITIES.map((entity) =>
+      getWorkspaceScopedRepositoryToken(entity),
+    );
 
     expect(imports).toHaveLength(1);
     expect(imports[0]?.module).toBe(TypeOrmModule);
     expect(controllers).toEqual([]);
-    expect(exports).toEqual(
-      ENTITIES.map((entity) => getWorkspaceScopedRepositoryToken(entity)),
+    expect(providers.filter((item) => item === IcemailClient)).toHaveLength(1);
+    expect(providers.filter((item) => item === WarmupInboxClient)).toHaveLength(
+      1,
     );
+    expect(providers).toHaveLength(repositoryTokens.length + 2);
+    expect(exports).toEqual([
+      ...repositoryTokens,
+      IcemailClient,
+      WarmupInboxClient,
+    ]);
   });
 
   it('is registered and exported exactly once through MyahModule', () => {
