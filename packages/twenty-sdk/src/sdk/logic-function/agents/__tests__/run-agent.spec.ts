@@ -40,6 +40,7 @@ describe('runAgent', () => {
 
     const result = await runAgent({
       agentUniversalIdentifier: 'agent-uid',
+      operationId: 'operation-1',
       prompt: 'Enrich record 123',
     });
 
@@ -63,6 +64,7 @@ describe('runAgent', () => {
     expect(sentBody.variables).toEqual({
       input: {
         agentUniversalIdentifier: 'agent-uid',
+        operationId: 'operation-1',
         prompt: 'Enrich record 123',
       },
     });
@@ -77,7 +79,11 @@ describe('runAgent', () => {
     );
 
     await expect(
-      runAgent({ agentUniversalIdentifier: 'a', prompt: 'p' }),
+      runAgent({
+        agentUniversalIdentifier: 'a',
+        operationId: 'o',
+        prompt: 'p',
+      }),
     ).rejects.toThrow(/Agent not found/);
   });
 
@@ -87,7 +93,11 @@ describe('runAgent', () => {
     );
 
     await expect(
-      runAgent({ agentUniversalIdentifier: 'a', prompt: 'p' }),
+      runAgent({
+        agentUniversalIdentifier: 'a',
+        operationId: 'o',
+        prompt: 'p',
+      }),
     ).rejects.toThrow(/HTTP 500/);
   });
 
@@ -95,7 +105,11 @@ describe('runAgent', () => {
     delete process.env.TWENTY_API_URL;
 
     await expect(
-      runAgent({ agentUniversalIdentifier: 'a', prompt: 'p' }),
+      runAgent({
+        agentUniversalIdentifier: 'a',
+        operationId: 'o',
+        prompt: 'p',
+      }),
     ).rejects.toThrow(/requires the app runtime env vars/);
 
     expect(fetchSpy).not.toHaveBeenCalled();

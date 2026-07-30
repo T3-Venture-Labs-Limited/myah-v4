@@ -3,5 +3,6 @@ export enum ModelFamily {
   CLAUDE = 'CLAUDE',
   GEMINI = 'GEMINI',
   MISTRAL = 'MISTRAL',
+  DEEPSEEK = 'DEEPSEEK',
   GROK = 'GROK',
 }

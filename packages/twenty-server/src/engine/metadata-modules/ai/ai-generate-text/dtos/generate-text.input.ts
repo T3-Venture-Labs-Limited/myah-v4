@@ -8,6 +8,9 @@ export class GenerateTextInput {
   @IsString()
   @IsNotEmpty()
   userPrompt: string;
+  @IsString()
+  @IsNotEmpty()
+  operationId: string;
 
   @IsString()
   @IsOptional()

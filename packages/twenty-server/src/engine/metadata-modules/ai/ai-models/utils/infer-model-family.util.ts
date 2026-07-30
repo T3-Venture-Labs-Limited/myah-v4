@@ -16,6 +16,7 @@ const MODEL_ID_FAMILY_PATTERNS: [RegExp, ModelFamily][] = [
   [/gpt|o[134]-|chatgpt/i, ModelFamily.GPT],
   [/gemini/i, ModelFamily.GEMINI],
   [/mistral|mixtral|pixtral/i, ModelFamily.MISTRAL],
+  [/deepseek/i, ModelFamily.DEEPSEEK],
   [/grok/i, ModelFamily.GROK],
 ];
 

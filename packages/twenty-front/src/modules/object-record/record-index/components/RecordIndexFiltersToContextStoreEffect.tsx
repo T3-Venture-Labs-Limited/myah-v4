@@ -10,7 +10,7 @@ import {
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
 import { type RecordFilterGroup } from '@/object-record/record-filter-group/types/RecordFilterGroup';
 import { anyFieldFilterValueComponentState } from '@/object-record/record-filter/states/anyFieldFilterValueComponentState';
-import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
+import { useEffectiveRecordFilters } from '@/object-record/record-filter/hooks/useEffectiveRecordFilters';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { hasUserSelectedAllRowsComponentState } from '@/object-record/record-table/record-table-row/states/hasUserSelectedAllRowsFamilyState';
@@ -27,10 +27,7 @@ export const RecordIndexFiltersToContextStoreEffect = () => {
 
   const store = useStore();
 
-  const currentRecordFilters = useAtomComponentStateValue(
-    currentRecordFiltersComponentState,
-    recordIndexId,
-  );
+  const effectiveRecordFilters = useEffectiveRecordFilters(recordIndexId);
 
   const currentRecordFilterGroups = useAtomComponentStateValue(
     currentRecordFilterGroupsComponentState,
@@ -170,7 +167,7 @@ export const RecordIndexFiltersToContextStoreEffect = () => {
 
   useEffect(() => {
     store.set(syncWriteAtom, {
-      filters: currentRecordFilters,
+      filters: effectiveRecordFilters,
       filterGroups: currentRecordFilterGroups,
       anyFieldFilterValue,
     });
@@ -179,7 +176,7 @@ export const RecordIndexFiltersToContextStoreEffect = () => {
       store.set(resetWriteAtom);
     };
   }, [
-    currentRecordFilters,
+    effectiveRecordFilters,
     currentRecordFilterGroups,
     anyFieldFilterValue,
     store,

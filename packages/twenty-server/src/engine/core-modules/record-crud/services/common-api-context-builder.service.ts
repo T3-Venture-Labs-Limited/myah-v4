@@ -11,6 +11,7 @@ import { isApiKeyAuthContext } from 'src/engine/core-modules/auth/guards/is-api-
 import { isApplicationAuthContext } from 'src/engine/core-modules/auth/guards/is-application-auth-context.guard';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { computePermissionIntersection } from 'src/engine/twenty-orm/utils/compute-permission-intersection.util';
 import {
   RecordCrudException,
   RecordCrudExceptionCode,
@@ -121,18 +122,37 @@ export class CommonApiContextBuilderService {
     authContext: WorkspaceAuthContext,
   ): Promise<ObjectsPermissions> {
     const workspaceId = authContext.workspace.id;
-    let roleId: string;
+    let roleIds: string[];
 
     if (isApiKeyAuthContext(authContext)) {
-      roleId = await this.apiKeyRoleService.getRoleIdForApiKeyId(
-        authContext.apiKey.id,
-        workspaceId,
-      );
+      roleIds = [
+        await this.apiKeyRoleService.getRoleIdForApiKeyId(
+          authContext.apiKey.id,
+          workspaceId,
+        ),
+      ];
     } else if (
       isApplicationAuthContext(authContext) &&
       isDefined(authContext.application.defaultRoleId)
     ) {
-      roleId = authContext.application.defaultRoleId;
+      roleIds = [authContext.application.defaultRoleId];
+
+      if (isDefined(authContext.userWorkspaceId)) {
+        const userWorkspaceRoleId =
+          await this.userRoleService.getRoleIdForUserWorkspace({
+            userWorkspaceId: authContext.userWorkspaceId,
+            workspaceId,
+          });
+
+        if (!isDefined(userWorkspaceRoleId)) {
+          throw new RecordCrudException(
+            'No role found for user workspace',
+            RecordCrudExceptionCode.INVALID_REQUEST,
+          );
+        }
+
+        roleIds.push(userWorkspaceRoleId);
+      }
     } else if (isUserAuthContext(authContext)) {
       const userWorkspaceRoleId =
         await this.userRoleService.getRoleIdForUserWorkspace({
@@ -147,7 +167,7 @@ export class CommonApiContextBuilderService {
         );
       }
 
-      roleId = userWorkspaceRoleId;
+      roleIds = [userWorkspaceRoleId];
     } else {
       throw new RecordCrudException(
         'Invalid auth context - no authentication mechanism found',
@@ -160,6 +180,8 @@ export class CommonApiContextBuilderService {
         'rolesPermissions',
       ]);
 
-    return rolesPermissions[roleId] ?? {};
+    return computePermissionIntersection(
+      roleIds.map((roleId) => rolesPermissions[roleId] ?? {}),
+    );
   }
 }

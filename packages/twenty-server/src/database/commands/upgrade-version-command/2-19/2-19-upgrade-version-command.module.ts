@@ -5,6 +5,10 @@ import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/w
 import { BackfillWorkspaceCustomApplicationRegistrationCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1782853718000-backfill-workspace-custom-application-registration.command';
 import { BackfillSystemUniqueIndexUniversalIdentifierCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1783093620000-backfill-system-unique-index-universal-identifier.command';
 import { ResynchronizeMyahStandardApplicationCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1810000010000-resynchronize-myah-standard-application.command';
+import { MigrateOpenRouterModelIdentitiesCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1784485121000-migrate-openrouter-model-identities.command';
+import { SynchronizeMyahCreatorCrmSearchMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016000-synchronize-myah-creator-crm-search-metadata.command';
+import { MigrateMyahCreatorImportMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785283200000-migrate-myah-creator-import-metadata.command';
+import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -13,6 +17,7 @@ import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/work
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
 import { TwentyStandardApplicationModule } from 'src/engine/workspace-manager/twenty-standard-application/twenty-standard-application.module';
+import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/workspace-migration-runner.module';
 
 @Module({
   imports: [
@@ -27,11 +32,16 @@ import { TwentyStandardApplicationModule } from 'src/engine/workspace-manager/tw
     WorkspaceMetadataVersionModule,
     WorkspaceMigrationModule,
     TwentyStandardApplicationModule,
+    WorkspaceMigrationRunnerModule,
+    V2_20_UpgradeVersionCommandModule,
   ],
   providers: [
     BackfillWorkspaceCustomApplicationRegistrationCommand,
     BackfillSystemUniqueIndexUniversalIdentifierCommand,
     ResynchronizeMyahStandardApplicationCommand,
+    MigrateOpenRouterModelIdentitiesCommand,
+    SynchronizeMyahCreatorCrmSearchMetadataCommand,
+    MigrateMyahCreatorImportMetadataCommand,
   ],
 })
 export class V2_19_UpgradeVersionCommandModule {}

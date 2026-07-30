@@ -120,6 +120,10 @@ describe('useSettingsNavigationItems', () => {
     );
 
     expect(workspaceSection?.items.every((item) => item.isHidden)).toBe(true);
+    expect(
+      workspaceSection?.items.find((item) => item.path === SettingsPath.Billing)
+        ?.isHidden,
+    ).toBe(true);
   });
 
   it('should show workspace settings when has permissions', () => {
@@ -138,7 +142,31 @@ describe('useSettingsNavigationItems', () => {
     expect(workspaceSection?.items.some((item) => !item.isHidden)).toBe(true);
   });
 
-  it('should hide billing navigation when billing is disabled', () => {
+  it('should order the first five workspace settings items', () => {
+    (usePermissionFlagMap as jest.Mock).mockImplementation(
+      () => allWorkspaceSettingsPermissions,
+    );
+
+    const { result } = renderHook(() => useSettingsNavigationItems(), {
+      wrapper: Wrapper,
+    });
+
+    const workspaceSection = result.current.find(
+      (section) => section.label === 'Workspace',
+    );
+
+    expect(
+      workspaceSection?.items.slice(0, 5).map((item) => item.path),
+    ).toEqual([
+      SettingsPath.General,
+      SettingsPath.Billing,
+      SettingsPath.Objects,
+      SettingsPath.Layout,
+      SettingsPath.WorkspaceMembersPage,
+    ]);
+  });
+
+  it('should show billing navigation when billing is disabled', () => {
     (usePermissionFlagMap as jest.Mock).mockImplementation(
       () => allWorkspaceSettingsPermissions,
     );
@@ -154,11 +182,11 @@ describe('useSettingsNavigationItems', () => {
       (item) => item.label === 'Billing',
     );
 
-    expect(billingItem?.isHidden).toBe(true);
+    expect(billingItem?.isHidden).toBe(false);
     expect(billingItem?.path).toBe(SettingsPath.Billing);
   });
 
-  it('should hide billing navigation until billing config is loaded', () => {
+  it('should show billing navigation when billing config is null', () => {
     jotaiStore.set(billingState.atom, null);
 
     (usePermissionFlagMap as jest.Mock).mockImplementation(
@@ -176,7 +204,8 @@ describe('useSettingsNavigationItems', () => {
       (item) => item.label === 'Billing',
     );
 
-    expect(billingItem?.isHidden).toBe(true);
+    expect(billingItem?.isHidden).toBe(false);
+    expect(billingItem?.path).toBe(SettingsPath.Billing);
   });
 
   it('should show user section items regardless of permissions', () => {

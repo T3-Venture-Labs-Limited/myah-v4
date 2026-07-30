@@ -2,7 +2,11 @@ import {
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
-import { FieldMetadataType } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  ViewOpenRecordIn,
+  ViewType,
+} from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { v5 as uuidv5 } from 'uuid';
 
@@ -35,16 +39,20 @@ const PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS = [
   'c4bccf25-cfd1-5648-918e-bf20b32ed375',
   'ccdc5be6-6c2b-5920-acd8-fa0ad52eeb29',
   '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b',
+  'f0d18169-7558-487c-bafd-eb0e6adaf63a',
   '1186d5b4-385f-5566-a4ba-87b8f65cdee5',
   'd383c2c2-9617-548f-a0ab-266b7dbe0789',
   'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31',
+  '184b0e66-11d9-45bd-8dde-e694355c57f1',
   '3db5e356-13b9-539d-8320-7c6606e3c574',
   '52162ce6-20b6-536d-b6b1-c21271c96006',
   'af645cc7-31fc-5175-af8d-427845ebe1ed',
+  'dcb35d52-cad9-4871-8ae2-8e97e38578f1',
   'cba072b8-6758-5eaa-bc1c-72e94a75b112',
   '6430e3f1-71aa-5b6a-bc7a-b635d4f2c3ab',
   'bdaf9a54-8931-5e51-836f-eb1cf6b11fcb',
   'bbfda234-327c-5d9d-ac39-8a33fd06779d',
+  '8bb2d28c-cecf-4111-b043-89b6c7255710',
   'cba84727-9219-502a-9880-a14bee741515',
   'b286bdf2-3024-575d-b852-adf935061749',
   'fa743d1a-aa43-5976-b6b2-8131a533ae5b',
@@ -300,6 +308,191 @@ describe('Myah standard metadata contract', () => {
             .universalIdentifier,
       }),
     );
+    for (const [name, universalIdentifier] of [
+      ['instagramUrl', '8d99a67f-e472-5fa5-b6d1-dc6d5fd2705b'],
+      ['tiktokUrl', 'e2b3b717-5d83-5dde-bb47-42c3a6cc6f31'],
+      ['youtubeUrl', 'af645cc7-31fc-5175-af8d-427845ebe1ed'],
+      ['twitterUrl', 'bbfda234-327c-5d9d-ac39-8a33fd06779d'],
+    ]) {
+      expect(creatorFields).toContainEqual(
+        expect.objectContaining({
+          name,
+          universalIdentifier,
+          type: FieldMetadataType.TEXT,
+          isNullable: true,
+          isUIEditable: true,
+        }),
+      );
+    }
+    expect(creatorFields).toContainEqual(
+      expect.objectContaining({
+        name: 'owner',
+        universalIdentifier: '654e0df0-0c1f-4083-bc30-f85252269092',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+        relationTargetObjectMetadataUniversalIdentifier:
+          STANDARD_OBJECTS.workspaceMember.universalIdentifier,
+        relationTargetFieldMetadataUniversalIdentifier:
+          'fe31748c-e0e8-40b2-b175-1759c817e54a',
+      }),
+    );
+    expect(contract.relations).toContainEqual({
+      sourceField:
+        MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
+      sourceObject: MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+      targetObject: STANDARD_OBJECTS.workspaceMember.universalIdentifier,
+      targetField:
+        STANDARD_OBJECTS.workspaceMember.fields.ownedCreators
+          .universalIdentifier,
+    });
+    expect(
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
+    ).toHaveProperty('19483764-6f84-4d09-8f03-945e7d0a4b28');
+    expect(
+      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+    ).toHaveProperty('03ddcbb7-42dd-4078-bc0a-c985c6a9c131');
+    expect(
+      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+    ).toHaveProperty('d1319af0-eeb2-4ca3-8afc-31e66c8a4277');
+  });
+
+  it('materializes the Campaign lifecycle and owner contract', () => {
+    const fields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const campaignStatus = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
+        field.name === 'status',
+    );
+    const campaignLifecycleStatus = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
+        field.name === 'lifecycleStatus',
+    );
+    const campaignOwner = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
+        field.name === 'owner',
+    );
+    const ownedCampaigns = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          STANDARD_OBJECTS.workspaceMember.universalIdentifier &&
+        field.name === 'ownedCampaigns',
+    );
+    const campaignView =
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaign.views.view5865bdbf.universalIdentifier
+      ];
+    const campaignOverviewView =
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9.universalIdentifier
+      ];
+    const campaignOverviewViewFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (viewField) =>
+          viewField.viewUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9.universalIdentifier,
+      );
+    const campaignTableViewFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (viewField) =>
+          viewField.viewUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.views.view5865bdbf.universalIdentifier,
+      );
+
+    expect(campaignStatus).toMatchObject({
+      type: FieldMetadataType.SELECT,
+      isUIEditable: false,
+      options: expect.arrayContaining([
+        expect.objectContaining({ value: 'PENDING' }),
+        expect.objectContaining({ value: 'APPROVED' }),
+        expect.objectContaining({ value: 'REJECTED' }),
+        expect.objectContaining({ value: 'APPLIED' }),
+      ]),
+    });
+    expect(campaignStatus?.options).toHaveLength(4);
+    expect(campaignLifecycleStatus).toMatchObject({
+      universalIdentifier: 'e169ef65-ded7-4060-9c7a-c9b92d359c8a',
+      type: FieldMetadataType.SELECT,
+      defaultValue: "'DRAFT'",
+      options: expect.arrayContaining([
+        expect.objectContaining({ value: 'DRAFT' }),
+        expect.objectContaining({ value: 'ACTIVE' }),
+        expect.objectContaining({ value: 'PAUSED' }),
+        expect.objectContaining({ value: 'COMPLETED' }),
+      ]),
+    });
+    expect(campaignLifecycleStatus?.options).toHaveLength(4);
+    expect(campaignOwner).toMatchObject({
+      universalIdentifier: '12d7812a-3d11-4704-8e59-d1468ee3026b',
+      relationTargetFieldMetadataUniversalIdentifier:
+        'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',
+    });
+    expect(ownedCampaigns).toMatchObject({
+      universalIdentifier: 'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',
+      relationTargetFieldMetadataUniversalIdentifier:
+        '12d7812a-3d11-4704-8e59-d1468ee3026b',
+    });
+    expect(campaignView).toMatchObject({
+      openRecordIn: ViewOpenRecordIn.RECORD_PAGE,
+    });
+    expect(campaignOverviewView).toMatchObject({
+      name: 'Campaign Overview Fields',
+      type: ViewType.FIELDS_WIDGET,
+    });
+    expect(campaignOverviewViewFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          universalIdentifier: '16a078ac-9f6f-4dbb-993e-ac1ce932eb98',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
+          position: 0,
+        }),
+        expect.objectContaining({
+          universalIdentifier: 'f7f89fa5-b524-4e5f-abaa-3fae7cb791f3',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.objective.universalIdentifier,
+          position: 1,
+        }),
+        expect.objectContaining({
+          universalIdentifier: 'daec24c3-ee6f-4287-8608-e3520149dc4b',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.owner.universalIdentifier,
+          position: 2,
+        }),
+      ]),
+    );
+    expect(campaignOverviewViewFields).toHaveLength(3);
+    expect(campaignTableViewFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          universalIdentifier: '39f85537-987b-42e6-b99b-f887373b725d',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus
+              .universalIdentifier,
+          position: 1,
+        }),
+      ]),
+    );
+    expect(campaignTableViewFields).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.status.universalIdentifier,
+        }),
+      ]),
+    );
   });
 
   it('normalizes select option positions and defaults', () => {
@@ -425,6 +618,102 @@ describe('Myah standard metadata contract', () => {
           canUpdateFieldValue: false,
         }),
       );
+    }
+  });
+
+  it('materializes search metadata for the native Creator CRM records', () => {
+    const searchFieldMetadata = Object.values(
+      result.allFlatEntityMaps.flatSearchFieldMetadataMaps
+        .byUniversalIdentifier,
+    ).filter(isDefined);
+    const creatorSearchFieldMetadata = searchFieldMetadata.filter(
+      ({ objectMetadataUniversalIdentifier }) =>
+        objectMetadataUniversalIdentifier ===
+        MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+    );
+
+    expect(creatorSearchFieldMetadata).toHaveLength(2);
+    expect(creatorSearchFieldMetadata).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
+        }),
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier,
+        }),
+      ]),
+    );
+
+    for (const [
+      objectMetadataUniversalIdentifier,
+      fieldMetadataUniversalIdentifier,
+    ] of [
+      [
+        MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creatorList.fields.name.universalIdentifier,
+      ],
+      [
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaign.fields.name.universalIdentifier,
+      ],
+    ]) {
+      expect(
+        searchFieldMetadata.filter(
+          (searchFieldMetadata) =>
+            searchFieldMetadata.objectMetadataUniversalIdentifier ===
+              objectMetadataUniversalIdentifier &&
+            searchFieldMetadata.fieldMetadataUniversalIdentifier ===
+              fieldMetadataUniversalIdentifier,
+        ),
+      ).toHaveLength(1);
+    }
+  });
+  it('enforces one active membership for each Creator List and Campaign relationship', () => {
+    const expectedIndexes = [
+      {
+        universalIdentifier: '6fd4b1ae-5a6c-4bf6-9cf9-bad4a3eaf9a1',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
+        fieldMetadataUniversalIdentifiers: [
+          MYAH_STANDARD_OBJECTS.creatorListMember.fields.creator
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.creatorListMember.fields.creatorList
+            .universalIdentifier,
+        ],
+      },
+      {
+        universalIdentifier: '6a1b09a7-0f81-4eb6-a5d2-3ba7951fac0d',
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+        fieldMetadataUniversalIdentifiers: [
+          MYAH_STANDARD_OBJECTS.campaignCreator.fields.creator
+            .universalIdentifier,
+          MYAH_STANDARD_OBJECTS.campaignCreator.fields.campaign
+            .universalIdentifier,
+        ],
+      },
+    ];
+
+    for (const expectedIndex of expectedIndexes) {
+      const actualIndex =
+        result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[
+          expectedIndex.universalIdentifier
+        ];
+
+      expect(actualIndex).toMatchObject({
+        objectMetadataUniversalIdentifier:
+          expectedIndex.objectMetadataUniversalIdentifier,
+        isUnique: true,
+        indexWhereClause: '"deletedAt" IS NULL',
+      });
+      expect(
+        actualIndex?.universalFlatIndexFieldMetadatas.map(
+          ({ fieldMetadataUniversalIdentifier }) =>
+            fieldMetadataUniversalIdentifier,
+        ),
+      ).toEqual(expectedIndex.fieldMetadataUniversalIdentifiers);
     }
   });
 });

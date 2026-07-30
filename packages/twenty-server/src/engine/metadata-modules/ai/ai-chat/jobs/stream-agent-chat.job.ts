@@ -284,6 +284,18 @@ export class StreamAgentChatJob {
               });
             };
 
+            const { turnId } = await userMessagePromise;
+
+            const managedProviderRequestIdRoot = data.existingTurnId
+              ? data.existingTurnId
+              : turnId;
+
+            if (!managedProviderRequestIdRoot) {
+              throw new Error(
+                'A persisted chat turn is required before managed AI execution',
+              );
+            }
+
             const { stream, modelConfig, hasNoMoreAvailableCredits } =
               await this.chatExecutionService.streamChat({
                 workspace,
@@ -297,6 +309,7 @@ export class StreamAgentChatJob {
                 onCompaction,
                 abortSignal,
                 conversationSizeTokens: data.conversationSizeTokens,
+                managedProviderRequestIdRoot,
               });
 
             checkHasNoMoreAvailableCredits = hasNoMoreAvailableCredits;

@@ -15,7 +15,7 @@ const appTester = createAppTester(App);
 
 describe('triggers.trigger_record.created', () => {
   test('should succeed to subscribe', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.CREATED;
@@ -44,7 +44,7 @@ describe('triggers.trigger_record.created', () => {
   });
 
   test('should succeed to unsubscribe', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.CREATED;
@@ -55,7 +55,7 @@ describe('triggers.trigger_record.created', () => {
       bundle,
     );
 
-    const unsubscribeBundle = getBundleForTest({});
+    const unsubscribeBundle = await getBundleForTest({});
 
     unsubscribeBundle.subscribeData = { id: result.id };
 
@@ -113,7 +113,7 @@ describe('triggers.trigger_record.created', () => {
     expect(company.record.id).toEqual('d6ccb1d1-a90b-4822-a992-a0dd946592c9');
   });
   it('should load companies from list', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.CREATED;
@@ -133,7 +133,7 @@ describe('triggers.trigger_record.created', () => {
 
 describe('triggers.trigger_record.update', () => {
   test('should succeed to subscribe', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.UPDATED;
@@ -161,7 +161,7 @@ describe('triggers.trigger_record.update', () => {
     expect(checkDbResult.data.webhook.operations[0]).toEqual('company.updated');
   });
   test('should succeed to unsubscribe', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.UPDATED;
@@ -172,7 +172,7 @@ describe('triggers.trigger_record.update', () => {
       bundle,
     );
 
-    const unsubscribeBundle = getBundleForTest({});
+    const unsubscribeBundle = await getBundleForTest({});
 
     unsubscribeBundle.subscribeData = { id: result.id };
 
@@ -200,7 +200,7 @@ describe('triggers.trigger_record.update', () => {
     ).toEqual(0);
   });
   it('should load companies from list', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.UPDATED;
@@ -221,7 +221,7 @@ describe('triggers.trigger_record.update', () => {
 
 describe('triggers.trigger_record.delete', () => {
   test('should succeed to subscribe', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.DELETED;
@@ -249,7 +249,7 @@ describe('triggers.trigger_record.delete', () => {
     expect(checkDbResult.data.webhook.operations[0]).toEqual('company.deleted');
   });
   test('should succeed to unsubscribe', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.DELETED;
@@ -260,7 +260,7 @@ describe('triggers.trigger_record.delete', () => {
       bundle,
     );
 
-    const unsubscribeBundle = getBundleForTest({});
+    const unsubscribeBundle = await getBundleForTest({});
 
     unsubscribeBundle.subscribeData = { id: result.id };
 
@@ -288,7 +288,7 @@ describe('triggers.trigger_record.delete', () => {
     ).toEqual(0);
   });
   it('should load companies from list', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
 
     bundle.inputData.nameSingular = 'company';
     bundle.inputData.operation = DatabaseEventAction.DELETED;

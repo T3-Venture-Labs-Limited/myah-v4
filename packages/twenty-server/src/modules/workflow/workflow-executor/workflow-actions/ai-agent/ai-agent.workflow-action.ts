@@ -82,6 +82,7 @@ export class AiAgentWorkflowAction implements WorkflowAction {
     const startedAtMs = Date.now();
 
     const executionResult = await this.aiAgentExecutionService.executeAgent({
+      executionSurface: 'workflow-background',
       agent,
       userPrompt: resolveInput(prompt, context) as string,
       actorContext: executionContext.isActingOnBehalfOfUser
@@ -90,6 +91,7 @@ export class AiAgentWorkflowAction implements WorkflowAction {
       authContext: executionContext.authContext,
       workspaceId,
       userWorkspaceId,
+      managedProviderRequestIdRoot: `${runInfo.workflowRunId}:${currentStepId}`,
       operationType: UsageOperationType.AI_WORKFLOW_TOKEN,
     });
 

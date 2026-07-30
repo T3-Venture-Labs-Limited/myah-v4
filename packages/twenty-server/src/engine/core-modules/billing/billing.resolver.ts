@@ -27,6 +27,8 @@ import { BillingUsageService } from 'src/engine/core-modules/billing/services/bi
 import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { formatBillingDatabaseProductToGraphqlDTO } from 'src/engine/core-modules/billing/utils/format-database-product-to-graphql-dto.util';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
+import { ManagedProviderBillingStatusService } from 'src/engine/core-modules/managed-provider-billing/services/managed-provider-billing-status.service';
+import { ManagedProviderBillingStatusDTO } from 'src/engine/core-modules/managed-provider-billing/types/managed-provider-billing-status.dto';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import {
   INTERNAL_CREDITS_PER_DISPLAY_CREDIT,
@@ -62,8 +64,20 @@ export class BillingResolver {
     private readonly billingPlanService: BillingPlanService,
     private readonly billingService: BillingService,
     private readonly billingUsageService: BillingUsageService,
+    private readonly managedProviderBillingStatusService: ManagedProviderBillingStatusService,
     private readonly permissionsService: PermissionsService,
   ) {}
+
+  @Query(() => ManagedProviderBillingStatusDTO)
+  @UseGuards(
+    WorkspaceAuthGuard,
+    SettingsPermissionGuard(PermissionFlagType.BILLING),
+  )
+  async managedProviderBillingStatus(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<ManagedProviderBillingStatusDTO> {
+    return this.managedProviderBillingStatusService.getStatus(workspace.id);
+  }
 
   @Query(() => BillingSessionDTO)
   @UseGuards(

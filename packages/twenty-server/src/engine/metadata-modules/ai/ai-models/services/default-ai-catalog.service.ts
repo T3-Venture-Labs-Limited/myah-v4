@@ -6,6 +6,8 @@ import defaultAiProviders from 'src/engine/metadata-modules/ai/ai-models/ai-prov
 import { aiProvidersConfigSchema } from 'src/engine/metadata-modules/ai/ai-models/types/ai-providers-config.schema';
 import { type AiProvidersConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-providers-config.type';
 import { normalizeAiProviders } from 'src/engine/metadata-modules/ai/ai-models/utils/normalize-ai-providers.util';
+import { assertManagedOpenRouterCatalogMatchesManifest } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
+
 import { streamToBuffer } from 'src/utils/stream-to-buffer';
 
 @Injectable()
@@ -28,6 +30,8 @@ export class DefaultAiCatalogService implements OnModuleInit {
         'Using built-in AI catalog (AI_CATALOG_STORAGE_PATH not set)',
       );
 
+      this.assertManagedOpenRouterCatalog();
+
       return;
     }
 
@@ -35,6 +39,8 @@ export class DefaultAiCatalogService implements OnModuleInit {
       const raw = await this.fetchCatalog(catalogPath);
 
       this.catalog = normalizeAiProviders(raw);
+      this.assertManagedOpenRouterCatalog();
+
       this.logger.log(`Loaded AI catalog from storage: ${catalogPath}`);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -54,5 +60,11 @@ export class DefaultAiCatalogService implements OnModuleInit {
     const body = (await streamToBuffer(stream)).toString('utf-8');
 
     return aiProvidersConfigSchema.parse(JSON.parse(body));
+  }
+  private assertManagedOpenRouterCatalog(): void {
+    const openrouter = this.catalog.openrouter;
+    if (openrouter) {
+      assertManagedOpenRouterCatalogMatchesManifest(openrouter);
+    }
   }
 }

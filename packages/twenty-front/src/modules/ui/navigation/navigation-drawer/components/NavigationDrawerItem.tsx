@@ -53,6 +53,7 @@ export type NavigationDrawerItemProps = {
   withIconBackground?: boolean;
   active?: boolean;
   modifier?: NavigationDrawerItemModifier;
+  disabled?: boolean;
   rightOptions?: ReactNode;
   alwaysShowRightOptions?: boolean;
   isDragging?: boolean;
@@ -73,6 +74,7 @@ type StyledItemProps = Pick<
   | 'variant'
 > & {
   isSoon: boolean;
+  isDisabled: boolean;
   isNavigationDrawerExpanded: boolean;
   hasRightOptions: boolean;
   href?: string;
@@ -102,8 +104,8 @@ const StyledItem = styled.button<StyledItemProps>`
     }
     return themeCssVariables.font.color.secondary;
   }};
-  cursor: ${({ isSoon, isDragging }) =>
-    isDragging ? 'grabbing' : isSoon ? 'default' : 'pointer'};
+  cursor: ${({ isDisabled, isDragging }) =>
+    isDragging ? 'grabbing' : isDisabled ? 'default' : 'pointer'};
   display: flex;
   font-family: ${themeCssVariables.font.family};
   font-size: ${themeCssVariables.font.size.md};
@@ -118,7 +120,7 @@ const StyledItem = styled.button<StyledItemProps>`
       ? themeCssVariables.spacing['0.5']
       : themeCssVariables.spacing[1]};
   padding-top: ${themeCssVariables.spacing[1]};
-  pointer-events: ${({ isSoon }) => (isSoon ? 'none' : 'auto')};
+  pointer-events: ${({ isDisabled }) => (isDisabled ? 'none' : 'auto')};
   text-decoration: none;
   user-select: none;
   width: ${({ isNavigationDrawerExpanded, hasRightOptions }) =>
@@ -267,6 +269,7 @@ export const NavigationDrawerItem = ({
   preventCollapseOnMobile = false,
   isSelectedInEditMode = false,
   variant = 'default',
+  disabled = false,
 }: NavigationDrawerItemProps) => {
   const { theme } = useContext(ThemeContext);
   const isMobile = useIsMobile();
@@ -278,6 +281,9 @@ export const NavigationDrawerItem = ({
   const { navigationItemId } = useNavigationDrawerTooltip(label, to);
 
   const isSoon = modifier === 'soon';
+  const navigationTarget = disabled ? undefined : to;
+  const navigationOnClick = disabled ? undefined : onClick;
+
   const isNew = modifier === 'new';
   const keyboardKeys =
     isDefined(modifier) && typeof modifier === 'object'
@@ -294,13 +300,14 @@ export const NavigationDrawerItem = ({
   };
 
   const isExternalLink =
-    isDefined(to) && (to.startsWith('http://') || to.startsWith('https://'));
-  const isInternalLink = isDefined(to) && !isExternalLink;
+    isDefined(navigationTarget) &&
+    (navigationTarget.startsWith('http://') ||
+      navigationTarget.startsWith('https://'));
+  const isInternalLink = isDefined(navigationTarget) && !isExternalLink;
 
   const handleExternalLinkClick = () => {
-    handleMobileNavigation();
-    if (isDefined(to)) {
-      window.open(to, '_blank', 'noopener,noreferrer');
+    if (isDefined(navigationTarget)) {
+      window.open(navigationTarget, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -308,9 +315,11 @@ export const NavigationDrawerItem = ({
     onClick: handleMouseDownNavigationClickClick,
     onMouseDown: handleMouseDown,
   } = useMouseDownNavigation({
-    to: isExternalLink ? undefined : to,
-    onClick: isExternalLink ? (onClick ?? handleExternalLinkClick) : onClick,
-    onBeforeNavigation: handleMobileNavigation,
+    to: isExternalLink ? undefined : navigationTarget,
+    onClick: isExternalLink
+      ? (navigationOnClick ?? handleExternalLinkClick)
+      : navigationOnClick,
+    onBeforeNavigation: disabled ? undefined : handleMobileNavigation,
     triggerEvent,
   });
 
@@ -327,24 +336,30 @@ export const NavigationDrawerItem = ({
       <StyledItem
         id={navigationItemId}
         className={`navigation-drawer-item ${className || ''}`}
-        onClick={handleMouseDownNavigationClickClick}
-        onMouseDown={handleMouseDown}
+        onClick={disabled ? undefined : handleMouseDownNavigationClickClick}
+        onMouseDown={disabled ? undefined : handleMouseDown}
         active={active}
         aria-selected={active}
+        aria-disabled={disabled || undefined}
         isSoon={isSoon}
         variant={variant}
+        isDisabled={disabled}
         indentationLevel={indentationLevel}
         isNavigationDrawerExpanded={isExpanded}
         isDragging={isDragging}
         hasRightOptions={isDefined(rightOptions)}
         isSelectedInEditMode={isSelectedInEditMode}
         as={elementType}
-        role={!to && isDefined(rightOptions) ? 'button' : undefined}
-        to={isInternalLink ? to : undefined}
-        href={isExternalLink ? to : undefined}
+        role={
+          !navigationTarget && isDefined(rightOptions) ? 'button' : undefined
+        }
+        to={isInternalLink ? navigationTarget : undefined}
+        href={isExternalLink ? navigationTarget : undefined}
         target={isExternalLink ? '_blank' : undefined}
         rel={isExternalLink ? 'noopener noreferrer' : undefined}
         draggable={isInternalLink ? false : undefined}
+        tabIndex={disabled ? -1 : undefined}
+        disabled={disabled}
       >
         <StyledItemElementsContainer>
           {showBreadcrumb && (

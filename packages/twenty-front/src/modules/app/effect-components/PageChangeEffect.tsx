@@ -26,7 +26,7 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { currentPageLayoutIdState } from '@/page-layout/states/currentPageLayoutIdState';
 import { useStore } from 'jotai';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   matchPath,
   useLocation,
@@ -51,6 +51,11 @@ export const PageChangeEffect = () => {
 
   const pageChangeEffectNavigateLocation =
     usePageChangeEffectNavigateLocation();
+  // Tracks an imperative navigation target without rerendering before the router commits it.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const lastPageChangeEffectNavigateLocationRef = useRef<string | undefined>(
+    undefined,
+  );
 
   //TODO: refactor useResetTableRowSelection hook to not throw when the argument `recordTableId` is an empty string
   // - replace CoreObjectNamePlural.Person
@@ -136,29 +141,42 @@ export const PageChangeEffect = () => {
   }, [location, previousLocation, executeTasksOnAnyLocationChange, store]);
 
   useEffect(() => {
+    if (!isDefined(pageChangeEffectNavigateLocation)) {
+      lastPageChangeEffectNavigateLocationRef.current = undefined;
+      return;
+    }
+
     if (
-      isDefined(pageChangeEffectNavigateLocation) &&
-      isAppEffectRedirectEnabled
+      !isAppEffectRedirectEnabled ||
+      (lastPageChangeEffectNavigateLocationRef.current ===
+        pageChangeEffectNavigateLocation &&
+        `${location.pathname}${location.search}${location.hash}` ===
+          pageChangeEffectNavigateLocation)
     ) {
-      if (
-        pageChangeEffectNavigateLocation === AppPath.SignInUp &&
-        !isOnAuthOrOnboardingPage
-      ) {
-        saveReturnToPath(
-          `${window.location.pathname}${window.location.search}${window.location.hash}`,
-        );
-      }
+      return;
+    }
 
-      const consumedReturnToPath =
-        getReturnToPath() === pageChangeEffectNavigateLocation;
+    if (
+      pageChangeEffectNavigateLocation === AppPath.SignInUp &&
+      !isOnAuthOrOnboardingPage
+    ) {
+      saveReturnToPath(
+        `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      );
+    }
 
-      navigate(pageChangeEffectNavigateLocation);
+    const consumedReturnToPath =
+      getReturnToPath() === pageChangeEffectNavigateLocation;
 
-      if (consumedReturnToPath) {
-        clearReturnToPath();
-      }
+    lastPageChangeEffectNavigateLocationRef.current =
+      pageChangeEffectNavigateLocation;
+    navigate(pageChangeEffectNavigateLocation);
+
+    if (consumedReturnToPath) {
+      clearReturnToPath();
     }
   }, [
+    location,
     navigate,
     pageChangeEffectNavigateLocation,
     isAppEffectRedirectEnabled,

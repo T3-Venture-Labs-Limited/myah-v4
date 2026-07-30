@@ -36,6 +36,8 @@ export const repairToolCall = async ({
   error,
   model,
   billingContext,
+  telemetryConfig,
+  maxRetries,
 }: {
   toolCall: ToolCall;
   tools: Record<string, unknown>;
@@ -43,6 +45,8 @@ export const repairToolCall = async ({
   error: Error;
   model: LanguageModel;
   billingContext?: RepairToolCallBillingContext;
+  telemetryConfig?: typeof AI_TELEMETRY_CONFIG;
+  maxRetries?: number;
 }): Promise<ToolCall | null> => {
   // Don't attempt to fix invalid tool names
   if (NoSuchToolError.isInstance(error)) {
@@ -83,7 +87,8 @@ export const repairToolCall = async ({
         `- Object structures must match the schema shape`,
         `- Array items must follow the specified format`,
       ].join('\n'),
-      experimental_telemetry: AI_TELEMETRY_CONFIG,
+      experimental_telemetry: telemetryConfig ?? AI_TELEMETRY_CONFIG,
+      maxRetries,
     });
 
     usage = result.usage;

@@ -5,5 +5,6 @@ export const MODEL_FAMILY_LABELS: Record<string, string> = {
   [ModelFamily.CLAUDE]: 'Claude',
   [ModelFamily.GEMINI]: 'Gemini',
   [ModelFamily.MISTRAL]: 'Mistral',
+  [ModelFamily.DEEPSEEK]: 'DeepSeek',
   [ModelFamily.GROK]: 'Grok',
 };

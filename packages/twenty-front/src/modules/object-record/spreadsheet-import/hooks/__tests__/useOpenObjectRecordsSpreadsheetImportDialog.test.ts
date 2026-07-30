@@ -22,6 +22,95 @@ jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
   }),
 }));
 
+const mockQueryExistingCreatorSocialProfiles = jest.fn();
+const mockBuildCreatorSpreadsheetImportSession = jest.fn();
+const mockEnqueueErrorSnackBar = jest.fn();
+const mockEnqueueSuccessSnackBar = jest.fn();
+let mockCreatorSession: Record<string, unknown>;
+
+jest.mock(
+  '@/myah/creator-crm/spreadsheet-import/hooks/useQueryExistingCreatorSocialProfiles',
+  () => ({
+    useQueryExistingCreatorSocialProfiles: () => ({
+      queryExistingCreatorSocialProfiles:
+        mockQueryExistingCreatorSocialProfiles,
+    }),
+  }),
+);
+
+jest.mock(
+  '@/myah/creator-crm/spreadsheet-import/utils/buildCreatorSpreadsheetImportSession',
+  () => ({
+    buildCreatorSpreadsheetImportSession: (...args: unknown[]) =>
+      mockBuildCreatorSpreadsheetImportSession(...args),
+  }),
+);
+
+jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
+  useSnackBar: () => ({
+    enqueueErrorSnackBar: mockEnqueueErrorSnackBar,
+    enqueueSuccessSnackBar: mockEnqueueSuccessSnackBar,
+  }),
+}));
+
+jest.mock('@lingui/react/macro', () => ({
+  useLingui: () => ({
+    t: (descriptor: { message: string; values?: Record<string, unknown> }) =>
+      Object.entries(descriptor.values ?? {}).reduce(
+        (message, [key, value]) =>
+          message.replaceAll(`{${key}}`, String(value)),
+        descriptor.message,
+      ),
+  }),
+}));
+
+jest.mock('@lingui/react', () => ({
+  useLingui: () => ({
+    i18n: {
+      _: (
+        descriptor: { message: string; values?: Record<string, unknown> },
+        values?: Record<string, unknown>,
+      ) =>
+        Object.entries(values ?? descriptor.values ?? {}).reduce(
+          (message, [key, value]) =>
+            message.replaceAll(`{${key}}`, String(value)),
+          descriptor.message,
+        ),
+    },
+  }),
+}));
+
+jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => {
+  const actual = jest.requireActual(
+    '@/object-metadata/hooks/useObjectMetadataItem',
+  );
+
+  return {
+    useObjectMetadataItem: (args: { objectNameSingular: string }) =>
+      args.objectNameSingular === 'creator'
+        ? {
+            objectMetadataItem: {
+              id: 'creator-metadata-id',
+              nameSingular: 'creator',
+              namePlural: 'creators',
+              fields: [
+                {
+                  id: 'creator-id-field-id',
+                  name: 'id',
+                  type: 'UUID',
+                },
+              ],
+              updatableFields: [],
+              readableFields: [],
+              indexMetadatas: [],
+              searchFieldMetadatas: [],
+              labelIdentifierFieldMetadataId: 'creator-name-field-id',
+            },
+          }
+        : actual.useObjectMetadataItem(args),
+  };
+});
+
 const mockResult = jest.fn(() => ({
   data: {
     createCompanies: [
@@ -72,6 +161,23 @@ const Wrapper = getJestMetadataAndApolloMocksWrapper({
 describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCreatorSession = {
+      spreadsheetImportFields: [],
+      headerAliases: { first_name: { fieldKey: 'name' } },
+      headerProfile: {
+        key: 'influencer-club',
+        label: 'Influencer Club CSV',
+        isDetected: jest.fn(),
+      },
+      matchColumnsStepHook: jest.fn(),
+      tableHook: jest.fn((table) => table),
+      beforeSubmitHook: jest.fn(),
+      getSubmissionBlockReason: jest.fn(),
+      getSummary: jest.fn(() => ({ existing: 0, conflicts: 0 })),
+    };
+    mockBuildCreatorSpreadsheetImportSession.mockImplementation(
+      () => mockCreatorSession,
+    );
   });
 
   it('should open dialog and configure onSubmit function correctly', async () => {
@@ -108,6 +214,12 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     expect(
       Array.isArray(dialogAfterOpen.options?.spreadsheetImportFields),
     ).toBe(true);
+    expect(dialogAfterOpen.options).not.toHaveProperty('headerAliases');
+    expect(dialogAfterOpen.options).not.toHaveProperty('headerProfile');
+    expect(dialogAfterOpen.options).not.toHaveProperty('beforeSubmitHook');
+    expect(dialogAfterOpen.options).not.toHaveProperty(
+      'getSubmissionBlockReason',
+    );
   });
 
   it('should call batchCreateManyRecords when onSubmit is executed', async () => {
@@ -169,5 +281,103 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     expect(recordToCreate).toHaveProperty('name', 'Example Company');
     expect(recordToCreate).toHaveProperty('idealCustomerProfile', true);
     expect(recordToCreate).toHaveProperty('employees', 0);
+  });
+
+  it('activates Creator-specific matching, preflight, and non-upsert submission', async () => {
+    (mockCreatorSession.getSummary as jest.Mock).mockReturnValue({
+      existing: 2,
+      conflicts: 1,
+    });
+    const { result } = renderHook(
+      () =>
+        useOpenObjectRecordsSpreadsheetImportDialog('creator')
+          .openObjectRecordsSpreadsheetImportDialog,
+      { wrapper: Wrapper },
+    );
+
+    await act(async () => {
+      result.current();
+    });
+
+    const options = jotaiStore.get(spreadsheetImportDialogState.atom).options;
+
+    expect(mockBuildCreatorSpreadsheetImportSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spreadsheetImportFields: [],
+        queryExistingCreators: mockQueryExistingCreatorSocialProfiles,
+      }),
+    );
+    expect(options).toEqual(
+      expect.objectContaining({
+        headerAliases: mockCreatorSession.headerAliases,
+        headerProfile: mockCreatorSession.headerProfile,
+        matchColumnsStepHook: mockCreatorSession.matchColumnsStepHook,
+        beforeSubmitHook: mockCreatorSession.beforeSubmitHook,
+        getSubmissionBlockReason: mockCreatorSession.getSubmissionBlockReason,
+      }),
+    );
+
+    const table = [{ name: 'Ada' }];
+    options?.tableHook?.(table, jest.fn());
+    expect(mockCreatorSession.tableHook).toHaveBeenCalledWith(
+      table,
+      expect.any(Function),
+    );
+
+    await act(async () => {
+      await options?.onSubmit(
+        {
+          validStructuredRows: [{ name: 'Ada' }],
+          invalidStructuredRows: [{}, {}, {}],
+          allStructuredRows: [{ name: 'Ada', __index: 'row-a' }],
+        },
+        fakeCsv(),
+      );
+    });
+
+    expect(mockBatchCreateManyRecords).toHaveBeenCalledWith({
+      recordsToCreate: [{}],
+      upsert: false,
+    });
+    expect(mockEnqueueSuccessSnackBar).toHaveBeenCalledWith({
+      message:
+        'Imported 1 creators. 2 already existed, 1 conflicted, and 1 had validation errors.',
+    });
+  });
+
+  it('skips the Creator mutation when every row already exists', async () => {
+    (mockCreatorSession.getSummary as jest.Mock).mockReturnValue({
+      existing: 1,
+      conflicts: 0,
+    });
+    const { result } = renderHook(
+      () =>
+        useOpenObjectRecordsSpreadsheetImportDialog('creator')
+          .openObjectRecordsSpreadsheetImportDialog,
+      { wrapper: Wrapper },
+    );
+
+    await act(async () => {
+      result.current();
+    });
+
+    const options = jotaiStore.get(spreadsheetImportDialogState.atom).options;
+
+    await act(async () => {
+      await options?.onSubmit(
+        {
+          validStructuredRows: [],
+          invalidStructuredRows: [{ instagram: 'existing' }],
+          allStructuredRows: [{ instagram: 'existing', __index: 'row-a' }],
+        },
+        fakeCsv(),
+      );
+    });
+
+    expect(mockBatchCreateManyRecords).not.toHaveBeenCalled();
+    expect(mockEnqueueSuccessSnackBar).toHaveBeenCalledWith({
+      message:
+        'Imported 0 creators. 1 already existed, 0 conflicted, and 0 had validation errors.',
+    });
   });
 });

@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import gql from 'graphql-tag';
 
 import { default as request } from 'supertest';
 import { PERSON_GQL_FIELDS } from 'test/integration/constants/person-gql-fields.constants';
@@ -21,6 +22,7 @@ describe('permissionsOnRelations', () => {
   let originalMemberRoleId: string;
   let customRoleId: string;
   const personId = randomUUID();
+  const companyId = randomUUID();
 
   beforeAll(async () => {
     // Get the original Member role ID for restoration later
@@ -45,7 +47,6 @@ describe('permissionsOnRelations', () => {
     ).id;
 
     // Create a person record
-    const companyId = randomUUID();
     const graphqlOperationForCompanyCreation = createOneOperationFactory({
       objectMetadataSingularName: 'company',
       gqlFields: `
@@ -132,6 +133,48 @@ describe('permissionsOnRelations', () => {
     const response = await makeGraphqlAPIRequestWithJony(graphqlOperation);
 
     // The query should fail when trying to access company relation without permission
+    expect(response.body.errors[0].message).toBe(
+      PermissionsExceptionMessage.PERMISSION_DENIED,
+    );
+    expect(response.body.errors[0].extensions.code).toBe(ErrorCode.FORBIDDEN);
+  });
+
+  it('should reject a filter-only one-to-many target object without read permission', async () => {
+    const { roleId } = await createCustomRoleWithObjectPermissions({
+      label: 'CompanyOnlyRelationFilterRole',
+      canReadPerson: false,
+      canReadCompany: true,
+    });
+
+    customRoleId = roleId;
+
+    await updateWorkspaceMemberRole({
+      client,
+      roleId: customRoleId,
+      workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
+    });
+    const response = await makeGraphqlAPIRequestWithJony({
+      query: gql`
+        query Companies($filter: CompanyFilterInput) {
+          companies(filter: $filter, first: 10) {
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
+      `,
+      variables: {
+        filter: {
+          and: [
+            { id: { eq: companyId } },
+            { people: { jobTitle: { eq: 'Paris' } } },
+          ],
+        },
+      },
+    });
+
     expect(response.body.errors[0].message).toBe(
       PermissionsExceptionMessage.PERMISSION_DENIED,
     );

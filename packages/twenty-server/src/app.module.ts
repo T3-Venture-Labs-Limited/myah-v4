@@ -163,6 +163,13 @@ export class AppModule {
       .forRoutes({ path: 'admin-panel', method: RequestMethod.ALL });
 
     consumer
+      .apply(
+        GraphQLHydrateRequestFromTokenMiddleware,
+        WorkspaceAuthContextMiddleware,
+      )
+      .forRoutes({ path: 'client-config', method: RequestMethod.ALL });
+
+    consumer
       .apply(McpMethodGuardMiddleware)
       .forRoutes({ path: 'mcp', method: RequestMethod.ALL });
 

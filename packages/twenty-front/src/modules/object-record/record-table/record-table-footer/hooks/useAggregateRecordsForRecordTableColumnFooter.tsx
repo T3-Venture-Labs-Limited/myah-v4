@@ -5,9 +5,9 @@ import { transformAggregateRawValueIntoAggregateDisplayValue } from '@/object-re
 import { getAggregateOperationLabel } from '@/object-record/record-board/record-board-column/utils/getAggregateOperationLabel';
 
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
+import { useEffectiveRecordFilters } from '@/object-record/record-filter/hooks/useEffectiveRecordFilters';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
 import { anyFieldFilterValueComponentState } from '@/object-record/record-filter/states/anyFieldFilterValueComponentState';
-import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { useRecordGroupFilter } from '@/object-record/record-group/hooks/useRecordGroupFilter';
 import { getRecordAggregateDisplayLabel } from '@/object-record/record-index/utils/getRecordndexAggregateDisplayLabel';
 import { AggregateOperations } from '@/object-record/record-table/constants/AggregateOperations';
@@ -43,9 +43,7 @@ export const useAggregateRecordsForRecordTableColumnFooter = (
     currentRecordFilterGroupsComponentState,
   );
 
-  const currentRecordFilters = useAtomComponentStateValue(
-    currentRecordFiltersComponentState,
-  );
+  const effectiveRecordFilters = useEffectiveRecordFilters();
 
   const dateLocale = useAtomStateValue(dateLocaleState);
 
@@ -59,7 +57,7 @@ export const useAggregateRecordsForRecordTableColumnFooter = (
     fieldMetadataItems: flattenedFieldMetadataItems,
     filterValueDependencies,
     recordFilterGroups: currentRecordFilterGroups,
-    recordFilters: currentRecordFilters,
+    recordFilters: effectiveRecordFilters,
   });
 
   const { viewFieldId } = useContext(

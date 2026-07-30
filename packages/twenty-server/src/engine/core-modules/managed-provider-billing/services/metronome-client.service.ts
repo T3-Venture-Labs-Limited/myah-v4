@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Metronome } from '@metronome/sdk';
+import type { ContractListBalancesResponse } from '@metronome/sdk/resources/v1/contracts';
 
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
@@ -7,10 +8,12 @@ import {
   MetronomeClientException,
   MetronomeClientExceptionCode,
 } from '../metronome-client.exception';
+import { toMetronomeHourBoundary } from '../utils/to-metronome-hour-boundary.util';
 import { validateSafeMetronomeEventProperties } from '../utils/validate-safe-metronome-event-properties.util';
 
-const RATE_CARD_REPLAY_PAGE_LIMIT = 100;
+const BALANCE_PAGE_LIMIT = 25;
 
+type MetronomeBalanceResponse = ContractListBalancesResponse;
 export type MetronomeCustomerInput = {
   alias: string;
   name: string;
@@ -35,11 +38,6 @@ export type MetronomeRateCard = {
     startingAt: string | null;
   }>;
   id: string;
-};
-
-export type MetronomeRateCardPage = {
-  hasNextPage: boolean;
-  rateCards: MetronomeRateCard[];
 };
 
 export type MetronomeCustomer = {
@@ -86,6 +84,24 @@ export type MetronomeUsageEvent = {
   processedAt: string | null;
   properties: Record<string, unknown>;
   transactionId: string;
+};
+
+export type MetronomeCustomerCreditInput = {
+  amountCents: number;
+  applicableProductIds: string[];
+  contractId: string;
+  customerId: string;
+  endingBefore: string;
+  name: string;
+  productId: string;
+  startingAt: string;
+  uniquenessKey: string;
+  customFields?: Record<string, string>;
+};
+
+export type MetronomeCustomerCreditReceipt = {
+  creditId: string;
+  metronomeEditId: string;
 };
 
 @Injectable()
@@ -139,7 +155,7 @@ export class MetronomeClientService {
     try {
       const response = await client.v1.contracts.create({
         customer_id: customerId,
-        starting_at: new Date().toISOString(),
+        starting_at: toMetronomeHourBoundary(new Date()).toISOString(),
         rate_card_alias: rateCardAlias,
         uniqueness_key: uniquenessKey,
       });
@@ -151,12 +167,85 @@ export class MetronomeClientService {
       }
 
       throw new MetronomeClientException(
-        this.getErrorStatus(error) === 409
+        this.isUniquenessConflict(error)
           ? MetronomeClientExceptionCode.CONFLICT
           : MetronomeClientExceptionCode.REQUEST_FAILED,
       );
     }
   }
+  async createCustomerCredit({
+    amountCents,
+    applicableProductIds,
+    contractId,
+    customerId,
+    endingBefore,
+    name,
+    productId,
+    startingAt,
+    uniquenessKey,
+    customFields,
+  }: MetronomeCustomerCreditInput): Promise<MetronomeCustomerCreditReceipt> {
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+      throw new Error(
+        'Metronome customer credit amount must be positive cents',
+      );
+    }
+
+    const client = this.getClient();
+    try {
+      const response = await client.v2.contracts.edit({
+        contract_id: contractId,
+        customer_id: customerId,
+        add_credits: [
+          {
+            access_schedule: {
+              schedule_items: [
+                {
+                  amount: amountCents,
+                  ending_before:
+                    toMetronomeHourBoundary(endingBefore).toISOString(),
+                  starting_at:
+                    toMetronomeHourBoundary(startingAt).toISOString(),
+                },
+              ],
+            },
+            applicable_product_ids: applicableProductIds,
+            ...(customFields === undefined
+              ? {}
+              : { custom_fields: customFields }),
+            name,
+            priority: 0,
+            product_id: productId,
+          },
+        ],
+        uniqueness_key: uniquenessKey,
+      });
+      const edit = response.data.edit;
+      const creditId =
+        edit?.add_credits?.length === 1 ? edit.add_credits[0].id : undefined;
+      if (!edit?.id || !creditId) {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+        );
+      }
+      return { creditId, metronomeEditId: edit.id };
+    } catch (error) {
+      if (error instanceof MetronomeClientException) {
+        throw error;
+      }
+      const status = this.getErrorStatus(error);
+      throw new MetronomeClientException(
+        this.isUniquenessConflict(error)
+          ? MetronomeClientExceptionCode.CONFLICT
+          : status === 429
+            ? MetronomeClientExceptionCode.RATE_LIMITED
+            : status === undefined || status >= 500
+              ? MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN
+              : MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+  }
+
   async findCurrentContracts(
     customerId: string,
   ): Promise<MetronomeCurrentContract[]> {
@@ -176,24 +265,20 @@ export class MetronomeClientService {
     }));
   }
 
-  async listRateCards(): Promise<MetronomeRateCardPage> {
+  async getRateCard(id: string): Promise<MetronomeRateCard> {
     const client = this.getClient();
     const response = await this.execute(() =>
-      client.v1.contracts.rateCards.list({
-        limit: RATE_CARD_REPLAY_PAGE_LIMIT,
-      }),
+      client.v1.contracts.rateCards.retrieve({ id }),
     );
+    const rateCard = response.data;
 
     return {
-      hasNextPage: response.hasNextPage(),
-      rateCards: response.getPaginatedItems().map((rateCard) => ({
-        aliases: (rateCard.aliases ?? []).map((alias) => ({
-          endingBefore: alias.ending_before ?? null,
-          name: alias.name,
-          startingAt: alias.starting_at ?? null,
-        })),
-        id: rateCard.id,
+      aliases: (rateCard.aliases ?? []).map((alias) => ({
+        endingBefore: alias.ending_before ?? null,
+        name: alias.name,
+        startingAt: alias.starting_at ?? null,
       })),
+      id: rateCard.id,
     };
   }
 
@@ -265,30 +350,108 @@ export class MetronomeClientService {
       })),
     };
   }
-
   async getPrepaidBalance(customerId: string): Promise<{ balance: number }> {
     const client = this.getClient();
-    const response = await this.execute(() =>
-      client.v1.contracts.getNetBalance({
-        customer_id: customerId,
-        filters: [{ balance_types: ['PREPAID_COMMIT'] }],
-        invoice_inclusion_mode: 'FINALIZED_AND_DRAFT',
-      }),
+    const chargeProductId = this.twentyConfigService.get(
+      'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
     );
-
-    const balance = response.data.balance;
-
-    if (
-      !Number.isSafeInteger(balance) ||
-      !Number.isFinite(balance) ||
-      balance < 0
-    ) {
-      throw new MetronomeClientException(
-        MetronomeClientExceptionCode.REQUEST_FAILED,
-      );
-    }
-
+    const creditProductId = this.twentyConfigService.get(
+      'MANAGED_OPENROUTER_CREDIT_PRODUCT_ID',
+    );
+    const balance = await this.getApplicableSponsoredCreditBalance(
+      client,
+      customerId,
+      chargeProductId,
+      creditProductId,
+    );
     return { balance };
+  }
+  private async getApplicableSponsoredCreditBalance(
+    client: Metronome,
+    customerId: string,
+    chargeProductId: string,
+    creditProductId: string,
+  ): Promise<number> {
+    let nextPage: string | null = null;
+    const requestedPages = new Set<string>();
+    let balance = 0;
+
+    do {
+      const response = await this.execute(() =>
+        client.v1.contracts.listBalances({
+          customer_id: customerId,
+          include_balance: true,
+          limit: BALANCE_PAGE_LIMIT,
+          ...(nextPage === null ? {} : { next_page: nextPage }),
+        }),
+      );
+      const listedBalances = response.data;
+
+      if (!Array.isArray(listedBalances)) {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.REQUEST_FAILED,
+        );
+      }
+      for (const listedBalance of listedBalances as MetronomeBalanceResponse[]) {
+        const isPrepaidCommit =
+          listedBalance.type === 'PREPAID' &&
+          listedBalance.product?.id === creditProductId;
+        const isSponsoredCredit =
+          listedBalance.type === 'CREDIT' &&
+          listedBalance.product?.id === creditProductId &&
+          listedBalance.custom_fields?.myah_managed_openrouter === 'sponsored';
+        if (!isPrepaidCommit && !isSponsoredCredit) {
+          continue;
+        }
+
+        const applicableProductIds = listedBalance.applicable_product_ids;
+        if (
+          !Array.isArray(applicableProductIds) ||
+          !applicableProductIds.includes(chargeProductId)
+        ) {
+          continue;
+        }
+
+        const listedBalanceAmount = listedBalance.balance;
+        if (
+          typeof listedBalanceAmount !== 'number' ||
+          !Number.isSafeInteger(listedBalanceAmount) ||
+          !Number.isFinite(listedBalanceAmount) ||
+          listedBalanceAmount < 0
+        ) {
+          throw new MetronomeClientException(
+            MetronomeClientExceptionCode.REQUEST_FAILED,
+          );
+        }
+
+        balance += listedBalanceAmount;
+        if (!Number.isSafeInteger(balance)) {
+          throw new MetronomeClientException(
+            MetronomeClientExceptionCode.REQUEST_FAILED,
+          );
+        }
+      }
+
+      const nextPageValue = response.next_page;
+      if (typeof nextPageValue !== 'string') {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.REQUEST_FAILED,
+        );
+      }
+      if (nextPageValue === '') {
+        nextPage = null;
+      } else {
+        if (requestedPages.has(nextPageValue)) {
+          throw new MetronomeClientException(
+            MetronomeClientExceptionCode.REQUEST_FAILED,
+          );
+        }
+        requestedPages.add(nextPageValue);
+        nextPage = nextPageValue;
+      }
+    } while (nextPage !== null);
+
+    return balance;
   }
 
   async ingestUsage({
@@ -386,6 +549,27 @@ export class MetronomeClientService {
     }
 
     return MetronomeClientExceptionCode.REQUEST_FAILED;
+  }
+
+  private isUniquenessConflict(error: unknown): boolean {
+    const status = this.getErrorStatus(error);
+
+    return (
+      status === 409 ||
+      (status === 422 &&
+        this.getErrorMessage(error)
+          ?.toLowerCase()
+          .includes('uniqueness key already exists') === true)
+    );
+  }
+
+  private getErrorMessage(error: unknown): string | undefined {
+    return typeof error === 'object' &&
+      error !== null &&
+      'message' in error &&
+      typeof error.message === 'string'
+      ? error.message
+      : undefined;
   }
 
   private getErrorStatus(error: unknown): number | undefined {

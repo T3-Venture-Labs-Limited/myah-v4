@@ -3014,6 +3014,12 @@ export const STANDARD_OBJECTS = {
       ownedOpportunities: {
         universalIdentifier: '20202020-9e4d-4b3a-8c1f-6d7e8f9a0b1c',
       },
+      ownedCreators: {
+        universalIdentifier: 'fe31748c-e0e8-40b2-b175-1759c817e54a',
+      },
+      ownedCampaigns: {
+        universalIdentifier: 'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',
+      },
       accountOwnerForCompanies: {
         universalIdentifier: '20202020-dc29-4bd4-a3c1-29eafa324bee',
       },

@@ -1,4 +1,5 @@
 import { RecordIndexCommandMenu } from '@/command-menu-item/components/RecordIndexCommandMenu';
+import { MyahCreatorBulkActions } from '@/myah/creator-crm/components/MyahCreatorBulkActions';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
 import { contextStoreNumberOfSelectedRecordsComponentState } from '@/context-store/states/contextStoreNumberOfSelectedRecordsComponentState';
@@ -79,6 +80,7 @@ export const RecordIndexPageHeader = () => {
       actionButton={
         isDefined(contextStoreCurrentViewId) ? (
           <>
+            <MyahCreatorBulkActions />
             <RecordIndexCommandMenu />
             {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
           </>

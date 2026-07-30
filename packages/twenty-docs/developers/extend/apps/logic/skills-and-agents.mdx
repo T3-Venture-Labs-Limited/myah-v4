@@ -109,6 +109,7 @@ import { runAgent } from 'twenty-sdk/logic-function';
 
 const { result, error, success } = await runAgent({
   agentUniversalIdentifier: 'b3c4d5e6-f7a8-9012-bcde-f34567890123',
+  operationId: event.id, // stable across retries of the same logical run
   prompt: 'Enrich House Ad <recordId>: fill empty fields from its listing URL.',
 });
 ```
@@ -116,6 +117,8 @@ const { result, error, success } = await runAgent({
 Key points:
 - The agent runs **synchronously** and can read/update records itself via its
   own tools — `runAgent()` resolves once the run completes.
+- `operationId` must uniquely identify the logical run and must be reused when
+  retrying that run; a new logical run needs a new identifier.
 - An app can only run its own agents.
 - The app's [default role](/developers/extend/apps/config/roles) must grant the
   `AI` permission flag — add `SystemPermissionFlag.AI` to its

@@ -1,14 +1,13 @@
 import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { type FlatObjectMetadataItem } from '@/metadata-store/types/FlatObjectMetadataItem';
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { PageLayoutLeftPanel } from '@/page-layout/components/PageLayoutLeftPanel';
 import { PageLayoutTabList } from '@/page-layout/components/PageLayoutTabList';
 import { PageLayoutTabListEffect } from '@/page-layout/components/PageLayoutTabListEffect';
 import { DEFAULT_RECORD_PAGE_LAYOUT_ID } from '@/page-layout/constants/DefaultRecordPageLayoutId';
 import { PAGE_LAYOUT_LEFT_PANEL_CONTAINER_WIDTH } from '@/page-layout/constants/PageLayoutLeftPanelContainerWidth';
-import { WIDGET_TYPE_TO_RELATION_FIELD_NAME } from '@/page-layout/constants/WidgetTypeToRelationFieldName';
 import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageLayoutOrThrow';
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
+import { usePageLayoutHiddenWidgetTypes } from '@/page-layout/hooks/usePageLayoutHiddenWidgetTypes';
 import { usePageLayoutAddTabStrategy } from '@/page-layout/hooks/usePageLayoutAddTabStrategy';
 import { useReorderRecordPageLayoutTabs } from '@/page-layout/hooks/useReorderRecordPageLayoutTabs';
 import { PageLayoutMainContent } from '@/page-layout/PageLayoutMainContent';
@@ -24,8 +23,6 @@ import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { styled } from '@linaria/react';
-import { useMemo } from 'react';
-import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { useIsMobile } from 'twenty-ui/utilities';
 
@@ -98,33 +95,7 @@ export const PageLayoutTabsRenderer = () => {
     currentPageLayout.id,
   );
 
-  const { objectMetadataItems } = useObjectMetadataItems();
-
-  const inactiveRelationFieldNames = useMemo(() => {
-    if (!isDefined(targetRecordIdentifier)) {
-      return new Set<string>();
-    }
-
-    const objectMetadataItem = objectMetadataItems.find(
-      (item) =>
-        item.nameSingular === targetRecordIdentifier.targetObjectNameSingular,
-    );
-
-    if (!isDefined(objectMetadataItem)) {
-      return new Set<string>();
-    }
-
-    return new Set(
-      objectMetadataItem.fields
-        .filter(
-          (field) =>
-            !field.isActive &&
-            (field.type === FieldMetadataType.RELATION ||
-              field.type === FieldMetadataType.MORPH_RELATION),
-        )
-        .map((field) => field.name),
-    );
-  }, [objectMetadataItems, targetRecordIdentifier]);
+  const hiddenWidgetTypes = usePageLayoutHiddenWidgetTypes();
 
   const isMobile = useIsMobile();
 
@@ -148,6 +119,7 @@ export const PageLayoutTabsRenderer = () => {
     isMobile,
     isInSidePanel,
     isEditMode: isPageLayoutInEditMode,
+    hiddenWidgetTypes,
   });
 
   const SYSTEM_OBJECT_TABS = ['Home', 'Timeline', 'Overview', 'Flow'];
@@ -169,23 +141,7 @@ export const PageLayoutTabsRenderer = () => {
     isInSidePanel,
   });
 
-  const sortedTabs = sortTabsByPosition(tabsToRenderInTabList);
-
-  const sortedActiveTabs = useMemo(
-    () =>
-      sortedTabs.filter((tab) => {
-        const widgetTypes = tab.widgets.map((widget) => widget.type);
-        return !widgetTypes.some((widgetType) => {
-          const relationFieldName =
-            WIDGET_TYPE_TO_RELATION_FIELD_NAME[widgetType];
-          return (
-            isDefined(relationFieldName) &&
-            inactiveRelationFieldNames.has(relationFieldName)
-          );
-        });
-      }),
-    [sortedTabs, inactiveRelationFieldNames],
-  );
+  const sortedActiveTabs = sortTabsByPosition(tabsToRenderInTabList);
 
   const activeTabExistsInCurrentPageLayout = currentPageLayout.tabs.some(
     (tab) => tab.id === activeTabId,

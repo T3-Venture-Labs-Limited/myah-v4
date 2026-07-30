@@ -56,6 +56,7 @@ const StyledTableRow = styled.div<{
 
 type TableRowProps = {
   id?: string;
+  role?: React.AriaRole;
   isSelected?: boolean;
   isExpanded?: boolean;
   isClickable?: boolean;
@@ -72,9 +73,9 @@ type TableRowProps = {
   cursor?: string;
   hoverBackgroundColor?: string;
 };
-
 export const TableRow = ({
   id,
+  role,
   isSelected,
   isExpanded,
   isClickable,
@@ -94,6 +95,7 @@ export const TableRow = ({
 }: React.PropsWithChildren<TableRowProps>) => (
   <StyledTableRow
     id={id}
+    role={role}
     isSelected={isSelected}
     isExpanded={isExpanded}
     onClick={onClick}

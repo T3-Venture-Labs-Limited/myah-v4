@@ -10,6 +10,7 @@ import { type FeatureFlagMap } from 'src/engine/core-modules/feature-flag/interf
 import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/workspace-internal-context.interface';
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
 import {
   PermissionsException,
   PermissionsExceptionCode,
@@ -54,6 +55,28 @@ export class WorkspaceSelectQueryBuilder<
 
   getFindOptions() {
     return this.findOptions;
+  }
+
+  public createPermissionAwareSelectQueryBuilder(
+    entityTarget: EntityTarget<ObjectLiteral>,
+    alias: string,
+  ): WorkspaceSelectQueryBuilder<ObjectLiteral> {
+    const queryBuilder = (
+      this.connection.manager as WorkspaceEntityManager
+    ).createQueryBuilder(entityTarget, alias, this.queryRunner, {
+      objectRecordsPermissions: this.objectRecordsPermissions,
+      shouldBypassPermissionChecks: this.shouldBypassPermissionChecks,
+    });
+
+    queryBuilder.internalContext = this.internalContext;
+    queryBuilder.authContext = this.authContext;
+    queryBuilder.featureFlagMap = this.featureFlagMap;
+
+    return queryBuilder;
+  }
+
+  public validatePermissionsBeforeSerialization(): void {
+    this.validatePermissions();
   }
 
   override clone(): this {

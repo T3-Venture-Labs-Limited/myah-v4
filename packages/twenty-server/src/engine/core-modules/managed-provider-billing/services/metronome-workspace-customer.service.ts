@@ -133,23 +133,22 @@ export class MetronomeWorkspaceCustomerService {
     }
 
     const contract = matchingContracts[0];
-    const rateCardPage = await this.metronomeClientService.listRateCards();
 
-    if (rateCardPage.hasNextPage) {
+    if (!contract.rateCardId) {
       throw this.createContractReconciliationError(error);
     }
 
-    const matchingRateCards = rateCardPage.rateCards.filter((rateCard) =>
-      rateCard.aliases.some(
-        (alias) =>
-          alias.name === rateCardAlias &&
-          this.isAliasActiveAt(alias, contract.startingAt),
-      ),
+    const rateCard = await this.metronomeClientService.getRateCard(
+      contract.rateCardId,
     );
 
     if (
-      matchingRateCards.length !== 1 ||
-      contract.rateCardId !== matchingRateCards[0].id
+      rateCard.id !== contract.rateCardId ||
+      !rateCard.aliases.some(
+        (alias) =>
+          alias.name === rateCardAlias &&
+          this.isAliasActiveAt(alias, contract.startingAt),
+      )
     ) {
       throw this.createContractReconciliationError(error);
     }

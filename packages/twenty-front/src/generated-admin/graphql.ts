@@ -397,8 +397,25 @@ export type MaintenanceMode = {
   startAt: Scalars['DateTime']['output'];
 };
 
+export type ManagedProviderCreditReceipt = {
+  __typename?: 'ManagedProviderCreditReceipt';
+  amountCents: Scalars['Int']['output'];
+  contractId: Scalars['UUID']['output'];
+  creditId?: Maybe<Scalars['UUID']['output']>;
+  currency: Scalars['String']['output'];
+  customerId: Scalars['UUID']['output'];
+  fundingActionCreatedAt: Scalars['DateTime']['output'];
+  fundingActionErrorCode?: Maybe<Scalars['String']['output']>;
+  fundingActionId: Scalars['UUID']['output'];
+  fundingActionState: Scalars['String']['output'];
+  fundingActionUpdatedAt: Scalars['DateTime']['output'];
+  metronomeEditId?: Maybe<Scalars['UUID']['output']>;
+  workspaceId: Scalars['UUID']['output'];
+};
+
 export enum ModelFamily {
   CLAUDE = 'CLAUDE',
+  DEEPSEEK = 'DEEPSEEK',
   GEMINI = 'GEMINI',
   GPT = 'GPT',
   GROK = 'GROK',
@@ -432,9 +449,12 @@ export type Mutation = {
   addModelToProvider: Scalars['Boolean']['output'];
   backfillApplicationInstallation: Scalars['Boolean']['output'];
   clearMaintenanceMode: Scalars['Boolean']['output'];
+  correctManagedProviderFunding: Scalars['Boolean']['output'];
   createDatabaseConfigVariable: Scalars['Boolean']['output'];
   deleteDatabaseConfigVariable: Scalars['Boolean']['output'];
   deleteJobs: DeleteJobsResponse;
+  grantManagedProviderCredit: ManagedProviderCreditReceipt;
+  recordManagedProviderOfflineCommitment: Scalars['Boolean']['output'];
   refreshUpgradeStatus: InstanceAndAllWorkspacesUpgradeStatus;
   removeAiProvider: Scalars['Boolean']['output'];
   removeModelFromProvider: Scalars['Boolean']['output'];
@@ -472,6 +492,17 @@ export type MutationBackfillApplicationInstallationArgs = {
 };
 
 
+export type MutationCorrectManagedProviderFundingArgs = {
+  amountCents: Scalars['Int']['input'];
+  correctedOperationId: Scalars['UUID']['input'];
+  currency?: Scalars['String']['input'];
+  externalReference: Scalars['String']['input'];
+  idempotencyKey: Scalars['String']['input'];
+  reason: Scalars['String']['input'];
+  workspaceId: Scalars['UUID']['input'];
+};
+
+
 export type MutationCreateDatabaseConfigVariableArgs = {
   key: Scalars['String']['input'];
   value: Scalars['JSON']['input'];
@@ -486,6 +517,28 @@ export type MutationDeleteDatabaseConfigVariableArgs = {
 export type MutationDeleteJobsArgs = {
   jobIds: Array<Scalars['String']['input']>;
   queueName: Scalars['String']['input'];
+};
+
+
+export type MutationGrantManagedProviderCreditArgs = {
+  amountCents: Scalars['Int']['input'];
+  endingBefore: Scalars['DateTime']['input'];
+  idempotencyKey: Scalars['String']['input'];
+  reason: Scalars['String']['input'];
+  workspaceId: Scalars['UUID']['input'];
+};
+
+
+export type MutationRecordManagedProviderOfflineCommitmentArgs = {
+  amountCents: Scalars['Int']['input'];
+  applicability?: InputMaybe<Scalars['String']['input']>;
+  currency?: Scalars['String']['input'];
+  expiresAt?: InputMaybe<Scalars['DateTime']['input']>;
+  externalReference: Scalars['String']['input'];
+  idempotencyKey: Scalars['String']['input'];
+  paymentEvidence: Scalars['String']['input'];
+  reason: Scalars['String']['input'];
+  workspaceId: Scalars['UUID']['input'];
 };
 
 

@@ -16,6 +16,7 @@ import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-e
 import type { SyncableFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-from.type';
 import type { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { getSubFlatEntityMapsByUniversalIdentifiersOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/get-sub-flat-entity-maps-by-universal-identifiers-or-throw.util';
+import { pruneDanglingForeignKeyAggregatorsInAllFlatEntityMapsThroughMutation } from 'src/engine/metadata-modules/flat-entity/utils/prune-dangling-foreign-key-aggregators-in-all-flat-entity-maps-through-mutation.util';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
 import { ALL_METADATA_ENTITY_BY_METADATA_NAME } from 'src/engine/metadata-modules/flat-entity/constant/all-metadata-entity-by-metadata-name.constant';
 import { TWENTY_STANDARD_ALL_METADATA_NAME } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-all-metadata-name.constant';
@@ -52,6 +53,7 @@ type UniversalMetadataEntity = {
   universalFlatIndexFieldMetadatas?: {
     fieldMetadataUniversalIdentifier: string;
   }[];
+  roleUniversalIdentifier?: string | null;
 };
 
 const getUniversalMetadataEntities = (
@@ -68,6 +70,16 @@ const toUniversalIdentifiers = (
 ) => new Set(entities.map(({ universalIdentifier }) => universalIdentifier));
 
 type SyncableFlatEntityMaps = FlatEntityMaps<SyncableFlatEntity>;
+type TwentyStandardMetadataName =
+  (typeof TWENTY_STANDARD_ALL_METADATA_NAME)[number];
+
+export type SynchronizeMyahStandardMetadataOptions = {
+  targetObjectUniversalIdentifiers?: ReadonlySet<string>;
+  migrateLegacyMyahApplication?: boolean;
+  explicitObsoleteUniversalIdentifiersByMetadataName?: Partial<
+    Record<TwentyStandardMetadataName, ReadonlySet<string>>
+  >;
+};
 
 
 @RegisteredWorkspaceCommand('2.20.0', 1784266302001)
@@ -89,11 +101,14 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     super(workspaceIteratorService);
   }
 
-  override async runOnWorkspace({
-    workspaceId,
-    options,
-  }: RunOnWorkspaceArgs): Promise<void> {
+  override runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    return this.synchronizeWorkspace(args);
+  }
 
+  async synchronizeWorkspace(
+    { workspaceId, options }: RunOnWorkspaceArgs,
+    syncOptions: SynchronizeMyahStandardMetadataOptions = {},
+  ): Promise<void> {
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow({
         workspaceId,
@@ -114,6 +129,9 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       ({ id }) => id,
     );
     const hasLegacyMyahApplication = legacyMyahApplicationIds.length > 0;
+        const shouldMigrateLegacyMyahApplication =
+          hasLegacyMyahApplication &&
+          syncOptions.migrateLegacyMyahApplication !== false;
     const metadataCacheKeys = [
       ...(TWENTY_STANDARD_ALL_METADATA_NAME.map(
         (metadataName) =>
@@ -130,49 +148,61 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       cachedMetadata.featureFlagsMap as AdditionalCacheDataMaps['featureFlagsMap'];
     const fromAllFlatEntityMaps =
       cachedMetadata as unknown as TwentyStandardAllFlatEntityMaps;
-    const {
-      allFlatEntityMaps: standardAllFlatEntityMaps,
-      idByUniversalIdentifierByMetadataName,
-    } = computeTwentyStandardApplicationAllFlatEntityMaps({
-      now: new Date().toISOString(),
-      workspaceId,
-      twentyStandardApplicationId: twentyStandardFlatApplication.id,
-      removeReplacedTwentyCrmMetadata: hasLegacyMyahApplication,
-    });
+    const { allFlatEntityMaps: standardAllFlatEntityMaps,
+    idByUniversalIdentifierByMetadataName, } = computeTwentyStandardApplicationAllFlatEntityMaps({ now: new Date().toISOString(),
+    workspaceId,
+    twentyStandardApplicationId: twentyStandardFlatApplication.id, removeReplacedTwentyCrmMetadata: shouldMigrateLegacyMyahApplication,  });
 
-    const objectUniversalIdentifiers = new Set<string>(
-      Object.values(MYAH_STANDARD_OBJECTS).map(
-        ({ universalIdentifier }) => universalIdentifier,
-      ),
-    );
+    const objectUniversalIdentifiers =
+          syncOptions.targetObjectUniversalIdentifiers ??
+          new Set<string>(
+            Object.values(MYAH_STANDARD_OBJECTS).map(
+              ({ universalIdentifier }) => universalIdentifier,
+            ),
+          );
     const standardFields = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     );
     const fieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardFields.filter(
-        (field) =>
-          objectUniversalIdentifiers.has(
-            field.objectMetadataUniversalIdentifier ?? '',
-          ) ||
-          objectUniversalIdentifiers.has(
-            field.relationTargetObjectMetadataUniversalIdentifier ?? '',
-          ),
+      standardFields.filter((field) =>
+        syncOptions.targetObjectUniversalIdentifiers === undefined
+          ? objectUniversalIdentifiers.has(
+              field.objectMetadataUniversalIdentifier ?? '',
+            ) ||
+            objectUniversalIdentifiers.has(
+              field.relationTargetObjectMetadataUniversalIdentifier ?? '',
+            )
+          : objectUniversalIdentifiers.has(
+                field.objectMetadataUniversalIdentifier ?? '',
+              ) &&
+              (field.relationTargetObjectMetadataUniversalIdentifier == null ||
+                objectUniversalIdentifiers.has(
+                  field.relationTargetObjectMetadataUniversalIdentifier,
+                )),
       ),
     );
     const standardIndexes = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatIndexMaps.byUniversalIdentifier,
     );
     const indexUniversalIdentifiers = toUniversalIdentifiers(
-      standardIndexes.filter(
-        (index) =>
-          objectUniversalIdentifiers.has(
-            index.objectMetadataUniversalIdentifier ?? '',
-          ) ||
-          index.universalFlatIndexFieldMetadatas?.some((indexField) =>
-            fieldUniversalIdentifiers.has(
-              indexField.fieldMetadataUniversalIdentifier,
-            ),
-          ) === true,
+      standardIndexes.filter((index) =>
+        syncOptions.targetObjectUniversalIdentifiers === undefined
+          ? objectUniversalIdentifiers.has(
+              index.objectMetadataUniversalIdentifier ?? '',
+            ) ||
+            index.universalFlatIndexFieldMetadatas?.some((indexField) =>
+              fieldUniversalIdentifiers.has(
+                indexField.fieldMetadataUniversalIdentifier,
+              ),
+            ) === true
+          : objectUniversalIdentifiers.has(
+                index.objectMetadataUniversalIdentifier ?? '',
+              ) &&
+              index.universalFlatIndexFieldMetadatas?.every((indexField) =>
+                fieldUniversalIdentifiers.has(
+                  indexField.fieldMetadataUniversalIdentifier,
+                ),
+              ) === true,
       ),
     );
     const standardViewFields = getUniversalMetadataEntities(
@@ -182,18 +212,31 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       standardAllFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
     );
     const viewUniversalIdentifiers = toUniversalIdentifiers(
-      standardViews.filter(
-        (view) =>
-          objectUniversalIdentifiers.has(
-            view.objectMetadataUniversalIdentifier ?? '',
-          ) ||
-          standardViewFields.some(
-            (viewField) =>
-              viewField.viewUniversalIdentifier === view.universalIdentifier &&
-              fieldUniversalIdentifiers.has(
-                viewField.fieldMetadataUniversalIdentifier ?? '',
-              ),
-          ),
+      standardViews.filter((view) =>
+        syncOptions.targetObjectUniversalIdentifiers === undefined
+          ? objectUniversalIdentifiers.has(
+              view.objectMetadataUniversalIdentifier ?? '',
+            ) ||
+            standardViewFields.some(
+              (viewField) =>
+                viewField.viewUniversalIdentifier === view.universalIdentifier &&
+                fieldUniversalIdentifiers.has(
+                  viewField.fieldMetadataUniversalIdentifier ?? '',
+                ),
+            )
+          : objectUniversalIdentifiers.has(
+                view.objectMetadataUniversalIdentifier ?? '',
+              ) &&
+              standardViewFields
+                .filter(
+                  (viewField) =>
+                    viewField.viewUniversalIdentifier === view.universalIdentifier,
+                )
+                .every((viewField) =>
+                  fieldUniversalIdentifiers.has(
+                    viewField.fieldMetadataUniversalIdentifier ?? '',
+                  ),
+                ),
       ),
     );
     const viewFilterUniversalIdentifiers = toUniversalIdentifiers(
@@ -284,31 +327,96 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     selectMetadata('view', viewUniversalIdentifiers);
     selectMetadata('viewFilter', viewFilterUniversalIdentifiers);
     selectMetadata('viewField', viewFieldUniversalIdentifiers);
-    selectMetadata('role', MYAH_ROLE_UNIVERSAL_IDENTIFIERS);
     selectMetadata(
-      'objectPermission',
-      toUniversalIdentifiers(
-        getUniversalMetadataEntities(
-          standardAllFlatEntityMaps.flatObjectPermissionMaps
-            .byUniversalIdentifier,
-        ),
-      ),
+      'role',
+      syncOptions.targetObjectUniversalIdentifiers === undefined
+        ? MYAH_ROLE_UNIVERSAL_IDENTIFIERS
+        : new Set(
+            [
+              ...getUniversalMetadataEntities(
+                standardAllFlatEntityMaps.flatObjectPermissionMaps
+                  .byUniversalIdentifier,
+              ).filter((objectPermission) =>
+                objectUniversalIdentifiers.has(
+                  objectPermission.objectMetadataUniversalIdentifier ?? '',
+                ),
+              ),
+              ...getUniversalMetadataEntities(
+                standardAllFlatEntityMaps.flatFieldPermissionMaps.byUniversalIdentifier,
+              ).filter((fieldPermission) =>
+                syncOptions.targetObjectUniversalIdentifiers === undefined
+                  ? objectUniversalIdentifiers.has(
+                      fieldPermission.objectMetadataUniversalIdentifier ?? '',
+                    ) ||
+                    fieldUniversalIdentifiers.has(
+                      fieldPermission.fieldMetadataUniversalIdentifier ?? '',
+                    )
+                  : objectUniversalIdentifiers.has(
+                        fieldPermission.objectMetadataUniversalIdentifier ?? '',
+                      ) &&
+                      fieldUniversalIdentifiers.has(
+                        fieldPermission.fieldMetadataUniversalIdentifier ?? '',
+                      ),
+              ),
+            ]
+              .map((permission) => permission.roleUniversalIdentifier)
+              .filter(isDefined),
+          ),
     );
     selectMetadata(
-      'fieldPermission',
-      toUniversalIdentifiers(
-        getUniversalMetadataEntities(
-          standardAllFlatEntityMaps.flatFieldPermissionMaps.byUniversalIdentifier,
-        ),
-      ),
-    );
+          'objectPermission',
+          toUniversalIdentifiers(
+            getUniversalMetadataEntities(
+              standardAllFlatEntityMaps.flatObjectPermissionMaps
+                .byUniversalIdentifier,
+            ).filter((objectPermission) =>
+              objectUniversalIdentifiers.has(
+                objectPermission.objectMetadataUniversalIdentifier ?? '',
+              ),
+            ),
+          ),
+        );
+    selectMetadata(
+          'fieldPermission',
+          toUniversalIdentifiers(
+            getUniversalMetadataEntities(
+              standardAllFlatEntityMaps.flatFieldPermissionMaps.byUniversalIdentifier,
+            ).filter((fieldPermission) =>
+              syncOptions.targetObjectUniversalIdentifiers === undefined
+                ? objectUniversalIdentifiers.has(
+                    fieldPermission.objectMetadataUniversalIdentifier ?? '',
+                  ) ||
+                  fieldUniversalIdentifiers.has(
+                    fieldPermission.fieldMetadataUniversalIdentifier ?? '',
+                  )
+                : objectUniversalIdentifiers.has(
+                      fieldPermission.objectMetadataUniversalIdentifier ?? '',
+                    ) &&
+                    fieldUniversalIdentifiers.has(
+                      fieldPermission.fieldMetadataUniversalIdentifier ?? '',
+                    ),
+            ),
+          ),
+        );
     selectMetadata('pageLayout', pageLayoutUniversalIdentifiers);
     selectMetadata('pageLayoutTab', pageLayoutTabUniversalIdentifiers);
     selectMetadata('pageLayoutWidget', pageLayoutWidgetUniversalIdentifiers);
-    selectMetadata(
-      'navigationMenuItem',
-      navigationMenuItemUniversalIdentifiers,
-    );
+    {
+      selectMetadata(
+        'navigationMenuItem',
+        navigationMenuItemUniversalIdentifiers,
+      );
+      pruneDanglingForeignKeyAggregatorsInAllFlatEntityMapsThroughMutation({
+        allFlatEntityMapsToMutate: toAllFlatEntityMaps,
+      });
+    }
+    const hasExplicitObsoleteUniversalIdentifiers =
+      TWENTY_STANDARD_ALL_METADATA_NAME.some(
+        (metadataName) =>
+          (syncOptions.explicitObsoleteUniversalIdentifiersByMetadataName?.[
+            metadataName
+          ]?.size ?? 0) > 0,
+      );
     const hasCompleteNativeMyahGraph =
       TWENTY_STANDARD_ALL_METADATA_NAME.every((metadataName) => {
         const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
@@ -334,19 +442,23 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         );
       });
 
-    if (!hasLegacyMyahApplication && hasCompleteNativeMyahGraph) {
+    if (
+      !hasLegacyMyahApplication &&
+      hasCompleteNativeMyahGraph &&
+      !hasExplicitObsoleteUniversalIdentifiers
+    ) {
       this.logger.log(
         `Skipping Myah standard metadata synchronization for workspace ${workspaceId}: native metadata graph is already complete`,
       );
 
       return;
     }
-    const obsoleteUniversalIdentifiersByMetadataName =
-      hasLegacyMyahApplication
-        ? getReplacedTwentyCrmMetadataUniversalIdentifiers(
-            fromAllFlatEntityMaps as TwentyStandardAllFlatEntityMaps,
-          )
-        : {};
+    const legacyObsoleteUniversalIdentifiersByMetadataName =
+          shouldMigrateLegacyMyahApplication
+            ? getReplacedTwentyCrmMetadataUniversalIdentifiers(
+                fromAllFlatEntityMaps as TwentyStandardAllFlatEntityMaps,
+              )
+            : {};
 
     const fromMyahFlatEntityMaps = createEmptyAllFlatEntityMaps();
     const dependencyAllFlatEntityMaps = createEmptyAllFlatEntityMaps();
@@ -366,7 +478,11 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       )[flatEntityMapsKey] = structuredClone(fromFlatEntityMaps);
       const universalIdentifiers = new Set([
         ...Object.keys(toFlatEntityMaps.byUniversalIdentifier),
-        ...(obsoleteUniversalIdentifiersByMetadataName[metadataName] ?? []),
+        ...(legacyObsoleteUniversalIdentifiersByMetadataName[metadataName] ??
+          []),
+        ...(syncOptions.explicitObsoleteUniversalIdentifiersByMetadataName?.[
+          metadataName
+        ] ?? []),
       ]);
 
       const fromFlatEntitySubMaps =
@@ -413,9 +529,9 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       );
     }
 
-    if (options.dryRun || legacyMyahApplicationIds.length === 0) {
-      return;
-    }
+    if (options.dryRun || !shouldMigrateLegacyMyahApplication) {
+          return;
+        }
 
     const queryRunner = this.coreDataSource.createQueryRunner();
 

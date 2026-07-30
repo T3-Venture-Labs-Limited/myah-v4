@@ -15,6 +15,17 @@ describe('ManagedProviderOperationEntity', () => {
       (candidate) => candidate.target === ManagedProviderOperationEntity,
     );
 
+    expect(
+      columns.find((column) => column.propertyName === 'workspaceId')?.options,
+    ).toMatchObject({ type: 'uuid' });
+    expect(
+      metadata.relations.some(
+        (candidate) =>
+          candidate.target === ManagedProviderOperationEntity &&
+          candidate.propertyName === 'workspace',
+      ),
+    ).toBe(false);
+
     expect(table).toMatchObject({
       name: 'managedProviderOperation',
       schema: 'core',

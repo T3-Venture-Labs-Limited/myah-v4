@@ -1,4 +1,4 @@
-import { ViewType } from 'twenty-shared/types';
+import { ViewOpenRecordIn, ViewType } from 'twenty-shared/types';
 import { type FlatView } from 'src/engine/metadata-modules/flat-view/types/flat-view.type';
 import {
   createStandardViewFlatMetadata,
@@ -54,6 +54,19 @@ export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
       key: null,
       position: 0,
       icon: 'IconTargetArrow',
+      openRecordIn: ViewOpenRecordIn.RECORD_PAGE,
+    },
+  }),
+  campaignOverviewFields: createStandardViewFlatMetadata({
+    ...args,
+    objectName: 'campaign',
+    context: {
+      viewName: 'view6bfee1b9',
+      name: 'Campaign Overview Fields',
+      type: ViewType.FIELDS_WIDGET,
+      key: null,
+      position: 1,
+      icon: 'IconList',
     },
   }),
   creatorLists: createStandardViewFlatMetadata({
@@ -80,6 +93,30 @@ export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
       icon: 'IconUserStar',
     },
   }),
+  creatorMetrics: createStandardViewFlatMetadata({
+    ...args,
+    objectName: 'creator',
+    context: {
+      viewName: 'creatorMetrics',
+      name: 'Creator metrics',
+      type: ViewType.TABLE,
+      key: null,
+      position: 2,
+      icon: 'IconChartBar',
+    },
+  }),
+  qualifiedCreatorsWithEmail: createStandardViewFlatMetadata({
+    ...args,
+    objectName: 'creator',
+    context: {
+      viewName: 'qualifiedCreatorsWithEmail',
+      name: 'Qualified creators with email',
+      type: ViewType.TABLE,
+      key: null,
+      position: 1,
+      icon: 'IconUsers',
+    },
+  }),
 });
 export const computeMyahBrandBrainPageViews = (args: Args) =>
   Object.fromEntries(
@@ -98,7 +135,7 @@ export const computeMyahBrandBrainUpdateProposalViews = (args: Args) =>
 export const computeMyahCampaignViews = (args: Args) =>
   Object.fromEntries(
     Object.entries(computeMyahViews(args)).filter(
-      ([key]) => key === 'campaigns',
+      ([key]) => key === 'campaigns' || key === 'campaignOverviewFields',
     ),
   );
 export const computeMyahCreatorListViews = (args: Args) =>
@@ -110,6 +147,9 @@ export const computeMyahCreatorListViews = (args: Args) =>
 export const computeMyahCreatorViews = (args: Args) =>
   Object.fromEntries(
     Object.entries(computeMyahViews(args)).filter(
-      ([key]) => key === 'creators',
+      ([key]) =>
+        key === 'creators' ||
+        key === 'creatorMetrics' ||
+        key === 'qualifiedCreatorsWithEmail',
     ),
   );

@@ -7,11 +7,7 @@ test('Create workflow', async ({ page }) => {
 
   await page.goto(process.env.LINK);
 
-  const workflowsFolder = page.getByRole('button', { name: 'Workflows' });
-  await workflowsFolder.click();
-
-  const workflowsLink = page.getByRole('link', { name: 'Workflows' });
-  await workflowsLink.click();
+  await page.getByRole('link', { name: 'Automations' }).click();
 
   const createWorkflowButton = page.getByRole('button', {
     name: 'Create new workflow',
@@ -28,9 +24,8 @@ test('Create workflow', async ({ page }) => {
       return requestBody.operationName === 'CreateOneWorkflow';
     }),
 
-    createWorkflowButton.click()
+    createWorkflowButton.click(),
   ]);
-
 
   const recordName = page.getByTestId('top-bar-title').getByPlaceholder('Name');
   await expect(recordName).toBeVisible();
