@@ -55,6 +55,9 @@ export const STANDARD_OBJECTS = {
       targetWorkflow: {
         universalIdentifier: '20202020-f1e8-4c9d-8a7b-3f5e1d2c9a8b',
       },
+      targetCreator: {
+        universalIdentifier: '179b4088-ecec-5113-8397-5b85ffd3d542',
+      },
       position: {
         universalIdentifier: 'cef8f62c-cd46-4444-8cbb-17d463b7464a',
       },
@@ -2482,6 +2485,9 @@ export const STANDARD_OBJECTS = {
       },
       targetMessageCampaign: {
         universalIdentifier: 'b2c3d4e5-6f70-4b81-8c92-03d4e5f60718',
+      },
+      targetCreator: {
+        universalIdentifier: '81c0d29d-abc3-5b58-a15d-e573ea52de57',
       },
       linkedRecordCachedName: {
         universalIdentifier: '20202020-cfdb-4bef-bbce-a29f41230934',

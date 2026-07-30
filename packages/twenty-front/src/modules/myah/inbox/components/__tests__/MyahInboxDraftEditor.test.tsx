@@ -1,5 +1,5 @@
 /* oxlint-disable react/jsx-props-no-spreading -- Tests reuse a typed baseline prop fixture. */
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import type * as ReactType from 'react';
 
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
@@ -95,6 +95,7 @@ const defaultProps = {
   canEdit: true,
   readOnlyReason: undefined,
   appliedProposal: null,
+  proposalAction: null,
 };
 
 describe('MyahInboxDraftEditor', () => {
@@ -152,28 +153,24 @@ describe('MyahInboxDraftEditor', () => {
     });
   });
 
-  it('clears the shared draft explicitly with a null body', async () => {
-    mockSaveDraft.mockResolvedValue({
-      status: 'SAVED',
-      revision: 3,
-      body: null,
-    });
-
-    render(<MyahInboxDraftEditor {...defaultProps} />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Clear draft' }));
-    });
-
-    expect(mockSaveDraft).toHaveBeenCalledWith({
-      threadId: 'thread-1',
-      expectedRevision: 2,
-      body: null,
-    });
-    expect(screen.getByLabelText('Shared reply draft')).toHaveValue('');
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Draft cleared at revision 3',
+  it('keeps Save draft and proposal generation in one action row without Clear draft', () => {
+    render(
+      <MyahInboxDraftEditor
+        {...defaultProps}
+        proposalAction={<button>Generate proposal</button>}
+      />,
     );
+
+    const actions = screen.getByLabelText('Draft actions');
+    expect(
+      within(actions).getByRole('button', { name: 'Save draft' }),
+    ).toBeVisible();
+    expect(
+      within(actions).getByRole('button', { name: 'Generate proposal' }),
+    ).toBeVisible();
+    expect(
+      within(actions).queryByRole('button', { name: 'Clear draft' }),
+    ).not.toBeInTheDocument();
   });
 
   it('preserves edits made while save is in flight and saves them against the confirmed revision', async () => {

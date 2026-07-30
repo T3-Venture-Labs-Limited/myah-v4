@@ -68,9 +68,9 @@ describe('MyahInboxProposalPreview', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Proposal instructions'), {
-      target: { value: 'Keep it concise' },
-    });
+    expect(
+      screen.queryByLabelText('Proposal instructions'),
+    ).not.toBeInTheDocument();
     await act(async () => {
       fireEvent.click(
         screen.getByRole('button', { name: 'Generate proposal' }),
@@ -79,7 +79,7 @@ describe('MyahInboxProposalPreview', () => {
 
     expect(mockGenerateProposal).toHaveBeenCalledWith({
       threadId: 'thread-1',
-      operatorInstructions: 'Keep it concise',
+      operatorInstructions: 'Draft a concise reply to this conversation.',
     });
     expect(screen.getByText('Re: Spring campaign')).toBeVisible();
     expect(screen.getByLabelText('Proposal preview')).toHaveTextContent(
@@ -94,7 +94,24 @@ describe('MyahInboxProposalPreview', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows a retryable proposal error without clearing instructions', async () => {
+  it('lets the shared composer render proposal generation beside Save draft', () => {
+    render(
+      <MyahInboxProposalPreview
+        threadId="thread-1"
+        disabled={false}
+        onApply={jest.fn()}
+        renderGenerateAction={(generateAction) => (
+          <div aria-label="Draft actions">{generateAction}</div>
+        )}
+      />,
+    );
+
+    expect(screen.getByLabelText('Draft actions')).toContainElement(
+      screen.getByRole('button', { name: 'Generate proposal' }),
+    );
+  });
+
+  it('shows a retryable proposal error', async () => {
     mockGenerateProposal.mockRejectedValue(new Error('model unavailable'));
 
     render(
@@ -105,9 +122,6 @@ describe('MyahInboxProposalPreview', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Proposal instructions'), {
-      target: { value: 'Mention the deadline' },
-    });
     await act(async () => {
       fireEvent.click(
         screen.getByRole('button', { name: 'Generate proposal' }),
@@ -116,9 +130,6 @@ describe('MyahInboxProposalPreview', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Could not generate a proposal. Try again.',
-    );
-    expect(screen.getByLabelText('Proposal instructions')).toHaveValue(
-      'Mention the deadline',
     );
   });
 
@@ -131,7 +142,6 @@ describe('MyahInboxProposalPreview', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Proposal instructions')).toBeDisabled();
     expect(
       screen.getByRole('button', { name: 'Generate proposal' }),
     ).toBeDisabled();

@@ -74,7 +74,9 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
   let originalThread: ThreadSnapshot;
 
   beforeAll(async () => {
-    const inboxResponse = await makeGraphqlAPIRequest({ query: inboxThreadQuery });
+    const inboxResponse = await makeGraphqlAPIRequest({
+      query: inboxThreadQuery,
+    });
 
     expect(inboxResponse.status).toBe(200);
     expect(inboxResponse.body.errors).toBeUndefined();
@@ -118,7 +120,12 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
               "myahReplyDraftBodyBlocknote" = $4,
               "myahReplyDraftRevision" = 2
         WHERE "id" = $1`,
-      [threadId, WORKSPACE_MEMBER_DATA_SEED_IDS.JANE, baselineDraft.markdown, baselineDraft.blocknote],
+      [
+        threadId,
+        WORKSPACE_MEMBER_DATA_SEED_IDS.JANE,
+        baselineDraft.markdown,
+        baselineDraft.blocknote,
+      ],
     );
   });
 
@@ -156,7 +163,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
     );
   });
 
-  it('persists one CAS save, returns the current row on stale save, and transfers then removes owner authority without changing the draft', async () => {
+  it('persists CAS saves for readable workspace members despite triage owner changes', async () => {
     const saved = await makeGraphqlAPIRequest({
       query: saveDraftMutation,
       variables: {
@@ -208,18 +215,29 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
       WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
     );
 
-    const oldOwnerWrite = await makeGraphqlAPIRequest({
+    const reassignedMemberWrite = await makeGraphqlAPIRequest({
       query: saveDraftMutation,
       variables: {
         input: {
           threadId,
           expectedRevision: 3,
-          body: { markdown: 'Jane no longer owns this', blocknote: null },
+          body: {
+            markdown: 'Jane can still edit after reassignment',
+            blocknote: null,
+          },
         },
       },
     });
 
-    expect(oldOwnerWrite.body.errors).toBeDefined();
+    expect(reassignedMemberWrite.body.errors).toBeUndefined();
+    expect(reassignedMemberWrite.body.data.saveMyahInboxDraft).toEqual({
+      status: 'SAVED',
+      revision: 4,
+      body: {
+        markdown: 'Jane can still edit after reassignment',
+        blocknote: null,
+      },
+    });
 
     const newOwnerWrite = await makeGraphqlAPIRequest(
       {
@@ -227,7 +245,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
         variables: {
           input: {
             threadId,
-            expectedRevision: 3,
+            expectedRevision: 4,
             body: { markdown: 'Jony current copy', blocknote: null },
           },
         },
@@ -238,7 +256,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
     expect(newOwnerWrite.body.errors).toBeUndefined();
     expect(newOwnerWrite.body.data.saveMyahInboxDraft).toEqual({
       status: 'SAVED',
-      revision: 4,
+      revision: 5,
       body: { markdown: 'Jony current copy', blocknote: null },
     });
 
@@ -269,7 +287,7 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
       inboxOwnerId: null,
       myahReplyDraftBodyMarkdown: 'Jony current copy',
       myahReplyDraftBodyBlocknote: null,
-      myahReplyDraftRevision: 4,
+      myahReplyDraftRevision: 5,
     });
   });
 

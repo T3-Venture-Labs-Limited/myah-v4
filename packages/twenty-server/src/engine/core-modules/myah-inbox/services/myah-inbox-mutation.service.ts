@@ -123,6 +123,7 @@ export class MyahInboxMutationService {
           attempt++
         ) {
           const patch = this.buildTriagePatch(input, thread);
+          await this.assertPolicyVisibleThread(input);
           const result = await transactionalRepositories.messageThread.update(
             { id: input.threadId, inboxState: thread.inboxState },
             patch,
@@ -174,31 +175,33 @@ export class MyahInboxMutationService {
               rolePermissionConfig,
               input.authContext,
             );
+            const draftRepository = (
+              manager as WorkspaceEntityManager
+            ).getRepository<InboxThreadRecord>(
+              repositories.messageThread.target,
+              { shouldBypassPermissionChecks: true },
+              input.authContext,
+            );
 
             await this.assertReadableCurrentMember(
               transactionalRepositories.workspaceMember,
               input.workspaceMemberId,
-            );
-            const thread = await this.loadReadableThread(
-              transactionalRepositories.messageThread,
-              input.threadId,
             );
 
             await this.assertReplyEligible(
               transactionalRepositories.message,
               input.threadId,
             );
-            this.assertDraftOwner(thread, input.workspaceMemberId);
+            await this.assertPolicyVisibleThread(input);
 
             const draftPatch = {
               myahReplyDraftBody: input.body,
               myahReplyDraftRevision: () => '"myahReplyDraftRevision" + 1',
             } as unknown as QueryDeepPartialEntity<InboxThreadRecord>;
 
-            const result = await transactionalRepositories.messageThread.update(
+            const result = await draftRepository.update(
               {
                 id: input.threadId,
-                inboxOwnerId: input.workspaceMemberId,
                 myahReplyDraftRevision: input.expectedRevision,
               },
               draftPatch,
@@ -222,8 +225,6 @@ export class MyahInboxMutationService {
               transactionalRepositories.messageThread,
               input.threadId,
             );
-
-            this.assertDraftOwner(current, input.workspaceMemberId);
 
             if (current.myahReplyDraftRevision === input.expectedRevision) {
               throw new ForbiddenException('Inbox draft is not writable');
@@ -595,16 +596,5 @@ export class MyahInboxMutationService {
     }
 
     return patch;
-  }
-
-  private assertDraftOwner(
-    thread: InboxThreadRecord,
-    workspaceMemberId: string,
-  ): void {
-    if (thread.inboxOwnerId !== workspaceMemberId) {
-      throw new ForbiddenException(
-        'Only the current Inbox owner may edit the shared draft',
-      );
-    }
   }
 }

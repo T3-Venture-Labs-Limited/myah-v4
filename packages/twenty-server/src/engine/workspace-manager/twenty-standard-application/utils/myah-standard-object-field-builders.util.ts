@@ -4230,6 +4230,50 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        timelineActivities: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'timelineActivities',
+            label: 'Timeline Activities',
+            description: 'Creators tied to the Creator',
+            icon: 'IconBuildingSkyscraper',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'timelineActivity',
+            targetFieldName: 'targetCreator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        attachments: createStandardRelationFieldFlatMetadata({
+          objectName: 'creator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'attachments',
+            label: 'Attachments',
+            description: 'Creators tied to the Creator',
+            icon: 'IconBuildingSkyscraper',
+            isNullable: true,
+            isUIEditable: false,
+            targetObjectName: 'attachment',
+            targetFieldName: 'targetCreator',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         noteTargets: createStandardRelationFieldFlatMetadata({
           objectName: 'creator',
           workspaceId: args.workspaceId,
@@ -4280,4 +4324,4 @@ export const buildMyahStandardFlatFieldMetadatas = ({
       return {};
   }
 };
-export const MYAH_RELATION_FIELD_COUNT = 36;
+export const MYAH_RELATION_FIELD_COUNT = 38;

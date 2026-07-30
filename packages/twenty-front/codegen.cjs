@@ -28,6 +28,7 @@ module.exports = {
           DateTime: 'string',
         },
         namingConvention: { enumValues: 'keep' },
+        useTypeImports: true,
       },
     },
   },

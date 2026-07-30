@@ -1,9 +1,24 @@
 /* oxlint-disable react/jsx-props-no-spreading -- Tests reuse a typed baseline prop fixture. */
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import type * as ReactType from 'react';
 import { useState } from 'react';
 
 import { MyahInboxThreadList } from '@/myah/inbox/components/MyahInboxThreadList';
 
+let mockObjectMetadataItems = [{ nameSingular: 'campaign' }];
+const mockOpenRecordInSidePanel = jest.fn();
+
+jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
+  useObjectMetadataItems: () => ({
+    objectMetadataItems: mockObjectMetadataItems,
+  }),
+}));
+
+jest.mock('@/side-panel/hooks/useOpenRecordInSidePanel', () => ({
+  useOpenRecordInSidePanel: () => ({
+    openRecordInSidePanel: mockOpenRecordInSidePanel,
+  }),
+}));
 jest.mock('twenty-ui/theme-constants', () => ({
   themeCssVariables: {
     background: {
@@ -39,6 +54,9 @@ jest.mock('twenty-ui/input', () => ({
     <button disabled={disabled} onClick={onClick}>
       {title}
     </button>
+  ),
+  IconButton: ({ ariaLabel }: { ariaLabel: string }) => (
+    <button aria-label={ariaLabel} />
   ),
 }));
 
@@ -81,10 +99,12 @@ jest.mock('@/ui/input/components/TextInput', () => ({
     label,
     value,
     onChange,
+    rightAdornment,
   }: {
     label: string;
     value: string;
     onChange: (value: string) => void;
+    rightAdornment?: React.ReactNode;
   }) => (
     <label>
       {label}
@@ -93,7 +113,39 @@ jest.mock('@/ui/input/components/TextInput', () => ({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
+      {rightAdornment}
     </label>
+  ),
+}));
+
+jest.mock('@/ui/layout/dropdown/components/Dropdown', () => {
+  const React = jest.requireActual('react') as typeof ReactType;
+
+  return {
+    Dropdown: ({
+      clickableComponent,
+      dropdownComponents,
+    }: {
+      clickableComponent: React.ReactNode;
+      dropdownComponents: React.ReactNode;
+    }) => {
+      const [isOpen, setIsOpen] = React.useState(false);
+
+      return (
+        <div>
+          <div onClick={() => setIsOpen((current) => !current)}>
+            {clickableComponent}
+          </div>
+          {isOpen && dropdownComponents}
+        </div>
+      );
+    },
+  };
+});
+
+jest.mock('@/ui/layout/dropdown/components/DropdownContent', () => ({
+  DropdownContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
 }));
 
@@ -145,20 +197,20 @@ const threads = [
     lastMessageSender: 'Grace',
     state: 'WAITING_ON_CREATOR' as const,
     snoozedUntil: null,
-    creator: { id: 'creator-2', name: 'Grace Creator' },
+    creator: null,
     campaign: { id: 'campaign-1', name: 'Spring campaign' },
     inboxOwner: null,
   },
 ];
 
 const filters = {
-  queue: 'CREATOR_LINKED' as const,
   owner: '',
   campaignId: null,
   campaignWorkspaceId: null,
   states: [] as Array<
     'NEEDS_REPLY' | 'WAITING_ON_CREATOR' | 'SNOOZED' | 'CLOSED'
   >,
+  snoozeStatus: '' as const,
   search: '',
 };
 
@@ -182,6 +234,22 @@ afterEach(() => {
 describe('MyahInboxThreadList', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockObjectMetadataItems = [{ nameSingular: 'campaign' }];
+  });
+
+  it('defers the campaign picker until campaign metadata is available', () => {
+    mockObjectMetadataItems = [];
+
+    render(<MyahInboxThreadList {...defaultProps} />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Filter conversations' }),
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading campaign filter',
+    );
+    expect(screen.queryByLabelText('Campaign filter')).not.toBeInTheDocument();
   });
 
   it('moves selection and DOM focus explicitly with arrow, Home, and End keys', () => {
@@ -212,7 +280,24 @@ describe('MyahInboxThreadList', () => {
     expect(secondRow).toHaveFocus();
   });
 
-  it('renders labelled queue, owner, state, campaign, and search filters', () => {
+  it('opens a linked Creator in the native side panel without selecting the thread', () => {
+    const onSelectThread = jest.fn();
+
+    render(
+      <MyahInboxThreadList {...defaultProps} onSelectThread={onSelectThread} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ada Creator' }));
+
+    expect(mockOpenRecordInSidePanel).toHaveBeenCalledWith({
+      recordId: 'creator-1',
+      objectNameSingular: 'creator',
+      resetNavigationStack: true,
+    });
+    expect(onSelectThread).not.toHaveBeenCalled();
+  });
+
+  it('keeps State and Campaign in a search-adjacent filter menu', () => {
     const onFiltersChange = jest.fn();
 
     render(
@@ -222,18 +307,15 @@ describe('MyahInboxThreadList', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Queue'), {
-      target: { value: 'UNMATCHED' },
-    });
-    expect(onFiltersChange).toHaveBeenCalledWith({
-      ...filters,
-      queue: 'UNMATCHED',
-    });
+    expect(screen.queryByLabelText('Queue')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Owner')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Snooze status')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('State')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Campaign filter')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Owner'), {
-      target: { value: 'ME' },
-    });
-    expect(onFiltersChange).toHaveBeenCalledWith({ ...filters, owner: 'ME' });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Filter conversations' }),
+    );
 
     fireEvent.change(screen.getByLabelText('State'), {
       target: { value: 'CLOSED' },
@@ -257,28 +339,52 @@ describe('MyahInboxThreadList', () => {
     expect(onFiltersChange).toHaveBeenCalledWith({ ...filters, search: 'Ada' });
   });
 
-  it('distinguishes an empty Inbox from an empty Unmatched queue', () => {
-    const { rerender } = render(
-      <MyahInboxThreadList {...defaultProps} threads={[]} />,
-    );
+  it('renders neutral empty-Inbox copy', () => {
+    render(<MyahInboxThreadList {...defaultProps} threads={[]} />);
 
     expect(screen.getByText('Inbox is clear')).toBeVisible();
     expect(
-      screen.getByText('New creator conversations will appear here.'),
+      screen.getByText('New readable conversations will appear here.'),
     ).toBeVisible();
+    expect(
+      screen.queryByText('No unmatched conversations'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Unmatched')).not.toBeInTheDocument();
+  });
 
-    rerender(
+  it('labels a missing sender as unlinked rather than unmatched', () => {
+    render(
       <MyahInboxThreadList
         {...defaultProps}
-        threads={[]}
-        filters={{ ...filters, queue: 'UNMATCHED' }}
+        threads={[{ ...threads[0], creator: null, lastMessageSender: null }]}
       />,
     );
 
-    expect(screen.getByText('No unmatched conversations')).toBeVisible();
-    expect(
-      screen.getByText('Threads without a creator match will appear here.'),
-    ).toBeVisible();
+    expect(screen.getByText('Unlinked sender')).toBeVisible();
+    expect(screen.queryByText('Unmatched sender')).not.toBeInTheDocument();
+  });
+
+  it('renders a Campaign pill only for threads with a named linked Campaign', () => {
+    render(
+      <MyahInboxThreadList
+        {...defaultProps}
+        threads={[
+          {
+            ...threads[0],
+            campaign: { id: 'campaign-1', name: 'Spring campaign' },
+          },
+          { ...threads[1], campaign: null },
+          {
+            ...threads[1],
+            id: 'thread-3',
+            campaign: { id: 'campaign-2', name: null },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByLabelText('Campaign: Spring campaign')).toBeVisible();
+    expect(screen.getAllByLabelText(/Campaign:/)).toHaveLength(1);
   });
 
   it('surfaces an expired snooze as due while leaving future snoozes snoozed', () => {

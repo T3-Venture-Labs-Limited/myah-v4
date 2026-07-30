@@ -39,6 +39,12 @@ type ChatStreamTextOptions = {
         arguments: Record<string, unknown>;
       }) => Promise<unknown>;
     };
+    learn_tools: {
+      execute: (input: {
+        toolNames: string[];
+        aspects?: string[];
+      }) => Promise<unknown>;
+    };
   };
 };
 
@@ -56,6 +62,19 @@ const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
   const toolRegistry = {
     buildToolIndex: jest.fn().mockResolvedValue([]),
     getToolsByName: jest.fn().mockResolvedValue({}),
+    getToolInfo: jest.fn().mockImplementation((toolNames: string[]) =>
+      Promise.resolve(
+        toolNames.includes('send_email')
+          ? [
+              {
+                name: 'send_email',
+                description: 'Send email',
+                inputSchema: {},
+              },
+            ]
+          : [],
+      ),
+    ),
     resolveAndExecute: jest.fn().mockResolvedValue({ success: true }),
   };
   const skillService = {
@@ -364,6 +383,91 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
         },
       }),
       expect.any(Object),
+    );
+  });
+
+  it('blocks provider sends and schema discovery for a selected Inbox thread after generic approval', async () => {
+    const selectedThreadId = '3ceef358-55fc-4d47-a7a8-2d8ac543641b';
+    const { service, toolRegistry } = buildService();
+
+    toolRegistry.buildToolIndex.mockResolvedValue([
+      {
+        name: 'send_email',
+        label: 'Send email',
+        description: 'Send email',
+        category: 'ACTION',
+        executionRef: { kind: 'static', toolId: 'send_email' },
+      },
+    ]);
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'chat-thread-id',
+      browsingContext: {
+        type: 'myahInboxThreadSelection',
+        workspaceId: 'workspace-id',
+        threadId: selectedThreadId,
+      } as never,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'approved-message-id',
+          role: 'assistant',
+          parts: [
+            {
+              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+              toolCallId: 'generic-approval-call',
+              state: 'output-available',
+              input: {},
+              output: {
+                result: {
+                  status: 'resolved',
+                  decision: 'approved',
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const streamTextCall = getLastChatStreamTextOptions();
+    const executeToolOptions = jest.mocked(createExecuteToolTool).mock
+      .lastCall?.[2];
+
+    expect(executeToolOptions?.excludeTools).toContain('send_email');
+    const execution = streamTextCall.tools.execute_tool.execute({
+      toolName: 'send_email',
+      arguments: {},
+    });
+    const learned = streamTextCall.tools.learn_tools.execute({
+      toolNames: ['send_email'],
+    });
+
+    await jest.runOnlyPendingTimersAsync();
+
+    await expect(execution).resolves.toEqual(
+      expect.objectContaining({
+        success: false,
+        message: 'Tool "send_email" is not available',
+      }),
+    );
+    await expect(learned).resolves.toEqual({
+      tools: [],
+      notFound: [],
+      message: 'No matching tools found.',
+    });
+    expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalled();
+    expect(toolRegistry.getToolInfo).toHaveBeenCalledWith(
+      [],
+      expect.anything(),
+      undefined,
     );
   });
 

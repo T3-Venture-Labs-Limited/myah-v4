@@ -1,24 +1,15 @@
 import { FormAdvancedTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput';
 import { styled } from '@linaria/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
 
 const StyledDraftEditor = styled.section`
-  border-top: 1px solid ${themeCssVariables.border.color.light};
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[2]};
-  padding-top: ${themeCssVariables.spacing[3]};
-`;
-
-const StyledHeading = styled.h3`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.semiBold};
-  margin: 0;
 `;
 
 const StyledActions = styled.div`
@@ -72,6 +63,7 @@ type MyahInboxDraftEditorProps = {
   canEdit: boolean;
   readOnlyReason?: string;
   appliedProposal: MyahInboxAppliedProposal | null;
+  proposalAction: ReactNode;
 };
 
 type DraftConflict = {
@@ -88,6 +80,7 @@ export const MyahInboxDraftEditor = ({
   canEdit,
   readOnlyReason,
   appliedProposal,
+  proposalAction,
 }: MyahInboxDraftEditorProps) => {
   const { saveDraft } = useMyahInboxThreadMutations();
   const [draftBody, setDraftBody] = useState(initialBody ?? EMPTY_DRAFT);
@@ -117,10 +110,7 @@ export const MyahInboxDraftEditor = ({
       ? { markdown: body.markdown, blocknote: body.blocknote ?? null }
       : null;
 
-  const persistDraft = async (
-    submittedBody: MyahInboxRichText | null,
-    completedAction: 'saved' | 'cleared',
-  ) => {
+  const persistDraft = async (submittedBody: MyahInboxRichText) => {
     setIsSaving(true);
     setError(null);
     setStatus(null);
@@ -147,7 +137,7 @@ export const MyahInboxDraftEditor = ({
           : currentBody,
       );
       setConflict(null);
-      setStatus(`Draft ${completedAction} at revision ${result.revision}`);
+      setStatus(`Draft saved at revision ${result.revision}`);
       setEditorVersion((version) => version + 1);
     } catch {
       setError('Could not save the draft. Your changes are still here.');
@@ -171,7 +161,6 @@ export const MyahInboxDraftEditor = ({
 
   return (
     <StyledDraftEditor aria-label="Shared reply draft editor">
-      <StyledHeading>Shared reply draft</StyledHeading>
       <FormAdvancedTextFieldInput
         key={`${threadId}-${editorVersion}-${canEdit ? 'editable' : 'readonly'}`}
         label="Shared reply draft"
@@ -188,21 +177,15 @@ export const MyahInboxDraftEditor = ({
         enableFullScreen={false}
       />
       {readOnlyReason && <StyledHint>{readOnlyReason}</StyledHint>}
-      <StyledActions>
-        <Button
-          title="Clear draft"
-          variant="secondary"
-          size="small"
-          disabled={!canEdit || isSaving || conflict !== null}
-          onClick={() => void persistDraft(null, 'cleared')}
-        />
+      <StyledActions aria-label="Draft actions">
         <Button
           title={isSaving ? 'Saving draft' : 'Save draft'}
           variant="primary"
           size="small"
           disabled={!canEdit || isSaving || conflict !== null}
-          onClick={() => void persistDraft(draftBody, 'saved')}
+          onClick={() => void persistDraft(draftBody)}
         />
+        {proposalAction}
       </StyledActions>
       {status && <StyledStatus role="status">{status}</StyledStatus>}
       {error && <StyledError role="alert">{error}</StyledError>}

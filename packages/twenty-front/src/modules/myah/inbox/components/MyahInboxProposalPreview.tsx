@@ -1,48 +1,14 @@
 import { styled } from '@linaria/react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
 
-const StyledProposal = styled.section`
-  border-top: 1px solid ${themeCssVariables.border.color.light};
+const StyledProposal = styled.div`
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[2]};
-  padding-top: ${themeCssVariables.spacing[3]};
-`;
-
-const StyledHeading = styled.h3`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.semiBold};
-  margin: 0;
-`;
-
-const StyledLabel = styled.label`
-  color: ${themeCssVariables.font.color.secondary};
-  display: flex;
-  flex-direction: column;
-  font-size: ${themeCssVariables.font.size.xs};
-  gap: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledTextArea = styled.textarea`
-  background: ${themeCssVariables.background.transparent.lighter};
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  color: ${themeCssVariables.font.color.primary};
-  font-family: ${themeCssVariables.font.family};
-  font-size: ${themeCssVariables.font.size.sm};
-  min-height: calc(${themeCssVariables.spacing[8]} * 2);
-  padding: ${themeCssVariables.spacing[2]};
-  resize: vertical;
-
-  &:focus-visible {
-    outline: 2px solid ${themeCssVariables.border.color.medium};
-    outline-offset: 1px;
-  }
 `;
 
 const StyledActions = styled.div`
@@ -79,15 +45,16 @@ type MyahInboxProposalPreviewProps = {
   threadId: string;
   disabled: boolean;
   onApply: (body: ProposalBody) => void;
+  renderGenerateAction?: (generateAction: ReactNode) => ReactNode;
 };
 
 export const MyahInboxProposalPreview = ({
   threadId,
   disabled,
   onApply,
+  renderGenerateAction,
 }: MyahInboxProposalPreviewProps) => {
   const { generateProposal } = useMyahInboxThreadMutations();
-  const [instructions, setInstructions] = useState('');
   const [proposal, setProposal] = useState<{
     subject: string | null;
     body: ProposalBody;
@@ -102,7 +69,7 @@ export const MyahInboxProposalPreview = ({
     try {
       const generatedProposal = await generateProposal({
         threadId,
-        operatorInstructions: instructions.trim(),
+        operatorInstructions: 'Draft a concise reply to this conversation.',
       });
       setProposal({
         subject: generatedProposal.subject ?? null,
@@ -118,26 +85,23 @@ export const MyahInboxProposalPreview = ({
     }
   };
 
+  const generateAction = (
+    <Button
+      title={isGenerating ? 'Generating proposal' : 'Generate proposal'}
+      variant="secondary"
+      size="small"
+      disabled={disabled || isGenerating}
+      onClick={handleGenerate}
+    />
+  );
+
   return (
     <StyledProposal aria-label="AI proposal">
-      <StyledHeading>Reply proposal</StyledHeading>
-      <StyledLabel>
-        Proposal instructions
-        <StyledTextArea
-          value={instructions}
-          disabled={disabled || isGenerating}
-          onChange={(event) => setInstructions(event.target.value)}
-        />
-      </StyledLabel>
-      <StyledActions>
-        <Button
-          title={isGenerating ? 'Generating proposal' : 'Generate proposal'}
-          variant="secondary"
-          size="small"
-          disabled={disabled || isGenerating || instructions.trim() === ''}
-          onClick={handleGenerate}
-        />
-      </StyledActions>
+      {renderGenerateAction ? (
+        renderGenerateAction(generateAction)
+      ) : (
+        <StyledActions>{generateAction}</StyledActions>
+      )}
       {isGenerating && (
         <StyledStatus role="status">Generating proposal</StyledStatus>
       )}

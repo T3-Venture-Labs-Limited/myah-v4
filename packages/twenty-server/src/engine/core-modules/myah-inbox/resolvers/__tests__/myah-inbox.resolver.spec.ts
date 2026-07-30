@@ -51,7 +51,7 @@ describe('MyahInboxResolver', () => {
 
     await expect(
       resolver.myahInboxThreads(
-        { first: 25, queue: 'CREATOR_LINKED' } as never,
+        { first: 25 } as never,
         workspace as never,
         workspaceMemberId,
       ),
@@ -62,7 +62,6 @@ describe('MyahInboxResolver', () => {
 
     expect(listThreads).toHaveBeenCalledWith({
       first: 25,
-      queue: 'CREATOR_LINKED',
       authContext: userAuthContext,
       user: userAuthContext.user,
       workspace,
@@ -98,6 +97,18 @@ describe('MyahInboxResolver', () => {
     });
 
     await expect(validate(input)).resolves.toEqual([]);
+  });
+
+  it('rejects Creator linkage as a public Inbox filter', async () => {
+    const input = Object.assign(new MyahInboxThreadsInput(), {
+      queue: 'CREATOR_LINKED',
+    });
+
+    await expect(
+      validate(input, { whitelist: true, forbidNonWhitelisted: true }),
+    ).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'queue' })]),
+    );
   });
 
   it('requires workspace, user, and custom permission guards', () => {

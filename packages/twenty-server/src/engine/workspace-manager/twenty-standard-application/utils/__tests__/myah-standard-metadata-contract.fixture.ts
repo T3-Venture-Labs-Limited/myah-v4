@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import ts from 'typescript';
-import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import {
+  MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS,
+  STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 
 type Value = string | Value[] | { [key: string]: Value } | undefined;
@@ -84,6 +87,7 @@ const viewPaths = [
   ...modules(`${creatorOps}/views`, [
     'campaigns.view.ts',
     'creator-lists.view.ts',
+    'creator-record-page-fields.view.ts',
     'creators.view.ts',
     'qualified-creators-with-email.view.ts',
   ]),
@@ -98,6 +102,7 @@ const navigationPaths = [
 ];
 const layoutPaths = [
   `${brand}/page-layouts/brand-brain-page-record-page.page-layout.ts`,
+  `${creatorOps}/page-layouts/creator-record-page.page-layout.ts`,
 ];
 const indexPaths = [
   `${brand}/indexes/brand-brain-page-canonical-path.index.ts`,
@@ -184,8 +189,14 @@ const evalExpr = (node: ts.Node, source: string): Value => {
         source,
         importDeclaration.moduleSpecifier.text,
       );
-      if (!target) return undefined;
       const exportedName = element.propertyName?.text ?? node.text;
+      if (
+        importDeclaration.moduleSpecifier.text === 'twenty-shared/metadata' &&
+        exportedName === 'MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS'
+      ) {
+        return MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS as unknown as Value;
+      }
+      if (!target) return undefined;
       const declaration = file(target)
         .statements.flatMap((statement) =>
           ts.isVariableStatement(statement)

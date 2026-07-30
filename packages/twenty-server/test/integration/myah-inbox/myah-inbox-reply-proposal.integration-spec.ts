@@ -237,6 +237,10 @@ describe('Myah Inbox reply proposal Nest integration', () => {
       directResponse.body.data.generateMyahInboxReplyProposal;
     const toolSet = toolService.generateMyahInboxTools({
       workspaceId: SEED_APPLE_WORKSPACE_ID,
+      myahInboxSelection: {
+        workspaceId: SEED_APPLE_WORKSPACE_ID,
+        threadId: fixture.threadIds.draft,
+      },
       roleId: actor.roleId,
       rolePermissionConfig: { unionOf: [actor.roleId] },
       authContext: actor.authContext,

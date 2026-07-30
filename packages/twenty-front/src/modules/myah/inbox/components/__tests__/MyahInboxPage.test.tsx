@@ -1,5 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
+import { StrictMode } from 'react';
+import { flushSync } from 'react-dom';
+import type * as React from 'react';
+import { createRoot } from 'react-dom/client';
 
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
 import {
@@ -8,14 +12,21 @@ import {
   myahInboxSelectedThreadIdState,
 } from '@/myah/inbox/states/myahInboxSelectionState';
 
-jest.mock('twenty-ui/theme-constants', () => ({
-  themeCssVariables: {
-    background: { primary: 'white' },
-    border: { color: { light: 'lightgray' } },
-    font: { color: { tertiary: 'gray' }, size: { xs: '11px' } },
-    spacing: { 1: '4px', 2: '8px', 3: '12px' },
-  },
-}));
+jest.mock('twenty-ui/theme-constants', () => {
+  const { createContext } = jest.requireActual<typeof React>('react');
+
+  return {
+    ThemeContext: createContext({
+      theme: { icon: { size: { md: 16 } } },
+    }),
+    themeCssVariables: {
+      background: { primary: 'white' },
+      border: { color: { light: 'lightgray' } },
+      font: { color: { tertiary: 'gray' }, size: { xs: '11px' } },
+      spacing: { 1: '4px', 2: '8px', 3: '12px' },
+    },
+  };
+});
 
 jest.mock('twenty-ui/input', () => ({
   SegmentedControl: ({
@@ -45,6 +56,7 @@ jest.mock('twenty-ui/input', () => ({
 }));
 
 const mockUseMyahInboxThreads = jest.fn();
+const mockRefetch = jest.fn();
 let mockIsMobile = false;
 let mockCurrentWorkspaceId = 'workspace-1';
 
@@ -84,42 +96,43 @@ jest.mock('@/myah/inbox/components/MyahInboxThreadList', () => ({
 jest.mock('@/myah/inbox/components/MyahInboxThreadPanel', () => ({
   MyahInboxThreadPanel: ({
     thread,
+    onThreadUpdated,
   }: {
     thread: { id: string; subject: string | null } | null;
-  }) => <div>Conversation panel {thread?.id ?? 'none'}</div>,
-}));
-
-jest.mock('@/myah/inbox/components/MyahInboxContextPanel', () => ({
-  MyahInboxContextPanel: ({
-    thread,
-    onTriageSaveStarted,
-    onTriageSaved,
-  }: {
-    thread: { id: string; subject: string | null } | null;
-    onTriageSaveStarted?: () => void;
-    onTriageSaved?: (message: string) => void;
+    onThreadUpdated?: (message: string) => void;
   }) => (
     <div>
-      Context panel {thread?.id ?? 'none'}
-      {thread && (
-        <>
-          <button
-            onClick={() => {
-              onTriageSaveStarted?.();
-              onTriageSaved?.('Triage saved');
-            }}
-          >
-            Save triage test double
-          </button>
-          <button onClick={onTriageSaveStarted}>Fail triage test double</button>
-        </>
-      )}
+      Conversation panel {thread?.id ?? 'none'}
+      <button onClick={() => onThreadUpdated?.('Conversation updated')}>
+        Update conversation test double
+      </button>
     </div>
   ),
 }));
 
 jest.mock('@/ui/layout/page/components/PageHeader', () => ({
   PageHeader: ({ title }: { title: string }) => <header>{title}</header>,
+}));
+
+jest.mock('@/ui/layout/page/components/PageCardHeader', () => ({
+  PageCardHeader: ({
+    title,
+    actionButton,
+  }: {
+    title: string;
+    actionButton: React.ReactNode;
+  }) => (
+    <header data-testid="inbox-page-header">
+      {title}
+      {actionButton}
+    </header>
+  ),
+}));
+
+jest.mock('@/side-panel/components/SidePanelToggleButton', () => ({
+  SidePanelToggleButton: () => (
+    <button data-testid="page-header-side-panel-button">Open side panel</button>
+  ),
 }));
 
 jest.mock('@/ui/layout/page/components/PageBody', () => ({
@@ -131,6 +144,21 @@ jest.mock('@/ui/layout/page/components/PageBody', () => ({
 jest.mock('@/ui/layout/page/components/PageContainer', () => ({
   PageContainer: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
+  ),
+}));
+
+jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
+  PageCardLayout: ({
+    header,
+    children,
+  }: {
+    header: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
+    <div data-testid="inbox-page-card-layout">
+      {header}
+      <main>{children}</main>
+    </div>
   ),
 }));
 
@@ -173,6 +201,7 @@ const renderPage = (store = createStore()) => ({
 describe('MyahInboxPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRefetch.mockReset();
     mockIsMobile = false;
     mockCurrentWorkspaceId = 'workspace-1';
     mockUseMyahInboxThreads.mockReturnValue({
@@ -181,8 +210,19 @@ describe('MyahInboxPage', () => {
       error: undefined,
       hasNextPage: false,
       loadMore: jest.fn(),
-      refetch: jest.fn(),
+      refetch: mockRefetch,
     });
+  });
+
+  it('uses the exact native page-card shell, header, and side-panel control', () => {
+    renderPage();
+
+    const pageCardLayout = screen.getByTestId('inbox-page-card-layout');
+    const pageHeader = screen.getByTestId('inbox-page-header');
+
+    expect(pageCardLayout).toContainElement(pageHeader);
+    expect(pageHeader).toHaveTextContent('Inbox');
+    expect(screen.getByTestId('page-header-side-panel-button')).toBeVisible();
   });
 
   it('selects the first loaded row without reading or changing the URL', async () => {
@@ -196,8 +236,126 @@ describe('MyahInboxPage', () => {
       ),
     );
     expect(screen.getByText('Conversation panel thread-1')).toBeVisible();
-    expect(screen.getByText('Context panel thread-1')).toBeVisible();
     expect(window.location.href).toBe(originalLocation);
+  });
+
+  it('keeps the first loaded row selected through development StrictMode replay', async () => {
+    const store = createStore();
+
+    render(
+      <StrictMode>
+        <JotaiProvider store={store}>
+          <MyahInboxPage />
+        </JotaiProvider>
+      </StrictMode>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+  });
+
+  it('renders desktop list and conversation panes without a permanent context column', async () => {
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+
+    const list = screen.getByLabelText('Thread list test double');
+    const conversation = screen.getByText('Conversation panel thread-1');
+    expect(
+      list.compareDocumentPosition(conversation) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/Context panel/)).not.toBeInTheDocument();
+  });
+  it('does not replace the initial selection after a refresh removes it', async () => {
+    const store = createStore();
+    const { rerender } = renderPage(store);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+
+    mockUseMyahInboxThreads.mockReturnValue({
+      threads: [threads[1]],
+      loading: false,
+      error: undefined,
+      hasNextPage: false,
+      loadMore: jest.fn(),
+      refetch: mockRefetch,
+    });
+
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'none',
+      ),
+    );
+  });
+  it('does not automatically select again after switching A to B to A', async () => {
+    const store = createStore();
+    const { rerender } = renderPage(store);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+
+    mockCurrentWorkspaceId = 'workspace-2';
+    mockUseMyahInboxThreads.mockReturnValue({
+      threads: [threads[1]],
+      loading: false,
+      error: undefined,
+      hasNextPage: false,
+      loadMore: jest.fn(),
+      refetch: mockRefetch,
+    });
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-2',
+      ),
+    );
+
+    mockCurrentWorkspaceId = 'workspace-1';
+    mockUseMyahInboxThreads.mockReturnValue({
+      threads: [threads[0]],
+      loading: false,
+      error: undefined,
+      hasNextPage: false,
+      loadMore: jest.fn(),
+      refetch: mockRefetch,
+    });
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'none',
+      ),
+    );
   });
 
   it('keeps an explicit selection stable while refreshed rows still contain it', async () => {
@@ -240,10 +398,130 @@ describe('MyahInboxPage', () => {
     );
   });
 
+  it('announces a successful header update, refetches, and keeps an eligible selection', async () => {
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select Second conversation' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Update conversation test double' }),
+    );
+
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Conversation updated')).toHaveAttribute(
+      'role',
+      'status',
+    );
+    expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+      'thread-2',
+    );
+  });
+  it('clears an update announcement when the workspace changes', async () => {
+    const store = createStore();
+    const { rerender } = renderPage(store);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Update conversation test double' }),
+    );
+    expect(screen.getByText('Conversation updated')).toHaveAttribute(
+      'role',
+      'status',
+    );
+
+    mockCurrentWorkspaceId = 'workspace-2';
+    mockUseMyahInboxThreads.mockReturnValue({
+      threads: [threads[1]],
+      loading: false,
+      error: undefined,
+      hasNextPage: false,
+      loadMore: jest.fn(),
+      refetch: mockRefetch,
+    });
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Conversation updated'),
+      ).not.toBeInTheDocument(),
+    );
+  });
+  it("does not render A's update announcement in B before effects run", async () => {
+    const store = createStore();
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    const root = createRoot(container);
+    const reactActEnvironment = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const previousReactActEnvironment =
+      reactActEnvironment.IS_REACT_ACT_ENVIRONMENT;
+    reactActEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
+
+    try {
+      flushSync(() => {
+        root.render(
+          <JotaiProvider store={store}>
+            <MyahInboxPage />
+          </JotaiProvider>,
+        );
+      });
+
+      await waitFor(() =>
+        expect(
+          container.querySelector('[aria-label="Selected thread"]'),
+        ).toHaveTextContent('thread-1'),
+      );
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Update conversation test double',
+        }),
+      );
+
+      mockCurrentWorkspaceId = 'workspace-2';
+      mockUseMyahInboxThreads.mockReturnValue({
+        threads: [threads[1]],
+        loading: false,
+        error: undefined,
+        hasNextPage: false,
+        loadMore: jest.fn(),
+        refetch: mockRefetch,
+      });
+      flushSync(() => {
+        root.render(
+          <JotaiProvider store={store}>
+            <MyahInboxPage />
+          </JotaiProvider>,
+        );
+      });
+
+      expect(container).not.toHaveTextContent('Conversation updated');
+    } finally {
+      root.unmount();
+      container.remove();
+      reactActEnvironment.IS_REACT_ACT_ENVIRONMENT =
+        previousReactActEnvironment;
+    }
+  });
+
   it('scopes the sidebar thread bridge to selection, page, and workspace', async () => {
     const store = createStore();
     store.set(myahInboxFiltersState.atom, {
-      queue: 'UNMATCHED',
       owner: 'ME',
       campaignId: 'campaign-1',
       campaignWorkspaceId: 'workspace-1',
@@ -275,7 +553,6 @@ describe('MyahInboxPage', () => {
     );
     expect(mockUseMyahInboxThreads.mock.lastCall).toEqual([
       {
-        queue: 'UNMATCHED',
         owner: 'ME',
         campaignId: null,
         campaignWorkspaceId: null,
@@ -290,7 +567,6 @@ describe('MyahInboxPage', () => {
     );
     expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
     expect(store.get(myahInboxFiltersState.atom)).toEqual({
-      queue: 'UNMATCHED',
       owner: 'ME',
       campaignId: null,
       campaignWorkspaceId: null,
@@ -321,69 +597,18 @@ describe('MyahInboxPage', () => {
 
     unmount();
 
-    expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull();
-    expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
-  });
-
-  it('keeps triage success announced after refetch removes the selected row', async () => {
-    const store = createStore();
-    const { rerender } = renderPage(store);
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Save triage test double' }),
-      ).toBeVisible(),
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Save triage test double' }),
-    );
-
-    mockUseMyahInboxThreads.mockReturnValue({
-      threads: [],
-      loading: false,
-      error: undefined,
-      hasNextPage: false,
-      loadMore: jest.fn(),
-      refetch: jest.fn(),
+    await waitFor(() => {
+      expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull();
+      expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
     });
-    rerender(
-      <JotaiProvider store={store}>
-        <MyahInboxPage />
-      </JotaiProvider>,
-    );
-
-    await waitFor(() =>
-      expect(screen.getByText('Context panel none')).toBeVisible(),
-    );
-    expect(screen.getByText('Triage saved')).toHaveAttribute('role', 'status');
-  });
-  it('clears a previous triage success when the next save starts', async () => {
-    renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Save triage test double' }),
-      ).toBeVisible(),
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Save triage test double' }),
-    );
-    expect(screen.getByText('Triage saved')).toBeVisible();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Fail triage test double' }),
-    );
-
-    expect(screen.queryByText('Triage saved')).not.toBeInTheDocument();
   });
 
-  it('provides narrow-screen access to list, conversation, and context panels', async () => {
+  it('provides narrow-screen access to list and conversation panes', async () => {
     mockIsMobile = true;
     renderPage();
 
     expect(screen.getByRole('button', { name: 'Threads' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Conversation' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Context' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Threads' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -391,10 +616,6 @@ describe('MyahInboxPage', () => {
     expect(
       screen.getByRole('button', { name: 'Conversation' }),
     ).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: 'Context' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
 
     await waitFor(() =>
       expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
@@ -411,13 +632,6 @@ describe('MyahInboxPage', () => {
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
     expect(screen.getByRole('status')).toHaveTextContent(
       'Selected: First conversation',
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Context' }));
-    expect(screen.getByText('Context panel thread-1')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Context' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Threads' }));

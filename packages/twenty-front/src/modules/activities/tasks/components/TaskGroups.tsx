@@ -7,8 +7,7 @@ import { type ActivityTargetableObject } from '@/activities/types/ActivityTarget
 import { type Task } from '@/activities/types/Task';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
-import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+
 import { t } from '@lingui/core/macro';
 import groupBy from 'lodash.groupby';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
@@ -54,15 +53,9 @@ export const TaskGroups = ({ targetableObject }: TaskGroupsProps) => {
     activityObjectNameSingular: CoreObjectNameSingular.Task,
   });
 
-  const activeTabId = useAtomComponentStateValue(activeTabIdComponentState);
+  const isLoading = tasksLoading;
 
-  const isLoading =
-    (activeTabId !== 'done' && tasksLoading) ||
-    (activeTabId === 'done' && tasksLoading);
-
-  const isTasksEmpty =
-    (activeTabId !== 'done' && tasks?.length === 0) ||
-    (activeTabId === 'done' && tasks?.length === 0);
+  const isTasksEmpty = tasks?.length === 0;
 
   if (isLoading && isTasksEmpty) {
     return <SkeletonLoader />;

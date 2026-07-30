@@ -9,11 +9,6 @@ import {
   Min,
 } from 'class-validator';
 
-export enum MyahInboxQueue {
-  CREATOR_LINKED = 'CREATOR_LINKED',
-  UNMATCHED = 'UNMATCHED',
-}
-
 export enum MyahInboxState {
   NEEDS_REPLY = 'NEEDS_REPLY',
   WAITING_ON_CREATOR = 'WAITING_ON_CREATOR',
@@ -21,8 +16,13 @@ export enum MyahInboxState {
   CLOSED = 'CLOSED',
 }
 
-registerEnumType(MyahInboxQueue, { name: 'MyahInboxQueue' });
+export enum MyahInboxSnoozeStatus {
+  ACTIVE = 'ACTIVE',
+  DUE = 'DUE',
+}
+
 registerEnumType(MyahInboxState, { name: 'MyahInboxState' });
+registerEnumType(MyahInboxSnoozeStatus, { name: 'MyahInboxSnoozeStatus' });
 
 @ArgsType()
 export class MyahInboxThreadsInput {
@@ -36,11 +36,6 @@ export class MyahInboxThreadsInput {
   @IsOptional()
   @IsString()
   after?: string;
-
-  @Field(() => MyahInboxQueue, { nullable: true })
-  @IsOptional()
-  @IsEnum(MyahInboxQueue)
-  queue?: MyahInboxQueue;
 
   @Field(() => String, { nullable: true })
   @IsOptional()
@@ -57,6 +52,11 @@ export class MyahInboxThreadsInput {
   @IsArray()
   @IsEnum(MyahInboxState, { each: true })
   states?: MyahInboxState[];
+
+  @Field(() => MyahInboxSnoozeStatus, { nullable: true })
+  @IsOptional()
+  @IsEnum(MyahInboxSnoozeStatus)
+  snoozeStatus?: MyahInboxSnoozeStatus;
 
   @Field(() => String, { nullable: true })
   @IsOptional()

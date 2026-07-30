@@ -9,7 +9,6 @@ import { EmailThreadNotShared } from '@/activities/emails/components/EmailThread
 import { type EmailThreadMessageWithSender } from '@/activities/emails/types/EmailThreadMessageWithSender';
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import { MessageParticipantRole } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
 import { MessageChannelVisibility } from '~/generated/graphql';
 
 type EmailThreadMessageProps = {
@@ -30,13 +29,6 @@ export const EmailThreadMessage = ({
   const receivers = message.messageParticipants.filter(
     (participant) => participant.role !== MessageParticipantRole.FROM,
   );
-
-  if (
-    !isDefined(message.sender) ||
-    (!message.isDraft && receivers.length === 0)
-  ) {
-    return null;
-  }
 
   const { isDraft } = message;
 
@@ -78,7 +70,7 @@ export const EmailThreadMessage = ({
             sender={message.sender}
             sentAt={message.receivedAt}
           />
-          {!isDraft && isOpen && (
+          {!isDraft && isOpen && receivers.length > 0 && (
             <EmailThreadMessageReceivers receivers={receivers} />
           )}
         </>

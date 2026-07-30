@@ -6,7 +6,7 @@ import { SynchronizeMyahCreatorCrmMetadataCommand } from 'src/database/commands/
 import { SynchronizeMyahCreatorCrmSearchMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302004-synchronize-myah-creator-crm-search-metadata.command';
 import { MigrateMyahCreatorImportMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302006-migrate-myah-creator-import-metadata.command';
 import { MigrateMyahCreatorSocialLinksService } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
-import { SynchronizeMyahInboxMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302005-synchronize-myah-inbox-metadata.command';
+
 import { RemoveReplacedTwentyCrmMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302002-remove-replaced-twenty-crm-metadata.command';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/workspace-metadata-version/workspace-metadata-version.module';
@@ -27,7 +27,7 @@ import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace
     SynchronizeMyahCreatorCrmSearchMetadataCommand,
     MigrateMyahCreatorImportMetadataCommand,
     MigrateMyahCreatorSocialLinksService,
-    SynchronizeMyahInboxMetadataCommand,
+
     RemoveReplacedTwentyCrmMetadataCommand,
   ],
 })

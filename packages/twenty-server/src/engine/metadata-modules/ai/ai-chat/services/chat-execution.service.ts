@@ -269,13 +269,12 @@ export class ChatExecutionService {
       hasLatestMessageApprovedGenericApproval(messages);
     const hasApprovedInstagramReply =
       hasApprovedInstagramReplyApproval(messages);
-    const preApprovalSafeToolNames = new Set(PRE_APPROVAL_SAFE_TOOL_NAMES);
-
-    if (isDefined(myahInboxSelection)) {
-      for (const toolName of MYAH_INBOX_SELECTION_TOOL_NAMES) {
-        preApprovalSafeToolNames.add(toolName);
-      }
-    }
+    const hasMyahInboxSelection = isDefined(myahInboxSelection);
+    const preApprovalSafeToolNames = new Set(
+      hasMyahInboxSelection
+        ? MYAH_INBOX_SELECTION_TOOL_NAMES
+        : PRE_APPROVAL_SAFE_TOOL_NAMES,
+    );
 
     const preloadedToolNames = [
       ...Object.keys(preloadedTools),
@@ -285,9 +284,11 @@ export class ChatExecutionService {
     ];
 
     const preApprovalExcludedToolNames = new Set(
-      isApprovedGenericApprovalResume
-        ? []
-        : getPreApprovalExcludedToolNames(toolCatalog),
+      hasMyahInboxSelection
+        ? toolCatalog.map((tool) => tool.name)
+        : isApprovedGenericApprovalResume
+          ? []
+          : getPreApprovalExcludedToolNames(toolCatalog),
     );
 
     // Enforce the source-controlled safe-tool exception at the execution
@@ -299,7 +300,7 @@ export class ChatExecutionService {
     // A follow-up user message may be necessary after the approval card. The
     // execution service still requires the exact approved request, thread, and
     // workspace before the sender can perform provider I/O.
-    if (hasApprovedInstagramReply) {
+    if (hasApprovedInstagramReply && !hasMyahInboxSelection) {
       preApprovalExcludedToolNames.delete('send_instagram_reply');
     }
 
@@ -318,6 +319,7 @@ export class ChatExecutionService {
       [LEARN_TOOLS_TOOL_NAME]: createLearnToolsTool(
         this.toolRegistry,
         toolContext,
+        preApprovalExcludedToolNames,
       ),
       [EXECUTE_TOOL_TOOL_NAME]: createExecuteToolTool(
         this.toolRegistry,

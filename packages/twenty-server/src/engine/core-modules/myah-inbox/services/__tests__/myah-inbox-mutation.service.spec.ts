@@ -95,6 +95,7 @@ const createService = ({
   readableMemberIds = [ownerId, otherMemberId, thirdMemberId],
   hasReadableMessage = true,
   projectionReadable = true,
+  canUpdateMessageThread = true,
 }: {
   thread?: ThreadRecord | null;
   readableCreatorIds?: string[];
@@ -102,6 +103,7 @@ const createService = ({
   readableMemberIds?: string[];
   hasReadableMessage?: boolean;
   projectionReadable?: boolean;
+  canUpdateMessageThread?: boolean;
 } = {}) => {
   let persistedThread = thread;
   const targets = {
@@ -110,6 +112,46 @@ const createService = ({
     creator: Symbol('creator'),
     campaign: Symbol('campaign'),
     workspaceMember: Symbol('workspaceMember'),
+  };
+
+  const updateMessageThread = (
+    criteria: Partial<ThreadRecord>,
+    patch: Record<string, unknown>,
+    canUpdate: boolean,
+  ) => {
+    if (!canUpdate) {
+      return Promise.reject(
+        new ForbiddenException('MessageThread update denied'),
+      );
+    }
+
+    if (
+      !persistedThread ||
+      criteria.id !== persistedThread.id ||
+      (criteria.inboxOwnerId !== undefined &&
+        criteria.inboxOwnerId !== persistedThread.inboxOwnerId) ||
+      (criteria.myahReplyDraftRevision !== undefined &&
+        criteria.myahReplyDraftRevision !==
+          persistedThread.myahReplyDraftRevision)
+    ) {
+      return Promise.resolve({ affected: 0, raw: [], generatedMaps: [] });
+    }
+
+    persistedThread = {
+      ...persistedThread,
+      ...patch,
+      myahReplyDraftRevision:
+        typeof patch.myahReplyDraftRevision === 'function'
+          ? persistedThread.myahReplyDraftRevision + 1
+          : ((patch.myahReplyDraftRevision as number | undefined) ??
+            persistedThread.myahReplyDraftRevision),
+    } as ThreadRecord;
+
+    return Promise.resolve({
+      affected: 1,
+      raw: [{ ...persistedThread }],
+      generatedMaps: [{ ...persistedThread }],
+    });
   };
 
   const messageThreadRepository = {
@@ -121,39 +163,17 @@ const createService = ({
           persistedThread?.id === where.id ? { ...persistedThread } : null,
         ),
       ),
-    update: jest
-      .fn()
-      .mockImplementation(
-        (criteria: Partial<ThreadRecord>, patch: Record<string, unknown>) => {
-          if (
-            !persistedThread ||
-            criteria.id !== persistedThread.id ||
-            (criteria.inboxOwnerId !== undefined &&
-              criteria.inboxOwnerId !== persistedThread.inboxOwnerId) ||
-            (criteria.myahReplyDraftRevision !== undefined &&
-              criteria.myahReplyDraftRevision !==
-                persistedThread.myahReplyDraftRevision)
-          ) {
-            return Promise.resolve({ affected: 0, raw: [], generatedMaps: [] });
-          }
-
-          persistedThread = {
-            ...persistedThread,
-            ...patch,
-            myahReplyDraftRevision:
-              typeof patch.myahReplyDraftRevision === 'function'
-                ? persistedThread.myahReplyDraftRevision + 1
-                : ((patch.myahReplyDraftRevision as number | undefined) ??
-                  persistedThread.myahReplyDraftRevision),
-          } as ThreadRecord;
-
-          return Promise.resolve({
-            affected: 1,
-            raw: [{ ...persistedThread }],
-            generatedMaps: [{ ...persistedThread }],
-          });
-        },
-      ),
+    update: jest.fn(
+      (criteria: Partial<ThreadRecord>, patch: Record<string, unknown>) =>
+        updateMessageThread(criteria, patch, canUpdateMessageThread),
+    ),
+  };
+  const bypassedMessageThreadRepository = {
+    ...messageThreadRepository,
+    update: jest.fn(
+      (criteria: Partial<ThreadRecord>, patch: Record<string, unknown>) =>
+        updateMessageThread(criteria, patch, true),
+    ),
   };
   const messageRepository = {
     target: targets.message,
@@ -211,7 +231,16 @@ const createService = ({
     ]),
   );
   const transactionManager = {
-    getRepository: jest.fn((target: symbol) => repositoryByTarget.get(target)),
+    getRepository: jest.fn(
+      (
+        target: symbol,
+        permissionConfig?: { shouldBypassPermissionChecks?: boolean },
+      ) =>
+        target === targets.messageThread &&
+        permissionConfig?.shouldBypassPermissionChecks
+          ? bypassedMessageThreadRepository
+          : repositoryByTarget.get(target),
+    ),
   };
   const transaction = jest
     .fn()
@@ -264,9 +293,11 @@ const createService = ({
   return {
     service,
     repositories,
+    bypassedMessageThreadRepository,
     globalWorkspaceOrmManager,
     transaction,
     transactionManager,
+    getThreadSummary,
     get persistedThread() {
       return persistedThread;
     },
@@ -303,6 +334,25 @@ describe('MyahInboxMutationService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('rechecks policy visibility before applying a selected Creator link', async () => {
+    const setup = createService();
+
+    setup.getThreadSummary
+      .mockResolvedValueOnce({ id: threadId })
+      .mockRejectedValueOnce(
+        new ForbiddenException('Inbox thread is not readable'),
+      );
+
+    await expect(
+      setup.service.updateMyahInboxThread({
+        ...request(),
+        threadId,
+        creatorId,
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(setup.getThreadSummary).toHaveBeenCalledTimes(2);
+    expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
+  });
   it('assigns, reassigns, and clears owner without changing the shared draft or revision', async () => {
     const setup = createService();
     const originalBody = setup.persistedThread?.myahReplyDraftBody;
@@ -366,7 +416,7 @@ describe('MyahInboxMutationService', () => {
     });
   });
 
-  it('transfers draft authority to the new owner and removes it when owner is cleared', async () => {
+  it('keeps owner triage independent from policy-authorized draft editing', async () => {
     const setup = createService();
 
     await setup.service.updateMyahInboxThread({
@@ -374,22 +424,32 @@ describe('MyahInboxMutationService', () => {
       threadId,
       inboxOwnerId: otherMemberId,
     });
+    setup.repositories.messageThread.update.mockClear();
+
     await expect(
       setup.service.saveMyahInboxDraft({
         ...request(),
         threadId,
         expectedRevision: 2,
-        body: { markdown: 'old owner overwrite', blocknote: null },
+        body: { markdown: 'first shared copy', blocknote: null },
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toMatchObject({ status: 'SAVED', revision: 3 });
+    expect(
+      setup.bypassedMessageThreadRepository.update,
+    ).toHaveBeenLastCalledWith(
+      { id: threadId, myahReplyDraftRevision: 2 },
+      expect.anything(),
+      expect.anything(),
+    );
+
     await expect(
       setup.service.saveMyahInboxDraft({
         ...request(otherMemberId),
         threadId,
-        expectedRevision: 2,
-        body: { markdown: 'new owner copy', blocknote: null },
+        expectedRevision: 3,
+        body: { markdown: 'second shared copy', blocknote: null },
       }),
-    ).resolves.toMatchObject({ status: 'SAVED', revision: 3 });
+    ).resolves.toMatchObject({ status: 'SAVED', revision: 4 });
 
     await setup.service.updateMyahInboxThread({
       ...request(otherMemberId),
@@ -398,12 +458,36 @@ describe('MyahInboxMutationService', () => {
     });
     await expect(
       setup.service.saveMyahInboxDraft({
+        ...request(thirdMemberId),
+        threadId,
+        expectedRevision: 4,
+        body: { markdown: 'unassigned shared copy', blocknote: null },
+      }),
+    ).resolves.toMatchObject({ status: 'SAVED', revision: 5 });
+  });
+
+  it('saves a policy-visible draft when generic MessageThread updates are denied', async () => {
+    const setup = createService({ canUpdateMessageThread: false });
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
         ...request(otherMemberId),
         threadId,
-        expectedRevision: 3,
-        body: null,
+        expectedRevision: 2,
+        body: { markdown: 'shared copy', blocknote: null },
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toMatchObject({ status: 'SAVED', revision: 3 });
+    expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
+    expect(setup.bypassedMessageThreadRepository.update).toHaveBeenCalledWith(
+      { id: threadId, myahReplyDraftRevision: 2 },
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(setup.transactionManager.getRepository).toHaveBeenCalledWith(
+      setup.repositories.messageThread.target,
+      { shouldBypassPermissionChecks: true },
+      expect.objectContaining({ workspaceMemberId: otherMemberId }),
+    );
   });
 
   it('requires a future timestamp when entering SNOOZED', async () => {
@@ -610,7 +694,9 @@ describe('MyahInboxMutationService', () => {
       revision: 3,
       body: { markdown: 'newer copy', blocknote: null },
     });
-    expect(setup.repositories.messageThread.update).toHaveBeenCalledTimes(1);
+    expect(setup.bypassedMessageThreadRepository.update).toHaveBeenCalledTimes(
+      1,
+    );
     expect(setup.persistedThread?.myahReplyDraftBody).toEqual({
       markdown: 'newer copy',
       blocknote: null,
@@ -654,7 +740,7 @@ describe('MyahInboxMutationService', () => {
 
   it('fails closed after a zero-row update when the thread vanished or ownership changed', async () => {
     const setup = createService();
-    setup.repositories.messageThread.update.mockImplementationOnce(() => {
+    setup.bypassedMessageThreadRepository.update.mockImplementationOnce(() => {
       const current = setup.persistedThread;
 
       if (current) {
@@ -710,6 +796,27 @@ describe('MyahInboxMutationService', () => {
       expect(setup.repositories.messageThread.update).not.toHaveBeenCalled();
     },
   );
+
+  it('rechecks policy visibility inside the draft transaction before a bypassed update', async () => {
+    const setup = createService();
+    setup.getThreadSummary
+      .mockResolvedValueOnce({ id: threadId })
+      .mockRejectedValueOnce(
+        new ForbiddenException('Inbox thread is not readable'),
+      );
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'hidden after preflight', blocknote: null },
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(setup.getThreadSummary).toHaveBeenCalledTimes(2);
+    expect(setup.bypassedMessageThreadRepository.update).not.toHaveBeenCalled();
+  });
 
   it('rejects malformed IDs, revisions, empty triage updates, and oversized draft payloads before writing', async () => {
     const setup = createService();

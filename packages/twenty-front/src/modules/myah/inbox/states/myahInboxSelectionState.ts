@@ -1,27 +1,28 @@
 import { createAtomState } from '@/ui/utilities/state/jotai/utils/createAtomState';
 
-export type MyahInboxQueueFilter = 'CREATOR_LINKED' | 'UNMATCHED';
 export type MyahInboxStateFilter =
   | 'NEEDS_REPLY'
   | 'WAITING_ON_CREATOR'
   | 'SNOOZED'
   | 'CLOSED';
 
+export type MyahInboxSnoozeStatusFilter = '' | 'ACTIVE' | 'DUE';
+
 export type MyahInboxFilters = {
-  queue: MyahInboxQueueFilter;
   owner: string;
   campaignId: string | null;
   campaignWorkspaceId: string | null;
   states: MyahInboxStateFilter[];
+  snoozeStatus: MyahInboxSnoozeStatusFilter;
   search: string;
 };
 
 export const DEFAULT_MYAH_INBOX_FILTERS: MyahInboxFilters = {
-  queue: 'CREATOR_LINKED',
   owner: '',
   campaignId: null,
   campaignWorkspaceId: null,
   states: [],
+  snoozeStatus: '',
   search: '',
 };
 

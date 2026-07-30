@@ -14,6 +14,7 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
 }));
 
 jest.mock('~/generated/graphql', () => ({
+  MyahInboxSnoozeStatus: { ACTIVE: 'ACTIVE', DUE: 'DUE' },
   MyahInboxThreadsDocument: {
     kind: 'Document',
     name: 'MyahInboxThreadsDocument',
@@ -21,11 +22,11 @@ jest.mock('~/generated/graphql', () => ({
 }));
 
 const filters = {
-  queue: 'CREATOR_LINKED' as const,
   owner: 'ME',
   campaignId: 'campaign-1',
   campaignWorkspaceId: 'workspace-1',
   states: ['NEEDS_REPLY' as const],
+  snoozeStatus: 'DUE' as const,
   search: 'Ada',
 };
 
@@ -47,7 +48,7 @@ describe('useMyahInboxThreads', () => {
     jest.clearAllMocks();
   });
 
-  it('keeps server data in Apollo and maps all active filters into the query', () => {
+  it('keeps server data in Apollo and maps all supported filters without Creator linkage state', () => {
     mockUseQuery.mockReturnValue({
       data: {
         myahInboxThreads: {
@@ -70,10 +71,10 @@ describe('useMyahInboxThreads', () => {
       {
         variables: {
           first: 50,
-          queue: 'CREATOR_LINKED',
           owner: 'ME',
           campaignId: 'campaign-1',
           states: ['NEEDS_REPLY'],
+          snoozeStatus: 'DUE',
           search: 'Ada',
         },
         notifyOnNetworkStatusChange: true,
@@ -173,11 +174,11 @@ describe('useMyahInboxThreads', () => {
     renderHook(() =>
       useMyahInboxThreads(
         {
-          queue: 'UNMATCHED',
           owner: '',
           campaignId: null,
           campaignWorkspaceId: null,
           states: [],
+          snoozeStatus: '',
           search: '',
         },
         'workspace-1',
@@ -189,10 +190,10 @@ describe('useMyahInboxThreads', () => {
       {
         variables: {
           first: 50,
-          queue: 'UNMATCHED',
           owner: undefined,
           campaignId: undefined,
           states: undefined,
+          snoozeStatus: undefined,
           search: undefined,
         },
         notifyOnNetworkStatusChange: true,
@@ -231,10 +232,10 @@ describe('useMyahInboxThreads', () => {
       expect.objectContaining({
         variables: {
           first: 50,
-          queue: 'CREATOR_LINKED',
           owner: 'ME',
           campaignId: undefined,
           states: ['NEEDS_REPLY'],
+          snoozeStatus: 'DUE',
           search: 'Ada',
         },
       }),

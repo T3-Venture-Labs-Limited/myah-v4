@@ -12,6 +12,7 @@ import type { FlatObjectPermission } from 'src/engine/metadata-modules/flat-obje
 
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
+import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
 import { buildMyahStandardMetadataContract } from './myah-standard-metadata-contract.fixture';
 
 const contract = buildMyahStandardMetadataContract();
@@ -341,6 +342,31 @@ describe('Myah standard metadata contract', () => {
         STANDARD_OBJECTS.workspaceMember.fields.ownedCreators
           .universalIdentifier,
     });
+    for (const expectedRelation of [
+      {
+        name: 'timelineActivities',
+        universalIdentifier: '5e98bbca-0761-5945-bbe6-c441e3fb831b',
+        targetObjectUniversalIdentifier:
+          STANDARD_OBJECTS.timelineActivity.universalIdentifier,
+      },
+      {
+        name: 'attachments',
+        universalIdentifier: '68ea5fd3-32b0-542f-ae42-9162331b53e8',
+        targetObjectUniversalIdentifier:
+          STANDARD_OBJECTS.attachment.universalIdentifier,
+      },
+    ]) {
+      expect(creatorFields).toContainEqual(
+        expect.objectContaining({
+          name: expectedRelation.name,
+          universalIdentifier: expectedRelation.universalIdentifier,
+          objectMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+          relationTargetObjectMetadataUniversalIdentifier:
+            expectedRelation.targetObjectUniversalIdentifier,
+        }),
+      );
+    }
     expect(
       result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
     ).toHaveProperty('19483764-6f84-4d09-8f03-945e7d0a4b28');
@@ -350,6 +376,80 @@ describe('Myah standard metadata contract', () => {
     expect(
       result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
     ).toHaveProperty('d1319af0-eeb2-4ca3-8afc-31e66c8a4277');
+  });
+
+  it('configures a full Creator record page through native fields and activity tabs', () => {
+    const creatorRecordPageFieldsViewUniversalIdentifier =
+      'fdbaccb5-56d4-4c36-98c7-0f5ab0b7cc1e';
+    const fieldsWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        '9b6cb66e-3a74-4c7a-9a52-481fb9497c2e'
+      ];
+    const timelineWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        '8e82ee16-5e12-4f6f-bf42-e8daed7cb619'
+      ];
+    const tasksWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        '9a965ec0-9fca-4b88-bd4d-78930ce870ce'
+      ];
+    const notesWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        '02b3dd33-16d2-4334-9ba7-5ecba705d797'
+      ];
+    const filesWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        'acc7a6b4-55c2-45c9-a609-c8f84ef9c4d7'
+      ];
+
+    expect(
+      result.allFlatEntityMaps.flatPageLayoutMaps.byUniversalIdentifier[
+        '65e152d0-e162-4ece-8b84-e6e223065a14'
+      ],
+    ).toMatchObject({
+      objectMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+      type: 'RECORD_PAGE',
+    });
+    expect(fieldsWidget?.universalConfiguration).toMatchObject({
+      configurationType: WidgetConfigurationType.FIELDS,
+      viewUniversalIdentifier: creatorRecordPageFieldsViewUniversalIdentifier,
+    });
+    expect(timelineWidget?.universalConfiguration).toMatchObject({
+      configurationType: WidgetConfigurationType.TIMELINE,
+    });
+    expect(tasksWidget?.universalConfiguration).toMatchObject({
+      configurationType: WidgetConfigurationType.TASKS,
+    });
+    expect(notesWidget?.universalConfiguration).toMatchObject({
+      configurationType: WidgetConfigurationType.NOTES,
+    });
+    expect(filesWidget?.universalConfiguration).toMatchObject({
+      configurationType: WidgetConfigurationType.FILES,
+    });
+
+    const recordPageFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (viewField) =>
+          viewField.viewUniversalIdentifier ===
+          creatorRecordPageFieldsViewUniversalIdentifier,
+      )
+      .map((viewField) => viewField.fieldMetadataUniversalIdentifier);
+
+    expect(recordPageFields).toEqual(
+      expect.arrayContaining([
+        MYAH_STANDARD_OBJECTS.creator.fields.name.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creator.fields.creatorStatus.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creator.fields.instagramUsername
+          .universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creator.fields.tiktokUsername.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.creator.fields.youtubeUrl.universalIdentifier,
+      ]),
+    );
   });
 
   it('normalizes select option positions and defaults', () => {

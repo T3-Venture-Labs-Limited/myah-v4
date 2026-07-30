@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
-import { MessageParticipantRole } from 'twenty-shared/types';
+import {
+  MessageChannelType,
+  MessageParticipantRole,
+} from 'twenty-shared/types';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
 import { In, IsNull } from 'typeorm';
 
@@ -21,7 +24,7 @@ import {
   type MyahInboxThreadEdge,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-connection.dto';
 import {
-  MyahInboxQueue,
+  MyahInboxSnoozeStatus,
   MyahInboxState,
   type MyahInboxThreadsInput,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
@@ -99,6 +102,32 @@ type ContextRecords = {
   campaignById: Map<string, ContextRecord>;
   workspaceMemberById: Map<string, ContextRecord>;
 };
+
+const MYAH_INBOX_EMAIL_CHANNEL_TYPES = [
+  MessageChannelType.EMAIL,
+  MessageChannelType.EMAIL_GROUP,
+];
+
+const getEmailChannelAssociationCondition = ({
+  workspaceSchemaName,
+  messageIdExpression,
+  associationAlias,
+  channelAlias,
+}: {
+  workspaceSchemaName: string;
+  messageIdExpression: string;
+  associationAlias: string;
+  channelAlias: string;
+}): string => `EXISTS (
+  SELECT 1
+  FROM "${workspaceSchemaName}"."messageChannelMessageAssociation" ${associationAlias}
+  INNER JOIN core."messageChannel" ${channelAlias}
+    ON ${channelAlias}.id = ${associationAlias}."messageChannelId"
+    AND ${channelAlias}."workspaceId" = :inboxEmailChannelWorkspaceId
+  WHERE ${associationAlias}."messageId" = ${messageIdExpression}
+    AND ${associationAlias}."deletedAt" IS NULL
+    AND ${channelAlias}.type IN (:...inboxEmailChannelTypes)
+)`;
 
 @Injectable()
 export class MyahInboxQueryService {
@@ -215,6 +244,12 @@ export class MyahInboxQueryService {
           FROM "${workspaceSchemaName}"."message" candidateMessage
           WHERE candidateMessage."messageThreadId" = message_thread.id
             AND candidateMessage."deletedAt" IS NULL
+            AND ${getEmailChannelAssociationCondition({
+              workspaceSchemaName,
+              messageIdExpression: 'candidateMessage.id',
+              associationAlias: 'candidateAssociation',
+              channelAlias: 'candidateChannel',
+            })}
             AND candidateMessage."receivedAt" IS NOT NULL
             AND ${candidateVisibility.expression} <> :messageVisibilityHidden
           ORDER BY candidateMessage."receivedAt" DESC, candidateMessage.id DESC LIMIT 1
@@ -272,18 +307,14 @@ export class MyahInboxQueryService {
             restrictedMessageContent:
               FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED,
             fromParticipantRole: MessageParticipantRole.FROM,
+            inboxEmailChannelWorkspaceId: input.workspace.id,
+            inboxEmailChannelTypes: MYAH_INBOX_EMAIL_CHANNEL_TYPES,
           });
 
         if (input.threadId) {
           queryBuilder.andWhere('message_thread.id = :threadId', {
             threadId: input.threadId,
           });
-        }
-
-        if (input.queue === MyahInboxQueue.CREATOR_LINKED) {
-          queryBuilder.andWhere('message_thread."creatorId" IS NOT NULL');
-        } else if (input.queue === MyahInboxQueue.UNMATCHED) {
-          queryBuilder.andWhere('message_thread."creatorId" IS NULL');
         }
 
         if (input.owner === 'ME') {
@@ -311,6 +342,20 @@ export class MyahInboxQueryService {
           queryBuilder.andWhere('message_thread."inboxState" IN (:...states)', {
             states: input.states,
           });
+        }
+
+        if (input.snoozeStatus === MyahInboxSnoozeStatus.ACTIVE) {
+          queryBuilder
+            .andWhere('message_thread."inboxState" = :snoozedState', {
+              snoozedState: MyahInboxState.SNOOZED,
+            })
+            .andWhere('message_thread."snoozedUntil" > CURRENT_TIMESTAMP');
+        } else if (input.snoozeStatus === MyahInboxSnoozeStatus.DUE) {
+          queryBuilder
+            .andWhere('message_thread."inboxState" = :snoozedState', {
+              snoozedState: MyahInboxState.SNOOZED,
+            })
+            .andWhere('message_thread."snoozedUntil" <= CURRENT_TIMESTAMP');
         }
 
         const search = input.search?.trim();
@@ -448,10 +493,20 @@ export class MyahInboxQueryService {
           })
           .andWhere('message."deletedAt" IS NULL')
           .andWhere('message."receivedAt" IS NOT NULL')
+          .andWhere(
+            getEmailChannelAssociationCondition({
+              workspaceSchemaName,
+              messageIdExpression: 'message.id',
+              associationAlias: 'inboxAssociation',
+              channelAlias: 'inboxChannel',
+            }),
+          )
           .andWhere(`${visibility.expression} = :messageVisibilityFull`)
           .setParameters({
             ...visibility.parameters,
             fromParticipantRole: MessageParticipantRole.FROM,
+            inboxEmailChannelWorkspaceId: input.workspace.id,
+            inboxEmailChannelTypes: MYAH_INBOX_EMAIL_CHANNEL_TYPES,
           })
           .orderBy('message."receivedAt"', 'DESC')
           .addOrderBy('message.id', 'DESC')

@@ -4,19 +4,19 @@ export const GET_MYAH_INBOX_THREADS = gql`
   query MyahInboxThreads(
     $first: Int
     $after: String
-    $queue: MyahInboxQueue
     $owner: String
     $campaignId: String
     $states: [MyahInboxState!]
+    $snoozeStatus: MyahInboxSnoozeStatus
     $search: String
   ) {
     myahInboxThreads(
       first: $first
       after: $after
-      queue: $queue
       owner: $owner
       campaignId: $campaignId
       states: $states
+      snoozeStatus: $snoozeStatus
       search: $search
     ) {
       edges {

@@ -1,4 +1,14 @@
 export { CREATOR_FIELD_UNIVERSAL_IDENTIFIERS } from './creator-field-universal-identifiers';
+export const MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS = {
+  creator: '2bab4cc0-d1d8-4394-b506-9c49a8b414a5',
+  myahCampaign: 'f7e38f36-1901-40df-b6c1-cfff373f472f',
+  inboxOwner: 'eb7f2495-3cc2-4db5-9744-1172ab8a44e8',
+  inboxState: '5047d99f-a82c-4a68-ad39-efd9665a182c',
+  snoozedUntil: 'ff39959f-533d-4a41-b022-2744628ada69',
+  myahReplyDraftBody: '8ec8253f-9b54-46d5-9b55-ac1829c10f4f',
+  myahReplyDraftRevision: 'dfcab7eb-b140-48b7-9252-ed4b9b0d5789',
+  ownedInboxThreads: '664b677e-8625-4442-bc1c-c836f541d0d1',
+} as const;
 
 export const APP_DISPLAY_NAME = 'Myah Creator Ops';
 export const APP_DESCRIPTION =
@@ -27,17 +37,6 @@ export const OUTREACH_STEP_OBJECT_UNIVERSAL_IDENTIFIER =
   'c25bfef3-4636-5864-a777-705238c91326';
 export const OUTREACH_ACTION_OBJECT_UNIVERSAL_IDENTIFIER =
   'b4459926-2c01-560a-8432-fa1974168439';
-
-export const MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS = {
-  creator: '2bab4cc0-d1d8-4394-b506-9c49a8b414a5',
-  myahCampaign: 'f7e38f36-1901-40df-b6c1-cfff373f472f',
-  inboxOwner: 'eb7f2495-3cc2-4db5-9744-1172ab8a44e8',
-  inboxState: '5047d99f-a82c-4a68-ad39-efd9665a182c',
-  snoozedUntil: 'ff39959f-533d-4a41-b022-2744628ada69',
-  myahReplyDraftBody: '8ec8253f-9b54-46d5-9b55-ac1829c10f4f',
-  myahReplyDraftRevision: 'dfcab7eb-b140-48b7-9252-ed4b9b0d5789',
-  ownedInboxThreads: '664b677e-8625-4442-bc1c-c836f541d0d1',
-} as const;
 
 export const MYAH_INBOX_STATE_OPTION_UNIVERSAL_IDENTIFIERS = {
   needsReply: 'ca66715e-5684-44b2-9057-545cfa34e31b',
@@ -225,4 +224,49 @@ export const CREATOR_LISTS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS = {
   name: '8b68fcb0-490d-5414-9b67-abf9e858908b',
   source: 'ce532f04-7846-52b2-9d6b-cd9305f767e2',
   description: 'a9084da4-53a4-5af9-b078-480a6878d74c',
+} as const;
+
+export const CREATOR_RECORD_PAGE_FIELDS_VIEW_UNIVERSAL_IDENTIFIER =
+  'fdbaccb5-56d4-4c36-98c7-0f5ab0b7cc1e';
+export const CREATOR_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER =
+  '65e152d0-e162-4ece-8b84-e6e223065a14';
+
+export const CREATOR_RECORD_PAGE_LAYOUT_TAB_UNIVERSAL_IDENTIFIERS = {
+  home: '551208dc-215c-4a16-bd6f-500e0d4f9128',
+  timeline: 'e5251ece-e1a7-468a-979b-5f174a3884bf',
+  tasks: '4e2d9bed-db7d-4f42-a7f3-6bdc55a797e2',
+  notes: '896a70bf-17a6-4689-8a99-3ab4c51e912b',
+  files: 'be53f49d-9389-4c0b-b42c-003ca6c8213e',
+} as const;
+
+export const CREATOR_RECORD_PAGE_LAYOUT_WIDGET_UNIVERSAL_IDENTIFIERS = {
+  fields: '9b6cb66e-3a74-4c7a-9a52-481fb9497c2e',
+  timeline: '8e82ee16-5e12-4f6f-bf42-e8daed7cb619',
+  tasks: '9a965ec0-9fca-4b88-bd4d-78930ce870ce',
+  notes: '02b3dd33-16d2-4334-9ba7-5ecba705d797',
+  files: 'acc7a6b4-55c2-45c9-a609-c8f84ef9c4d7',
+} as const;
+
+export const CREATOR_RECORD_PAGE_FIELDS_VIEW_FIELD_UNIVERSAL_IDENTIFIERS = {
+  name: 'b5bc3c54-01bb-4fc6-b88d-14e1a55b2577',
+  creatorStatus: '7ea32ccf-4538-4162-8290-59fd1c7c93a3',
+  owner: '948ade2e-b3c5-4a6c-a02d-300e2a51b354',
+  email: '6ccc557a-62f4-4272-8679-314079624d9e',
+  phone: '18d116ff-6058-46e9-a89d-2b5d24043706',
+  profileType: '4e4a6f78-c5e9-4280-ad1b-d9bd0babfe35',
+  categories: 'b2dd3a83-483b-4029-a0a0-d40683eed272',
+  niches: '04629f9e-c028-4ad0-987a-02ce3b394a95',
+  location: 'f65e5e49-5486-436c-8d89-adf09797ac00',
+  language: 'a9ab2317-c118-4f71-81ef-4262675ffd64',
+  source: 'e0eae8eb-c7f0-4e82-9b4b-abd9bbe6c7fb',
+  sourceUrl: 'e1d56d59-7d80-4aa9-b9ef-48343462f709',
+  notes: '91e0a34a-3927-4858-925a-ddfd2b4639ec',
+  instagramUsername: '6a6c6dac-2951-40e5-ad91-89bb753d35b6',
+  instagramFollowerCount: 'e16bee73-14bc-4171-a67f-53f0099c6969',
+  tiktokUsername: 'a09a68fe-985b-4db0-8ed8-7335138e1944',
+  tiktokFollowerCount: '9283c933-d80e-4161-83fa-d517cd7c98b5',
+  youtubeTitle: 'c9383b7e-ac59-4d51-bef0-2a54c6d3332b',
+  youtubeSubscriberCount: '3efca5c3-31a3-49b9-8086-77c1d4b66483',
+  patreonUrl: '5fc47ee7-760f-4e73-aad0-cae7ac579c30',
+  youtubeUrl: '1d7dd6cc-9fdb-43c1-b990-550aa62e32c1',
 } as const;

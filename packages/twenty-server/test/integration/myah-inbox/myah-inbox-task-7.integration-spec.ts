@@ -17,7 +17,6 @@ const inboxThreadsQuery = gql`
   query Task7InboxThreads(
     $first: Int
     $after: String
-    $queue: MyahInboxQueue
     $owner: String
     $campaignId: String
     $states: [MyahInboxState!]
@@ -26,7 +25,6 @@ const inboxThreadsQuery = gql`
     myahInboxThreads(
       first: $first
       after: $after
-      queue: $queue
       owner: $owner
       campaignId: $campaignId
       states: $states
@@ -196,7 +194,10 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     expectFixtureAbsent(await cleanupFixture());
   });
 
-  it('keeps tied-timestamp cursor pages stable and filters linked, unmatched, owner, campaign, and state queues', async () => {
+  it('keeps one readable collection cursor-stable while owner, campaign, state, and search constrain it', async () => {
+    const defaultCollection = await fetchInbox(operatorAccessToken, {
+      first: 20,
+    });
     const firstPage = await fetchInbox(operatorAccessToken, {
       first: 1,
       search: fixture.markers.tied,
@@ -211,12 +212,26 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       search: fixture.markers.tied,
     });
 
+    expect(defaultCollection.edges.map(({ node }) => node.id)).toEqual(
+      expect.arrayContaining([
+        fixture.threadIds.tiedLinked,
+        fixture.threadIds.tiedUnlinked,
+      ]),
+    );
+    expect(
+      defaultCollection.edges.find(
+        ({ node }) => node.id === fixture.threadIds.tiedUnlinked,
+      )?.node,
+    ).toMatchObject({
+      creator: null,
+      campaign: { id: fixture.campaignId, name: fixture.campaignName },
+    });
     expect(firstPage.pageInfo.hasNextPage).toBe(true);
     expect(repeatedFirstPage).toEqual(firstPage);
     expect(
       [firstPage.edges[0].node.id, secondPage.edges[0].node.id].sort(),
     ).toEqual(
-      [fixture.threadIds.tiedLinked, fixture.threadIds.tiedUnmatched].sort(),
+      [fixture.threadIds.tiedLinked, fixture.threadIds.tiedUnlinked].sort(),
     );
     expect(secondPage.edges[0].node.id).not.toBe(firstPage.edges[0].node.id);
     expect(secondPage.pageInfo.hasNextPage).toBe(false);
@@ -224,16 +239,6 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       secondPage.edges[0].node.lastActivityAt,
     );
 
-    const linked = await fetchInbox(operatorAccessToken, {
-      first: 20,
-      queue: 'CREATOR_LINKED',
-      search: fixture.markers.prefix,
-    });
-    const unmatched = await fetchInbox(operatorAccessToken, {
-      first: 20,
-      queue: 'UNMATCHED',
-      search: fixture.markers.prefix,
-    });
     const mine = await fetchInbox(operatorAccessToken, {
       first: 20,
       owner: 'ME',
@@ -255,34 +260,61 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       search: fixture.markers.prefix,
     });
 
-    expect(linked.edges.map(({ node }) => node.id)).toEqual([
-      fixture.threadIds.hiddenVisibleAfter,
-      fixture.threadIds.hiddenVisibleBefore,
-      fixture.threadIds.tiedLinked,
-      fixture.threadIds.sharedFallback,
-      fixture.threadIds.owner,
-      fixture.threadIds.draft,
-      fixture.threadIds.subject,
-    ]);
-    expect(unmatched.edges.map(({ node }) => node.id)).toEqual([
-      fixture.threadIds.tiedUnmatched,
-    ]);
     expect(mine.edges.map(({ node }) => node.id)).toEqual([
       fixture.threadIds.owner,
       fixture.threadIds.draft,
     ]);
     expect(unassigned.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.tiedUnlinked,
       fixture.threadIds.sharedFallback,
       fixture.threadIds.metadata,
     ]);
     expect(campaign.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.tiedUnlinked,
       fixture.threadIds.tiedLinked,
       fixture.threadIds.sharedFallback,
       fixture.threadIds.draft,
     ]);
     expect(waiting.edges.map(({ node }) => node.id)).toContain(
-      fixture.threadIds.tiedUnmatched,
+      fixture.threadIds.tiedUnlinked,
     );
+  });
+
+  it('keeps the unlinked readable thread selectable and links it only to the existing Creator', async () => {
+    const unlinked = await fetchInbox(operatorAccessToken, {
+      first: 20,
+      search: fixture.markers.tied,
+    });
+    const unlinkedNode = unlinked.edges.find(
+      ({ node }) => node.id === fixture.threadIds.tiedUnlinked,
+    )?.node;
+
+    expect(unlinkedNode).toMatchObject({
+      id: fixture.threadIds.tiedUnlinked,
+      creator: null,
+      campaign: { id: fixture.campaignId },
+    });
+
+    const linked = await makeGraphqlAPIRequest(
+      {
+        query: updateThreadMutation,
+        variables: {
+          input: {
+            threadId: fixture.threadIds.tiedUnlinked,
+            creatorId: fixture.creatorId,
+          },
+        },
+      },
+      operatorAccessToken,
+    );
+
+    expect(linked.status).toBe(200);
+    expect(linked.body.errors).toBeUndefined();
+    expect(linked.body.data.updateMyahInboxThread).toMatchObject({
+      id: fixture.threadIds.tiedUnlinked,
+      creator: { id: fixture.creatorId },
+      campaign: { id: fixture.campaignId },
+    });
   });
 
   it('matches native selected-thread visibility and exposes no hidden or masked-content search oracle', async () => {

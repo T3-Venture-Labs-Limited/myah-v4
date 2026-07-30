@@ -5,7 +5,7 @@ import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient
 
 import { type MyahInboxFilters } from '@/myah/inbox/states/myahInboxSelectionState';
 import {
-  type MyahInboxQueue,
+  MyahInboxSnoozeStatus,
   type MyahInboxState,
   MyahInboxThreadsDocument,
 } from '~/generated/graphql';
@@ -28,11 +28,16 @@ export const useMyahInboxThreads = (
   currentWorkspaceId: string | null,
 ) => {
   const apolloCoreClient = useApolloCoreClient();
+  const snoozeStatus =
+    filters.snoozeStatus === 'ACTIVE'
+      ? MyahInboxSnoozeStatus.ACTIVE
+      : filters.snoozeStatus === 'DUE'
+        ? MyahInboxSnoozeStatus.DUE
+        : undefined;
   const query = useQuery(MyahInboxThreadsDocument, {
     client: apolloCoreClient,
     variables: {
       first: 50,
-      queue: filters.queue as MyahInboxQueue,
       owner: filters.owner || undefined,
       campaignId:
         filters.campaignWorkspaceId === currentWorkspaceId
@@ -42,6 +47,7 @@ export const useMyahInboxThreads = (
         filters.states.length > 0
           ? (filters.states as MyahInboxState[])
           : undefined,
+      snoozeStatus,
       search: filters.search || undefined,
     },
     notifyOnNetworkStatusChange: true,

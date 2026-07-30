@@ -32,6 +32,7 @@ const noteId = '21270000-0000-4000-8000-000000000005';
 const noteTargetId = '21270000-0000-4000-8000-000000000006';
 const foreignCreatorId = '21270000-0000-4000-8000-000000000099';
 const fixtureMarker = 'MYAH212-INTEGRATION-TASK7';
+const campaignName = 'MYAH-212 UAT · Summer Creator Launch';
 
 const markers = {
   prefix: fixtureMarker,
@@ -56,18 +57,17 @@ const markers = {
   draftHiddenSubject: `${fixtureMarker} draft hidden subject`,
   draftHiddenBody: `${fixtureMarker} draft hidden body`,
 } as const;
-
 const timestamps = {
-  visibleFallback: '2026-07-24T11:00:00.000Z',
-  tied: '2026-07-24T12:00:00.000Z',
-  hiddenVisibleBefore: '2026-07-24T13:59:00.000Z',
-  hiddenNewest: '2026-07-24T14:00:00.000Z',
-  hiddenVisibleAfter: '2026-07-24T14:01:00.000Z',
+  visibleFallback: '2099-07-24T11:00:00.000Z',
+  tied: '2099-07-24T12:00:00.000Z',
+  hiddenVisibleBefore: '2099-07-24T13:59:00.000Z',
+  hiddenNewest: '2099-07-24T14:00:00.000Z',
+  hiddenVisibleAfter: '2099-07-24T14:01:00.000Z',
 } as const;
 
 const threadIds = {
   tiedLinked: '21270000-1001-4000-8000-000000000001',
-  tiedUnmatched: '21270000-1002-4000-8000-000000000002',
+  tiedUnlinked: '21270000-1002-4000-8000-000000000002',
   owner: '21270000-1003-4000-8000-000000000003',
   sharedFallback: '21270000-1004-4000-8000-000000000004',
   subject: '21270000-1005-4000-8000-000000000005',
@@ -97,6 +97,7 @@ export type MyahInboxTask7CleanupEvidence = {
 export type MyahInboxTask7Fixture = {
   creatorId: string;
   campaignId: string;
+  campaignName: string;
   taskId: string;
   noteId: string;
   foreignCreatorId: string;
@@ -142,12 +143,12 @@ const messageFixtures: MessageFixture[] = [
     id: '21270000-2002-4000-8000-000000000002',
     participantId: '21270000-3002-4000-8000-000000000002',
     associationId: '21270000-4002-4000-8000-000000000002',
-    threadId: threadIds.tiedUnmatched,
+    threadId: threadIds.tiedUnlinked,
     channelId: channelIds.shared,
-    externalId: 'task7-tied-unmatched',
-    threadExternalId: 'task7-tied-unmatched-thread',
-    subject: `${markers.tied} unmatched`,
-    text: 'Task 7 tied unmatched body',
+    externalId: 'task7-tied-unlinked-readable',
+    threadExternalId: 'task7-tied-unlinked-readable-thread',
+    subject: `${markers.tied} unlinked readable`,
+    text: 'Task 7 tied unlinked readable body',
     receivedAt: timestamps.tied,
   },
   {
@@ -900,7 +901,7 @@ export const seedMyahInboxTask7Fixture = async ({
     objectName: 'campaign',
     gqlFields: 'id name',
     id: campaignId,
-    data: { name: 'Task 7 Campaign' },
+    data: { name: campaignName },
     token: operatorAccessToken,
   });
   await ensureRecord({
@@ -941,9 +942,9 @@ export const seedMyahInboxTask7Fixture = async ({
       inboxState: 'NEEDS_REPLY',
     },
     {
-      threadId: threadIds.tiedUnmatched,
+      threadId: threadIds.tiedUnlinked,
       creatorId: null,
-      campaignId: null,
+      campaignId,
       inboxOwnerId: null,
       inboxState: 'WAITING_ON_CREATOR',
     },
@@ -1051,6 +1052,7 @@ export const seedMyahInboxTask7Fixture = async ({
   return {
     creatorId,
     campaignId,
+    campaignName,
     taskId,
     noteId,
     foreignCreatorId,

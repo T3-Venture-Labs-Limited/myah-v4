@@ -318,6 +318,12 @@ describe('MyahInboxQueryService', () => {
     expect(calls.limit).toBe(2);
     expect(allJoinSql(calls)).toContain(fullVisibilityExpression);
     expect(allJoinSql(calls)).toContain('candidateMessage."deletedAt" IS NULL');
+    expect(allJoinSql(calls)).toContain(
+      'candidateChannel.type IN (:...inboxEmailChannelTypes)',
+    );
+    expect(calls.parameters).toMatchObject({
+      inboxEmailChannelTypes: ['EMAIL', 'EMAIL_GROUP'],
+    });
     expect(allWhereSql(calls)).toContain('message_thread."deletedAt" IS NULL');
     expect(allWhereSql(calls)).toContain('latest_message."deletedAt" IS NULL');
     expect(calls.operations.indexOf('join')).toBeLessThan(
@@ -325,6 +331,33 @@ describe('MyahInboxQueryService', () => {
     );
     expect(calls.operations.indexOf('order')).toBeLessThan(
       calls.operations.indexOf('limit'),
+    );
+  });
+
+  it('returns linked and unlinked readable threads in the same unfiltered Inbox page', async () => {
+    const { service, calls } = createService({
+      rows: [
+        row('linked-thread', '2026-07-21T10:00:00.000Z', {
+          creatorId: 'creator-id',
+        }),
+        row('unlinked-thread', '2026-07-21T09:00:00.000Z'),
+      ],
+    });
+
+    await expect(
+      service.listThreads(listInput({ first: 10 })),
+    ).resolves.toMatchObject({
+      edges: [
+        { node: { id: 'linked-thread' } },
+        { node: { id: 'unlinked-thread' } },
+      ],
+    });
+
+    expect(allWhereSql(calls)).not.toContain(
+      'message_thread."creatorId" IS NOT NULL',
+    );
+    expect(allWhereSql(calls)).not.toContain(
+      'message_thread."creatorId" IS NULL',
     );
   });
 
@@ -424,7 +457,7 @@ describe('MyahInboxQueryService', () => {
     },
   );
 
-  it('applies Creator, owner, Campaign, state, and policy-aware search filters before limit', async () => {
+  it('applies owner, Campaign, state, and policy-aware search filters before limit without a Creator gate', async () => {
     const campaignId = '20202020-f7c5-4e2f-a44a-240b2d3a9d02';
     const { service, calls } = createService({
       campaignFilterRecord: { id: campaignId, name: 'Campaign' },
@@ -433,7 +466,6 @@ describe('MyahInboxQueryService', () => {
     await service.listThreads(
       listInput({
         first: 10,
-        queue: 'CREATOR_LINKED',
         owner: 'ME',
         campaignId,
         states: ['NEEDS_REPLY', 'SNOOZED'],
@@ -443,7 +475,8 @@ describe('MyahInboxQueryService', () => {
 
     const whereSql = allWhereSql(calls);
 
-    expect(whereSql).toContain('message_thread."creatorId" IS NOT NULL');
+    expect(whereSql).not.toContain('message_thread."creatorId" IS NOT NULL');
+    expect(whereSql).not.toContain('message_thread."creatorId" IS NULL');
     expect(whereSql).toContain('message_thread."inboxOwnerId" = :inboxOwnerId');
     expect(whereSql).toContain('message_thread."myahCampaignId" = :campaignId');
     expect(whereSql).toContain('message_thread."inboxState" IN (:...states)');
@@ -460,24 +493,44 @@ describe('MyahInboxQueryService', () => {
     );
   });
 
-  it('supports Unmatched, unassigned, and explicit readable owner filters', async () => {
+  it.each([
+    ['active', 'ACTIVE', '>'],
+    ['due', 'DUE', '<='],
+  ])(
+    'filters %s Snoozed conversations by their deadline before pagination',
+    async (_label, snoozeStatus, comparison) => {
+      const { service, calls } = createService();
+
+      await service.listThreads(listInput({ snoozeStatus }));
+
+      expect(calls.where).toContainEqual([
+        'message_thread."inboxState" = :snoozedState',
+        { snoozedState: 'SNOOZED' },
+      ]);
+      expect(allWhereSql(calls)).toContain(
+        `message_thread."snoozedUntil" ${comparison} CURRENT_TIMESTAMP`,
+      );
+      expect(calls.operations.lastIndexOf('where')).toBeLessThan(
+        calls.operations.indexOf('limit'),
+      );
+    },
+  );
+
+  it('supports unassigned and explicit readable owner filters without a Creator gate', async () => {
     const ownerId = '20202020-0b5c-4178-bed7-d371f6411eab';
     const { service, calls } = createService({
       ownerFilterRecord: { id: ownerId },
     });
 
-    await service.listThreads(
-      listInput({ queue: 'UNMATCHED', owner: 'UNASSIGNED' }),
-    );
+    await service.listThreads(listInput({ owner: 'UNASSIGNED' }));
     await service.listThreads(listInput({ owner: ownerId }));
 
-    expect(allWhereSql(calls)).toContain('message_thread."creatorId" IS NULL');
-    expect(allWhereSql(calls)).toContain(
-      'message_thread."inboxOwnerId" IS NULL',
-    );
-    expect(allWhereSql(calls)).toContain(
-      'message_thread."inboxOwnerId" = :inboxOwnerId',
-    );
+    const whereSql = allWhereSql(calls);
+
+    expect(whereSql).not.toContain('message_thread."creatorId" IS NOT NULL');
+    expect(whereSql).not.toContain('message_thread."creatorId" IS NULL');
+    expect(whereSql).toContain('message_thread."inboxOwnerId" IS NULL');
+    expect(whereSql).toContain('message_thread."inboxOwnerId" = :inboxOwnerId');
   });
 
   it('clamps oversized service callers to MYAH_INBOX_MAX_PAGE_SIZE', async () => {
@@ -765,6 +818,9 @@ describe('MyahInboxQueryService', () => {
     expect(historyWhereSql).toContain('message."messageThreadId" = :threadId');
     expect(historyWhereSql).toContain(
       `${historyVisibilityExpression} = :messageVisibilityFull`,
+    );
+    expect(historyWhereSql).toContain(
+      'inboxChannel.type IN (:...inboxEmailChannelTypes)',
     );
     expect(historyWhereSql).not.toContain(':messageVisibilitySubject');
     expect(historyWhereSql).not.toContain(':messageVisibilityMetadata');
