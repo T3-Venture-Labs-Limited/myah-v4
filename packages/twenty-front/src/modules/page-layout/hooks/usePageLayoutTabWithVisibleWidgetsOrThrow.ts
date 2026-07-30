@@ -1,5 +1,6 @@
 import { useCurrentPageLayout } from '@/page-layout/hooks/useCurrentPageLayout';
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
+import { usePageLayoutHiddenWidgetTypes } from '@/page-layout/hooks/usePageLayoutHiddenWidgetTypes';
 import { type PageLayoutTab } from '@/page-layout/types/PageLayoutTab';
 import { buildWidgetVisibilityContext } from '@/page-layout/utils/buildWidgetVisibilityContext';
 import { filterVisibleWidgets } from '@/page-layout/utils/filterVisibleWidgets';
@@ -16,6 +17,7 @@ export const usePageLayoutTabWithVisibleWidgetsOrThrow = (
   const isMobile = useIsMobile();
   const { isInSidePanel } = useLayoutRenderingContext();
   const isPageLayoutInEditMode = useIsPageLayoutInEditMode();
+  const hiddenWidgetTypes = usePageLayoutHiddenWidgetTypes();
 
   if (!isDefined(currentPageLayout)) {
     throw new Error('currentPageLayout is not defined');
@@ -27,7 +29,9 @@ export const usePageLayoutTabWithVisibleWidgetsOrThrow = (
     throw new Error('Tab not found');
   }
 
-  const activeWidgets = tab.widgets.filter((widget) => widget.isActive);
+  const activeWidgets = tab.widgets.filter(
+    (widget) => widget.isActive && !hiddenWidgetTypes.has(widget.type),
+  );
 
   if (isPageLayoutInEditMode) {
     return {

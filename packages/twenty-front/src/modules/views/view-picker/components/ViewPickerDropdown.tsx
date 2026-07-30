@@ -1,6 +1,8 @@
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
+import { recordIndexContextualViewNameComponentState } from '@/object-record/record-index/states/recordIndexContextualViewNameComponentState';
 import { StyledDropdownButtonContainer } from '@/ui/layout/dropdown/components/StyledDropdownButtonContainer';
 import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
 import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
@@ -53,6 +55,11 @@ const StyledViewName = styled.span`
 
 export const ViewPickerDropdown = () => {
   const { theme } = useContext(ThemeContext);
+  const { recordIndexId } = useRecordIndexContextOrThrow();
+  const recordIndexContextualViewName = useAtomComponentStateValue(
+    recordIndexContextualViewNameComponentState,
+    recordIndexId,
+  );
   const { currentView } = useGetCurrentViewOnly();
 
   const { updateViewFromCurrentState } = useUpdateViewFromCurrentState();
@@ -87,14 +94,20 @@ export const ViewPickerDropdown = () => {
       clickableComponent={
         <StyledDropdownButtonContainer isUnfolded={isDropdownOpen}>
           <StyledIconContainer>
-            {isDefined(currentView) && isDefined(CurrentViewIcon) ? (
+            {isDefined(recordIndexContextualViewName) ? (
+              <IconList size={theme.icon.size.md} />
+            ) : isDefined(currentView) && isDefined(CurrentViewIcon) ? (
               <CurrentViewIcon size={theme.icon.size.md} />
             ) : (
               <IconList size={theme.icon.size.md} />
             )}
           </StyledIconContainer>
           <StyledViewName>
-            <OverflowingTextWithTooltip text={currentView?.name ?? t`All`} />
+            <OverflowingTextWithTooltip
+              text={
+                recordIndexContextualViewName ?? currentView?.name ?? t`All`
+              }
+            />
           </StyledViewName>
           <StyledDropdownLabelAdornments>
             {isDefined(totalCount) && <>· {formatNumber(totalCount)} </>}

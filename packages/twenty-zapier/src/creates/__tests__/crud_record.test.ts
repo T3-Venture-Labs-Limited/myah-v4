@@ -15,7 +15,7 @@ tools.env.inject();
 
 describe('creates.create_company', () => {
   test('should run to create a Company Record', async () => {
-    const bundle = getBundleForTest({
+    const bundle = await getBundleForTest({
       nameSingular: 'Company',
       crudZapierOperation: DatabaseEventAction.CREATED,
       name: 'Company Name',
@@ -46,7 +46,7 @@ describe('creates.create_company', () => {
     expect(checkDbResult.data.company.address.addressCity).toEqual('Paris');
   });
   test('should run to create a Person Record', async () => {
-    const bundle = getBundleForTest({
+    const bundle = await getBundleForTest({
       nameSingular: 'Person',
       crudZapierOperation: DatabaseEventAction.CREATED,
       name: { firstName: 'John', lastName: 'Doe' },
@@ -82,7 +82,7 @@ describe('creates.create_company', () => {
 
 describe('creates.update_company', () => {
   test('should run to update a Company record', async () => {
-    const createBundle = getBundleForTest({
+    const createBundle = await getBundleForTest({
       nameSingular: 'Company',
       crudZapierOperation: DatabaseEventAction.CREATED,
       name: 'Company Name',
@@ -95,7 +95,7 @@ describe('creates.update_company', () => {
 
     const companyId = createResult.data?.createCompany?.id;
 
-    const updateBundle = getBundleForTest({
+    const updateBundle = await getBundleForTest({
       nameSingular: 'Company',
       crudZapierOperation: DatabaseEventAction.UPDATED,
       id: companyId,
@@ -124,7 +124,7 @@ describe('creates.update_company', () => {
 
 describe('creates.delete_company', () => {
   test('should run to delete a Company record', async () => {
-    const createBundle = getBundleForTest({
+    const createBundle = await getBundleForTest({
       nameSingular: 'Company',
       crudZapierOperation: DatabaseEventAction.CREATED,
       name: 'Delete Company Name',
@@ -137,7 +137,7 @@ describe('creates.delete_company', () => {
 
     const companyId = createResult.data?.createCompany?.id;
 
-    const deleteBundle = getBundleForTest({
+    const deleteBundle = await getBundleForTest({
       nameSingular: 'Company',
       crudZapierOperation: DatabaseEventAction.DELETED,
       id: companyId,

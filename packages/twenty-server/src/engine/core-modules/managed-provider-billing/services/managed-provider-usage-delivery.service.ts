@@ -82,7 +82,10 @@ export class ManagedProviderUsageDeliveryService {
           return { status: 'NOT_PENDING' } as const;
         }
 
-        if (!lockedOperation.actualUsageProperties) {
+        if (
+          !lockedOperation.actualUsageProperties ||
+          !lockedOperation.actualMetronomeProperties
+        ) {
           throw new Error('Managed provider usage facts are unavailable');
         }
 
@@ -90,7 +93,7 @@ export class ManagedProviderUsageDeliveryService {
           await this.metronomeClientService.ingestUsage({
             customerId,
             eventType: lockedOperation.metronomeEventType,
-            properties: lockedOperation.actualUsageProperties,
+            properties: lockedOperation.actualMetronomeProperties,
             timestamp: deliveryEventAt.toISOString(),
             transactionId: `managed-provider-usage:${lockedOperation.id}`,
           });
@@ -191,14 +194,14 @@ export class ManagedProviderUsageDeliveryService {
       if (persistedQuote != null) {
         quotedActualAmountCents = BigInt(persistedQuote);
       } else {
-        if (!operation.actualUsageProperties) {
+        if (!operation.actualMetronomeProperties) {
           throw new Error('Managed provider usage facts are unavailable');
         }
 
         const preview = await this.metronomeClientService.previewUsage({
           customerId,
           eventType: operation.metronomeEventType,
-          properties: operation.actualUsageProperties,
+          properties: operation.actualMetronomeProperties,
           timestamp: deliveryEventAt.toISOString(),
         });
 
@@ -208,6 +211,7 @@ export class ManagedProviderUsageDeliveryService {
             customerId,
             expectedProductIds: operation.expectedProductIds,
             preview,
+            allowZeroAmount: false,
           });
         } catch {
           await manager.save(ManagedProviderOperationEntity, {

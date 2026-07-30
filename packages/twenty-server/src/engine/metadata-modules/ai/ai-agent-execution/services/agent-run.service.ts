@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { randomUUID } from 'node:crypto';
 import {
   type RunAgentInput,
   type RunAgentResult,
@@ -62,10 +63,12 @@ export class AgentRunService {
 
     const { result, hasNoMoreAvailableCredits } =
       await this.agentAsyncExecutorService.executeAgent({
+        executionSurface: 'graphql-agent',
         agent,
         userPrompt: input.prompt,
         authContext,
         workspaceId: workspace.id,
+        managedProviderRequestIdRoot: input.operationId ?? randomUUID(),
         userWorkspaceId: requestUserWorkspaceId,
         operationType: UsageOperationType.AI_WORKFLOW_TOKEN,
       });

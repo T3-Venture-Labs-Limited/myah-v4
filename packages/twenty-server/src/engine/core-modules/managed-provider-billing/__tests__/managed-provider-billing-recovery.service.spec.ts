@@ -15,11 +15,18 @@ import { ManagedProviderOperationEntity } from '../entities/managed-provider-ope
 import { ManagedProviderOperationState } from '../enums/managed-provider-operation-state.enum';
 import { ManagedProviderBillingRecoveryService } from '../services/managed-provider-billing-recovery.service';
 import { MetronomeClientService } from '../services/metronome-client.service';
+import { type OpenRouterGenerationLookupService } from '../services/openrouter-generation-lookup.service';
 
 describe('ManagedProviderBillingRecoveryService', () => {
   const acceptedOperation = {
     actualUsageProperties: { quantity: 3 },
     expectedBillableMetricIds: ['metric-id'],
+    actualMetronomeProperties: {
+      charge_cent_unit: '3',
+      model_id: 'openrouter/model',
+      operation_id: 'operation-id',
+      tariff_version: 'tariff-v1',
+    },
     id: 'operation-id',
     metronomeEventType: 'managed-provider-operation',
     deliveryEventAt: new Date('2026-07-16T00:00:00.000Z'),
@@ -28,6 +35,22 @@ describe('ManagedProviderBillingRecoveryService', () => {
     state: ManagedProviderOperationState.USAGE_ACCEPTED,
     workspaceId: 'workspace-id',
   } as unknown as ManagedProviderOperationEntity;
+  const acceptedUsageEvent = {
+    customerId: 'customer-id',
+    matchedCustomerId: 'customer-id',
+    eventType: 'managed-provider-operation',
+    isDuplicate: false,
+    matchedBillableMetricIds: ['metric-id'],
+    timestamp: '2026-07-16T00:00:00.000000+00:00',
+    processedAt: '2026-07-16T00:01:00.000Z',
+    properties: {
+      charge_cent_unit: '3',
+      model_id: 'openrouter/model',
+      operation_id: 'operation-id',
+      tariff_version: 'tariff-v1',
+    },
+    transactionId: 'managed-provider-usage:operation-id',
+  };
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -39,7 +62,9 @@ describe('ManagedProviderBillingRecoveryService', () => {
     jest.restoreAllMocks();
   });
 
-  const createService = () => {
+  const createService = (
+    lookup?: Pick<OpenRouterGenerationLookupService, 'lookup'>,
+  ) => {
     const save = jest.fn((_, value) => value);
     const findOne = jest.fn().mockImplementation((entity) =>
       entity === MyahWorkspaceInstallationEntity
@@ -74,19 +99,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
     >;
     const metronomeClientService = {
       getPrepaidBalance: jest.fn().mockResolvedValue({ balance: 10 }),
-      searchUsageEvents: jest.fn().mockResolvedValue([
-        {
-          customerId: 'customer-id',
-          matchedCustomerId: 'customer-id',
-          eventType: 'managed-provider-operation',
-          isDuplicate: false,
-          matchedBillableMetricIds: ['metric-id'],
-          timestamp: '2026-07-16T00:00:00.000Z',
-          processedAt: '2026-07-16T00:01:00.000Z',
-          properties: { quantity: '3' },
-          transactionId: 'managed-provider-usage:operation-id',
-        },
-      ]),
+      searchUsageEvents: jest.fn().mockResolvedValue([acceptedUsageEvent]),
     } as Pick<
       MetronomeClientService,
       'getPrepaidBalance' | 'searchUsageEvents'
@@ -113,6 +126,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
         metronomeClientService as MetronomeClientService,
         messageQueueService as MessageQueueService,
         twentyConfigService as TwentyConfigService,
+        lookup as OpenRouterGenerationLookupService | undefined,
       ),
     };
   };
@@ -177,12 +191,24 @@ describe('ManagedProviderBillingRecoveryService', () => {
   it('backs off every remaining accepted operation after a balance rate limit', async () => {
     const { metronomeClientService, operationRepository, save, service } =
       createService();
-    const firstBatch = Array.from({ length: 100 }, (_, index) => ({
-      ...acceptedOperation,
-      id: `operation-${index.toString().padStart(3, '0')}`,
-    }));
+    const firstBatch = Array.from({ length: 100 }, (_, index) => {
+      const id = `operation-${index.toString().padStart(3, '0')}`;
+
+      return {
+        ...acceptedOperation,
+        actualMetronomeProperties: {
+          ...acceptedOperation.actualMetronomeProperties,
+          operation_id: id,
+        },
+        id,
+      };
+    });
     const finalOperation = {
       ...acceptedOperation,
+      actualMetronomeProperties: {
+        ...acceptedOperation.actualMetronomeProperties,
+        operation_id: 'operation-100',
+      },
       id: 'operation-100',
     };
 
@@ -201,7 +227,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
           matchedBillableMetricIds: ['metric-id'],
           timestamp: '2026-07-16T00:00:00.000Z',
           processedAt: '2026-07-16T00:01:00.000Z',
-          properties: { quantity: '3' },
+          properties: {
+            charge_cent_unit: '3',
+            model_id: 'openrouter/model',
+            operation_id: transactionId.replace('managed-provider-usage:', ''),
+            tariff_version: 'tariff-v1',
+          },
           transactionId,
         })),
     );
@@ -268,6 +299,58 @@ describe('ManagedProviderBillingRecoveryService', () => {
     );
   });
 
+  it.each([
+    ['2026-07-16T00:00:00.000001Z', new Date('2026-07-16T00:00:00.000Z')],
+    ['2026-02-30T00:00:00.000Z', new Date('2026-03-02T00:00:00.000Z')],
+  ])(
+    'requires reconciliation for contradictory or invalid timestamp evidence %s',
+    async (timestamp, deliveryEventAt) => {
+      const {
+        findOne,
+        metronomeClientService,
+        operationRepository,
+        save,
+        service,
+      } = createService();
+      const operation = { ...acceptedOperation, deliveryEventAt };
+      jest.setSystemTime(new Date(deliveryEventAt.getTime() + 2 * 60_000));
+
+      (operationRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([operation]);
+      (findOne as jest.Mock).mockImplementation(async (entity) =>
+        entity === MyahWorkspaceInstallationEntity
+          ? {
+              metronomeCustomerId: 'customer-id',
+              workspaceId: 'workspace-id',
+            }
+          : operation,
+      );
+      (metronomeClientService.searchUsageEvents as jest.Mock).mockResolvedValue(
+        [
+          {
+            ...acceptedUsageEvent,
+            timestamp,
+            processedAt: new Date(
+              deliveryEventAt.getTime() + 60_000,
+            ).toISOString(),
+          },
+        ],
+      );
+
+      await service.recover();
+
+      expect(metronomeClientService.getPrepaidBalance).not.toHaveBeenCalled();
+      expect(save).toHaveBeenCalledWith(
+        ManagedProviderOperationEntity,
+        expect.objectContaining({
+          state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+        }),
+      );
+    },
+  );
+
   it('settles an accepted operation at most once across concurrent recovery runs', async () => {
     const { findOne, operationRepository, save, service } = createService();
     const lockedOperation = { ...acceptedOperation };
@@ -333,7 +416,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
         matchedBillableMetricIds: ['unexpected-metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
-        properties: { quantity: '3' },
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         transactionId: 'managed-provider-usage:operation-id',
       },
     ]);
@@ -386,11 +474,15 @@ describe('ManagedProviderBillingRecoveryService', () => {
         customerId: 'customer-id',
         matchedCustomerId: 'customer-id',
         eventType: 'managed-provider-operation',
-        isDuplicate: false,
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         matchedBillableMetricIds: ['metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
-        properties: { quantity: '3' },
         transactionId: 'managed-provider-usage:operation-id',
       },
       {
@@ -399,9 +491,14 @@ describe('ManagedProviderBillingRecoveryService', () => {
         eventType: 'managed-provider-operation',
         isDuplicate: true,
         matchedBillableMetricIds: ['metric-id'],
-        timestamp: '2026-07-16T00:00:00.000Z',
+        timestamp: '2026-07-16T00:00:00.000000+00:00',
         processedAt: '2026-07-16T00:01:00.000Z',
-        properties: { quantity: '3' },
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         transactionId: 'managed-provider-usage:operation-id',
       },
     ]);
@@ -427,7 +524,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
         matchedBillableMetricIds: ['metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: null,
-        properties: { quantity: '3' },
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         transactionId: 'managed-provider-usage:operation-id',
       },
     ]);
@@ -493,7 +595,12 @@ describe('ManagedProviderBillingRecoveryService', () => {
         matchedBillableMetricIds: ['metric-id', 'unexpected-metric-id'],
         timestamp: '2026-07-16T00:00:00.000Z',
         processedAt: '2026-07-16T00:01:00.000Z',
-        properties: { quantity: '3' },
+        properties: {
+          charge_cent_unit: '3',
+          model_id: 'openrouter/model',
+          operation_id: 'operation-id',
+          tariff_version: 'tariff-v1',
+        },
         transactionId: 'managed-provider-usage:operation-id',
       },
     ]);
@@ -600,5 +707,520 @@ describe('ManagedProviderBillingRecoveryService', () => {
     );
     expect(messageQueueService.add).not.toHaveBeenCalled();
     expect(operationRepository.manager.transaction).not.toHaveBeenCalled();
+  });
+  const unknownOperation = () =>
+    ({
+      ...acceptedOperation,
+      actualUsageProperties: null,
+      completionOutcome: 'UNKNOWN',
+      id: 'unknown-operation',
+      maximumUsageProperties: {
+        baseCachedInputRate: 0.14,
+        baseCacheCreationRate: 1.43,
+        baseInputRate: 1.43,
+        baseOutputRate: 8.58,
+        cachedInputRate: 0.29,
+        cacheCreationRate: 0,
+        inputRate: 2.86,
+        inputUnits: 100,
+        longContextThreshold: 272_000,
+        outputRate: 12.86,
+        outputUnits: 100,
+        tariffVersion: '2026-07-19-v1',
+        cashPaidMicrousd: '1000000',
+        usableCreditsReceivedMicrousd: '1000000',
+        multiplierEvidenceVersion: 'funding-v1',
+      },
+      providerConfigurationKey: 'openrouter/openai/gpt-5.6-luna',
+      providerCostMicrousd: null,
+      providerExecutionId: 'gen-123',
+      providerKey: 'openrouter',
+      reservedAmountCents: '10',
+      state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+    }) as unknown as ManagedProviderOperationEntity;
+
+  it.each([
+    ['not found', { status: 'not_found' }],
+    ['unavailable', { status: 'unavailable' }],
+    ['malformed', { status: 'malformed' }],
+    [
+      'mismatched identity',
+      {
+        status: 'found',
+        id: 'other-generation',
+        model: 'openai/gpt-5.6-luna',
+        cachedPromptTokens: 0,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalCostUsd: 0.001,
+      },
+    ],
+  ])(
+    'retains reconciliation for OpenRouter %s lookup',
+    async (_label, result) => {
+      const lookup = { lookup: jest.fn().mockResolvedValue(result) };
+      const { messageQueueService, operationRepository, service } =
+        createService(lookup);
+      const operation = unknownOperation();
+      (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+        (callback) =>
+          callback({
+            findOne: jest.fn().mockResolvedValue(operation),
+            save: jest.fn(),
+          }),
+      );
+      (operationRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([operation]);
+
+      await service.recover();
+
+      expect(lookup.lookup).toHaveBeenCalledWith('gen-123');
+      expect(messageQueueService.add).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not enqueue a duplicate delivery when concurrent recovery claims race', async () => {
+    const operation = unknownOperation();
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({
+        status: 'found',
+        id: 'gen-123',
+        model: 'openai/gpt-5.6-luna',
+        cachedPromptTokens: 0,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalCostUsd: 0.001,
+      }),
+    };
+    const { messageQueueService, operationRepository, service } =
+      createService(lookup);
+    let claimed = false;
+    const save = jest.fn((_, value) => {
+      claimed = true;
+      operation.state = value.state;
+      return value;
+    });
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    let scans = 0;
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockImplementation(() => {
+        scans += 1;
+        return Promise.resolve(scans > 4 ? [operation] : []);
+      });
+
+    await Promise.all([service.recover(), service.recover()]);
+
+    expect(claimed).toBe(true);
+    expect(
+      (messageQueueService.add as jest.Mock).mock.calls.filter(
+        ([, data]: [string, { operationId: string }]) =>
+          data.operationId === 'unknown-operation',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('releases unreconciled OpenRouter operations after seven days without queueing', async () => {
+    const operation = {
+      ...unknownOperation(),
+      createdAt: new Date('2026-07-08T00:00:00.000Z'),
+    };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({ status: 'not_found' }),
+    };
+    const { messageQueueService, operationRepository, save, service } =
+      createService(lookup);
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation]);
+
+    await service.recover();
+
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
+        nextDeliveryAttemptAt: null,
+        releasedAt: expect.any(Date),
+        state: ManagedProviderOperationState.RELEASED,
+      }),
+    );
+    expect(lookup.lookup).toHaveBeenCalledWith('gen-123');
+    expect(messageQueueService.add).not.toHaveBeenCalledWith(
+      expect.any(String),
+      { operationId: operation.id },
+      expect.anything(),
+    );
+  });
+
+  it('backs off unavailable reconciliation by 24 hours', async () => {
+    const operation = unknownOperation();
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({ status: 'unavailable' }),
+    };
+    const { operationRepository, service } = createService(lookup);
+    const save = jest.fn();
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation]);
+
+    await service.recover();
+
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_PENDING',
+        nextDeliveryAttemptAt: new Date('2026-07-17T00:02:00.000Z'),
+      }),
+    );
+  });
+
+  it('absorbs late valid evidence after release without redelivery', async () => {
+    const operation = {
+      ...unknownOperation(),
+      state: ManagedProviderOperationState.RELEASED,
+      releasedAt: new Date('2026-07-16T00:00:00.000Z'),
+    };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({
+        status: 'found',
+        id: 'gen-123',
+        model: 'openai/gpt-5.6-luna',
+        cachedPromptTokens: 0,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalCostUsd: 0.001,
+      }),
+    };
+    const { messageQueueService, operationRepository, service } =
+      createService(lookup);
+    const save = jest.fn();
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation]);
+
+    await service.recover();
+
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        actualUsageProperties: expect.objectContaining({
+          chargeCentUnits: 1,
+          inputCacheReadUnits: 0,
+          inputNoCacheUnits: 4,
+          inputUnits: 4,
+          inputRate: 1.43,
+          model: 'openrouter/openai/gpt-5.6-luna',
+          outputUnits: 2,
+          outputRate: 8.58,
+          tariffVersion: '2026-07-19-v1',
+        }),
+        providerCostMicrousd: '1000',
+        state: ManagedProviderOperationState.RELEASED,
+      }),
+    );
+    expect((messageQueueService.add as jest.Mock).mock.calls).not.toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          expect.any(String),
+          { operationId: operation.id },
+        ]),
+      ]),
+    );
+  });
+  it('reconciles a proven OpenRouter generation exactly once', async () => {
+    const operation = unknownOperation();
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({
+        status: 'found',
+        id: 'gen-123',
+        model: 'openai/gpt-5.6-luna',
+        cachedPromptTokens: 0,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalCostUsd: 0.001,
+      }),
+    };
+    const { messageQueueService, operationRepository, service } =
+      createService(lookup);
+    const findOne = jest.fn().mockResolvedValue(operation);
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) => callback({ findOne, save: jest.fn() }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation]);
+
+    await service.recover();
+
+    expect(lookup.lookup).toHaveBeenCalledWith('gen-123');
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      expect.any(String),
+      { operationId: 'unknown-operation' },
+      expect.objectContaining({
+        id: 'managed-provider-usage:unknown-operation',
+      }),
+    );
+  });
+  it('reconciles reserved OpenRouter operations with a captured provider ID', async () => {
+    const operation = {
+      ...unknownOperation(),
+      state: ManagedProviderOperationState.RESERVED,
+    };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({ status: 'unavailable' }),
+    };
+    const { operationRepository, service } = createService(lookup);
+    const save = jest.fn();
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(lookup.lookup).toHaveBeenCalledWith('gen-123');
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        completionOutcome: 'UNKNOWN',
+        state: ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+      }),
+    );
+  });
+
+  it('releases unknown operations without a provider ID after the deadline', async () => {
+    const operation = {
+      ...unknownOperation(),
+      createdAt: new Date('2026-07-08T00:00:00.000Z'),
+      providerExecutionId: null,
+    };
+    const lookup = { lookup: jest.fn() };
+    const { operationRepository, save, service } = createService(lookup);
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(lookup.lookup).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
+        state: ManagedProviderOperationState.RELEASED,
+      }),
+    );
+  });
+
+  it('recovers authoritative cache-write usage and canonical billing evidence', async () => {
+    const operation = {
+      ...unknownOperation(),
+      maximumUsageProperties: {
+        ...unknownOperation().maximumUsageProperties,
+        cacheCreationRate: 0.32,
+      },
+    };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({
+        status: 'found',
+        id: 'gen-123',
+        model: 'openai/gpt-5.6-luna',
+        cachedPromptTokens: 1,
+        cacheWriteTokens: 1,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalCostUsd: 0.001,
+      }),
+    };
+    const { messageQueueService, operationRepository, service } =
+      createService(lookup);
+    const save = jest.fn();
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      expect.any(String),
+      { operationId: operation.id },
+      expect.objectContaining({ id: `managed-provider-usage:${operation.id}` }),
+    );
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        actualUsageProperties: expect.objectContaining({
+          inputCacheReadUnits: 1,
+          inputCacheWriteUnits: 1,
+          inputNoCacheUnits: 2,
+          cashPaidMicrousd: '1000000',
+          usableCreditsReceivedMicrousd: '1000000',
+          multiplierEvidenceVersion: 'funding-v1',
+          charge_cent_unit: '1',
+          model_id: operation.providerConfigurationKey,
+          tariff_version: '2026-07-19-v1',
+          operation_id: operation.id,
+        }),
+      }),
+    );
+  });
+
+  it('records immutable quarantine evidence when known cost cannot be priced by deadline', async () => {
+    const operation = {
+      ...unknownOperation(),
+      createdAt: new Date('2026-07-08T00:00:00.000Z'),
+      maximumUsageProperties: {
+        ...unknownOperation().maximumUsageProperties,
+        cacheCreationRate: 0.32,
+        baseCacheCreationRate: 0.32,
+      },
+    };
+    const lookup = {
+      lookup: jest.fn().mockResolvedValue({
+        status: 'found',
+        id: 'gen-123',
+        model: 'openai/gpt-5.6-luna',
+        cachedPromptTokens: 1,
+        promptTokens: 4,
+        completionTokens: 2,
+        totalCostUsd: 0.001,
+      }),
+    };
+    const { operationRepository, save, service } = createService(lookup);
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        actualUsageProperties: expect.objectContaining({
+          absorbedCostMicrousd: '1000',
+          model: operation.providerConfigurationKey,
+          model_id: operation.providerConfigurationKey,
+          operation_id: operation.id,
+          overrun: true,
+          tariffVersion: '2026-07-19-v1',
+          tariff_version: '2026-07-19-v1',
+        }),
+        providerCostMicrousd: '1000',
+        state: ManagedProviderOperationState.RELEASED,
+      }),
+    );
+  });
+  it('releases a reserved crash row with no completion outcome after the deadline', async () => {
+    const operation = {
+      ...unknownOperation(),
+      completionOutcome: null,
+      createdAt: new Date('2026-07-08T00:00:00.000Z'),
+      providerExecutionId: null,
+      state: ManagedProviderOperationState.RESERVED,
+    };
+    const lookup = { lookup: jest.fn() };
+    const { operationRepository, save, service } = createService(lookup);
+    (operationRepository.manager.transaction as jest.Mock).mockImplementation(
+      (callback) =>
+        callback({
+          findOne: jest.fn().mockResolvedValue(operation),
+          save,
+        }),
+    );
+    (operationRepository.find as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([operation])
+      .mockResolvedValueOnce([]);
+
+    await service.recover();
+
+    expect(lookup.lookup).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledWith(
+      ManagedProviderOperationEntity,
+      expect.objectContaining({
+        lastDeliveryErrorCode: 'OPENROUTER_RECONCILIATION_TIMEOUT',
+        state: ManagedProviderOperationState.RELEASED,
+      }),
+    );
   });
 });

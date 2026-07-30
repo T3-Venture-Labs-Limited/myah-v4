@@ -96,11 +96,11 @@ export const generateColumns = (
             aria-label={t`Select`}
             checked={isRowSelected}
             variant={CheckboxVariant.Tertiary}
-            onChange={(event) => {
+            onCheckedChange={(checked) => {
               onRowSelectionChange({
                 row: props.row,
-                checked: event.target.checked,
-                isShiftClick: (event.nativeEvent as MouseEvent).shiftKey,
+                checked,
+                isShiftClick: false,
               });
             }}
           />

@@ -1,6 +1,6 @@
 {
   "name": "myah-creator-ops",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "engines": {
     "node": "^24.5.0",
@@ -18,18 +18,19 @@
   },
   "dependencies": {
     "twenty-client-sdk": "2.13.0",
-    "twenty-sdk": "2.13.0",
     "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",
     "@types/react": "^19.0.0",
+    "jsdom": "^29.1.1",
     "oxlint": "^0.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tsx": "^4.0.0",
+    "twenty-sdk": "2.13.0",
+    "twenty-ui": "^1.0.0-alpha.1",
     "typescript": "^5.9.3",
-    "vite-tsconfig-paths": "^4.2.1",
     "vitest": "^4.0.0"
   }
 }

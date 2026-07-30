@@ -38,7 +38,7 @@ dump.rdb
 .tinyb
 
 .notes
-/docs/superpowers/
+/docs/
 /data/
 /.devenv/
 /.direnv/

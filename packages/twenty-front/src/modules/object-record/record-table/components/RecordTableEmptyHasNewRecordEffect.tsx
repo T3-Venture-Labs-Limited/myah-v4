@@ -3,8 +3,8 @@ import { type ObjectRecordOperationBrowserEventDetail } from '@/browser-event/ty
 import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/flattenedFieldMetadataItemsSelector';
 import { turnSortsIntoOrderBy } from '@/object-record/object-sort-dropdown/utils/turnSortsIntoOrderBy';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
+import { useEffectiveRecordFilters } from '@/object-record/record-filter/hooks/useEffectiveRecordFilters';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
-import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { recordIndexHasRecordsComponentSelector } from '@/object-record/record-index/states/selectors/recordIndexHasRecordsComponentSelector';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
@@ -44,9 +44,7 @@ export const RecordTableEmptyHasNewRecordEffect = () => {
     flattenedFieldMetadataItemsSelector,
   );
 
-  const currentRecordFilters = useAtomComponentStateValue(
-    currentRecordFiltersComponentState,
-  );
+  const effectiveRecordFilters = useEffectiveRecordFilters();
 
   const currentRecordSorts = useAtomComponentStateValue(
     currentRecordSortsComponentState,
@@ -64,7 +62,7 @@ export const RecordTableEmptyHasNewRecordEffect = () => {
       variables: {
         filter: computeRecordGqlOperationFilter({
           fieldMetadataItems: flattenedFieldMetadataItems,
-          recordFilters: currentRecordFilters,
+          recordFilters: effectiveRecordFilters,
           recordFilterGroups: currentRecordFilterGroups,
           filterValueDependencies,
         }),
@@ -73,7 +71,7 @@ export const RecordTableEmptyHasNewRecordEffect = () => {
     }),
     [
       objectMetadataItem,
-      currentRecordFilters,
+      effectiveRecordFilters,
       currentRecordFilterGroups,
       filterValueDependencies,
       currentRecordSorts,

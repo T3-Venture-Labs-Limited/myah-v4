@@ -29,6 +29,10 @@ export interface UserWorkspaceAuthContext extends BaseWorkspaceAuthContext {
 export interface ApplicationWorkspaceAuthContext extends BaseWorkspaceAuthContext {
   type: 'application';
   application: NonNullable<RawAuthContext['application']>;
+  userWorkspaceId?: NonNullable<RawAuthContext['userWorkspaceId']>;
+  user?: NonNullable<RawAuthContext['user']>;
+  workspaceMemberId?: NonNullable<RawAuthContext['workspaceMemberId']>;
+  workspaceMember?: NonNullable<RawAuthContext['workspaceMember']>;
 }
 
 export interface SystemWorkspaceAuthContext extends BaseWorkspaceAuthContext {

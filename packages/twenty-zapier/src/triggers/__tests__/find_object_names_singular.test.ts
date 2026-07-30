@@ -7,7 +7,7 @@ tools.env.inject();
 const appTester = createAppTester(App);
 describe('triggers.find_object_names_singular', () => {
   test('should run', async () => {
-    const bundle = getBundleForTest({});
+    const bundle = await getBundleForTest({});
     const result = await appTester(
       App.triggers[findObjectNamesSingularKey].operation.perform,
       bundle,

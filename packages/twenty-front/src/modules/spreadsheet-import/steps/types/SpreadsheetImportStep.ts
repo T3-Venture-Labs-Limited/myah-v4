@@ -19,6 +19,7 @@ export type SpreadsheetImportStep =
       type: SpreadsheetImportStepType.matchColumns;
       data: ImportedRow[];
       headerValues: ImportedRow;
+      activeHeaderProfileKey?: string | null;
     }
   | {
       type: SpreadsheetImportStepType.validateData;

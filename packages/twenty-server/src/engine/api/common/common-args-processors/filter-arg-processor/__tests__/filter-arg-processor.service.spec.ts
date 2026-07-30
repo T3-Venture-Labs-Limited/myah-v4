@@ -371,6 +371,89 @@ describe('FilterArgProcessorService', () => {
         sourceObjectMetadata,
       };
     };
+    const createOneToManyRelationFixture = () => {
+      const sourceObjectId = 'creator-object-id';
+      const targetObjectId = 'creator-list-member-object-id';
+      const relationFieldId = 'list-memberships-field-id';
+      const creatorListIdFieldId = 'creator-list-id-field-id';
+      const creatorFieldId = 'creator-field-id';
+      const sourceObjectMetadata = {
+        id: sourceObjectId,
+        nameSingular: 'creator',
+        namePlural: 'creators',
+        fieldIds: [relationFieldId],
+        universalIdentifier: 'creator-object-universal-id',
+        labelIdentifierFieldMetadataUniversalIdentifier: null,
+        imageIdentifierFieldMetadataUniversalIdentifier: null,
+      } as unknown as FlatObjectMetadata;
+      const targetObjectMetadata = {
+        id: targetObjectId,
+        nameSingular: 'creatorListMember',
+        namePlural: 'creatorListMembers',
+        fieldIds: [creatorListIdFieldId, creatorFieldId],
+        universalIdentifier: 'creator-list-member-object-universal-id',
+        labelIdentifierFieldMetadataUniversalIdentifier: null,
+        imageIdentifierFieldMetadataUniversalIdentifier: null,
+      } as unknown as FlatObjectMetadata;
+      const flatFieldMetadataMaps = {
+        byUniversalIdentifier: {
+          'list-memberships-field-uid': {
+            id: relationFieldId,
+            name: 'listMemberships',
+            type: FieldMetadataType.RELATION,
+            isNullable: true,
+            objectMetadataId: sourceObjectId,
+            universalIdentifier: 'list-memberships-field-uid',
+            relationTargetObjectMetadataId: targetObjectId,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          'creator-list-id-field-uid': {
+            id: creatorListIdFieldId,
+            name: 'creatorListId',
+            type: FieldMetadataType.UUID,
+            isNullable: true,
+            objectMetadataId: targetObjectId,
+            universalIdentifier: 'creator-list-id-field-uid',
+          },
+          'creator-field-uid': {
+            id: creatorFieldId,
+            name: 'creator',
+            type: FieldMetadataType.RELATION,
+            isNullable: true,
+            objectMetadataId: targetObjectId,
+            universalIdentifier: 'creator-field-uid',
+            relationTargetObjectMetadataId: sourceObjectId,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              joinColumnName: 'creatorId',
+            },
+          },
+        },
+        universalIdentifierById: {
+          [relationFieldId]: 'list-memberships-field-uid',
+          [creatorListIdFieldId]: 'creator-list-id-field-uid',
+          [creatorFieldId]: 'creator-field-uid',
+        },
+        universalIdentifiersByApplicationId: {},
+      } as unknown as FlatEntityMaps<FlatFieldMetadata>;
+      const flatObjectMetadataMaps = {
+        byUniversalIdentifier: {
+          [sourceObjectMetadata.universalIdentifier]: sourceObjectMetadata,
+          [targetObjectMetadata.universalIdentifier]: targetObjectMetadata,
+        },
+        universalIdentifierById: {
+          [sourceObjectId]: sourceObjectMetadata.universalIdentifier,
+          [targetObjectId]: targetObjectMetadata.universalIdentifier,
+        },
+        universalIdentifiersByApplicationId: {},
+      } as unknown as FlatEntityMaps<FlatObjectMetadata>;
+
+      return {
+        flatFieldMetadataMaps,
+        flatObjectMetadataMaps,
+        sourceObjectMetadata,
+      };
+    };
 
     it('should accept a relation traversal onto a scalar field on the target', () => {
       const {
@@ -456,6 +539,73 @@ describe('FilterArgProcessorService', () => {
           flatFieldMetadataMaps,
         }),
       ).toThrow(/use "targetId" instead/);
+    });
+    it('should accept a one-to-many traversal onto a child foreign key', () => {
+      const {
+        flatFieldMetadataMaps,
+        flatObjectMetadataMaps,
+        sourceObjectMetadata,
+      } = createOneToManyRelationFixture();
+      const filter = {
+        listMemberships: {
+          creatorListId: {
+            in: ['20202020-eeee-4000-8000-000000000001'],
+          },
+        },
+      };
+
+      const result = filterArgProcessorService.process({
+        filter,
+        flatObjectMetadata: sourceObjectMetadata,
+        flatObjectMetadataMaps,
+        flatFieldMetadataMaps,
+      });
+
+      expect(result).toEqual(filter);
+    });
+
+    it('should reject a non-object one-to-many relation filter', () => {
+      const {
+        flatFieldMetadataMaps,
+        flatObjectMetadataMaps,
+        sourceObjectMetadata,
+      } = createOneToManyRelationFixture();
+
+      expect(() =>
+        filterArgProcessorService.process({
+          filter: { listMemberships: 'not-an-object' } as never,
+          flatObjectMetadata: sourceObjectMetadata,
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+        }),
+      ).toThrow();
+    });
+
+    it('should retain the one-hop depth limit after a one-to-many traversal', () => {
+      const {
+        flatFieldMetadataMaps,
+        flatObjectMetadataMaps,
+        sourceObjectMetadata,
+      } = createOneToManyRelationFixture();
+
+      expect(() =>
+        filterArgProcessorService.process({
+          filter: {
+            listMemberships: {
+              creator: {
+                listMemberships: {
+                  creatorListId: {
+                    in: ['20202020-eeee-4000-8000-000000000001'],
+                  },
+                },
+              },
+            },
+          },
+          flatObjectMetadata: sourceObjectMetadata,
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+        }),
+      ).toThrow(/Relation filter nesting deeper than 1 hop is not supported/);
     });
   });
 });

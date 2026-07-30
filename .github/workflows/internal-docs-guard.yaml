@@ -1,0 +1,27 @@
+name: Internal docs guard
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  reject-root-docs:
+    name: reject root docs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - name: Reject internal root docs
+        run: |
+          if ! git diff --quiet \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" -- docs; then
+            printf '%s\n' 'Root docs/ is internal-only and must not be published.' >&2
+            exit 1
+          fi

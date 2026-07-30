@@ -27,6 +27,7 @@ type ProcessGroupByConnectionWithRecordsArgs = {
     | Array<Record<string, boolean | Record<string, string>>>
     | Record<string, boolean | Record<string, string>>;
   objectMetadataItem: EnrichedObjectMetadataItem;
+  objectMetadataItems?: EnrichedObjectMetadataItem[];
   readField: ReadFieldFunction;
   toReference: ToReferenceFunction;
 };
@@ -41,6 +42,7 @@ export const processGroupByConnectionWithRecords = ({
   groupByDimensionValues,
   groupByConfig,
   objectMetadataItem,
+  objectMetadataItems,
   readField,
   toReference,
 }: ProcessGroupByConnectionWithRecordsArgs): {
@@ -58,12 +60,6 @@ export const processGroupByConnectionWithRecords = ({
   let totalCountDelta = 0;
 
   for (const record of records) {
-    const recordMatchesFilter = isRecordMatchingFilter({
-      record,
-      filter: queryFilter ?? {},
-      objectMetadataItem,
-    });
-
     const belongsToGroup = doesRecordBelongToGroup(
       record,
       groupByDimensionValues,
@@ -80,6 +76,14 @@ export const processGroupByConnectionWithRecords = ({
       (cachedEdge) => readField('id', cachedEdge.node) === record.id,
     );
     const recordExistsInEdges = recordIndexInEdges !== -1;
+    const recordMatchesFilter = isRecordMatchingFilter({
+      record,
+      filter: queryFilter ?? {},
+      objectMetadataItem,
+      objectMetadataItems,
+      shouldMatchUnloadedOneToManyRelations:
+        operation === 'update' && recordExistsInEdges,
+    });
 
     if (operation === 'create') {
       const shouldAdd =

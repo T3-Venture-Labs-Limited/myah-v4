@@ -37,13 +37,9 @@ describe('CreateManagedProviderBillingFoundationFastInstanceCommand', () => {
       expect(statements).toContain(
         'ALTER TABLE "core"."managedProviderOperation" ADD "expectedBillableMetricIds" jsonb NOT NULL',
       );
-      expect(
-        statements.some((statement) =>
-          statement.includes(
-            'FOREIGN KEY ("workspaceId") REFERENCES "core"."workspace"("id") ON DELETE CASCADE',
-          ),
-        ),
-      ).toBe(true);
+      expect(statements).toContain(
+        'ALTER TABLE "core"."managedProviderOperation" DROP CONSTRAINT IF EXISTS "FK_MANAGED_PROVIDER_OPERATION_WORKSPACE"',
+      );
       expect(
         statements.some((statement) =>
           statement.includes(
@@ -74,6 +70,29 @@ describe('CreateManagedProviderBillingFoundationFastInstanceCommand', () => {
           ),
         ),
       ).toBe(true);
+      expect(
+        statements.some((statement) =>
+          statement.includes(
+            'CREATE TABLE "core"."managedProviderFundingAction"',
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        statements.some((statement) =>
+          statement.includes(
+            'CONSTRAINT "UQ_MANAGED_PROVIDER_FUNDING_ACTION_IDEMPOTENCY" UNIQUE ("workspaceId", "idempotencyKey")',
+          ),
+        ),
+      ).toBe(true);
+      expect(statements).toContain(
+        'CREATE INDEX "IDX_MANAGED_PROVIDER_FUNDING_ACTION_PENDING" ON "core"."managedProviderFundingAction" ("state", "createdAt") WHERE "state" IN (\'PENDING\', \'RECONCILIATION_REQUIRED\')',
+      );
+      expect(statements).toContain(
+        'ALTER TABLE "core"."managedProviderFundingAction" ADD COLUMN IF NOT EXISTS "applicableProductIds" jsonb, ADD COLUMN IF NOT EXISTS "creditProductId" text',
+      );
+      expect(statements).toContain(
+        'ALTER TABLE "core"."managedProviderFundingAction" ADD CONSTRAINT "FK_MANAGED_PROVIDER_FUNDING_ACTION_WORKSPACE" FOREIGN KEY ("workspaceId") REFERENCES "core"."workspace"("id") ON DELETE SET NULL',
+      );
     });
   });
 
@@ -85,6 +104,7 @@ describe('CreateManagedProviderBillingFoundationFastInstanceCommand', () => {
       await command.down(queryRunner);
 
       expect(query.mock.calls.map((call) => call[0] as string)).toEqual([
+        'DROP TABLE "core"."managedProviderFundingAction"',
         'DROP TABLE "core"."managedProviderOperation"',
         'DROP INDEX "core"."IDX_MYAH_WORKSPACE_INSTALLATION_METRONOME_CUSTOMER_ID_UNIQUE"',
         'ALTER TABLE "core"."myahWorkspaceInstallation" DROP COLUMN "metronomeCustomerId"',

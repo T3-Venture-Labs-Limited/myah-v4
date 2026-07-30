@@ -67,7 +67,7 @@ describe('ManagedProviderBillingModule', () => {
     expect(exports).toContain(ManagedProviderOperationService);
     expect(exports).toContain(ManagedProviderBillingRecoveryCronCommand);
   });
-  it('keeps the billing foundation Community-safe and reachable only through Myah', () => {
+  it('keeps the billing foundation isolated behind approved entry-point modules', () => {
     const billingImports = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,
       ManagedProviderBillingModule,
@@ -114,7 +114,10 @@ describe('ManagedProviderBillingModule', () => {
       ),
     ).toHaveLength(1);
     expect(billingModuleImportFiles).toEqual([
+      'engine/core-modules/admin-panel/admin-panel.module.ts',
+      'engine/core-modules/billing/billing.module.ts',
       'engine/core-modules/myah/myah.module.ts',
+      'engine/metadata-modules/ai/ai-models/ai-models.module.ts',
     ]);
     expect(billingImports).not.toEqual(
       expect.arrayContaining([

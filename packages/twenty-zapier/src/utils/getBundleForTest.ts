@@ -2,14 +2,86 @@ import { type Bundle } from 'zapier-platform-core';
 
 import { type InputData } from 'src/utils/data.types';
 
-const ADMIN_TEST_TOKEN =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMDIwMjAyMC1lNmI1LTQ2ODAtOGEzMi1iODIwOTczNzE1NmIiLCJ1c2VySWQiOiIyMDIwMjAyMC1lNmI1LTQ2ODAtOGEzMi1iODIwOTczNzE1NmIiLCJ3b3Jrc3BhY2VJZCI6IjIwMjAyMDIwLTFjMjUtNGQwMi1iZjI1LTZhZWNjZjdlYTQxOSIsIndvcmtzcGFjZU1lbWJlcklkIjoiMjAyMDIwMjAtNDYzZi00MzViLTgyOGMtMTA3ZTAwN2EyNzExIiwidXNlcldvcmtzcGFjZUlkIjoiMjAyMDIwMjAtMWU3Yy00M2Q5LWE1ZGItNjg1YjUwNjlkODE2IiwidHlwZSI6IkFDQ0VTUyIsImF1dGhQcm92aWRlciI6InBhc3N3b3JkIiwiaWF0IjoxNzUxMjgxNzA0LCJleHAiOjIwNjY4NTc3MDR9.HMGqCsVlOAPVUBhKSGlD1X86VoHKt4LIUtET3CGIdik';
 const TEST_URL = 'http://localhost:3000';
+const TEST_ORIGIN = 'http://apple.localhost:3000';
 
-export const getBundleForTest = (inputData?: InputData): Bundle => {
+type GraphQLResponse<T> = {
+  data?: T;
+  errors?: Array<{ message: string }>;
+};
+
+const requestMetadataApi = async <T>(
+  query: string,
+  variables: Record<string, string>,
+): Promise<T> => {
+  const response = await fetch(`${TEST_URL}/metadata`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: TEST_ORIGIN,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  const body = (await response.json()) as GraphQLResponse<T>;
+
+  if (!response.ok || body.data === undefined) {
+    throw new Error(body.errors?.[0]?.message ?? 'Metadata request failed.');
+  }
+
+  return body.data;
+};
+
+const getAdminTestToken = async (): Promise<string> => {
+  const loginTokenResponse = await requestMetadataApi<{
+    getLoginTokenFromCredentials: { loginToken: { token: string } };
+  }>(
+    `mutation GetLoginTokenFromCredentials($email: String!, $password: String!, $origin: String!) {
+      getLoginTokenFromCredentials(email: $email, password: $password, origin: $origin) {
+        loginToken {
+          token
+        }
+      }
+    }`,
+    {
+      email: 'jane.austen@apple.dev',
+      password: 'tim@apple.dev',
+      origin: TEST_ORIGIN,
+    },
+  );
+  const loginToken =
+    loginTokenResponse.getLoginTokenFromCredentials.loginToken.token;
+  const authTokensResponse = await requestMetadataApi<{
+    getAuthTokensFromLoginToken: {
+      tokens: { accessOrWorkspaceAgnosticToken: { token: string } };
+    };
+  }>(
+    `mutation GetAuthTokensFromLoginToken($loginToken: String!, $origin: String!) {
+      getAuthTokensFromLoginToken(loginToken: $loginToken, origin: $origin) {
+        tokens {
+          accessOrWorkspaceAgnosticToken {
+            token
+          }
+        }
+      }
+    }`,
+    { loginToken, origin: TEST_ORIGIN },
+  );
+
+  return authTokensResponse.getAuthTokensFromLoginToken.tokens
+    .accessOrWorkspaceAgnosticToken.token;
+};
+
+let adminTestTokenPromise: Promise<string> | undefined;
+
+export const getBundleForTest = async (
+  inputData?: InputData,
+): Promise<Bundle> => {
+  adminTestTokenPromise ??= getAdminTestToken();
+  const adminTestToken = await adminTestTokenPromise;
+
   return {
     authData: {
-      apiKey: ADMIN_TEST_TOKEN,
+      apiKey: adminTestToken,
       apiUrl: TEST_URL,
     },
     inputData: inputData || {},

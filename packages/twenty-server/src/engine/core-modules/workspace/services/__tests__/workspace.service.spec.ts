@@ -224,6 +224,55 @@ describe('WorkspaceService', () => {
     jest.clearAllMocks();
   });
 
+  it('validates persisted model choices with the execution workspace identity', async () => {
+    const registry = service[
+      'aiModelRegistryService' as keyof WorkspaceService
+    ] as unknown as {
+      validateModelAvailability: jest.Mock;
+    };
+    registry.validateModelAvailability = jest.fn((modelId: string) => {
+      if (modelId === 'openai/gpt-4.1') {
+        throw new Error('native model rejected for managed workspace');
+      }
+    });
+    const permissionsService = service[
+      'permissionsService' as keyof WorkspaceService
+    ] as unknown as {
+      userHasWorkspaceSettingPermission: jest.Mock;
+    };
+    permissionsService.userHasWorkspaceSettingPermission = jest
+      .fn()
+      .mockResolvedValue(true);
+    const twentyConfigService = service[
+      'twentyConfigService' as keyof WorkspaceService
+    ] as unknown as { get: jest.Mock };
+    twentyConfigService.get = jest.fn().mockReturnValue(false);
+    const workspace = {
+      id: 'workspace-id',
+      activationStatus: 'INACTIVE',
+      fastModel: 'openai/gpt-4.1',
+      smartModel: 'openrouter/deepseek/deepseek-v4-flash',
+      useRecommendedModels: true,
+      enabledAiModelIds: [],
+    } as unknown as WorkspaceEntity;
+    workspaceRepository.findOneBy = jest.fn().mockResolvedValue(workspace);
+    workspaceRepository.save = jest.fn().mockResolvedValue(workspace);
+
+    await expect(
+      service.updateWorkspaceById({
+        payload: { id: workspace.id, fastModel: 'openai/gpt-4.1' },
+        userWorkspaceId: 'user-workspace-id',
+        apiKey: undefined,
+      }),
+    ).rejects.toThrow('Selected model is not available');
+
+    expect(registry.validateModelAvailability).toHaveBeenCalledWith(
+      'openai/gpt-4.1',
+      expect.objectContaining({ id: 'workspace-id' }),
+    );
+    expect(workspaceRepository.save).not.toHaveBeenCalled();
+  });
+
   it('should be defined', () => {
     expect(service).toBeDefined();
   });

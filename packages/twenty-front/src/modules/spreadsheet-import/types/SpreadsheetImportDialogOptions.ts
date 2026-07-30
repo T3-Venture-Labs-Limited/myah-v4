@@ -1,6 +1,10 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type SpreadsheetColumns } from '@/spreadsheet-import/types/SpreadsheetColumns';
 import { type SpreadsheetImportFields } from '@/spreadsheet-import/types/SpreadsheetImportFields';
+import {
+  type SpreadsheetImportHeaderAlias,
+  type SpreadsheetImportHeaderProfile,
+} from '@/spreadsheet-import/types/SpreadsheetImportHeaderProfile';
 import { type SpreadsheetImportImportValidationResult } from '@/spreadsheet-import/types/SpreadsheetImportImportValidationResult';
 import { type ImportedRow } from '@/spreadsheet-import/types/SpreadsheetImportImportedRow';
 import { type ImportedStructuredRow } from '@/spreadsheet-import/types/SpreadsheetImportImportedStructuredRow';
@@ -25,6 +29,7 @@ export type SpreadsheetImportDialogOptions = {
     importedStructuredRows: ImportedStructuredRow[],
     importedRows: ImportedRow[],
     columns: SpreadsheetColumns,
+    activeHeaderProfileKey: string | undefined,
   ) => Promise<ImportedStructuredRow[]>;
   // Runs after column matching and on entry change
   rowHook?: SpreadsheetImportRowHook;
@@ -47,6 +52,10 @@ export type SpreadsheetImportDialogOptions = {
   maxFileSize?: number;
   // Automatically map imported headers to specified fields if possible. Default: true
   autoMapHeaders?: boolean;
+  // Source-specific exact aliases are resolved before fuzzy header matching.
+  headerAliases?: Readonly<Record<string, SpreadsheetImportHeaderAlias>>;
+  // Optional source format detector and notice for the column-matching step.
+  headerProfile?: SpreadsheetImportHeaderProfile;
   // Headers matching accuracy: 1 for strict and up for more flexible matching
   autoMapDistance?: number;
   // Initial Step state to be rendered on load
@@ -61,4 +70,10 @@ export type SpreadsheetImportDialogOptions = {
   selectHeader?: boolean;
   // Available field for import
   availableFieldMetadataItems: FieldMetadataItem[];
+  // Refresh or validate the current local rows immediately before submission.
+  beforeSubmitHook?: (rows: readonly ImportedStructuredRow[]) => Promise<void>;
+  // Return a user-facing reason to block submission of the refreshed rows.
+  getSubmissionBlockReason?: (
+    rows: readonly ImportedStructuredRow[],
+  ) => string | undefined;
 };

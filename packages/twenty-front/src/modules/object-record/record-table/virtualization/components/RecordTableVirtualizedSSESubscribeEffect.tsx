@@ -3,8 +3,8 @@ import { useMemo } from 'react';
 import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/flattenedFieldMetadataItemsSelector';
 import { turnSortsIntoOrderBy } from '@/object-record/object-sort-dropdown/utils/turnSortsIntoOrderBy';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
+import { useEffectiveRecordFilters } from '@/object-record/record-filter/hooks/useEffectiveRecordFilters';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
-import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { useListenToEventsForQuery } from '@/sse-db-event/hooks/useListenToEventsForQuery';
@@ -20,9 +20,7 @@ export const RecordTableVirtualizedSSESubscribeEffect = () => {
     flattenedFieldMetadataItemsSelector,
   );
 
-  const currentRecordFilters = useAtomComponentStateValue(
-    currentRecordFiltersComponentState,
-  );
+  const effectiveRecordFilters = useEffectiveRecordFilters();
 
   const currentRecordSorts = useAtomComponentStateValue(
     currentRecordSortsComponentState,
@@ -40,7 +38,7 @@ export const RecordTableVirtualizedSSESubscribeEffect = () => {
       variables: {
         filter: computeRecordGqlOperationFilter({
           fieldMetadataItems: flattenedFieldMetadataItems,
-          recordFilters: currentRecordFilters,
+          recordFilters: effectiveRecordFilters,
           recordFilterGroups: currentRecordFilterGroups,
           filterValueDependencies,
         }),
@@ -49,7 +47,7 @@ export const RecordTableVirtualizedSSESubscribeEffect = () => {
     }),
     [
       objectMetadataItem,
-      currentRecordFilters,
+      effectiveRecordFilters,
       currentRecordFilterGroups,
       filterValueDependencies,
       currentRecordSorts,

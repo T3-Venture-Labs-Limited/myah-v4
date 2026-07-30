@@ -1,3 +1,6 @@
+import { useAuth } from '@/auth/hooks/useAuth';
+import { ensureTokenRenewed } from '@/auth/utils/ensureTokenRenewed';
+import { tokenPairState } from '@/auth/states/tokenPairState';
 import { aiModelsState } from '@/client-config/states/aiModelsState';
 import { apiConfigState } from '@/client-config/states/apiConfigState';
 import { onboardingConfigState } from '@/client-config/states/onboardingConfigState';
@@ -29,11 +32,32 @@ import { supportChatState } from '@/client-config/states/supportChatState';
 import { type ClientConfig } from '@/client-config/types/ClientConfig';
 import { domainConfigurationState } from '@/domain-manager/states/domainConfigurationState';
 import { useCallback } from 'react';
+import { useStore } from 'jotai';
 import { clientConfigApiStatusState } from '@/client-config/states/clientConfigApiStatusState';
 import { getClientConfig } from '@/client-config/utils/getClientConfig';
 import { allowRequestsToTwentyIconsState } from '@/client-config/states/allowRequestsToTwentyIcons';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { type AuthTokenPair } from '~/generated-metadata/graphql';
+
+type TokenPairSnapshot = {
+  accessToken: string | undefined;
+  refreshToken: string | undefined;
+};
+
+const getTokenPairSnapshot = (
+  tokenPair: AuthTokenPair | null,
+): TokenPairSnapshot => ({
+  accessToken: tokenPair?.accessOrWorkspaceAgnosticToken?.token,
+  refreshToken: tokenPair?.refreshToken?.token,
+});
+
+const areTokenPairSnapshotsEqual = (
+  firstTokenPair: TokenPairSnapshot,
+  secondTokenPair: TokenPairSnapshot,
+): boolean =>
+  firstTokenPair.accessToken === secondTokenPair.accessToken &&
+  firstTokenPair.refreshToken === secondTokenPair.refreshToken;
 
 type UseClientConfigResult = {
   data: { clientConfig: ClientConfig } | undefined;
@@ -44,6 +68,8 @@ type UseClientConfigResult = {
 };
 
 export const useClientConfig = (): UseClientConfigResult => {
+  const store = useStore();
+  const { clearSession } = useAuth();
   const setIsAnalyticsEnabled = useSetAtomState(isAnalyticsEnabledState);
   const setDomainConfiguration = useSetAtomState(domainConfigurationState);
   const setAuthProviders = useSetAtomState(authProvidersState);
@@ -135,7 +161,90 @@ export const useClientConfig = (): UseClientConfigResult => {
     }));
 
     try {
-      const clientConfig = await getClientConfig();
+      const tokenPairBeforeInitialRequest = store.get(tokenPairState.atom);
+      const initialTokenPairSnapshot = getTokenPairSnapshot(
+        tokenPairBeforeInitialRequest,
+      );
+      const accessTokenExpiresAt =
+        tokenPairBeforeInitialRequest?.accessOrWorkspaceAgnosticToken.expiresAt;
+
+      if (
+        accessTokenExpiresAt &&
+        Date.parse(accessTokenExpiresAt) <= Date.now() &&
+        !(await ensureTokenRenewed(store)) &&
+        areTokenPairSnapshotsEqual(
+          initialTokenPairSnapshot,
+          getTokenPairSnapshot(store.get(tokenPairState.atom)),
+        )
+      ) {
+        clearSession();
+
+        return;
+      }
+
+      let clientConfig: ClientConfig;
+
+      try {
+        clientConfig = await getClientConfig();
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          error.name !== 'ClientConfigUnauthenticatedError'
+        ) {
+          throw error;
+        }
+
+        const tokenPairAfterUnauthenticatedResponse = getTokenPairSnapshot(
+          store.get(tokenPairState.atom),
+        );
+
+        if (
+          areTokenPairSnapshotsEqual(
+            initialTokenPairSnapshot,
+            tokenPairAfterUnauthenticatedResponse,
+          ) &&
+          !(await ensureTokenRenewed(store)) &&
+          areTokenPairSnapshotsEqual(
+            initialTokenPairSnapshot,
+            getTokenPairSnapshot(store.get(tokenPairState.atom)),
+          )
+        ) {
+          clearSession();
+
+          return;
+        }
+
+        const tokenPairBeforeRetry = getTokenPairSnapshot(
+          store.get(tokenPairState.atom),
+        );
+
+        try {
+          clientConfig = await getClientConfig();
+        } catch (retryError) {
+          if (
+            retryError instanceof Error &&
+            retryError.name === 'ClientConfigUnauthenticatedError'
+          ) {
+            if (
+              areTokenPairSnapshotsEqual(
+                tokenPairBeforeRetry,
+                getTokenPairSnapshot(store.get(tokenPairState.atom)),
+              )
+            ) {
+              clearSession();
+            } else {
+              setClientConfigApiStatus((currentStatus) => ({
+                ...currentStatus,
+                isLoading: false,
+              }));
+            }
+
+            return;
+          }
+
+          throw retryError;
+        }
+      }
       setClientConfigApiStatus((prev) => ({
         ...prev,
         isLoading: false,
@@ -222,6 +331,8 @@ export const useClientConfig = (): UseClientConfigResult => {
       }));
     }
   }, [
+    clearSession,
+    store,
     setAiModels,
     setApiConfig,
     setOnboardingConfig,

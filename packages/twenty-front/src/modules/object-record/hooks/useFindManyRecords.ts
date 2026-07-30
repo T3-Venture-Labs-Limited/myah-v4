@@ -116,7 +116,7 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
     }
   }, [error, handleFindManyRecordsError]);
 
-  const { fetchMoreRecords, records, hasNextPage } =
+  const { fetchMoreRecords, records, hasNextPage, isFetchingMoreRecords } =
     useFetchMoreRecordsWithPagination<T>({
       objectNameSingular,
       filter: withSoftDeleteFilter,
@@ -137,10 +137,12 @@ export const useFindManyRecords = <T extends ObjectRecord = ObjectRecord>({
     records,
     totalCount,
     loading,
+    hasReadPermission,
     error,
     fetchMoreRecords,
     queryIdentifier,
     hasNextPage,
+    isFetchingMoreRecords,
     pageInfo,
     refetch,
   };

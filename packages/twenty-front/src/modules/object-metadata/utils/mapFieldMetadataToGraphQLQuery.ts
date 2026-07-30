@@ -16,6 +16,12 @@ import {
   isDefined,
 } from 'twenty-shared/utils';
 
+const LINKS_GQL_FIELDS = [
+  'primaryLinkUrl',
+  'primaryLinkLabel',
+  'secondaryLinks',
+] as const;
+
 type MapFieldMetadataToGraphQLQueryArgs = {
   objectMetadataItems: EnrichedObjectMetadataItem[];
   gqlField: string;
@@ -240,11 +246,15 @@ ${mapObjectMetadataToGraphQLQuery({
   }
 
   if (fieldType === FieldMetadataType.LINKS) {
+    const selectedLinksGqlFields = isDefined(relationRecordGqlFields)
+      ? LINKS_GQL_FIELDS.filter(
+          (linksGqlField) => relationRecordGqlFields[linksGqlField] === true,
+        )
+      : LINKS_GQL_FIELDS;
+
     return `${gqlField}
 {
-  primaryLinkUrl
-  primaryLinkLabel
-  secondaryLinks
+  ${selectedLinksGqlFields.join('\n  ')}
 }`;
   }
 

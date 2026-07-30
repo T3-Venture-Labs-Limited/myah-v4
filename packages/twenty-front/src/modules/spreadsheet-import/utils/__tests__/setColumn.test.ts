@@ -2,7 +2,6 @@ import { type SpreadsheetImportField } from '@/spreadsheet-import/types';
 import { type SpreadsheetColumn } from '@/spreadsheet-import/types/SpreadsheetColumn';
 import { SpreadsheetColumnType } from '@/spreadsheet-import/types/SpreadsheetColumnType';
 import { setColumn } from '@/spreadsheet-import/utils/setColumn';
-import { FieldMetadataType } from 'twenty-shared/types';
 
 describe('setColumn', () => {
   const defaultField = {
@@ -10,7 +9,6 @@ describe('setColumn', () => {
     label: 'label',
     key: 'Name',
     fieldType: { type: 'input' },
-    fieldMetadataType: FieldMetadataType.TEXT,
   } as SpreadsheetImportField;
 
   const oldColumn: SpreadsheetColumn = {
@@ -47,6 +45,29 @@ describe('setColumn', () => {
           value: 'Alice',
         },
       ],
+    });
+  });
+
+  it('matches source-specific select option aliases without changing the imported value', () => {
+    const field = {
+      ...defaultField,
+      key: 'gender',
+      fieldType: {
+        type: 'select',
+        options: [{ value: 'MALE', label: 'Male' }],
+      },
+    } as SpreadsheetImportField;
+
+    const result = setColumn(oldColumn, field, [['male']], {
+      male: 'MALE',
+    });
+
+    expect(result).toEqual({
+      index: 0,
+      header: 'Name',
+      type: SpreadsheetColumnType.matchedSelectOptions,
+      value: 'gender',
+      matchedOptions: [{ entry: 'male', value: 'MALE' }],
     });
   });
 

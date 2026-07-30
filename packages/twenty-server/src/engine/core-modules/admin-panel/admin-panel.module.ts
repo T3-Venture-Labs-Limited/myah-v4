@@ -16,10 +16,12 @@ import { MaintenanceModeService } from 'src/engine/core-modules/admin-panel/main
 import { AdminPanelBillingService } from 'src/engine/core-modules/admin-panel/services/admin-panel-billing.service';
 import { AdminPanelChatService } from 'src/engine/core-modules/admin-panel/services/admin-panel-chat.service';
 import { AdminPanelConfigService } from 'src/engine/core-modules/admin-panel/services/admin-panel-config.service';
+import { AdminPanelManagedProviderBillingService } from 'src/engine/core-modules/admin-panel/services/admin-panel-managed-provider-billing.service';
 import { AdminPanelServerAdminService } from 'src/engine/core-modules/admin-panel/services/admin-panel-server-admin.service';
 import { AdminPanelSigningKeyService } from 'src/engine/core-modules/admin-panel/services/admin-panel-signing-key.service';
 import { AdminPanelStatisticsService } from 'src/engine/core-modules/admin-panel/services/admin-panel-statistics.service';
 import { AdminPanelUserLookupService } from 'src/engine/core-modules/admin-panel/services/admin-panel-user-lookup.service';
+import { ManagedProviderBillingModule } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.module';
 import { AdminPanelVersionService } from 'src/engine/core-modules/admin-panel/services/admin-panel-version.service';
 import { ApplicationRegistrationModule } from 'src/engine/core-modules/application/application-registration/application-registration.module';
 import { AuthModule } from 'src/engine/core-modules/auth/auth.module';
@@ -52,6 +54,7 @@ import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permi
 import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 @Module({
   imports: [
+    ManagedProviderBillingModule,
     TypeOrmModule.forFeature([
       UserEntity,
       WorkspaceEntity,
@@ -93,6 +96,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     AdminPanelStatisticsService,
     AdminPanelBillingService,
     AdminPanelChatService,
+    AdminPanelManagedProviderBillingService,
     AdminPanelConfigService,
     AdminPanelSigningKeyService,
     AdminPanelVersionService,

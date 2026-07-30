@@ -6,9 +6,9 @@ import { EMPTY_QUERY } from '@/object-record/constants/EmptyQuery';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { generateGroupByAggregateQuery } from '@/object-record/record-aggregate/utils/generateGroupByAggregateQuery';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
+import { useEffectiveRecordFilters } from '@/object-record/record-filter/hooks/useEffectiveRecordFilters';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
 import { anyFieldFilterValueComponentState } from '@/object-record/record-filter/states/anyFieldFilterValueComponentState';
-import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { recordGroupDefinitionsComponentSelector } from '@/object-record/record-group/states/selectors/recordGroupDefinitionsComponentSelector';
 import { computeRecordGroupOptionsFilter } from '@/object-record/record-group/utils/computeRecordGroupOptionsFilter';
 import { useAggregateGqlFieldsFromRecordIndexGroupAggregates } from '@/object-record/record-index/hooks/useAggregateGqlFieldsFromRecordIndexGroupAggregates';
@@ -46,9 +46,7 @@ export const useRecordIndexGroupsAggregatesGroupBy = ({
     currentRecordFilterGroupsComponentState,
   );
 
-  const currentRecordFilters = useAtomComponentStateValue(
-    currentRecordFiltersComponentState,
-  );
+  const effectiveRecordFilters = useEffectiveRecordFilters();
 
   const { filterValueDependencies } = useFilterValueDependencies();
 
@@ -58,7 +56,7 @@ export const useRecordIndexGroupsAggregatesGroupBy = ({
 
   const requestFilters = computeRecordGqlOperationFilter({
     filterValueDependencies,
-    recordFilters: currentRecordFilters,
+    recordFilters: effectiveRecordFilters,
     recordFilterGroups: currentRecordFilterGroups,
     fieldMetadataItems: flattenedFieldMetadataItems,
   });

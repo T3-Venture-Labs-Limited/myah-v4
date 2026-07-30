@@ -14,6 +14,14 @@ export const useHandleIndexIdentifierClick = ({
   );
 
   const indexIdentifierUrl = (recordId: string) => {
+    if (objectMetadataItem.nameSingular === 'creatorList') {
+      return getAppPath(
+        AppPath.RecordIndexPage,
+        { objectNamePlural: 'creators' },
+        { creatorListId: recordId },
+      );
+    }
+
     return getAppPath(
       AppPath.RecordShowPage,
       {

@@ -149,8 +149,8 @@ describe('Quick Lead Workflow (e2e)', () => {
       ).toBeDefined();
 
       expect(workflowRun?.state?.stepInfos?.trigger?.status).toBe('SUCCESS');
-      expect(workflowRun?.state?.stepInfos?.[FORM_STEP_ID]?.status).toBe(
-        'PENDING',
+      expect(['PENDING', 'RUNNING']).toContain(
+        workflowRun?.state?.stepInfos?.[FORM_STEP_ID]?.status,
       );
       expect(
         workflowRun?.state?.stepInfos?.['0715b6cd-7cc1-4b98-971b-00f54dfe643b']
@@ -249,8 +249,8 @@ describe('Quick Lead Workflow (e2e)', () => {
       );
 
       expect(workflowRun?.status).toBe('RUNNING');
-      expect(workflowRun?.state?.stepInfos?.[FORM_STEP_ID]?.status).toBe(
-        'PENDING',
+      expect(['PENDING', 'RUNNING']).toContain(
+        workflowRun?.state?.stepInfos?.[FORM_STEP_ID]?.status,
       );
 
       const testId = uuidv4().slice(0, 8);

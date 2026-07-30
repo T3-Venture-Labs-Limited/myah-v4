@@ -19,6 +19,7 @@ describe('AgentRunService', () => {
 
   const input = {
     agentUniversalIdentifier: 'agent-uid',
+    operationId: 'operation-1',
     prompt: 'Enrich record 123',
   };
 
@@ -91,6 +92,39 @@ describe('AgentRunService', () => {
           workspace,
           application: { id: 'app-1' },
         },
+      }),
+    );
+  });
+
+  it('forwards the caller operation id as the managed provider request root', async () => {
+    await service.run({
+      workspace,
+      requestUserWorkspaceId: 'user-workspace-1',
+      input,
+    });
+
+    expect(agentAsyncExecutorService.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        managedProviderRequestIdRoot: 'operation-1',
+      }),
+    );
+  });
+
+  it('generates a managed provider request root for legacy callers', async () => {
+    await service.run({
+      workspace,
+      requestUserWorkspaceId: 'user-workspace-1',
+      input: {
+        agentUniversalIdentifier: input.agentUniversalIdentifier,
+        prompt: input.prompt,
+      },
+    });
+
+    expect(agentAsyncExecutorService.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        managedProviderRequestIdRoot: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+        ),
       }),
     );
   });
