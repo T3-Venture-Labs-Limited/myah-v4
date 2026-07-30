@@ -1,6 +1,6 @@
 import { Command } from 'nest-commander';
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
-import { isDefined } from 'twenty-shared/utils';
+
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -35,8 +35,8 @@ export class MigrateMyahCreatorImportMetadataCommand extends ActiveOrSuspendedWo
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
-    if (!isDefined(args.dataSource)) {
-      throw new Error('Workspace data source is required');
+    if (args.dataSource === undefined) {
+      return;
     }
 
     await this.synchronizeMyahStandardMetadataCommand.synchronizeWorkspace(

@@ -115,20 +115,25 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     expect(synchronizeWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  it('requires the workspace data source supplied by the command runner', async () => {
+  it('skips workspaces without a workspace schema', async () => {
+    const synchronizeWorkspace = jest.fn();
+    const migrate = jest.fn();
     const command = new MigrateMyahCreatorImportMetadataCommand(
       {} as WorkspaceIteratorService,
       {
-        synchronizeWorkspace: jest.fn(),
+        synchronizeWorkspace,
       } as unknown as SynchronizeMyahStandardMetadataCommand,
       {
-        migrate: jest.fn(),
+        migrate,
       } as unknown as MigrateMyahCreatorSocialLinksService,
     );
-
+  
     await expect(
       command.runOnWorkspace({ ...args, dataSource: undefined }),
-    ).rejects.toThrow('Workspace data source is required');
+    ).resolves.toBeUndefined();
+  
+    expect(synchronizeWorkspace).not.toHaveBeenCalled();
+    expect(migrate).not.toHaveBeenCalled();
   });
 
   it('registers the forward-only migration in the current version', () => {

@@ -1,5 +1,7 @@
 import type { DataSource, QueryRunner } from 'typeorm';
 
+import type { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+
 import { MigrateMyahCreatorSocialLinksService } from 'src/database/commands/upgrade-version-command/2-20/services/migrate-myah-creator-social-links.service';
 
 const WORKSPACE_ID = '20202020-0000-0000-0000-000000000001';
@@ -85,19 +87,17 @@ const createHarness = (): Harness => {
 describe('MigrateMyahCreatorSocialLinksService', () => {
   it('copies old text values and migrates active view references', async () => {
     const harness = createHarness();
-
+  
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: true });
-
+  
     const updateSql = harness.workspaceQuery.mock.calls[2][0] as string;
-
+  
     expect(updateSql).toContain(
       '"instagramLinkPrimaryLinkUrl" = COALESCE(NULLIF(BTRIM("instagramLinkPrimaryLinkUrl"), \'\'), BTRIM("instagramUrl"))',
     );
@@ -107,9 +107,9 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     expect(updateSql).toContain(
       'WHEN jsonb_typeof("instagramLinkSecondaryLinks") = \'array\'',
     );
-
+  
     const referenceSql = harness.referenceQuery.mock.calls[0][0] as string;
-
+  
     expect(referenceSql).toContain('core."viewField"');
     expect(referenceSql).toContain('core."viewFilter"');
     expect(referenceSql).toContain('core."viewSort"');
@@ -121,7 +121,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     );
     expect(harness.queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
     const permissionCopySql = harness.coreQuery.mock.calls[1][0] as string;
-
+  
     expect(permissionCopySql).toContain('INSERT INTO core."fieldPermission"');
     expect(permissionCopySql).toContain('ON CONFLICT ("fieldMetadataId", "roleId") DO NOTHING');
     expect(
@@ -138,6 +138,33 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
       ],
       workspaceId: WORKSPACE_ID,
     });
+  
+    expect(harness.workspaceQuery.mock.calls).toEqual([
+      [
+        expect.any(String),
+        undefined,
+        undefined,
+        { shouldBypassPermissionChecks: true },
+      ],
+      [
+        expect.any(String),
+        undefined,
+        undefined,
+        { shouldBypassPermissionChecks: true },
+      ],
+      [
+        expect.any(String),
+        undefined,
+        undefined,
+        { shouldBypassPermissionChecks: true },
+      ],
+      [
+        expect.any(String),
+        undefined,
+        undefined,
+        { shouldBypassPermissionChecks: true },
+      ],
+    ]);
   });
   it('materializes missing link companions when the replacement URL already matches old text', async () => {
     const harness = createHarness();
@@ -145,9 +172,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: true });
@@ -188,9 +213,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: false });
@@ -222,9 +245,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: false });
@@ -238,9 +259,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
 
     await harness.service.migrate({
       workspaceId: WORKSPACE_ID,
-      workspaceDataSource: {
-        query: harness.workspaceQuery,
-      } as unknown as DataSource,
+      workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
       dryRun: false,
     });
 
@@ -266,9 +285,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: false });
@@ -299,9 +316,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: true });
@@ -319,9 +334,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).rejects.toThrow('copy failed');
@@ -334,9 +347,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
 
     await harness.service.migrate({
       workspaceId: WORKSPACE_ID,
-      workspaceDataSource: {
-        query: harness.workspaceQuery,
-      } as unknown as DataSource,
+      workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
       dryRun: false,
     });
 
@@ -357,9 +368,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).rejects.toThrow('permission copy failed');
@@ -388,9 +397,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: true });
@@ -410,9 +417,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: true,
       }),
     ).resolves.toEqual({ canDeleteOldFields: true });
@@ -431,9 +436,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
-        workspaceDataSource: {
-          query: harness.workspaceQuery,
-        } as unknown as DataSource,
+        workspaceDataSource: { query: harness.workspaceQuery } as unknown as GlobalWorkspaceDataSource,
         dryRun: true,
       }),
     ).resolves.toEqual({ canDeleteOldFields: true });
