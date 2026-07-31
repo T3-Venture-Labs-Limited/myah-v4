@@ -33,6 +33,22 @@ describe('request_approval tool', () => {
     expect(REQUEST_APPROVAL_TOOL_NAME).toBe('request_approval');
   });
 
+  it('requires approval for generic writes except pre-approval-safe tools', () => {
+    const tool = createRequestApprovalTool();
+
+    expect(tool.description).toContain(
+      'CRM records, workflows, or metadata require this approval',
+    );
+    expect(tool.description).toContain(
+      '\`prepare_instagram_reply_draft\` and \`prepare_outreach_email_draft\` are pre-approval safe',
+    );
+    expect(tool.description).toContain('persists only local review state');
+    expect(tool.description).toContain(
+      'both send tools still require registered approval',
+    );
+    expect(tool.description).not.toContain('trivial actions');
+  });
+
   it('execute echoes the approval request with a pending status', async () => {
     const tool = createRequestApprovalTool();
 
