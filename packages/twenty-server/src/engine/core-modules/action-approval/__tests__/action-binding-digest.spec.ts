@@ -12,6 +12,7 @@ describe('action binding digest', () => {
     contentDigest: 'a'.repeat(64),
     recipientFingerprint: 'b'.repeat(64),
     sendingAccountFingerprint: 'c'.repeat(64),
+    actionContextFingerprint: null,
     inboundMessageId: 'provider-inbound-message-id',
     inboundSenderIgsid: 'recipient-igsid',
     inboundDirection: 'INBOUND' as const,
@@ -32,7 +33,6 @@ describe('action binding digest', () => {
 
   it.each([
     ['workspaceId', '00000000-0000-4000-8000-000000000099'],
-    ['actionName', 'send_instagram_reply_v2'],
     ['actionVersion', 2],
     ['draftId', '00000000-0000-4000-8000-000000000099'],
     ['contentDigest', 'd'.repeat(64)],
@@ -48,6 +48,15 @@ describe('action binding digest', () => {
     ).not.toBe(computeLogicalActionKey(base));
   });
 
+  it('rejects an unsupported action kind', () => {
+    expect(() =>
+      computeLogicalActionKey({
+        ...base,
+        actionName: 'unsupported_action',
+      } as never),
+    ).toThrow();
+  });
+
   it('excludes approval, actor, and thread identity from the logical key', () => {
     expect(
       computeLogicalActionKey({
@@ -56,5 +65,37 @@ describe('action binding digest', () => {
         initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000098',
       }),
     ).toBe(computeLogicalActionKey(base));
+  });
+
+  it('binds outreach execution to its email-thread context', () => {
+    const outreach = {
+      workspaceId: base.workspaceId,
+      actionName: 'send_outreach_email' as const,
+      actionVersion: 1 as const,
+      draftId: base.draftId,
+      contentDigest: base.contentDigest,
+      recipientFingerprint: base.recipientFingerprint,
+      sendingAccountFingerprint: base.sendingAccountFingerprint,
+      actionContextFingerprint: 'd'.repeat(64),
+      threadId: base.threadId,
+      initiatorUserWorkspaceId: base.initiatorUserWorkspaceId,
+      evidenceLinks: [],
+    };
+
+    expect(computeLogicalActionKey(outreach)).not.toBe(
+      computeLogicalActionKey(base),
+    );
+    expect(
+      computeLogicalActionKey({
+        ...outreach,
+        actionContextFingerprint: 'e'.repeat(64),
+      }),
+    ).not.toBe(computeLogicalActionKey(outreach));
+    expect(
+      computeLogicalActionKey({
+        ...outreach,
+        threadId: '00000000-0000-4000-8000-000000000099',
+      }),
+    ).toBe(computeLogicalActionKey(outreach));
   });
 });

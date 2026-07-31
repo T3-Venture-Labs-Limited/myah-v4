@@ -8,6 +8,8 @@ export const ACTION_TOOL_IDS = [
   'send_email',
   'prepare_instagram_reply_draft',
   'send_instagram_reply',
+  'prepare_outreach_email_draft',
+  'send_outreach_email',
   'draft_email',
   'create_calendar_event',
   'search_help_center',
@@ -29,6 +31,12 @@ export const ACTION_TOOL_LABELS: Record<ActionToolId, ActionToolLabel> = {
   },
   prepare_instagram_reply_draft: {
     label: i18nLabel(msg`Prepare Instagram Reply Draft`),
+  },
+  prepare_outreach_email_draft: {
+    label: i18nLabel(msg`Prepare Outreach Email Draft`),
+  },
+  send_outreach_email: {
+    label: i18nLabel(msg`Send Outreach Email`),
   },
   draft_email: {
     label: i18nLabel(msg`Draft Email`),

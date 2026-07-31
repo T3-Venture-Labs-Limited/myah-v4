@@ -29,7 +29,9 @@ export class ActionReceiptProjectorService {
   ): Promise<{ projected: boolean }> {
     const receipt = await this.receiptRepository.findOne({
       where: { id: receiptId },
-      relations: { actionApprovalBinding: true },
+      relations: {
+        actionApprovalBinding: { evidenceLinks: true },
+      },
     });
 
     if (receipt?.state !== ActionExecutionReceiptState.PROVIDER_ACCEPTED) {
@@ -41,6 +43,18 @@ export class ActionReceiptProjectorService {
       workspaceId: receipt.workspaceId,
       draftId: receipt.actionApprovalBinding.draftId,
       contentDigest: receipt.actionApprovalBinding.contentDigest,
+      actionName: receipt.actionApprovalBinding.actionName as
+        | 'send_instagram_reply'
+        | 'send_outreach_email',
+      providerMessageId: receipt.providerMessageId,
+      providerExternalMessageId: receipt.providerExternalMessageId,
+      providerThreadExternalId: receipt.providerThreadExternalId,
+      recipientFingerprint: receipt.actionApprovalBinding.recipientFingerprint,
+      sendingAccountFingerprint:
+        receipt.actionApprovalBinding.sendingAccountFingerprint,
+      actionContextFingerprint:
+        receipt.actionApprovalBinding.actionContextFingerprint,
+      evidenceLinks: receipt.actionApprovalBinding.evidenceLinks,
     });
     await faultHooks?.afterWorkspaceProjection?.(receipt.id);
     await this.receiptRepository.update(

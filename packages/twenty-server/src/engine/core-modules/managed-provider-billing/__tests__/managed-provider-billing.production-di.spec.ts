@@ -1,7 +1,9 @@
 import { type DynamicModule } from '@nestjs/common';
+import { MODULE_METADATA } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 
+import { ManagedProviderBillingModule } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.module';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
@@ -44,9 +46,13 @@ const testDependenciesModule: DynamicModule = {
 };
 
 describe('managed-provider billing production dependency injection', () => {
-  it('resolves the recovery cron command through the production Myah module graph', async () => {
+  it('is registered by Myah and resolves its production recovery command', async () => {
+    expect(Reflect.getMetadata(MODULE_METADATA.IMPORTS, MyahModule)).toContain(
+      ManagedProviderBillingModule,
+    );
+
     const moduleRef = await Test.createTestingModule({
-      imports: [testDependenciesModule, MyahModule],
+      imports: [testDependenciesModule, ManagedProviderBillingModule],
     }).compile();
 
     expect(

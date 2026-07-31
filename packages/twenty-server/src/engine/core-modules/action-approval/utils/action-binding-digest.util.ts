@@ -1,5 +1,7 @@
 import { createHash } from 'crypto';
 
+import { assertUnreachable } from 'twenty-shared/utils';
+
 import { type ExpectedActionBindingWithWorkspace } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 
 const sha256 = (value: string) =>
@@ -13,20 +15,40 @@ export const computeActionContentDigest = (content: string) =>
 
 export const computeLogicalActionKey = (
   input: ExpectedActionBindingWithWorkspace,
-) =>
-  sha256(
-    JSON.stringify([
-      'v1',
-      input.workspaceId,
-      input.actionName,
-      input.actionVersion,
-      input.draftId,
-      input.contentDigest,
-      input.recipientFingerprint,
-      input.sendingAccountFingerprint,
-      input.inboundMessageId,
-      input.inboundSenderIgsid,
-      input.inboundDirection,
-      input.inboundReceivedAt.toISOString(),
-    ]),
-  );
+): string => {
+  switch (input.actionName) {
+    case 'send_instagram_reply':
+      return sha256(
+        JSON.stringify([
+          'v1',
+          input.workspaceId,
+          input.actionName,
+          input.actionVersion,
+          input.draftId,
+          input.contentDigest,
+          input.recipientFingerprint,
+          input.sendingAccountFingerprint,
+          input.inboundMessageId,
+          input.inboundSenderIgsid,
+          input.inboundDirection,
+          input.inboundReceivedAt.toISOString(),
+        ]),
+      );
+    case 'send_outreach_email':
+      return sha256(
+        JSON.stringify([
+          'v1',
+          input.workspaceId,
+          input.actionName,
+          input.actionVersion,
+          input.draftId,
+          input.contentDigest,
+          input.recipientFingerprint,
+          input.sendingAccountFingerprint,
+          input.actionContextFingerprint,
+        ]),
+      );
+    default:
+      return assertUnreachable(input);
+  }
+};

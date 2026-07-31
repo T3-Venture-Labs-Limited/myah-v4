@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { In, IsNull, Repository } from 'typeorm';
+import { EntityNotFoundError, In, Repository } from 'typeorm';
 
 import { AppOAuthRevokeService } from 'src/engine/core-modules/application/connection-provider/refresh/services/app-oauth-revoke.service';
+import { MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME } from 'src/engine/core-modules/myah/constants/workspace-mailbox-connected-account-name.constant';
 import { CALENDAR_CHANNEL_DELETED_EVENT } from 'src/engine/metadata-modules/calendar-channel/constants/calendar-channel-deleted.constant';
 import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
 import { type CalendarChannelDeletedEvent } from 'src/engine/metadata-modules/calendar-channel/types/calendar-channel-deleted.type';
@@ -178,54 +179,94 @@ export class ConnectedAccountMetadataService {
       return;
     }
 
-    const connectedAccountIds = connectedAccounts.map((account) => account.id);
+    const workspaceMailboxAccounts = connectedAccounts.filter(
+      (account) =>
+        account.name === MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME &&
+        account.visibility === 'workspace',
+    );
+    const personalAccounts = connectedAccounts.filter(
+      (account) => !workspaceMailboxAccounts.includes(account),
+    );
+    const workspaceMailboxAccountIds = workspaceMailboxAccounts.map(
+      (account) => account.id,
+    );
+    const personalAccountIds = personalAccounts.map((account) => account.id);
 
     await this.repository.manager.transaction(async (entityManager) => {
-      await entityManager.update(
-        ConnectedAccountEntity,
-        { id: In(connectedAccountIds), workspaceId },
-        {
-          userWorkspaceId: toUserWorkspaceId,
-          accessToken: null,
-          refreshToken: null,
-          connectionParameters: null,
-        },
-      );
+      if (workspaceMailboxAccountIds.length > 0) {
+        await entityManager.update(
+          ConnectedAccountEntity,
+          { id: In(workspaceMailboxAccountIds), workspaceId },
+          { userWorkspaceId: toUserWorkspaceId },
+        );
+      }
 
-      await entityManager.update(
-        ConnectedAccountEntity,
-        { id: In(connectedAccountIds), workspaceId, archivedAt: IsNull() },
-        { archivedAt: new Date() },
-      );
-
-      await entityManager.update(
-        MessageChannelEntity,
-        { connectedAccountId: In(connectedAccountIds), workspaceId },
-        { isSyncEnabled: false },
-      );
-
-      await entityManager.update(
-        CalendarChannelEntity,
-        { connectedAccountId: In(connectedAccountIds), workspaceId },
-        { isSyncEnabled: false },
-      );
+      if (personalAccountIds.length > 0) {
+        await entityManager.update(
+          ConnectedAccountEntity,
+          { id: In(personalAccountIds), workspaceId },
+          {
+            accessToken: null,
+            archivedAt: new Date(),
+            connectionParameters: null,
+            refreshToken: null,
+            userWorkspaceId: toUserWorkspaceId,
+          },
+        );
+        await entityManager.update(
+          MessageChannelEntity,
+          { connectedAccountId: In(personalAccountIds), workspaceId },
+          { isSyncEnabled: false },
+        );
+        await entityManager.update(
+          CalendarChannelEntity,
+          { connectedAccountId: In(personalAccountIds), workspaceId },
+          { isSyncEnabled: false },
+        );
+      }
     });
 
-    for (const connectedAccount of connectedAccounts) {
+    for (const connectedAccount of personalAccounts) {
       await this.appOAuthRevokeService.revokeIfApp(connectedAccount);
     }
   }
 
   async delete({
+    allowWorkspaceMailbox = false,
     id,
     workspaceId,
   }: {
+    allowWorkspaceMailbox?: boolean;
     id: string;
     workspaceId: string;
   }): Promise<ConnectedAccountEntity> {
-    const connectedAccount = await this.repository.findOneOrFail({
-      where: { id, workspaceId },
-    });
+    let connectedAccount: ConnectedAccountEntity;
+
+    try {
+      connectedAccount = await this.repository.findOneOrFail({
+        where: { id, workspaceId },
+      });
+    } catch (error) {
+      if (error instanceof EntityNotFoundError) {
+        throw new ConnectedAccountException(
+          'Connected account not found',
+          ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+        );
+      }
+
+      throw error;
+    }
+
+    if (
+      connectedAccount.name === MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME &&
+      connectedAccount.visibility === 'workspace' &&
+      !allowWorkspaceMailbox
+    ) {
+      throw new ConnectedAccountException(
+        'Connected account not found',
+        ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      );
+    }
 
     const [messageChannels, calendarChannels] = await Promise.all([
       this.messageChannelRepository.find({
@@ -244,7 +285,14 @@ export class ConnectedAccountMetadataService {
 
     await this.appOAuthRevokeService.revokeIfApp(connectedAccount);
 
-    await this.repository.delete({ id, workspaceId });
+    const deleteResult = await this.repository.delete({ id, workspaceId });
+
+    if (deleteResult?.affected === 0) {
+      throw new ConnectedAccountException(
+        'Connected account not found',
+        ConnectedAccountExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      );
+    }
 
     this.workspaceEventEmitter.emitCustomBatchEvent<MessageChannelDeletedEvent>(
       MESSAGE_CHANNEL_DELETED_EVENT,

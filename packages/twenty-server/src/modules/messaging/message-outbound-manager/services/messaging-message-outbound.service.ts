@@ -8,6 +8,7 @@ import { EmailGroupMessageOutboundService } from 'src/modules/messaging/message-
 import { GmailMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/gmail/services/gmail-message-outbound.service';
 import { ImapSmtpMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/imap/services/imap-smtp-message-outbound.service';
 import { MicrosoftMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/drivers/microsoft/services/microsoft-message-outbound.service';
+import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 
@@ -62,7 +63,7 @@ export class MessagingMessageOutboundService {
   public async createDraft(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
-  ): Promise<void> {
+  ): Promise<CreateDraftResult> {
     switch (connectedAccount.provider) {
       case ConnectedAccountProvider.GOOGLE:
         return this.gmailMessageOutboundService.createDraft(
@@ -90,6 +91,41 @@ export class MessagingMessageOutboundService {
         assertUnreachable(
           connectedAccount.provider,
           `Provider ${connectedAccount.provider} not supported for creating drafts`,
+        );
+    }
+  }
+
+  public async deleteDraft(
+    draftExternalId: string,
+    connectedAccount: ConnectedAccountEntity,
+  ): Promise<void> {
+    switch (connectedAccount.provider) {
+      case ConnectedAccountProvider.GOOGLE:
+        return this.gmailMessageOutboundService.deleteDraft(
+          draftExternalId,
+          connectedAccount,
+        );
+      case ConnectedAccountProvider.MICROSOFT:
+        return this.microsoftMessageOutboundService.deleteDraft(
+          draftExternalId,
+          connectedAccount,
+        );
+      case ConnectedAccountProvider.IMAP_SMTP_CALDAV:
+        return this.imapSmtpMessageOutboundService.deleteDraft(
+          draftExternalId,
+          connectedAccount,
+        );
+      case ConnectedAccountProvider.EMAIL_GROUP:
+      case ConnectedAccountProvider.OIDC:
+      case ConnectedAccountProvider.SAML:
+      case ConnectedAccountProvider.APP:
+        throw new Error(
+          `Provider ${connectedAccount.provider} does not support deleting drafts`,
+        );
+      default:
+        assertUnreachable(
+          connectedAccount.provider,
+          `Provider ${connectedAccount.provider} not supported for deleting drafts`,
         );
     }
   }

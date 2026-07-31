@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { isNonEmptyString } from '@sniptt/guards';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
 
 import { MicrosoftOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/microsoft/microsoft-oauth2-client.provider';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { toMicrosoftRecipients } from 'src/modules/messaging/message-import-manager/utils/to-microsoft-recipients.util';
+import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 import { type Client as MicrosoftGraphClient } from '@microsoft/microsoft-graph-client';
@@ -44,12 +46,29 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
   async createDraft(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
-  ): Promise<void> {
+  ): Promise<CreateDraftResult> {
     const microsoftClient = await this.microsoftOAuth2ClientProvider.getClient(
       connectedAccount.id,
     );
 
-    await this.createDraftMessage(microsoftClient, sendMessageInput);
+    const { id, internetMessageId, conversationId } =
+      await this.createDraftMessage(microsoftClient, sendMessageInput);
+
+    if (!isNonEmptyString(id)) {
+      throw new Error('Microsoft draft did not return a message id');
+    }
+
+    if (!isNonEmptyString(internetMessageId)) {
+      throw new Error('Microsoft draft did not return an internet message id');
+    }
+
+    return {
+      headerMessageId: internetMessageId,
+      draftExternalId: id,
+      ...(isNonEmptyString(conversationId)
+        ? { threadExternalId: conversationId }
+        : {}),
+    };
   }
 
   async sendDraft(
@@ -62,20 +81,26 @@ export class MicrosoftMessageOutboundService implements MessageOutboundDriver {
       connectedAccount,
     );
 
+    try {
+      await this.deleteDraft(draftExternalId, connectedAccount);
+    } catch {
+      this.logger.warn(
+        `Failed to delete Microsoft draft ${draftExternalId} after send`,
+      );
+    }
+
+    return sendResult;
+  }
+
+  async deleteDraft(
+    draftExternalId: string,
+    connectedAccount: ConnectedAccountEntity,
+  ): Promise<void> {
     const microsoftClient = await this.microsoftOAuth2ClientProvider.getClient(
       connectedAccount.id,
     );
 
-    await microsoftClient
-      .api(`/me/messages/${draftExternalId}`)
-      .delete()
-      .catch((error) =>
-        this.logger.warn(
-          `Failed to delete Microsoft draft ${draftExternalId} after send: ${error}`,
-        ),
-      );
-
-    return sendResult;
+    await microsoftClient.api(`/me/messages/${draftExternalId}`).delete();
   }
 
   private async createDraftMessage(

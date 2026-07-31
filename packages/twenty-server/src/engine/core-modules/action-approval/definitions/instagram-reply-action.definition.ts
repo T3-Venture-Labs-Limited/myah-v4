@@ -6,8 +6,9 @@ import { z } from 'zod';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import {
-  type ExpectedActionBindingWithWorkspace,
   type ActionEvidenceLinkInput,
+  type ExpectedActionBindingWithWorkspace,
+  type InstagramReplyExpectedActionBinding,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
@@ -82,6 +83,11 @@ type InstagramReplyEvidenceObjectMetadataIds = {
   draft: string;
   inboundMessage: string;
 };
+
+type InstagramReplyExpectedActionBindingWithWorkspace =
+  InstagramReplyExpectedActionBinding & {
+    workspaceId: string;
+  };
 
 export type CanonicalInstagramReplyGraph = {
   draftId: string;
@@ -193,6 +199,9 @@ export class InstagramReplyActionDefinition {
     workspaceId: string;
     binding: ExpectedActionBindingWithWorkspace;
   }): Promise<InstagramReplyActionAuthority> {
+    if (binding.actionName !== this.actionName) {
+      throw new Error('Instagram reply source graph is unavailable');
+    }
     const graph = await this.loadCanonicalGraph(
       workspaceId,
       binding.draftId,
@@ -246,6 +255,7 @@ export class InstagramReplyActionDefinition {
       contentDigest: binding.contentDigest,
       recipientFingerprint: binding.recipientFingerprint ?? '',
       sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
+      actionContextFingerprint: null,
       inboundMessageId: binding.inboundMessageId ?? '',
       inboundSenderIgsid: binding.inboundSenderIgsid ?? '',
       inboundDirection:
@@ -295,7 +305,7 @@ export class InstagramReplyActionDefinition {
       conversationLabel: string;
     };
     evidenceObjectMetadataIds: InstagramReplyEvidenceObjectMetadataIds;
-  }): ExpectedActionBindingWithWorkspace {
+  }): InstagramReplyExpectedActionBindingWithWorkspace {
     return {
       workspaceId,
       actionName: this.actionName,
@@ -313,6 +323,7 @@ export class InstagramReplyActionDefinition {
           graph.account.igUserId,
         ]),
       ),
+      actionContextFingerprint: null,
       inboundMessageId: graph.inboundMessageId,
       inboundSenderIgsid: graph.inboundSenderIgsid,
       inboundDirection: graph.inboundDirection,
@@ -345,8 +356,8 @@ export class InstagramReplyActionDefinition {
   }
 
   private matchesBinding(
-    actual: ExpectedActionBindingWithWorkspace,
-    expected: ExpectedActionBindingWithWorkspace,
+    actual: InstagramReplyExpectedActionBindingWithWorkspace,
+    expected: InstagramReplyExpectedActionBindingWithWorkspace,
   ): boolean {
     if (
       actual.workspaceId !== expected.workspaceId ||

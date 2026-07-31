@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { isNonEmptyString } from '@sniptt/guards';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
@@ -15,6 +16,7 @@ import { ImapFindDraftsFolderService } from 'src/modules/messaging/message-impor
 import { getImapFolderPath } from 'src/modules/messaging/message-import-manager/drivers/imap/utils/get-imap-folder-path.util';
 import { parseMessageId } from 'src/modules/messaging/message-import-manager/drivers/imap/utils/parse-message-id.util';
 import { SmtpClientProvider } from 'src/modules/messaging/message-import-manager/drivers/smtp/providers/smtp-client.provider';
+import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 import { extractMessageIdFromBuffer } from 'src/modules/messaging/message-outbound-manager/utils/extract-message-id-from-buffer.util';
@@ -99,7 +101,7 @@ export class ImapSmtpMessageOutboundService implements MessageOutboundDriver {
   async createDraft(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
-  ): Promise<void> {
+  ): Promise<CreateDraftResult> {
     const { handle, connectionParameters } = connectedAccount;
 
     this.assertHandleIsDefined(handle);
@@ -126,9 +128,28 @@ export class ImapSmtpMessageOutboundService implements MessageOutboundDriver {
       if (!isDefined(draftsFolder)) {
         throw new Error('No drafts folder found and could not create one');
       }
-      const DRAFT_FLAG = '\\Draft';
 
-      await imapClient.append(draftsFolder.path, messageBuffer, [DRAFT_FLAG]);
+      const DRAFT_FLAG = '\\Draft';
+      const appendResult = await imapClient.append(
+        draftsFolder.path,
+        messageBuffer,
+        [DRAFT_FLAG],
+      );
+
+      if (appendResult === false || !isDefined(appendResult.uid)) {
+        throw new Error('IMAP draft append did not return a UID');
+      }
+
+      const headerMessageId = extractMessageIdFromBuffer(messageBuffer);
+
+      if (!isNonEmptyString(headerMessageId)) {
+        throw new Error('IMAP draft did not produce a header message id');
+      }
+
+      return {
+        headerMessageId,
+        draftExternalId: `${draftsFolder.path}:${appendResult.uid}`,
+      };
     } finally {
       await this.imapClientProvider.closeClient(imapClient);
     }
@@ -146,9 +167,9 @@ export class ImapSmtpMessageOutboundService implements MessageOutboundDriver {
 
     try {
       await this.deleteDraft(draftExternalId, connectedAccount);
-    } catch (error) {
+    } catch {
       this.logger.warn(
-        `Failed to delete IMAP draft ${draftExternalId} after send: ${error}`,
+        `Failed to delete IMAP draft ${draftExternalId} after send`,
       );
     }
 

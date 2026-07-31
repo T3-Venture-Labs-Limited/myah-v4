@@ -67,10 +67,23 @@ export class ActionApprovalService {
           contentDigest: input.contentDigest,
           recipientFingerprint: input.recipientFingerprint,
           sendingAccountFingerprint: input.sendingAccountFingerprint,
-          inboundMessageId: input.inboundMessageId,
-          inboundSenderIgsid: input.inboundSenderIgsid,
-          inboundDirection: input.inboundDirection,
-          inboundReceivedAt: input.inboundReceivedAt,
+          actionContextFingerprint: input.actionContextFingerprint ?? null,
+          inboundMessageId:
+            input.actionName === 'send_instagram_reply'
+              ? input.inboundMessageId
+              : null,
+          inboundSenderIgsid:
+            input.actionName === 'send_instagram_reply'
+              ? input.inboundSenderIgsid
+              : null,
+          inboundDirection:
+            input.actionName === 'send_instagram_reply'
+              ? input.inboundDirection
+              : null,
+          inboundReceivedAt:
+            input.actionName === 'send_instagram_reply'
+              ? input.inboundReceivedAt
+              : null,
           threadId: input.threadId,
           state: ActionApprovalBindingState.PENDING,
           expiresAt: new Date(Date.now() + ACTION_APPROVAL_TTL_MS),
@@ -244,36 +257,72 @@ export class ActionApprovalService {
           await manager.save(ActionApprovalBindingEntity, binding);
         }
         if (
-          !binding ||
+          binding == null ||
           (binding.state !== ActionApprovalBindingState.APPROVED &&
             binding.state !== ActionApprovalBindingState.CONSUMED) ||
           binding.initiatorUserWorkspaceId !== initiatorUserWorkspaceId ||
-          binding.threadId !== threadId ||
-          !binding.inboundMessageId ||
-          !binding.inboundSenderIgsid ||
-          binding.inboundDirection !== 'INBOUND' ||
-          !binding.inboundReceivedAt
+          binding.threadId !== threadId
         ) {
           return null;
         }
         const evidenceLinks = await this.findEvidence(manager, binding.id);
-
-        return {
+        const commonBinding = {
           workspaceId: binding.workspaceId,
-          actionName: binding.actionName as 'send_instagram_reply',
-          actionVersion: binding.actionVersion as 1,
           draftId: binding.draftId,
           contentDigest: binding.contentDigest,
           recipientFingerprint: binding.recipientFingerprint ?? '',
           sendingAccountFingerprint: binding.sendingAccountFingerprint ?? '',
-          inboundMessageId: binding.inboundMessageId,
-          inboundSenderIgsid: binding.inboundSenderIgsid,
-          inboundDirection: binding.inboundDirection,
-          inboundReceivedAt: binding.inboundReceivedAt,
           threadId: binding.threadId,
           initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
           evidenceLinks,
         };
+
+        switch (binding.actionName) {
+          case 'send_instagram_reply':
+            if (
+              binding.actionVersion !== 1 ||
+              binding.actionContextFingerprint != null ||
+              binding.inboundMessageId == null ||
+              binding.inboundSenderIgsid == null ||
+              binding.inboundDirection !== 'INBOUND' ||
+              binding.inboundReceivedAt == null
+            ) {
+              return null;
+            }
+
+            return {
+              ...commonBinding,
+              actionName: 'send_instagram_reply' as const,
+              actionVersion: 1 as const,
+              actionContextFingerprint: null,
+              inboundMessageId: binding.inboundMessageId,
+              inboundSenderIgsid: binding.inboundSenderIgsid,
+              inboundDirection: binding.inboundDirection,
+              inboundReceivedAt: binding.inboundReceivedAt,
+            };
+          case 'send_outreach_email':
+            if (
+              binding.actionVersion !== 1 ||
+              binding.actionContextFingerprint?.length !== 64 ||
+              binding.recipientFingerprint == null ||
+              binding.sendingAccountFingerprint == null ||
+              binding.inboundMessageId != null ||
+              binding.inboundSenderIgsid != null ||
+              binding.inboundDirection != null ||
+              binding.inboundReceivedAt != null
+            ) {
+              return null;
+            }
+
+            return {
+              ...commonBinding,
+              actionName: 'send_outreach_email' as const,
+              actionVersion: 1 as const,
+              actionContextFingerprint: binding.actionContextFingerprint,
+            };
+          default:
+            return null;
+        }
       },
     );
 
@@ -468,14 +517,21 @@ export class ActionApprovalService {
       if (receipt.state === ActionExecutionReceiptState.PROVIDER_ACCEPTED) {
         return this.redactionService.toSafeReceipt(receipt);
       }
-      if (receipt.state !== ActionExecutionReceiptState.PROCESSING) {
+      if (
+        receipt.state !== ActionExecutionReceiptState.PROCESSING &&
+        receipt.state !== ActionExecutionReceiptState.UNKNOWN
+      ) {
         throw new Error(
           'Action execution receipt cannot accept a provider result',
         );
       }
 
       receipt.state = ActionExecutionReceiptState.PROVIDER_ACCEPTED;
-      receipt.providerMessageId = null;
+      receipt.providerMessageId = acceptedOutcome.providerMessageId ?? null;
+      receipt.providerExternalMessageId =
+        acceptedOutcome.providerExternalMessageId ?? null;
+      receipt.providerThreadExternalId =
+        acceptedOutcome.providerThreadExternalId ?? null;
       receipt.providerCode = acceptedOutcome.code;
       receipt.redactedOutcome = acceptedOutcome.code;
 
@@ -645,7 +701,7 @@ export class ActionApprovalService {
       };
     }
 
-    const candidates = await manager
+    const candidateQuery = manager
       .getRepository(ActionApprovalBindingEntity)
       .createQueryBuilder('binding')
       .setLock('pessimistic_write')
@@ -659,14 +715,31 @@ export class ActionApprovalService {
         'binding."sendingAccountFingerprint" = :sendingAccountFingerprint',
         input,
       )
-      .andWhere('binding."inboundMessageId" = :inboundMessageId', input)
-      .andWhere('binding."inboundSenderIgsid" = :inboundSenderIgsid', input)
-      .andWhere('binding."inboundDirection" = :inboundDirection', input)
-      .andWhere('binding."inboundReceivedAt" = :inboundReceivedAt', input)
       .andWhere('binding.state = :state', {
         state: ActionApprovalBindingState.APPROVED,
       })
-      .andWhere('binding."expiresAt" > :now', { now: new Date() })
+      .andWhere('binding."expiresAt" > :now', { now: new Date() });
+
+    if (input.actionName === 'send_instagram_reply') {
+      candidateQuery
+        .andWhere('binding."actionContextFingerprint" IS NULL')
+        .andWhere('binding."inboundMessageId" = :inboundMessageId', input)
+        .andWhere('binding."inboundSenderIgsid" = :inboundSenderIgsid', input)
+        .andWhere('binding."inboundDirection" = :inboundDirection', input)
+        .andWhere('binding."inboundReceivedAt" = :inboundReceivedAt', input);
+    } else {
+      candidateQuery
+        .andWhere(
+          'binding."actionContextFingerprint" = :actionContextFingerprint',
+          input,
+        )
+        .andWhere('binding."inboundMessageId" IS NULL')
+        .andWhere('binding."inboundSenderIgsid" IS NULL')
+        .andWhere('binding."inboundDirection" IS NULL')
+        .andWhere('binding."inboundReceivedAt" IS NULL');
+    }
+
+    const candidates = await candidateQuery
       .orderBy('binding."createdAt"', 'ASC')
       .getMany();
 
@@ -757,10 +830,25 @@ export class ActionApprovalService {
       binding.contentDigest !== input.contentDigest ||
       binding.recipientFingerprint !== input.recipientFingerprint ||
       binding.sendingAccountFingerprint !== input.sendingAccountFingerprint ||
-      binding.inboundMessageId !== input.inboundMessageId ||
-      binding.inboundSenderIgsid !== input.inboundSenderIgsid ||
-      binding.inboundDirection !== input.inboundDirection ||
-      binding.inboundReceivedAt?.getTime() !== input.inboundReceivedAt.getTime()
+      (binding.actionContextFingerprint ?? null) !==
+        (input.actionContextFingerprint ?? null) ||
+      binding.threadId !== input.threadId ||
+      binding.initiatorUserWorkspaceId !== input.initiatorUserWorkspaceId
+    ) {
+      throw new Error('Action binding does not match execution request');
+    }
+
+    if (
+      input.actionName === 'send_instagram_reply'
+        ? binding.inboundMessageId !== input.inboundMessageId ||
+          binding.inboundSenderIgsid !== input.inboundSenderIgsid ||
+          binding.inboundDirection !== input.inboundDirection ||
+          binding.inboundReceivedAt?.getTime() !==
+            input.inboundReceivedAt.getTime()
+        : binding.inboundMessageId != null ||
+          binding.inboundSenderIgsid != null ||
+          binding.inboundDirection != null ||
+          binding.inboundReceivedAt != null
     ) {
       throw new Error('Action binding does not match execution request');
     }

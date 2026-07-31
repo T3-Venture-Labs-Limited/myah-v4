@@ -8,6 +8,7 @@ import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { JwtModule } from 'src/engine/core-modules/jwt/jwt.module';
 import { InstagramReplyModule } from 'src/engine/core-modules/instagram-reply/instagram-reply.module';
+import { OutreachEmailModule } from 'src/engine/core-modules/outreach-email/outreach-email.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
 import { CodeInterpreterTool } from 'src/engine/core-modules/tool/tools/code-interpreter-tool/code-interpreter-tool';
@@ -18,6 +19,8 @@ import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool
 import { PrepareInstagramReplyDraftTool } from 'src/engine/core-modules/tool/tools/instagram-tool/prepare-instagram-reply-draft-tool';
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
 import { NavigateAppTool } from 'src/engine/core-modules/tool/tools/navigate-tool/navigate-app-tool';
+import { PrepareOutreachEmailDraftTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/prepare-outreach-email-draft-tool';
+import { SendOutreachEmailTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/send-outreach-email-tool';
 import { ExtractJsonPathsTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/extract-json-paths-tool';
 import { SearchOutputTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/search-output-tool';
 import { SearchHelpCenterTool } from 'src/engine/core-modules/tool/tools/search-help-center-tool/search-help-center-tool';
@@ -40,6 +43,7 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     MessagingSendManagerModule,
     CalendarEventCreationManagerModule,
     InstagramReplyModule,
+    OutreachEmailModule,
     TypeOrmModule.forFeature([FileEntity, ConnectedAccountEntity]),
     ApplicationModule,
     FeatureFlagModule,
@@ -58,6 +62,8 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     CreateCalendarEventTool,
     PrepareInstagramReplyDraftTool,
     SendInstagramReplyTool,
+    PrepareOutreachEmailDraftTool,
+    SendOutreachEmailTool,
     EmailComposerService,
     SearchHelpCenterTool,
     CodeInterpreterTool,
@@ -75,6 +81,8 @@ import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspac
     EmailComposerService,
     PrepareInstagramReplyDraftTool,
     SendInstagramReplyTool,
+    PrepareOutreachEmailDraftTool,
+    SendOutreachEmailTool,
     SearchHelpCenterTool,
     CodeInterpreterTool,
     NavigateAppTool,

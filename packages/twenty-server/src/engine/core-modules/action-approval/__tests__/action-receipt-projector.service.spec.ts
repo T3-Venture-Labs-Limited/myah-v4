@@ -5,9 +5,23 @@ describe('ActionReceiptProjectorService', () => {
     id: '00000000-0000-4000-8000-000000000001',
     workspaceId: '00000000-0000-4000-8000-000000000002',
     state: 'PROVIDER_ACCEPTED',
+    providerMessageId: '<sent@example.com>',
+    providerExternalMessageId: 'provider-message-id',
+    providerThreadExternalId: 'provider-thread-id',
     actionApprovalBinding: {
+      actionName: 'send_outreach_email',
       draftId: '00000000-0000-4000-8000-000000000003',
       contentDigest: 'a'.repeat(64),
+      recipientFingerprint: 'b'.repeat(64),
+      sendingAccountFingerprint: 'c'.repeat(64),
+      actionContextFingerprint: 'd'.repeat(64),
+      evidenceLinks: [
+        {
+          objectMetadataId: '00000000-0000-4000-8000-000000000004',
+          recordId: '00000000-0000-4000-8000-000000000005',
+          role: 'campaign_creator',
+        },
+      ],
     },
   };
 
@@ -44,6 +58,22 @@ describe('ActionReceiptProjectorService', () => {
       projected: true,
     });
     expect(writes).toEqual(new Set([receipt.id]));
+    expect(writer.project).toHaveBeenCalledWith({
+      receiptId: receipt.id,
+      workspaceId: receipt.workspaceId,
+      draftId: receipt.actionApprovalBinding.draftId,
+      contentDigest: receipt.actionApprovalBinding.contentDigest,
+      actionName: 'send_outreach_email',
+      providerMessageId: '<sent@example.com>',
+      providerExternalMessageId: 'provider-message-id',
+      providerThreadExternalId: 'provider-thread-id',
+      recipientFingerprint: receipt.actionApprovalBinding.recipientFingerprint,
+      sendingAccountFingerprint:
+        receipt.actionApprovalBinding.sendingAccountFingerprint,
+      actionContextFingerprint:
+        receipt.actionApprovalBinding.actionContextFingerprint,
+      evidenceLinks: receipt.actionApprovalBinding.evidenceLinks,
+    });
     expect(repository.update).toHaveBeenCalledWith(
       { id: receipt.id, state: 'PROVIDER_ACCEPTED' },
       { state: 'SENT' },

@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
 
+import type { GlobalWorkspaceDataSource } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource';
+
+import { WorkspaceMigrationRunnerService } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/services/workspace-migration-runner.service';
 
 export const OBSOLETE_SOURCE_CONTROLLED_CREATOR_VIEW_FIELD_UNIVERSAL_IDENTIFIERS =
   new Set([
@@ -201,7 +204,7 @@ type FieldMetadataRow = { id: string; universalIdentifier: string };
 
 export type MigrateMyahCreatorSocialLinksArgs = {
   workspaceId: string;
-  workspaceDataSource: DataSource;
+  workspaceDataSource: GlobalWorkspaceDataSource;
   dryRun: boolean;
 };
 
@@ -214,6 +217,7 @@ export class MigrateMyahCreatorSocialLinksService {
   constructor(
     @InjectDataSource()
     private readonly coreDataSource: DataSource,
+    private readonly workspaceMigrationRunnerService: WorkspaceMigrationRunnerService,
   ) {}
 
   async migrate({
@@ -223,12 +227,17 @@ export class MigrateMyahCreatorSocialLinksService {
   }: MigrateMyahCreatorSocialLinksArgs): Promise<{
     canDeleteOldFields: boolean;
   }> {
-    const columnRows = await workspaceDataSource.query<DatabaseColumnRow[]>(`
-      SELECT "column_name" AS "columnName"
-      FROM information_schema.columns
-      WHERE "table_schema" = current_schema()
-        AND "table_name" = 'creator'
-    `);
+    const columnRows = await workspaceDataSource.query<DatabaseColumnRow[]>(
+      `
+        SELECT "column_name" AS "columnName"
+        FROM information_schema.columns
+        WHERE "table_schema" = current_schema()
+          AND "table_name" = 'creator'
+      `,
+      undefined,
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
     const availableColumns = new Set(
       columnRows.map(({ columnName }) => columnName),
     );
@@ -263,13 +272,18 @@ export class MigrateMyahCreatorSocialLinksService {
     }
 
     for (const pair of presentPairs) {
-      const conflictRows = await workspaceDataSource.query<CountRow[]>(`
-        SELECT COUNT(*)::text AS "count"
-        FROM "creator"
-        WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
-          AND NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NOT NULL
-          AND BTRIM("${pair.oldColumnName}") <> BTRIM("${pair.newPrimaryUrlColumnName}")
-      `);
+      const conflictRows = await workspaceDataSource.query<CountRow[]>(
+        `
+          SELECT COUNT(*)::text AS "count"
+          FROM "creator"
+          WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
+            AND NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NOT NULL
+            AND BTRIM("${pair.oldColumnName}") <> BTRIM("${pair.newPrimaryUrlColumnName}")
+        `,
+        undefined,
+        undefined,
+        { shouldBypassPermissionChecks: true },
+      );
 
       if (Number(conflictRows[0]?.count ?? 0) > 0) {
         this.logger.error(
@@ -331,47 +345,9 @@ export class MigrateMyahCreatorSocialLinksService {
       return { canDeleteOldFields: true };
     }
 
-    for (const pair of presentPairs) {
-      await this.coreDataSource.query(COPY_FIELD_PERMISSIONS_SQL, [
-        workspaceId,
-        fieldMetadataIdByUniversalIdentifier.get(
-          pair.oldUniversalIdentifier,
-        ),
-        fieldMetadataIdByUniversalIdentifier.get(
-          pair.newUniversalIdentifier,
-        ),
-      ]);
-    }
-
-    for (const pair of presentPairs) {
-      await workspaceDataSource.query(`
-        UPDATE "creator"
-        SET
-          "${pair.newPrimaryUrlColumnName}" = COALESCE(NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), ''), BTRIM("${pair.oldColumnName}")),
-          "${pair.newPrimaryLabelColumnName}" = COALESCE("${pair.newPrimaryLabelColumnName}", ''),
-          "${pair.newSecondaryLinksColumnName}" = CASE
-            WHEN jsonb_typeof("${pair.newSecondaryLinksColumnName}") = 'array'
-            THEN "${pair.newSecondaryLinksColumnName}"
-            ELSE '[]'::jsonb
-          END
-        WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
-          AND (
-            NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NULL
-            OR "${pair.newPrimaryLabelColumnName}" IS NULL
-            OR jsonb_typeof("${pair.newSecondaryLinksColumnName}") IS DISTINCT FROM 'array'
-          )
-      `);
-    }
-
-    const queryRunner = this.coreDataSource.createQueryRunner();
-
-    await queryRunner.connect();
-
     try {
-      await queryRunner.startTransaction();
-
       for (const pair of presentPairs) {
-        await queryRunner.manager.query(MIGRATE_VIEW_REFERENCES_SQL, [
+        await this.coreDataSource.query(COPY_FIELD_PERMISSIONS_SQL, [
           workspaceId,
           fieldMetadataIdByUniversalIdentifier.get(
             pair.oldUniversalIdentifier,
@@ -382,61 +358,134 @@ export class MigrateMyahCreatorSocialLinksService {
         ]);
       }
 
-      await queryRunner.commitTransaction();
-    } catch (error) {
-      if (queryRunner.isTransactionActive) {
-        await queryRunner.rollbackTransaction();
+      for (const pair of presentPairs) {
+        await workspaceDataSource.query(
+          `
+            UPDATE "creator"
+            SET
+              "${pair.newPrimaryUrlColumnName}" = COALESCE(NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), ''), BTRIM("${pair.oldColumnName}")),
+              "${pair.newPrimaryLabelColumnName}" = COALESCE("${pair.newPrimaryLabelColumnName}", ''),
+              "${pair.newSecondaryLinksColumnName}" = CASE
+                WHEN jsonb_typeof("${pair.newSecondaryLinksColumnName}") = 'array'
+                THEN "${pair.newSecondaryLinksColumnName}"
+                ELSE '[]'::jsonb
+              END
+            WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
+              AND (
+                NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NULL
+                OR "${pair.newPrimaryLabelColumnName}" IS NULL
+                OR jsonb_typeof("${pair.newSecondaryLinksColumnName}") IS DISTINCT FROM 'array'
+              )
+          `,
+          undefined,
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        );
       }
 
-      throw error;
+      const queryRunner = this.coreDataSource.createQueryRunner();
+
+      await queryRunner.connect();
+
+      try {
+        await queryRunner.startTransaction();
+
+        for (const pair of presentPairs) {
+          await queryRunner.manager.query(MIGRATE_VIEW_REFERENCES_SQL, [
+            workspaceId,
+            fieldMetadataIdByUniversalIdentifier.get(
+              pair.oldUniversalIdentifier,
+            ),
+            fieldMetadataIdByUniversalIdentifier.get(
+              pair.newUniversalIdentifier,
+            ),
+          ]);
+        }
+
+        await queryRunner.commitTransaction();
+      } catch (error) {
+        if (queryRunner.isTransactionActive) {
+          await queryRunner.rollbackTransaction();
+        }
+
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
+
+      for (const pair of presentPairs) {
+        const mismatchRows = await workspaceDataSource.query<CountRow[]>(
+          `
+            SELECT COUNT(*)::text AS "count"
+            FROM "creator"
+            WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
+              AND (
+                NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NULL
+                OR BTRIM("${pair.oldColumnName}") <> BTRIM("${pair.newPrimaryUrlColumnName}")
+                OR "${pair.newPrimaryLabelColumnName}" IS NULL
+                OR jsonb_typeof("${pair.newSecondaryLinksColumnName}") IS DISTINCT FROM 'array'
+              )
+          `,
+          undefined,
+          undefined,
+          { shouldBypassPermissionChecks: true },
+        );
+
+        if (Number(mismatchRows[0]?.count ?? 0) > 0) {
+          return { canDeleteOldFields: false };
+        }
+      }
+
+      const obsoleteFieldMetadataIds = presentPairs.map((pair) =>
+        fieldMetadataIdByUniversalIdentifier.get(pair.oldUniversalIdentifier),
+      );
+      const remainingReferenceRows = await this.coreDataSource.query<CountRow[]>(
+        `
+          SELECT (
+            (SELECT COUNT(*) FROM core."viewField"
+              WHERE "workspaceId" = $1
+                AND "fieldMetadataId" = ANY($2::uuid[])
+                AND "deletedAt" IS NULL) +
+            (SELECT COUNT(*) FROM core."viewFilter"
+              WHERE "workspaceId" = $1
+                AND "fieldMetadataId" = ANY($2::uuid[])
+                AND "deletedAt" IS NULL) +
+            (SELECT COUNT(*) FROM core."viewSort"
+              WHERE "workspaceId" = $1
+                AND "fieldMetadataId" = ANY($2::uuid[])
+                AND "deletedAt" IS NULL)
+          )::text AS "count"
+        `,
+        [workspaceId, obsoleteFieldMetadataIds],
+      );
+
+      return {
+        canDeleteOldFields:
+          Number(remainingReferenceRows[0]?.count ?? 0) === 0,
+      };
     } finally {
-      await queryRunner.release();
+      await this.invalidateMetadataCache(workspaceId);
     }
+  }
 
-    for (const pair of presentPairs) {
-      const mismatchRows = await workspaceDataSource.query<CountRow[]>(`
-        SELECT COUNT(*)::text AS "count"
-        FROM "creator"
-        WHERE NULLIF(BTRIM("${pair.oldColumnName}"), '') IS NOT NULL
-          AND (
-            NULLIF(BTRIM("${pair.newPrimaryUrlColumnName}"), '') IS NULL
-            OR BTRIM("${pair.oldColumnName}") <> BTRIM("${pair.newPrimaryUrlColumnName}")
-            OR "${pair.newPrimaryLabelColumnName}" IS NULL
-            OR jsonb_typeof("${pair.newSecondaryLinksColumnName}") IS DISTINCT FROM 'array'
-          )
-      `);
-
-      if (Number(mismatchRows[0]?.count ?? 0) > 0) {
-        return { canDeleteOldFields: false };
-      }
+  private async invalidateMetadataCache(workspaceId: string): Promise<void> {
+    try {
+      await this.workspaceMigrationRunnerService.invalidateCache({
+        allFlatEntityMapsKeys: [
+          'flatFieldPermissionMaps',
+          'flatFieldMetadataMaps',
+          'flatObjectMetadataMaps',
+          'flatRoleMaps',
+          'flatViewFieldMaps',
+          'flatViewFilterMaps',
+          'flatViewSortMaps',
+        ],
+        workspaceId,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to invalidate Creator social link migration metadata cache for workspace ${workspaceId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
-
-    const obsoleteFieldMetadataIds = presentPairs.map((pair) =>
-      fieldMetadataIdByUniversalIdentifier.get(pair.oldUniversalIdentifier),
-    );
-    const remainingReferenceRows = await this.coreDataSource.query<CountRow[]>(
-      `
-        SELECT (
-          (SELECT COUNT(*) FROM core."viewField"
-            WHERE "workspaceId" = $1
-              AND "fieldMetadataId" = ANY($2::uuid[])
-              AND "deletedAt" IS NULL) +
-          (SELECT COUNT(*) FROM core."viewFilter"
-            WHERE "workspaceId" = $1
-              AND "fieldMetadataId" = ANY($2::uuid[])
-              AND "deletedAt" IS NULL) +
-          (SELECT COUNT(*) FROM core."viewSort"
-            WHERE "workspaceId" = $1
-              AND "fieldMetadataId" = ANY($2::uuid[])
-              AND "deletedAt" IS NULL)
-        )::text AS "count"
-      `,
-      [workspaceId, obsoleteFieldMetadataIds],
-    );
-
-    return {
-      canDeleteOldFields:
-        Number(remainingReferenceRows[0]?.count ?? 0) === 0,
-    };
   }
 }

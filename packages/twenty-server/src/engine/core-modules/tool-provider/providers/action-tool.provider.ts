@@ -30,6 +30,8 @@ import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool
 import { NavigateAppTool } from 'src/engine/core-modules/tool/tools/navigate-tool/navigate-app-tool';
 import { PrepareInstagramReplyDraftTool } from 'src/engine/core-modules/tool/tools/instagram-tool/prepare-instagram-reply-draft-tool';
 import { SendInstagramReplyTool } from 'src/engine/core-modules/tool/tools/instagram-tool/send-instagram-reply-tool';
+import { PrepareOutreachEmailDraftTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/prepare-outreach-email-draft-tool';
+import { SendOutreachEmailTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/send-outreach-email-tool';
 import { ExtractJsonPathsTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/extract-json-paths-tool';
 import { SearchOutputTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/search-output-tool';
 import { SearchHelpCenterTool } from 'src/engine/core-modules/tool/tools/search-help-center-tool/search-help-center-tool';
@@ -49,6 +51,8 @@ export class ActionToolProvider implements ToolProvider {
     'draft_email',
     'prepare_instagram_reply_draft',
     'send_instagram_reply',
+    'prepare_outreach_email_draft',
+    'send_outreach_email',
     'create_calendar_event',
     'search_help_center',
     'code_interpreter',
@@ -70,6 +74,8 @@ export class ActionToolProvider implements ToolProvider {
     private readonly codeInterpreterService: CodeInterpreterService,
     private readonly prepareInstagramReplyDraftTool: PrepareInstagramReplyDraftTool,
     private readonly sendInstagramReplyTool: SendInstagramReplyTool,
+    private readonly prepareOutreachEmailDraftTool: PrepareOutreachEmailDraftTool,
+    private readonly sendOutreachEmailTool: SendOutreachEmailTool,
     private readonly permissionsService: PermissionsService,
     private readonly i18nService: I18nService,
     private readonly externalWritePolicyService: ExternalWritePolicyService,
@@ -83,6 +89,8 @@ export class ActionToolProvider implements ToolProvider {
       draft_email: this.draftEmailTool,
       prepare_instagram_reply_draft: this.prepareInstagramReplyDraftTool,
       send_instagram_reply: this.sendInstagramReplyTool,
+      prepare_outreach_email_draft: this.prepareOutreachEmailDraftTool,
+      send_outreach_email: this.sendOutreachEmailTool,
       create_calendar_event: this.createCalendarEventTool,
       search_help_center: this.searchHelpCenterTool,
       code_interpreter: this.codeInterpreterTool,
@@ -146,6 +154,22 @@ export class ActionToolProvider implements ToolProvider {
         this.buildDescriptor(
           'draft_email',
           this.draftEmailTool,
+          includeSchemas,
+          context.locale,
+        ),
+      );
+      descriptors.push(
+        this.buildDescriptor(
+          'prepare_outreach_email_draft',
+          this.prepareOutreachEmailDraftTool,
+          includeSchemas,
+          context.locale,
+        ),
+      );
+      descriptors.push(
+        this.buildDescriptor(
+          'send_outreach_email',
+          this.sendOutreachEmailTool,
           includeSchemas,
           context.locale,
         ),
@@ -258,7 +282,8 @@ export class ActionToolProvider implements ToolProvider {
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
     const approvalBindingId =
-      toolName === 'send_instagram_reply' &&
+      (toolName === 'send_instagram_reply' ||
+        toolName === 'send_outreach_email') &&
       typeof args.actionApprovalBindingId === 'string'
         ? args.actionApprovalBindingId
         : undefined;

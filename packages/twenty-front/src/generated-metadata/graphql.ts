@@ -1026,6 +1026,12 @@ export enum CommandMenuItemAvailabilityType {
 
 export type CommandMenuItemPayload = ObjectMetadataCommandMenuItemPayload | PathCommandMenuItemPayload;
 
+export type ConnectWorkspaceMailboxInput = {
+  accountType: Scalars['String']['input'];
+  connectionParameters: WorkspaceMailboxConnectionParametersInput;
+  handle: Scalars['String']['input'];
+};
+
 export type ConnectedAccountPublicDto = {
   __typename?: 'ConnectedAccountPublicDTO';
   applicationId?: Maybe<Scalars['UUID']['output']>;
@@ -2573,6 +2579,7 @@ export type Mutation = {
   checkPublicDomainValidRecords?: Maybe<DomainValidRecords>;
   checkoutSession: BillingSession;
   completeFileUpload: FileWithSignedUrl;
+  connectWorkspaceMailbox: WorkspaceMailboxConnectionResult;
   createApiKey: ApiKey;
   createApplicationRegistration: CreateApplicationRegistration;
   createApplicationRegistrationVariable: ApplicationRegistrationVariable;
@@ -2682,6 +2689,7 @@ export type Mutation = {
   installApplication: Application;
   /** @deprecated Use installApplication instead */
   installMarketplaceApp: Scalars['Boolean']['output'];
+  reconnectWorkspaceMailbox: WorkspaceMailboxConnectionResult;
   refreshEnterpriseValidityToken: Scalars['Boolean']['output'];
   removeQueryFromEventStream: Scalars['Boolean']['output'];
   removeRoleFromAgent: Scalars['Boolean']['output'];
@@ -2697,7 +2705,9 @@ export type Mutation = {
   resolveAgentChatApproval: SendChatMessageResult;
   retryChatMessage: SendChatMessageResult;
   revokeApiKey?: Maybe<ApiKey>;
+  revokeWorkspaceMailbox: RevokeWorkspaceMailboxResult;
   rotateApplicationRegistrationClientSecret: RotateClientSecret;
+  rotateWorkspaceMailbox: WorkspaceMailboxConnectionResult;
   runAgent: RunAgentResult;
   runEvaluationInput: AgentTurn;
   saveImapSmtpCaldavAccount: ImapSmtpCaldavConnectionSuccess;
@@ -2852,6 +2862,11 @@ export type MutationCheckoutSessionArgs = {
 
 export type MutationCompleteFileUploadArgs = {
   fileId: Scalars['String']['input'];
+};
+
+
+export type MutationConnectWorkspaceMailboxArgs = {
+  input: ConnectWorkspaceMailboxInput;
 };
 
 
@@ -3383,6 +3398,11 @@ export type MutationInstallMarketplaceAppArgs = {
 };
 
 
+export type MutationReconnectWorkspaceMailboxArgs = {
+  input: ReplaceWorkspaceMailboxCredentialsInput;
+};
+
+
 export type MutationRemoveQueryFromEventStreamArgs = {
   input: RemoveQueryFromEventStreamInput;
 };
@@ -3459,8 +3479,18 @@ export type MutationRevokeApiKeyArgs = {
 };
 
 
+export type MutationRevokeWorkspaceMailboxArgs = {
+  connectedAccountId: Scalars['UUID']['input'];
+};
+
+
 export type MutationRotateApplicationRegistrationClientSecretArgs = {
   id: Scalars['String']['input'];
+};
+
+
+export type MutationRotateWorkspaceMailboxArgs = {
+  input: ReplaceWorkspaceMailboxCredentialsInput;
 };
 
 
@@ -4489,6 +4519,7 @@ export type Query = {
   getViewSorts: Array<ViewSort>;
   getViews: Array<View>;
   getWorkspaceCreationDefaults: WorkspaceCreationDefaultsDto;
+  getWorkspaceMailboxStatus: WorkspaceMailboxConnectionStatus;
   index: Index;
   indexMetadatas: IndexConnection;
   lineChartData: LineChartData;
@@ -4836,6 +4867,11 @@ export type QueryGetViewsArgs = {
 };
 
 
+export type QueryGetWorkspaceMailboxStatusArgs = {
+  connectedAccountId: Scalars['UUID']['input'];
+};
+
+
 export type QueryIndexArgs = {
   id: Scalars['UUID']['input'];
 };
@@ -4947,6 +4983,11 @@ export type RemoveQueryFromEventStreamInput = {
   queryId: Scalars['String']['input'];
 };
 
+export type ReplaceWorkspaceMailboxCredentialsInput = {
+  connectedAccountId: Scalars['String']['input'];
+  connectionParameters: WorkspaceMailboxConnectionParametersInput;
+};
+
 export type ResendEmailVerificationToken = {
   __typename?: 'ResendEmailVerificationToken';
   success: Scalars['Boolean']['output'];
@@ -4954,6 +4995,13 @@ export type ResendEmailVerificationToken = {
 
 export type RevokeApiKeyInput = {
   id: Scalars['UUID']['input'];
+};
+
+export type RevokeWorkspaceMailboxResult = {
+  __typename?: 'RevokeWorkspaceMailboxResult';
+  connectedAccountId: Scalars['UUID']['output'];
+  revoked: Scalars['Boolean']['output'];
+  state: Scalars['String']['output'];
 };
 
 export type RichTextBody = {
@@ -6413,6 +6461,40 @@ export type WorkspaceInvitation = {
 export type WorkspaceInviteHashValid = {
   __typename?: 'WorkspaceInviteHashValid';
   isValid: Scalars['Boolean']['output'];
+};
+
+export type WorkspaceMailboxConnectionParametersInput = {
+  IMAP?: InputMaybe<WorkspaceMailboxProtocolConnectionInput>;
+  SMTP?: InputMaybe<WorkspaceMailboxProtocolConnectionInput>;
+};
+
+export type WorkspaceMailboxConnectionResult = {
+  __typename?: 'WorkspaceMailboxConnectionResult';
+  connectedAccountId: Scalars['UUID']['output'];
+  messageChannelId: Scalars['UUID']['output'];
+  status: WorkspaceMailboxConnectionStatus;
+};
+
+export type WorkspaceMailboxConnectionStatus = {
+  __typename?: 'WorkspaceMailboxConnectionStatus';
+  connectedAccountId: Scalars['UUID']['output'];
+  errorCode?: Maybe<Scalars['String']['output']>;
+  errorMessage?: Maybe<Scalars['String']['output']>;
+  lastSafeOperation: Scalars['String']['output'];
+  maskedHandle: Scalars['String']['output'];
+  messageChannelId: Scalars['UUID']['output'];
+  state: Scalars['String']['output'];
+  syncStage: Scalars['String']['output'];
+  syncStatus: Scalars['String']['output'];
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type WorkspaceMailboxProtocolConnectionInput = {
+  connectionSecurity: Scalars['String']['input'];
+  host: Scalars['String']['input'];
+  password: Scalars['String']['input'];
+  port: Scalars['Float']['input'];
+  username?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type WorkspaceMember = {

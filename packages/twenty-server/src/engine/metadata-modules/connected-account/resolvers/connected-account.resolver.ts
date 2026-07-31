@@ -3,6 +3,8 @@ import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { UserInputError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
+import { MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME } from 'src/engine/core-modules/myah/constants/workspace-mailbox-connected-account-name.constant';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
@@ -44,11 +46,19 @@ export class ConnectedAccountResolver {
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<ConnectedAccountPublicDTO> {
-    await this.connectedAccountMetadataService.verifyOwnership({
-      id,
-      userWorkspaceId,
-      workspaceId: workspace.id,
-    });
+    const connectedAccount =
+      await this.connectedAccountMetadataService.verifyOwnership({
+        id,
+        userWorkspaceId,
+        workspaceId: workspace.id,
+      });
+
+    if (
+      connectedAccount.name === MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME &&
+      connectedAccount.visibility === 'workspace'
+    ) {
+      throw new UserInputError('Connected account not found');
+    }
 
     const deleted = await this.connectedAccountMetadataService.delete({
       id,

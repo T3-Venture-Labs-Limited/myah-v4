@@ -1,22 +1,17 @@
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
+import { useCreatorListContext } from '@/myah/creator-crm/hooks/useCreatorListContext';
 import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
 import { useRecordIndexIdFromCurrentContextStore } from '@/object-record/record-index/hooks/useRecordIndexIdFromCurrentContextStore';
 import { recordIndexContextualViewNameComponentState } from '@/object-record/record-index/states/recordIndexContextualViewNameComponentState';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { FieldMetadataType, ViewFilterOperand } from 'twenty-shared/types';
+import { ViewFilterOperand } from 'twenty-shared/types';
 
 const CREATOR_LIST_MEMBERSHIP_FILTER_ID =
   'a5b456b7-7e58-4bf8-9ab2-87a689ac5e24';
 
 export const CreatorListMembershipFilterEffect = () => {
-  const [searchParams] = useSearchParams();
-  const creatorListId = searchParams.get('creatorListId');
-  const { objectMetadataItems } = useObjectMetadataItems();
-  const { recordIndexId, objectMetadataItem } =
-    useRecordIndexIdFromCurrentContextStore();
+  const creatorListContext = useCreatorListContext();
+  const { recordIndexId } = useRecordIndexIdFromCurrentContextStore();
   const setQueryOnlyRecordFilters = useSetAtomComponentState(
     queryOnlyRecordFiltersComponentState,
     recordIndexId,
@@ -25,62 +20,24 @@ export const CreatorListMembershipFilterEffect = () => {
     recordIndexContextualViewNameComponentState,
     recordIndexId,
   );
-  const { record: creatorList } = useFindOneRecord({
-    objectNameSingular: 'creatorList',
-    objectRecordId: creatorListId ?? '',
-    recordGqlFields: { id: true, name: true },
-    skip: !creatorListId || objectMetadataItem.nameSingular !== 'creator',
-  });
-  const creatorListName = creatorList?.name?.trim();
-
-  const listMembershipsFieldMetadataItem = objectMetadataItem.fields.find(
-    (fieldMetadataItem) => fieldMetadataItem.name === 'listMemberships',
-  );
-  const creatorListMemberObjectMetadataItem = objectMetadataItems.find(
-    (item) =>
-      item.id ===
-      listMembershipsFieldMetadataItem?.relation?.targetObjectMetadata.id,
-  );
-  const creatorListFieldMetadataItem =
-    creatorListMemberObjectMetadataItem?.fields.find(
-      (fieldMetadataItem) => fieldMetadataItem.name === 'creatorList',
-    );
 
   useEffect(() => {
-    if (
-      objectMetadataItem.nameSingular !== 'creator' ||
-      !creatorListId ||
-      !creatorListName ||
-      !listMembershipsFieldMetadataItem ||
-      !creatorListFieldMetadataItem ||
-      creatorListFieldMetadataItem.type !== FieldMetadataType.RELATION
-    ) {
+    if (!creatorListContext) {
       setRecordIndexContextualViewName(undefined);
       return;
     }
 
-    setRecordIndexContextualViewName(`List: ${creatorListName}`);
+    setRecordIndexContextualViewName(
+      `List: ${creatorListContext.target.label}`,
+    );
 
     return () => {
       setRecordIndexContextualViewName(undefined);
     };
-  }, [
-    creatorListFieldMetadataItem,
-    creatorListId,
-    creatorListName,
-    listMembershipsFieldMetadataItem,
-    objectMetadataItem.nameSingular,
-    setRecordIndexContextualViewName,
-  ]);
+  }, [creatorListContext, setRecordIndexContextualViewName]);
 
   useEffect(() => {
-    if (
-      objectMetadataItem.nameSingular !== 'creator' ||
-      !creatorListId ||
-      !listMembershipsFieldMetadataItem ||
-      !creatorListFieldMetadataItem ||
-      creatorListFieldMetadataItem.type !== FieldMetadataType.RELATION
-    ) {
+    if (!creatorListContext) {
       setQueryOnlyRecordFilters((recordFilters) =>
         recordFilters.filter(
           (recordFilter) =>
@@ -96,15 +53,14 @@ export const CreatorListMembershipFilterEffect = () => {
       ),
       {
         id: CREATOR_LIST_MEMBERSHIP_FILTER_ID,
-        fieldMetadataId: listMembershipsFieldMetadataItem.id,
-        relationTargetFieldMetadataId: creatorListFieldMetadataItem.id,
+        fieldMetadataId: creatorListContext.filter.fieldMetadataId,
+        relationTargetFieldMetadataId:
+          creatorListContext.filter.relationTargetFieldMetadataId,
         type: 'RELATION',
         operand: ViewFilterOperand.IS,
-        value: creatorListId,
+        value: creatorListContext.target.id,
         displayValue: '',
-        label: creatorListName
-          ? `List: ${creatorListName}`
-          : `${listMembershipsFieldMetadataItem.label} → ${creatorListFieldMetadataItem.label}`,
+        label: `List: ${creatorListContext.target.label}`,
         subFieldName: null,
       },
     ]);
@@ -117,14 +73,7 @@ export const CreatorListMembershipFilterEffect = () => {
         ),
       );
     };
-  }, [
-    creatorListFieldMetadataItem,
-    creatorListId,
-    listMembershipsFieldMetadataItem,
-    objectMetadataItem.nameSingular,
-    setQueryOnlyRecordFilters,
-    creatorListName,
-  ]);
+  }, [creatorListContext, setQueryOnlyRecordFilters]);
 
   return null;
 };

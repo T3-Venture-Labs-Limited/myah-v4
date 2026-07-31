@@ -94,6 +94,11 @@ describe('DraftEmailTool', () => {
       success: true,
       data: composedEmail,
     });
+    mockCreateDraft.mockResolvedValue({
+      headerMessageId: '<draft@example.com>',
+      draftExternalId: 'draft-external-id',
+      threadExternalId: 'thread-external-id',
+    });
 
     const result = await tool.execute(baseInput, {
       workspaceId: 'workspace-1',

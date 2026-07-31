@@ -1,5 +1,6 @@
 import { PermissionFlagType } from 'twenty-shared/constants';
 
+import { ACTION_TOOL_LABELS } from 'src/engine/core-modules/tool-provider/constants/action-tool-label.constant';
 import { ActionToolProvider } from 'src/engine/core-modules/tool-provider/providers/action-tool.provider';
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
 import { ExternalWritePolicyService } from 'src/engine/core-modules/tool-provider/services/external-write-policy.service';
@@ -15,11 +16,13 @@ const EXTERNAL_WRITE_TOOL_NAMES = [
   'send_email',
   'draft_email',
   'send_instagram_reply',
+  'send_outreach_email',
   'create_calendar_event',
 ] as const;
 
 const DECLARED_READ_OR_PREPARATION_TOOL_NAMES = [
   'prepare_instagram_reply_draft',
+  'prepare_outreach_email_draft',
   'search_help_center',
   'code_interpreter',
   'navigate_app',
@@ -39,6 +42,9 @@ const buildProvider = () => {
   );
   const permissionsService = {
     hasToolPermission: jest.fn().mockResolvedValue(true),
+  };
+  const i18nService = {
+    translateMessage: jest.fn(({ messageId }) => messageId),
   };
   const externalWritePolicyService = new ExternalWritePolicyService(
     permissionsService as never,
@@ -61,8 +67,10 @@ const buildProvider = () => {
       { isEnabled: jest.fn().mockReturnValue(true) } as never,
       tools.prepare_instagram_reply_draft as never,
       tools.send_instagram_reply as never,
+      tools.prepare_outreach_email_draft as never,
+      tools.send_outreach_email as never,
       permissionsService as never,
-      {} as never,
+      i18nService as never,
       externalWritePolicyService,
     ),
   };
@@ -82,6 +90,8 @@ describe('external write policy static dispatch', () => {
       'draft_email',
       'prepare_instagram_reply_draft',
       'send_instagram_reply',
+      'prepare_outreach_email_draft',
+      'send_outreach_email',
       'create_calendar_event',
       'search_help_center',
       'code_interpreter',
@@ -89,6 +99,38 @@ describe('external write policy static dispatch', () => {
       'extract_json_paths',
       'search_output',
     ]);
+  });
+
+  it('publishes both outreach tools in the SEND_EMAIL catalog', async () => {
+    const { provider } = buildProvider();
+
+    const descriptors = await provider.generateDescriptors(context, {
+      includeSchemas: false,
+    });
+
+    expect(
+      descriptors
+        .filter(({ name }) => name.includes('outreach_email'))
+        .map(({ name, label }) => ({ name, label })),
+    ).toEqual([
+      {
+        name: 'prepare_outreach_email_draft',
+        label: 'Prepare Outreach Email Draft',
+      },
+      {
+        name: 'send_outreach_email',
+        label: 'Send Outreach Email',
+      },
+    ]);
+  });
+
+  it('publishes exact outreach tool labels', () => {
+    expect(ACTION_TOOL_LABELS.prepare_outreach_email_draft.label).toBe(
+      'Prepare Outreach Email Draft',
+    );
+    expect(ACTION_TOOL_LABELS.send_outreach_email.label).toBe(
+      'Send Outreach Email',
+    );
   });
 
   it.each(ACTION_TOOL_NAMES)(
@@ -163,6 +205,30 @@ describe('external write policy static dispatch', () => {
       );
     },
   );
+
+  it.each([
+    ['prepare_outreach_email_draft', undefined],
+    ['send_outreach_email', 'e7b5ec63-c3f4-44b2-8e7c-d8ec162a78e7'],
+  ])('enforces SEND_EMAIL_TOOL for %s', async (toolName, approvalBindingId) => {
+    const permissionsService = {
+      hasToolPermission: jest.fn().mockResolvedValue(true),
+    };
+    const externalWritePolicyService = new ExternalWritePolicyService(
+      permissionsService as never,
+    );
+
+    await externalWritePolicyService.assertExecutable({
+      toolName,
+      context,
+      approvalBindingId,
+    });
+
+    expect(permissionsService.hasToolPermission).toHaveBeenCalledWith(
+      context.rolePermissionConfig,
+      context.workspaceId,
+      PermissionFlagType.SEND_EMAIL_TOOL,
+    );
+  });
   it('denies an unknown or missing-policy action before execution', async () => {
     const { provider, tools } = buildProvider();
 

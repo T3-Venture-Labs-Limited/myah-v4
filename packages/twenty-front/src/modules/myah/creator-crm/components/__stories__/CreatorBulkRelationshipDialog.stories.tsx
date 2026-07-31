@@ -1,6 +1,6 @@
 import { type Meta, type StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
 import { type ComponentProps } from 'react';
+import { fn } from 'storybook/test';
 
 import { CreatorBulkRelationshipDialogContent } from '@/myah/creator-crm/components/CreatorBulkRelationshipDialog';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
@@ -15,14 +15,6 @@ type CreatorBulkRelationshipDialogStoryProps = {
 const CreatorBulkRelationshipDialogStory = ({
   args,
 }: CreatorBulkRelationshipDialogStoryProps) => {
-  const {
-    target,
-    preview,
-    isApplying,
-    isConfirmationDisabled,
-    onCancel,
-    onConfirm,
-  } = args;
   const isMobile = useIsMobile();
 
   return (
@@ -35,16 +27,7 @@ const CreatorBulkRelationshipDialogStory = ({
       autoHeight
       isMobile={isMobile}
     >
-      <CreatorBulkRelationshipDialogContent
-        {...{
-          target,
-          preview,
-          isApplying,
-          isConfirmationDisabled,
-          onCancel,
-          onConfirm,
-        }}
-      />
+      <CreatorBulkRelationshipDialogContent {...args} />
     </Modal>
   );
 };
@@ -59,15 +42,18 @@ const meta: Meta<typeof CreatorBulkRelationshipDialogContent> = {
   },
   render: (args) => <CreatorBulkRelationshipDialogStory args={args} />,
   args: {
-    target: {
-      kind: 'creator-list',
-      id: 'list-a',
-      label: 'TEST12',
+    action: {
+      operation: 'add',
+      target: {
+        kind: 'creator-list',
+        id: 'list-a',
+        label: 'TEST12',
+      },
     },
     preview: {
       selectedCount: 10,
-      willAddCount: 8,
-      alreadyPresentCount: 2,
+      willChangeCount: 8,
+      unchangedCount: 2,
       state: 'ready',
     },
     isApplying: false,
@@ -85,15 +71,18 @@ export const List: Story = {};
 
 export const CampaignWithLongName: Story = {
   args: {
-    target: {
-      kind: 'campaign',
-      id: 'campaign-a',
-      label: 'Summer creator launch campaign',
+    action: {
+      operation: 'add',
+      target: {
+        kind: 'campaign',
+        id: 'campaign-a',
+        label: 'Summer creator launch campaign',
+      },
     },
     preview: {
       selectedCount: 24,
-      willAddCount: 19,
-      alreadyPresentCount: 5,
+      willChangeCount: 19,
+      unchangedCount: 5,
       state: 'ready',
     },
   },
@@ -103,8 +92,8 @@ export const LoadingPreview: Story = {
   args: {
     preview: {
       selectedCount: 10,
-      willAddCount: 0,
-      alreadyPresentCount: 0,
+      willChangeCount: 0,
+      unchangedCount: 0,
       state: 'loading',
     },
     isConfirmationDisabled: true,
@@ -115,8 +104,8 @@ export const PreviewUnavailable: Story = {
   args: {
     preview: {
       selectedCount: 10,
-      willAddCount: 0,
-      alreadyPresentCount: 0,
+      willChangeCount: 0,
+      unchangedCount: 0,
       state: 'unavailable',
     },
     isConfirmationDisabled: true,
@@ -127,8 +116,8 @@ export const EveryoneAlreadyPresent: Story = {
   args: {
     preview: {
       selectedCount: 10,
-      willAddCount: 0,
-      alreadyPresentCount: 10,
+      willChangeCount: 0,
+      unchangedCount: 10,
       state: 'ready',
     },
     isConfirmationDisabled: true,
@@ -144,10 +133,58 @@ export const Applying: Story = {
 
 export const MobileCampaign: Story = {
   args: {
-    target: {
-      kind: 'campaign',
-      id: 'campaign-a',
-      label: 'Summer creator launch campaign',
+    action: {
+      operation: 'add',
+      target: {
+        kind: 'campaign',
+        id: 'campaign-a',
+        label: 'Summer creator launch campaign',
+      },
+    },
+  },
+  parameters: {
+    viewport: {
+      defaultViewport: 'mobile1',
+    },
+  },
+};
+
+export const RemoveFromList: Story = {
+  args: {
+    action: {
+      operation: 'remove',
+      target: { kind: 'creator-list', id: 'list-a', label: 'TEST12' },
+    },
+    preview: {
+      selectedCount: 10,
+      willChangeCount: 8,
+      unchangedCount: 2,
+      state: 'ready',
+    },
+  },
+};
+
+export const EveryoneAlreadyAbsent: Story = {
+  args: {
+    action: {
+      operation: 'remove',
+      target: { kind: 'creator-list', id: 'list-a', label: 'TEST12' },
+    },
+    preview: {
+      selectedCount: 10,
+      willChangeCount: 0,
+      unchangedCount: 10,
+      state: 'ready',
+    },
+    isConfirmationDisabled: true,
+  },
+};
+
+export const MobileRemoveFromList: Story = {
+  args: {
+    action: {
+      operation: 'remove',
+      target: { kind: 'creator-list', id: 'list-a', label: 'TEST12' },
     },
   },
   parameters: {

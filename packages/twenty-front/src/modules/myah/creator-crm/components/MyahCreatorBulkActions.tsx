@@ -6,7 +6,11 @@ import {
   CreatorBulkRelationshipTargetPickerDialog,
   CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID,
 } from '@/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog';
-import { type CreatorBulkRelationshipTarget } from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
+import { useCreatorListContext } from '@/myah/creator-crm/hooks/useCreatorListContext';
+import {
+  type CreatorBulkRelationshipAction,
+  type CreatorBulkRelationshipTarget,
+} from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { contextStoreTargetedRecordsRuleComponentState } from '@/context-store/states/contextStoreTargetedRecordsRuleComponentState';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
@@ -33,6 +37,7 @@ export const MyahCreatorBulkActions = () => {
     useFilteredObjectMetadataItems();
   const objectMetadataItem =
     findObjectMetadataItemByNamePlural(objectNamePlural);
+  const creatorListContext = useCreatorListContext();
   const contextStoreTargetedRecordsRule = useAtomComponentStateValue(
     contextStoreTargetedRecordsRuleComponentState,
     MAIN_CONTEXT_STORE_INSTANCE_ID,
@@ -41,10 +46,10 @@ export const MyahCreatorBulkActions = () => {
     contextStoreTargetedRecordsRuleComponentState,
     MAIN_CONTEXT_STORE_INSTANCE_ID,
   );
-  const { openModal } = useModal();
+  const { closeModal, openModal } = useModal();
   const [targetKind, setTargetKind] =
     useState<CreatorBulkRelationshipTarget['kind']>();
-  const [target, setTarget] = useState<CreatorBulkRelationshipTarget>();
+  const [action, setAction] = useState<CreatorBulkRelationshipAction>();
 
   const selectedCreatorIds =
     contextStoreTargetedRecordsRule.mode === 'selection'
@@ -52,10 +57,22 @@ export const MyahCreatorBulkActions = () => {
       : [];
 
   useEffect(() => {
-    if (target) {
-      openModal(getCreatorBulkRelationshipDialogId(target));
+    if (action) {
+      openModal(getCreatorBulkRelationshipDialogId(action));
     }
-  }, [openModal, target]);
+  }, [action, openModal]);
+
+  useEffect(() => {
+    if (
+      action?.operation !== 'remove' ||
+      creatorListContext?.target.id === action.target.id
+    ) {
+      return;
+    }
+
+    closeModal(getCreatorBulkRelationshipDialogId(action));
+    setAction(undefined);
+  }, [action, closeModal, creatorListContext]);
 
   if (
     objectMetadataItem?.universalIdentifier !==
@@ -65,13 +82,13 @@ export const MyahCreatorBulkActions = () => {
     return null;
   }
 
-  const clearTarget = () => {
-    setTarget(undefined);
+  const clearAction = () => {
+    setAction(undefined);
     setTargetKind(undefined);
   };
 
   const openTargetPicker = (kind: CreatorBulkRelationshipTarget['kind']) => {
-    setTarget(undefined);
+    setAction(undefined);
     setTargetKind(kind);
     openModal(CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID);
   };
@@ -79,8 +96,16 @@ export const MyahCreatorBulkActions = () => {
   const handleTargetSelected = (
     selectedTarget: CreatorBulkRelationshipTarget,
   ) => {
-    setTarget(selectedTarget);
+    setAction({ operation: 'add', target: selectedTarget });
     setTargetKind(undefined);
+  };
+
+  const handleOpenRemoveFromList = () => {
+    if (!creatorListContext) {
+      return;
+    }
+
+    setAction({ operation: 'remove', target: creatorListContext.target });
   };
 
   const clearSelectionAfterSuccess = () => {
@@ -88,7 +113,7 @@ export const MyahCreatorBulkActions = () => {
       mode: 'selection',
       selectedRecordIds: [],
     });
-    clearTarget();
+    clearAction();
   };
 
   return (
@@ -111,19 +136,26 @@ export const MyahCreatorBulkActions = () => {
           </DropdownContent>
         }
       />
-      {targetKind && !target && (
+      {creatorListContext && (
+        <Button
+          title={t`Remove from list`}
+          variant="secondary"
+          onClick={handleOpenRemoveFromList}
+        />
+      )}
+      {targetKind && !action && (
         <CreatorBulkRelationshipTargetPickerDialog
           kind={targetKind}
-          onClose={clearTarget}
+          onClose={clearAction}
           onTargetSelected={handleTargetSelected}
         />
       )}
-      {target && (
+      {action && (
         <CreatorBulkRelationshipDialog
-          target={target}
+          action={action}
           selectedCreatorIds={selectedCreatorIds}
           onSuccess={clearSelectionAfterSuccess}
-          onClose={clearTarget}
+          onClose={clearAction}
         />
       )}
     </>

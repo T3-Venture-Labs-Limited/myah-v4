@@ -14,6 +14,7 @@ import {
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbound-manager/interfaces/message-outbound-driver.interface';
+import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 import { getDomainFromEmail } from 'src/utils/get-domain-from-email';
@@ -64,7 +65,14 @@ export class EmailGroupMessageOutboundService implements MessageOutboundDriver {
     };
   }
 
-  async createDraft(): Promise<void> {
+  async createDraft(): Promise<CreateDraftResult> {
+    throw new MessageChannelException(
+      'Email handle channels do not support drafts.',
+      MessageChannelExceptionCode.INVALID_MESSAGE_CHANNEL_INPUT,
+    );
+  }
+
+  async deleteDraft(): Promise<void> {
     throw new MessageChannelException(
       'Email handle channels do not support drafts.',
       MessageChannelExceptionCode.INVALID_MESSAGE_CHANNEL_INPUT,

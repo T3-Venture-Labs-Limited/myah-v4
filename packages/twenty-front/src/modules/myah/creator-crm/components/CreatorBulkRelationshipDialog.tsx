@@ -1,6 +1,6 @@
 import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
 import { useCreatorBulkRelationshipPreview } from '@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview';
-import { type CreatorBulkRelationshipTarget } from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
+import { type CreatorBulkRelationshipAction } from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { plural, t } from '@lingui/core/macro';
@@ -11,8 +11,9 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { H1Title, H1TitleFontColor } from 'twenty-ui/typography';
 
 export const getCreatorBulkRelationshipDialogId = (
-  target: CreatorBulkRelationshipTarget,
-) => `creator-bulk-relationship-${target.kind}-${target.id}`;
+  action: CreatorBulkRelationshipAction,
+) =>
+  `creator-bulk-relationship-${action.operation}-${action.target.kind}-${action.target.id}`;
 
 const StyledDialogContent = styled.div`
   display: flex;
@@ -77,13 +78,13 @@ const StyledActions = styled.div`
 
 type CreatorBulkRelationshipDialogPreview = {
   selectedCount: number;
-  willAddCount: number;
-  alreadyPresentCount: number;
+  willChangeCount: number;
+  unchangedCount: number;
   state: 'loading' | 'unavailable' | 'ready';
 };
 
 type CreatorBulkRelationshipDialogContentProps = {
-  target: CreatorBulkRelationshipTarget;
+  action: CreatorBulkRelationshipAction;
   preview: CreatorBulkRelationshipDialogPreview;
   isApplying: boolean;
   isConfirmationDisabled: boolean;
@@ -108,39 +109,40 @@ const getPreviewCountLabel = (
       : getCreatorCountLabel(count);
 
 export const CreatorBulkRelationshipDialogContent = ({
-  target,
+  action,
   preview,
   isApplying,
   isConfirmationDisabled,
   onCancel,
   onConfirm,
 }: CreatorBulkRelationshipDialogContentProps) => {
-  const targetLabel = target.kind === 'creator-list' ? t`list` : t`campaign`;
-  const willAddValue = getPreviewCountLabel(
-    preview.state,
-    preview.willAddCount,
-  );
-  const alreadyPresentValue = getPreviewCountLabel(
-    preview.state,
-    preview.alreadyPresentCount,
-  );
+  const isRemoval = action.operation === 'remove';
+  const title = isRemoval ? t`Confirm removal` : t`Confirm addition`;
+  const changedLabel = isRemoval ? t`Will be removed` : t`Will be added`;
+  const unchangedLabel = isRemoval ? t`Already absent` : t`Already present`;
+  const targetLabel =
+    action.target.kind === 'creator-list' ? t`list` : t`campaign`;
+  const confirmTitle = isApplying
+    ? isRemoval
+      ? t`Removing`
+      : t`Adding`
+    : isRemoval
+      ? t`Remove from list`
+      : t`Add to ${targetLabel}`;
   const feedback =
     preview.state === 'unavailable'
       ? t`Unable to verify existing relationships. Try again.`
-      : preview.state === 'ready' && preview.willAddCount === 0
+      : preview.state === 'ready' && preview.willChangeCount === 0
         ? t`No changes will be made.`
         : undefined;
 
   return (
     <StyledDialogContent>
-      <H1Title
-        title={t`Confirm addition`}
-        fontColor={H1TitleFontColor.Primary}
-      />
+      <H1Title title={title} fontColor={H1TitleFontColor.Primary} />
       <StyledReviewRows>
         <StyledReviewRow>
           <StyledReviewLabel>{t`Target`}</StyledReviewLabel>
-          <StyledReviewValue>{target.label}</StyledReviewValue>
+          <StyledReviewValue>{action.target.label}</StyledReviewValue>
         </StyledReviewRow>
         <StyledReviewRow>
           <StyledReviewLabel>{t`Selected`}</StyledReviewLabel>
@@ -149,12 +151,16 @@ export const CreatorBulkRelationshipDialogContent = ({
           </StyledReviewValue>
         </StyledReviewRow>
         <StyledReviewRow>
-          <StyledReviewLabel>{t`Will be added`}</StyledReviewLabel>
-          <StyledReviewValue>{willAddValue}</StyledReviewValue>
+          <StyledReviewLabel>{changedLabel}</StyledReviewLabel>
+          <StyledReviewValue>
+            {getPreviewCountLabel(preview.state, preview.willChangeCount)}
+          </StyledReviewValue>
         </StyledReviewRow>
         <StyledReviewRow>
-          <StyledReviewLabel>{t`Already present`}</StyledReviewLabel>
-          <StyledReviewValue>{alreadyPresentValue}</StyledReviewValue>
+          <StyledReviewLabel>{unchangedLabel}</StyledReviewLabel>
+          <StyledReviewValue>
+            {getPreviewCountLabel(preview.state, preview.unchangedCount)}
+          </StyledReviewValue>
         </StyledReviewRow>
       </StyledReviewRows>
       <StyledFeedback role="status">{feedback}</StyledFeedback>
@@ -168,9 +174,9 @@ export const CreatorBulkRelationshipDialogContent = ({
           justify="center"
         />
         <Button
-          title={isApplying ? t`Adding` : t`Add to ${targetLabel}`}
+          title={confirmTitle}
           variant="primary"
-          accent="brand"
+          accent={isRemoval ? 'danger' : 'brand'}
           onClick={onConfirm}
           disabled={isConfirmationDisabled}
           fullWidth
@@ -182,30 +188,35 @@ export const CreatorBulkRelationshipDialogContent = ({
 };
 
 export const CreatorBulkRelationshipDialog = ({
-  target,
+  action,
   selectedCreatorIds,
   onSuccess,
   onClose,
 }: {
-  target: CreatorBulkRelationshipTarget;
+  action: CreatorBulkRelationshipAction;
   selectedCreatorIds: string[];
   onSuccess?: () => void;
   onClose?: () => void;
 }) => {
   const preview = useCreatorBulkRelationshipPreview({
-    target,
+    target: action.target,
     selectedCreatorIds,
   });
-  const { applyCreatorBulkRelationship } = useApplyCreatorBulkRelationship();
+  const { applyCreatorBulkRelationship, removeCreatorListMembers } =
+    useApplyCreatorBulkRelationship();
   const { closeModal } = useModal();
   const [isApplying, setIsApplying] = useState(false);
-  const modalInstanceId = getCreatorBulkRelationshipDialogId(target);
+  const modalInstanceId = getCreatorBulkRelationshipDialogId(action);
+  const isRemoval = action.operation === 'remove';
+  const actionableCount = isRemoval
+    ? preview.relationshipRecordIds.length
+    : preview.unlinkedCreatorIds.length;
   const isConfirmationDisabled =
     preview.loading ||
     preview.isPreviewUnavailable ||
     isApplying ||
     preview.selectedCreatorIds.length === 0 ||
-    preview.creatorIdsToAdd.length === 0;
+    actionableCount === 0;
 
   const handleConfirm = async () => {
     if (isConfirmationDisabled) {
@@ -215,10 +226,18 @@ export const CreatorBulkRelationshipDialog = ({
     setIsApplying(true);
 
     try {
-      await applyCreatorBulkRelationship({
-        target,
-        creatorIdsToAdd: preview.creatorIdsToAdd,
-      });
+      if (action.operation === 'remove') {
+        await removeCreatorListMembers({
+          creatorListId: action.target.id,
+          creatorListMemberIdsToRemove: preview.relationshipRecordIds,
+          creatorIdsToRemove: preview.linkedCreatorIds,
+        });
+      } else {
+        await applyCreatorBulkRelationship({
+          target: action.target,
+          creatorIdsToAdd: preview.unlinkedCreatorIds,
+        });
+      }
       closeModal(modalInstanceId);
       onSuccess?.();
     } catch {
@@ -255,11 +274,13 @@ export const CreatorBulkRelationshipDialog = ({
       autoHeight
     >
       <CreatorBulkRelationshipDialogContent
-        target={target}
+        action={action}
         preview={{
           selectedCount: preview.selectedCreatorIds.length,
-          willAddCount: preview.creatorIdsToAdd.length,
-          alreadyPresentCount: preview.alreadyLinkedCreatorIds.length,
+          willChangeCount: actionableCount,
+          unchangedCount: isRemoval
+            ? preview.unlinkedCreatorIds.length
+            : preview.linkedCreatorIds.length,
           state: preview.loading
             ? 'loading'
             : preview.isPreviewUnavailable
