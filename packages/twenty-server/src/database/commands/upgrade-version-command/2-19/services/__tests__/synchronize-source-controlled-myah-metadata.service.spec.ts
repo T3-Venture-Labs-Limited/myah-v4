@@ -311,4 +311,30 @@ describe('SynchronizeSourceControlledMyahMetadataService', () => {
 
     expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
   });
+
+  it('logs the migration report and selected metadata when source synchronization fails', async () => {
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService({
+        ...createEmptyAllFlatEntityMaps(),
+        featureFlagsMap: {},
+      });
+    validateBuildAndRunWorkspaceMigrationFromTo.mockResolvedValue({
+      errors: ['missing source field'],
+      status: 'fail',
+    });
+    const logger = { error: jest.fn() };
+    (service as unknown as { logger: typeof logger }).logger = logger;
+
+    await expect(
+      service.synchronizeWorkspace(createArgs(), {
+        fieldMetadata: new Set([INBOX_FIELD_UNIVERSAL_IDENTIFIER]),
+      }),
+    ).rejects.toThrow(
+      `Failed to synchronize source-controlled Myah metadata for workspace ${WORKSPACE_ID}`,
+    );
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('missing source field'),
+    );
+  });
 });

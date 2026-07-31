@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RelationType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
@@ -44,6 +44,10 @@ export type SourceControlledMyahMetadataSelection = Partial<
 
 @Injectable()
 export class SynchronizeSourceControlledMyahMetadataService {
+  private readonly logger = new Logger(
+    SynchronizeSourceControlledMyahMetadataService.name,
+  );
+
   constructor(
     private readonly applicationService: ApplicationService,
     private readonly workspaceCacheService: WorkspaceCacheService,
@@ -243,6 +247,22 @@ export class SynchronizeSourceControlledMyahMetadataService {
       );
 
     if (result.status === 'fail') {
+      const selectedMetadataByName = Object.fromEntries(
+        Object.entries(selection).map(
+          ([metadataName, universalIdentifiers]) => [
+            metadataName,
+            [...universalIdentifiers],
+          ],
+        ),
+      );
+
+      this.logger.error(
+        `Failed to synchronize source-controlled Myah metadata for workspace ${workspaceId}:\n${JSON.stringify(
+          { result, selection: selectedMetadataByName },
+          null,
+          2,
+        )}`,
+      );
       throw new Error(
         `Failed to synchronize source-controlled Myah metadata for workspace ${workspaceId}`,
       );
