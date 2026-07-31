@@ -38,10 +38,7 @@ export class ResynchronizeMyahStandardApplicationCommand extends ActiveOrSuspend
     if (
       flatObjectMetadataMaps.byUniversalIdentifier[
         MYAH_STANDARD_OBJECTS.outreachAction.universalIdentifier
-      ] === undefined ||
-      flatObjectMetadataMaps.byUniversalIdentifier[
-        STANDARD_OBJECTS.company.universalIdentifier
-      ] !== undefined
+      ] === undefined
     ) {
       return;
     }
@@ -53,9 +50,15 @@ export class ResynchronizeMyahStandardApplicationCommand extends ActiveOrSuspend
 
       return;
     }
+    const profile =
+      flatObjectMetadataMaps.byUniversalIdentifier[
+        STANDARD_OBJECTS.company.universalIdentifier
+      ] === undefined
+        ? 'myah'
+        : 'full';
 
     await this.twentyStandardApplicationService.synchronizeTwentyStandardApplicationOrThrow(
-      { workspaceId, profile: 'myah' },
+      { workspaceId, profile },
     );
   }
 }

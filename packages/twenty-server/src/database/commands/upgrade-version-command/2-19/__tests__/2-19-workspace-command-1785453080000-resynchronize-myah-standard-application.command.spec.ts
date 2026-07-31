@@ -63,7 +63,7 @@ describe('ResynchronizeMyahStandardApplicationCommand', () => {
     expect(synchronizeTwentyStandardApplicationOrThrow).not.toHaveBeenCalled();
   });
 
-  it('skips a CRM workspace that also contains canonical Myah metadata', async () => {
+  it('preserves the full profile when resynchronizing a CRM workspace', async () => {
     getOrRecompute.mockResolvedValueOnce({
       flatObjectMetadataMaps: {
         byUniversalIdentifier: {
@@ -86,7 +86,10 @@ describe('ResynchronizeMyahStandardApplicationCommand', () => {
       total: 1,
     });
 
-    expect(synchronizeTwentyStandardApplicationOrThrow).not.toHaveBeenCalled();
+    expect(synchronizeTwentyStandardApplicationOrThrow).toHaveBeenCalledWith({
+      workspaceId,
+      profile: 'full',
+    });
   });
 
   it('does not mutate a workspace during dry run', async () => {
