@@ -342,6 +342,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         universalIdentifier: string;
         objectMetadataUniversalIdentifier: string;
         relationTargetObjectMetadataUniversalIdentifier?: string | null;
+        relationTargetFieldMetadataUniversalIdentifier?: string | null;
       }>;
       const creatorOwnerField = standardFields.find(
         ({ universalIdentifier }) =>
@@ -367,6 +368,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
       if (
         !creatorOwnerField ||
+        !creatorOwnerField.relationTargetFieldMetadataUniversalIdentifier ||
         !unselectedOutboundCreatorRelation ||
         !inboundCreatorRelation
       ) {
@@ -383,6 +385,11 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
       expect(
         desiredFields[creatorOwnerField.universalIdentifier],
+      ).toBeDefined();
+      expect(
+        desiredFields[
+          creatorOwnerField.relationTargetFieldMetadataUniversalIdentifier
+        ],
       ).toBeDefined();
       expect(
         desiredFields[unselectedOutboundCreatorRelation.universalIdentifier],

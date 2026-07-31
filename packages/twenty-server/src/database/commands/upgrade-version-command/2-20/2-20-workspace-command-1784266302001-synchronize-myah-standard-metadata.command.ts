@@ -45,6 +45,7 @@ type UniversalMetadataEntity = {
   universalIdentifier: string;
   objectMetadataUniversalIdentifier?: string | null;
   relationTargetObjectMetadataUniversalIdentifier?: string | null;
+  relationTargetFieldMetadataUniversalIdentifier?: string | null;
   fieldMetadataUniversalIdentifier?: string | null;
   viewUniversalIdentifier?: string | null;
   pageLayoutUniversalIdentifier?: string | null;
@@ -300,6 +301,17 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         isDefined(fieldMetadataUniversalIdentifier)
       ) {
         fieldUniversalIdentifiers.add(fieldMetadataUniversalIdentifier);
+      }
+    }
+
+    for (const field of standardFields) {
+      if (
+        fieldUniversalIdentifiers.has(field.universalIdentifier) &&
+        isDefined(field.relationTargetFieldMetadataUniversalIdentifier)
+      ) {
+        fieldUniversalIdentifiers.add(
+          field.relationTargetFieldMetadataUniversalIdentifier,
+        );
       }
     }
     const viewFilterUniversalIdentifiers = toUniversalIdentifiers(
