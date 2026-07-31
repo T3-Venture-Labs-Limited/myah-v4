@@ -54,9 +54,9 @@ describe('Workflow Campaign assignment query hooks', () => {
 
   it('delegates ordinary update validation without changing payload identity', async () => {
     const payload = { id: 'workflow-a', data: { name: 'Renamed' } };
-    jest.mocked(assignmentService.prepareUpdateOne).mockResolvedValue(
-      payload as never,
-    );
+    jest
+      .mocked(assignmentService.prepareUpdateOne)
+      .mockResolvedValue(payload as never);
 
     await expect(
       new WorkflowUpdateOnePreQueryHook(assignmentService).execute(
@@ -89,7 +89,9 @@ describe('Workflow Campaign assignment query hooks', () => {
     [WorkflowCreateOnePreQueryHook, 'workflow.createOne'],
     [WorkflowUpdateOnePreQueryHook, 'workflow.updateOne'],
   ])('registers %s as %s', (HookClass, key) => {
-    expect(Reflect.getMetadata(WORKSPACE_QUERY_HOOK_METADATA, HookClass)).toEqual({
+    expect(
+      Reflect.getMetadata(WORKSPACE_QUERY_HOOK_METADATA, HookClass),
+    ).toEqual({
       key,
       type: WorkspaceQueryHookType.PRE_HOOK,
     });

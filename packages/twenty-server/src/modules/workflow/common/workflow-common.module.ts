@@ -16,7 +16,14 @@ import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/work
     CommandMenuItemModule,
     FeatureFlagModule,
   ],
-  providers: [WorkflowCommonWorkspaceService],
-  exports: [WorkflowQueryHookModule, WorkflowCommonWorkspaceService],
+  providers: [
+    WorkflowCampaignAssignmentService,
+    WorkflowCommonWorkspaceService,
+  ],
+  exports: [
+    WorkflowCampaignAssignmentService,
+    WorkflowQueryHookModule,
+    WorkflowCommonWorkspaceService,
+  ],
 })
 export class WorkflowCommonModule {}

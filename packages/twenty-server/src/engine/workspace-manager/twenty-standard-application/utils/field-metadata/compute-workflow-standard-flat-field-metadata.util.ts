@@ -144,7 +144,9 @@ export const buildWorkflowStandardFlatFieldMetadatas = ({
       fieldName: 'sourceWorkflowId',
       type: FieldMetadataType.UUID,
       label: i18nLabel(msg`Source Workflow Id`),
-      description: i18nLabel(msg`The General Automation copied into this Workflow`),
+      description: i18nLabel(
+        msg`The General Automation copied into this Workflow`,
+      ),
       icon: 'IconCopy',
       isNullable: true,
       isUIEditable: false,

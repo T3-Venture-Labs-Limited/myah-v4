@@ -2,13 +2,14 @@ import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Args, Mutation } from '@nestjs/graphql';
 
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
+import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
-import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
 import { CopyGeneralAutomationToCampaignInput } from 'src/engine/core-modules/workflow/dtos/copy-general-automation-to-campaign.input';
 import { WorkflowVersionDTO } from 'src/engine/core-modules/workflow/dtos/workflow-version.dto';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
+import { CustomPermissionGuard } from 'src/engine/guards/custom-permission.guard';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
@@ -28,7 +29,7 @@ export class CampaignWorkflowResolver {
     private readonly workflowVersionWorkspaceService: WorkflowVersionWorkspaceService,
   ) {}
 
-  @UseGuards(WorkspaceAuthGuard, UserAuthGuard)
+  @UseGuards(WorkspaceAuthGuard, UserAuthGuard, CustomPermissionGuard)
   @Mutation(() => WorkflowVersionDTO)
   async copyGeneralAutomationToCampaign(
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
