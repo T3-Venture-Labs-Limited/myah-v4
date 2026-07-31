@@ -4,6 +4,7 @@ import {
 } from 'twenty-shared/metadata';
 import {
   FieldMetadataType,
+  ViewFilterOperand,
   ViewOpenRecordIn,
   ViewType,
 } from 'twenty-shared/types';
@@ -1208,5 +1209,75 @@ describe('Myah standard metadata contract', () => {
         ),
       ).toEqual(expectedIndex.fieldMetadataUniversalIdentifiers);
     }
+  });
+
+  it('keeps Campaign-owned Workflows out of the General Automations view', () => {
+    const viewFields =
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier;
+    const viewFilters =
+      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier;
+
+    expect(viewFields['9ecf92f8-6702-49bb-a25f-1d6e4ade47d8']).toMatchObject({
+      viewUniversalIdentifier:
+        STANDARD_OBJECTS.workflow.views.allWorkflows.universalIdentifier,
+      fieldMetadataUniversalIdentifier:
+        STANDARD_OBJECTS.workflow.fields.campaign.universalIdentifier,
+      isVisible: false,
+    });
+    expect(viewFilters['e505cfd8-a195-4b9a-997c-6c8208394a37']).toMatchObject({
+      viewUniversalIdentifier:
+        STANDARD_OBJECTS.workflow.views.allWorkflows.universalIdentifier,
+      fieldMetadataUniversalIdentifier:
+        STANDARD_OBJECTS.workflow.fields.campaign.universalIdentifier,
+      operand: ViewFilterOperand.IS_EMPTY,
+      value: '',
+    });
+  });
+
+  it('materializes Campaign Workflow ownership and copy provenance', () => {
+    const fields =
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier;
+    const campaign = fields['f173bd4d-0e7e-410b-876e-7c2dcf768a99'];
+    const sourceWorkflowId = fields['0a178c94-60ff-48e0-9982-64318f6ca3fa'];
+    const workflows = fields['a58a03e6-4c1d-4b0c-b40f-f3a78f6b6c16'];
+    expect(campaign).toMatchObject({
+      objectMetadataUniversalIdentifier:
+        STANDARD_OBJECTS.workflow.universalIdentifier,
+      name: 'campaign',
+      type: FieldMetadataType.RELATION,
+      isNullable: true,
+      isUIEditable: false,
+      relationTargetObjectMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+      relationTargetFieldMetadataUniversalIdentifier:
+        'a58a03e6-4c1d-4b0c-b40f-f3a78f6b6c16',
+      universalSettings: expect.objectContaining({
+        relationType: 'MANY_TO_ONE',
+        joinColumnName: 'campaignId',
+        onDelete: 'SET_NULL',
+      }),
+    });
+    expect(workflows).toMatchObject({
+      objectMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+      name: 'workflows',
+      type: FieldMetadataType.RELATION,
+      relationTargetObjectMetadataUniversalIdentifier:
+        STANDARD_OBJECTS.workflow.universalIdentifier,
+      relationTargetFieldMetadataUniversalIdentifier:
+        'f173bd4d-0e7e-410b-876e-7c2dcf768a99',
+      universalSettings: expect.objectContaining({
+        relationType: 'ONE_TO_MANY',
+      }),
+    });
+    expect(sourceWorkflowId).toMatchObject({
+      objectMetadataUniversalIdentifier:
+        STANDARD_OBJECTS.workflow.universalIdentifier,
+      name: 'sourceWorkflowId',
+      type: FieldMetadataType.UUID,
+      isNullable: true,
+      isUIEditable: false,
+      relationTargetObjectMetadataUniversalIdentifier: null,
+    });
   });
 });

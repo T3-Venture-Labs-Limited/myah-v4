@@ -2922,6 +2922,27 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        workflows: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'workflows',
+            label: 'Automations',
+            description: 'Automations owned by this Campaign',
+            icon: 'IconSettingsAutomation',
+            targetObjectName: 'workflow',
+            targetFieldName: 'campaign',
+            morphId: null,
+            isUIEditable: false,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         campaignCreators: createStandardRelationFieldFlatMetadata({
           objectName: 'campaign',
           workspaceId: args.workspaceId,

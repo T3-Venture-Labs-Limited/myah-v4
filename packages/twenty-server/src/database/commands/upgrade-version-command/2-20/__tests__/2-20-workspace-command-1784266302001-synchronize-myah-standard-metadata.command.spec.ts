@@ -329,25 +329,17 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       ).toBe(false);
     }
 
-    const myahObjectUniversalIdentifiers = new Set<string>(
-      Object.values(MYAH_STANDARD_OBJECTS).map(
-        ({ universalIdentifier }) => universalIdentifier,
-      ),
-    );
-
     for (const field of desiredFields) {
       expect(
-        myahObjectUniversalIdentifiers.has(
-          field.objectMetadataUniversalIdentifier,
-        ),
-      ).toBe(true);
+        desiredObjects[field.objectMetadataUniversalIdentifier],
+      ).toBeDefined();
 
       if (isDefined(field.relationTargetObjectMetadataUniversalIdentifier)) {
         expect(
-          myahObjectUniversalIdentifiers.has(
-            field.relationTargetObjectMetadataUniversalIdentifier,
-          ),
-        ).toBe(true);
+          desiredObjects[
+            field.relationTargetObjectMetadataUniversalIdentifier
+          ],
+        ).toBeDefined();
       }
     }
 
@@ -412,6 +404,55 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     expect(desiredCompany.labelSingular).toBe('Account');
   });
 
+  it('syncs only the Myah-owned Workflow extensions and General Automations filter', async () => {
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const desiredObjects =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier;
+    const desiredFields =
+      migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+        .byUniversalIdentifier;
+    const desiredViews =
+      migrationInput.fromToAllFlatEntityMaps.flatViewMaps.to
+        .byUniversalIdentifier;
+    const desiredViewFields =
+      migrationInput.fromToAllFlatEntityMaps.flatViewFieldMaps.to
+        .byUniversalIdentifier;
+    const desiredViewFilters =
+      migrationInput.fromToAllFlatEntityMaps.flatViewFilterMaps.to
+        .byUniversalIdentifier;
+
+    expect(
+      desiredFields[
+        STANDARD_OBJECTS.workflow.fields.campaign.universalIdentifier
+      ],
+    ).toBeDefined();
+    expect(
+      desiredFields[
+        STANDARD_OBJECTS.workflow.fields.sourceWorkflowId.universalIdentifier
+      ],
+    ).toBeDefined();
+    expect(
+      desiredFields[STANDARD_OBJECTS.workflow.fields.name.universalIdentifier],
+    ).toBeUndefined();
+    expect(
+      desiredObjects[STANDARD_OBJECTS.workflow.universalIdentifier],
+    ).toBeDefined();
+    expect(
+      desiredViews[
+        STANDARD_OBJECTS.workflow.views.allWorkflows.universalIdentifier
+      ],
+    ).toBeDefined();
+    expect(
+      desiredViewFields['9ecf92f8-6702-49bb-a25f-1d6e4ade47d8'],
+    ).toBeDefined();
+    expect(
+      desiredViewFilters['e505cfd8-a195-4b9a-997c-6c8208394a37'],
+    ).toBeDefined();
+  });
   it('provides isolated retained standard objects as migration dependencies', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({

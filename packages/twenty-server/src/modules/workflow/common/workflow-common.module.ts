@@ -5,6 +5,7 @@ import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { LogicFunctionModule } from 'src/engine/metadata-modules/logic-function/logic-function.module';
 import { WorkflowQueryHookModule } from 'src/modules/workflow/common/query-hooks/workflow-query-hook.module';
+import { WorkflowCampaignAssignmentService } from 'src/modules/workflow/common/services/workflow-campaign-assignment.service';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 
 @Module({
@@ -16,6 +17,6 @@ import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/work
     FeatureFlagModule,
   ],
   providers: [WorkflowCommonWorkspaceService],
-  exports: [WorkflowCommonWorkspaceService],
+  exports: [WorkflowQueryHookModule, WorkflowCommonWorkspaceService],
 })
 export class WorkflowCommonModule {}

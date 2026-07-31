@@ -1,13 +1,25 @@
 import { type CreateOneResolverArgs } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { WorkflowCreateOnePreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-create-one.pre-query.hook';
+import { WorkflowCampaignAssignmentService } from 'src/modules/workflow/common/services/workflow-campaign-assignment.service';
 import {
   type WorkflowWorkspaceEntity,
   WorkflowStatus,
 } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 
 describe('WorkflowCreateOnePreQueryHook', () => {
-  const hook = new WorkflowCreateOnePreQueryHook();
+  const workflowCampaignAssignmentService = {
+    prepareCreateOne: jest.fn(
+      async (
+        _authContext: WorkspaceAuthContext,
+        _objectName: string,
+        payload: CreateOneResolverArgs<WorkflowWorkspaceEntity>,
+      ) => payload,
+    ),
+  } as unknown as WorkflowCampaignAssignmentService;
+  const hook = new WorkflowCreateOnePreQueryHook(
+    workflowCampaignAssignmentService,
+  );
   const authContext = {} as WorkspaceAuthContext;
   const objectName = 'workflow';
 

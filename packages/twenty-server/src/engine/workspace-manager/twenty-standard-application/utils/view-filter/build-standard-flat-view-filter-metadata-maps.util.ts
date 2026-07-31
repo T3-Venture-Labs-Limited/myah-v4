@@ -5,6 +5,7 @@ import { type FlatViewFilter } from 'src/engine/metadata-modules/flat-view-filte
 import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
 import { computeMyahViewFilters } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-filter/compute-myah-view-filters.util';
 import { computeStandardTaskViewFilters } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-filter/compute-standard-task-view-filters.util';
+import { computeStandardWorkflowViewFilters } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-filter/compute-standard-workflow-view-filters.util';
 import { type CreateStandardViewFilterArgs } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-filter/create-standard-view-filter-flat-metadata.util';
 
 type StandardViewFilterBuilder<P extends AllStandardObjectName> = (
@@ -13,6 +14,7 @@ type StandardViewFilterBuilder<P extends AllStandardObjectName> = (
 
 const STANDARD_FLAT_VIEW_FILTER_METADATA_BUILDERS_BY_OBJECT_NAME = {
   task: computeStandardTaskViewFilters,
+  workflow: computeStandardWorkflowViewFilters,
   brandBrainUpdateProposal: computeMyahViewFilters,
   creator: computeMyahViewFilters,
   campaignCreator: computeMyahViewFilters,

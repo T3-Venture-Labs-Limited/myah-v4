@@ -58,6 +58,11 @@ type CopySourceParams = Identifier & {
   toBuiltHandlerPath: string;
 };
 
+type DeleteCopiedResourcesParams = Identifier & {
+  sourceHandlerPath: string;
+  builtHandlerPath: string;
+};
+
 @Injectable()
 export class LogicFunctionResourceService {
   constructor(private readonly fileStorageService: FileStorageService) {}
@@ -212,46 +217,99 @@ export class LogicFunctionResourceService {
     workspaceId,
     applicationUniversalIdentifier,
   }: CopySourceParams): Promise<void> {
-    await this.fileStorageService.copy({
-      from: {
-        workspaceId,
-        applicationUniversalIdentifier,
-        fileFolder: FileFolder.Source,
-        resourcePath: fromSourceHandlerPath,
-      },
-      to: {
-        workspaceId,
-        applicationUniversalIdentifier,
-        fileFolder: FileFolder.Source,
-        resourcePath: toSourceHandlerPath,
-      },
-    });
+    try {
+      await this.fileStorageService.copy({
+        from: {
+          workspaceId,
+          applicationUniversalIdentifier,
+          fileFolder: FileFolder.Source,
+          resourcePath: fromSourceHandlerPath,
+        },
+        to: {
+          workspaceId,
+          applicationUniversalIdentifier,
+          fileFolder: FileFolder.Source,
+          resourcePath: toSourceHandlerPath,
+        },
+      });
 
-    const builtFileExists = await this.fileStorageService.checkFileExists({
-      workspaceId,
-      applicationUniversalIdentifier,
-      fileFolder: FileFolder.BuiltLogicFunction,
-      resourcePath: fromBuiltHandlerPath,
-    });
-
-    if (!builtFileExists) {
-      return;
-    }
-
-    await this.fileStorageService.copy({
-      from: {
+      const builtFileExists = await this.fileStorageService.checkFileExists({
         workspaceId,
         applicationUniversalIdentifier,
         fileFolder: FileFolder.BuiltLogicFunction,
         resourcePath: fromBuiltHandlerPath,
-      },
-      to: {
+      });
+
+      if (!builtFileExists) {
+        return;
+      }
+
+      await this.fileStorageService.copy({
+        from: {
+          workspaceId,
+          applicationUniversalIdentifier,
+          fileFolder: FileFolder.BuiltLogicFunction,
+          resourcePath: fromBuiltHandlerPath,
+        },
+        to: {
+          workspaceId,
+          applicationUniversalIdentifier,
+          fileFolder: FileFolder.BuiltLogicFunction,
+          resourcePath: toBuiltHandlerPath,
+        },
+      });
+    } catch (error) {
+      await this.deleteCopiedResources({
         workspaceId,
         applicationUniversalIdentifier,
+        sourceHandlerPath: toSourceHandlerPath,
+        builtHandlerPath: toBuiltHandlerPath,
+      });
+
+      throw error;
+    }
+  }
+
+  async deleteCopiedResources({
+    workspaceId,
+    applicationUniversalIdentifier,
+    sourceHandlerPath,
+    builtHandlerPath,
+  }: DeleteCopiedResourcesParams): Promise<void> {
+    const deleteResourceIfPresent = async ({
+      fileFolder,
+      resourcePath,
+    }: {
+      fileFolder: FileFolder;
+      resourcePath: string;
+    }) => {
+      const exists = await this.fileStorageService.checkFileExists({
+        workspaceId,
+        applicationUniversalIdentifier,
+        fileFolder,
+        resourcePath,
+      });
+
+      if (exists) {
+        await this.fileStorageService.deleteFile({
+          workspaceId,
+          applicationUniversalIdentifier,
+          fileFolder,
+          resourcePath,
+        });
+      }
+    };
+
+    await Promise.all([
+      deleteResourceIfPresent({
+        fileFolder: FileFolder.Source,
+        resourcePath: sourceHandlerPath,
+      }),
+      deleteResourceIfPresent({
         fileFolder: FileFolder.BuiltLogicFunction,
-        resourcePath: toBuiltHandlerPath,
-      },
-    });
+        resourcePath: builtHandlerPath,
+      }),
+    ]);
   }
 
   async copyDependenciesInMemory({

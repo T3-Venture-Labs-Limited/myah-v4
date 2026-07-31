@@ -3,7 +3,10 @@ import { Command } from 'nest-commander';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { In, type DataSource } from 'typeorm';
 
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import {
+  MYAH_STANDARD_OBJECTS,
+  STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 
@@ -36,6 +39,11 @@ import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspa
 const MYAH_ROLE_UNIVERSAL_IDENTIFIERS = new Set<string>([
   STANDARD_ROLE.brandBrainAdmin.universalIdentifier,
   STANDARD_ROLE.creatorOpsDefault.universalIdentifier,
+]);
+
+const MYAH_NATIVE_WORKFLOW_FIELD_UNIVERSAL_IDENTIFIERS = new Set<string>([
+  STANDARD_OBJECTS.workflow.fields.campaign.universalIdentifier,
+  STANDARD_OBJECTS.workflow.fields.sourceWorkflowId.universalIdentifier,
 ]);
 
 const LEGACY_MYAH_APPLICATION_UNIVERSAL_IDENTIFIERS = [
@@ -261,7 +269,12 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       return hasMyahEndpoint && hasAvailableFieldEndpoints(field);
     };
     const fieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardFields.filter(shouldIncludeField),
+      standardFields.filter(
+        (field) =>
+          MYAH_NATIVE_WORKFLOW_FIELD_UNIVERSAL_IDENTIFIERS.has(
+            field.universalIdentifier,
+          ) || shouldIncludeField(field),
+      ),
     );
     const standardIndexes = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatIndexMaps.byUniversalIdentifier,

@@ -3,13 +3,18 @@ import { type CreateManyResolverArgs } from 'src/engine/api/graphql/workspace-re
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { WorkflowCampaignAssignmentService } from 'src/modules/workflow/common/services/workflow-campaign-assignment.service';
 import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 
 @WorkspaceQueryHook(`workflow.createMany`)
 export class WorkflowCreateManyPreQueryHook implements WorkspacePreQueryHookInstance {
+  constructor(
+    private readonly workflowCampaignAssignmentService: WorkflowCampaignAssignmentService,
+  ) {}
+
   async execute(
-    _authContext: WorkspaceAuthContext,
-    _objectName: string,
+    authContext: WorkspaceAuthContext,
+    objectName: string,
     payload: CreateManyResolverArgs<WorkflowWorkspaceEntity>,
   ): Promise<CreateManyResolverArgs<WorkflowWorkspaceEntity>> {
     const sanitizedData = payload.data.map((workflow) => {
@@ -17,10 +22,19 @@ export class WorkflowCreateManyPreQueryHook implements WorkspacePreQueryHookInst
 
       return workflowWithoutStatuses as WorkflowWorkspaceEntity;
     });
+    const preparedPayloads = await Promise.all(
+      sanitizedData.map((data) =>
+        this.workflowCampaignAssignmentService.prepareCreateOne(
+          authContext,
+          objectName,
+          { data, upsert: payload.upsert },
+        ),
+      ),
+    );
 
     return {
       ...payload,
-      data: sanitizedData,
+      data: preparedPayloads.map(({ data }) => data),
     };
   }
 }

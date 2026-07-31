@@ -9,6 +9,7 @@ import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata
 import { LogicFunctionModule } from 'src/engine/metadata-modules/logic-function/logic-function.module';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
+import { TwentyORMModule } from 'src/engine/twenty-orm/twenty-orm.module';
 import { CodeStepBuildModule } from 'src/modules/workflow/workflow-builder/workflow-version-step/code-step/code-step-build.module';
 import { WorkflowCreateManyPostQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-create-many.post-query.hook';
 import { WorkflowCreateManyPreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-create-many.pre-query.hook';
@@ -36,6 +37,7 @@ import { WorkflowVersionDeleteManyPreQueryHook } from 'src/modules/workflow/comm
 import { WorkflowVersionDeleteOnePreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-version-delete-one.pre-query.hook';
 import { WorkflowVersionUpdateManyPreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-version-update-many.pre-query.hook';
 import { WorkflowVersionUpdateOnePreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-version-update-one.pre-query.hook';
+import { WorkflowCampaignAssignmentService } from 'src/modules/workflow/common/services/workflow-campaign-assignment.service';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 import { WorkflowVersionValidationWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-version-validation.workspace-service';
 
@@ -46,11 +48,13 @@ import { WorkflowVersionValidationWorkspaceService } from 'src/modules/workflow/
     RecordPositionModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
     ObjectMetadataModule,
+    TwentyORMModule,
     CodeStepBuildModule,
     CommandMenuItemModule,
     FeatureFlagModule,
   ],
   providers: [
+    WorkflowCampaignAssignmentService,
     WorkflowCreateOnePreQueryHook,
     WorkflowCreateManyPreQueryHook,
     WorkflowUpdateOnePreQueryHook,
@@ -80,5 +84,6 @@ import { WorkflowVersionValidationWorkspaceService } from 'src/modules/workflow/
     WorkflowDestroyOnePreQueryHook,
     WorkflowDestroyManyPreQueryHook,
   ],
+  exports: [WorkflowCampaignAssignmentService],
 })
 export class WorkflowQueryHookModule {}
