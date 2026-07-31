@@ -19,6 +19,9 @@ const isAcceptedProviderOutcomeCode = (
 ): code is AcceptedProviderOutcome['code'] =>
   Object.prototype.hasOwnProperty.call(SAFE_PROVIDER_OUTCOME_CODES, code);
 
+const isUnsafeProviderIdentifier = (value: string): boolean =>
+  value.length === 0 || value.length > 998 || /[\r\n]/.test(value);
+
 @Injectable()
 export class ActionReceiptRedactionService {
   toAcceptedProviderOutcome(
@@ -28,9 +31,28 @@ export class ActionReceiptRedactionService {
       throw new Error('Unsafe provider outcome');
     }
 
+    for (const [name, value] of [
+      ['message', input.providerMessageId],
+      ['external message', input.providerExternalMessageId],
+      ['thread', input.providerThreadExternalId],
+    ] as const) {
+      if (value !== undefined && isUnsafeProviderIdentifier(value)) {
+        throw new Error(`Unsafe provider ${name} id`);
+      }
+    }
+
     return {
       code: input.code,
       acceptedAt: input.acceptedAt,
+      ...(input.providerMessageId === undefined
+        ? {}
+        : { providerMessageId: input.providerMessageId }),
+      ...(input.providerExternalMessageId === undefined
+        ? {}
+        : { providerExternalMessageId: input.providerExternalMessageId }),
+      ...(input.providerThreadExternalId === undefined
+        ? {}
+        : { providerThreadExternalId: input.providerThreadExternalId }),
     };
   }
 

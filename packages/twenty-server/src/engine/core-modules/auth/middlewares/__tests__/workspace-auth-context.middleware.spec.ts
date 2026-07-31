@@ -77,7 +77,7 @@ describe('WorkspaceAuthContextMiddleware', () => {
     );
   });
 
-  it('should create a user auth context when both application and user are present', () => {
+  it('should preserve the initiating user in an application auth context', () => {
     const req = buildRequest({
       application: mockApplication,
       user: mockUser,
@@ -95,7 +95,8 @@ describe('WorkspaceAuthContextMiddleware', () => {
 
     expect(capturedContext).toEqual(
       expect.objectContaining({
-        type: 'user',
+        type: 'application',
+        application: mockApplication,
         user: mockUser,
         userWorkspaceId: 'user-workspace-id',
         workspaceMemberId: 'workspace-member-id',

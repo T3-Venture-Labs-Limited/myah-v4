@@ -1427,6 +1427,151 @@ export interface ActionExecutionReceipt {
     __typename: 'ActionExecutionReceipt'
 }
 
+export interface VerificationRecord {
+    type: Scalars['String']
+    key: Scalars['String']
+    value: Scalars['String']
+    priority?: Scalars['Float']
+    __typename: 'VerificationRecord'
+}
+
+export interface EmailingDomain {
+    id: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    domain: Scalars['String']
+    status: EmailingDomainStatus
+    verificationRecords?: VerificationRecord[]
+    verifiedAt?: Scalars['DateTime']
+    __typename: 'EmailingDomain'
+}
+
+export type EmailingDomainStatus = 'PENDING' | 'VERIFIED' | 'FAILED' | 'TEMPORARY_FAILURE'
+
+export interface PublicConnectionParametersOutput {
+    host: Scalars['String']
+    port: Scalars['Float']
+    username?: Scalars['String']
+    connectionSecurity?: EmailConnectionSecurity
+    __typename: 'PublicConnectionParametersOutput'
+}
+
+export type EmailConnectionSecurity = 'NONE' | 'STARTTLS' | 'SSL_TLS'
+
+export interface PublicImapSmtpCaldavConnectionParameters {
+    IMAP?: PublicConnectionParametersOutput
+    SMTP?: PublicConnectionParametersOutput
+    CALDAV?: PublicConnectionParametersOutput
+    __typename: 'PublicImapSmtpCaldavConnectionParameters'
+}
+
+export interface ConnectedAccountPublicDTO {
+    id: Scalars['UUID']
+    handle: Scalars['String']
+    provider: Scalars['String']
+    lastCredentialsRefreshedAt?: Scalars['DateTime']
+    authFailedAt?: Scalars['DateTime']
+    archivedAt?: Scalars['DateTime']
+    handleAliases?: Scalars['String'][]
+    scopes?: Scalars['String'][]
+    lastSignedInAt?: Scalars['DateTime']
+    userWorkspaceId: Scalars['UUID']
+    connectionProviderId?: Scalars['UUID']
+    applicationId?: Scalars['UUID']
+    name?: Scalars['String']
+    visibility: Scalars['String']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    connectionParameters?: PublicImapSmtpCaldavConnectionParameters
+    __typename: 'ConnectedAccountPublicDTO'
+}
+
+export interface MessageChannel {
+    id: Scalars['UUID']
+    visibility: MessageChannelVisibility
+    handle: Scalars['String']
+    type: MessageChannelType
+    isContactAutoCreationEnabled: Scalars['Boolean']
+    contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy
+    messageFolderImportPolicy: MessageFolderImportPolicy
+    excludeNonProfessionalEmails: Scalars['Boolean']
+    excludeGroupEmails: Scalars['Boolean']
+    pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction
+    isSyncEnabled: Scalars['Boolean']
+    syncedAt?: Scalars['DateTime']
+    syncStatus: MessageChannelSyncStatus
+    syncStage: MessageChannelSyncStage
+    syncStageStartedAt?: Scalars['DateTime']
+    throttleFailureCount: Scalars['Float']
+    throttleRetryAfter?: Scalars['DateTime']
+    connectedAccountId: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    connectedAccount?: ConnectedAccountPublicDTO
+    __typename: 'MessageChannel'
+}
+
+export type MessageChannelVisibility = 'METADATA' | 'SUBJECT' | 'SHARE_EVERYTHING'
+
+export type MessageChannelType = 'EMAIL' | 'SMS' | 'EMAIL_GROUP'
+
+export type MessageChannelContactAutoCreationPolicy = 'SENT_AND_RECEIVED' | 'SENT' | 'NONE'
+
+export type MessageFolderImportPolicy = 'ALL_FOLDERS' | 'SELECTED_FOLDERS'
+
+export type MessageChannelPendingGroupEmailsAction = 'GROUP_EMAILS_DELETION' | 'GROUP_EMAILS_IMPORT' | 'NONE'
+
+export type MessageChannelSyncStatus = 'NOT_SYNCED' | 'ONGOING' | 'ACTIVE' | 'FAILED_INSUFFICIENT_PERMISSIONS' | 'FAILED_UNKNOWN'
+
+export type MessageChannelSyncStage = 'PENDING_CONFIGURATION' | 'MESSAGE_LIST_FETCH_PENDING' | 'MESSAGE_LIST_FETCH_SCHEDULED' | 'MESSAGE_LIST_FETCH_ONGOING' | 'MESSAGES_IMPORT_PENDING' | 'MESSAGES_IMPORT_SCHEDULED' | 'MESSAGES_IMPORT_ONGOING' | 'FAILED'
+
+export interface CreateEmailGroupChannelOutput {
+    messageChannel: MessageChannel
+    forwardingAddress: Scalars['String']
+    __typename: 'CreateEmailGroupChannelOutput'
+}
+
+export interface CampaignAudiencePreviewDTO {
+    totalMembers: Scalars['Int']
+    withoutEmail: Scalars['Int']
+    duplicateEmails: Scalars['Int']
+    globallyUnsubscribed: Scalars['Int']
+    topicUnsubscribed: Scalars['Int']
+    sendable: Scalars['Int']
+    __typename: 'CampaignAudiencePreviewDTO'
+}
+
+export interface SendEmailViaDomainOutput {
+    messageId: Scalars['String']
+    __typename: 'SendEmailViaDomainOutput'
+}
+
+export interface CampaignSkippedRecipientsDTO {
+    noEmail: Scalars['Int']
+    deduped: Scalars['Int']
+    overCap: Scalars['Int']
+    __typename: 'CampaignSkippedRecipientsDTO'
+}
+
+export interface SendMessageCampaignOutputDTO {
+    campaignId: Scalars['String']
+    queuedCount: Scalars['Int']
+    skipped: CampaignSkippedRecipientsDTO
+    __typename: 'SendMessageCampaignOutputDTO'
+}
+
+export interface UnsubscribeTopic {
+    id: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    name?: Scalars['String']
+    description?: Scalars['String']
+    visibility: UnsubscribeTopicVisibility
+    __typename: 'UnsubscribeTopic'
+}
+
+export type UnsubscribeTopicVisibility = 'PUBLIC' | 'PRIVATE'
+
 export interface FeatureFlag {
     key: FeatureFlagKey
     value: Scalars['Boolean']
@@ -1993,44 +2138,6 @@ export interface LogicFunctionLogs {
     __typename: 'LogicFunctionLogs'
 }
 
-export interface PublicConnectionParametersOutput {
-    host: Scalars['String']
-    port: Scalars['Float']
-    username?: Scalars['String']
-    connectionSecurity?: EmailConnectionSecurity
-    __typename: 'PublicConnectionParametersOutput'
-}
-
-export type EmailConnectionSecurity = 'NONE' | 'STARTTLS' | 'SSL_TLS'
-
-export interface PublicImapSmtpCaldavConnectionParameters {
-    IMAP?: PublicConnectionParametersOutput
-    SMTP?: PublicConnectionParametersOutput
-    CALDAV?: PublicConnectionParametersOutput
-    __typename: 'PublicImapSmtpCaldavConnectionParameters'
-}
-
-export interface ConnectedAccountPublicDTO {
-    id: Scalars['UUID']
-    handle: Scalars['String']
-    provider: Scalars['String']
-    lastCredentialsRefreshedAt?: Scalars['DateTime']
-    authFailedAt?: Scalars['DateTime']
-    archivedAt?: Scalars['DateTime']
-    handleAliases?: Scalars['String'][]
-    scopes?: Scalars['String'][]
-    lastSignedInAt?: Scalars['DateTime']
-    userWorkspaceId: Scalars['UUID']
-    connectionProviderId?: Scalars['UUID']
-    applicationId?: Scalars['UUID']
-    name?: Scalars['String']
-    visibility: Scalars['String']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    connectionParameters?: PublicImapSmtpCaldavConnectionParameters
-    __typename: 'ConnectedAccountPublicDTO'
-}
-
 export interface DeleteTwoFactorAuthenticationMethod {
     /** Boolean that confirms query was dispatched */
     success: Scalars['Boolean']
@@ -2212,113 +2319,6 @@ export interface PublicDomain {
     __typename: 'PublicDomain'
 }
 
-export interface VerificationRecord {
-    type: Scalars['String']
-    key: Scalars['String']
-    value: Scalars['String']
-    priority?: Scalars['Float']
-    __typename: 'VerificationRecord'
-}
-
-export interface EmailingDomain {
-    id: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    domain: Scalars['String']
-    status: EmailingDomainStatus
-    verificationRecords?: VerificationRecord[]
-    verifiedAt?: Scalars['DateTime']
-    __typename: 'EmailingDomain'
-}
-
-export type EmailingDomainStatus = 'PENDING' | 'VERIFIED' | 'FAILED' | 'TEMPORARY_FAILURE'
-
-export interface MessageChannel {
-    id: Scalars['UUID']
-    visibility: MessageChannelVisibility
-    handle: Scalars['String']
-    type: MessageChannelType
-    isContactAutoCreationEnabled: Scalars['Boolean']
-    contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy
-    messageFolderImportPolicy: MessageFolderImportPolicy
-    excludeNonProfessionalEmails: Scalars['Boolean']
-    excludeGroupEmails: Scalars['Boolean']
-    pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction
-    isSyncEnabled: Scalars['Boolean']
-    syncedAt?: Scalars['DateTime']
-    syncStatus: MessageChannelSyncStatus
-    syncStage: MessageChannelSyncStage
-    syncStageStartedAt?: Scalars['DateTime']
-    throttleFailureCount: Scalars['Float']
-    throttleRetryAfter?: Scalars['DateTime']
-    connectedAccountId: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    connectedAccount?: ConnectedAccountPublicDTO
-    __typename: 'MessageChannel'
-}
-
-export type MessageChannelVisibility = 'METADATA' | 'SUBJECT' | 'SHARE_EVERYTHING'
-
-export type MessageChannelType = 'EMAIL' | 'SMS' | 'EMAIL_GROUP'
-
-export type MessageChannelContactAutoCreationPolicy = 'SENT_AND_RECEIVED' | 'SENT' | 'NONE'
-
-export type MessageFolderImportPolicy = 'ALL_FOLDERS' | 'SELECTED_FOLDERS'
-
-export type MessageChannelPendingGroupEmailsAction = 'GROUP_EMAILS_DELETION' | 'GROUP_EMAILS_IMPORT' | 'NONE'
-
-export type MessageChannelSyncStatus = 'NOT_SYNCED' | 'ONGOING' | 'ACTIVE' | 'FAILED_INSUFFICIENT_PERMISSIONS' | 'FAILED_UNKNOWN'
-
-export type MessageChannelSyncStage = 'PENDING_CONFIGURATION' | 'MESSAGE_LIST_FETCH_PENDING' | 'MESSAGE_LIST_FETCH_SCHEDULED' | 'MESSAGE_LIST_FETCH_ONGOING' | 'MESSAGES_IMPORT_PENDING' | 'MESSAGES_IMPORT_SCHEDULED' | 'MESSAGES_IMPORT_ONGOING' | 'FAILED'
-
-export interface CreateEmailGroupChannelOutput {
-    messageChannel: MessageChannel
-    forwardingAddress: Scalars['String']
-    __typename: 'CreateEmailGroupChannelOutput'
-}
-
-export interface CampaignAudiencePreviewDTO {
-    totalMembers: Scalars['Int']
-    withoutEmail: Scalars['Int']
-    duplicateEmails: Scalars['Int']
-    globallyUnsubscribed: Scalars['Int']
-    topicUnsubscribed: Scalars['Int']
-    sendable: Scalars['Int']
-    __typename: 'CampaignAudiencePreviewDTO'
-}
-
-export interface SendEmailViaDomainOutput {
-    messageId: Scalars['String']
-    __typename: 'SendEmailViaDomainOutput'
-}
-
-export interface CampaignSkippedRecipientsDTO {
-    noEmail: Scalars['Int']
-    deduped: Scalars['Int']
-    overCap: Scalars['Int']
-    __typename: 'CampaignSkippedRecipientsDTO'
-}
-
-export interface SendMessageCampaignOutputDTO {
-    campaignId: Scalars['String']
-    queuedCount: Scalars['Int']
-    skipped: CampaignSkippedRecipientsDTO
-    __typename: 'SendMessageCampaignOutputDTO'
-}
-
-export interface UnsubscribeTopic {
-    id: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    name?: Scalars['String']
-    description?: Scalars['String']
-    visibility: UnsubscribeTopicVisibility
-    __typename: 'UnsubscribeTopic'
-}
-
-export type UnsubscribeTopicVisibility = 'PUBLIC' | 'PRIVATE'
-
 export interface AutocompleteResult {
     text: Scalars['String']
     placeId: Scalars['String']
@@ -2369,6 +2369,34 @@ export interface ImapSmtpCaldavConnectionSuccess {
     success: Scalars['Boolean']
     connectedAccountId: Scalars['String']
     __typename: 'ImapSmtpCaldavConnectionSuccess'
+}
+
+export interface WorkspaceMailboxConnectionStatus {
+    connectedAccountId: Scalars['UUID']
+    errorCode?: Scalars['String']
+    errorMessage?: Scalars['String']
+    lastSafeOperation: Scalars['String']
+    maskedHandle: Scalars['String']
+    messageChannelId: Scalars['UUID']
+    state: Scalars['String']
+    syncStage: Scalars['String']
+    syncStatus: Scalars['String']
+    updatedAt: Scalars['DateTime']
+    __typename: 'WorkspaceMailboxConnectionStatus'
+}
+
+export interface WorkspaceMailboxConnectionResult {
+    connectedAccountId: Scalars['UUID']
+    messageChannelId: Scalars['UUID']
+    status: WorkspaceMailboxConnectionStatus
+    __typename: 'WorkspaceMailboxConnectionResult'
+}
+
+export interface RevokeWorkspaceMailboxResult {
+    connectedAccountId: Scalars['UUID']
+    revoked: Scalars['Boolean']
+    state: Scalars['String']
+    __typename: 'RevokeWorkspaceMailboxResult'
 }
 
 export interface AgentMessagePart {
@@ -2744,68 +2772,24 @@ export interface MinimalMetadata {
 }
 
 export interface Query {
+    getWorkspaceMailboxStatus: WorkspaceMailboxConnectionStatus
     navigationMenuItems: NavigationMenuItem[]
     navigationMenuItem?: NavigationMenuItem
     enterprisePortalSession?: Scalars['String']
     enterpriseCheckoutSession?: Scalars['String']
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTO
-    getViewFilterGroups: ViewFilterGroup[]
-    getViewFilterGroup?: ViewFilterGroup
-    getViewFilters: ViewFilter[]
-    getViewFilter?: ViewFilter
-    getViews: View[]
-    getView?: View
-    getViewSorts: ViewSort[]
-    getViewSort?: ViewSort
-    getViewFields: ViewField[]
-    getViewField?: ViewField
-    getViewFieldGroups: ViewFieldGroup[]
-    getViewFieldGroup?: ViewFieldGroup
-    apiKeys: ApiKey[]
-    apiKey?: ApiKey
-    getInviteSuggestions: InviteSuggestion[]
+    myConnectedAccounts: ConnectedAccountPublicDTO[]
     applicationConnectionProviders: ApplicationConnectionProvider[]
-    managedProviderBillingStatus: ManagedProviderBillingStatus
-    billingPortalSession: BillingSession
-    listPlans: BillingPlan[]
-    getResourceCreditUsage: BillingResourceCreditUsage[]
-    findWorkspaceInvitations: WorkspaceInvitation[]
-    getApprovedAccessDomains: ApprovedAccessDomain[]
-    getPageLayoutTabs: PageLayoutTab[]
-    getPageLayoutTab: PageLayoutTab
-    getPageLayouts: PageLayout[]
-    getPageLayout?: PageLayout
-    getPageLayoutWidgets: PageLayoutWidget[]
-    getPageLayoutWidget: PageLayoutWidget
-    findManyAgents: Agent[]
-    findOneAgent: Agent
-    objectRecordCounts: ObjectRecordCount[]
-    object: Object
-    objects: ObjectConnection
-    index: Index
-    indexMetadatas: IndexConnection
-    findOneLogicFunction: LogicFunction
-    findManyLogicFunctions: LogicFunction[]
-    getAvailablePackages: Scalars['JSON']
-    getLogicFunctionSourceCode?: Scalars['String']
-    commandMenuItems: CommandMenuItem[]
-    commandMenuItem?: CommandMenuItem
-    frontComponents: FrontComponent[]
-    frontComponent?: FrontComponent
-    getToolIndex: ToolIndexEntry[]
-    getToolInputSchema?: Scalars['JSON']
-    webhooks: Webhook[]
-    webhook?: Webhook
-    field: Field
-    fields: FieldConnection
-    getViewGroups: ViewGroup[]
-    getViewGroup?: ViewGroup
     checkUserExists: CheckUserExist
     checkWorkspaceInviteHashIsValid: WorkspaceInviteHashValid
     findWorkspaceFromInviteHash: Workspace
     checkWorkspaceSubdomainAvailability: SubdomainAvailabilityDTO
     getWorkspaceCreationDefaults: WorkspaceCreationDefaultsDTO
     validatePasswordResetToken: ValidatePasswordResetToken
+    managedProviderBillingStatus: ManagedProviderBillingStatus
+    billingPortalSession: BillingSession
+    listPlans: BillingPlan[]
+    getResourceCreditUsage: BillingResourceCreditUsage[]
     appConnections: AppConnection[]
     appConnection: AppConnection
     findApplicationRegistrationByClientId?: PublicApplicationRegistration
@@ -2815,17 +2799,63 @@ export interface Query {
     findApplicationRegistrationStats: ApplicationRegistrationStats
     findApplicationRegistrationVariables: ApplicationRegistrationVariableDTO[]
     applicationRegistrationTarballUrl?: Scalars['String']
+    field: Field
+    fields: FieldConnection
+    index: Index
+    indexMetadatas: IndexConnection
+    getViewGroups: ViewGroup[]
+    getViewGroup?: ViewGroup
+    getViewFilters: ViewFilter[]
+    getViewFilter?: ViewFilter
+    getViewFields: ViewField[]
+    getViewField?: ViewField
+    getViews: View[]
+    getView?: View
+    getViewSorts: ViewSort[]
+    getViewSort?: ViewSort
+    getViewFieldGroups: ViewFieldGroup[]
+    getViewFieldGroup?: ViewFieldGroup
+    objectRecordCounts: ObjectRecordCount[]
+    object: Object
+    objects: ObjectConnection
+    apiKeys: ApiKey[]
+    apiKey?: ApiKey
     currentUser: User
-    myConnectedAccounts: ConnectedAccountPublicDTO[]
+    getInviteSuggestions: InviteSuggestion[]
+    findWorkspaceInvitations: WorkspaceInvitation[]
+    getApprovedAccessDomains: ApprovedAccessDomain[]
     currentWorkspace: Workspace
     getPublicWorkspaceDataByDomain: PublicWorkspaceData
     getPublicWorkspaceDataById: PublicWorkspaceDataSummary
+    getViewFilterGroups: ViewFilterGroup[]
+    getViewFilterGroup?: ViewFilterGroup
+    getPageLayoutTabs: PageLayoutTab[]
+    getPageLayoutTab: PageLayoutTab
+    getPageLayouts: PageLayout[]
+    getPageLayout?: PageLayout
+    frontComponents: FrontComponent[]
+    frontComponent?: FrontComponent
+    findOneLogicFunction: LogicFunction
+    findManyLogicFunctions: LogicFunction[]
+    getAvailablePackages: Scalars['JSON']
+    getLogicFunctionSourceCode?: Scalars['String']
     findManyApplications: Application[]
     findOneApplication: Application
     findManyMarketplaceApps: MarketplaceApp[]
     findMarketplaceAppDetail: MarketplaceAppDetail
+    findManyAgents: Agent[]
+    findOneAgent: Agent
     getRoles: Role[]
     getSSOIdentityProviders: FindAvailableSSOIDP[]
+    getConnectedImapSmtpCaldavAccount: ConnectedImapSmtpCaldavAccount
+    getPageLayoutWidgets: PageLayoutWidget[]
+    getPageLayoutWidget: PageLayoutWidget
+    commandMenuItems: CommandMenuItem[]
+    commandMenuItem?: CommandMenuItem
+    getToolIndex: ToolIndexEntry[]
+    getToolInputSchema?: Scalars['JSON']
+    webhooks: Webhook[]
+    webhook?: Webhook
     previewMessageCampaignAudience: CampaignAudiencePreviewDTO
     unsubscribeTopics: UnsubscribeTopic[]
     unsubscribePagePreviewUrl: Scalars['String']
@@ -2849,7 +2879,6 @@ export interface Query {
     pieChartData: PieChartData
     lineChartData: LineChartData
     barChartData: BarChartData
-    getConnectedImapSmtpCaldavAccount: ConnectedImapSmtpCaldavAccount
     getAutoCompleteAddress: AutocompleteResult[]
     getAddressDetails: PlaceDetailsResult
     getUsageAnalytics: UsageAnalytics
@@ -2862,6 +2891,10 @@ export type EventLogTable = 'WORKSPACE_EVENT' | 'PAGEVIEW' | 'OBJECT_EVENT' | 'U
 export type UsageOperationType = 'AI_CHAT_TOKEN' | 'AI_WORKFLOW_TOKEN' | 'WORKFLOW_EXECUTION' | 'CODE_EXECUTION' | 'WEB_SEARCH' | 'CALL_RECORDING' | 'EMAIL_SEND'
 
 export interface Mutation {
+    connectWorkspaceMailbox: WorkspaceMailboxConnectionResult
+    rotateWorkspaceMailbox: WorkspaceMailboxConnectionResult
+    reconnectWorkspaceMailbox: WorkspaceMailboxConnectionResult
+    revokeWorkspaceMailbox: RevokeWorkspaceMailboxResult
     addQueryToEventStream: Scalars['Boolean']
     removeQueryFromEventStream: Scalars['Boolean']
     createManyNavigationMenuItems: NavigationMenuItem[]
@@ -2881,103 +2914,8 @@ export interface Mutation {
     uploadWorkspaceMemberProfilePicture: FileWithSignedUrl
     uploadFilesFieldFile: FileWithSignedUrl
     uploadFilesFieldFileByUniversalIdentifier: FileWithSignedUrl
-    createViewFilterGroup: ViewFilterGroup
-    updateViewFilterGroup: ViewFilterGroup
-    deleteViewFilterGroup: Scalars['Boolean']
-    destroyViewFilterGroup: Scalars['Boolean']
-    createViewFilter: ViewFilter
-    updateViewFilter: ViewFilter
-    deleteViewFilter: ViewFilter
-    destroyViewFilter: ViewFilter
-    createView: View
-    updateView: View
-    deleteView: Scalars['Boolean']
-    destroyView: Scalars['Boolean']
-    upsertViewWidget: View
-    createViewSort: ViewSort
-    updateViewSort: ViewSort
-    deleteViewSort: Scalars['Boolean']
-    destroyViewSort: Scalars['Boolean']
-    updateViewField: ViewField
-    createViewField: ViewField
-    createManyViewFields: ViewField[]
-    deleteViewField: ViewField
-    destroyViewField: ViewField
-    updateViewFieldGroup: ViewFieldGroup
-    createViewFieldGroup: ViewFieldGroup
-    createManyViewFieldGroups: ViewFieldGroup[]
-    deleteViewFieldGroup: ViewFieldGroup
-    destroyViewFieldGroup: ViewFieldGroup
-    upsertFieldsWidget: View
-    createApiKey: ApiKey
-    updateApiKey?: ApiKey
-    revokeApiKey?: ApiKey
-    assignRoleToApiKey: Scalars['Boolean']
-    skipSyncEmailOnboardingStep: OnboardingStepSuccess
-    skipBookOnboardingStep: OnboardingStepSuccess
-    triggerInstallAppsOnboardingStep: OnboardingStepSuccess
+    deleteConnectedAccount: ConnectedAccountPublicDTO
     updateOneApplicationVariable: Scalars['Boolean']
-    checkoutSession: BillingSession
-    createSubscriptionPaymentIntent: BillingPaymentIntent
-    createBillingPaymentMethodSetupIntent: BillingPaymentIntent
-    switchSubscriptionInterval: BillingUpdate
-    switchBillingPlan: BillingUpdate
-    cancelSwitchBillingPlan: BillingUpdate
-    cancelSwitchBillingInterval: BillingUpdate
-    setResourceCreditSubscriptionPrice: BillingUpdate
-    endSubscriptionTrialPeriod: BillingEndTrialPeriod
-    cancelSwitchResourceCreditPrice: BillingUpdate
-    deleteWorkspaceInvitation: Scalars['String']
-    resendWorkspaceInvitation: SendInvitations
-    sendInvitations: SendInvitations
-    createApprovedAccessDomain: ApprovedAccessDomain
-    deleteApprovedAccessDomain: Scalars['Boolean']
-    validateApprovedAccessDomain: ApprovedAccessDomain
-    createPageLayoutTab: PageLayoutTab
-    updatePageLayoutTab: PageLayoutTab
-    destroyPageLayoutTab: Scalars['Boolean']
-    createPageLayout: PageLayout
-    updatePageLayout: PageLayout
-    destroyPageLayout: Scalars['Boolean']
-    updatePageLayoutWithTabsAndWidgets: PageLayout
-    resetPageLayoutToDefault: PageLayout
-    resetPageLayoutWidgetToDefault: PageLayoutWidget
-    resetPageLayoutTabToDefault: PageLayoutTab
-    createPageLayoutWidget: PageLayoutWidget
-    updatePageLayoutWidget: PageLayoutWidget
-    destroyPageLayoutWidget: Scalars['Boolean']
-    createOneAgent: Agent
-    updateOneAgent: Agent
-    deleteOneAgent: Agent
-    createOneObject: Object
-    deleteOneObject: Object
-    updateOneObject: Object
-    createOneIndex: Index
-    deleteOneIndex: Index
-    deleteOneLogicFunction: LogicFunction
-    createOneLogicFunction: LogicFunction
-    executeOneLogicFunction: LogicFunctionExecutionResult
-    updateOneLogicFunction: Scalars['Boolean']
-    createCommandMenuItem: CommandMenuItem
-    updateCommandMenuItem: CommandMenuItem
-    resetCommandMenuItem: CommandMenuItem
-    deleteCommandMenuItem: CommandMenuItem
-    createFrontComponent: FrontComponent
-    updateFrontComponent: FrontComponent
-    deleteFrontComponent: FrontComponent
-    createWebhook: Webhook
-    updateWebhook: Webhook
-    deleteWebhook: Webhook
-    createOneField: Field
-    updateOneField: Field
-    deleteOneField: Field
-    createViewGroup: ViewGroup
-    createManyViewGroups: ViewGroup[]
-    updateViewGroup: ViewGroup
-    updateManyViewGroups: ViewGroup[]
-    deleteViewGroup: ViewGroup
-    destroyViewGroup: ViewGroup
-    runAgent: RunAgentResult
     getAuthorizationUrlForSSO: GetAuthorizationUrlForSSO
     getLoginTokenFromCredentials: LoginToken
     signIn: AvailableWorkspacesAndAccessTokens
@@ -2996,6 +2934,16 @@ export interface Mutation {
     generatePlaygroundToken: AuthToken
     emailPasswordResetLink: EmailPasswordResetLink
     updatePasswordViaResetToken: InvalidatePassword
+    checkoutSession: BillingSession
+    createSubscriptionPaymentIntent: BillingPaymentIntent
+    createBillingPaymentMethodSetupIntent: BillingPaymentIntent
+    switchSubscriptionInterval: BillingUpdate
+    switchBillingPlan: BillingUpdate
+    cancelSwitchBillingPlan: BillingUpdate
+    cancelSwitchBillingInterval: BillingUpdate
+    setResourceCreditSubscriptionPrice: BillingUpdate
+    endSubscriptionTrialPeriod: BillingEndTrialPeriod
+    cancelSwitchResourceCreditPrice: BillingUpdate
     createApplicationRegistration: CreateApplicationRegistration
     updateApplicationRegistration: ApplicationRegistration
     deleteApplicationRegistration: Scalars['Boolean']
@@ -3005,6 +2953,48 @@ export interface Mutation {
     deleteApplicationRegistrationVariable: Scalars['Boolean']
     uploadAppTarball: ApplicationRegistration
     transferApplicationRegistrationOwnership: ApplicationRegistration
+    createOneField: Field
+    updateOneField: Field
+    deleteOneField: Field
+    createOneIndex: Index
+    deleteOneIndex: Index
+    createViewGroup: ViewGroup
+    createManyViewGroups: ViewGroup[]
+    updateViewGroup: ViewGroup
+    updateManyViewGroups: ViewGroup[]
+    deleteViewGroup: ViewGroup
+    destroyViewGroup: ViewGroup
+    createViewFilter: ViewFilter
+    updateViewFilter: ViewFilter
+    deleteViewFilter: ViewFilter
+    destroyViewFilter: ViewFilter
+    updateViewField: ViewField
+    createViewField: ViewField
+    createManyViewFields: ViewField[]
+    deleteViewField: ViewField
+    destroyViewField: ViewField
+    createView: View
+    updateView: View
+    deleteView: Scalars['Boolean']
+    destroyView: Scalars['Boolean']
+    upsertViewWidget: View
+    createViewSort: ViewSort
+    updateViewSort: ViewSort
+    deleteViewSort: Scalars['Boolean']
+    destroyViewSort: Scalars['Boolean']
+    updateViewFieldGroup: ViewFieldGroup
+    createViewFieldGroup: ViewFieldGroup
+    createManyViewFieldGroups: ViewFieldGroup[]
+    deleteViewFieldGroup: ViewFieldGroup
+    destroyViewFieldGroup: ViewFieldGroup
+    upsertFieldsWidget: View
+    createOneObject: Object
+    deleteOneObject: Object
+    updateOneObject: Object
+    createApiKey: ApiKey
+    updateApiKey?: ApiKey
+    revokeApiKey?: ApiKey
+    assignRoleToApiKey: Scalars['Boolean']
     initiateOTPProvisioning: InitiateTwoFactorAuthenticationProvisioning
     initiateOTPProvisioningForAuthenticatedUser: InitiateTwoFactorAuthenticationProvisioning
     deleteTwoFactorAuthenticationMethod: DeleteTwoFactorAuthenticationMethod
@@ -3014,16 +3004,48 @@ export interface Mutation {
     updateWorkspaceMemberSettings: Scalars['Boolean']
     updateUserEmail: Scalars['Boolean']
     resendEmailVerificationToken: ResendEmailVerificationToken
-    deleteConnectedAccount: ConnectedAccountPublicDTO
+    skipSyncEmailOnboardingStep: OnboardingStepSuccess
+    skipBookOnboardingStep: OnboardingStepSuccess
+    triggerInstallAppsOnboardingStep: OnboardingStepSuccess
+    deleteWorkspaceInvitation: Scalars['String']
+    resendWorkspaceInvitation: SendInvitations
+    sendInvitations: SendInvitations
+    createApprovedAccessDomain: ApprovedAccessDomain
+    deleteApprovedAccessDomain: Scalars['Boolean']
+    validateApprovedAccessDomain: ApprovedAccessDomain
     activateWorkspace: Workspace
     updateWorkspace: Workspace
     deleteCurrentWorkspace: Workspace
     checkCustomDomainValidRecords?: DomainValidRecords
+    createViewFilterGroup: ViewFilterGroup
+    updateViewFilterGroup: ViewFilterGroup
+    deleteViewFilterGroup: Scalars['Boolean']
+    destroyViewFilterGroup: Scalars['Boolean']
+    createPageLayoutTab: PageLayoutTab
+    updatePageLayoutTab: PageLayoutTab
+    destroyPageLayoutTab: Scalars['Boolean']
+    createPageLayout: PageLayout
+    updatePageLayout: PageLayout
+    destroyPageLayout: Scalars['Boolean']
+    updatePageLayoutWithTabsAndWidgets: PageLayout
+    resetPageLayoutToDefault: PageLayout
+    resetPageLayoutWidgetToDefault: PageLayoutWidget
+    resetPageLayoutTabToDefault: PageLayoutTab
+    createFrontComponent: FrontComponent
+    updateFrontComponent: FrontComponent
+    deleteFrontComponent: FrontComponent
+    deleteOneLogicFunction: LogicFunction
+    createOneLogicFunction: LogicFunction
+    executeOneLogicFunction: LogicFunctionExecutionResult
+    updateOneLogicFunction: Scalars['Boolean']
     /** @deprecated Use installApplication instead */
     installMarketplaceApp: Scalars['Boolean']
     installApplication: Application
     uninstallApplication: Scalars['Boolean']
     syncMarketplaceCatalog: Scalars['Boolean']
+    createOneAgent: Agent
+    updateOneAgent: Agent
+    deleteOneAgent: Agent
     updateWorkspaceMemberRole: WorkspaceMember
     createOneRole: Role
     updateOneRole: Role
@@ -3038,6 +3060,18 @@ export interface Mutation {
     createSAMLIdentityProvider: SetupSso
     deleteSSOIdentityProvider: DeleteSso
     editSSOIdentityProvider: EditSso
+    saveImapSmtpCaldavAccount: ImapSmtpCaldavConnectionSuccess
+    createPageLayoutWidget: PageLayoutWidget
+    updatePageLayoutWidget: PageLayoutWidget
+    destroyPageLayoutWidget: Scalars['Boolean']
+    createCommandMenuItem: CommandMenuItem
+    updateCommandMenuItem: CommandMenuItem
+    resetCommandMenuItem: CommandMenuItem
+    deleteCommandMenuItem: CommandMenuItem
+    createWebhook: Webhook
+    updateWebhook: Webhook
+    deleteWebhook: Webhook
+    runAgent: RunAgentResult
     sendEmailViaEmailingDomain: SendEmailViaDomainOutput
     sendMessageCampaign: SendMessageCampaignOutputDTO
     createUnsubscribeTopic: UnsubscribeTopic
@@ -3077,7 +3111,6 @@ export interface Mutation {
     createCalendarEvent: CreateCalendarEventOutput
     sendEmail: SendEmailOutput
     startChannelSync: ChannelSyncSuccess
-    saveImapSmtpCaldavAccount: ImapSmtpCaldavConnectionSuccess
     updateLabPublicFeatureFlag: FeatureFlag
     createPublicDomain: PublicDomain
     deletePublicDomain: Scalars['Boolean']
@@ -3493,7 +3526,7 @@ export interface IndexGenqlSelection{
     indexFieldMetadataList?: IndexFieldGenqlSelection
     objectMetadata?: (IndexObjectMetadataConnectionGenqlSelection & { __args: {
     /** Limit or page results. */
-    paging: CursorPaging, 
+    paging: CursorPaging,
     /** Specify to filter the records returned. */
     filter: ObjectFilter} })
     __typename?: boolean | number
@@ -3547,12 +3580,12 @@ export interface ObjectGenqlSelection{
     searchFieldMetadataList?: SearchFieldGenqlSelection
     fields?: (ObjectFieldsConnectionGenqlSelection & { __args: {
     /** Limit or page results. */
-    paging: CursorPaging, 
+    paging: CursorPaging,
     /** Specify to filter the records returned. */
     filter: FieldFilter} })
     indexMetadatas?: (ObjectIndexMetadatasConnectionGenqlSelection & { __args: {
     /** Limit or page results. */
-    paging: CursorPaging, 
+    paging: CursorPaging,
     /** Specify to filter the records returned. */
     filter: IndexFilter} })
     __typename?: boolean | number
@@ -4578,6 +4611,143 @@ export interface ActionExecutionReceiptGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface VerificationRecordGenqlSelection{
+    type?: boolean | number
+    key?: boolean | number
+    value?: boolean | number
+    priority?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface EmailingDomainGenqlSelection{
+    id?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    domain?: boolean | number
+    status?: boolean | number
+    verificationRecords?: VerificationRecordGenqlSelection
+    verifiedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface PublicConnectionParametersOutputGenqlSelection{
+    host?: boolean | number
+    port?: boolean | number
+    username?: boolean | number
+    connectionSecurity?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface PublicImapSmtpCaldavConnectionParametersGenqlSelection{
+    IMAP?: PublicConnectionParametersOutputGenqlSelection
+    SMTP?: PublicConnectionParametersOutputGenqlSelection
+    CALDAV?: PublicConnectionParametersOutputGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ConnectedAccountPublicDTOGenqlSelection{
+    id?: boolean | number
+    handle?: boolean | number
+    provider?: boolean | number
+    lastCredentialsRefreshedAt?: boolean | number
+    authFailedAt?: boolean | number
+    archivedAt?: boolean | number
+    handleAliases?: boolean | number
+    scopes?: boolean | number
+    lastSignedInAt?: boolean | number
+    userWorkspaceId?: boolean | number
+    connectionProviderId?: boolean | number
+    applicationId?: boolean | number
+    name?: boolean | number
+    visibility?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    connectionParameters?: PublicImapSmtpCaldavConnectionParametersGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MessageChannelGenqlSelection{
+    id?: boolean | number
+    visibility?: boolean | number
+    handle?: boolean | number
+    type?: boolean | number
+    isContactAutoCreationEnabled?: boolean | number
+    contactAutoCreationPolicy?: boolean | number
+    messageFolderImportPolicy?: boolean | number
+    excludeNonProfessionalEmails?: boolean | number
+    excludeGroupEmails?: boolean | number
+    pendingGroupEmailsAction?: boolean | number
+    isSyncEnabled?: boolean | number
+    syncedAt?: boolean | number
+    syncStatus?: boolean | number
+    syncStage?: boolean | number
+    syncStageStartedAt?: boolean | number
+    throttleFailureCount?: boolean | number
+    throttleRetryAfter?: boolean | number
+    connectedAccountId?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    connectedAccount?: ConnectedAccountPublicDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CreateEmailGroupChannelOutputGenqlSelection{
+    messageChannel?: MessageChannelGenqlSelection
+    forwardingAddress?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignAudiencePreviewDTOGenqlSelection{
+    totalMembers?: boolean | number
+    withoutEmail?: boolean | number
+    duplicateEmails?: boolean | number
+    globallyUnsubscribed?: boolean | number
+    topicUnsubscribed?: boolean | number
+    sendable?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SendEmailViaDomainOutputGenqlSelection{
+    messageId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignSkippedRecipientsDTOGenqlSelection{
+    noEmail?: boolean | number
+    deduped?: boolean | number
+    overCap?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SendMessageCampaignOutputDTOGenqlSelection{
+    campaignId?: boolean | number
+    queuedCount?: boolean | number
+    skipped?: CampaignSkippedRecipientsDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface UnsubscribeTopicGenqlSelection{
+    id?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    name?: boolean | number
+    description?: boolean | number
+    visibility?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface FeatureFlagGenqlSelection{
     key?: boolean | number
     value?: boolean | number
@@ -5187,45 +5357,6 @@ export interface LogicFunctionLogsGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface PublicConnectionParametersOutputGenqlSelection{
-    host?: boolean | number
-    port?: boolean | number
-    username?: boolean | number
-    connectionSecurity?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface PublicImapSmtpCaldavConnectionParametersGenqlSelection{
-    IMAP?: PublicConnectionParametersOutputGenqlSelection
-    SMTP?: PublicConnectionParametersOutputGenqlSelection
-    CALDAV?: PublicConnectionParametersOutputGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ConnectedAccountPublicDTOGenqlSelection{
-    id?: boolean | number
-    handle?: boolean | number
-    provider?: boolean | number
-    lastCredentialsRefreshedAt?: boolean | number
-    authFailedAt?: boolean | number
-    archivedAt?: boolean | number
-    handleAliases?: boolean | number
-    scopes?: boolean | number
-    lastSignedInAt?: boolean | number
-    userWorkspaceId?: boolean | number
-    connectionProviderId?: boolean | number
-    applicationId?: boolean | number
-    name?: boolean | number
-    visibility?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    connectionParameters?: PublicImapSmtpCaldavConnectionParametersGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface DeleteTwoFactorAuthenticationMethodGenqlSelection{
     /** Boolean that confirms query was dispatched */
     success?: boolean | number
@@ -5436,104 +5567,6 @@ export interface PublicDomainGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface VerificationRecordGenqlSelection{
-    type?: boolean | number
-    key?: boolean | number
-    value?: boolean | number
-    priority?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface EmailingDomainGenqlSelection{
-    id?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    domain?: boolean | number
-    status?: boolean | number
-    verificationRecords?: VerificationRecordGenqlSelection
-    verifiedAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface MessageChannelGenqlSelection{
-    id?: boolean | number
-    visibility?: boolean | number
-    handle?: boolean | number
-    type?: boolean | number
-    isContactAutoCreationEnabled?: boolean | number
-    contactAutoCreationPolicy?: boolean | number
-    messageFolderImportPolicy?: boolean | number
-    excludeNonProfessionalEmails?: boolean | number
-    excludeGroupEmails?: boolean | number
-    pendingGroupEmailsAction?: boolean | number
-    isSyncEnabled?: boolean | number
-    syncedAt?: boolean | number
-    syncStatus?: boolean | number
-    syncStage?: boolean | number
-    syncStageStartedAt?: boolean | number
-    throttleFailureCount?: boolean | number
-    throttleRetryAfter?: boolean | number
-    connectedAccountId?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    connectedAccount?: ConnectedAccountPublicDTOGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CreateEmailGroupChannelOutputGenqlSelection{
-    messageChannel?: MessageChannelGenqlSelection
-    forwardingAddress?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignAudiencePreviewDTOGenqlSelection{
-    totalMembers?: boolean | number
-    withoutEmail?: boolean | number
-    duplicateEmails?: boolean | number
-    globallyUnsubscribed?: boolean | number
-    topicUnsubscribed?: boolean | number
-    sendable?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SendEmailViaDomainOutputGenqlSelection{
-    messageId?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignSkippedRecipientsDTOGenqlSelection{
-    noEmail?: boolean | number
-    deduped?: boolean | number
-    overCap?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SendMessageCampaignOutputDTOGenqlSelection{
-    campaignId?: boolean | number
-    queuedCount?: boolean | number
-    skipped?: CampaignSkippedRecipientsDTOGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface UnsubscribeTopicGenqlSelection{
-    id?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    name?: boolean | number
-    description?: boolean | number
-    visibility?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface AutocompleteResultGenqlSelection{
     text?: boolean | number
     placeId?: boolean | number
@@ -5589,6 +5622,37 @@ export interface ConnectedImapSmtpCaldavAccountGenqlSelection{
 export interface ImapSmtpCaldavConnectionSuccessGenqlSelection{
     success?: boolean | number
     connectedAccountId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface WorkspaceMailboxConnectionStatusGenqlSelection{
+    connectedAccountId?: boolean | number
+    errorCode?: boolean | number
+    errorMessage?: boolean | number
+    lastSafeOperation?: boolean | number
+    maskedHandle?: boolean | number
+    messageChannelId?: boolean | number
+    state?: boolean | number
+    syncStage?: boolean | number
+    syncStatus?: boolean | number
+    updatedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface WorkspaceMailboxConnectionResultGenqlSelection{
+    connectedAccountId?: boolean | number
+    messageChannelId?: boolean | number
+    status?: WorkspaceMailboxConnectionStatusGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface RevokeWorkspaceMailboxResultGenqlSelection{
+    connectedAccountId?: boolean | number
+    revoked?: boolean | number
+    state?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -5991,86 +6055,24 @@ export interface MinimalMetadataGenqlSelection{
 }
 
 export interface QueryGenqlSelection{
+    getWorkspaceMailboxStatus?: (WorkspaceMailboxConnectionStatusGenqlSelection & { __args: {connectedAccountId: Scalars['UUID']} })
     navigationMenuItems?: NavigationMenuItemGenqlSelection
     navigationMenuItem?: (NavigationMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
     enterprisePortalSession?: { __args: {returnUrlPath?: (Scalars['String'] | null)} } | boolean | number
     enterpriseCheckoutSession?: { __args: {billingInterval?: (Scalars['String'] | null)} } | boolean | number
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTOGenqlSelection
-    getViewFilterGroups?: (ViewFilterGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
-    getViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String']} })
-    getViewFilters?: (ViewFilterGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
-    getViewFilter?: (ViewFilterGenqlSelection & { __args: {id: Scalars['String']} })
-    getViews?: (ViewGenqlSelection & { __args?: {objectMetadataId?: (Scalars['String'] | null), viewTypes?: (ViewType[] | null)} })
-    getView?: (ViewGenqlSelection & { __args: {id: Scalars['String']} })
-    getViewSorts?: (ViewSortGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
-    getViewSort?: (ViewSortGenqlSelection & { __args: {id: Scalars['String']} })
-    getViewFields?: (ViewFieldGenqlSelection & { __args: {viewId: Scalars['String']} })
-    getViewField?: (ViewFieldGenqlSelection & { __args: {id: Scalars['String']} })
-    getViewFieldGroups?: (ViewFieldGroupGenqlSelection & { __args: {viewId: Scalars['String']} })
-    getViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {id: Scalars['String']} })
-    apiKeys?: ApiKeyGenqlSelection
-    apiKey?: (ApiKeyGenqlSelection & { __args: {input: GetApiKeyInput} })
-    getInviteSuggestions?: InviteSuggestionGenqlSelection
+    myConnectedAccounts?: ConnectedAccountPublicDTOGenqlSelection
     applicationConnectionProviders?: (ApplicationConnectionProviderGenqlSelection & { __args: {applicationId: Scalars['UUID']} })
-    managedProviderBillingStatus?: ManagedProviderBillingStatusGenqlSelection
-    billingPortalSession?: (BillingSessionGenqlSelection & { __args?: {returnUrlPath?: (Scalars['String'] | null), forPaymentMethodUpdate?: (Scalars['Boolean'] | null)} })
-    listPlans?: BillingPlanGenqlSelection
-    getResourceCreditUsage?: BillingResourceCreditUsageGenqlSelection
-    findWorkspaceInvitations?: WorkspaceInvitationGenqlSelection
-    getApprovedAccessDomains?: ApprovedAccessDomainGenqlSelection
-    getPageLayoutTabs?: (PageLayoutTabGenqlSelection & { __args: {pageLayoutId: Scalars['String']} })
-    getPageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String']} })
-    getPageLayouts?: (PageLayoutGenqlSelection & { __args?: {objectMetadataId?: (Scalars['String'] | null), pageLayoutType?: (PageLayoutType | null)} })
-    getPageLayout?: (PageLayoutGenqlSelection & { __args: {id: Scalars['String']} })
-    getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
-    getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
-    findManyAgents?: AgentGenqlSelection
-    findOneAgent?: (AgentGenqlSelection & { __args: {input: AgentIdInput} })
-    objectRecordCounts?: ObjectRecordCountGenqlSelection
-    object?: (ObjectGenqlSelection & { __args: {
-    /** The id of the record to find. */
-    id: Scalars['UUID']} })
-    objects?: (ObjectConnectionGenqlSelection & { __args: {
-    /** Limit or page results. */
-    paging: CursorPaging, 
-    /** Specify to filter the records returned. */
-    filter: ObjectFilter} })
-    index?: (IndexGenqlSelection & { __args: {
-    /** The id of the record to find. */
-    id: Scalars['UUID']} })
-    indexMetadatas?: (IndexConnectionGenqlSelection & { __args: {
-    /** Limit or page results. */
-    paging: CursorPaging, 
-    /** Specify to filter the records returned. */
-    filter: IndexFilter} })
-    findOneLogicFunction?: (LogicFunctionGenqlSelection & { __args: {input: LogicFunctionIdInput} })
-    findManyLogicFunctions?: LogicFunctionGenqlSelection
-    getAvailablePackages?: { __args: {input: LogicFunctionIdInput} }
-    getLogicFunctionSourceCode?: { __args: {input: LogicFunctionIdInput} }
-    commandMenuItems?: CommandMenuItemGenqlSelection
-    commandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
-    frontComponents?: FrontComponentGenqlSelection
-    frontComponent?: (FrontComponentGenqlSelection & { __args: {id: Scalars['UUID']} })
-    getToolIndex?: ToolIndexEntryGenqlSelection
-    getToolInputSchema?: { __args: {toolName: Scalars['String']} }
-    webhooks?: WebhookGenqlSelection
-    webhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
-    field?: (FieldGenqlSelection & { __args: {
-    /** The id of the record to find. */
-    id: Scalars['UUID']} })
-    fields?: (FieldConnectionGenqlSelection & { __args: {
-    /** Limit or page results. */
-    paging: CursorPaging, 
-    /** Specify to filter the records returned. */
-    filter: FieldFilter} })
-    getViewGroups?: (ViewGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
-    getViewGroup?: (ViewGroupGenqlSelection & { __args: {id: Scalars['String']} })
     checkUserExists?: (CheckUserExistGenqlSelection & { __args: {email: Scalars['String'], captchaToken?: (Scalars['String'] | null)} })
     checkWorkspaceInviteHashIsValid?: (WorkspaceInviteHashValidGenqlSelection & { __args: {inviteHash: Scalars['String']} })
     findWorkspaceFromInviteHash?: (WorkspaceGenqlSelection & { __args: {inviteHash: Scalars['String']} })
     checkWorkspaceSubdomainAvailability?: (SubdomainAvailabilityDTOGenqlSelection & { __args: {subdomain: Scalars['String']} })
     getWorkspaceCreationDefaults?: WorkspaceCreationDefaultsDTOGenqlSelection
     validatePasswordResetToken?: (ValidatePasswordResetTokenGenqlSelection & { __args: {passwordResetToken: Scalars['String']} })
+    managedProviderBillingStatus?: ManagedProviderBillingStatusGenqlSelection
+    billingPortalSession?: (BillingSessionGenqlSelection & { __args?: {returnUrlPath?: (Scalars['String'] | null), forPaymentMethodUpdate?: (Scalars['Boolean'] | null)} })
+    listPlans?: BillingPlanGenqlSelection
+    getResourceCreditUsage?: BillingResourceCreditUsageGenqlSelection
     appConnections?: (AppConnectionGenqlSelection & { __args?: {filter?: (ListAppConnectionsInput | null)} })
     appConnection?: (AppConnectionGenqlSelection & { __args: {id: Scalars['ID']} })
     findApplicationRegistrationByClientId?: (PublicApplicationRegistrationGenqlSelection & { __args: {clientId: Scalars['String']} })
@@ -6080,17 +6082,81 @@ export interface QueryGenqlSelection{
     findApplicationRegistrationStats?: (ApplicationRegistrationStatsGenqlSelection & { __args: {id: Scalars['String']} })
     findApplicationRegistrationVariables?: (ApplicationRegistrationVariableDTOGenqlSelection & { __args: {applicationRegistrationId: Scalars['String']} })
     applicationRegistrationTarballUrl?: { __args: {id: Scalars['String']} }
+    field?: (FieldGenqlSelection & { __args: {
+    /** The id of the record to find. */
+    id: Scalars['UUID']} })
+    fields?: (FieldConnectionGenqlSelection & { __args: {
+    /** Limit or page results. */
+    paging: CursorPaging,
+    /** Specify to filter the records returned. */
+    filter: FieldFilter} })
+    index?: (IndexGenqlSelection & { __args: {
+    /** The id of the record to find. */
+    id: Scalars['UUID']} })
+    indexMetadatas?: (IndexConnectionGenqlSelection & { __args: {
+    /** Limit or page results. */
+    paging: CursorPaging,
+    /** Specify to filter the records returned. */
+    filter: IndexFilter} })
+    getViewGroups?: (ViewGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
+    getViewGroup?: (ViewGroupGenqlSelection & { __args: {id: Scalars['String']} })
+    getViewFilters?: (ViewFilterGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
+    getViewFilter?: (ViewFilterGenqlSelection & { __args: {id: Scalars['String']} })
+    getViewFields?: (ViewFieldGenqlSelection & { __args: {viewId: Scalars['String']} })
+    getViewField?: (ViewFieldGenqlSelection & { __args: {id: Scalars['String']} })
+    getViews?: (ViewGenqlSelection & { __args?: {objectMetadataId?: (Scalars['String'] | null), viewTypes?: (ViewType[] | null)} })
+    getView?: (ViewGenqlSelection & { __args: {id: Scalars['String']} })
+    getViewSorts?: (ViewSortGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
+    getViewSort?: (ViewSortGenqlSelection & { __args: {id: Scalars['String']} })
+    getViewFieldGroups?: (ViewFieldGroupGenqlSelection & { __args: {viewId: Scalars['String']} })
+    getViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {id: Scalars['String']} })
+    objectRecordCounts?: ObjectRecordCountGenqlSelection
+    object?: (ObjectGenqlSelection & { __args: {
+    /** The id of the record to find. */
+    id: Scalars['UUID']} })
+    objects?: (ObjectConnectionGenqlSelection & { __args: {
+    /** Limit or page results. */
+    paging: CursorPaging,
+    /** Specify to filter the records returned. */
+    filter: ObjectFilter} })
+    apiKeys?: ApiKeyGenqlSelection
+    apiKey?: (ApiKeyGenqlSelection & { __args: {input: GetApiKeyInput} })
     currentUser?: UserGenqlSelection
-    myConnectedAccounts?: ConnectedAccountPublicDTOGenqlSelection
+    getInviteSuggestions?: InviteSuggestionGenqlSelection
+    findWorkspaceInvitations?: WorkspaceInvitationGenqlSelection
+    getApprovedAccessDomains?: ApprovedAccessDomainGenqlSelection
     currentWorkspace?: WorkspaceGenqlSelection
     getPublicWorkspaceDataByDomain?: (PublicWorkspaceDataGenqlSelection & { __args?: {origin?: (Scalars['String'] | null)} })
     getPublicWorkspaceDataById?: (PublicWorkspaceDataSummaryGenqlSelection & { __args: {id: Scalars['UUID']} })
+    getViewFilterGroups?: (ViewFilterGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
+    getViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String']} })
+    getPageLayoutTabs?: (PageLayoutTabGenqlSelection & { __args: {pageLayoutId: Scalars['String']} })
+    getPageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String']} })
+    getPageLayouts?: (PageLayoutGenqlSelection & { __args?: {objectMetadataId?: (Scalars['String'] | null), pageLayoutType?: (PageLayoutType | null)} })
+    getPageLayout?: (PageLayoutGenqlSelection & { __args: {id: Scalars['String']} })
+    frontComponents?: FrontComponentGenqlSelection
+    frontComponent?: (FrontComponentGenqlSelection & { __args: {id: Scalars['UUID']} })
+    findOneLogicFunction?: (LogicFunctionGenqlSelection & { __args: {input: LogicFunctionIdInput} })
+    findManyLogicFunctions?: LogicFunctionGenqlSelection
+    getAvailablePackages?: { __args: {input: LogicFunctionIdInput} }
+    getLogicFunctionSourceCode?: { __args: {input: LogicFunctionIdInput} }
     findManyApplications?: ApplicationGenqlSelection
     findOneApplication?: (ApplicationGenqlSelection & { __args?: {id?: (Scalars['UUID'] | null), universalIdentifier?: (Scalars['UUID'] | null)} })
     findManyMarketplaceApps?: MarketplaceAppGenqlSelection
     findMarketplaceAppDetail?: (MarketplaceAppDetailGenqlSelection & { __args: {universalIdentifier: Scalars['String']} })
+    findManyAgents?: AgentGenqlSelection
+    findOneAgent?: (AgentGenqlSelection & { __args: {input: AgentIdInput} })
     getRoles?: RoleGenqlSelection
     getSSOIdentityProviders?: FindAvailableSSOIDPGenqlSelection
+    getConnectedImapSmtpCaldavAccount?: (ConnectedImapSmtpCaldavAccountGenqlSelection & { __args: {id: Scalars['UUID']} })
+    getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
+    getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
+    commandMenuItems?: CommandMenuItemGenqlSelection
+    commandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
+    getToolIndex?: ToolIndexEntryGenqlSelection
+    getToolInputSchema?: { __args: {toolName: Scalars['String']} }
+    webhooks?: WebhookGenqlSelection
+    webhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
     previewMessageCampaignAudience?: (CampaignAudiencePreviewDTOGenqlSelection & { __args: {input: PreviewMessageCampaignAudienceInput} })
     unsubscribeTopics?: UnsubscribeTopicGenqlSelection
     unsubscribePagePreviewUrl?: boolean | number
@@ -6114,7 +6180,6 @@ export interface QueryGenqlSelection{
     pieChartData?: (PieChartDataGenqlSelection & { __args: {input: PieChartDataInput} })
     lineChartData?: (LineChartDataGenqlSelection & { __args: {input: LineChartDataInput} })
     barChartData?: (BarChartDataGenqlSelection & { __args: {input: BarChartDataInput} })
-    getConnectedImapSmtpCaldavAccount?: (ConnectedImapSmtpCaldavAccountGenqlSelection & { __args: {id: Scalars['UUID']} })
     getAutoCompleteAddress?: (AutocompleteResultGenqlSelection & { __args: {address: Scalars['String'], token: Scalars['String'], country?: (Scalars['String'] | null), isFieldCity?: (Scalars['Boolean'] | null)} })
     getAddressDetails?: (PlaceDetailsResultGenqlSelection & { __args: {placeId: Scalars['String'], token: Scalars['String']} })
     getUsageAnalytics?: (UsageAnalyticsGenqlSelection & { __args?: {input?: (UsageAnalyticsInput | null)} })
@@ -6123,17 +6188,17 @@ export interface QueryGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface GetApiKeyInput {id: Scalars['UUID']}
+export interface ListAppConnectionsInput {providerName?: (Scalars['String'] | null),userWorkspaceId?: (Scalars['String'] | null),visibility?: (Scalars['String'] | null)}
 
-export interface AgentIdInput {
-/** The id of the agent. */
-id: Scalars['UUID']}
+export interface GetApiKeyInput {id: Scalars['UUID']}
 
 export interface LogicFunctionIdInput {
 /** The id of the function. */
 id: Scalars['ID']}
 
-export interface ListAppConnectionsInput {providerName?: (Scalars['String'] | null),userWorkspaceId?: (Scalars['String'] | null),visibility?: (Scalars['String'] | null)}
+export interface AgentIdInput {
+/** The id of the agent. */
+id: Scalars['UUID']}
 
 export interface PreviewMessageCampaignAudienceInput {listId: Scalars['String'],unsubscribeTopicId?: (Scalars['String'] | null)}
 
@@ -6152,6 +6217,10 @@ export interface BarChartDataInput {objectMetadataId: Scalars['UUID'],configurat
 export interface UsageAnalyticsInput {periodStart?: (Scalars['DateTime'] | null),periodEnd?: (Scalars['DateTime'] | null),userWorkspaceId?: (Scalars['String'] | null),operationTypes?: (UsageOperationType[] | null)}
 
 export interface MutationGenqlSelection{
+    connectWorkspaceMailbox?: (WorkspaceMailboxConnectionResultGenqlSelection & { __args: {input: ConnectWorkspaceMailboxInput} })
+    rotateWorkspaceMailbox?: (WorkspaceMailboxConnectionResultGenqlSelection & { __args: {input: ReplaceWorkspaceMailboxCredentialsInput} })
+    reconnectWorkspaceMailbox?: (WorkspaceMailboxConnectionResultGenqlSelection & { __args: {input: ReplaceWorkspaceMailboxCredentialsInput} })
+    revokeWorkspaceMailbox?: (RevokeWorkspaceMailboxResultGenqlSelection & { __args: {connectedAccountId: Scalars['UUID']} })
     addQueryToEventStream?: { __args: {input: AddQuerySubscriptionInput} }
     removeQueryFromEventStream?: { __args: {input: RemoveQueryFromEventStreamInput} }
     createManyNavigationMenuItems?: (NavigationMenuItemGenqlSelection & { __args: {inputs: CreateNavigationMenuItemInput[]} })
@@ -6171,103 +6240,8 @@ export interface MutationGenqlSelection{
     uploadWorkspaceMemberProfilePicture?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload']} })
     uploadFilesFieldFile?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataId: Scalars['String']} })
     uploadFilesFieldFileByUniversalIdentifier?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataUniversalIdentifier: Scalars['String']} })
-    createViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {input: CreateViewFilterGroupInput} })
-    updateViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String'], input: UpdateViewFilterGroupInput} })
-    deleteViewFilterGroup?: { __args: {id: Scalars['String']} }
-    destroyViewFilterGroup?: { __args: {id: Scalars['String']} }
-    createViewFilter?: (ViewFilterGenqlSelection & { __args: {input: CreateViewFilterInput} })
-    updateViewFilter?: (ViewFilterGenqlSelection & { __args: {input: UpdateViewFilterInput} })
-    deleteViewFilter?: (ViewFilterGenqlSelection & { __args: {input: DeleteViewFilterInput} })
-    destroyViewFilter?: (ViewFilterGenqlSelection & { __args: {input: DestroyViewFilterInput} })
-    createView?: (ViewGenqlSelection & { __args: {input: CreateViewInput} })
-    updateView?: (ViewGenqlSelection & { __args: {id: Scalars['String'], input: UpdateViewInput} })
-    deleteView?: { __args: {id: Scalars['String']} }
-    destroyView?: { __args: {id: Scalars['String']} }
-    upsertViewWidget?: (ViewGenqlSelection & { __args: {input: UpsertViewWidgetInput} })
-    createViewSort?: (ViewSortGenqlSelection & { __args: {input: CreateViewSortInput} })
-    updateViewSort?: (ViewSortGenqlSelection & { __args: {input: UpdateViewSortInput} })
-    deleteViewSort?: { __args: {input: DeleteViewSortInput} }
-    destroyViewSort?: { __args: {input: DestroyViewSortInput} }
-    updateViewField?: (ViewFieldGenqlSelection & { __args: {input: UpdateViewFieldInput} })
-    createViewField?: (ViewFieldGenqlSelection & { __args: {input: CreateViewFieldInput} })
-    createManyViewFields?: (ViewFieldGenqlSelection & { __args: {inputs: CreateViewFieldInput[]} })
-    deleteViewField?: (ViewFieldGenqlSelection & { __args: {input: DeleteViewFieldInput} })
-    destroyViewField?: (ViewFieldGenqlSelection & { __args: {input: DestroyViewFieldInput} })
-    updateViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {input: UpdateViewFieldGroupInput} })
-    createViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {input: CreateViewFieldGroupInput} })
-    createManyViewFieldGroups?: (ViewFieldGroupGenqlSelection & { __args: {inputs: CreateViewFieldGroupInput[]} })
-    deleteViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {input: DeleteViewFieldGroupInput} })
-    destroyViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {input: DestroyViewFieldGroupInput} })
-    upsertFieldsWidget?: (ViewGenqlSelection & { __args: {input: UpsertFieldsWidgetInput} })
-    createApiKey?: (ApiKeyGenqlSelection & { __args: {input: CreateApiKeyInput} })
-    updateApiKey?: (ApiKeyGenqlSelection & { __args: {input: UpdateApiKeyInput} })
-    revokeApiKey?: (ApiKeyGenqlSelection & { __args: {input: RevokeApiKeyInput} })
-    assignRoleToApiKey?: { __args: {apiKeyId: Scalars['UUID'], roleId: Scalars['UUID']} }
-    skipSyncEmailOnboardingStep?: OnboardingStepSuccessGenqlSelection
-    skipBookOnboardingStep?: OnboardingStepSuccessGenqlSelection
-    triggerInstallAppsOnboardingStep?: (OnboardingStepSuccessGenqlSelection & { __args: {universalIdentifiers: Scalars['String'][]} })
+    deleteConnectedAccount?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {id: Scalars['UUID']} })
     updateOneApplicationVariable?: { __args: {key: Scalars['String'], value: Scalars['String'], applicationId: Scalars['UUID']} }
-    checkoutSession?: (BillingSessionGenqlSelection & { __args: {recurringInterval: SubscriptionInterval, plan: BillingPlanKey, requirePaymentMethod: Scalars['Boolean'], successUrlPath?: (Scalars['String'] | null)} })
-    createSubscriptionPaymentIntent?: (BillingPaymentIntentGenqlSelection & { __args: {recurringInterval: SubscriptionInterval, plan: BillingPlanKey, requirePaymentMethod: Scalars['Boolean'], successUrlPath?: (Scalars['String'] | null), idempotencyKey: Scalars['String']} })
-    createBillingPaymentMethodSetupIntent?: BillingPaymentIntentGenqlSelection
-    switchSubscriptionInterval?: BillingUpdateGenqlSelection
-    switchBillingPlan?: BillingUpdateGenqlSelection
-    cancelSwitchBillingPlan?: BillingUpdateGenqlSelection
-    cancelSwitchBillingInterval?: BillingUpdateGenqlSelection
-    setResourceCreditSubscriptionPrice?: (BillingUpdateGenqlSelection & { __args: {priceId: Scalars['String']} })
-    endSubscriptionTrialPeriod?: BillingEndTrialPeriodGenqlSelection
-    cancelSwitchResourceCreditPrice?: BillingUpdateGenqlSelection
-    deleteWorkspaceInvitation?: { __args: {appTokenId: Scalars['String']} }
-    resendWorkspaceInvitation?: (SendInvitationsGenqlSelection & { __args: {appTokenId: Scalars['String']} })
-    sendInvitations?: (SendInvitationsGenqlSelection & { __args: {emails: Scalars['String'][], roleId?: (Scalars['UUID'] | null)} })
-    createApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: CreateApprovedAccessDomainInput} })
-    deleteApprovedAccessDomain?: { __args: {input: DeleteApprovedAccessDomainInput} }
-    validateApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: ValidateApprovedAccessDomainInput} })
-    createPageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {input: CreatePageLayoutTabInput} })
-    updatePageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutTabInput} })
-    destroyPageLayoutTab?: { __args: {id: Scalars['String']} }
-    createPageLayout?: (PageLayoutGenqlSelection & { __args: {input: CreatePageLayoutInput} })
-    updatePageLayout?: (PageLayoutGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutInput} })
-    destroyPageLayout?: { __args: {id: Scalars['String']} }
-    updatePageLayoutWithTabsAndWidgets?: (PageLayoutGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWithTabsInput} })
-    resetPageLayoutToDefault?: (PageLayoutGenqlSelection & { __args: {id: Scalars['String']} })
-    resetPageLayoutWidgetToDefault?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
-    resetPageLayoutTabToDefault?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String']} })
-    createPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {input: CreatePageLayoutWidgetInput} })
-    updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
-    destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
-    createOneAgent?: (AgentGenqlSelection & { __args: {input: CreateAgentInput} })
-    updateOneAgent?: (AgentGenqlSelection & { __args: {input: UpdateAgentInput} })
-    deleteOneAgent?: (AgentGenqlSelection & { __args: {input: AgentIdInput} })
-    createOneObject?: (ObjectGenqlSelection & { __args: {input: CreateOneObjectInput} })
-    deleteOneObject?: (ObjectGenqlSelection & { __args: {input: DeleteOneObjectInput} })
-    updateOneObject?: (ObjectGenqlSelection & { __args: {input: UpdateOneObjectInput} })
-    createOneIndex?: (IndexGenqlSelection & { __args: {input: CreateOneIndexInput} })
-    deleteOneIndex?: (IndexGenqlSelection & { __args: {input: DeleteOneIndexInput} })
-    deleteOneLogicFunction?: (LogicFunctionGenqlSelection & { __args: {input: LogicFunctionIdInput} })
-    createOneLogicFunction?: (LogicFunctionGenqlSelection & { __args: {input: CreateLogicFunctionFromSourceInput} })
-    executeOneLogicFunction?: (LogicFunctionExecutionResultGenqlSelection & { __args: {input: ExecuteOneLogicFunctionInput} })
-    updateOneLogicFunction?: { __args: {input: UpdateLogicFunctionFromSourceInput} }
-    createCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {input: CreateCommandMenuItemInput} })
-    updateCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {input: UpdateCommandMenuItemInput} })
-    resetCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
-    deleteCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
-    createFrontComponent?: (FrontComponentGenqlSelection & { __args: {input: CreateFrontComponentInput} })
-    updateFrontComponent?: (FrontComponentGenqlSelection & { __args: {input: UpdateFrontComponentInput} })
-    deleteFrontComponent?: (FrontComponentGenqlSelection & { __args: {id: Scalars['UUID']} })
-    createWebhook?: (WebhookGenqlSelection & { __args: {input: CreateWebhookInput} })
-    updateWebhook?: (WebhookGenqlSelection & { __args: {input: UpdateWebhookInput} })
-    deleteWebhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
-    createOneField?: (FieldGenqlSelection & { __args: {input: CreateOneFieldMetadataInput} })
-    updateOneField?: (FieldGenqlSelection & { __args: {input: UpdateOneFieldMetadataInput} })
-    deleteOneField?: (FieldGenqlSelection & { __args: {input: DeleteOneFieldInput} })
-    createViewGroup?: (ViewGroupGenqlSelection & { __args: {input: CreateViewGroupInput} })
-    createManyViewGroups?: (ViewGroupGenqlSelection & { __args: {inputs: CreateViewGroupInput[]} })
-    updateViewGroup?: (ViewGroupGenqlSelection & { __args: {input: UpdateViewGroupInput} })
-    updateManyViewGroups?: (ViewGroupGenqlSelection & { __args: {inputs: UpdateViewGroupInput[]} })
-    deleteViewGroup?: (ViewGroupGenqlSelection & { __args: {input: DeleteViewGroupInput} })
-    destroyViewGroup?: (ViewGroupGenqlSelection & { __args: {input: DestroyViewGroupInput} })
-    runAgent?: (RunAgentResultGenqlSelection & { __args: {input: RunAgentInput} })
     getAuthorizationUrlForSSO?: (GetAuthorizationUrlForSSOGenqlSelection & { __args: {input: GetAuthorizationUrlForSSOInput} })
     getLoginTokenFromCredentials?: (LoginTokenGenqlSelection & { __args: {email: Scalars['String'], password: Scalars['String'], captchaToken?: (Scalars['String'] | null), locale?: (Scalars['String'] | null), verifyEmailRedirectPath?: (Scalars['String'] | null), origin: Scalars['String']} })
     signIn?: (AvailableWorkspacesAndAccessTokensGenqlSelection & { __args: {email: Scalars['String'], password: Scalars['String'], captchaToken?: (Scalars['String'] | null), locale?: (Scalars['String'] | null), verifyEmailRedirectPath?: (Scalars['String'] | null)} })
@@ -6286,6 +6260,16 @@ export interface MutationGenqlSelection{
     generatePlaygroundToken?: AuthTokenGenqlSelection
     emailPasswordResetLink?: (EmailPasswordResetLinkGenqlSelection & { __args: {email: Scalars['String'], workspaceId?: (Scalars['UUID'] | null)} })
     updatePasswordViaResetToken?: (InvalidatePasswordGenqlSelection & { __args: {passwordResetToken: Scalars['String'], newPassword: Scalars['String']} })
+    checkoutSession?: (BillingSessionGenqlSelection & { __args: {recurringInterval: SubscriptionInterval, plan: BillingPlanKey, requirePaymentMethod: Scalars['Boolean'], successUrlPath?: (Scalars['String'] | null)} })
+    createSubscriptionPaymentIntent?: (BillingPaymentIntentGenqlSelection & { __args: {recurringInterval: SubscriptionInterval, plan: BillingPlanKey, requirePaymentMethod: Scalars['Boolean'], successUrlPath?: (Scalars['String'] | null), idempotencyKey: Scalars['String']} })
+    createBillingPaymentMethodSetupIntent?: BillingPaymentIntentGenqlSelection
+    switchSubscriptionInterval?: BillingUpdateGenqlSelection
+    switchBillingPlan?: BillingUpdateGenqlSelection
+    cancelSwitchBillingPlan?: BillingUpdateGenqlSelection
+    cancelSwitchBillingInterval?: BillingUpdateGenqlSelection
+    setResourceCreditSubscriptionPrice?: (BillingUpdateGenqlSelection & { __args: {priceId: Scalars['String']} })
+    endSubscriptionTrialPeriod?: BillingEndTrialPeriodGenqlSelection
+    cancelSwitchResourceCreditPrice?: BillingUpdateGenqlSelection
     createApplicationRegistration?: (CreateApplicationRegistrationGenqlSelection & { __args: {input: CreateApplicationRegistrationInput} })
     updateApplicationRegistration?: (ApplicationRegistrationGenqlSelection & { __args: {input: UpdateApplicationRegistrationInput} })
     deleteApplicationRegistration?: { __args: {id: Scalars['String']} }
@@ -6295,6 +6279,48 @@ export interface MutationGenqlSelection{
     deleteApplicationRegistrationVariable?: { __args: {id: Scalars['String']} }
     uploadAppTarball?: (ApplicationRegistrationGenqlSelection & { __args: {file: Scalars['Upload'], universalIdentifier?: (Scalars['String'] | null)} })
     transferApplicationRegistrationOwnership?: (ApplicationRegistrationGenqlSelection & { __args: {applicationRegistrationId: Scalars['String'], targetWorkspaceSubdomain: Scalars['String']} })
+    createOneField?: (FieldGenqlSelection & { __args: {input: CreateOneFieldMetadataInput} })
+    updateOneField?: (FieldGenqlSelection & { __args: {input: UpdateOneFieldMetadataInput} })
+    deleteOneField?: (FieldGenqlSelection & { __args: {input: DeleteOneFieldInput} })
+    createOneIndex?: (IndexGenqlSelection & { __args: {input: CreateOneIndexInput} })
+    deleteOneIndex?: (IndexGenqlSelection & { __args: {input: DeleteOneIndexInput} })
+    createViewGroup?: (ViewGroupGenqlSelection & { __args: {input: CreateViewGroupInput} })
+    createManyViewGroups?: (ViewGroupGenqlSelection & { __args: {inputs: CreateViewGroupInput[]} })
+    updateViewGroup?: (ViewGroupGenqlSelection & { __args: {input: UpdateViewGroupInput} })
+    updateManyViewGroups?: (ViewGroupGenqlSelection & { __args: {inputs: UpdateViewGroupInput[]} })
+    deleteViewGroup?: (ViewGroupGenqlSelection & { __args: {input: DeleteViewGroupInput} })
+    destroyViewGroup?: (ViewGroupGenqlSelection & { __args: {input: DestroyViewGroupInput} })
+    createViewFilter?: (ViewFilterGenqlSelection & { __args: {input: CreateViewFilterInput} })
+    updateViewFilter?: (ViewFilterGenqlSelection & { __args: {input: UpdateViewFilterInput} })
+    deleteViewFilter?: (ViewFilterGenqlSelection & { __args: {input: DeleteViewFilterInput} })
+    destroyViewFilter?: (ViewFilterGenqlSelection & { __args: {input: DestroyViewFilterInput} })
+    updateViewField?: (ViewFieldGenqlSelection & { __args: {input: UpdateViewFieldInput} })
+    createViewField?: (ViewFieldGenqlSelection & { __args: {input: CreateViewFieldInput} })
+    createManyViewFields?: (ViewFieldGenqlSelection & { __args: {inputs: CreateViewFieldInput[]} })
+    deleteViewField?: (ViewFieldGenqlSelection & { __args: {input: DeleteViewFieldInput} })
+    destroyViewField?: (ViewFieldGenqlSelection & { __args: {input: DestroyViewFieldInput} })
+    createView?: (ViewGenqlSelection & { __args: {input: CreateViewInput} })
+    updateView?: (ViewGenqlSelection & { __args: {id: Scalars['String'], input: UpdateViewInput} })
+    deleteView?: { __args: {id: Scalars['String']} }
+    destroyView?: { __args: {id: Scalars['String']} }
+    upsertViewWidget?: (ViewGenqlSelection & { __args: {input: UpsertViewWidgetInput} })
+    createViewSort?: (ViewSortGenqlSelection & { __args: {input: CreateViewSortInput} })
+    updateViewSort?: (ViewSortGenqlSelection & { __args: {input: UpdateViewSortInput} })
+    deleteViewSort?: { __args: {input: DeleteViewSortInput} }
+    destroyViewSort?: { __args: {input: DestroyViewSortInput} }
+    updateViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {input: UpdateViewFieldGroupInput} })
+    createViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {input: CreateViewFieldGroupInput} })
+    createManyViewFieldGroups?: (ViewFieldGroupGenqlSelection & { __args: {inputs: CreateViewFieldGroupInput[]} })
+    deleteViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {input: DeleteViewFieldGroupInput} })
+    destroyViewFieldGroup?: (ViewFieldGroupGenqlSelection & { __args: {input: DestroyViewFieldGroupInput} })
+    upsertFieldsWidget?: (ViewGenqlSelection & { __args: {input: UpsertFieldsWidgetInput} })
+    createOneObject?: (ObjectGenqlSelection & { __args: {input: CreateOneObjectInput} })
+    deleteOneObject?: (ObjectGenqlSelection & { __args: {input: DeleteOneObjectInput} })
+    updateOneObject?: (ObjectGenqlSelection & { __args: {input: UpdateOneObjectInput} })
+    createApiKey?: (ApiKeyGenqlSelection & { __args: {input: CreateApiKeyInput} })
+    updateApiKey?: (ApiKeyGenqlSelection & { __args: {input: UpdateApiKeyInput} })
+    revokeApiKey?: (ApiKeyGenqlSelection & { __args: {input: RevokeApiKeyInput} })
+    assignRoleToApiKey?: { __args: {apiKeyId: Scalars['UUID'], roleId: Scalars['UUID']} }
     initiateOTPProvisioning?: (InitiateTwoFactorAuthenticationProvisioningGenqlSelection & { __args: {loginToken: Scalars['String'], origin: Scalars['String']} })
     initiateOTPProvisioningForAuthenticatedUser?: InitiateTwoFactorAuthenticationProvisioningGenqlSelection
     deleteTwoFactorAuthenticationMethod?: (DeleteTwoFactorAuthenticationMethodGenqlSelection & { __args: {twoFactorAuthenticationMethodId: Scalars['UUID']} })
@@ -6304,16 +6330,48 @@ export interface MutationGenqlSelection{
     updateWorkspaceMemberSettings?: { __args: {input: UpdateWorkspaceMemberSettingsInput} }
     updateUserEmail?: { __args: {newEmail: Scalars['String'], verifyEmailRedirectPath?: (Scalars['String'] | null)} }
     resendEmailVerificationToken?: (ResendEmailVerificationTokenGenqlSelection & { __args: {email: Scalars['String'], origin: Scalars['String']} })
-    deleteConnectedAccount?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {id: Scalars['UUID']} })
+    skipSyncEmailOnboardingStep?: OnboardingStepSuccessGenqlSelection
+    skipBookOnboardingStep?: OnboardingStepSuccessGenqlSelection
+    triggerInstallAppsOnboardingStep?: (OnboardingStepSuccessGenqlSelection & { __args: {universalIdentifiers: Scalars['String'][]} })
+    deleteWorkspaceInvitation?: { __args: {appTokenId: Scalars['String']} }
+    resendWorkspaceInvitation?: (SendInvitationsGenqlSelection & { __args: {appTokenId: Scalars['String']} })
+    sendInvitations?: (SendInvitationsGenqlSelection & { __args: {emails: Scalars['String'][], roleId?: (Scalars['UUID'] | null)} })
+    createApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: CreateApprovedAccessDomainInput} })
+    deleteApprovedAccessDomain?: { __args: {input: DeleteApprovedAccessDomainInput} }
+    validateApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: ValidateApprovedAccessDomainInput} })
     activateWorkspace?: (WorkspaceGenqlSelection & { __args: {data: ActivateWorkspaceInput} })
     updateWorkspace?: (WorkspaceGenqlSelection & { __args: {data: UpdateWorkspaceInput} })
     deleteCurrentWorkspace?: WorkspaceGenqlSelection
     checkCustomDomainValidRecords?: DomainValidRecordsGenqlSelection
+    createViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {input: CreateViewFilterGroupInput} })
+    updateViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String'], input: UpdateViewFilterGroupInput} })
+    deleteViewFilterGroup?: { __args: {id: Scalars['String']} }
+    destroyViewFilterGroup?: { __args: {id: Scalars['String']} }
+    createPageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {input: CreatePageLayoutTabInput} })
+    updatePageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutTabInput} })
+    destroyPageLayoutTab?: { __args: {id: Scalars['String']} }
+    createPageLayout?: (PageLayoutGenqlSelection & { __args: {input: CreatePageLayoutInput} })
+    updatePageLayout?: (PageLayoutGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutInput} })
+    destroyPageLayout?: { __args: {id: Scalars['String']} }
+    updatePageLayoutWithTabsAndWidgets?: (PageLayoutGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWithTabsInput} })
+    resetPageLayoutToDefault?: (PageLayoutGenqlSelection & { __args: {id: Scalars['String']} })
+    resetPageLayoutWidgetToDefault?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
+    resetPageLayoutTabToDefault?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String']} })
+    createFrontComponent?: (FrontComponentGenqlSelection & { __args: {input: CreateFrontComponentInput} })
+    updateFrontComponent?: (FrontComponentGenqlSelection & { __args: {input: UpdateFrontComponentInput} })
+    deleteFrontComponent?: (FrontComponentGenqlSelection & { __args: {id: Scalars['UUID']} })
+    deleteOneLogicFunction?: (LogicFunctionGenqlSelection & { __args: {input: LogicFunctionIdInput} })
+    createOneLogicFunction?: (LogicFunctionGenqlSelection & { __args: {input: CreateLogicFunctionFromSourceInput} })
+    executeOneLogicFunction?: (LogicFunctionExecutionResultGenqlSelection & { __args: {input: ExecuteOneLogicFunctionInput} })
+    updateOneLogicFunction?: { __args: {input: UpdateLogicFunctionFromSourceInput} }
     /** @deprecated Use installApplication instead */
     installMarketplaceApp?: { __args: {universalIdentifier: Scalars['String'], version?: (Scalars['String'] | null)} }
     installApplication?: (ApplicationGenqlSelection & { __args: {universalIdentifier: Scalars['String'], version?: (Scalars['String'] | null)} })
     uninstallApplication?: { __args: {universalIdentifier: Scalars['String']} }
     syncMarketplaceCatalog?: boolean | number
+    createOneAgent?: (AgentGenqlSelection & { __args: {input: CreateAgentInput} })
+    updateOneAgent?: (AgentGenqlSelection & { __args: {input: UpdateAgentInput} })
+    deleteOneAgent?: (AgentGenqlSelection & { __args: {input: AgentIdInput} })
     updateWorkspaceMemberRole?: (WorkspaceMemberGenqlSelection & { __args: {workspaceMemberId: Scalars['UUID'], roleId: Scalars['UUID']} })
     createOneRole?: (RoleGenqlSelection & { __args: {createRoleInput: CreateRoleInput} })
     updateOneRole?: (RoleGenqlSelection & { __args: {updateRoleInput: UpdateRoleInput} })
@@ -6328,6 +6386,18 @@ export interface MutationGenqlSelection{
     createSAMLIdentityProvider?: (SetupSsoGenqlSelection & { __args: {input: SetupSAMLSsoInput} })
     deleteSSOIdentityProvider?: (DeleteSsoGenqlSelection & { __args: {input: DeleteSsoInput} })
     editSSOIdentityProvider?: (EditSsoGenqlSelection & { __args: {input: EditSsoInput} })
+    saveImapSmtpCaldavAccount?: (ImapSmtpCaldavConnectionSuccessGenqlSelection & { __args: {handle: Scalars['String'], connectionParameters: EmailAccountConnectionParameters, id?: (Scalars['UUID'] | null)} })
+    createPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {input: CreatePageLayoutWidgetInput} })
+    updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
+    destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
+    createCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {input: CreateCommandMenuItemInput} })
+    updateCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {input: UpdateCommandMenuItemInput} })
+    resetCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
+    deleteCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
+    createWebhook?: (WebhookGenqlSelection & { __args: {input: CreateWebhookInput} })
+    updateWebhook?: (WebhookGenqlSelection & { __args: {input: UpdateWebhookInput} })
+    deleteWebhook?: (WebhookGenqlSelection & { __args: {id: Scalars['UUID']} })
+    runAgent?: (RunAgentResultGenqlSelection & { __args: {input: RunAgentInput} })
     sendEmailViaEmailingDomain?: (SendEmailViaDomainOutputGenqlSelection & { __args: {input: SendEmailViaDomainInput} })
     sendMessageCampaign?: (SendMessageCampaignOutputDTOGenqlSelection & { __args: {input: SendMessageCampaignInput} })
     createUnsubscribeTopic?: (UnsubscribeTopicGenqlSelection & { __args: {input: CreateUnsubscribeTopicInput} })
@@ -6367,7 +6437,6 @@ export interface MutationGenqlSelection{
     createCalendarEvent?: (CreateCalendarEventOutputGenqlSelection & { __args: {input: CreateCalendarEventInput} })
     sendEmail?: (SendEmailOutputGenqlSelection & { __args: {input: SendEmailInput} })
     startChannelSync?: (ChannelSyncSuccessGenqlSelection & { __args: {connectedAccountId: Scalars['UUID']} })
-    saveImapSmtpCaldavAccount?: (ImapSmtpCaldavConnectionSuccessGenqlSelection & { __args: {handle: Scalars['String'], connectionParameters: EmailAccountConnectionParameters, id?: (Scalars['UUID'] | null)} })
     updateLabPublicFeatureFlag?: (FeatureFlagGenqlSelection & { __args: {input: UpdateLabPublicFeatureFlagInput} })
     createPublicDomain?: (PublicDomainGenqlSelection & { __args: {domain: Scalars['String'], applicationId: Scalars['String']} })
     deletePublicDomain?: { __args: {domain: Scalars['String']} }
@@ -6383,6 +6452,14 @@ export interface MutationGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface ConnectWorkspaceMailboxInput {accountType: Scalars['String'],connectionParameters: WorkspaceMailboxConnectionParametersInput,handle: Scalars['String']}
+
+export interface WorkspaceMailboxConnectionParametersInput {IMAP?: (WorkspaceMailboxProtocolConnectionInput | null),SMTP?: (WorkspaceMailboxProtocolConnectionInput | null)}
+
+export interface WorkspaceMailboxProtocolConnectionInput {host: Scalars['String'],port: Scalars['Float'],username?: (Scalars['String'] | null),password: Scalars['String'],connectionSecurity: Scalars['String']}
+
+export interface ReplaceWorkspaceMailboxCredentialsInput {connectedAccountId: Scalars['String'],connectionParameters: WorkspaceMailboxConnectionParametersInput}
+
 export interface AddQuerySubscriptionInput {eventStreamId: Scalars['String'],queryId: Scalars['String'],operationSignature: Scalars['JSON']}
 
 export interface RemoveQueryFromEventStreamInput {eventStreamId: Scalars['String'],queryId: Scalars['String']}
@@ -6397,9 +6474,69 @@ update: UpdateNavigationMenuItemInput}
 
 export interface UpdateNavigationMenuItemInput {folderId?: (Scalars['UUID'] | null),position?: (Scalars['Float'] | null),name?: (Scalars['String'] | null),link?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),color?: (Scalars['String'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
 
-export interface CreateViewFilterGroupInput {id?: (Scalars['UUID'] | null),parentViewFilterGroupId?: (Scalars['UUID'] | null),logicalOperator?: (ViewFilterGroupLogicalOperator | null),positionInViewFilterGroup?: (Scalars['Float'] | null),viewId: Scalars['UUID']}
+export interface GetAuthorizationUrlForSSOInput {identityProviderId: Scalars['UUID'],workspaceInviteHash?: (Scalars['String'] | null)}
 
-export interface UpdateViewFilterGroupInput {id?: (Scalars['UUID'] | null),parentViewFilterGroupId?: (Scalars['UUID'] | null),logicalOperator?: (ViewFilterGroupLogicalOperator | null),positionInViewFilterGroup?: (Scalars['Float'] | null),viewId?: (Scalars['UUID'] | null)}
+export interface SignUpInNewWorkspaceInput {displayName?: (Scalars['String'] | null),subdomain?: (Scalars['String'] | null)}
+
+export interface CreateApplicationRegistrationInput {name: Scalars['String'],universalIdentifier?: (Scalars['String'] | null),oAuthRedirectUris?: (Scalars['String'][] | null),oAuthScopes?: (Scalars['String'][] | null)}
+
+export interface UpdateApplicationRegistrationInput {id: Scalars['String'],update: UpdateApplicationRegistrationPayload}
+
+export interface UpdateApplicationRegistrationPayload {name?: (Scalars['String'] | null),oAuthRedirectUris?: (Scalars['String'][] | null),oAuthScopes?: (Scalars['String'][] | null),isListed?: (Scalars['Boolean'] | null),isPreInstalled?: (Scalars['Boolean'] | null)}
+
+export interface CreateApplicationRegistrationVariableInput {applicationRegistrationId: Scalars['String'],key: Scalars['String'],value: Scalars['String'],description?: (Scalars['String'] | null),isSecret?: (Scalars['Boolean'] | null)}
+
+export interface UpdateApplicationRegistrationVariableInput {id: Scalars['String'],update: UpdateApplicationRegistrationVariablePayload}
+
+export interface UpdateApplicationRegistrationVariablePayload {value?: (Scalars['String'] | null),resetValue?: (Scalars['Boolean'] | null),description?: (Scalars['String'] | null)}
+
+export interface CreateOneFieldMetadataInput {
+/** The record to create */
+field: CreateFieldInput}
+
+export interface CreateFieldInput {type: FieldMetadataType,name: Scalars['String'],label: Scalars['String'],description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null),isSystem?: (Scalars['Boolean'] | null),isUIEditable?: (Scalars['Boolean'] | null),isUIReadOnly?: (Scalars['Boolean'] | null),isNullable?: (Scalars['Boolean'] | null),isUnique?: (Scalars['Boolean'] | null),defaultValue?: (Scalars['JSON'] | null),options?: (Scalars['JSON'] | null),settings?: (Scalars['JSON'] | null),objectMetadataId: Scalars['UUID'],isLabelSyncedWithName?: (Scalars['Boolean'] | null),isRemoteCreation?: (Scalars['Boolean'] | null),relationCreationPayload?: (Scalars['JSON'] | null),morphRelationsCreationPayload?: (Scalars['JSON'][] | null)}
+
+export interface UpdateOneFieldMetadataInput {
+/** The id of the record to update */
+id: Scalars['UUID'],
+/** The record to update */
+update: UpdateFieldInput}
+
+export interface UpdateFieldInput {universalIdentifier?: (Scalars['String'] | null),name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null),isSystem?: (Scalars['Boolean'] | null),isUIEditable?: (Scalars['Boolean'] | null),isUIReadOnly?: (Scalars['Boolean'] | null),isNullable?: (Scalars['Boolean'] | null),isUnique?: (Scalars['Boolean'] | null),defaultValue?: (Scalars['JSON'] | null),options?: (Scalars['JSON'] | null),settings?: (Scalars['JSON'] | null),objectMetadataId?: (Scalars['UUID'] | null),isLabelSyncedWithName?: (Scalars['Boolean'] | null),morphRelationsUpdatePayload?: (Scalars['JSON'][] | null)}
+
+export interface DeleteOneFieldInput {
+/** The id of the field to delete. */
+id: Scalars['UUID']}
+
+export interface CreateOneIndexInput {
+/** The custom index to create */
+index: CreateIndexInput}
+
+export interface CreateIndexInput {objectMetadataId: Scalars['UUID'],fields: CreateIndexFieldInput[],indexType: IndexType}
+
+export interface CreateIndexFieldInput {fieldMetadataId: Scalars['UUID'],subFieldName?: (Scalars['String'] | null)}
+
+export interface DeleteOneIndexInput {
+/** The id of the custom index to delete. */
+id: Scalars['UUID']}
+
+export interface CreateViewGroupInput {id?: (Scalars['UUID'] | null),isVisible?: (Scalars['Boolean'] | null),fieldValue: Scalars['String'],position?: (Scalars['Float'] | null),viewId: Scalars['UUID']}
+
+export interface UpdateViewGroupInput {
+/** The id of the view group to update */
+id: Scalars['UUID'],
+/** The view group to update */
+update: UpdateViewGroupInputUpdates}
+
+export interface UpdateViewGroupInputUpdates {fieldMetadataId?: (Scalars['UUID'] | null),isVisible?: (Scalars['Boolean'] | null),fieldValue?: (Scalars['String'] | null),position?: (Scalars['Float'] | null)}
+
+export interface DeleteViewGroupInput {
+/** The id of the view group to delete. */
+id: Scalars['UUID']}
+
+export interface DestroyViewGroupInput {
+/** The id of the view group to destroy. */
+id: Scalars['UUID']}
 
 export interface CreateViewFilterInput {id?: (Scalars['UUID'] | null),fieldMetadataId: Scalars['UUID'],operand?: (ViewFilterOperand | null),value: Scalars['JSON'],viewFilterGroupId?: (Scalars['UUID'] | null),positionInViewFilterGroup?: (Scalars['Float'] | null),subFieldName?: (Scalars['String'] | null),relationTargetFieldMetadataId?: (Scalars['UUID'] | null),viewId: Scalars['UUID']}
 
@@ -6417,6 +6554,24 @@ id: Scalars['UUID']}
 
 export interface DestroyViewFilterInput {
 /** The id of the view filter to destroy. */
+id: Scalars['UUID']}
+
+export interface UpdateViewFieldInput {
+/** The id of the view field to update */
+id: Scalars['UUID'],
+/** The view field to update */
+update: UpdateViewFieldInputUpdates}
+
+export interface UpdateViewFieldInputUpdates {isVisible?: (Scalars['Boolean'] | null),size?: (Scalars['Float'] | null),position?: (Scalars['Float'] | null),aggregateOperation?: (AggregateOperations | null),viewFieldGroupId?: (Scalars['UUID'] | null)}
+
+export interface CreateViewFieldInput {id?: (Scalars['UUID'] | null),fieldMetadataId: Scalars['UUID'],viewId: Scalars['UUID'],isVisible?: (Scalars['Boolean'] | null),size?: (Scalars['Float'] | null),position?: (Scalars['Float'] | null),aggregateOperation?: (AggregateOperations | null),viewFieldGroupId?: (Scalars['UUID'] | null)}
+
+export interface DeleteViewFieldInput {
+/** The id of the view field to delete. */
+id: Scalars['UUID']}
+
+export interface DestroyViewFieldInput {
+/** The id of the view field to destroy. */
 id: Scalars['UUID']}
 
 export interface CreateViewInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],objectMetadataId: Scalars['UUID'],type?: (ViewType | null),key?: (ViewKey | null),icon: Scalars['String'],position?: (Scalars['Float'] | null),isCompact?: (Scalars['Boolean'] | null),shouldHideEmptyGroups?: (Scalars['Boolean'] | null),kanbanColumnWidth?: (Scalars['Int'] | null),openRecordIn?: (ViewOpenRecordIn | null),kanbanAggregateOperation?: (AggregateOperations | null),kanbanAggregateOperationFieldMetadataId?: (Scalars['UUID'] | null),anyFieldFilterValue?: (Scalars['String'] | null),calendarLayout?: (ViewCalendarLayout | null),calendarFieldMetadataId?: (Scalars['UUID'] | null),mainGroupByFieldMetadataId?: (Scalars['UUID'] | null),visibility?: (ViewVisibility | null)}
@@ -6465,24 +6620,6 @@ export interface DestroyViewSortInput {
 /** The id of the view sort to destroy. */
 id: Scalars['UUID']}
 
-export interface UpdateViewFieldInput {
-/** The id of the view field to update */
-id: Scalars['UUID'],
-/** The view field to update */
-update: UpdateViewFieldInputUpdates}
-
-export interface UpdateViewFieldInputUpdates {isVisible?: (Scalars['Boolean'] | null),size?: (Scalars['Float'] | null),position?: (Scalars['Float'] | null),aggregateOperation?: (AggregateOperations | null),viewFieldGroupId?: (Scalars['UUID'] | null)}
-
-export interface CreateViewFieldInput {id?: (Scalars['UUID'] | null),fieldMetadataId: Scalars['UUID'],viewId: Scalars['UUID'],isVisible?: (Scalars['Boolean'] | null),size?: (Scalars['Float'] | null),position?: (Scalars['Float'] | null),aggregateOperation?: (AggregateOperations | null),viewFieldGroupId?: (Scalars['UUID'] | null)}
-
-export interface DeleteViewFieldInput {
-/** The id of the view field to delete. */
-id: Scalars['UUID']}
-
-export interface DestroyViewFieldInput {
-/** The id of the view field to destroy. */
-id: Scalars['UUID']}
-
 export interface UpdateViewFieldGroupInput {
 /** The id of the view field group to update */
 id: Scalars['UUID'],
@@ -6517,17 +6654,45 @@ viewFieldId?: (Scalars['UUID'] | null),
 /** The id of the field metadata. Used to create a new view field when viewFieldId is not provided. */
 fieldMetadataId?: (Scalars['UUID'] | null),isVisible: Scalars['Boolean'],position: Scalars['Float']}
 
+export interface CreateOneObjectInput {
+/** The object to create */
+object: CreateObjectInput}
+
+export interface CreateObjectInput {nameSingular: Scalars['String'],namePlural: Scalars['String'],labelSingular: Scalars['String'],labelPlural: Scalars['String'],description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortcut?: (Scalars['String'] | null),color?: (Scalars['String'] | null),skipNameField?: (Scalars['Boolean'] | null),isRemote?: (Scalars['Boolean'] | null),primaryKeyColumnType?: (Scalars['String'] | null),primaryKeyFieldMetadataSettings?: (Scalars['JSON'] | null),isLabelSyncedWithName?: (Scalars['Boolean'] | null)}
+
+export interface DeleteOneObjectInput {
+/** The id of the record to delete. */
+id: Scalars['UUID']}
+
+export interface UpdateOneObjectInput {update: UpdateObjectPayload,
+/** The id of the object to update */
+id: Scalars['UUID']}
+
+export interface UpdateObjectPayload {labelSingular?: (Scalars['String'] | null),labelPlural?: (Scalars['String'] | null),nameSingular?: (Scalars['String'] | null),namePlural?: (Scalars['String'] | null),description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortcut?: (Scalars['String'] | null),color?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null),labelIdentifierFieldMetadataId?: (Scalars['UUID'] | null),imageIdentifierFieldMetadataId?: (Scalars['UUID'] | null),isLabelSyncedWithName?: (Scalars['Boolean'] | null),isSearchable?: (Scalars['Boolean'] | null)}
+
 export interface CreateApiKeyInput {name: Scalars['String'],expiresAt: Scalars['String'],revokedAt?: (Scalars['String'] | null),roleId: Scalars['UUID']}
 
 export interface UpdateApiKeyInput {id: Scalars['UUID'],name?: (Scalars['String'] | null),expiresAt?: (Scalars['String'] | null),revokedAt?: (Scalars['String'] | null)}
 
 export interface RevokeApiKeyInput {id: Scalars['UUID']}
 
+export interface UpdateWorkspaceMemberSettingsInput {workspaceMemberId: Scalars['UUID'],update: Scalars['JSON']}
+
 export interface CreateApprovedAccessDomainInput {domain: Scalars['String'],email: Scalars['String']}
 
 export interface DeleteApprovedAccessDomainInput {id: Scalars['UUID']}
 
 export interface ValidateApprovedAccessDomainInput {validationToken: Scalars['String'],approvedAccessDomainId: Scalars['UUID']}
+
+export interface ActivateWorkspaceInput {
+/** Deprecated: the workspace name is set at creation (signUpInNewWorkspace) and this field is ignored during activation. Kept for backward compatibility. */
+displayName?: (Scalars['String'] | null)}
+
+export interface UpdateWorkspaceInput {subdomain?: (Scalars['String'] | null),customDomain?: (Scalars['String'] | null),displayName?: (Scalars['String'] | null),logo?: (Scalars['String'] | null),inviteHash?: (Scalars['String'] | null),isPublicInviteLinkEnabled?: (Scalars['Boolean'] | null),workspaceDiscoverability?: (WorkspaceDiscoverability | null),allowImpersonation?: (Scalars['Boolean'] | null),isGoogleAuthEnabled?: (Scalars['Boolean'] | null),isMicrosoftAuthEnabled?: (Scalars['Boolean'] | null),isPasswordAuthEnabled?: (Scalars['Boolean'] | null),isGoogleAuthBypassEnabled?: (Scalars['Boolean'] | null),isMicrosoftAuthBypassEnabled?: (Scalars['Boolean'] | null),isPasswordAuthBypassEnabled?: (Scalars['Boolean'] | null),defaultRoleId?: (Scalars['UUID'] | null),isTwoFactorAuthenticationEnforced?: (Scalars['Boolean'] | null),trashRetentionDays?: (Scalars['Float'] | null),eventLogRetentionDays?: (Scalars['Float'] | null),fastModel?: (Scalars['String'] | null),smartModel?: (Scalars['String'] | null),aiAdditionalInstructions?: (Scalars['String'] | null),editableProfileFields?: (Scalars['String'][] | null),enabledAiModelIds?: (Scalars['String'][] | null),useRecommendedModels?: (Scalars['Boolean'] | null),isInternalMessagesImportEnabled?: (Scalars['Boolean'] | null)}
+
+export interface CreateViewFilterGroupInput {id?: (Scalars['UUID'] | null),parentViewFilterGroupId?: (Scalars['UUID'] | null),logicalOperator?: (ViewFilterGroupLogicalOperator | null),positionInViewFilterGroup?: (Scalars['Float'] | null),viewId: Scalars['UUID']}
+
+export interface UpdateViewFilterGroupInput {id?: (Scalars['UUID'] | null),parentViewFilterGroupId?: (Scalars['UUID'] | null),logicalOperator?: (ViewFilterGroupLogicalOperator | null),positionInViewFilterGroup?: (Scalars['Float'] | null),viewId?: (Scalars['UUID'] | null)}
 
 export interface CreatePageLayoutTabInput {title: Scalars['String'],position?: (Scalars['Float'] | null),pageLayoutId: Scalars['UUID'],layoutMode?: (PageLayoutTabLayoutMode | null)}
 
@@ -6545,41 +6710,15 @@ export interface UpdatePageLayoutWidgetWithIdInput {id: Scalars['UUID'],pageLayo
 
 export interface GridPositionInput {row: Scalars['Float'],column: Scalars['Float'],rowSpan: Scalars['Float'],columnSpan: Scalars['Float']}
 
-export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
+export interface CreateFrontComponentInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],description?: (Scalars['String'] | null),sourceComponentPath: Scalars['String'],builtComponentPath: Scalars['String'],componentName: Scalars['String'],builtComponentChecksum: Scalars['String']}
 
-export interface UpdatePageLayoutWidgetInput {pageLayoutTabId?: (Scalars['UUID'] | null),title?: (Scalars['String'] | null),type?: (WidgetType | null),objectMetadataId?: (Scalars['UUID'] | null),gridPosition?: (GridPositionInput | null),position?: (Scalars['JSON'] | null),configuration?: (Scalars['JSON'] | null),conditionalDisplay?: (Scalars['JSON'] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null)}
+export interface UpdateFrontComponentInput {
+/** The id of the front component to update */
+id: Scalars['UUID'],
+/** The front component fields to update */
+update: UpdateFrontComponentInputUpdates}
 
-export interface CreateAgentInput {name?: (Scalars['String'] | null),label: Scalars['String'],icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),prompt: Scalars['String'],modelId: Scalars['String'],roleId?: (Scalars['UUID'] | null),responseFormat?: (Scalars['JSON'] | null),modelConfiguration?: (Scalars['JSON'] | null),evaluationInputs?: (Scalars['String'][] | null)}
-
-export interface UpdateAgentInput {id: Scalars['UUID'],name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),prompt?: (Scalars['String'] | null),modelId?: (Scalars['String'] | null),roleId?: (Scalars['UUID'] | null),responseFormat?: (Scalars['JSON'] | null),modelConfiguration?: (Scalars['JSON'] | null),evaluationInputs?: (Scalars['String'][] | null)}
-
-export interface CreateOneObjectInput {
-/** The object to create */
-object: CreateObjectInput}
-
-export interface CreateObjectInput {nameSingular: Scalars['String'],namePlural: Scalars['String'],labelSingular: Scalars['String'],labelPlural: Scalars['String'],description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortcut?: (Scalars['String'] | null),color?: (Scalars['String'] | null),skipNameField?: (Scalars['Boolean'] | null),isRemote?: (Scalars['Boolean'] | null),primaryKeyColumnType?: (Scalars['String'] | null),primaryKeyFieldMetadataSettings?: (Scalars['JSON'] | null),isLabelSyncedWithName?: (Scalars['Boolean'] | null)}
-
-export interface DeleteOneObjectInput {
-/** The id of the record to delete. */
-id: Scalars['UUID']}
-
-export interface UpdateOneObjectInput {update: UpdateObjectPayload,
-/** The id of the object to update */
-id: Scalars['UUID']}
-
-export interface UpdateObjectPayload {labelSingular?: (Scalars['String'] | null),labelPlural?: (Scalars['String'] | null),nameSingular?: (Scalars['String'] | null),namePlural?: (Scalars['String'] | null),description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortcut?: (Scalars['String'] | null),color?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null),labelIdentifierFieldMetadataId?: (Scalars['UUID'] | null),imageIdentifierFieldMetadataId?: (Scalars['UUID'] | null),isLabelSyncedWithName?: (Scalars['Boolean'] | null),isSearchable?: (Scalars['Boolean'] | null)}
-
-export interface CreateOneIndexInput {
-/** The custom index to create */
-index: CreateIndexInput}
-
-export interface CreateIndexInput {objectMetadataId: Scalars['UUID'],fields: CreateIndexFieldInput[],indexType: IndexType}
-
-export interface CreateIndexFieldInput {fieldMetadataId: Scalars['UUID'],subFieldName?: (Scalars['String'] | null)}
-
-export interface DeleteOneIndexInput {
-/** The id of the custom index to delete. */
-id: Scalars['UUID']}
+export interface UpdateFrontComponentInputUpdates {name?: (Scalars['String'] | null),description?: (Scalars['String'] | null)}
 
 export interface CreateLogicFunctionFromSourceInput {id?: (Scalars['UUID'] | null),universalIdentifier?: (Scalars['UUID'] | null),name: Scalars['String'],description?: (Scalars['String'] | null),timeoutSeconds?: (Scalars['Float'] | null),source?: (Scalars['JSON'] | null),cronTriggerSettings?: (Scalars['JSON'] | null),databaseEventTriggerSettings?: (Scalars['JSON'] | null),httpRouteTriggerSettings?: (Scalars['JSON'] | null),serverRouteTriggerSettings?: (Scalars['JSON'] | null),toolTriggerSettings?: (Scalars['JSON'] | null),workflowActionTriggerSettings?: (Scalars['JSON'] | null)}
 
@@ -6597,91 +6736,9 @@ update: UpdateLogicFunctionFromSourceInputUpdates}
 
 export interface UpdateLogicFunctionFromSourceInputUpdates {name?: (Scalars['String'] | null),description?: (Scalars['String'] | null),timeoutSeconds?: (Scalars['Float'] | null),sourceHandlerCode?: (Scalars['String'] | null),handlerName?: (Scalars['String'] | null),sourceHandlerPath?: (Scalars['String'] | null),cronTriggerSettings?: (Scalars['JSON'] | null),databaseEventTriggerSettings?: (Scalars['JSON'] | null),httpRouteTriggerSettings?: (Scalars['JSON'] | null),toolTriggerSettings?: (Scalars['JSON'] | null),workflowActionTriggerSettings?: (Scalars['JSON'] | null)}
 
-export interface CreateCommandMenuItemInput {workflowVersionId?: (Scalars['UUID'] | null),frontComponentId?: (Scalars['UUID'] | null),engineComponentKey: EngineComponentKey,label: Scalars['String'],icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),hotKeys?: (Scalars['String'][] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),payload?: (Scalars['JSON'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
+export interface CreateAgentInput {name?: (Scalars['String'] | null),label: Scalars['String'],icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),prompt: Scalars['String'],modelId: Scalars['String'],roleId?: (Scalars['UUID'] | null),responseFormat?: (Scalars['JSON'] | null),modelConfiguration?: (Scalars['JSON'] | null),evaluationInputs?: (Scalars['String'][] | null)}
 
-export interface UpdateCommandMenuItemInput {id: Scalars['UUID'],label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),engineComponentKey?: (EngineComponentKey | null),hotKeys?: (Scalars['String'][] | null),pageLayoutId?: (Scalars['UUID'] | null)}
-
-export interface CreateFrontComponentInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],description?: (Scalars['String'] | null),sourceComponentPath: Scalars['String'],builtComponentPath: Scalars['String'],componentName: Scalars['String'],builtComponentChecksum: Scalars['String']}
-
-export interface UpdateFrontComponentInput {
-/** The id of the front component to update */
-id: Scalars['UUID'],
-/** The front component fields to update */
-update: UpdateFrontComponentInputUpdates}
-
-export interface UpdateFrontComponentInputUpdates {name?: (Scalars['String'] | null),description?: (Scalars['String'] | null)}
-
-export interface CreateWebhookInput {id?: (Scalars['UUID'] | null),targetUrl: Scalars['String'],operations: Scalars['String'][],description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
-
-export interface UpdateWebhookInput {
-/** The id of the webhook to update */
-id: Scalars['UUID'],
-/** The webhook fields to update */
-update: UpdateWebhookInputUpdates}
-
-export interface UpdateWebhookInputUpdates {targetUrl?: (Scalars['String'] | null),operations?: (Scalars['String'][] | null),description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
-
-export interface CreateOneFieldMetadataInput {
-/** The record to create */
-field: CreateFieldInput}
-
-export interface CreateFieldInput {type: FieldMetadataType,name: Scalars['String'],label: Scalars['String'],description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null),isSystem?: (Scalars['Boolean'] | null),isUIEditable?: (Scalars['Boolean'] | null),isUIReadOnly?: (Scalars['Boolean'] | null),isNullable?: (Scalars['Boolean'] | null),isUnique?: (Scalars['Boolean'] | null),defaultValue?: (Scalars['JSON'] | null),options?: (Scalars['JSON'] | null),settings?: (Scalars['JSON'] | null),objectMetadataId: Scalars['UUID'],isLabelSyncedWithName?: (Scalars['Boolean'] | null),isRemoteCreation?: (Scalars['Boolean'] | null),relationCreationPayload?: (Scalars['JSON'] | null),morphRelationsCreationPayload?: (Scalars['JSON'][] | null)}
-
-export interface UpdateOneFieldMetadataInput {
-/** The id of the record to update */
-id: Scalars['UUID'],
-/** The record to update */
-update: UpdateFieldInput}
-
-export interface UpdateFieldInput {universalIdentifier?: (Scalars['String'] | null),name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),isActive?: (Scalars['Boolean'] | null),isSystem?: (Scalars['Boolean'] | null),isUIEditable?: (Scalars['Boolean'] | null),isUIReadOnly?: (Scalars['Boolean'] | null),isNullable?: (Scalars['Boolean'] | null),isUnique?: (Scalars['Boolean'] | null),defaultValue?: (Scalars['JSON'] | null),options?: (Scalars['JSON'] | null),settings?: (Scalars['JSON'] | null),objectMetadataId?: (Scalars['UUID'] | null),isLabelSyncedWithName?: (Scalars['Boolean'] | null),morphRelationsUpdatePayload?: (Scalars['JSON'][] | null)}
-
-export interface DeleteOneFieldInput {
-/** The id of the field to delete. */
-id: Scalars['UUID']}
-
-export interface CreateViewGroupInput {id?: (Scalars['UUID'] | null),isVisible?: (Scalars['Boolean'] | null),fieldValue: Scalars['String'],position?: (Scalars['Float'] | null),viewId: Scalars['UUID']}
-
-export interface UpdateViewGroupInput {
-/** The id of the view group to update */
-id: Scalars['UUID'],
-/** The view group to update */
-update: UpdateViewGroupInputUpdates}
-
-export interface UpdateViewGroupInputUpdates {fieldMetadataId?: (Scalars['UUID'] | null),isVisible?: (Scalars['Boolean'] | null),fieldValue?: (Scalars['String'] | null),position?: (Scalars['Float'] | null)}
-
-export interface DeleteViewGroupInput {
-/** The id of the view group to delete. */
-id: Scalars['UUID']}
-
-export interface DestroyViewGroupInput {
-/** The id of the view group to destroy. */
-id: Scalars['UUID']}
-
-export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId?: (Scalars['String'] | null)}
-
-export interface GetAuthorizationUrlForSSOInput {identityProviderId: Scalars['UUID'],workspaceInviteHash?: (Scalars['String'] | null)}
-
-export interface SignUpInNewWorkspaceInput {displayName?: (Scalars['String'] | null),subdomain?: (Scalars['String'] | null)}
-
-export interface CreateApplicationRegistrationInput {name: Scalars['String'],universalIdentifier?: (Scalars['String'] | null),oAuthRedirectUris?: (Scalars['String'][] | null),oAuthScopes?: (Scalars['String'][] | null)}
-
-export interface UpdateApplicationRegistrationInput {id: Scalars['String'],update: UpdateApplicationRegistrationPayload}
-
-export interface UpdateApplicationRegistrationPayload {name?: (Scalars['String'] | null),oAuthRedirectUris?: (Scalars['String'][] | null),oAuthScopes?: (Scalars['String'][] | null),isListed?: (Scalars['Boolean'] | null),isPreInstalled?: (Scalars['Boolean'] | null)}
-
-export interface CreateApplicationRegistrationVariableInput {applicationRegistrationId: Scalars['String'],key: Scalars['String'],value: Scalars['String'],description?: (Scalars['String'] | null),isSecret?: (Scalars['Boolean'] | null)}
-
-export interface UpdateApplicationRegistrationVariableInput {id: Scalars['String'],update: UpdateApplicationRegistrationVariablePayload}
-
-export interface UpdateApplicationRegistrationVariablePayload {value?: (Scalars['String'] | null),resetValue?: (Scalars['Boolean'] | null),description?: (Scalars['String'] | null)}
-
-export interface UpdateWorkspaceMemberSettingsInput {workspaceMemberId: Scalars['UUID'],update: Scalars['JSON']}
-
-export interface ActivateWorkspaceInput {
-/** Deprecated: the workspace name is set at creation (signUpInNewWorkspace) and this field is ignored during activation. Kept for backward compatibility. */
-displayName?: (Scalars['String'] | null)}
-
-export interface UpdateWorkspaceInput {subdomain?: (Scalars['String'] | null),customDomain?: (Scalars['String'] | null),displayName?: (Scalars['String'] | null),logo?: (Scalars['String'] | null),inviteHash?: (Scalars['String'] | null),isPublicInviteLinkEnabled?: (Scalars['Boolean'] | null),workspaceDiscoverability?: (WorkspaceDiscoverability | null),allowImpersonation?: (Scalars['Boolean'] | null),isGoogleAuthEnabled?: (Scalars['Boolean'] | null),isMicrosoftAuthEnabled?: (Scalars['Boolean'] | null),isPasswordAuthEnabled?: (Scalars['Boolean'] | null),isGoogleAuthBypassEnabled?: (Scalars['Boolean'] | null),isMicrosoftAuthBypassEnabled?: (Scalars['Boolean'] | null),isPasswordAuthBypassEnabled?: (Scalars['Boolean'] | null),defaultRoleId?: (Scalars['UUID'] | null),isTwoFactorAuthenticationEnforced?: (Scalars['Boolean'] | null),trashRetentionDays?: (Scalars['Float'] | null),eventLogRetentionDays?: (Scalars['Float'] | null),fastModel?: (Scalars['String'] | null),smartModel?: (Scalars['String'] | null),aiAdditionalInstructions?: (Scalars['String'] | null),editableProfileFields?: (Scalars['String'][] | null),enabledAiModelIds?: (Scalars['String'][] | null),useRecommendedModels?: (Scalars['Boolean'] | null),isInternalMessagesImportEnabled?: (Scalars['Boolean'] | null)}
+export interface UpdateAgentInput {id: Scalars['UUID'],name?: (Scalars['String'] | null),label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),description?: (Scalars['String'] | null),prompt?: (Scalars['String'] | null),modelId?: (Scalars['String'] | null),roleId?: (Scalars['UUID'] | null),responseFormat?: (Scalars['JSON'] | null),modelConfiguration?: (Scalars['JSON'] | null),evaluationInputs?: (Scalars['String'][] | null)}
 
 export interface CreateRoleInput {id?: (Scalars['String'] | null),label: Scalars['String'],description?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),canUpdateAllSettings?: (Scalars['Boolean'] | null),canAccessAllTools?: (Scalars['Boolean'] | null),canReadAllObjectRecords?: (Scalars['Boolean'] | null),canUpdateAllObjectRecords?: (Scalars['Boolean'] | null),canSoftDeleteAllObjectRecords?: (Scalars['Boolean'] | null),canDestroyAllObjectRecords?: (Scalars['Boolean'] | null),canBeAssignedToUsers?: (Scalars['Boolean'] | null),canBeAssignedToAgents?: (Scalars['Boolean'] | null),canBeAssignedToApiKeys?: (Scalars['Boolean'] | null)}
 
@@ -6714,6 +6771,30 @@ export interface SetupSAMLSsoInput {name: Scalars['String'],issuer: Scalars['Str
 export interface DeleteSsoInput {identityProviderId: Scalars['UUID']}
 
 export interface EditSsoInput {id: Scalars['UUID'],status: SSOIdentityProviderStatus}
+
+export interface EmailAccountConnectionParameters {IMAP?: (ConnectionParametersInput | null),SMTP?: (ConnectionParametersInput | null),CALDAV?: (ConnectionParametersInput | null)}
+
+export interface ConnectionParametersInput {host: Scalars['String'],port: Scalars['Float'],username?: (Scalars['String'] | null),password?: (Scalars['String'] | null),connectionSecurity?: (EmailConnectionSecurity | null)}
+
+export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
+
+export interface UpdatePageLayoutWidgetInput {pageLayoutTabId?: (Scalars['UUID'] | null),title?: (Scalars['String'] | null),type?: (WidgetType | null),objectMetadataId?: (Scalars['UUID'] | null),gridPosition?: (GridPositionInput | null),position?: (Scalars['JSON'] | null),configuration?: (Scalars['JSON'] | null),conditionalDisplay?: (Scalars['JSON'] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null)}
+
+export interface CreateCommandMenuItemInput {workflowVersionId?: (Scalars['UUID'] | null),frontComponentId?: (Scalars['UUID'] | null),engineComponentKey: EngineComponentKey,label: Scalars['String'],icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),hotKeys?: (Scalars['String'][] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),payload?: (Scalars['JSON'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
+
+export interface UpdateCommandMenuItemInput {id: Scalars['UUID'],label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),engineComponentKey?: (EngineComponentKey | null),hotKeys?: (Scalars['String'][] | null),pageLayoutId?: (Scalars['UUID'] | null)}
+
+export interface CreateWebhookInput {id?: (Scalars['UUID'] | null),targetUrl: Scalars['String'],operations: Scalars['String'][],description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
+
+export interface UpdateWebhookInput {
+/** The id of the webhook to update */
+id: Scalars['UUID'],
+/** The webhook fields to update */
+update: UpdateWebhookInputUpdates}
+
+export interface UpdateWebhookInputUpdates {targetUrl?: (Scalars['String'] | null),operations?: (Scalars['String'][] | null),description?: (Scalars['String'] | null),secret?: (Scalars['String'] | null)}
+
+export interface RunAgentInput {agentUniversalIdentifier: Scalars['String'],prompt: Scalars['String'],operationId?: (Scalars['String'] | null)}
 
 export interface SendEmailViaDomainInput {emailingDomainId: Scalars['String'],to: Scalars['String'][],cc?: (Scalars['String'][] | null),bcc?: (Scalars['String'][] | null),subject: Scalars['String'],text: Scalars['String'],html?: (Scalars['String'] | null),from: Scalars['String'],replyTo?: (Scalars['String'][] | null)}
 
@@ -6757,10 +6838,6 @@ export interface SendEmailInput {connectedAccountId: Scalars['String'],to: Scala
 
 export interface SendEmailAttachmentInput {id: Scalars['String'],name: Scalars['String']}
 
-export interface EmailAccountConnectionParameters {IMAP?: (ConnectionParametersInput | null),SMTP?: (ConnectionParametersInput | null),CALDAV?: (ConnectionParametersInput | null)}
-
-export interface ConnectionParametersInput {host: Scalars['String'],port: Scalars['Float'],username?: (Scalars['String'] | null),password?: (Scalars['String'] | null),connectionSecurity?: (EmailConnectionSecurity | null)}
-
 export interface UpdateLabPublicFeatureFlagInput {publicFeatureFlag: Scalars['String'],value: Scalars['Boolean']}
 
 export interface CreateOneAppTokenInput {
@@ -6786,7 +6863,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingProductDTO"')
       return BillingProductDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApiKey_possibleTypes: string[] = ['ApiKey']
@@ -6794,7 +6871,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApiKey"')
       return ApiKey_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationRegistrationVariable_possibleTypes: string[] = ['ApplicationRegistrationVariable']
@@ -6802,7 +6879,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationVariable"')
       return ApplicationRegistrationVariable_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationRegistration_possibleTypes: string[] = ['ApplicationRegistration']
@@ -6810,7 +6887,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistration"')
       return ApplicationRegistration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const TwoFactorAuthenticationMethodSummary_possibleTypes: string[] = ['TwoFactorAuthenticationMethodSummary']
@@ -6818,7 +6895,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isTwoFactorAuthenticationMethodSummary"')
       return TwoFactorAuthenticationMethodSummary_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RowLevelPermissionPredicateGroup_possibleTypes: string[] = ['RowLevelPermissionPredicateGroup']
@@ -6826,7 +6903,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRowLevelPermissionPredicateGroup"')
       return RowLevelPermissionPredicateGroup_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RowLevelPermissionPredicate_possibleTypes: string[] = ['RowLevelPermissionPredicate']
@@ -6834,7 +6911,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRowLevelPermissionPredicate"')
       return RowLevelPermissionPredicate_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectPermission_possibleTypes: string[] = ['ObjectPermission']
@@ -6842,7 +6919,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectPermission"')
       return ObjectPermission_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const UserWorkspace_possibleTypes: string[] = ['UserWorkspace']
@@ -6850,7 +6927,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isUserWorkspace"')
       return UserWorkspace_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FullName_possibleTypes: string[] = ['FullName']
@@ -6858,7 +6935,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFullName"')
       return FullName_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WorkspaceMember_possibleTypes: string[] = ['WorkspaceMember']
@@ -6866,7 +6943,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMember"')
       return WorkspaceMember_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Agent_possibleTypes: string[] = ['Agent']
@@ -6874,7 +6951,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgent"')
       return Agent_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FieldPermission_possibleTypes: string[] = ['FieldPermission']
@@ -6882,7 +6959,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFieldPermission"')
       return FieldPermission_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RolePermissionFlag_possibleTypes: string[] = ['RolePermissionFlag']
@@ -6890,7 +6967,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRolePermissionFlag"')
       return RolePermissionFlag_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApiKeyForRole_possibleTypes: string[] = ['ApiKeyForRole']
@@ -6898,7 +6975,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApiKeyForRole"')
       return ApiKeyForRole_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Role_possibleTypes: string[] = ['Role']
@@ -6906,7 +6983,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRole"')
       return Role_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationRegistrationSummary_possibleTypes: string[] = ['ApplicationRegistrationSummary']
@@ -6914,7 +6991,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationSummary"')
       return ApplicationRegistrationSummary_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationVariable_possibleTypes: string[] = ['ApplicationVariable']
@@ -6922,7 +6999,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationVariable"')
       return ApplicationVariable_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AuthToken_possibleTypes: string[] = ['AuthToken']
@@ -6930,7 +7007,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAuthToken"')
       return AuthToken_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationTokenPair_possibleTypes: string[] = ['ApplicationTokenPair']
@@ -6938,7 +7015,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationTokenPair"')
       return ApplicationTokenPair_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FrontComponent_possibleTypes: string[] = ['FrontComponent']
@@ -6946,7 +7023,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFrontComponent"')
       return FrontComponent_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CommandMenuItem_possibleTypes: string[] = ['CommandMenuItem']
@@ -6954,7 +7031,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCommandMenuItem"')
       return CommandMenuItem_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CommandMenuItemPayload_possibleTypes: string[] = ['PathCommandMenuItemPayload','ObjectMetadataCommandMenuItemPayload']
@@ -6962,7 +7039,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCommandMenuItemPayload"')
       return CommandMenuItemPayload_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PathCommandMenuItemPayload_possibleTypes: string[] = ['PathCommandMenuItemPayload']
@@ -6970,7 +7047,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPathCommandMenuItemPayload"')
       return PathCommandMenuItemPayload_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectMetadataCommandMenuItemPayload_possibleTypes: string[] = ['ObjectMetadataCommandMenuItemPayload']
@@ -6978,7 +7055,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectMetadataCommandMenuItemPayload"')
       return ObjectMetadataCommandMenuItemPayload_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const LogicFunction_possibleTypes: string[] = ['LogicFunction']
@@ -6986,7 +7063,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLogicFunction"')
       return LogicFunction_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Field_possibleTypes: string[] = ['Field']
@@ -6994,7 +7071,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isField"')
       return Field_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Index_possibleTypes: string[] = ['Index']
@@ -7002,7 +7079,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isIndex"')
       return Index_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Object_possibleTypes: string[] = ['Object']
@@ -7010,7 +7087,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObject"')
       return Object_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Application_possibleTypes: string[] = ['Application']
@@ -7018,7 +7095,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplication"')
       return Application_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewField_possibleTypes: string[] = ['ViewField']
@@ -7026,7 +7103,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewField"')
       return ViewField_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewFilterGroup_possibleTypes: string[] = ['ViewFilterGroup']
@@ -7034,7 +7111,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewFilterGroup"')
       return ViewFilterGroup_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewFilter_possibleTypes: string[] = ['ViewFilter']
@@ -7042,7 +7119,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewFilter"')
       return ViewFilter_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewGroup_possibleTypes: string[] = ['ViewGroup']
@@ -7050,7 +7127,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewGroup"')
       return ViewGroup_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewSort_possibleTypes: string[] = ['ViewSort']
@@ -7058,7 +7135,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewSort"')
       return ViewSort_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewFieldGroup_possibleTypes: string[] = ['ViewFieldGroup']
@@ -7066,7 +7143,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewFieldGroup"')
       return ViewFieldGroup_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const View_possibleTypes: string[] = ['View']
@@ -7074,7 +7151,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isView"')
       return View_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Workspace_possibleTypes: string[] = ['Workspace']
@@ -7082,7 +7159,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspace"')
       return Workspace_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AppToken_possibleTypes: string[] = ['AppToken']
@@ -7090,7 +7167,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAppToken"')
       return AppToken_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const User_possibleTypes: string[] = ['User']
@@ -7098,7 +7175,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isUser"')
       return User_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RatioAggregateConfig_possibleTypes: string[] = ['RatioAggregateConfig']
@@ -7106,7 +7183,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRatioAggregateConfig"')
       return RatioAggregateConfig_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RichTextBody_possibleTypes: string[] = ['RichTextBody']
@@ -7114,7 +7191,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRichTextBody"')
       return RichTextBody_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const GridPosition_possibleTypes: string[] = ['GridPosition']
@@ -7122,7 +7199,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isGridPosition"')
       return GridPosition_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PageLayoutWidget_possibleTypes: string[] = ['PageLayoutWidget']
@@ -7130,7 +7207,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPageLayoutWidget"')
       return PageLayoutWidget_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PageLayoutWidgetPosition_possibleTypes: string[] = ['PageLayoutWidgetGridPosition','PageLayoutWidgetVerticalListPosition','PageLayoutWidgetCanvasPosition']
@@ -7138,7 +7215,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPageLayoutWidgetPosition"')
       return PageLayoutWidgetPosition_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PageLayoutWidgetGridPosition_possibleTypes: string[] = ['PageLayoutWidgetGridPosition']
@@ -7146,7 +7223,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPageLayoutWidgetGridPosition"')
       return PageLayoutWidgetGridPosition_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PageLayoutWidgetVerticalListPosition_possibleTypes: string[] = ['PageLayoutWidgetVerticalListPosition']
@@ -7154,7 +7231,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPageLayoutWidgetVerticalListPosition"')
       return PageLayoutWidgetVerticalListPosition_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PageLayoutWidgetCanvasPosition_possibleTypes: string[] = ['PageLayoutWidgetCanvasPosition']
@@ -7162,7 +7239,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPageLayoutWidgetCanvasPosition"')
       return PageLayoutWidgetCanvasPosition_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WidgetConfiguration_possibleTypes: string[] = ['AggregateChartConfiguration','StandaloneRichTextConfiguration','PieChartConfiguration','LineChartConfiguration','IframeConfiguration','BarChartConfiguration','CalendarConfiguration','FrontComponentConfiguration','EmailsConfiguration','EmailThreadConfiguration','FieldConfiguration','FieldRichTextConfiguration','FieldsConfiguration','FilesConfiguration','NotesConfiguration','TasksConfiguration','TimelineConfiguration','ViewConfiguration','RecordTableConfiguration','WorkflowConfiguration','WorkflowRunConfiguration','WorkflowVersionConfiguration']
@@ -7170,7 +7247,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWidgetConfiguration"')
       return WidgetConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AggregateChartConfiguration_possibleTypes: string[] = ['AggregateChartConfiguration']
@@ -7178,7 +7255,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAggregateChartConfiguration"')
       return AggregateChartConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const StandaloneRichTextConfiguration_possibleTypes: string[] = ['StandaloneRichTextConfiguration']
@@ -7186,7 +7263,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isStandaloneRichTextConfiguration"')
       return StandaloneRichTextConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PieChartConfiguration_possibleTypes: string[] = ['PieChartConfiguration']
@@ -7194,7 +7271,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPieChartConfiguration"')
       return PieChartConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const LineChartConfiguration_possibleTypes: string[] = ['LineChartConfiguration']
@@ -7202,7 +7279,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLineChartConfiguration"')
       return LineChartConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const IframeConfiguration_possibleTypes: string[] = ['IframeConfiguration']
@@ -7210,7 +7287,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isIframeConfiguration"')
       return IframeConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BarChartConfiguration_possibleTypes: string[] = ['BarChartConfiguration']
@@ -7218,7 +7295,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBarChartConfiguration"')
       return BarChartConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CalendarConfiguration_possibleTypes: string[] = ['CalendarConfiguration']
@@ -7226,7 +7303,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCalendarConfiguration"')
       return CalendarConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FrontComponentConfiguration_possibleTypes: string[] = ['FrontComponentConfiguration']
@@ -7234,7 +7311,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFrontComponentConfiguration"')
       return FrontComponentConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EmailsConfiguration_possibleTypes: string[] = ['EmailsConfiguration']
@@ -7242,7 +7319,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEmailsConfiguration"')
       return EmailsConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EmailThreadConfiguration_possibleTypes: string[] = ['EmailThreadConfiguration']
@@ -7250,7 +7327,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEmailThreadConfiguration"')
       return EmailThreadConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FieldConfiguration_possibleTypes: string[] = ['FieldConfiguration']
@@ -7258,7 +7335,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFieldConfiguration"')
       return FieldConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FieldRichTextConfiguration_possibleTypes: string[] = ['FieldRichTextConfiguration']
@@ -7266,7 +7343,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFieldRichTextConfiguration"')
       return FieldRichTextConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FieldsConfiguration_possibleTypes: string[] = ['FieldsConfiguration']
@@ -7274,7 +7351,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFieldsConfiguration"')
       return FieldsConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FilesConfiguration_possibleTypes: string[] = ['FilesConfiguration']
@@ -7282,7 +7359,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFilesConfiguration"')
       return FilesConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const NotesConfiguration_possibleTypes: string[] = ['NotesConfiguration']
@@ -7290,7 +7367,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isNotesConfiguration"')
       return NotesConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const TasksConfiguration_possibleTypes: string[] = ['TasksConfiguration']
@@ -7298,7 +7375,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isTasksConfiguration"')
       return TasksConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const TimelineConfiguration_possibleTypes: string[] = ['TimelineConfiguration']
@@ -7306,7 +7383,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isTimelineConfiguration"')
       return TimelineConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ViewConfiguration_possibleTypes: string[] = ['ViewConfiguration']
@@ -7314,7 +7391,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isViewConfiguration"')
       return ViewConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RecordTableConfiguration_possibleTypes: string[] = ['RecordTableConfiguration']
@@ -7322,7 +7399,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRecordTableConfiguration"')
       return RecordTableConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WorkflowConfiguration_possibleTypes: string[] = ['WorkflowConfiguration']
@@ -7330,7 +7407,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkflowConfiguration"')
       return WorkflowConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WorkflowRunConfiguration_possibleTypes: string[] = ['WorkflowRunConfiguration']
@@ -7338,7 +7415,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkflowRunConfiguration"')
       return WorkflowRunConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WorkflowVersionConfiguration_possibleTypes: string[] = ['WorkflowVersionConfiguration']
@@ -7346,7 +7423,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkflowVersionConfiguration"')
       return WorkflowVersionConfiguration_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PageLayoutTab_possibleTypes: string[] = ['PageLayoutTab']
@@ -7354,7 +7431,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPageLayoutTab"')
       return PageLayoutTab_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PageLayout_possibleTypes: string[] = ['PageLayout']
@@ -7362,7 +7439,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPageLayout"')
       return PageLayout_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationConnectionProviderOAuthConfig_possibleTypes: string[] = ['ApplicationConnectionProviderOAuthConfig']
@@ -7370,7 +7447,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationConnectionProviderOAuthConfig"')
       return ApplicationConnectionProviderOAuthConfig_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApplicationConnectionProvider_possibleTypes: string[] = ['ApplicationConnectionProvider']
@@ -7378,7 +7455,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationConnectionProvider"')
       return ApplicationConnectionProvider_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EnterpriseLicenseInfoDTO_possibleTypes: string[] = ['EnterpriseLicenseInfoDTO']
@@ -7386,7 +7463,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEnterpriseLicenseInfoDTO"')
       return EnterpriseLicenseInfoDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EnterpriseSubscriptionStatusDTO_possibleTypes: string[] = ['EnterpriseSubscriptionStatusDTO']
@@ -7394,7 +7471,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEnterpriseSubscriptionStatusDTO"')
       return EnterpriseSubscriptionStatusDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ApprovedAccessDomain_possibleTypes: string[] = ['ApprovedAccessDomain']
@@ -7402,7 +7479,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isApprovedAccessDomain"')
       return ApprovedAccessDomain_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FileWithSignedUrl_possibleTypes: string[] = ['FileWithSignedUrl']
@@ -7410,7 +7487,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFileWithSignedUrl"')
       return FileWithSignedUrl_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FileUploadTarget_possibleTypes: string[] = ['FileUploadTarget']
@@ -7418,7 +7495,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFileUploadTarget"')
       return FileUploadTarget_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingSubscriptionSchedulePhaseItem_possibleTypes: string[] = ['BillingSubscriptionSchedulePhaseItem']
@@ -7426,7 +7503,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionSchedulePhaseItem"')
       return BillingSubscriptionSchedulePhaseItem_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingSubscriptionSchedulePhase_possibleTypes: string[] = ['BillingSubscriptionSchedulePhase']
@@ -7434,7 +7511,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionSchedulePhase"')
       return BillingSubscriptionSchedulePhase_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingProductMetadata_possibleTypes: string[] = ['BillingProductMetadata']
@@ -7442,7 +7519,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingProductMetadata"')
       return BillingProductMetadata_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingPriceLicensed_possibleTypes: string[] = ['BillingPriceLicensed']
@@ -7450,7 +7527,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceLicensed"')
       return BillingPriceLicensed_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingPriceTier_possibleTypes: string[] = ['BillingPriceTier']
@@ -7458,7 +7535,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceTier"')
       return BillingPriceTier_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingPriceMetered_possibleTypes: string[] = ['BillingPriceMetered']
@@ -7466,7 +7543,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPriceMetered"')
       return BillingPriceMetered_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingProduct_possibleTypes: string[] = ['BillingProduct']
@@ -7474,7 +7551,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingProduct"')
       return BillingProduct_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingLicensedProduct_possibleTypes: string[] = ['BillingLicensedProduct']
@@ -7482,7 +7559,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingLicensedProduct"')
       return BillingLicensedProduct_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingMeteredProduct_possibleTypes: string[] = ['BillingMeteredProduct']
@@ -7490,7 +7567,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingMeteredProduct"')
       return BillingMeteredProduct_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingSubscriptionItem_possibleTypes: string[] = ['BillingSubscriptionItem']
@@ -7498,7 +7575,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionItem"')
       return BillingSubscriptionItem_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingCustomer_possibleTypes: string[] = ['BillingCustomer']
@@ -7506,7 +7583,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingCustomer"')
       return BillingCustomer_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingSubscription_possibleTypes: string[] = ['BillingSubscription']
@@ -7514,7 +7591,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscription"')
       return BillingSubscription_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingEndTrialPeriod_possibleTypes: string[] = ['BillingEndTrialPeriod']
@@ -7522,7 +7599,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingEndTrialPeriod"')
       return BillingEndTrialPeriod_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingResourceCreditUsage_possibleTypes: string[] = ['BillingResourceCreditUsage']
@@ -7530,7 +7607,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingResourceCreditUsage"')
       return BillingResourceCreditUsage_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingPlan_possibleTypes: string[] = ['BillingPlan']
@@ -7538,7 +7615,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPlan"')
       return BillingPlan_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingPaymentIntent_possibleTypes: string[] = ['BillingPaymentIntent']
@@ -7546,7 +7623,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingPaymentIntent"')
       return BillingPaymentIntent_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingSession_possibleTypes: string[] = ['BillingSession']
@@ -7554,7 +7631,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSession"')
       return BillingSession_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingUpdate_possibleTypes: string[] = ['BillingUpdate']
@@ -7562,7 +7639,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingUpdate"')
       return BillingUpdate_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ManagedProviderBillingStatus_possibleTypes: string[] = ['ManagedProviderBillingStatus']
@@ -7570,7 +7647,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderBillingStatus"')
       return ManagedProviderBillingStatus_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const InviteSuggestion_possibleTypes: string[] = ['InviteSuggestion']
@@ -7578,7 +7655,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isInviteSuggestion"')
       return InviteSuggestion_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const OnboardingStepSuccess_possibleTypes: string[] = ['OnboardingStepSuccess']
@@ -7586,7 +7663,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isOnboardingStepSuccess"')
       return OnboardingStepSuccess_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WorkspaceInvitation_possibleTypes: string[] = ['WorkspaceInvitation']
@@ -7594,7 +7671,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceInvitation"')
       return WorkspaceInvitation_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const SendInvitations_possibleTypes: string[] = ['SendInvitations']
@@ -7602,7 +7679,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isSendInvitations"')
       return SendInvitations_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RecordIdentifier_possibleTypes: string[] = ['RecordIdentifier']
@@ -7610,7 +7687,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRecordIdentifier"')
       return RecordIdentifier_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const NavigationMenuItem_possibleTypes: string[] = ['NavigationMenuItem']
@@ -7618,7 +7695,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isNavigationMenuItem"')
       return NavigationMenuItem_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectRecordEventProperties_possibleTypes: string[] = ['ObjectRecordEventProperties']
@@ -7626,7 +7703,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectRecordEventProperties"')
       return ObjectRecordEventProperties_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const MetadataEvent_possibleTypes: string[] = ['MetadataEvent']
@@ -7634,7 +7711,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMetadataEvent"')
       return MetadataEvent_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectRecordEvent_possibleTypes: string[] = ['ObjectRecordEvent']
@@ -7642,7 +7719,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectRecordEvent"')
       return ObjectRecordEvent_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectRecordEventWithQueryIds_possibleTypes: string[] = ['ObjectRecordEventWithQueryIds']
@@ -7650,7 +7727,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectRecordEventWithQueryIds"')
       return ObjectRecordEventWithQueryIds_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EventSubscription_possibleTypes: string[] = ['EventSubscription']
@@ -7658,7 +7735,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEventSubscription"')
       return EventSubscription_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const LogicFunctionExecutionResult_possibleTypes: string[] = ['LogicFunctionExecutionResult']
@@ -7666,7 +7743,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLogicFunctionExecutionResult"')
       return LogicFunctionExecutionResult_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ActionApprovalEvidenceLink_possibleTypes: string[] = ['ActionApprovalEvidenceLink']
@@ -7674,7 +7751,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isActionApprovalEvidenceLink"')
       return ActionApprovalEvidenceLink_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ActionApprovalProposal_possibleTypes: string[] = ['ActionApprovalProposal']
@@ -7682,7 +7759,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isActionApprovalProposal"')
       return ActionApprovalProposal_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ActionExecutionReceipt_possibleTypes: string[] = ['ActionExecutionReceipt']
@@ -7690,751 +7767,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isActionExecutionReceipt"')
       return ActionExecutionReceipt_possibleTypes.includes(obj.__typename)
     }
-    
 
-
-    const FeatureFlag_possibleTypes: string[] = ['FeatureFlag']
-    export const isFeatureFlag = (obj?: { __typename?: any } | null): obj is FeatureFlag => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isFeatureFlag"')
-      return FeatureFlag_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const WorkspaceUrls_possibleTypes: string[] = ['WorkspaceUrls']
-    export const isWorkspaceUrls = (obj?: { __typename?: any } | null): obj is WorkspaceUrls => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceUrls"')
-      return WorkspaceUrls_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ApplicationRegistrationVariableDTO_possibleTypes: string[] = ['ApplicationRegistrationVariableDTO']
-    export const isApplicationRegistrationVariableDTO = (obj?: { __typename?: any } | null): obj is ApplicationRegistrationVariableDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationVariableDTO"')
-      return ApplicationRegistrationVariableDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const VersionDistributionEntry_possibleTypes: string[] = ['VersionDistributionEntry']
-    export const isVersionDistributionEntry = (obj?: { __typename?: any } | null): obj is VersionDistributionEntry => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isVersionDistributionEntry"')
-      return VersionDistributionEntry_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ApplicationRegistrationStats_possibleTypes: string[] = ['ApplicationRegistrationStats']
-    export const isApplicationRegistrationStats = (obj?: { __typename?: any } | null): obj is ApplicationRegistrationStats => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationStats"')
-      return ApplicationRegistrationStats_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingTrialPeriod_possibleTypes: string[] = ['BillingTrialPeriod']
-    export const isBillingTrialPeriod = (obj?: { __typename?: any } | null): obj is BillingTrialPeriod => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingTrialPeriod"')
-      return BillingTrialPeriod_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SSOIdentityProvider_possibleTypes: string[] = ['SSOIdentityProvider']
-    export const isSSOIdentityProvider = (obj?: { __typename?: any } | null): obj is SSOIdentityProvider => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSSOIdentityProvider"')
-      return SSOIdentityProvider_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AuthProviders_possibleTypes: string[] = ['AuthProviders']
-    export const isAuthProviders = (obj?: { __typename?: any } | null): obj is AuthProviders => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthProviders"')
-      return AuthProviders_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AuthBypassProviders_possibleTypes: string[] = ['AuthBypassProviders']
-    export const isAuthBypassProviders = (obj?: { __typename?: any } | null): obj is AuthBypassProviders => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthBypassProviders"')
-      return AuthBypassProviders_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicWorkspaceData_possibleTypes: string[] = ['PublicWorkspaceData']
-    export const isPublicWorkspaceData = (obj?: { __typename?: any } | null): obj is PublicWorkspaceData => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicWorkspaceData"')
-      return PublicWorkspaceData_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicWorkspaceDataSummary_possibleTypes: string[] = ['PublicWorkspaceDataSummary']
-    export const isPublicWorkspaceDataSummary = (obj?: { __typename?: any } | null): obj is PublicWorkspaceDataSummary => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicWorkspaceDataSummary"')
-      return PublicWorkspaceDataSummary_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const NativeModelCapabilities_possibleTypes: string[] = ['NativeModelCapabilities']
-    export const isNativeModelCapabilities = (obj?: { __typename?: any } | null): obj is NativeModelCapabilities => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isNativeModelCapabilities"')
-      return NativeModelCapabilities_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ClientAiModelConfig_possibleTypes: string[] = ['ClientAiModelConfig']
-    export const isClientAiModelConfig = (obj?: { __typename?: any } | null): obj is ClientAiModelConfig => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isClientAiModelConfig"')
-      return ClientAiModelConfig_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Billing_possibleTypes: string[] = ['Billing']
-    export const isBilling = (obj?: { __typename?: any } | null): obj is Billing => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBilling"')
-      return Billing_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Support_possibleTypes: string[] = ['Support']
-    export const isSupport = (obj?: { __typename?: any } | null): obj is Support => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSupport"')
-      return Support_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Sentry_possibleTypes: string[] = ['Sentry']
-    export const isSentry = (obj?: { __typename?: any } | null): obj is Sentry => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSentry"')
-      return Sentry_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Captcha_possibleTypes: string[] = ['Captcha']
-    export const isCaptcha = (obj?: { __typename?: any } | null): obj is Captcha => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCaptcha"')
-      return Captcha_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ApiConfig_possibleTypes: string[] = ['ApiConfig']
-    export const isApiConfig = (obj?: { __typename?: any } | null): obj is ApiConfig => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isApiConfig"')
-      return ApiConfig_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicFeatureFlagMetadata_possibleTypes: string[] = ['PublicFeatureFlagMetadata']
-    export const isPublicFeatureFlagMetadata = (obj?: { __typename?: any } | null): obj is PublicFeatureFlagMetadata => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicFeatureFlagMetadata"')
-      return PublicFeatureFlagMetadata_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicFeatureFlag_possibleTypes: string[] = ['PublicFeatureFlag']
-    export const isPublicFeatureFlag = (obj?: { __typename?: any } | null): obj is PublicFeatureFlag => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicFeatureFlag"')
-      return PublicFeatureFlag_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ClientConfigMaintenanceMode_possibleTypes: string[] = ['ClientConfigMaintenanceMode']
-    export const isClientConfigMaintenanceMode = (obj?: { __typename?: any } | null): obj is ClientConfigMaintenanceMode => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isClientConfigMaintenanceMode"')
-      return ClientConfigMaintenanceMode_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ClientConfig_possibleTypes: string[] = ['ClientConfig']
-    export const isClientConfig = (obj?: { __typename?: any } | null): obj is ClientConfig => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isClientConfig"')
-      return ClientConfig_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const UsageBreakdownItem_possibleTypes: string[] = ['UsageBreakdownItem']
-    export const isUsageBreakdownItem = (obj?: { __typename?: any } | null): obj is UsageBreakdownItem => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageBreakdownItem"')
-      return UsageBreakdownItem_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CreateApplicationRegistration_possibleTypes: string[] = ['CreateApplicationRegistration']
-    export const isCreateApplicationRegistration = (obj?: { __typename?: any } | null): obj is CreateApplicationRegistration => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCreateApplicationRegistration"')
-      return CreateApplicationRegistration_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicApplicationRegistration_possibleTypes: string[] = ['PublicApplicationRegistration']
-    export const isPublicApplicationRegistration = (obj?: { __typename?: any } | null): obj is PublicApplicationRegistration => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicApplicationRegistration"')
-      return PublicApplicationRegistration_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const RotateClientSecret_possibleTypes: string[] = ['RotateClientSecret']
-    export const isRotateClientSecret = (obj?: { __typename?: any } | null): obj is RotateClientSecret => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isRotateClientSecret"')
-      return RotateClientSecret_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Relation_possibleTypes: string[] = ['Relation']
-    export const isRelation = (obj?: { __typename?: any } | null): obj is Relation => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isRelation"')
-      return Relation_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const IndexField_possibleTypes: string[] = ['IndexField']
-    export const isIndexField = (obj?: { __typename?: any } | null): obj is IndexField => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isIndexField"')
-      return IndexField_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const IndexEdge_possibleTypes: string[] = ['IndexEdge']
-    export const isIndexEdge = (obj?: { __typename?: any } | null): obj is IndexEdge => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isIndexEdge"')
-      return IndexEdge_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PageInfo_possibleTypes: string[] = ['PageInfo']
-    export const isPageInfo = (obj?: { __typename?: any } | null): obj is PageInfo => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPageInfo"')
-      return PageInfo_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const IndexConnection_possibleTypes: string[] = ['IndexConnection']
-    export const isIndexConnection = (obj?: { __typename?: any } | null): obj is IndexConnection => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isIndexConnection"')
-      return IndexConnection_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ObjectEdge_possibleTypes: string[] = ['ObjectEdge']
-    export const isObjectEdge = (obj?: { __typename?: any } | null): obj is ObjectEdge => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectEdge"')
-      return ObjectEdge_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const IndexObjectMetadataConnection_possibleTypes: string[] = ['IndexObjectMetadataConnection']
-    export const isIndexObjectMetadataConnection = (obj?: { __typename?: any } | null): obj is IndexObjectMetadataConnection => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isIndexObjectMetadataConnection"')
-      return IndexObjectMetadataConnection_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ObjectRecordCount_possibleTypes: string[] = ['ObjectRecordCount']
-    export const isObjectRecordCount = (obj?: { __typename?: any } | null): obj is ObjectRecordCount => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectRecordCount"')
-      return ObjectRecordCount_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SearchField_possibleTypes: string[] = ['SearchField']
-    export const isSearchField = (obj?: { __typename?: any } | null): obj is SearchField => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSearchField"')
-      return SearchField_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ObjectConnection_possibleTypes: string[] = ['ObjectConnection']
-    export const isObjectConnection = (obj?: { __typename?: any } | null): obj is ObjectConnection => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectConnection"')
-      return ObjectConnection_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ObjectIndexMetadatasConnection_possibleTypes: string[] = ['ObjectIndexMetadatasConnection']
-    export const isObjectIndexMetadatasConnection = (obj?: { __typename?: any } | null): obj is ObjectIndexMetadatasConnection => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectIndexMetadatasConnection"')
-      return ObjectIndexMetadatasConnection_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const FieldEdge_possibleTypes: string[] = ['FieldEdge']
-    export const isFieldEdge = (obj?: { __typename?: any } | null): obj is FieldEdge => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isFieldEdge"')
-      return FieldEdge_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ObjectFieldsConnection_possibleTypes: string[] = ['ObjectFieldsConnection']
-    export const isObjectFieldsConnection = (obj?: { __typename?: any } | null): obj is ObjectFieldsConnection => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectFieldsConnection"')
-      return ObjectFieldsConnection_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const FieldConnection_possibleTypes: string[] = ['FieldConnection']
-    export const isFieldConnection = (obj?: { __typename?: any } | null): obj is FieldConnection => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isFieldConnection"')
-      return FieldConnection_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AppConnection_possibleTypes: string[] = ['AppConnection']
-    export const isAppConnection = (obj?: { __typename?: any } | null): obj is AppConnection => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAppConnection"')
-      return AppConnection_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ResendEmailVerificationToken_possibleTypes: string[] = ['ResendEmailVerificationToken']
-    export const isResendEmailVerificationToken = (obj?: { __typename?: any } | null): obj is ResendEmailVerificationToken => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isResendEmailVerificationToken"')
-      return ResendEmailVerificationToken_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const DeleteSso_possibleTypes: string[] = ['DeleteSso']
-    export const isDeleteSso = (obj?: { __typename?: any } | null): obj is DeleteSso => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isDeleteSso"')
-      return DeleteSso_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const EditSso_possibleTypes: string[] = ['EditSso']
-    export const isEditSso = (obj?: { __typename?: any } | null): obj is EditSso => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isEditSso"')
-      return EditSso_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const WorkspaceNameAndId_possibleTypes: string[] = ['WorkspaceNameAndId']
-    export const isWorkspaceNameAndId = (obj?: { __typename?: any } | null): obj is WorkspaceNameAndId => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceNameAndId"')
-      return WorkspaceNameAndId_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const FindAvailableSSOIDP_possibleTypes: string[] = ['FindAvailableSSOIDP']
-    export const isFindAvailableSSOIDP = (obj?: { __typename?: any } | null): obj is FindAvailableSSOIDP => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isFindAvailableSSOIDP"')
-      return FindAvailableSSOIDP_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SetupSso_possibleTypes: string[] = ['SetupSso']
-    export const isSetupSso = (obj?: { __typename?: any } | null): obj is SetupSso => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSetupSso"')
-      return SetupSso_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SSOConnection_possibleTypes: string[] = ['SSOConnection']
-    export const isSSOConnection = (obj?: { __typename?: any } | null): obj is SSOConnection => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSSOConnection"')
-      return SSOConnection_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AvailableWorkspace_possibleTypes: string[] = ['AvailableWorkspace']
-    export const isAvailableWorkspace = (obj?: { __typename?: any } | null): obj is AvailableWorkspace => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAvailableWorkspace"')
-      return AvailableWorkspace_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AvailableWorkspaces_possibleTypes: string[] = ['AvailableWorkspaces']
-    export const isAvailableWorkspaces = (obj?: { __typename?: any } | null): obj is AvailableWorkspaces => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAvailableWorkspaces"')
-      return AvailableWorkspaces_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const DeletedWorkspaceMember_possibleTypes: string[] = ['DeletedWorkspaceMember']
-    export const isDeletedWorkspaceMember = (obj?: { __typename?: any } | null): obj is DeletedWorkspaceMember => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isDeletedWorkspaceMember"')
-      return DeletedWorkspaceMember_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MarketplaceApp_possibleTypes: string[] = ['MarketplaceApp']
-    export const isMarketplaceApp = (obj?: { __typename?: any } | null): obj is MarketplaceApp => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceApp"')
-      return MarketplaceApp_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MarketplaceAppRoleObjectPermission_possibleTypes: string[] = ['MarketplaceAppRoleObjectPermission']
-    export const isMarketplaceAppRoleObjectPermission = (obj?: { __typename?: any } | null): obj is MarketplaceAppRoleObjectPermission => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceAppRoleObjectPermission"')
-      return MarketplaceAppRoleObjectPermission_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MarketplaceAppRoleFieldPermission_possibleTypes: string[] = ['MarketplaceAppRoleFieldPermission']
-    export const isMarketplaceAppRoleFieldPermission = (obj?: { __typename?: any } | null): obj is MarketplaceAppRoleFieldPermission => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceAppRoleFieldPermission"')
-      return MarketplaceAppRoleFieldPermission_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MarketplaceAppRole_possibleTypes: string[] = ['MarketplaceAppRole']
-    export const isMarketplaceAppRole = (obj?: { __typename?: any } | null): obj is MarketplaceAppRole => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceAppRole"')
-      return MarketplaceAppRole_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const MarketplaceAppDetail_possibleTypes: string[] = ['MarketplaceAppDetail']
-    export const isMarketplaceAppDetail = (obj?: { __typename?: any } | null): obj is MarketplaceAppDetail => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceAppDetail"')
-      return MarketplaceAppDetail_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingEntitlement_possibleTypes: string[] = ['BillingEntitlement']
-    export const isBillingEntitlement = (obj?: { __typename?: any } | null): obj is BillingEntitlement => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingEntitlement"')
-      return BillingEntitlement_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const DomainRecord_possibleTypes: string[] = ['DomainRecord']
-    export const isDomainRecord = (obj?: { __typename?: any } | null): obj is DomainRecord => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isDomainRecord"')
-      return DomainRecord_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const DomainValidRecords_possibleTypes: string[] = ['DomainValidRecords']
-    export const isDomainValidRecords = (obj?: { __typename?: any } | null): obj is DomainValidRecords => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isDomainValidRecords"')
-      return DomainValidRecords_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const UpsertRowLevelPermissionPredicatesResult_possibleTypes: string[] = ['UpsertRowLevelPermissionPredicatesResult']
-    export const isUpsertRowLevelPermissionPredicatesResult = (obj?: { __typename?: any } | null): obj is UpsertRowLevelPermissionPredicatesResult => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isUpsertRowLevelPermissionPredicatesResult"')
-      return UpsertRowLevelPermissionPredicatesResult_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const LogicFunctionLogs_possibleTypes: string[] = ['LogicFunctionLogs']
-    export const isLogicFunctionLogs = (obj?: { __typename?: any } | null): obj is LogicFunctionLogs => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isLogicFunctionLogs"')
-      return LogicFunctionLogs_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicConnectionParametersOutput_possibleTypes: string[] = ['PublicConnectionParametersOutput']
-    export const isPublicConnectionParametersOutput = (obj?: { __typename?: any } | null): obj is PublicConnectionParametersOutput => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicConnectionParametersOutput"')
-      return PublicConnectionParametersOutput_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicImapSmtpCaldavConnectionParameters_possibleTypes: string[] = ['PublicImapSmtpCaldavConnectionParameters']
-    export const isPublicImapSmtpCaldavConnectionParameters = (obj?: { __typename?: any } | null): obj is PublicImapSmtpCaldavConnectionParameters => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicImapSmtpCaldavConnectionParameters"')
-      return PublicImapSmtpCaldavConnectionParameters_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ConnectedAccountPublicDTO_possibleTypes: string[] = ['ConnectedAccountPublicDTO']
-    export const isConnectedAccountPublicDTO = (obj?: { __typename?: any } | null): obj is ConnectedAccountPublicDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isConnectedAccountPublicDTO"')
-      return ConnectedAccountPublicDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const DeleteTwoFactorAuthenticationMethod_possibleTypes: string[] = ['DeleteTwoFactorAuthenticationMethod']
-    export const isDeleteTwoFactorAuthenticationMethod = (obj?: { __typename?: any } | null): obj is DeleteTwoFactorAuthenticationMethod => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isDeleteTwoFactorAuthenticationMethod"')
-      return DeleteTwoFactorAuthenticationMethod_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const InitiateTwoFactorAuthenticationProvisioning_possibleTypes: string[] = ['InitiateTwoFactorAuthenticationProvisioning']
-    export const isInitiateTwoFactorAuthenticationProvisioning = (obj?: { __typename?: any } | null): obj is InitiateTwoFactorAuthenticationProvisioning => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isInitiateTwoFactorAuthenticationProvisioning"')
-      return InitiateTwoFactorAuthenticationProvisioning_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const VerifyTwoFactorAuthenticationMethod_possibleTypes: string[] = ['VerifyTwoFactorAuthenticationMethod']
-    export const isVerifyTwoFactorAuthenticationMethod = (obj?: { __typename?: any } | null): obj is VerifyTwoFactorAuthenticationMethod => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isVerifyTwoFactorAuthenticationMethod"')
-      return VerifyTwoFactorAuthenticationMethod_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AuthorizeApp_possibleTypes: string[] = ['AuthorizeApp']
-    export const isAuthorizeApp = (obj?: { __typename?: any } | null): obj is AuthorizeApp => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthorizeApp"')
-      return AuthorizeApp_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AuthTokenPair_possibleTypes: string[] = ['AuthTokenPair']
-    export const isAuthTokenPair = (obj?: { __typename?: any } | null): obj is AuthTokenPair => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthTokenPair"')
-      return AuthTokenPair_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AvailableWorkspacesAndAccessTokens_possibleTypes: string[] = ['AvailableWorkspacesAndAccessTokens']
-    export const isAvailableWorkspacesAndAccessTokens = (obj?: { __typename?: any } | null): obj is AvailableWorkspacesAndAccessTokens => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAvailableWorkspacesAndAccessTokens"')
-      return AvailableWorkspacesAndAccessTokens_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const EmailPasswordResetLink_possibleTypes: string[] = ['EmailPasswordResetLink']
-    export const isEmailPasswordResetLink = (obj?: { __typename?: any } | null): obj is EmailPasswordResetLink => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isEmailPasswordResetLink"')
-      return EmailPasswordResetLink_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const GetAuthorizationUrlForSSO_possibleTypes: string[] = ['GetAuthorizationUrlForSSO']
-    export const isGetAuthorizationUrlForSSO = (obj?: { __typename?: any } | null): obj is GetAuthorizationUrlForSSO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isGetAuthorizationUrlForSSO"')
-      return GetAuthorizationUrlForSSO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const InvalidatePassword_possibleTypes: string[] = ['InvalidatePassword']
-    export const isInvalidatePassword = (obj?: { __typename?: any } | null): obj is InvalidatePassword => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isInvalidatePassword"')
-      return InvalidatePassword_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const WorkspaceUrlsAndId_possibleTypes: string[] = ['WorkspaceUrlsAndId']
-    export const isWorkspaceUrlsAndId = (obj?: { __typename?: any } | null): obj is WorkspaceUrlsAndId => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceUrlsAndId"')
-      return WorkspaceUrlsAndId_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SignUp_possibleTypes: string[] = ['SignUp']
-    export const isSignUp = (obj?: { __typename?: any } | null): obj is SignUp => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSignUp"')
-      return SignUp_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const TransientToken_possibleTypes: string[] = ['TransientToken']
-    export const isTransientToken = (obj?: { __typename?: any } | null): obj is TransientToken => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isTransientToken"')
-      return TransientToken_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ValidatePasswordResetToken_possibleTypes: string[] = ['ValidatePasswordResetToken']
-    export const isValidatePasswordResetToken = (obj?: { __typename?: any } | null): obj is ValidatePasswordResetToken => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isValidatePasswordResetToken"')
-      return ValidatePasswordResetToken_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const VerifyEmailAndGetLoginToken_possibleTypes: string[] = ['VerifyEmailAndGetLoginToken']
-    export const isVerifyEmailAndGetLoginToken = (obj?: { __typename?: any } | null): obj is VerifyEmailAndGetLoginToken => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isVerifyEmailAndGetLoginToken"')
-      return VerifyEmailAndGetLoginToken_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SubdomainAvailabilityDTO_possibleTypes: string[] = ['SubdomainAvailabilityDTO']
-    export const isSubdomainAvailabilityDTO = (obj?: { __typename?: any } | null): obj is SubdomainAvailabilityDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSubdomainAvailabilityDTO"')
-      return SubdomainAvailabilityDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const WorkspaceCreationDefaultsDTO_possibleTypes: string[] = ['WorkspaceCreationDefaultsDTO']
-    export const isWorkspaceCreationDefaultsDTO = (obj?: { __typename?: any } | null): obj is WorkspaceCreationDefaultsDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceCreationDefaultsDTO"')
-      return WorkspaceCreationDefaultsDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ApiKeyToken_possibleTypes: string[] = ['ApiKeyToken']
-    export const isApiKeyToken = (obj?: { __typename?: any } | null): obj is ApiKeyToken => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isApiKeyToken"')
-      return ApiKeyToken_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AuthTokens_possibleTypes: string[] = ['AuthTokens']
-    export const isAuthTokens = (obj?: { __typename?: any } | null): obj is AuthTokens => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthTokens"')
-      return AuthTokens_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const LoginToken_possibleTypes: string[] = ['LoginToken']
-    export const isLoginToken = (obj?: { __typename?: any } | null): obj is LoginToken => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isLoginToken"')
-      return LoginToken_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CheckUserExist_possibleTypes: string[] = ['CheckUserExist']
-    export const isCheckUserExist = (obj?: { __typename?: any } | null): obj is CheckUserExist => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCheckUserExist"')
-      return CheckUserExist_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const WorkspaceInviteHashValid_possibleTypes: string[] = ['WorkspaceInviteHashValid']
-    export const isWorkspaceInviteHashValid = (obj?: { __typename?: any } | null): obj is WorkspaceInviteHashValid => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceInviteHashValid"')
-      return WorkspaceInviteHashValid_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Impersonate_possibleTypes: string[] = ['Impersonate']
-    export const isImpersonate = (obj?: { __typename?: any } | null): obj is Impersonate => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isImpersonate"')
-      return Impersonate_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const UsageTimeSeries_possibleTypes: string[] = ['UsageTimeSeries']
-    export const isUsageTimeSeries = (obj?: { __typename?: any } | null): obj is UsageTimeSeries => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageTimeSeries"')
-      return UsageTimeSeries_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const UsageUserDaily_possibleTypes: string[] = ['UsageUserDaily']
-    export const isUsageUserDaily = (obj?: { __typename?: any } | null): obj is UsageUserDaily => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageUserDaily"')
-      return UsageUserDaily_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const UsageAnalytics_possibleTypes: string[] = ['UsageAnalytics']
-    export const isUsageAnalytics = (obj?: { __typename?: any } | null): obj is UsageAnalytics => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageAnalytics"')
-      return UsageAnalytics_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const DevelopmentApplication_possibleTypes: string[] = ['DevelopmentApplication']
-    export const isDevelopmentApplication = (obj?: { __typename?: any } | null): obj is DevelopmentApplication => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isDevelopmentApplication"')
-      return DevelopmentApplication_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const WorkspaceMigration_possibleTypes: string[] = ['WorkspaceMigration']
-    export const isWorkspaceMigration = (obj?: { __typename?: any } | null): obj is WorkspaceMigration => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMigration"')
-      return WorkspaceMigration_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const File_possibleTypes: string[] = ['File']
-    export const isFile = (obj?: { __typename?: any } | null): obj is File => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isFile"')
-      return File_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicDomain_possibleTypes: string[] = ['PublicDomain']
-    export const isPublicDomain = (obj?: { __typename?: any } | null): obj is PublicDomain => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicDomain"')
-      return PublicDomain_possibleTypes.includes(obj.__typename)
-    }
-    
 
 
     const VerificationRecord_possibleTypes: string[] = ['VerificationRecord']
@@ -8442,7 +7775,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isVerificationRecord"')
       return VerificationRecord_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EmailingDomain_possibleTypes: string[] = ['EmailingDomain']
@@ -8450,7 +7783,31 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEmailingDomain"')
       return EmailingDomain_possibleTypes.includes(obj.__typename)
     }
-    
+
+
+
+    const PublicConnectionParametersOutput_possibleTypes: string[] = ['PublicConnectionParametersOutput']
+    export const isPublicConnectionParametersOutput = (obj?: { __typename?: any } | null): obj is PublicConnectionParametersOutput => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicConnectionParametersOutput"')
+      return PublicConnectionParametersOutput_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const PublicImapSmtpCaldavConnectionParameters_possibleTypes: string[] = ['PublicImapSmtpCaldavConnectionParameters']
+    export const isPublicImapSmtpCaldavConnectionParameters = (obj?: { __typename?: any } | null): obj is PublicImapSmtpCaldavConnectionParameters => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicImapSmtpCaldavConnectionParameters"')
+      return PublicImapSmtpCaldavConnectionParameters_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ConnectedAccountPublicDTO_possibleTypes: string[] = ['ConnectedAccountPublicDTO']
+    export const isConnectedAccountPublicDTO = (obj?: { __typename?: any } | null): obj is ConnectedAccountPublicDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isConnectedAccountPublicDTO"')
+      return ConnectedAccountPublicDTO_possibleTypes.includes(obj.__typename)
+    }
+
 
 
     const MessageChannel_possibleTypes: string[] = ['MessageChannel']
@@ -8458,7 +7815,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMessageChannel"')
       return MessageChannel_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CreateEmailGroupChannelOutput_possibleTypes: string[] = ['CreateEmailGroupChannelOutput']
@@ -8466,7 +7823,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCreateEmailGroupChannelOutput"')
       return CreateEmailGroupChannelOutput_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CampaignAudiencePreviewDTO_possibleTypes: string[] = ['CampaignAudiencePreviewDTO']
@@ -8474,7 +7831,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignAudiencePreviewDTO"')
       return CampaignAudiencePreviewDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const SendEmailViaDomainOutput_possibleTypes: string[] = ['SendEmailViaDomainOutput']
@@ -8482,7 +7839,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isSendEmailViaDomainOutput"')
       return SendEmailViaDomainOutput_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CampaignSkippedRecipientsDTO_possibleTypes: string[] = ['CampaignSkippedRecipientsDTO']
@@ -8490,7 +7847,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSkippedRecipientsDTO"')
       return CampaignSkippedRecipientsDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const SendMessageCampaignOutputDTO_possibleTypes: string[] = ['SendMessageCampaignOutputDTO']
@@ -8498,7 +7855,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isSendMessageCampaignOutputDTO"')
       return SendMessageCampaignOutputDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const UnsubscribeTopic_possibleTypes: string[] = ['UnsubscribeTopic']
@@ -8506,7 +7863,727 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isUnsubscribeTopic"')
       return UnsubscribeTopic_possibleTypes.includes(obj.__typename)
     }
-    
+
+
+
+    const FeatureFlag_possibleTypes: string[] = ['FeatureFlag']
+    export const isFeatureFlag = (obj?: { __typename?: any } | null): obj is FeatureFlag => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isFeatureFlag"')
+      return FeatureFlag_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const WorkspaceUrls_possibleTypes: string[] = ['WorkspaceUrls']
+    export const isWorkspaceUrls = (obj?: { __typename?: any } | null): obj is WorkspaceUrls => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceUrls"')
+      return WorkspaceUrls_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ApplicationRegistrationVariableDTO_possibleTypes: string[] = ['ApplicationRegistrationVariableDTO']
+    export const isApplicationRegistrationVariableDTO = (obj?: { __typename?: any } | null): obj is ApplicationRegistrationVariableDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationVariableDTO"')
+      return ApplicationRegistrationVariableDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const VersionDistributionEntry_possibleTypes: string[] = ['VersionDistributionEntry']
+    export const isVersionDistributionEntry = (obj?: { __typename?: any } | null): obj is VersionDistributionEntry => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isVersionDistributionEntry"')
+      return VersionDistributionEntry_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ApplicationRegistrationStats_possibleTypes: string[] = ['ApplicationRegistrationStats']
+    export const isApplicationRegistrationStats = (obj?: { __typename?: any } | null): obj is ApplicationRegistrationStats => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationStats"')
+      return ApplicationRegistrationStats_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const BillingTrialPeriod_possibleTypes: string[] = ['BillingTrialPeriod']
+    export const isBillingTrialPeriod = (obj?: { __typename?: any } | null): obj is BillingTrialPeriod => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingTrialPeriod"')
+      return BillingTrialPeriod_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const SSOIdentityProvider_possibleTypes: string[] = ['SSOIdentityProvider']
+    export const isSSOIdentityProvider = (obj?: { __typename?: any } | null): obj is SSOIdentityProvider => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSSOIdentityProvider"')
+      return SSOIdentityProvider_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AuthProviders_possibleTypes: string[] = ['AuthProviders']
+    export const isAuthProviders = (obj?: { __typename?: any } | null): obj is AuthProviders => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthProviders"')
+      return AuthProviders_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AuthBypassProviders_possibleTypes: string[] = ['AuthBypassProviders']
+    export const isAuthBypassProviders = (obj?: { __typename?: any } | null): obj is AuthBypassProviders => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthBypassProviders"')
+      return AuthBypassProviders_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const PublicWorkspaceData_possibleTypes: string[] = ['PublicWorkspaceData']
+    export const isPublicWorkspaceData = (obj?: { __typename?: any } | null): obj is PublicWorkspaceData => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicWorkspaceData"')
+      return PublicWorkspaceData_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const PublicWorkspaceDataSummary_possibleTypes: string[] = ['PublicWorkspaceDataSummary']
+    export const isPublicWorkspaceDataSummary = (obj?: { __typename?: any } | null): obj is PublicWorkspaceDataSummary => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicWorkspaceDataSummary"')
+      return PublicWorkspaceDataSummary_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const NativeModelCapabilities_possibleTypes: string[] = ['NativeModelCapabilities']
+    export const isNativeModelCapabilities = (obj?: { __typename?: any } | null): obj is NativeModelCapabilities => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isNativeModelCapabilities"')
+      return NativeModelCapabilities_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ClientAiModelConfig_possibleTypes: string[] = ['ClientAiModelConfig']
+    export const isClientAiModelConfig = (obj?: { __typename?: any } | null): obj is ClientAiModelConfig => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isClientAiModelConfig"')
+      return ClientAiModelConfig_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const Billing_possibleTypes: string[] = ['Billing']
+    export const isBilling = (obj?: { __typename?: any } | null): obj is Billing => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBilling"')
+      return Billing_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const Support_possibleTypes: string[] = ['Support']
+    export const isSupport = (obj?: { __typename?: any } | null): obj is Support => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSupport"')
+      return Support_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const Sentry_possibleTypes: string[] = ['Sentry']
+    export const isSentry = (obj?: { __typename?: any } | null): obj is Sentry => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSentry"')
+      return Sentry_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const Captcha_possibleTypes: string[] = ['Captcha']
+    export const isCaptcha = (obj?: { __typename?: any } | null): obj is Captcha => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCaptcha"')
+      return Captcha_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ApiConfig_possibleTypes: string[] = ['ApiConfig']
+    export const isApiConfig = (obj?: { __typename?: any } | null): obj is ApiConfig => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isApiConfig"')
+      return ApiConfig_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const PublicFeatureFlagMetadata_possibleTypes: string[] = ['PublicFeatureFlagMetadata']
+    export const isPublicFeatureFlagMetadata = (obj?: { __typename?: any } | null): obj is PublicFeatureFlagMetadata => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicFeatureFlagMetadata"')
+      return PublicFeatureFlagMetadata_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const PublicFeatureFlag_possibleTypes: string[] = ['PublicFeatureFlag']
+    export const isPublicFeatureFlag = (obj?: { __typename?: any } | null): obj is PublicFeatureFlag => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicFeatureFlag"')
+      return PublicFeatureFlag_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ClientConfigMaintenanceMode_possibleTypes: string[] = ['ClientConfigMaintenanceMode']
+    export const isClientConfigMaintenanceMode = (obj?: { __typename?: any } | null): obj is ClientConfigMaintenanceMode => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isClientConfigMaintenanceMode"')
+      return ClientConfigMaintenanceMode_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ClientConfig_possibleTypes: string[] = ['ClientConfig']
+    export const isClientConfig = (obj?: { __typename?: any } | null): obj is ClientConfig => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isClientConfig"')
+      return ClientConfig_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const UsageBreakdownItem_possibleTypes: string[] = ['UsageBreakdownItem']
+    export const isUsageBreakdownItem = (obj?: { __typename?: any } | null): obj is UsageBreakdownItem => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageBreakdownItem"')
+      return UsageBreakdownItem_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CreateApplicationRegistration_possibleTypes: string[] = ['CreateApplicationRegistration']
+    export const isCreateApplicationRegistration = (obj?: { __typename?: any } | null): obj is CreateApplicationRegistration => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCreateApplicationRegistration"')
+      return CreateApplicationRegistration_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const PublicApplicationRegistration_possibleTypes: string[] = ['PublicApplicationRegistration']
+    export const isPublicApplicationRegistration = (obj?: { __typename?: any } | null): obj is PublicApplicationRegistration => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicApplicationRegistration"')
+      return PublicApplicationRegistration_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const RotateClientSecret_possibleTypes: string[] = ['RotateClientSecret']
+    export const isRotateClientSecret = (obj?: { __typename?: any } | null): obj is RotateClientSecret => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isRotateClientSecret"')
+      return RotateClientSecret_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const Relation_possibleTypes: string[] = ['Relation']
+    export const isRelation = (obj?: { __typename?: any } | null): obj is Relation => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isRelation"')
+      return Relation_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const IndexField_possibleTypes: string[] = ['IndexField']
+    export const isIndexField = (obj?: { __typename?: any } | null): obj is IndexField => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isIndexField"')
+      return IndexField_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const IndexEdge_possibleTypes: string[] = ['IndexEdge']
+    export const isIndexEdge = (obj?: { __typename?: any } | null): obj is IndexEdge => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isIndexEdge"')
+      return IndexEdge_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const PageInfo_possibleTypes: string[] = ['PageInfo']
+    export const isPageInfo = (obj?: { __typename?: any } | null): obj is PageInfo => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPageInfo"')
+      return PageInfo_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const IndexConnection_possibleTypes: string[] = ['IndexConnection']
+    export const isIndexConnection = (obj?: { __typename?: any } | null): obj is IndexConnection => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isIndexConnection"')
+      return IndexConnection_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ObjectEdge_possibleTypes: string[] = ['ObjectEdge']
+    export const isObjectEdge = (obj?: { __typename?: any } | null): obj is ObjectEdge => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectEdge"')
+      return ObjectEdge_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const IndexObjectMetadataConnection_possibleTypes: string[] = ['IndexObjectMetadataConnection']
+    export const isIndexObjectMetadataConnection = (obj?: { __typename?: any } | null): obj is IndexObjectMetadataConnection => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isIndexObjectMetadataConnection"')
+      return IndexObjectMetadataConnection_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ObjectRecordCount_possibleTypes: string[] = ['ObjectRecordCount']
+    export const isObjectRecordCount = (obj?: { __typename?: any } | null): obj is ObjectRecordCount => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectRecordCount"')
+      return ObjectRecordCount_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const SearchField_possibleTypes: string[] = ['SearchField']
+    export const isSearchField = (obj?: { __typename?: any } | null): obj is SearchField => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSearchField"')
+      return SearchField_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ObjectConnection_possibleTypes: string[] = ['ObjectConnection']
+    export const isObjectConnection = (obj?: { __typename?: any } | null): obj is ObjectConnection => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectConnection"')
+      return ObjectConnection_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ObjectIndexMetadatasConnection_possibleTypes: string[] = ['ObjectIndexMetadatasConnection']
+    export const isObjectIndexMetadatasConnection = (obj?: { __typename?: any } | null): obj is ObjectIndexMetadatasConnection => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectIndexMetadatasConnection"')
+      return ObjectIndexMetadatasConnection_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const FieldEdge_possibleTypes: string[] = ['FieldEdge']
+    export const isFieldEdge = (obj?: { __typename?: any } | null): obj is FieldEdge => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isFieldEdge"')
+      return FieldEdge_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ObjectFieldsConnection_possibleTypes: string[] = ['ObjectFieldsConnection']
+    export const isObjectFieldsConnection = (obj?: { __typename?: any } | null): obj is ObjectFieldsConnection => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isObjectFieldsConnection"')
+      return ObjectFieldsConnection_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const FieldConnection_possibleTypes: string[] = ['FieldConnection']
+    export const isFieldConnection = (obj?: { __typename?: any } | null): obj is FieldConnection => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isFieldConnection"')
+      return FieldConnection_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AppConnection_possibleTypes: string[] = ['AppConnection']
+    export const isAppConnection = (obj?: { __typename?: any } | null): obj is AppConnection => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAppConnection"')
+      return AppConnection_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ResendEmailVerificationToken_possibleTypes: string[] = ['ResendEmailVerificationToken']
+    export const isResendEmailVerificationToken = (obj?: { __typename?: any } | null): obj is ResendEmailVerificationToken => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isResendEmailVerificationToken"')
+      return ResendEmailVerificationToken_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const DeleteSso_possibleTypes: string[] = ['DeleteSso']
+    export const isDeleteSso = (obj?: { __typename?: any } | null): obj is DeleteSso => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isDeleteSso"')
+      return DeleteSso_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const EditSso_possibleTypes: string[] = ['EditSso']
+    export const isEditSso = (obj?: { __typename?: any } | null): obj is EditSso => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isEditSso"')
+      return EditSso_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const WorkspaceNameAndId_possibleTypes: string[] = ['WorkspaceNameAndId']
+    export const isWorkspaceNameAndId = (obj?: { __typename?: any } | null): obj is WorkspaceNameAndId => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceNameAndId"')
+      return WorkspaceNameAndId_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const FindAvailableSSOIDP_possibleTypes: string[] = ['FindAvailableSSOIDP']
+    export const isFindAvailableSSOIDP = (obj?: { __typename?: any } | null): obj is FindAvailableSSOIDP => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isFindAvailableSSOIDP"')
+      return FindAvailableSSOIDP_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const SetupSso_possibleTypes: string[] = ['SetupSso']
+    export const isSetupSso = (obj?: { __typename?: any } | null): obj is SetupSso => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSetupSso"')
+      return SetupSso_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const SSOConnection_possibleTypes: string[] = ['SSOConnection']
+    export const isSSOConnection = (obj?: { __typename?: any } | null): obj is SSOConnection => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSSOConnection"')
+      return SSOConnection_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AvailableWorkspace_possibleTypes: string[] = ['AvailableWorkspace']
+    export const isAvailableWorkspace = (obj?: { __typename?: any } | null): obj is AvailableWorkspace => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAvailableWorkspace"')
+      return AvailableWorkspace_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AvailableWorkspaces_possibleTypes: string[] = ['AvailableWorkspaces']
+    export const isAvailableWorkspaces = (obj?: { __typename?: any } | null): obj is AvailableWorkspaces => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAvailableWorkspaces"')
+      return AvailableWorkspaces_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const DeletedWorkspaceMember_possibleTypes: string[] = ['DeletedWorkspaceMember']
+    export const isDeletedWorkspaceMember = (obj?: { __typename?: any } | null): obj is DeletedWorkspaceMember => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isDeletedWorkspaceMember"')
+      return DeletedWorkspaceMember_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MarketplaceApp_possibleTypes: string[] = ['MarketplaceApp']
+    export const isMarketplaceApp = (obj?: { __typename?: any } | null): obj is MarketplaceApp => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceApp"')
+      return MarketplaceApp_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MarketplaceAppRoleObjectPermission_possibleTypes: string[] = ['MarketplaceAppRoleObjectPermission']
+    export const isMarketplaceAppRoleObjectPermission = (obj?: { __typename?: any } | null): obj is MarketplaceAppRoleObjectPermission => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceAppRoleObjectPermission"')
+      return MarketplaceAppRoleObjectPermission_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MarketplaceAppRoleFieldPermission_possibleTypes: string[] = ['MarketplaceAppRoleFieldPermission']
+    export const isMarketplaceAppRoleFieldPermission = (obj?: { __typename?: any } | null): obj is MarketplaceAppRoleFieldPermission => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceAppRoleFieldPermission"')
+      return MarketplaceAppRoleFieldPermission_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MarketplaceAppRole_possibleTypes: string[] = ['MarketplaceAppRole']
+    export const isMarketplaceAppRole = (obj?: { __typename?: any } | null): obj is MarketplaceAppRole => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceAppRole"')
+      return MarketplaceAppRole_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MarketplaceAppDetail_possibleTypes: string[] = ['MarketplaceAppDetail']
+    export const isMarketplaceAppDetail = (obj?: { __typename?: any } | null): obj is MarketplaceAppDetail => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMarketplaceAppDetail"')
+      return MarketplaceAppDetail_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const BillingEntitlement_possibleTypes: string[] = ['BillingEntitlement']
+    export const isBillingEntitlement = (obj?: { __typename?: any } | null): obj is BillingEntitlement => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingEntitlement"')
+      return BillingEntitlement_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const DomainRecord_possibleTypes: string[] = ['DomainRecord']
+    export const isDomainRecord = (obj?: { __typename?: any } | null): obj is DomainRecord => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isDomainRecord"')
+      return DomainRecord_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const DomainValidRecords_possibleTypes: string[] = ['DomainValidRecords']
+    export const isDomainValidRecords = (obj?: { __typename?: any } | null): obj is DomainValidRecords => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isDomainValidRecords"')
+      return DomainValidRecords_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const UpsertRowLevelPermissionPredicatesResult_possibleTypes: string[] = ['UpsertRowLevelPermissionPredicatesResult']
+    export const isUpsertRowLevelPermissionPredicatesResult = (obj?: { __typename?: any } | null): obj is UpsertRowLevelPermissionPredicatesResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isUpsertRowLevelPermissionPredicatesResult"')
+      return UpsertRowLevelPermissionPredicatesResult_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const LogicFunctionLogs_possibleTypes: string[] = ['LogicFunctionLogs']
+    export const isLogicFunctionLogs = (obj?: { __typename?: any } | null): obj is LogicFunctionLogs => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isLogicFunctionLogs"')
+      return LogicFunctionLogs_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const DeleteTwoFactorAuthenticationMethod_possibleTypes: string[] = ['DeleteTwoFactorAuthenticationMethod']
+    export const isDeleteTwoFactorAuthenticationMethod = (obj?: { __typename?: any } | null): obj is DeleteTwoFactorAuthenticationMethod => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isDeleteTwoFactorAuthenticationMethod"')
+      return DeleteTwoFactorAuthenticationMethod_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const InitiateTwoFactorAuthenticationProvisioning_possibleTypes: string[] = ['InitiateTwoFactorAuthenticationProvisioning']
+    export const isInitiateTwoFactorAuthenticationProvisioning = (obj?: { __typename?: any } | null): obj is InitiateTwoFactorAuthenticationProvisioning => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isInitiateTwoFactorAuthenticationProvisioning"')
+      return InitiateTwoFactorAuthenticationProvisioning_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const VerifyTwoFactorAuthenticationMethod_possibleTypes: string[] = ['VerifyTwoFactorAuthenticationMethod']
+    export const isVerifyTwoFactorAuthenticationMethod = (obj?: { __typename?: any } | null): obj is VerifyTwoFactorAuthenticationMethod => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isVerifyTwoFactorAuthenticationMethod"')
+      return VerifyTwoFactorAuthenticationMethod_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AuthorizeApp_possibleTypes: string[] = ['AuthorizeApp']
+    export const isAuthorizeApp = (obj?: { __typename?: any } | null): obj is AuthorizeApp => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthorizeApp"')
+      return AuthorizeApp_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AuthTokenPair_possibleTypes: string[] = ['AuthTokenPair']
+    export const isAuthTokenPair = (obj?: { __typename?: any } | null): obj is AuthTokenPair => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthTokenPair"')
+      return AuthTokenPair_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AvailableWorkspacesAndAccessTokens_possibleTypes: string[] = ['AvailableWorkspacesAndAccessTokens']
+    export const isAvailableWorkspacesAndAccessTokens = (obj?: { __typename?: any } | null): obj is AvailableWorkspacesAndAccessTokens => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAvailableWorkspacesAndAccessTokens"')
+      return AvailableWorkspacesAndAccessTokens_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const EmailPasswordResetLink_possibleTypes: string[] = ['EmailPasswordResetLink']
+    export const isEmailPasswordResetLink = (obj?: { __typename?: any } | null): obj is EmailPasswordResetLink => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isEmailPasswordResetLink"')
+      return EmailPasswordResetLink_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const GetAuthorizationUrlForSSO_possibleTypes: string[] = ['GetAuthorizationUrlForSSO']
+    export const isGetAuthorizationUrlForSSO = (obj?: { __typename?: any } | null): obj is GetAuthorizationUrlForSSO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isGetAuthorizationUrlForSSO"')
+      return GetAuthorizationUrlForSSO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const InvalidatePassword_possibleTypes: string[] = ['InvalidatePassword']
+    export const isInvalidatePassword = (obj?: { __typename?: any } | null): obj is InvalidatePassword => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isInvalidatePassword"')
+      return InvalidatePassword_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const WorkspaceUrlsAndId_possibleTypes: string[] = ['WorkspaceUrlsAndId']
+    export const isWorkspaceUrlsAndId = (obj?: { __typename?: any } | null): obj is WorkspaceUrlsAndId => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceUrlsAndId"')
+      return WorkspaceUrlsAndId_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const SignUp_possibleTypes: string[] = ['SignUp']
+    export const isSignUp = (obj?: { __typename?: any } | null): obj is SignUp => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSignUp"')
+      return SignUp_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const TransientToken_possibleTypes: string[] = ['TransientToken']
+    export const isTransientToken = (obj?: { __typename?: any } | null): obj is TransientToken => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isTransientToken"')
+      return TransientToken_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ValidatePasswordResetToken_possibleTypes: string[] = ['ValidatePasswordResetToken']
+    export const isValidatePasswordResetToken = (obj?: { __typename?: any } | null): obj is ValidatePasswordResetToken => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isValidatePasswordResetToken"')
+      return ValidatePasswordResetToken_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const VerifyEmailAndGetLoginToken_possibleTypes: string[] = ['VerifyEmailAndGetLoginToken']
+    export const isVerifyEmailAndGetLoginToken = (obj?: { __typename?: any } | null): obj is VerifyEmailAndGetLoginToken => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isVerifyEmailAndGetLoginToken"')
+      return VerifyEmailAndGetLoginToken_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const SubdomainAvailabilityDTO_possibleTypes: string[] = ['SubdomainAvailabilityDTO']
+    export const isSubdomainAvailabilityDTO = (obj?: { __typename?: any } | null): obj is SubdomainAvailabilityDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSubdomainAvailabilityDTO"')
+      return SubdomainAvailabilityDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const WorkspaceCreationDefaultsDTO_possibleTypes: string[] = ['WorkspaceCreationDefaultsDTO']
+    export const isWorkspaceCreationDefaultsDTO = (obj?: { __typename?: any } | null): obj is WorkspaceCreationDefaultsDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceCreationDefaultsDTO"')
+      return WorkspaceCreationDefaultsDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const ApiKeyToken_possibleTypes: string[] = ['ApiKeyToken']
+    export const isApiKeyToken = (obj?: { __typename?: any } | null): obj is ApiKeyToken => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isApiKeyToken"')
+      return ApiKeyToken_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const AuthTokens_possibleTypes: string[] = ['AuthTokens']
+    export const isAuthTokens = (obj?: { __typename?: any } | null): obj is AuthTokens => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthTokens"')
+      return AuthTokens_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const LoginToken_possibleTypes: string[] = ['LoginToken']
+    export const isLoginToken = (obj?: { __typename?: any } | null): obj is LoginToken => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isLoginToken"')
+      return LoginToken_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const CheckUserExist_possibleTypes: string[] = ['CheckUserExist']
+    export const isCheckUserExist = (obj?: { __typename?: any } | null): obj is CheckUserExist => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCheckUserExist"')
+      return CheckUserExist_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const WorkspaceInviteHashValid_possibleTypes: string[] = ['WorkspaceInviteHashValid']
+    export const isWorkspaceInviteHashValid = (obj?: { __typename?: any } | null): obj is WorkspaceInviteHashValid => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceInviteHashValid"')
+      return WorkspaceInviteHashValid_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const Impersonate_possibleTypes: string[] = ['Impersonate']
+    export const isImpersonate = (obj?: { __typename?: any } | null): obj is Impersonate => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isImpersonate"')
+      return Impersonate_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const UsageTimeSeries_possibleTypes: string[] = ['UsageTimeSeries']
+    export const isUsageTimeSeries = (obj?: { __typename?: any } | null): obj is UsageTimeSeries => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageTimeSeries"')
+      return UsageTimeSeries_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const UsageUserDaily_possibleTypes: string[] = ['UsageUserDaily']
+    export const isUsageUserDaily = (obj?: { __typename?: any } | null): obj is UsageUserDaily => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageUserDaily"')
+      return UsageUserDaily_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const UsageAnalytics_possibleTypes: string[] = ['UsageAnalytics']
+    export const isUsageAnalytics = (obj?: { __typename?: any } | null): obj is UsageAnalytics => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageAnalytics"')
+      return UsageAnalytics_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const DevelopmentApplication_possibleTypes: string[] = ['DevelopmentApplication']
+    export const isDevelopmentApplication = (obj?: { __typename?: any } | null): obj is DevelopmentApplication => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isDevelopmentApplication"')
+      return DevelopmentApplication_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const WorkspaceMigration_possibleTypes: string[] = ['WorkspaceMigration']
+    export const isWorkspaceMigration = (obj?: { __typename?: any } | null): obj is WorkspaceMigration => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMigration"')
+      return WorkspaceMigration_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const File_possibleTypes: string[] = ['File']
+    export const isFile = (obj?: { __typename?: any } | null): obj is File => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isFile"')
+      return File_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const PublicDomain_possibleTypes: string[] = ['PublicDomain']
+    export const isPublicDomain = (obj?: { __typename?: any } | null): obj is PublicDomain => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicDomain"')
+      return PublicDomain_possibleTypes.includes(obj.__typename)
+    }
+
 
 
     const AutocompleteResult_possibleTypes: string[] = ['AutocompleteResult']
@@ -8514,7 +8591,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAutocompleteResult"')
       return AutocompleteResult_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Location_possibleTypes: string[] = ['Location']
@@ -8522,7 +8599,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLocation"')
       return Location_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PlaceDetailsResult_possibleTypes: string[] = ['PlaceDetailsResult']
@@ -8530,7 +8607,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPlaceDetailsResult"')
       return PlaceDetailsResult_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ImapSmtpCaldavPublicConnectionParams_possibleTypes: string[] = ['ImapSmtpCaldavPublicConnectionParams']
@@ -8538,7 +8615,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavPublicConnectionParams"')
       return ImapSmtpCaldavPublicConnectionParams_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ImapSmtpCaldavPublicConnectionParameters_possibleTypes: string[] = ['ImapSmtpCaldavPublicConnectionParameters']
@@ -8546,7 +8623,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavPublicConnectionParameters"')
       return ImapSmtpCaldavPublicConnectionParameters_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ConnectedImapSmtpCaldavAccount_possibleTypes: string[] = ['ConnectedImapSmtpCaldavAccount']
@@ -8554,7 +8631,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isConnectedImapSmtpCaldavAccount"')
       return ConnectedImapSmtpCaldavAccount_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ImapSmtpCaldavConnectionSuccess_possibleTypes: string[] = ['ImapSmtpCaldavConnectionSuccess']
@@ -8562,7 +8639,31 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavConnectionSuccess"')
       return ImapSmtpCaldavConnectionSuccess_possibleTypes.includes(obj.__typename)
     }
-    
+
+
+
+    const WorkspaceMailboxConnectionStatus_possibleTypes: string[] = ['WorkspaceMailboxConnectionStatus']
+    export const isWorkspaceMailboxConnectionStatus = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionStatus => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionStatus"')
+      return WorkspaceMailboxConnectionStatus_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const WorkspaceMailboxConnectionResult_possibleTypes: string[] = ['WorkspaceMailboxConnectionResult']
+    export const isWorkspaceMailboxConnectionResult = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionResult"')
+      return WorkspaceMailboxConnectionResult_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const RevokeWorkspaceMailboxResult_possibleTypes: string[] = ['RevokeWorkspaceMailboxResult']
+    export const isRevokeWorkspaceMailboxResult = (obj?: { __typename?: any } | null): obj is RevokeWorkspaceMailboxResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isRevokeWorkspaceMailboxResult"')
+      return RevokeWorkspaceMailboxResult_possibleTypes.includes(obj.__typename)
+    }
+
 
 
     const AgentMessagePart_possibleTypes: string[] = ['AgentMessagePart']
@@ -8570,7 +8671,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgentMessagePart"')
       return AgentMessagePart_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const RunAgentResult_possibleTypes: string[] = ['RunAgentResult']
@@ -8578,7 +8679,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRunAgentResult"')
       return RunAgentResult_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Webhook_possibleTypes: string[] = ['Webhook']
@@ -8586,7 +8687,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWebhook"')
       return Webhook_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ToolIndexEntry_possibleTypes: string[] = ['ToolIndexEntry']
@@ -8594,7 +8695,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isToolIndexEntry"')
       return ToolIndexEntry_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ChannelSyncSuccess_possibleTypes: string[] = ['ChannelSyncSuccess']
@@ -8602,7 +8703,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isChannelSyncSuccess"')
       return ChannelSyncSuccess_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CreateCalendarEventOutput_possibleTypes: string[] = ['CreateCalendarEventOutput']
@@ -8610,7 +8711,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCreateCalendarEventOutput"')
       return CreateCalendarEventOutput_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BarChartSeries_possibleTypes: string[] = ['BarChartSeries']
@@ -8618,7 +8719,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBarChartSeries"')
       return BarChartSeries_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BarChartData_possibleTypes: string[] = ['BarChartData']
@@ -8626,7 +8727,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBarChartData"')
       return BarChartData_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const LineChartDataPoint_possibleTypes: string[] = ['LineChartDataPoint']
@@ -8634,7 +8735,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLineChartDataPoint"')
       return LineChartDataPoint_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const LineChartSeries_possibleTypes: string[] = ['LineChartSeries']
@@ -8642,7 +8743,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLineChartSeries"')
       return LineChartSeries_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const LineChartData_possibleTypes: string[] = ['LineChartData']
@@ -8650,7 +8751,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLineChartData"')
       return LineChartData_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PieChartDataItem_possibleTypes: string[] = ['PieChartDataItem']
@@ -8658,7 +8759,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPieChartDataItem"')
       return PieChartDataItem_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PieChartData_possibleTypes: string[] = ['PieChartData']
@@ -8666,7 +8767,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPieChartData"')
       return PieChartData_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const DuplicatedDashboard_possibleTypes: string[] = ['DuplicatedDashboard']
@@ -8674,7 +8775,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isDuplicatedDashboard"')
       return DuplicatedDashboard_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const SendEmailOutput_possibleTypes: string[] = ['SendEmailOutput']
@@ -8682,7 +8783,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isSendEmailOutput"')
       return SendEmailOutput_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Analytics_possibleTypes: string[] = ['Analytics']
@@ -8690,7 +8791,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAnalytics"')
       return Analytics_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EventLogRecord_possibleTypes: string[] = ['EventLogRecord']
@@ -8698,7 +8799,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEventLogRecord"')
       return EventLogRecord_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EventLogPageInfo_possibleTypes: string[] = ['EventLogPageInfo']
@@ -8706,7 +8807,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEventLogPageInfo"')
       return EventLogPageInfo_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const EventLogQueryResult_possibleTypes: string[] = ['EventLogQueryResult']
@@ -8714,7 +8815,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isEventLogQueryResult"')
       return EventLogQueryResult_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Skill_possibleTypes: string[] = ['Skill']
@@ -8722,7 +8823,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isSkill"')
       return Skill_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AgentMessage_possibleTypes: string[] = ['AgentMessage']
@@ -8730,7 +8831,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgentMessage"')
       return AgentMessage_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AgentChatThread_possibleTypes: string[] = ['AgentChatThread']
@@ -8738,7 +8839,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgentChatThread"')
       return AgentChatThread_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AiSystemPromptSection_possibleTypes: string[] = ['AiSystemPromptSection']
@@ -8746,7 +8847,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAiSystemPromptSection"')
       return AiSystemPromptSection_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AiSystemPromptPreview_possibleTypes: string[] = ['AiSystemPromptPreview']
@@ -8754,7 +8855,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAiSystemPromptPreview"')
       return AiSystemPromptPreview_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ChatStreamError_possibleTypes: string[] = ['ChatStreamError']
@@ -8762,7 +8863,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isChatStreamError"')
       return ChatStreamError_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ChatStreamCatchupChunks_possibleTypes: string[] = ['ChatStreamCatchupChunks']
@@ -8770,7 +8871,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isChatStreamCatchupChunks"')
       return ChatStreamCatchupChunks_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const SendChatMessageResult_possibleTypes: string[] = ['SendChatMessageResult']
@@ -8778,7 +8879,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isSendChatMessageResult"')
       return SendChatMessageResult_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AgentChatEvent_possibleTypes: string[] = ['AgentChatEvent']
@@ -8786,7 +8887,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgentChatEvent"')
       return AgentChatEvent_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AgentTurnEvaluation_possibleTypes: string[] = ['AgentTurnEvaluation']
@@ -8794,7 +8895,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgentTurnEvaluation"')
       return AgentTurnEvaluation_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const AgentTurn_possibleTypes: string[] = ['AgentTurn']
@@ -8802,7 +8903,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgentTurn"')
       return AgentTurn_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const WorkspaceAiStats_possibleTypes: string[] = ['WorkspaceAiStats']
@@ -8810,7 +8911,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceAiStats"')
       return WorkspaceAiStats_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CalendarChannel_possibleTypes: string[] = ['CalendarChannel']
@@ -8818,7 +8919,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCalendarChannel"')
       return CalendarChannel_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const MessageFolder_possibleTypes: string[] = ['MessageFolder']
@@ -8826,7 +8927,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMessageFolder"')
       return MessageFolder_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CollectionHash_possibleTypes: string[] = ['CollectionHash']
@@ -8834,7 +8935,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCollectionHash"')
       return CollectionHash_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const MinimalObjectMetadata_possibleTypes: string[] = ['MinimalObjectMetadata']
@@ -8842,7 +8943,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMinimalObjectMetadata"')
       return MinimalObjectMetadata_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const MinimalView_possibleTypes: string[] = ['MinimalView']
@@ -8850,7 +8951,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMinimalView"')
       return MinimalView_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const MinimalMetadata_possibleTypes: string[] = ['MinimalMetadata']
@@ -8858,7 +8959,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMinimalMetadata"')
       return MinimalMetadata_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Query_possibleTypes: string[] = ['Query']
@@ -8866,7 +8967,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isQuery"')
       return Query_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Mutation_possibleTypes: string[] = ['Mutation']
@@ -8874,7 +8975,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isMutation"')
       return Mutation_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const Subscription_possibleTypes: string[] = ['Subscription']
@@ -8882,7 +8983,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isSubscription"')
       return Subscription_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 export const enumApplicationRegistrationSourceType = {
    NPM: 'NPM' as const,
@@ -9353,71 +9454,17 @@ export const enumLogicFunctionExecutionStatus = {
    ERROR: 'ERROR' as const
 }
 
-export const enumFeatureFlagKey = {
-   IS_UNIQUE_INDEXES_ENABLED: 'IS_UNIQUE_INDEXES_ENABLED' as const,
-   IS_JSON_FILTER_ENABLED: 'IS_JSON_FILTER_ENABLED' as const,
-   IS_MARKETPLACE_SETTING_TAB_VISIBLE: 'IS_MARKETPLACE_SETTING_TAB_VISIBLE' as const,
-   IS_EMAIL_GROUP_ENABLED: 'IS_EMAIL_GROUP_ENABLED' as const,
-   IS_JUNCTION_RELATIONS_ENABLED: 'IS_JUNCTION_RELATIONS_ENABLED' as const,
-   IS_REST_METADATA_API_NEW_FORMAT_DIRECT: 'IS_REST_METADATA_API_NEW_FORMAT_DIRECT' as const,
-   IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED: 'IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED' as const,
-   IS_SETTINGS_DISCOVERY_HERO_ENABLED: 'IS_SETTINGS_DISCOVERY_HERO_ENABLED' as const,
-   IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED: 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED' as const
-}
-
-export const enumIdentityProviderType = {
-   OIDC: 'OIDC' as const,
-   SAML: 'SAML' as const
-}
-
-export const enumSsoIdentityProviderStatus = {
-   Active: 'Active' as const,
-   Inactive: 'Inactive' as const,
-   Error: 'Error' as const
-}
-
-export const enumModelFamily = {
-   GPT: 'GPT' as const,
-   CLAUDE: 'CLAUDE' as const,
-   GEMINI: 'GEMINI' as const,
-   MISTRAL: 'MISTRAL' as const,
-   DEEPSEEK: 'DEEPSEEK' as const,
-   GROK: 'GROK' as const
-}
-
-export const enumSupportDriver = {
-   NONE: 'NONE' as const,
-   FRONT: 'FRONT' as const
-}
-
-export const enumCaptchaDriverType = {
-   GOOGLE_RECAPTCHA: 'GOOGLE_RECAPTCHA' as const,
-   TURNSTILE: 'TURNSTILE' as const
-}
-
-export const enumRelationType = {
-   ONE_TO_MANY: 'ONE_TO_MANY' as const,
-   MANY_TO_ONE: 'MANY_TO_ONE' as const
-}
-
-export const enumBillingEntitlementKey = {
-   SSO: 'SSO' as const,
-   CUSTOM_DOMAIN: 'CUSTOM_DOMAIN' as const,
-   RLS: 'RLS' as const,
-   AUDIT_LOGS: 'AUDIT_LOGS' as const
+export const enumEmailingDomainStatus = {
+   PENDING: 'PENDING' as const,
+   VERIFIED: 'VERIFIED' as const,
+   FAILED: 'FAILED' as const,
+   TEMPORARY_FAILURE: 'TEMPORARY_FAILURE' as const
 }
 
 export const enumEmailConnectionSecurity = {
    NONE: 'NONE' as const,
    STARTTLS: 'STARTTLS' as const,
    SSL_TLS: 'SSL_TLS' as const
-}
-
-export const enumEmailingDomainStatus = {
-   PENDING: 'PENDING' as const,
-   VERIFIED: 'VERIFIED' as const,
-   FAILED: 'FAILED' as const,
-   TEMPORARY_FAILURE: 'TEMPORARY_FAILURE' as const
 }
 
 export const enumMessageChannelVisibility = {
@@ -9471,6 +9518,60 @@ export const enumMessageChannelSyncStage = {
 export const enumUnsubscribeTopicVisibility = {
    PUBLIC: 'PUBLIC' as const,
    PRIVATE: 'PRIVATE' as const
+}
+
+export const enumFeatureFlagKey = {
+   IS_UNIQUE_INDEXES_ENABLED: 'IS_UNIQUE_INDEXES_ENABLED' as const,
+   IS_JSON_FILTER_ENABLED: 'IS_JSON_FILTER_ENABLED' as const,
+   IS_MARKETPLACE_SETTING_TAB_VISIBLE: 'IS_MARKETPLACE_SETTING_TAB_VISIBLE' as const,
+   IS_EMAIL_GROUP_ENABLED: 'IS_EMAIL_GROUP_ENABLED' as const,
+   IS_JUNCTION_RELATIONS_ENABLED: 'IS_JUNCTION_RELATIONS_ENABLED' as const,
+   IS_REST_METADATA_API_NEW_FORMAT_DIRECT: 'IS_REST_METADATA_API_NEW_FORMAT_DIRECT' as const,
+   IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED: 'IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED' as const,
+   IS_SETTINGS_DISCOVERY_HERO_ENABLED: 'IS_SETTINGS_DISCOVERY_HERO_ENABLED' as const,
+   IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED: 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED' as const
+}
+
+export const enumIdentityProviderType = {
+   OIDC: 'OIDC' as const,
+   SAML: 'SAML' as const
+}
+
+export const enumSsoIdentityProviderStatus = {
+   Active: 'Active' as const,
+   Inactive: 'Inactive' as const,
+   Error: 'Error' as const
+}
+
+export const enumModelFamily = {
+   GPT: 'GPT' as const,
+   CLAUDE: 'CLAUDE' as const,
+   GEMINI: 'GEMINI' as const,
+   MISTRAL: 'MISTRAL' as const,
+   DEEPSEEK: 'DEEPSEEK' as const,
+   GROK: 'GROK' as const
+}
+
+export const enumSupportDriver = {
+   NONE: 'NONE' as const,
+   FRONT: 'FRONT' as const
+}
+
+export const enumCaptchaDriverType = {
+   GOOGLE_RECAPTCHA: 'GOOGLE_RECAPTCHA' as const,
+   TURNSTILE: 'TURNSTILE' as const
+}
+
+export const enumRelationType = {
+   ONE_TO_MANY: 'ONE_TO_MANY' as const,
+   MANY_TO_ONE: 'MANY_TO_ONE' as const
+}
+
+export const enumBillingEntitlementKey = {
+   SSO: 'SSO' as const,
+   CUSTOM_DOMAIN: 'CUSTOM_DOMAIN' as const,
+   RLS: 'RLS' as const,
+   AUDIT_LOGS: 'AUDIT_LOGS' as const
 }
 
 export const enumCalendarChannelSyncStatus = {

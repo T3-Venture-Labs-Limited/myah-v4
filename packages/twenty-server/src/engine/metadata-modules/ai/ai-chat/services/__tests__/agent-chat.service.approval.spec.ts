@@ -2,6 +2,7 @@ import { REQUEST_APPROVAL_TOOL_NAME } from 'twenty-shared/ai';
 import { IsNull } from 'typeorm';
 
 import { AgentChatService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat.service';
+import { CHAT_SYSTEM_PROMPTS } from 'src/engine/metadata-modules/ai/ai-chat/constants/chat-system-prompts.const';
 import { AiExceptionCode } from 'src/engine/metadata-modules/ai/ai.exception';
 
 const pendingApprovalOutput = {
@@ -645,5 +646,38 @@ describe('AgentChatService.resolvePendingApproval', () => {
     ).rejects.toMatchObject({
       code: AiExceptionCode.INVALID_APPROVAL_DECISION,
     });
+  });
+
+  it('teaches the exact approval-gated creator outreach sequence', () => {
+    const prompt = CHAT_SYSTEM_PROMPTS.BASE;
+    const orderedSteps = [
+      '1. Load the selected Campaign Creator, Creator, Campaign, and available Brand Brain context',
+      '2. Learn and execute `prepare_outreach_email_draft` with the canonical IDs, subject, body, and optional parent header ID',
+      '3. Review the exact returned preview',
+      '4. Call `request_approval` in its own step with only `toolName: "send_outreach_email"` and `actionInput: { outreachActionId }`',
+      '5. Only after the user approves, call `send_outreach_email` with the `actionApprovalBindingId`',
+    ];
+    let previousStepIndex = -1;
+
+    for (const step of orderedSteps) {
+      const stepIndex = prompt.indexOf(step);
+
+      expect(stepIndex).toBeGreaterThan(previousStepIndex);
+      previousStepIndex = stepIndex;
+    }
+
+    for (const requiredSafetyText of [
+      'stop and wait',
+      'Never automatically send',
+      'Never bulk-send',
+      'Never substitute the recipient or sending account',
+      'Never bypass approval',
+      'Never include credentials',
+      'Brand Brain is drafting context only',
+      'Do not persist Brand Brain records, prompts, or source text',
+      'durable subject and body snapshot',
+    ]) {
+      expect(prompt).toContain(requiredSafetyText);
+    }
   });
 });

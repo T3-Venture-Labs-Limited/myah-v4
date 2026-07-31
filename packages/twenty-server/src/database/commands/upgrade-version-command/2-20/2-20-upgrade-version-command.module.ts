@@ -12,6 +12,7 @@ import { ApplicationModule } from 'src/engine/core-modules/application/applicati
 import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/workspace-metadata-version/workspace-metadata-version.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
+import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/workspace-migration-runner.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace
     WorkspaceIteratorModule,
     WorkspaceMetadataVersionModule,
     WorkspaceMigrationModule,
+    WorkspaceMigrationRunnerModule,
   ],
   providers: [
     SynchronizeMyahStandardMetadataCommand,
@@ -29,6 +31,10 @@ import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace
     MigrateMyahCreatorSocialLinksService,
 
     RemoveReplacedTwentyCrmMetadataCommand,
+  ],
+  exports: [
+    SynchronizeMyahStandardMetadataCommand,
+    MigrateMyahCreatorSocialLinksService,
   ],
 })
 export class V2_20_UpgradeVersionCommandModule {}

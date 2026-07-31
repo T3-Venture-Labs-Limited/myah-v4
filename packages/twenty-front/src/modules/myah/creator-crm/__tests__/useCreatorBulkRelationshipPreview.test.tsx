@@ -9,8 +9,12 @@ import {
 import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
 
 const mockBatchCreateManyRecords = jest.fn();
+const mockDestroyManyRecords = jest.fn();
 const mockUseBatchCreateManyRecords = jest.fn((_args: unknown) => ({
   batchCreateManyRecords: mockBatchCreateManyRecords,
+}));
+const mockUseDestroyManyRecords = jest.fn((_args: unknown) => ({
+  destroyManyRecords: mockDestroyManyRecords,
 }));
 const mockRefetchQueries = jest.fn();
 const mockApolloCoreClient = {
@@ -18,6 +22,7 @@ const mockApolloCoreClient = {
   refetchQueries: mockRefetchQueries,
 };
 const mockEnqueueErrorSnackBar = jest.fn();
+const mockEnqueueWarningSnackBar = jest.fn();
 const mockUseFindManyRecords = jest.fn();
 
 jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
@@ -25,55 +30,66 @@ jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
     mockUseBatchCreateManyRecords(args),
 }));
 
+jest.mock('@/object-record/hooks/useDestroyManyRecords', () => ({
+  useDestroyManyRecords: (args: unknown) => mockUseDestroyManyRecords(args),
+}));
+
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
   useApolloCoreClient: () => mockApolloCoreClient,
 }));
 
+jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
+  useObjectMetadataItem: () => ({
+    objectMetadataItem: { id: 'creator-object' },
+  }),
+}));
+
 jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
-  useSnackBar: () => ({ enqueueErrorSnackBar: mockEnqueueErrorSnackBar }),
+  useSnackBar: () => ({
+    enqueueErrorSnackBar: mockEnqueueErrorSnackBar,
+    enqueueWarningSnackBar: mockEnqueueWarningSnackBar,
+  }),
 }));
 
 jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
   useFindManyRecords: (args: unknown) => mockUseFindManyRecords(args),
 }));
 
+const creatorListTarget = {
+  kind: 'creator-list' as const,
+  id: 'list-a',
+  label: 'Spring creators',
+};
+
 describe('buildCreatorBulkRelationshipPreview', () => {
-  it('separates missing and existing creator links', () => {
+  it('separates linked and unlinked creators and retains only matched membership IDs', () => {
     expect(
       buildCreatorBulkRelationshipPreview({
         selectedCreatorIds: ['creator-a', 'creator-b', 'creator-c'],
-        existingCreatorIds: new Set(['creator-b']),
+        relationshipRecords: [
+          { id: 'membership-b', creatorId: 'creator-b' },
+          { id: 'membership-c', creatorId: 'creator-c' },
+        ],
       }),
     ).toEqual({
       selectedCreatorIds: ['creator-a', 'creator-b', 'creator-c'],
-      creatorIdsToAdd: ['creator-a', 'creator-c'],
-      alreadyLinkedCreatorIds: ['creator-b'],
+      linkedCreatorIds: ['creator-b', 'creator-c'],
+      unlinkedCreatorIds: ['creator-a'],
+      relationshipRecordIds: ['membership-b', 'membership-c'],
     });
   });
 
-  it('returns no additions for an empty selection', () => {
+  it('returns no actionable membership IDs for an empty selection', () => {
     expect(
       buildCreatorBulkRelationshipPreview({
         selectedCreatorIds: [],
-        existingCreatorIds: new Set(['creator-a']),
+        relationshipRecords: [{ id: 'membership-a', creatorId: 'creator-a' }],
       }),
     ).toEqual({
       selectedCreatorIds: [],
-      creatorIdsToAdd: [],
-      alreadyLinkedCreatorIds: [],
-    });
-  });
-
-  it('skips every selected creator already linked to the target', () => {
-    expect(
-      buildCreatorBulkRelationshipPreview({
-        selectedCreatorIds: ['creator-a', 'creator-b'],
-        existingCreatorIds: new Set(['creator-a', 'creator-b']),
-      }),
-    ).toEqual({
-      selectedCreatorIds: ['creator-a', 'creator-b'],
-      creatorIdsToAdd: [],
-      alreadyLinkedCreatorIds: ['creator-a', 'creator-b'],
+      linkedCreatorIds: [],
+      unlinkedCreatorIds: [],
+      relationshipRecordIds: [],
     });
   });
 });
@@ -83,7 +99,7 @@ describe('useCreatorBulkRelationshipPreview', () => {
     jest.clearAllMocks();
   });
 
-  it('queries every selected creator when more than the default page size are selected', () => {
+  it('queries every selected creator and exposes only matching relationship IDs', () => {
     const selectedCreatorIds = Array.from(
       { length: 61 },
       (_, index) => `creator-${index}`,
@@ -102,11 +118,7 @@ describe('useCreatorBulkRelationshipPreview', () => {
 
     const { result } = renderHook(() =>
       useCreatorBulkRelationshipPreview({
-        target: {
-          kind: 'creator-list',
-          id: 'list-a',
-          label: 'Spring creators',
-        },
+        target: creatorListTarget,
         selectedCreatorIds,
       }),
     );
@@ -114,8 +126,11 @@ describe('useCreatorBulkRelationshipPreview', () => {
     expect(mockUseFindManyRecords).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 61 }),
     );
-    expect(result.current.creatorIdsToAdd).toEqual([]);
-    expect(result.current.alreadyLinkedCreatorIds).toEqual(selectedCreatorIds);
+    expect(result.current.linkedCreatorIds).toEqual(selectedCreatorIds);
+    expect(result.current.unlinkedCreatorIds).toEqual([]);
+    expect(result.current.relationshipRecordIds).toEqual(
+      selectedCreatorIds.map((creatorId) => `${creatorId}-membership`),
+    );
     expect(result.current.isPreviewUnavailable).toBe(false);
   });
 
@@ -130,11 +145,7 @@ describe('useCreatorBulkRelationshipPreview', () => {
 
     const { result } = renderHook(() =>
       useCreatorBulkRelationshipPreview({
-        target: {
-          kind: 'creator-list',
-          id: 'list-a',
-          label: 'Spring creators',
-        },
+        target: creatorListTarget,
         selectedCreatorIds: ['creator-a'],
       }),
     );
@@ -147,6 +158,7 @@ describe('useApplyCreatorBulkRelationship', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockBatchCreateManyRecords.mockResolvedValue([]);
+    mockDestroyManyRecords.mockResolvedValue([]);
     mockApolloCoreClient.cache = new InMemoryCache();
     mockRefetchQueries.mockResolvedValue([]);
   });
@@ -193,11 +205,7 @@ describe('useApplyCreatorBulkRelationship', () => {
     const { result } = renderHook(() => useApplyCreatorBulkRelationship());
 
     await result.current.applyCreatorBulkRelationship({
-      target: {
-        kind: 'creator-list',
-        id: 'list-a',
-        label: 'Spring creators',
-      },
+      target: creatorListTarget,
       creatorIdsToAdd: ['creator-a', 'creator-c'],
     });
 
@@ -215,13 +223,9 @@ describe('useApplyCreatorBulkRelationship', () => {
         returnPartialData: true,
       }).complete,
     ).toBe(false);
-    expect(mockRefetchQueries).toHaveBeenCalledWith({
-      include: ['FindManyCreators', 'FindManyCreatorListMembers'],
-      updateCache: expect.any(Function),
-    });
   });
 
-  it('keeps the successful creation lifecycle when cache refresh fails', async () => {
+  it('keeps successful creation complete when cache refresh fails', async () => {
     mockRefetchQueries.mockRejectedValueOnce(new Error('network unavailable'));
     const { result } = renderHook(() => useApplyCreatorBulkRelationship());
 
@@ -236,29 +240,82 @@ describe('useApplyCreatorBulkRelationship', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(mockBatchCreateManyRecords).toHaveBeenCalledWith({
-      recordsToCreate: [
-        { name: '', creatorId: 'creator-a', campaignId: 'campaign-a' },
-      ],
-    });
     expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
       message: 'Failed to refresh creator relationships.',
     });
   });
 
-  it('does not mutate when there are no missing creators', async () => {
+  it('does not mutate when there are no creators to add', async () => {
     const { result } = renderHook(() => useApplyCreatorBulkRelationship());
 
     await result.current.applyCreatorBulkRelationship({
-      target: {
-        kind: 'campaign',
-        id: 'campaign-a',
-        label: 'Spring campaign',
-      },
+      target: creatorListTarget,
       creatorIdsToAdd: [],
     });
 
     expect(mockBatchCreateManyRecords).not.toHaveBeenCalled();
     expect(mockRefetchQueries).not.toHaveBeenCalled();
+  });
+
+  it('destroys only previewed Creator List membership records and refreshes the filtered Creator table', async () => {
+    mockDestroyManyRecords.mockResolvedValue([
+      { id: 'membership-a' },
+      { id: 'membership-c' },
+    ]);
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await expect(
+      result.current.removeCreatorListMembers({
+        creatorListId: 'list-a',
+        creatorListMemberIdsToRemove: ['membership-a', 'membership-c'],
+        creatorIdsToRemove: [],
+      }),
+    ).resolves.toEqual({ removedCount: 2, wasPartial: false });
+
+    expect(mockDestroyManyRecords).toHaveBeenCalledWith({
+      recordIdsToDestroy: ['membership-a', 'membership-c'],
+      skipOptimisticEffect: true,
+    });
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      include: ['FindManyCreators', 'FindManyCreatorListMembers'],
+      updateCache: expect.any(Function),
+    });
+  });
+
+  it('warns when a membership disappears after preview without retrying another deletion', async () => {
+    mockDestroyManyRecords.mockResolvedValue([]);
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await expect(
+      result.current.removeCreatorListMembers({
+        creatorListId: 'list-a',
+        creatorListMemberIdsToRemove: ['membership-a'],
+        creatorIdsToRemove: [],
+      }),
+    ).resolves.toEqual({ removedCount: 0, wasPartial: true });
+
+    expect(mockEnqueueWarningSnackBar).toHaveBeenCalledWith({
+      message: 'Some creators were already absent from this list.',
+    });
+    expect(mockDestroyManyRecords).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps removal available for retry when membership destruction fails', async () => {
+    mockDestroyManyRecords.mockRejectedValueOnce(
+      new Error('network unavailable'),
+    );
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await expect(
+      result.current.removeCreatorListMembers({
+        creatorListId: 'list-a',
+        creatorListMemberIdsToRemove: ['membership-a'],
+        creatorIdsToRemove: [],
+      }),
+    ).rejects.toThrow('Creator List membership removal failed');
+
+    expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
+      message: 'Failed to remove creators from this list.',
+    });
   });
 });

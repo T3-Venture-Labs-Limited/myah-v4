@@ -329,6 +329,53 @@ export const MYAH_STANDARD_OBJECTS = {
       resultSummary: {
         universalIdentifier: 'a461116c-dab8-525c-bdd9-4708dcebf433',
       },
+      subject: { universalIdentifier: 'a3ecbb51-442c-589d-b944-4bf5f6ddc93d' },
+      body: { universalIdentifier: 'fe19e40a-8f51-54df-b631-390b33a72359' },
+      contentDigest: {
+        universalIdentifier: 'ed7d3f38-2ebf-556a-bc7d-7507def97dab',
+      },
+      recipientEmail: {
+        universalIdentifier: '21598e0a-077c-519b-b8d4-1a1a95966d90',
+      },
+      connectedAccountId: {
+        universalIdentifier: 'df2e43ca-b6b4-50ea-a0db-6edbb46ab391',
+      },
+      messageChannelId: {
+        universalIdentifier: 'a0b2e292-21e4-5226-aa88-e732345383e5',
+      },
+      senderEmail: {
+        universalIdentifier: 'b9b351b6-7e75-52be-9eaa-21cd6f722c12',
+      },
+      senderDisplayName: {
+        universalIdentifier: 'ec41fcc7-25d9-58b6-88a1-6749306e6947',
+      },
+      approvalBindingId: {
+        universalIdentifier: '8b5bd6ca-b61f-5a0c-b225-37f515d649ba',
+      },
+      executionReceiptId: {
+        universalIdentifier: '81731a47-27a7-5227-869c-284087244fa7',
+      },
+      providerDraftExternalId: {
+        universalIdentifier: '63285ab2-bd0c-537e-999b-4e67119b3bcc',
+      },
+      sentHeaderMessageId: {
+        universalIdentifier: '31e80297-1638-53b3-a607-3125905a63aa',
+      },
+      providerMessageExternalId: {
+        universalIdentifier: '3835066d-3e92-5781-a926-54b01b73d3a2',
+      },
+      providerThreadExternalId: {
+        universalIdentifier: 'f9dea5b1-f7a2-5c30-a5fe-8fbf082c87ad',
+      },
+      messageId: {
+        universalIdentifier: '9cca420c-78b7-52b9-ac79-c1f797e47846',
+      },
+      messageThreadId: {
+        universalIdentifier: '0a05accb-b4ca-5673-87be-41ea7d50c50b',
+      },
+      inReplyTo: {
+        universalIdentifier: '8b2b7357-3662-54e7-8433-31b73899051b',
+      },
     },
     indexes: {},
     views: {},
@@ -524,8 +571,14 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       name: { universalIdentifier: '63c56aea-35db-5733-9d3a-d062544ac897' },
       status: { universalIdentifier: '9d3c6d96-896d-51d1-b6d2-5d6b2e333e87' },
+      lifecycleStatus: {
+        universalIdentifier: 'e169ef65-ded7-4060-9c7a-c9b92d359c8a',
+      },
       objective: {
         universalIdentifier: 'e22687bb-2633-573f-bd80-c4b13e80d966',
+      },
+      owner: {
+        universalIdentifier: '12d7812a-3d11-4704-8e59-d1468ee3026b',
       },
       targetPlatforms: {
         universalIdentifier: '877f9622-775c-52c1-9869-4abf14161de0',
@@ -560,8 +613,8 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: '5865bdbf-be33-5457-9d91-184885276b94',
         viewFields: {
           name: { universalIdentifier: 'ead80d6b-300a-5edc-b03e-7cce7f3fecc4' },
-          status: {
-            universalIdentifier: '8ce2c107-f484-5525-8f45-b7f4c9d32683',
+          lifecycleStatus: {
+            universalIdentifier: '39f85537-987b-42e6-b99b-f887373b725d',
           },
           objective: {
             universalIdentifier: '4d438e45-9995-5b0f-b9eb-ed916870f280',
@@ -571,6 +624,20 @@ export const MYAH_STANDARD_OBJECTS = {
           },
           icpGoal: {
             universalIdentifier: 'dacf7682-7297-5319-b86d-6cb137f9ddb2',
+          },
+        },
+      },
+      view6bfee1b9: {
+        universalIdentifier: '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
+        viewFields: {
+          name: {
+            universalIdentifier: '16a078ac-9f6f-4dbb-993e-ac1ce932eb98',
+          },
+          objective: {
+            universalIdentifier: 'f7f89fa5-b524-4e5f-abaa-3fae7cb791f3',
+          },
+          owner: {
+            universalIdentifier: 'daec24c3-ee6f-4287-8608-e3520149dc4b',
           },
         },
       },

@@ -9,8 +9,11 @@ import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 
+import { EmailConnectionSecurity } from 'src/engine/core-modules/imap-smtp-caldav-connection/enums/email-connection-security.enum';
 import { buildSmtpTlsOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-smtp-tls-options.util';
 import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
+import { MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME } from 'src/engine/core-modules/myah/constants/workspace-mailbox-connected-account-name.constant';
+import { getWorkspaceMailboxTlsServername } from 'src/engine/core-modules/myah/utils/get-workspace-mailbox-tls-servername.util';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
 
@@ -49,18 +52,30 @@ export class SmtpClientProvider {
 
     const validatedSmtpHost =
       await this.secureHttpClientService.getValidatedHost(smtpParams.host);
+    const isWorkspaceMailbox =
+      connectedAccount.name === MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME &&
+      connectedAccount.visibility === 'workspace';
 
     const options: SMTPConnection.Options = {
       host: validatedSmtpHost,
       port: smtpParams.port,
       ...buildSmtpTlsOptions(smtpParams.connectionSecurity),
+      ...(isWorkspaceMailbox &&
+      smtpParams.connectionSecurity === EmailConnectionSecurity.STARTTLS
+        ? { requireTLS: true }
+        : {}),
       auth: {
         user: smtpParams.username ?? connectedAccount.handle ?? '',
         pass: smtpParams.password,
       },
-      tls: {
-        rejectUnauthorized: false,
-      },
+      tls: isWorkspaceMailbox
+        ? {
+            rejectUnauthorized: true,
+            servername: getWorkspaceMailboxTlsServername(smtpParams.host),
+          }
+        : {
+            rejectUnauthorized: false,
+          },
     };
 
     const transporter = createTransport(options);

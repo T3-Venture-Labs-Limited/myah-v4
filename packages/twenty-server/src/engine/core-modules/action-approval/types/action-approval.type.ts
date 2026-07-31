@@ -4,21 +4,34 @@ export type ActionEvidenceLinkInput = {
   role: string;
 };
 
-export type ExpectedActionBinding = {
-  actionName: 'send_instagram_reply';
+type ActionBindingBase = {
   actionVersion: 1;
   draftId: string;
   contentDigest: string;
   recipientFingerprint: string;
   sendingAccountFingerprint: string;
-  inboundMessageId: string;
-  inboundSenderIgsid: string;
-  inboundDirection: 'INBOUND';
-  inboundReceivedAt: Date;
   threadId: string;
   initiatorUserWorkspaceId: string;
   evidenceLinks: readonly ActionEvidenceLinkInput[];
 };
+
+export type InstagramReplyExpectedActionBinding = ActionBindingBase & {
+  actionName: 'send_instagram_reply';
+  actionContextFingerprint?: null;
+  inboundMessageId: string;
+  inboundSenderIgsid: string;
+  inboundDirection: 'INBOUND';
+  inboundReceivedAt: Date;
+};
+
+export type OutreachEmailExpectedActionBinding = ActionBindingBase & {
+  actionName: 'send_outreach_email';
+  actionContextFingerprint: string;
+};
+
+export type ExpectedActionBinding =
+  | InstagramReplyExpectedActionBinding
+  | OutreachEmailExpectedActionBinding;
 
 export type ExpectedActionBindingWithWorkspace = ExpectedActionBinding & {
   workspaceId: string;
@@ -27,11 +40,17 @@ export type ExpectedActionBindingWithWorkspace = ExpectedActionBinding & {
 export type ProviderAcceptedOutcomeInput = {
   code: string;
   acceptedAt: Date;
+  providerMessageId?: string;
+  providerExternalMessageId?: string;
+  providerThreadExternalId?: string;
 };
 
 export type AcceptedProviderOutcome = {
   code: 'accepted' | 'queued';
   acceptedAt: Date;
+  providerMessageId?: string;
+  providerExternalMessageId?: string;
+  providerThreadExternalId?: string;
 };
 
 export type ActionApprovalFaultHooks = {
@@ -62,6 +81,14 @@ export type ActionReceiptProjectionWriter = {
     workspaceId: string;
     draftId: string;
     contentDigest: string;
+    actionName: ExpectedActionBinding['actionName'];
+    providerMessageId: string | null;
+    providerExternalMessageId: string | null;
+    providerThreadExternalId: string | null;
+    recipientFingerprint: string | null;
+    sendingAccountFingerprint: string | null;
+    actionContextFingerprint: string | null;
+    evidenceLinks: readonly ActionEvidenceLinkInput[];
   }) => Promise<void>;
 };
 

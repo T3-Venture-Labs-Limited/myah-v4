@@ -10,6 +10,7 @@ import { type MessageOutboundDriver } from 'src/modules/messaging/message-outbou
 import { GoogleOAuth2ClientProvider } from 'src/modules/connected-account/oauth2-client-manager/drivers/google/google-oauth2-client.provider';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { mimeEncode } from 'src/modules/messaging/message-import-manager/utils/mime-encode.util';
+import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
 import { type SendMessageInput } from 'src/modules/messaging/message-outbound-manager/types/send-message-input.type';
 import { type SendMessageResult } from 'src/modules/messaging/message-outbound-manager/types/send-message-result.type';
 import { extractMessageIdFromBuffer } from 'src/modules/messaging/message-outbound-manager/utils/extract-message-id-from-buffer.util';
@@ -50,13 +51,11 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
   async createDraft(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
-  ): Promise<void> {
-    const { gmailClient, encodedMessage } = await this.composeGmailMessage(
-      connectedAccount,
-      sendMessageInput,
-    );
+  ): Promise<CreateDraftResult> {
+    const { gmailClient, encodedMessage, messageBuffer } =
+      await this.composeGmailMessage(connectedAccount, sendMessageInput);
 
-    await gmailClient.users.drafts.create({
+    const { data } = await gmailClient.users.drafts.create({
       userId: 'me',
       requestBody: {
         message: {
@@ -67,6 +66,26 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
         },
       },
     });
+
+    const draftExternalId = data.message?.id;
+
+    if (!isNonEmptyString(draftExternalId)) {
+      throw new Error('Gmail draft did not return a message id');
+    }
+
+    const headerMessageId = extractMessageIdFromBuffer(messageBuffer);
+
+    if (!isNonEmptyString(headerMessageId)) {
+      throw new Error('Gmail draft did not produce a header message id');
+    }
+
+    return {
+      headerMessageId,
+      draftExternalId,
+      ...(isNonEmptyString(data.message?.threadId)
+        ? { threadExternalId: data.message.threadId }
+        : {}),
+    };
   }
 
   async sendDraft(
@@ -80,19 +99,19 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     );
 
     try {
-      await this.deleteDraftByMessageId(connectedAccount, draftExternalId);
-    } catch (error) {
+      await this.deleteDraft(draftExternalId, connectedAccount);
+    } catch {
       this.logger.warn(
-        `Failed to delete Gmail draft for message ${draftExternalId} after send: ${error}`,
+        `Failed to delete Gmail draft ${draftExternalId} after send`,
       );
     }
 
     return sendResult;
   }
 
-  private async deleteDraftByMessageId(
+  async deleteDraft(
+    draftExternalId: string,
     connectedAccount: ConnectedAccountEntity,
-    messageId: string,
   ): Promise<void> {
     const oAuth2Client = await this.googleOAuth2ClientProvider.getClient(
       connectedAccount.id,
@@ -100,7 +119,10 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
 
     const gmailClient = google.gmail({ version: 'v1', auth: oAuth2Client });
 
-    const draftId = await this.findDraftIdByMessageId(gmailClient, messageId);
+    const draftId = await this.findDraftIdByMessageId(
+      gmailClient,
+      draftExternalId,
+    );
 
     if (isDefined(draftId)) {
       await gmailClient.users.drafts.delete({ userId: 'me', id: draftId });
@@ -109,7 +131,7 @@ export class GmailMessageOutboundService implements MessageOutboundDriver {
     }
 
     this.logger.warn(
-      `No Gmail draft found for message ${messageId}; skipping delete`,
+      `No Gmail draft found for message ${draftExternalId}; skipping delete`,
     );
   }
 
