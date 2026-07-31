@@ -68,6 +68,7 @@ const args: RunOnWorkspaceArgs = {
   options: { dryRun: true },
   index: 0,
   total: 1,
+  dataSource: {} as never,
 };
 
 describe('SynchronizeMyahCreatorPageLayoutMetadataCommand', () => {
@@ -115,6 +116,25 @@ describe('SynchronizeMyahCreatorPageLayoutMetadataCommand', () => {
     expect([...selection.pageLayoutWidget].sort()).toEqual(
       CREATOR_PAGE_LAYOUT_WIDGET_UNIVERSAL_IDENTIFIERS.sort(),
     );
+  });
+
+  it('skips Creator layout metadata synchronization when the workspace schema is unavailable', async () => {
+    const commandModule = loadCommandModule();
+
+    expect(commandModule).toBeDefined();
+
+    const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
+    const command =
+      new commandModule!.SynchronizeMyahCreatorPageLayoutMetadataCommand(
+        {} as WorkspaceIteratorService,
+        {
+          synchronizeWorkspace,
+        } as SynchronizeSourceControlledMyahMetadataService,
+      );
+
+    await command.runOnWorkspace({ ...args, dataSource: undefined });
+
+    expect(synchronizeWorkspace).not.toHaveBeenCalled();
   });
 
   it('registers the Creator page layout replay in active version 2.19 after Inbox metadata', () => {

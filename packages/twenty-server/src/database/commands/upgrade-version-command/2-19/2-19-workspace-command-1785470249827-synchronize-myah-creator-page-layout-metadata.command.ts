@@ -38,7 +38,11 @@ export class SynchronizeMyahCreatorPageLayoutMetadataCommand extends ActiveOrSus
     super(workspaceIteratorService);
   }
 
-  override runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+  override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    if (args.dataSource === undefined) {
+      return;
+    }
+
     return this.synchronizeSourceControlledMyahMetadataService.synchronizeWorkspace(
       args,
       {
