@@ -54,6 +54,10 @@ type UniversalMetadataEntity = {
     fieldMetadataUniversalIdentifier: string;
   }[];
   roleUniversalIdentifier?: string | null;
+  universalConfiguration?: {
+    viewUniversalIdentifier?: string | null;
+    viewId?: string | null;
+  };
 };
 
 const getUniversalMetadataEntities = (
@@ -239,22 +243,6 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
                 ),
       ),
     );
-    const viewFilterUniversalIdentifiers = toUniversalIdentifiers(
-      getUniversalMetadataEntities(
-        standardAllFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
-      ).filter((viewFilter) =>
-        viewUniversalIdentifiers.has(
-          viewFilter.viewUniversalIdentifier ?? '',
-        ),
-      ),
-    );
-    const viewFieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardViewFields.filter((viewField) =>
-        viewUniversalIdentifiers.has(
-          viewField.viewUniversalIdentifier ?? '',
-        ),
-      ),
-    );
     const pageLayoutUniversalIdentifiers = toUniversalIdentifiers(
       getUniversalMetadataEntities(
         standardAllFlatEntityMaps.flatPageLayoutMaps.byUniversalIdentifier,
@@ -280,6 +268,42 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       ).filter((pageLayoutWidget) =>
         pageLayoutTabUniversalIdentifiers.has(
           pageLayoutWidget.pageLayoutTabUniversalIdentifier ?? '',
+        ),
+      ),
+    );
+    for (const pageLayoutWidget of getUniversalMetadataEntities(
+      standardAllFlatEntityMaps.flatPageLayoutWidgetMaps
+        .byUniversalIdentifier,
+    )) {
+      if (
+        !pageLayoutWidgetUniversalIdentifiers.has(
+          pageLayoutWidget.universalIdentifier,
+        )
+      ) {
+        continue;
+      }
+
+      const viewUniversalIdentifier =
+        pageLayoutWidget.universalConfiguration?.viewUniversalIdentifier ??
+        pageLayoutWidget.universalConfiguration?.viewId;
+
+      if (isDefined(viewUniversalIdentifier)) {
+        viewUniversalIdentifiers.add(viewUniversalIdentifier);
+      }
+    }
+    const viewFilterUniversalIdentifiers = toUniversalIdentifiers(
+      getUniversalMetadataEntities(
+        standardAllFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+      ).filter((viewFilter) =>
+        viewUniversalIdentifiers.has(
+          viewFilter.viewUniversalIdentifier ?? '',
+        ),
+      ),
+    );
+    const viewFieldUniversalIdentifiers = toUniversalIdentifiers(
+      standardViewFields.filter((viewField) =>
+        viewUniversalIdentifiers.has(
+          viewField.viewUniversalIdentifier ?? '',
         ),
       ),
     );

@@ -30,6 +30,13 @@ type TestFlatEntity = {
   applicationUniversalIdentifier?: string;
 };
 
+type TestPageLayoutWidget = TestFlatEntity & {
+  universalConfiguration: {
+    configurationType: string;
+    viewUniversalIdentifier?: string;
+  };
+};
+
 type StandardFieldIdentifiers = Record<
   string,
   { universalIdentifier: string }
@@ -411,6 +418,47 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         desiredCreatorOpsRole.fieldPermissionUniversalIdentifiers.every(
           (permissionUniversalIdentifier) =>
             desiredFieldPermissions[permissionUniversalIdentifier] !== undefined,
+        ),
+      ).toBe(true);
+    });
+
+    it('includes every bounded Creator Fields widget view in the desired migration slice', async () => {
+      await command.synchronizeWorkspace(
+        {
+          workspaceId: WORKSPACE_ID,
+          options: { dryRun: false },
+          index: 0,
+          total: 1,
+        },
+        {
+          targetObjectUniversalIdentifiers: new Set([
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+          ]),
+        },
+      );
+
+      const migrationInput =
+        validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+      const desiredViews =
+        migrationInput.fromToAllFlatEntityMaps.flatViewMaps.to
+          .byUniversalIdentifier;
+      const desiredWidgets = Object.values(
+        migrationInput.fromToAllFlatEntityMaps.flatPageLayoutWidgetMaps.to
+          .byUniversalIdentifier,
+      ) as TestPageLayoutWidget[];
+      const fieldsWidgetViewUniversalIdentifiers = desiredWidgets.flatMap(
+        ({ universalConfiguration }) =>
+          universalConfiguration.configurationType === 'FIELDS' &&
+          universalConfiguration.viewUniversalIdentifier !== undefined
+            ? [universalConfiguration.viewUniversalIdentifier]
+            : [],
+      );
+
+      expect(fieldsWidgetViewUniversalIdentifiers).not.toHaveLength(0);
+      expect(
+        fieldsWidgetViewUniversalIdentifiers.every(
+          (viewUniversalIdentifier) =>
+            desiredViews[viewUniversalIdentifier] !== undefined,
         ),
       ).toBe(true);
     });
