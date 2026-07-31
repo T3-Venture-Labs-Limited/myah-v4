@@ -143,22 +143,62 @@ export class SynchronizeSourceControlledMyahMetadataService {
         );
       }
     }
-    for (const fieldUniversalIdentifier of selectedFieldMetadataUniversalIdentifiers) {
-      const field =
-        standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
-          fieldUniversalIdentifier
-        ];
+    const standardFieldMetadata = Object.values(
+      standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    let didExpandSelection = true;
 
-      if (isDefined(field?.objectMetadataUniversalIdentifier)) {
-        selectedObjectMetadataUniversalIdentifiers.add(
-          field.objectMetadataUniversalIdentifier,
-        );
+    while (didExpandSelection) {
+      const fieldMetadataCount = selectedFieldMetadataUniversalIdentifiers.size;
+      const objectMetadataCount = selectedObjectMetadataUniversalIdentifiers.size;
+
+      for (const fieldUniversalIdentifier of selectedFieldMetadataUniversalIdentifiers) {
+        const field =
+          standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+            fieldUniversalIdentifier
+          ];
+
+        if (
+          isDefined(field?.objectMetadataUniversalIdentifier) &&
+          fromAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+            fieldUniversalIdentifier
+          ] === undefined
+        ) {
+          selectedObjectMetadataUniversalIdentifiers.add(
+            field.objectMetadataUniversalIdentifier,
+          );
+        }
+        if (isDefined(field?.relationTargetFieldMetadataUniversalIdentifier)) {
+          selectedFieldMetadataUniversalIdentifiers.add(
+            field.relationTargetFieldMetadataUniversalIdentifier,
+          );
+        }
       }
-      if (isDefined(field?.relationTargetFieldMetadataUniversalIdentifier)) {
-        selectedFieldMetadataUniversalIdentifiers.add(
-          field.relationTargetFieldMetadataUniversalIdentifier,
-        );
+
+      for (const objectMetadataUniversalIdentifier of selectedObjectMetadataUniversalIdentifiers) {
+        if (
+          fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+            objectMetadataUniversalIdentifier
+          ] !== undefined
+        ) {
+          continue;
+        }
+
+        for (const field of standardFieldMetadata) {
+          if (
+            field.objectMetadataUniversalIdentifier ===
+            objectMetadataUniversalIdentifier
+          ) {
+            selectedFieldMetadataUniversalIdentifiers.add(
+              field.universalIdentifier,
+            );
+          }
+        }
       }
+
+      didExpandSelection =
+        fieldMetadataCount !== selectedFieldMetadataUniversalIdentifiers.size ||
+        objectMetadataCount !== selectedObjectMetadataUniversalIdentifiers.size;
     }
 
     const toAllFlatEntityMaps = createEmptyAllFlatEntityMaps();

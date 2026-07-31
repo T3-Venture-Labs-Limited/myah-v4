@@ -122,6 +122,15 @@ describe('SynchronizeSourceControlledMyahMetadataService', () => {
     ).toMatchObject({
       universalIdentifier: MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
     });
+    expect(
+      migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+        .byUniversalIdentifier[
+          MYAH_STANDARD_OBJECTS.creator.fields.id.universalIdentifier
+        ],
+    ).toMatchObject({
+      universalIdentifier:
+        MYAH_STANDARD_OBJECTS.creator.fields.id.universalIdentifier,
+    });
   });
 
   it('includes a selected view field relation and its inverse field metadata', async () => {
