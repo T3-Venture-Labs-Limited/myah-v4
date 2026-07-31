@@ -442,6 +442,9 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       const desiredViews =
         migrationInput.fromToAllFlatEntityMaps.flatViewMaps.to
           .byUniversalIdentifier;
+      const desiredViewFields =
+        migrationInput.fromToAllFlatEntityMaps.flatViewFieldMaps.to
+          .byUniversalIdentifier;
       const desiredWidgets = Object.values(
         migrationInput.fromToAllFlatEntityMaps.flatPageLayoutWidgetMaps.to
           .byUniversalIdentifier,
@@ -459,6 +462,28 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         fieldsWidgetViewUniversalIdentifiers.every(
           (viewUniversalIdentifier) =>
             desiredViews[viewUniversalIdentifier] !== undefined,
+        ),
+      ).toBe(true);
+
+      const { allFlatEntityMaps } =
+        computeTwentyStandardApplicationAllFlatEntityMaps({
+          workspaceId: WORKSPACE_ID,
+          twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+          now: '2026-07-15T00:00:00.000Z',
+        });
+      const fieldsWidgetViewFieldUniversalIdentifiers = Object.values(
+        allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+      ).flatMap(({ universalIdentifier, viewUniversalIdentifier }) =>
+        fieldsWidgetViewUniversalIdentifiers.includes(viewUniversalIdentifier)
+          ? [universalIdentifier]
+          : [],
+      );
+
+      expect(fieldsWidgetViewFieldUniversalIdentifiers).not.toHaveLength(0);
+      expect(
+        fieldsWidgetViewFieldUniversalIdentifiers.every(
+          (viewFieldUniversalIdentifier) =>
+            desiredViewFields[viewFieldUniversalIdentifier] !== undefined,
         ),
       ).toBe(true);
     });
