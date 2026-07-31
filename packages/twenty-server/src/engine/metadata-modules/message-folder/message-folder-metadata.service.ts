@@ -8,6 +8,7 @@ import {
   MessageFolderPendingSyncAction,
 } from 'twenty-shared/types';
 
+import { MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME } from 'src/engine/core-modules/myah/constants/workspace-mailbox-connected-account-name.constant';
 import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
 import { MessageFolderDTO } from 'src/engine/metadata-modules/message-folder/dtos/message-folder.dto';
 import { MessageFolderEntity } from 'src/engine/metadata-modules/message-folder/entities/message-folder.entity';
@@ -114,10 +115,12 @@ export class MessageFolderMetadataService {
   }
 
   async verifyOwnership({
+    allowWorkspaceMailbox = true,
     id,
     userWorkspaceId,
     workspaceId,
   }: {
+    allowWorkspaceMailbox?: boolean;
     id: string;
     userWorkspaceId: string;
     workspaceId: string;
@@ -133,12 +136,22 @@ export class MessageFolderMetadataService {
       );
     }
 
+    if (!allowWorkspaceMailbox) {
+      await this.messageChannelMetadataService.verifyOwnership({
+        allowWorkspaceMailbox: false,
+        id: messageFolder.messageChannelId,
+        userWorkspaceId,
+        workspaceId,
+      });
+
+      return messageFolder;
+    }
+
     const userAccountIds =
       await this.connectedAccountMetadataService.getUserConnectedAccountIds({
         userWorkspaceId,
         workspaceId,
       });
-
     const messageChannel = await this.messageChannelMetadataService.findById({
       id: messageFolder.messageChannelId,
       workspaceId,
@@ -178,6 +191,7 @@ export class MessageFolderMetadataService {
     workspaceId: string;
     data: Partial<MessageFolderEntity>;
   }): Promise<MessageFolderDTO> {
+    await this.assertGenericUpdateAllowed({ ids: [id], workspaceId });
     await this.repository.update(
       { id, workspaceId },
       data as Record<string, unknown>,
@@ -195,6 +209,7 @@ export class MessageFolderMetadataService {
     workspaceId: string;
     data: Partial<MessageFolderEntity>;
   }): Promise<MessageFolderDTO[]> {
+    await this.assertGenericUpdateAllowed({ ids, workspaceId });
     await this.repository.manager.transaction(async (manager) => {
       if (!data.isSynced) {
         await manager.update(
@@ -244,6 +259,34 @@ export class MessageFolderMetadataService {
     });
 
     return this.repository.find({ where: { id: In(ids), workspaceId } });
+  }
+
+  private async assertGenericUpdateAllowed({
+    ids,
+    workspaceId,
+  }: {
+    ids: string[];
+    workspaceId: string;
+  }): Promise<void> {
+    const workspaceMailboxFolder = await this.repository.findOne({
+      where: {
+        id: In(ids),
+        messageChannel: {
+          connectedAccount: {
+            name: MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME,
+            visibility: 'workspace',
+          },
+        },
+        workspaceId,
+      },
+    });
+
+    if (workspaceMailboxFolder) {
+      throw new MessageFolderException(
+        'Message folder not found',
+        MessageFolderExceptionCode.MESSAGE_FOLDER_NOT_FOUND,
+      );
+    }
   }
 
   async delete({
