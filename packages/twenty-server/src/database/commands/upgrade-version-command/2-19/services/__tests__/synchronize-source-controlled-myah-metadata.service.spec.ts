@@ -116,6 +116,51 @@ describe('SynchronizeSourceControlledMyahMetadataService', () => {
     });
   });
 
+  it('includes a selected view field relation and its inverse field metadata', async () => {
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService({
+        ...createEmptyAllFlatEntityMaps(),
+        featureFlagsMap: {},
+      });
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        now: '2026-07-28T00:00:00.000Z',
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+      });
+    const creatorOwnerField =
+      allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier
+      ];
+
+    if (!creatorOwnerField?.relationTargetFieldMetadataUniversalIdentifier) {
+      throw new Error('Creator owner relation metadata is required by the test fixture');
+    }
+
+    await service.synchronizeWorkspace(createArgs(), {
+      viewField: new Set([
+        MYAH_STANDARD_OBJECTS.creator.views.creatorRecordPageFields.viewFields
+          .owner.universalIdentifier,
+      ]),
+    });
+
+    const desiredFields =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+        .fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+        .byUniversalIdentifier;
+
+    expect(
+      desiredFields[
+        MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier
+      ],
+    ).toBeDefined();
+    expect(
+      desiredFields[
+        creatorOwnerField.relationTargetFieldMetadataUniversalIdentifier
+      ],
+    ).toBeDefined();
+  });
+
   it('re-registers selected Inbox relation metadata over existing join columns before the generic sync', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({

@@ -121,6 +121,34 @@ export class SynchronizeSourceControlledMyahMetadataService {
         cachedMetadata as unknown as TwentyStandardAllFlatEntityMaps;
     }
 
+    const selectedFieldMetadataUniversalIdentifiers = new Set(
+      selection.fieldMetadata,
+    );
+    for (const viewFieldUniversalIdentifier of selection.viewField ?? []) {
+      const viewField =
+        standardAllFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier[
+          viewFieldUniversalIdentifier
+        ];
+
+      if (isDefined(viewField?.fieldMetadataUniversalIdentifier)) {
+        selectedFieldMetadataUniversalIdentifiers.add(
+          viewField.fieldMetadataUniversalIdentifier,
+        );
+      }
+    }
+    for (const fieldUniversalIdentifier of selectedFieldMetadataUniversalIdentifiers) {
+      const field =
+        standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+          fieldUniversalIdentifier
+        ];
+
+      if (isDefined(field?.relationTargetFieldMetadataUniversalIdentifier)) {
+        selectedFieldMetadataUniversalIdentifiers.add(
+          field.relationTargetFieldMetadataUniversalIdentifier,
+        );
+      }
+    }
+
     const toAllFlatEntityMaps = createEmptyAllFlatEntityMaps();
     const fromSelectedFlatEntityMaps = createEmptyAllFlatEntityMaps();
     const dependencyAllFlatEntityMaps = createEmptyAllFlatEntityMaps();
@@ -150,7 +178,10 @@ export class SynchronizeSourceControlledMyahMetadataService {
 
     for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
       const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
-      const selectedUniversalIdentifiers = selection[metadataName];
+      const selectedUniversalIdentifiers =
+        metadataName === 'fieldMetadata'
+          ? selectedFieldMetadataUniversalIdentifiers
+          : selection[metadataName];
       const fromFlatEntityMaps = fromFlatEntityMapsByKey[flatEntityMapsKey];
 
       dependencyAllFlatEntityMapsByKey[flatEntityMapsKey] = structuredClone(
