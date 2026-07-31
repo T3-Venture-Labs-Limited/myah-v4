@@ -1,6 +1,9 @@
 import { Command } from 'nest-commander';
 
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import {
+  MYAH_STANDARD_OBJECTS,
+  STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
@@ -35,7 +38,10 @@ export class ResynchronizeMyahStandardApplicationCommand extends ActiveOrSuspend
     if (
       flatObjectMetadataMaps.byUniversalIdentifier[
         MYAH_STANDARD_OBJECTS.outreachAction.universalIdentifier
-      ] === undefined
+      ] === undefined ||
+      flatObjectMetadataMaps.byUniversalIdentifier[
+        STANDARD_OBJECTS.company.universalIdentifier
+      ] !== undefined
     ) {
       return;
     }

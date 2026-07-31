@@ -1,4 +1,7 @@
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import {
+  MYAH_STANDARD_OBJECTS,
+  STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
 import { type WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { ResynchronizeMyahStandardApplicationCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785453080000-resynchronize-myah-standard-application.command';
 import { type WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -48,6 +51,32 @@ describe('ResynchronizeMyahStandardApplicationCommand', () => {
   it('skips a workspace without canonical Myah metadata', async () => {
     getOrRecompute.mockResolvedValueOnce({
       flatObjectMetadataMaps: { byUniversalIdentifier: {} },
+    });
+
+    await command.runOnWorkspace({
+      workspaceId,
+      options: {},
+      index: 0,
+      total: 1,
+    });
+
+    expect(synchronizeTwentyStandardApplicationOrThrow).not.toHaveBeenCalled();
+  });
+
+  it('skips a CRM workspace that also contains canonical Myah metadata', async () => {
+    getOrRecompute.mockResolvedValueOnce({
+      flatObjectMetadataMaps: {
+        byUniversalIdentifier: {
+          [MYAH_STANDARD_OBJECTS.outreachAction.universalIdentifier]: {
+            universalIdentifier:
+              MYAH_STANDARD_OBJECTS.outreachAction.universalIdentifier,
+          },
+          [STANDARD_OBJECTS.company.universalIdentifier]: {
+            universalIdentifier:
+              STANDARD_OBJECTS.company.universalIdentifier,
+          },
+        },
+      },
     });
 
     await command.runOnWorkspace({
