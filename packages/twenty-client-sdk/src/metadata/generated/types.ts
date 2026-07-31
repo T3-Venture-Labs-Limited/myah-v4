@@ -5352,69 +5352,6 @@ export default {
                 1
             ]
         },
-        "WorkspaceMailboxConnectionStatus": {
-            "connectedAccountId": [
-                3
-            ],
-            "errorCode": [
-                1
-            ],
-            "errorMessage": [
-                1
-            ],
-            "lastSafeOperation": [
-                1
-            ],
-            "maskedHandle": [
-                1
-            ],
-            "messageChannelId": [
-                3
-            ],
-            "state": [
-                1
-            ],
-            "syncStage": [
-                1
-            ],
-            "syncStatus": [
-                1
-            ],
-            "updatedAt": [
-                4
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "WorkspaceMailboxConnectionResult": {
-            "connectedAccountId": [
-                3
-            ],
-            "messageChannelId": [
-                3
-            ],
-            "status": [
-                301
-            ],
-            "__typename": [
-                1
-            ]
-        },
-        "RevokeWorkspaceMailboxResult": {
-            "connectedAccountId": [
-                3
-            ],
-            "revoked": [
-                6
-            ],
-            "state": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
         "AgentMessagePart": {
             "id": [
                 3
@@ -5568,6 +5505,69 @@ export default {
             ],
             "inputSchema": [
                 7
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "WorkspaceMailboxConnectionStatus": {
+            "connectedAccountId": [
+                3
+            ],
+            "errorCode": [
+                1
+            ],
+            "errorMessage": [
+                1
+            ],
+            "lastSafeOperation": [
+                1
+            ],
+            "maskedHandle": [
+                1
+            ],
+            "messageChannelId": [
+                3
+            ],
+            "state": [
+                1
+            ],
+            "syncStage": [
+                1
+            ],
+            "syncStatus": [
+                1
+            ],
+            "updatedAt": [
+                4
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "WorkspaceMailboxConnectionResult": {
+            "connectedAccountId": [
+                3
+            ],
+            "messageChannelId": [
+                3
+            ],
+            "status": [
+                305
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "RevokeWorkspaceMailboxResult": {
+            "connectedAccountId": [
+                3
+            ],
+            "revoked": [
+                6
+            ],
+            "state": [
+                1
             ],
             "__typename": [
                 1
@@ -5889,7 +5889,7 @@ export default {
                 1
             ],
             "parts": [
-                304
+                301
             ],
             "processedAt": [
                 4
@@ -6241,7 +6241,7 @@ export default {
         },
         "Query": {
             "getWorkspaceMailboxStatus": [
-                301,
+                305,
                 {
                     "connectedAccountId": [
                         3,
@@ -6839,7 +6839,7 @@ export default {
                 }
             ],
             "getToolIndex": [
-                307
+                304
             ],
             "getToolInputSchema": [
                 7,
@@ -6851,10 +6851,10 @@ export default {
                 }
             ],
             "webhooks": [
-                306
+                303
             ],
             "webhook": [
-                306,
+                303,
                 {
                     "id": [
                         3,
@@ -7216,7 +7216,7 @@ export default {
         "UsageOperationType": {},
         "Mutation": {
             "connectWorkspaceMailbox": [
-                302,
+                306,
                 {
                     "input": [
                         363,
@@ -7225,7 +7225,7 @@ export default {
                 }
             ],
             "rotateWorkspaceMailbox": [
-                302,
+                306,
                 {
                     "input": [
                         366,
@@ -7234,7 +7234,7 @@ export default {
                 }
             ],
             "reconnectWorkspaceMailbox": [
-                302,
+                306,
                 {
                     "input": [
                         366,
@@ -7243,7 +7243,7 @@ export default {
                 }
             ],
             "revokeWorkspaceMailbox": [
-                303,
+                307,
                 {
                     "connectedAccountId": [
                         3,
@@ -8949,7 +8949,7 @@ export default {
                 }
             ],
             "createWebhook": [
-                306,
+                303,
                 {
                     "input": [
                         480,
@@ -8958,7 +8958,7 @@ export default {
                 }
             ],
             "updateWebhook": [
-                306,
+                303,
                 {
                     "input": [
                         481,
@@ -8967,7 +8967,7 @@ export default {
                 }
             ],
             "deleteWebhook": [
-                306,
+                303,
                 {
                     "id": [
                         3,
@@ -8976,7 +8976,7 @@ export default {
                 }
             ],
             "runAgent": [
-                305,
+                302,
                 {
                     "input": [
                         483,
@@ -9146,6 +9146,9 @@ export default {
                     "threadId": [
                         3,
                         "UUID!"
+                    ],
+                    "browsingContext": [
+                        7
                     ],
                     "modelId": [
                         1

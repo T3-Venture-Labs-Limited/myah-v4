@@ -2708,31 +2708,6 @@ type ImapSmtpCaldavConnectionSuccess {
   connectedAccountId: String!
 }
 
-type WorkspaceMailboxConnectionStatus {
-  connectedAccountId: UUID!
-  errorCode: String
-  errorMessage: String
-  lastSafeOperation: String!
-  maskedHandle: String!
-  messageChannelId: UUID!
-  state: String!
-  syncStage: String!
-  syncStatus: String!
-  updatedAt: DateTime!
-}
-
-type WorkspaceMailboxConnectionResult {
-  connectedAccountId: UUID!
-  messageChannelId: UUID!
-  status: WorkspaceMailboxConnectionStatus!
-}
-
-type RevokeWorkspaceMailboxResult {
-  connectedAccountId: UUID!
-  revoked: Boolean!
-  state: String!
-}
-
 type AgentMessagePart {
   id: UUID!
   messageId: UUID!
@@ -2789,6 +2764,31 @@ type ToolIndexEntry {
   objectName: String
   icon: String
   inputSchema: JSON
+}
+
+type WorkspaceMailboxConnectionStatus {
+  connectedAccountId: UUID!
+  errorCode: String
+  errorMessage: String
+  lastSafeOperation: String!
+  maskedHandle: String!
+  messageChannelId: UUID!
+  state: String!
+  syncStage: String!
+  syncStatus: String!
+  updatedAt: DateTime!
+}
+
+type WorkspaceMailboxConnectionResult {
+  connectedAccountId: UUID!
+  messageChannelId: UUID!
+  status: WorkspaceMailboxConnectionStatus!
+}
+
+type RevokeWorkspaceMailboxResult {
+  connectedAccountId: UUID!
+  revoked: Boolean!
+  state: String!
 }
 
 type ChannelSyncSuccess {
@@ -3550,7 +3550,7 @@ type Mutation {
   updateCalendarChannel(input: UpdateCalendarChannelInput!): CalendarChannel!
   createChatThread: AgentChatThread!
   sendChatMessage(threadId: UUID!, text: String!, messageId: UUID!, browsingContext: JSON, modelId: String, fileAttachments: [FileAttachmentInput!]): SendChatMessageResult!
-  retryChatMessage(threadId: UUID!, modelId: String): SendChatMessageResult!
+  retryChatMessage(threadId: UUID!, browsingContext: JSON, modelId: String): SendChatMessageResult!
   answerAgentChatQuestion(threadId: UUID!, messageId: UUID!, answers: [AgentChatQuestionAnswerInput!]!, modelId: String): SendChatMessageResult!
   resolveAgentChatApproval(threadId: UUID!, messageId: UUID!, decision: AgentChatApprovalDecisionInput!, modelId: String): SendChatMessageResult!
   stopAgentChatStream(threadId: UUID!): Boolean!
