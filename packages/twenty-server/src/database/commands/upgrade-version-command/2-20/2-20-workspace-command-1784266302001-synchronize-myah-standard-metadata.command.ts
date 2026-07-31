@@ -291,6 +291,17 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         viewUniversalIdentifiers.add(viewUniversalIdentifier);
       }
     }
+    for (const viewField of standardViewFields) {
+      const fieldMetadataUniversalIdentifier =
+        viewField.fieldMetadataUniversalIdentifier;
+
+      if (
+        viewUniversalIdentifiers.has(viewField.viewUniversalIdentifier ?? '') &&
+        isDefined(fieldMetadataUniversalIdentifier)
+      ) {
+        fieldUniversalIdentifiers.add(fieldMetadataUniversalIdentifier);
+      }
+    }
     const viewFilterUniversalIdentifiers = toUniversalIdentifiers(
       getUniversalMetadataEntities(
         standardAllFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,

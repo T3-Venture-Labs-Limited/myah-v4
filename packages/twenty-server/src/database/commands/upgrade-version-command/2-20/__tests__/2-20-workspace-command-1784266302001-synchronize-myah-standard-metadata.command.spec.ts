@@ -343,14 +343,19 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         objectMetadataUniversalIdentifier: string;
         relationTargetObjectMetadataUniversalIdentifier?: string | null;
       }>;
-      const outboundCreatorRelation = standardFields.find(
+      const creatorOwnerField = standardFields.find(
+        ({ universalIdentifier }) =>
+          universalIdentifier ===
+          MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
+      );
+      const unselectedOutboundCreatorRelation = standardFields.find(
         (field) =>
           field.objectMetadataUniversalIdentifier ===
             MYAH_STANDARD_OBJECTS.creator.universalIdentifier &&
           field.relationTargetObjectMetadataUniversalIdentifier !== null &&
           field.relationTargetObjectMetadataUniversalIdentifier !== undefined &&
-          field.relationTargetObjectMetadataUniversalIdentifier !==
-            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
+          field.universalIdentifier !==
+            MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
       );
       const inboundCreatorRelation = standardFields.find(
         (field) =>
@@ -360,7 +365,11 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
             MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
       );
 
-      if (!outboundCreatorRelation || !inboundCreatorRelation) {
+      if (
+        !creatorOwnerField ||
+        !unselectedOutboundCreatorRelation ||
+        !inboundCreatorRelation
+      ) {
         throw new Error('Creator relation field fixtures are missing');
       }
 
@@ -373,7 +382,10 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
           .fromToAllFlatEntityMaps.flatRoleMaps.to.byUniversalIdentifier;
 
       expect(
-        desiredFields[outboundCreatorRelation.universalIdentifier],
+        desiredFields[creatorOwnerField.universalIdentifier],
+      ).toBeDefined();
+      expect(
+        desiredFields[unselectedOutboundCreatorRelation.universalIdentifier],
       ).toBeUndefined();
       expect(
         desiredFields[inboundCreatorRelation.universalIdentifier],
@@ -443,6 +455,9 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       const desiredViews =
         migrationInput.fromToAllFlatEntityMaps.flatViewMaps.to
           .byUniversalIdentifier;
+      const desiredFields =
+        migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+          .byUniversalIdentifier;
       const desiredViewFields =
         migrationInput.fromToAllFlatEntityMaps.flatViewFieldMaps.to
           .byUniversalIdentifier;
@@ -487,6 +502,29 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         fieldsWidgetViewFieldUniversalIdentifiers.every(
           (viewFieldUniversalIdentifier) =>
             desiredViewFields[viewFieldUniversalIdentifier] !== undefined,
+        ),
+      ).toBe(true);
+
+      const fieldsWidgetViewFieldMetadataUniversalIdentifiers = Object.values(
+        allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+      )
+        .filter(isDefined)
+        .flatMap(
+          ({ fieldMetadataUniversalIdentifier, viewUniversalIdentifier }) =>
+            fieldsWidgetViewUniversalIdentifiers.includes(
+              viewUniversalIdentifier,
+            ) && isDefined(fieldMetadataUniversalIdentifier)
+              ? [fieldMetadataUniversalIdentifier]
+              : [],
+        );
+
+      expect(
+        fieldsWidgetViewFieldMetadataUniversalIdentifiers,
+      ).not.toHaveLength(0);
+      expect(
+        fieldsWidgetViewFieldMetadataUniversalIdentifiers.every(
+          (fieldMetadataUniversalIdentifier) =>
+            desiredFields[fieldMetadataUniversalIdentifier] !== undefined,
         ),
       ).toBe(true);
     });
