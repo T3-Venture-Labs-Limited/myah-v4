@@ -1,5 +1,13 @@
 /* oxlint-disable react/jsx-props-no-spreading -- Tests reuse a typed baseline prop fixture. */
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { StrictMode } from 'react';
 import type * as ReactType from 'react';
 
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
@@ -96,6 +104,8 @@ const defaultProps = {
   readOnlyReason: undefined,
   appliedProposal: null,
   proposalAction: null,
+  onDraftSavingChange: jest.fn(),
+  onProposalApplicationSettled: jest.fn(),
 };
 
 describe('MyahInboxDraftEditor', () => {
@@ -262,6 +272,28 @@ describe('MyahInboxDraftEditor', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('persists an applied proposal once in StrictMode', async () => {
+    mockSaveDraft.mockResolvedValue({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'proposed reply', blocknote: null },
+    });
+
+    render(
+      <StrictMode>
+        <MyahInboxDraftEditor
+          {...defaultProps}
+          appliedProposal={{
+            applicationId: 1,
+            body: { markdown: 'proposed reply', blocknote: null },
+          }}
+        />
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1));
+  });
+
   it('remounts proposal text after a conflict reload with the same proposal counter', async () => {
     mockSaveDraft.mockResolvedValue({
       status: 'CONFLICT',
@@ -294,8 +326,10 @@ describe('MyahInboxDraftEditor', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Shared reply draft')).toHaveValue(
-      'first proposed reply',
+    await waitFor(() =>
+      expect(screen.getByLabelText('Shared reply draft')).toHaveValue(
+        'first proposed reply',
+      ),
     );
   });
 
@@ -352,7 +386,12 @@ describe('MyahInboxDraftEditor', () => {
     expect(screen.getByLabelText('Shared reply draft')).toBeEnabled();
   });
 
-  it('copies an applied proposal into the editor without saving it', () => {
+  it('persists an applied proposal through the revision-protected draft mutation', async () => {
+    mockSaveDraft.mockResolvedValue({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'proposed reply', blocknote: null },
+    });
     const { rerender } = render(<MyahInboxDraftEditor {...defaultProps} />);
 
     rerender(
@@ -365,9 +404,15 @@ describe('MyahInboxDraftEditor', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Shared reply draft')).toHaveValue(
-      'proposed reply',
+    await waitFor(() =>
+      expect(mockSaveDraft).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        expectedRevision: 2,
+        body: { markdown: 'proposed reply', blocknote: null },
+      }),
     );
-    expect(mockSaveDraft).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Draft saved at revision 3',
+    );
   });
 });

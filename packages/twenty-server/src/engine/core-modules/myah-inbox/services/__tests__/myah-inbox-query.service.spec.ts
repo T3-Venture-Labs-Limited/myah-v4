@@ -16,6 +16,7 @@ import {
   type MyahInboxListThreadsInput,
   MyahInboxQueryService,
 } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
+import { MyahInboxThreadProposalContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-thread-proposal-context.service';
 import { MessageVisibilityAccess } from 'src/modules/messaging/common/query-hooks/message/message-visibility-policy.service';
 
 const rolePermissionConfig = { unionOf: ['role-id'] };
@@ -776,7 +777,12 @@ describe('MyahInboxQueryService', () => {
   });
 
   it('loads bounded full-visibility native history before ordering and pagination for proposal context', async () => {
-    const { service, historyCalls } = createService({
+    const {
+      service,
+      historyCalls,
+      globalWorkspaceOrmManager,
+      visibilityPolicy,
+    } = createService({
       rows: [row(tiedThreadAId, '2026-07-21T10:00:00.000Z')],
       historyRows: [
         {
@@ -795,7 +801,11 @@ describe('MyahInboxQueryService', () => {
     });
 
     await expect(
-      service.getThreadProposalContext({
+      new MyahInboxThreadProposalContextService(
+        service,
+        globalWorkspaceOrmManager as never,
+        visibilityPolicy as never,
+      ).getThreadProposalContext({
         ...listInput(),
         threadId: tiedThreadAId,
       }),

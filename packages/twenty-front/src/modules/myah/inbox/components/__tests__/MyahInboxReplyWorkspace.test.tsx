@@ -40,10 +40,14 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     canEdit,
     readOnlyReason,
     appliedProposal,
+    onDraftSavingChange,
+    onProposalApplicationSettled,
   }: {
     canEdit: boolean;
     readOnlyReason?: string;
     appliedProposal: { body: { markdown: string } } | null;
+    onDraftSavingChange: (isSaving: boolean) => void;
+    onProposalApplicationSettled: () => void;
   }) => (
     <div aria-label="Shared reply draft editor">
       Draft is {canEdit ? 'editable' : 'read-only'}
@@ -51,6 +55,15 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
       <output aria-label="Applied proposal">
         {appliedProposal?.body.markdown ?? 'none'}
       </output>
+      <button onClick={() => onDraftSavingChange(true)}>
+        Start manual draft save test double
+      </button>
+      <button onClick={() => onDraftSavingChange(false)}>
+        Finish manual draft save test double
+      </button>
+      <button onClick={onProposalApplicationSettled}>
+        Finish proposal persistence test double
+      </button>
     </div>
   ),
 }));
@@ -153,16 +166,49 @@ describe('MyahInboxReplyWorkspace', () => {
     ).toBeEnabled();
   });
 
-  it('applies a proposal locally without saving it', () => {
+  it('blocks applying a proposal while a manual draft save is pending', () => {
     render(<MyahInboxReplyWorkspace thread={thread} />);
 
+    const applyProposalButton = screen.getByRole('button', {
+      name: 'Apply proposal test double',
+    });
     fireEvent.click(
-      screen.getByRole('button', { name: 'Apply proposal test double' }),
+      screen.getByRole('button', {
+        name: 'Start manual draft save test double',
+      }),
     );
+
+    expect(applyProposalButton).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Finish manual draft save test double',
+      }),
+    );
+
+    expect(applyProposalButton).toBeEnabled();
+  });
+
+  it('blocks repeated proposal application until draft persistence settles', () => {
+    render(<MyahInboxReplyWorkspace thread={thread} />);
+
+    const applyProposalButton = screen.getByRole('button', {
+      name: 'Apply proposal test double',
+    });
+    fireEvent.click(applyProposalButton);
 
     expect(screen.getByLabelText('Applied proposal')).toHaveTextContent(
       'proposal copied explicitly',
     );
+    expect(applyProposalButton).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Finish proposal persistence test double',
+      }),
+    );
+
+    expect(applyProposalButton).toBeEnabled();
     expect(mockUseFindOneRecord).toHaveBeenCalledWith({
       objectNameSingular: 'messageThread',
       objectRecordId: 'thread-1',

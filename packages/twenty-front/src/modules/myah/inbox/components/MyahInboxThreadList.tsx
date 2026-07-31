@@ -1,22 +1,11 @@
-import { FormSingleRecordPicker } from '@/object-record/record-field/ui/form-types/components/FormSingleRecordPicker';
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
-import { TextInput } from '@/ui/input/components/TextInput';
+import { MyahInboxThreadFilters } from '@/myah/inbox/components/MyahInboxThreadFilters';
+import { MyahInboxThreadRow } from '@/myah/inbox/components/MyahInboxThreadRow';
+import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
+import { type MyahInboxFilters } from '@/myah/inbox/states/myahInboxSelectionState';
 import { styled } from '@linaria/react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Tag } from 'twenty-ui/data-display';
-import { IconFilter } from 'twenty-ui/icon';
-import { Button, IconButton } from 'twenty-ui/input';
+import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-
-import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
-import {
-  type MyahInboxFilters,
-  type MyahInboxStateFilter,
-} from '@/myah/inbox/states/myahInboxSelectionState';
-import { Select } from '@/ui/input/components/Select';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 
 const StyledListPanel = styled.section`
   background: ${themeCssVariables.background.primary};
@@ -27,144 +16,12 @@ const StyledListPanel = styled.section`
   min-width: 0;
 `;
 
-const StyledFilters = styled.div`
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  padding: ${themeCssVariables.spacing[3]};
-`;
-
-const StyledSearch = styled.div`
-  position: relative;
-`;
-
-const StyledFilterTrigger = styled.div`
-  bottom: ${themeCssVariables.spacing[1]};
-  position: absolute;
-  right: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledFilterMenu = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
-  padding: ${themeCssVariables.spacing[3]};
-`;
-
 const StyledList = styled.div`
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-`;
-
-const StyledThreadRow = styled.div<{ isSelected: boolean }>`
-  background: ${({ isSelected }) =>
-    isSelected
-      ? themeCssVariables.background.transparent.light
-      : 'transparent'};
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  color: ${themeCssVariables.font.color.primary};
-  display: flex;
-  flex-direction: column;
-  font-family: ${themeCssVariables.font.family};
-
-  &:hover {
-    background: ${themeCssVariables.background.transparent.lighter};
-  }
-`;
-
-const StyledThreadSelectButton = styled.button`
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  font: inherit;
-  gap: ${themeCssVariables.spacing[1]};
-  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[3]} 0;
-  text-align: left;
-  width: 100%;
-
-  &:focus-visible {
-    outline: 2px solid ${themeCssVariables.border.color.medium};
-    outline-offset: -2px;
-  }
-`;
-
-const StyledRowHeader = styled.span`
-  align-items: baseline;
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  justify-content: space-between;
-  width: 100%;
-`;
-
-const StyledSubject = styled.span`
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const StyledTimestamp = styled.time`
-  color: ${themeCssVariables.font.color.tertiary};
-  flex-shrink: 0;
-  font-size: ${themeCssVariables.font.size.xs};
-`;
-
-const StyledMeta = styled.div`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.xs};
-  overflow: hidden;
-  padding: 0 ${themeCssVariables.spacing[3]};
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  width: 100%;
-`;
-
-const StyledCreatorLink = styled.button`
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  overflow: hidden;
-  padding: 0;
-  text-align: left;
-  text-decoration: underline;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &:focus-visible {
-    outline: 2px solid ${themeCssVariables.border.color.medium};
-    outline-offset: 2px;
-  }
-`;
-
-const StyledCampaignTag = styled.div`
-  align-self: flex-start;
-`;
-
-const StyledPreview = styled.span`
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  color: ${themeCssVariables.font.color.tertiary};
-  display: -webkit-box;
-  font-size: ${themeCssVariables.font.size.xs};
-  line-clamp: 2;
-  overflow: hidden;
-`;
-
-const StyledState = styled.span<{ isAttentionNeeded: boolean }>`
-  color: ${({ isAttentionNeeded }) =>
-    isAttentionNeeded
-      ? themeCssVariables.font.color.danger
-      : themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${({ isAttentionNeeded }) =>
-    isAttentionNeeded ? themeCssVariables.font.weight.medium : 'inherit'};
 `;
 
 const StyledStatus = styled.div`
@@ -189,13 +46,6 @@ const StyledLoadMore = styled.div`
   justify-content: center;
   padding: ${themeCssVariables.spacing[3]};
 `;
-
-const STATE_OPTIONS = [
-  { label: 'Needs reply', value: 'NEEDS_REPLY' },
-  { label: 'Waiting on creator', value: 'WAITING_ON_CREATOR' },
-  { label: 'Snoozed', value: 'SNOOZED' },
-  { label: 'Closed', value: 'CLOSED' },
-] satisfies Array<{ label: string; value: MyahInboxStateFilter }>;
 
 const MAX_TIMEOUT_DELAY = 2_147_483_647;
 
@@ -229,11 +79,6 @@ export const MyahInboxThreadList = ({
   // oxlint-disable-next-line twenty/no-state-useref -- DOM refs coordinate roving keyboard focus.
   const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [snoozeClock, setSnoozeClock] = useState(0);
-  const { objectMetadataItems } = useObjectMetadataItems();
-  const { openRecordInSidePanel } = useOpenRecordInSidePanel();
-  const isCampaignMetadataReady = objectMetadataItems.some(
-    (item) => item.nameSingular === 'campaign',
-  );
 
   useEffect(() => {
     const now = Date.now();
@@ -323,71 +168,29 @@ export const MyahInboxThreadList = ({
       );
     }
 
+    const selectedThreadIsVisible = threads.some(
+      (thread) => thread.id === selectedThreadId,
+    );
+
     return (
       <StyledList role="listbox" aria-label="Inbox conversations">
         {threads.map((thread, index) => {
           const isSelected = selectedThreadId === thread.id;
-          const creator = thread.creator;
-          const isSnoozeDue =
-            thread.state === 'SNOOZED' &&
-            thread.snoozedUntil !== null &&
-            Date.parse(thread.snoozedUntil) <= Date.now();
 
           return (
-            <StyledThreadRow key={thread.id} isSelected={isSelected}>
-              <StyledThreadSelectButton
-                ref={(element) => {
-                  rowRefs.current[index] = element;
-                }}
-                role="option"
-                aria-selected={isSelected}
-                tabIndex={isSelected ? 0 : -1}
-                onClick={() => onSelectThread(thread.id)}
-                onKeyDown={(event) => handleRowKeyDown(event, index)}
-              >
-                <StyledRowHeader>
-                  <StyledSubject>
-                    {thread.subject || 'No subject'}
-                  </StyledSubject>
-                  <StyledTimestamp dateTime={thread.lastActivityAt}>
-                    {new Date(thread.lastActivityAt).toLocaleDateString()}
-                  </StyledTimestamp>
-                </StyledRowHeader>
-                {thread.campaign?.name ? (
-                  <StyledCampaignTag
-                    aria-label={`Campaign: ${thread.campaign.name}`}
-                  >
-                    <Tag color="blue" text={thread.campaign.name} />
-                  </StyledCampaignTag>
-                ) : null}
-                <StyledPreview>
-                  {thread.lastMessagePreview || 'No message preview'}
-                </StyledPreview>
-                <StyledState isAttentionNeeded={isSnoozeDue}>
-                  {isSnoozeDue
-                    ? 'Snooze due · Attention needed'
-                    : thread.state.replaceAll('_', ' ').toLowerCase()}
-                </StyledState>
-              </StyledThreadSelectButton>
-              <StyledMeta>
-                {creator ? (
-                  <StyledCreatorLink
-                    type="button"
-                    onClick={() =>
-                      openRecordInSidePanel({
-                        recordId: creator.id,
-                        objectNameSingular: 'creator',
-                        resetNavigationStack: true,
-                      })
-                    }
-                  >
-                    {creator.name}
-                  </StyledCreatorLink>
-                ) : (
-                  (thread.lastMessageSender ?? 'Unlinked sender')
-                )}
-              </StyledMeta>
-            </StyledThreadRow>
+            <MyahInboxThreadRow
+              key={thread.id}
+              thread={thread}
+              isSelected={isSelected}
+              tabIndex={
+                isSelected || (!selectedThreadIsVisible && index === 0) ? 0 : -1
+              }
+              rowRef={(element) => {
+                rowRefs.current[index] = element;
+              }}
+              onSelect={onSelectThread}
+              onKeyDown={(event) => handleRowKeyDown(event, index)}
+            />
           );
         })}
         {(hasNextPage || loadingMore) && (
@@ -411,63 +214,10 @@ export const MyahInboxThreadList = ({
 
   return (
     <StyledListPanel aria-label="Inbox conversations">
-      <StyledFilters>
-        <StyledSearch>
-          <TextInput
-            label="Search conversations"
-            placeholder="Search messages"
-            value={filters.search}
-            fullWidth
-            onChange={(search) => onFiltersChange({ ...filters, search })}
-          />
-          <StyledFilterTrigger>
-            <Dropdown
-              dropdownId="myah-inbox-filter-menu"
-              clickableComponent={
-                <IconButton
-                  Icon={IconFilter}
-                  ariaLabel="Filter conversations"
-                  size="small"
-                  variant="tertiary"
-                />
-              }
-              dropdownComponents={
-                <DropdownContent>
-                  <StyledFilterMenu aria-label="Inbox filters">
-                    <Select
-                      dropdownId="myah-inbox-state-filter"
-                      label="State"
-                      fullWidth
-                      value={filters.states[0] ?? ''}
-                      options={STATE_OPTIONS}
-                      emptyOption={{ label: 'All states', value: '' }}
-                      onChange={(state) =>
-                        onFiltersChange({
-                          ...filters,
-                          states: state ? [state] : [],
-                        })
-                      }
-                    />
-                    {isCampaignMetadataReady ? (
-                      <FormSingleRecordPicker
-                        label="Campaign filter"
-                        objectNameSingulars={['campaign']}
-                        defaultValue={filters.campaignId}
-                        onChange={(campaignId) =>
-                          onFiltersChange({ ...filters, campaignId })
-                        }
-                      />
-                    ) : (
-                      <span role="status">Loading campaign filter</span>
-                    )}
-                  </StyledFilterMenu>
-                </DropdownContent>
-              }
-              dropdownPlacement="bottom-end"
-            />
-          </StyledFilterTrigger>
-        </StyledSearch>
-      </StyledFilters>
+      <MyahInboxThreadFilters
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+      />
       {renderBody()}
     </StyledListPanel>
   );

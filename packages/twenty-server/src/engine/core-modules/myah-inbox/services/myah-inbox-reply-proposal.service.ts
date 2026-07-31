@@ -16,8 +16,8 @@ import {
 import { type MyahInboxThreadSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
 import {
   type MyahInboxThreadProposalContext,
-  MyahInboxQueryService,
-} from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
+  MyahInboxThreadProposalContextService,
+} from 'src/engine/core-modules/myah-inbox/services/myah-inbox-thread-proposal-context.service';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import {
   type AgentActorContext,
@@ -60,7 +60,7 @@ const proposalRequestSchema = z
 @Injectable()
 export class MyahInboxReplyProposalService {
   constructor(
-    private readonly myahInboxQueryService: MyahInboxQueryService,
+    private readonly myahInboxThreadProposalContextService: MyahInboxThreadProposalContextService,
     private readonly agentActorContextService: AgentActorContextService,
     private readonly brandBrainPreflightService: BrandBrainPreflightService,
     private readonly aiModelRegistryService: AiModelRegistryService,
@@ -68,7 +68,6 @@ export class MyahInboxReplyProposalService {
     private readonly aiBillingService: AiBillingService,
     private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
   ) {}
-
   async getThreadContext(
     input: MyahInboxReplyProposalContextInput,
   ): Promise<MyahInboxThreadSummary> {
@@ -194,13 +193,15 @@ export class MyahInboxReplyProposalService {
     }
 
     const { thread, history } =
-      await this.myahInboxQueryService.getThreadProposalContext({
-        authContext: input.authContext,
-        user: input.authContext.user,
-        workspace: input.authContext.workspace,
-        workspaceMemberId: input.authContext.workspaceMemberId,
-        threadId: input.threadId,
-      });
+      await this.myahInboxThreadProposalContextService.getThreadProposalContext(
+        {
+          authContext: input.authContext,
+          user: input.authContext.user,
+          workspace: input.authContext.workspace,
+          workspaceMemberId: input.authContext.workspaceMemberId,
+          threadId: input.threadId,
+        },
+      );
 
     return { actor, thread, history };
   }

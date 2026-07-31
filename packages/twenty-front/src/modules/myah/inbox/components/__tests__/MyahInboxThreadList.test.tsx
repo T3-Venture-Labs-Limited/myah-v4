@@ -280,6 +280,21 @@ describe('MyahInboxThreadList', () => {
     expect(secondRow).toHaveFocus();
   });
 
+  it('keeps one visible row in the tab order without selecting a thread', () => {
+    render(<MyahInboxThreadList {...defaultProps} selectedThreadId={null} />);
+
+    const firstRow = screen.getByRole('option', {
+      name: /First conversation/,
+    });
+    const secondRow = screen.getByRole('option', {
+      name: /Second conversation/,
+    });
+
+    expect(firstRow).toHaveAttribute('tabindex', '0');
+    expect(secondRow).toHaveAttribute('tabindex', '-1');
+    expect(firstRow).toHaveAttribute('aria-selected', 'false');
+  });
+
   it('opens a linked Creator in the native side panel without selecting the thread', () => {
     const onSelectThread = jest.fn();
 

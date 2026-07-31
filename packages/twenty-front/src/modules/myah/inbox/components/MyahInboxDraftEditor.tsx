@@ -1,6 +1,12 @@
 import { FormAdvancedTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput';
 import { styled } from '@linaria/react';
-import { useEffect, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -64,6 +70,8 @@ type MyahInboxDraftEditorProps = {
   readOnlyReason?: string;
   appliedProposal: MyahInboxAppliedProposal | null;
   proposalAction: ReactNode;
+  onDraftSavingChange: (isSaving: boolean) => void;
+  onProposalApplicationSettled: () => void;
 };
 
 type DraftConflict = {
@@ -73,6 +81,11 @@ type DraftConflict = {
 
 const EMPTY_DRAFT: MyahInboxRichText = { markdown: '', blocknote: null };
 
+const normalizeRichText = (
+  body: { markdown: string; blocknote?: string | null } | null | undefined,
+): MyahInboxRichText | null =>
+  body ? { markdown: body.markdown, blocknote: body.blocknote ?? null } : null;
+
 export const MyahInboxDraftEditor = ({
   threadId,
   initialBody,
@@ -81,6 +94,8 @@ export const MyahInboxDraftEditor = ({
   readOnlyReason,
   appliedProposal,
   proposalAction,
+  onDraftSavingChange,
+  onProposalApplicationSettled,
 }: MyahInboxDraftEditorProps) => {
   const { saveDraft } = useMyahInboxThreadMutations();
   const [draftBody, setDraftBody] = useState(initialBody ?? EMPTY_DRAFT);
@@ -90,61 +105,74 @@ export const MyahInboxDraftEditor = ({
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // oxlint-disable-next-line twenty/no-state-useref -- The ID suppresses StrictMode effect replays before state updates render.
+  const lastAppliedProposalApplicationIdRef = useRef<number | null>(null);
+
+  const persistDraft = useCallback(
+    async (submittedBody: MyahInboxRichText) => {
+      setIsSaving(true);
+      onDraftSavingChange(true);
+      setError(null);
+      setStatus(null);
+
+      try {
+        const result = await saveDraft({
+          threadId,
+          expectedRevision: confirmedRevision,
+          body: submittedBody,
+        });
+        const savedBody = normalizeRichText(result.body);
+
+        if (result.status === 'CONFLICT') {
+          setConflict({ revision: result.revision, body: savedBody });
+
+          return;
+        }
+
+        setConfirmedRevision(result.revision);
+        setDraftBody((currentBody) =>
+          currentBody.markdown === submittedBody.markdown &&
+          currentBody.blocknote === submittedBody.blocknote
+            ? (savedBody ?? EMPTY_DRAFT)
+            : currentBody,
+        );
+        setConflict(null);
+        setStatus(`Draft saved at revision ${result.revision}`);
+        setEditorVersion((version) => version + 1);
+      } catch {
+        setError('Could not save the draft. Your changes are still here.');
+      } finally {
+        setIsSaving(false);
+        onDraftSavingChange(false);
+      }
+    },
+    [confirmedRevision, onDraftSavingChange, saveDraft, threadId],
+  );
 
   useEffect(() => {
-    if (!appliedProposal) {
+    if (
+      !appliedProposal ||
+      appliedProposal.applicationId ===
+        lastAppliedProposalApplicationIdRef.current
+    ) {
       return;
     }
 
+    lastAppliedProposalApplicationIdRef.current = appliedProposal.applicationId;
     setDraftBody(appliedProposal.body);
+    setEditorVersion((version) => version + 1);
     setConflict(null);
     setError(null);
-    setStatus('Proposal applied. Save the draft to keep it.');
-    setEditorVersion((version) => version + 1);
-  }, [appliedProposal]);
 
-  const normalizeRichText = (
-    body: { markdown: string; blocknote?: string | null } | null | undefined,
-  ): MyahInboxRichText | null =>
-    body
-      ? { markdown: body.markdown, blocknote: body.blocknote ?? null }
-      : null;
-
-  const persistDraft = async (submittedBody: MyahInboxRichText) => {
-    setIsSaving(true);
-    setError(null);
-    setStatus(null);
-    const localBodyAtSubmit = draftBody;
-
-    try {
-      const result = await saveDraft({
-        threadId,
-        expectedRevision: confirmedRevision,
-        body: submittedBody,
-      });
-      const savedBody = normalizeRichText(result.body);
-
-      if (result.status === 'CONFLICT') {
-        setConflict({ revision: result.revision, body: savedBody });
-        return;
-      }
-
-      setConfirmedRevision(result.revision);
-      setDraftBody((currentBody) =>
-        currentBody.markdown === localBodyAtSubmit.markdown &&
-        currentBody.blocknote === localBodyAtSubmit.blocknote
-          ? (savedBody ?? EMPTY_DRAFT)
-          : currentBody,
-      );
-      setConflict(null);
-      setStatus(`Draft saved at revision ${result.revision}`);
-      setEditorVersion((version) => version + 1);
-    } catch {
-      setError('Could not save the draft. Your changes are still here.');
-    } finally {
-      setIsSaving(false);
+    if (!canEdit) {
+      onProposalApplicationSettled();
+      return;
     }
-  };
+
+    void persistDraft(appliedProposal.body).finally(
+      onProposalApplicationSettled,
+    );
+  }, [appliedProposal, canEdit, onProposalApplicationSettled, persistDraft]);
 
   const handleReloadConflict = () => {
     if (!conflict) {

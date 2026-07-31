@@ -70,6 +70,8 @@ const MyahInboxReplyWorkspaceContent = ({
     });
   const [appliedProposal, setAppliedProposal] =
     useState<MyahInboxAppliedProposal | null>(null);
+  const [isApplyingProposal, setIsApplyingProposal] = useState(false);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const canEditDraft = true;
 
   if (draftLoading) {
@@ -79,13 +81,14 @@ const MyahInboxReplyWorkspaceContent = ({
   return (
     <MyahInboxProposalPreview
       threadId={thread.id}
-      disabled={!canEditDraft}
-      onApply={(body) =>
+      disabled={!canEditDraft || isDraftSaving || isApplyingProposal}
+      onApply={(body) => {
+        setIsApplyingProposal(true);
         setAppliedProposal((current) => ({
           applicationId: (current?.applicationId ?? 0) + 1,
           body,
-        }))
-      }
+        }));
+      }}
       renderGenerateAction={(generateAction) => (
         <MyahInboxDraftEditor
           threadId={thread.id}
@@ -94,6 +97,8 @@ const MyahInboxReplyWorkspaceContent = ({
           canEdit={canEditDraft}
           appliedProposal={appliedProposal}
           proposalAction={generateAction}
+          onDraftSavingChange={setIsDraftSaving}
+          onProposalApplicationSettled={() => setIsApplyingProposal(false)}
         />
       )}
     />
