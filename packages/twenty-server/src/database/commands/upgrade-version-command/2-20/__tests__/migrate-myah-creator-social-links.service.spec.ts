@@ -87,7 +87,7 @@ const createHarness = (): Harness => {
 describe('MigrateMyahCreatorSocialLinksService', () => {
   it('copies old text values and migrates active view references', async () => {
     const harness = createHarness();
-
+  
     await expect(
       harness.service.migrate({
         workspaceId: WORKSPACE_ID,
@@ -95,9 +95,9 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
         dryRun: false,
       }),
     ).resolves.toEqual({ canDeleteOldFields: true });
-
+  
     const updateSql = harness.workspaceQuery.mock.calls[2][0] as string;
-
+  
     expect(updateSql).toContain(
       '"instagramLinkPrimaryLinkUrl" = COALESCE(NULLIF(BTRIM("instagramLinkPrimaryLinkUrl"), \'\'), BTRIM("instagramUrl"))',
     );
@@ -107,9 +107,9 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     expect(updateSql).toContain(
       'WHEN jsonb_typeof("instagramLinkSecondaryLinks") = \'array\'',
     );
-
+  
     const referenceSql = harness.referenceQuery.mock.calls[0][0] as string;
-
+  
     expect(referenceSql).toContain('core."viewField"');
     expect(referenceSql).toContain('core."viewFilter"');
     expect(referenceSql).toContain('core."viewSort"');
@@ -121,7 +121,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
     );
     expect(harness.queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
     const permissionCopySql = harness.coreQuery.mock.calls[1][0] as string;
-
+  
     expect(permissionCopySql).toContain('INSERT INTO core."fieldPermission"');
     expect(permissionCopySql).toContain('ON CONFLICT ("fieldMetadataId", "roleId") DO NOTHING');
     expect(
@@ -138,7 +138,7 @@ describe('MigrateMyahCreatorSocialLinksService', () => {
       ],
       workspaceId: WORKSPACE_ID,
     });
-
+  
     expect(harness.workspaceQuery.mock.calls).toEqual([
       [
         expect.any(String),
