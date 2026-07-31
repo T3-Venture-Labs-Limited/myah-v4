@@ -2,6 +2,7 @@ import {
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
+import { isDefined } from 'twenty-shared/utils';
 import type { DataSource } from 'typeorm';
 
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
@@ -473,7 +474,9 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         });
       const fieldsWidgetViewFieldUniversalIdentifiers = Object.values(
         allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
-      ).flatMap(({ universalIdentifier, viewUniversalIdentifier }) =>
+      )
+        .filter(isDefined)
+        .flatMap(({ universalIdentifier, viewUniversalIdentifier }) =>
         fieldsWidgetViewUniversalIdentifiers.includes(viewUniversalIdentifier)
           ? [universalIdentifier]
           : [],
