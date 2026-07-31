@@ -110,6 +110,7 @@ const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
     incrementCounterBy: jest.fn(),
   };
   const instagramReplyDraftService = {};
+  const outreachEmailActionDefinition = {};
   const instagramReplyApprovalService = {};
   const managedOpenRouterModelService = {
     isManagedModel: jest.fn().mockReturnValue(managed),
@@ -131,6 +132,7 @@ const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
     messagePruningService as never,
     metricsService as never,
     instagramReplyDraftService as never,
+    outreachEmailActionDefinition as never,
     instagramReplyApprovalService as never,
     managedOpenRouterModelService as never,
   );

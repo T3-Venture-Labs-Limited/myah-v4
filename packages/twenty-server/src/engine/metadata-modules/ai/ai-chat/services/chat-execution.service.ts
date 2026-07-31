@@ -22,6 +22,7 @@ import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service'
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 
 import { type CodeExecutionStreamEmitter } from 'src/engine/core-modules/tool-provider/interfaces/code-execution-stream-emitter.type';
@@ -73,9 +74,10 @@ import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-ch
 import { SystemPromptBuilderService } from 'src/engine/metadata-modules/ai/ai-chat/services/system-prompt-builder.service';
 import { type ExtractedFile } from 'src/engine/metadata-modules/ai/ai-chat/types/extracted-file.type';
 import {
+  allowRegisteredActionSenders,
   getGenericApprovedResumeActiveToolNames,
   getPreApprovalExcludedToolNames,
-  hasApprovedInstagramReplyApproval,
+  hasApprovedRegisteredActionApproval,
   hasLatestMessageApprovedGenericApproval,
   PRE_APPROVAL_SAFE_TOOL_NAMES,
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/approval-tool-availability.util';
@@ -138,6 +140,7 @@ export class ChatExecutionService {
     private readonly messagePruningService: MessagePruningService,
     private readonly metricsService: MetricsService,
     private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
+    private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
     private readonly actionApprovalService: ActionApprovalService,
     private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
   ) {}
@@ -248,8 +251,8 @@ export class ChatExecutionService {
 
     const isApprovedGenericApprovalResume =
       hasLatestMessageApprovedGenericApproval(messages);
-    const hasApprovedInstagramReply =
-      hasApprovedInstagramReplyApproval(messages);
+    const hasApprovedRegisteredAction =
+      hasApprovedRegisteredActionApproval(messages);
 
     const preloadedToolNames = [
       ...Object.keys(preloadedTools),
@@ -270,11 +273,11 @@ export class ChatExecutionService {
       preApprovalExcludedToolNames.delete(toolName);
     }
 
-    // A follow-up user message may be necessary after the approval card. The
-    // execution service still requires the exact approved request, thread, and
-    // workspace before the sender can perform provider I/O.
-    if (hasApprovedInstagramReply) {
-      preApprovalExcludedToolNames.delete('send_instagram_reply');
+    // Chat output deliberately contains only the opaque binding ID, not its
+    // action type. Expose registered senders after approval; each sender rejects
+    // a binding for another action before provider I/O.
+    if (hasApprovedRegisteredAction) {
+      allowRegisteredActionSenders(preApprovalExcludedToolNames);
     }
 
     // ToolSet is constant for the entire conversation — no mutation.
@@ -286,7 +289,10 @@ export class ChatExecutionService {
         workspaceId: workspace.id,
         userWorkspaceId,
         threadId,
-        actionDefinition: this.instagramReplyActionDefinition,
+        actionDefinitions: {
+          send_instagram_reply: this.instagramReplyActionDefinition,
+          send_outreach_email: this.outreachEmailActionDefinition,
+        },
         actionApprovalService: this.actionApprovalService,
       }),
       [LEARN_TOOLS_TOOL_NAME]: createLearnToolsTool(

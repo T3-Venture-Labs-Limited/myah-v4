@@ -25,13 +25,16 @@ describe('CHAT_SYSTEM_PROMPTS', () => {
     expect(prompt).toContain('present a new approval request when needed');
   });
 
-  it('preserves the pre-approval Instagram draft before registered send approval', () => {
+  it('preserves pre-approval drafts before registered send approval', () => {
     const prompt = CHAT_SYSTEM_PROMPTS.BASE;
 
     expect(prompt).toContain(
-      '\`prepare_instagram_reply_draft\` is the only current pre-approval write exception',
+      '\`prepare_instagram_reply_draft\` and \`prepare_outreach_email_draft\` are the current pre-approval write exceptions',
     );
     expect(prompt).toContain('persists only local review state');
+    expect(prompt).toContain(
+      'both send tools still require registered approval',
+    );
 
     const prepareDraftIndex = prompt.indexOf(
       'Learn and execute \`prepare_instagram_reply_draft\`',

@@ -10,6 +10,10 @@ import {
   InstagramReplyActionDefinition,
   InstagramReplyActionProposalInputZodSchema,
 } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import {
+  OutreachEmailActionDefinition,
+  OutreachEmailActionProposalInputZodSchema,
+} from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 
 export { REQUEST_APPROVAL_TOOL_NAME };
@@ -50,6 +54,7 @@ const requestApprovalAffectedRecordSchema = z.object({
 });
 
 const INSTAGRAM_REPLY_TOOL_NAME = 'send_instagram_reply';
+const OUTREACH_EMAIL_TOOL_NAME = 'send_outreach_email';
 
 const requestApprovalInputObjectSchema = z
   .object({
@@ -92,12 +97,14 @@ const requestApprovalInputObjectSchema = z
   })
   .strict()
   .superRefine((input, context) => {
-    if (input.toolName === INSTAGRAM_REPLY_TOOL_NAME) {
+    if (
+      input.toolName === INSTAGRAM_REPLY_TOOL_NAME ||
+      input.toolName === OUTREACH_EMAIL_TOOL_NAME
+    ) {
       context.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['toolName'],
-        message:
-          'Use a registered action input for prepared Instagram replies.',
+        message: 'Use the registered action input for this prepared action.',
       });
     }
   });
@@ -108,6 +115,18 @@ const registeredInstagramReplyApprovalInputSchema = z
     actionInput: InstagramReplyActionProposalInputZodSchema,
   })
   .strict();
+
+const registeredOutreachEmailApprovalInputSchema = z
+  .object({
+    toolName: z.literal(OUTREACH_EMAIL_TOOL_NAME),
+    actionInput: OutreachEmailActionProposalInputZodSchema,
+  })
+  .strict();
+
+const registeredApprovalInputSchema = z.discriminatedUnion('toolName', [
+  registeredInstagramReplyApprovalInputSchema,
+  registeredOutreachEmailApprovalInputSchema,
+]);
 
 const unwrapDirectApprovalArguments = (input: unknown): unknown => {
   if (
@@ -135,21 +154,19 @@ const unwrapDirectApprovalArguments = (input: unknown): unknown => {
 
 export const requestApprovalInputSchema = z.preprocess(
   unwrapDirectApprovalArguments,
-  z.union([
-    requestApprovalInputObjectSchema,
-    registeredInstagramReplyApprovalInputSchema,
-  ]),
+  z.union([requestApprovalInputObjectSchema, registeredApprovalInputSchema]),
 );
 
-type RegisteredApprovalInput = z.infer<
-  typeof registeredInstagramReplyApprovalInputSchema
->;
+type RegisteredApprovalInput = z.infer<typeof registeredApprovalInputSchema>;
 
 type RegisteredApprovalOptions = {
   workspaceId: string;
   userWorkspaceId: string | undefined;
   threadId: string | undefined;
-  actionDefinition: InstagramReplyActionDefinition;
+  actionDefinitions: {
+    send_instagram_reply: InstagramReplyActionDefinition;
+    send_outreach_email: OutreachEmailActionDefinition;
+  };
   actionApprovalService: ActionApprovalService;
 };
 
@@ -166,56 +183,101 @@ type RequestApprovalPendingOutput = {
 
 export const createRequestApprovalTool = (
   registeredApprovalOptions?: RegisteredApprovalOptions,
-) => ({
-  description:
-    'Ask the user to approve, reject, or request changes before a consequential side effect. ' +
-    'Generic tools that create, update, or delete CRM records, workflows, or metadata require this approval unless a domain-specific procedure explicitly identifies them as pre-approval safe. ' +
-    '\`prepare_instagram_reply_draft\` is pre-approval safe: it persists only local review state (the verified inbound message, conversation, and draft) and cannot send externally; the later \`send_instagram_reply\` still requires registered approval. ' +
-    'Use this tool before external writes, public posts, outbound email, destructive changes, or financial actions. ' +
-    'Do not use it for read-only lookups. For a prepared Instagram reply, provide only its draft ID as the registered action input. ' +
-    'Approval is not execution: after approval, call the real action tool through the normal tool pipeline. ' +
-    'If rejected, stop or ask for a safer alternative. Call at most one human-input tool in a single turn.',
-  inputSchema: requestApprovalInputSchema,
-  execute: async (
-    input: RequestApprovalToolInput | RegisteredApprovalInput,
-  ): Promise<RequestApprovalPendingOutput> => {
-    if ('actionInput' in input) {
-      const options = registeredApprovalOptions;
-      if (!options?.userWorkspaceId || !options.threadId) {
-        throw new Error(
-          'An authenticated chat thread is required to request an Instagram reply approval.',
-        );
+) => {
+  const registeredActions = registeredApprovalOptions
+    ? {
+        send_instagram_reply: {
+          proposalInputSchema: InstagramReplyActionProposalInputZodSchema,
+          propose: (input: unknown) =>
+            registeredApprovalOptions.actionDefinitions.send_instagram_reply.propose(
+              {
+                workspaceId: registeredApprovalOptions.workspaceId,
+                initiatorUserWorkspaceId:
+                  registeredApprovalOptions.userWorkspaceId ?? '',
+                threadId: registeredApprovalOptions.threadId ?? '',
+                input: InstagramReplyActionProposalInputZodSchema.parse(input),
+              },
+            ),
+        },
+        send_outreach_email: {
+          proposalInputSchema: OutreachEmailActionProposalInputZodSchema,
+          propose: (input: unknown) =>
+            registeredApprovalOptions.actionDefinitions.send_outreach_email.propose(
+              {
+                workspaceId: registeredApprovalOptions.workspaceId,
+                initiatorUserWorkspaceId:
+                  registeredApprovalOptions.userWorkspaceId ?? '',
+                threadId: registeredApprovalOptions.threadId ?? '',
+                input: OutreachEmailActionProposalInputZodSchema.parse(input),
+              },
+            ),
+        },
       }
+    : undefined;
 
-      const proposal = await options.actionDefinition.propose({
-        workspaceId: options.workspaceId,
-        initiatorUserWorkspaceId: options.userWorkspaceId,
-        threadId: options.threadId,
-        input: input.actionInput,
-      });
-      const binding = await options.actionApprovalService.createPendingBinding(
-        proposal.expectedActionBinding,
-      );
+  return {
+    description:
+      'Ask the user to approve, reject, or request changes before a consequential side effect. ' +
+      'Generic tools that create, update, or delete CRM records, workflows, or metadata require this approval unless a domain-specific procedure explicitly identifies them as pre-approval safe. ' +
+      '\`prepare_instagram_reply_draft\` and \`prepare_outreach_email_draft\` are pre-approval safe: the Instagram tool persists only local review state, while the outreach tool creates a provider draft plus one durable content snapshot; neither sends externally, and both send tools still require registered approval. ' +
+      'Use this tool before external writes, public posts, outbound email, destructive changes, or financial actions. ' +
+      'Do not use it for read-only lookups. For a prepared Instagram reply or outreach email, provide only its registered record ID. ' +
+      'Approval is not execution: after approval, call the real action tool through the normal tool pipeline. ' +
+      'If rejected, stop or ask for a safer alternative. Call at most one human-input tool in a single turn.',
+    inputSchema: requestApprovalInputSchema,
+    execute: async (
+      input: RequestApprovalToolInput | RegisteredApprovalInput,
+    ): Promise<RequestApprovalPendingOutput> => {
+      if ('actionInput' in input) {
+        const options = registeredApprovalOptions;
+
+        if (
+          !options?.userWorkspaceId ||
+          !options.threadId ||
+          !registeredActions
+        ) {
+          throw new Error(
+            'An authenticated chat thread is required to request registered action approval.',
+          );
+        }
+
+        const proposal = await registeredActions[input.toolName].propose(
+          input.actionInput,
+        );
+        const binding =
+          await options.actionApprovalService.createPendingBinding(
+            proposal.expectedActionBinding,
+          );
+
+        if (input.toolName === 'send_outreach_email') {
+          await options.actionDefinitions.send_outreach_email.recordApprovalBinding(
+            {
+              expectedActionBinding: proposal.expectedActionBinding,
+              approvalBindingId: binding.id,
+            },
+          );
+        }
+
+        return {
+          success: true,
+          message:
+            'Approval request presented to the user; awaiting their decision.',
+          result: {
+            status: 'pending',
+            actionApprovalBindingId: binding.id,
+          },
+        };
+      }
 
       return {
         success: true,
         message:
           'Approval request presented to the user; awaiting their decision.',
         result: {
+          request: input,
           status: 'pending',
-          actionApprovalBindingId: binding.id,
         },
       };
-    }
-
-    return {
-      success: true,
-      message:
-        'Approval request presented to the user; awaiting their decision.',
-      result: {
-        request: input,
-        status: 'pending',
-      },
-    };
-  },
-});
+    },
+  };
+};

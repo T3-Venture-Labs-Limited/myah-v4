@@ -3,6 +3,10 @@ import {
   ActionApprovalBindingState,
 } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionApprovalBindingEvidenceLinkEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding-evidence-link.entity';
+import {
+  ActionExecutionReceiptEntity,
+  ActionExecutionReceiptState,
+} from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
@@ -199,6 +203,180 @@ describe('ActionApprovalService overdue authority', () => {
     expect(manager.save).toHaveBeenCalledWith(
       ActionApprovalBindingEntity,
       expect.objectContaining({ state: ActionApprovalBindingState.EXPIRED }),
+    );
+  });
+});
+
+describe('ActionApprovalService outreach authority', () => {
+  const evidenceLinks = [
+    {
+      objectMetadataId: '00000000-0000-4000-8000-000000000010',
+      recordId: '00000000-0000-4000-8000-000000000011',
+      role: 'draft',
+    },
+  ];
+  const expectedBinding = {
+    workspaceId,
+    actionName: 'send_outreach_email' as const,
+    actionVersion: 1 as const,
+    draftId: '00000000-0000-4000-8000-000000000005',
+    contentDigest: 'a'.repeat(64),
+    recipientFingerprint: 'b'.repeat(64),
+    sendingAccountFingerprint: 'c'.repeat(64),
+    actionContextFingerprint: 'd'.repeat(64),
+    threadId,
+    initiatorUserWorkspaceId: userWorkspaceId,
+    evidenceLinks,
+  };
+
+  it('reconstructs an approved outreach binding without Instagram fields', async () => {
+    const manager = {
+      findOne: jest.fn().mockResolvedValue({
+        id: approvalBindingId,
+        ...expectedBinding,
+        state: ActionApprovalBindingState.APPROVED,
+        expiresAt: new Date('2099-07-18T00:00:00.000Z'),
+        inboundMessageId: null,
+        inboundSenderIgsid: null,
+        inboundDirection: null,
+        inboundReceivedAt: null,
+      }),
+      find: jest.fn().mockResolvedValue(evidenceLinks),
+      save: jest.fn(),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.getApprovedBinding({
+        workspaceId,
+        approvalBindingId,
+        initiatorUserWorkspaceId: userWorkspaceId,
+        threadId,
+      }),
+    ).resolves.toEqual(expectedBinding);
+  });
+
+  it('reserves one outreach receipt and returns it on a duplicate request', async () => {
+    const approvedBinding = {
+      id: approvalBindingId,
+      ...expectedBinding,
+      state: ActionApprovalBindingState.APPROVED,
+      expiresAt: new Date('2099-07-18T00:00:00.000Z'),
+      inboundMessageId: null,
+      inboundSenderIgsid: null,
+      inboundDirection: null,
+      inboundReceivedAt: null,
+    };
+    let storedReceipt:
+      | (Record<string, unknown> & {
+          actionApprovalBinding: typeof approvedBinding & {
+            evidenceLinks: typeof evidenceLinks;
+          };
+        })
+      | null = null;
+    const manager = {
+      findOne: jest.fn(async (entity) => {
+        if (entity === ActionExecutionReceiptEntity) return storedReceipt;
+        if (entity === ActionApprovalBindingEntity) return approvedBinding;
+        return null;
+      }),
+      find: jest.fn().mockResolvedValue(evidenceLinks),
+      create: jest.fn((_entity, value) => value),
+      save: jest.fn(async (entity, value) => {
+        if (entity === ActionExecutionReceiptEntity) {
+          storedReceipt = {
+            ...value,
+            id: '00000000-0000-4000-8000-000000000020',
+            updatedAt: new Date('2026-07-26T00:00:00.000Z'),
+            actionApprovalBinding: {
+              ...approvedBinding,
+              evidenceLinks,
+            },
+          };
+          return storedReceipt;
+        }
+        return value;
+      }),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+        getRepository: jest.fn().mockReturnValue({ findOne: jest.fn() }),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    const first = await service.reserveExecutionForBinding({
+      approvalBindingId,
+      expectedActionBinding: expectedBinding,
+    });
+    const second = await service.reserveExecutionForBinding({
+      approvalBindingId,
+      expectedActionBinding: expectedBinding,
+    });
+
+    expect(first.created).toBe(true);
+    expect(second).toEqual({ created: false, receipt: first.receipt });
+    expect(
+      manager.save.mock.calls.filter(
+        ([entity]) => entity === ActionExecutionReceiptEntity,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('records verified provider acceptance while reconciling UNKNOWN', async () => {
+    const receipt = {
+      id: '00000000-0000-4000-8000-000000000020',
+      workspaceId,
+      state: ActionExecutionReceiptState.UNKNOWN,
+      providerMessageId: null,
+      providerExternalMessageId: null,
+      providerThreadExternalId: null,
+      providerCode: 'unknown',
+      redactedOutcome: 'unknown',
+      updatedAt: new Date('2026-07-26T00:00:00.000Z'),
+    };
+    const manager = {
+      findOne: jest.fn().mockResolvedValue(receipt),
+      save: jest.fn(async (_entity, value) => ({
+        ...value,
+        updatedAt: new Date('2026-07-26T01:00:00.000Z'),
+      })),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.recordProviderAccepted(receipt.id, {
+        code: 'accepted',
+        acceptedAt: new Date('2026-07-26T01:00:00.000Z'),
+        providerMessageId: '<verified@example.com>',
+        providerExternalMessageId: 'provider-message-id',
+        providerThreadExternalId: 'provider-thread-id',
+      }),
+    ).resolves.toMatchObject({
+      id: receipt.id,
+      state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      providerCode: 'accepted',
+      outcome: 'accepted',
+    });
+    expect(manager.save).toHaveBeenCalledWith(
+      ActionExecutionReceiptEntity,
+      expect.objectContaining({
+        state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+        providerMessageId: '<verified@example.com>',
+        providerExternalMessageId: 'provider-message-id',
+        providerThreadExternalId: 'provider-thread-id',
+      }),
     );
   });
 });

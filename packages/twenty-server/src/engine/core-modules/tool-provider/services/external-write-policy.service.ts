@@ -9,7 +9,7 @@ import { PermissionsService } from 'src/engine/metadata-modules/permissions/perm
 export type ExternalWritePolicy = {
   permissionFlag?: PermissionFlagType;
   kind: 'read' | 'preparation' | 'external-write';
-  actionName?: 'send_instagram_reply';
+  actionName?: 'send_instagram_reply' | 'send_outreach_email';
 };
 
 const EXTERNAL_WRITE_POLICIES: Readonly<Record<string, ExternalWritePolicy>> =
@@ -34,6 +34,15 @@ const EXTERNAL_WRITE_POLICIES: Readonly<Record<string, ExternalWritePolicy>> =
       permissionFlag: PermissionFlagType.SEND_INSTAGRAM_REPLY_TOOL,
       kind: 'external-write',
       actionName: 'send_instagram_reply',
+    },
+    prepare_outreach_email_draft: {
+      permissionFlag: PermissionFlagType.SEND_EMAIL_TOOL,
+      kind: 'preparation',
+    },
+    send_outreach_email: {
+      permissionFlag: PermissionFlagType.SEND_EMAIL_TOOL,
+      kind: 'external-write',
+      actionName: 'send_outreach_email',
     },
     create_calendar_event: {
       permissionFlag: PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL,
@@ -68,9 +77,13 @@ export class ExternalWritePolicyService {
       throw new Error(`No policy registered for action tool "${toolName}".`);
     }
 
+    const isRegisteredApprovalAction =
+      policy.actionName === 'send_instagram_reply' ||
+      policy.actionName === 'send_outreach_email';
+
     if (
       policy.kind === 'external-write' &&
-      (policy.actionName !== 'send_instagram_reply' ||
+      (!isRegisteredApprovalAction ||
         !approvalBindingId ||
         !isValidUuid(approvalBindingId))
     ) {

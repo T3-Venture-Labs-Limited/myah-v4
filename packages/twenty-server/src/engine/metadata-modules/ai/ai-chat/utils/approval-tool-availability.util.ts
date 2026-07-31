@@ -17,13 +17,20 @@ export const PRE_APPROVAL_READ_ONLY_TOOL_NAMES = new Set([
   'app_myah_list_instagram_messages',
 ]);
 
-// This narrow native action may create a reviewable local draft and
-// conversation candidate after a user requests an outbound reply. It performs
-// no provider I/O and cannot deliver a message; all generic writes stay denied.
+// These narrow native actions prepare reviewable content without sending it;
+// every external-write action remains excluded until approval.
 export const PRE_APPROVAL_SAFE_TOOL_NAMES = new Set([
   ...PRE_APPROVAL_READ_ONLY_TOOL_NAMES,
   'prepare_instagram_reply_draft',
+  'prepare_outreach_email_draft',
 ]);
+
+export const allowRegisteredActionSenders = (
+  excludedToolNames: Set<string>,
+): void => {
+  excludedToolNames.delete('send_instagram_reply');
+  excludedToolNames.delete('send_outreach_email');
+};
 
 export const getPreApprovalExcludedToolNames = (
   toolCatalog: ToolIndexEntry[],
@@ -91,9 +98,10 @@ export const hasLatestMessageApprovedGenericApproval = (
   });
 };
 
-// A registered approval opens only its matching sender. The sender still
-// rechecks its binding, thread, workspace, and immutable source graph.
-export const hasApprovedInstagramReplyApproval = (messages: MessageLike[]) =>
+// A registered approval exposes the registered senders without adding action
+// metadata to chat output. Each sender still rejects a binding for another
+// action and rechecks thread, workspace, and immutable source graph.
+export const hasApprovedRegisteredActionApproval = (messages: MessageLike[]) =>
   messages.some(
     (message) =>
       message.role === 'assistant' &&

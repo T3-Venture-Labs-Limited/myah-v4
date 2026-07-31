@@ -43,6 +43,11 @@ export class ActionExecutionReceiptEntity {
 
   @Column({ type: 'text', nullable: true })
   providerMessageId: string | null;
+  @Column({ type: 'text', nullable: true })
+  providerExternalMessageId: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  providerThreadExternalId: string | null;
 
   @Column({ type: 'text', nullable: true })
   providerCode: string | null;

@@ -49,6 +49,9 @@ export class ActionApprovalBindingEntity {
   @Column({ type: 'varchar', length: 64, nullable: true })
   sendingAccountFingerprint: string | null;
 
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  actionContextFingerprint: string | null;
+
   @Column({ type: 'text', nullable: true })
   inboundMessageId: string | null;
 
