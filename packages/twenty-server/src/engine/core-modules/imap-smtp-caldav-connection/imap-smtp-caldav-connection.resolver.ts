@@ -14,6 +14,7 @@ import { ConnectedImapSmtpCaldavAccountDTO } from 'src/engine/core-modules/imap-
 import { ImapSmtpCaldavConnectionSuccessDTO } from 'src/engine/core-modules/imap-smtp-caldav-connection/dtos/imap-smtp-caldav-connection-success.dto';
 import { EmailAccountConnectionParametersInput } from 'src/engine/core-modules/imap-smtp-caldav-connection/dtos/imap-smtp-caldav-connection.input';
 import { ImapSmtpCaldavService } from 'src/engine/core-modules/imap-smtp-caldav-connection/services/imap-smtp-caldav-connection.service';
+import { MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME } from 'src/engine/core-modules/myah/constants/workspace-mailbox-connected-account-name.constant';
 import { buildPublicConnectionParameters } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-public-connection-parameters.util';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
@@ -95,7 +96,11 @@ export class ImapSmtpCaldavResolver {
     if (
       isDefined(id) &&
       (!existingAccount ||
-        existingAccount.provider !== ConnectedAccountProvider.IMAP_SMTP_CALDAV)
+        existingAccount.provider !==
+          ConnectedAccountProvider.IMAP_SMTP_CALDAV ||
+        (existingAccount.name ===
+          MYAH_WORKSPACE_MAILBOX_CONNECTED_ACCOUNT_NAME &&
+          existingAccount.visibility === 'workspace'))
     ) {
       throw new UserInputError('Connected account not found');
     }
@@ -116,7 +121,7 @@ export class ImapSmtpCaldavResolver {
         existingConnectionParameters: decryptedExistingParams,
       });
 
-    const connectedAccountId =
+    const { connectedAccountId } =
       await this.imapSmtpCaldavApisService.upsertConnectedAccount({
         handle,
         userWorkspaceId,

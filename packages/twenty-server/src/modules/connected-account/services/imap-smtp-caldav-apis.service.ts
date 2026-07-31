@@ -7,7 +7,7 @@ import {
   MessageChannelSyncStage,
 } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { v4 } from 'uuid';
 
 import { CreateCalendarChannelService } from 'src/engine/core-modules/auth/services/create-calendar-channel.service';
@@ -27,6 +27,8 @@ import {
   type CalendarEventListFetchJobData,
 } from 'src/modules/calendar/calendar-event-import-manager/jobs/calendar-event-list-fetch.job';
 import { CalendarChannelSyncStatusService } from 'src/modules/calendar/common/services/calendar-channel-sync-status.service';
+import { WorkspaceSharedConnectedAccountConflictError } from 'src/modules/connected-account/exceptions/workspace-shared-connected-account-conflict.error';
+import { WorkspaceSharedConnectedAccountNotFoundError } from 'src/modules/connected-account/exceptions/workspace-shared-connected-account-not-found.error';
 import { AccountsToReconnectService } from 'src/modules/connected-account/services/accounts-to-reconnect.service';
 import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/services/message-channel-sync-status.service';
 import { SyncMessageFoldersService } from 'src/modules/messaging/message-folder-manager/services/sync-message-folders.service';
@@ -34,6 +36,23 @@ import {
   MessagingMessageListFetchJob,
   type MessagingMessageListFetchJobData,
 } from 'src/modules/messaging/message-import-manager/jobs/messaging-message-list-fetch.job';
+
+export type UpsertConnectedAccountInput = {
+  handle: string;
+  userWorkspaceId: string;
+  workspaceId: string;
+  // Caller has already validated the input through `ImapSmtpCaldavService`,
+  // which produces plaintext passwords for immediate encryption.
+  connectionParameters: PlaintextImapSmtpCaldavParams;
+  existingAccount?: ConnectedAccountEntity | null;
+  name?: string;
+  visibility?: ConnectedAccountEntity['visibility'];
+};
+
+export type UpsertConnectedAccountResult = {
+  connectedAccountId: string;
+  messageChannelId: string | null;
+};
 
 @Injectable()
 export class ImapSmtpCalDavAPIService {
@@ -61,17 +80,10 @@ export class ImapSmtpCalDavAPIService {
     private readonly connectedAccountTokenEncryptionService: ConnectedAccountTokenEncryptionService,
   ) {}
 
-  async upsertConnectedAccount(input: {
-    handle: string;
-    userWorkspaceId: string;
-    workspaceId: string;
-    // Caller (resolver) has already validated the input through
-    // `ImapSmtpCaldavService.validateAndTestConnectionParameters`, which
-    // produces fully plaintext passwords ready for re-encryption.
-    connectionParameters: PlaintextImapSmtpCaldavParams;
-    existingAccount?: ConnectedAccountEntity | null;
-  }): Promise<string> {
-    const { handle, workspaceId, userWorkspaceId } = input;
+  async upsertConnectedAccount(
+    input: UpsertConnectedAccountInput,
+  ): Promise<UpsertConnectedAccountResult> {
+    const { handle, workspaceId, userWorkspaceId, visibility = 'user' } = input;
 
     const userWorkspace = await this.userWorkspaceRepository.findOne({
       where: { id: userWorkspaceId, workspaceId },
@@ -83,86 +95,192 @@ export class ImapSmtpCalDavAPIService {
       );
     }
 
-    const existingAccount =
-      input.existingAccount ??
-      (await this.connectedAccountRepository.findOne({
-        where: { handle, userWorkspaceId, workspaceId },
-      }));
+    if (
+      input.existingAccount?.visibility === 'workspace' &&
+      visibility !== 'workspace'
+    ) {
+      throw new WorkspaceSharedConnectedAccountConflictError();
+    }
 
-    const newOrExistingAccountId = existingAccount?.id ?? v4();
-
-    const existingMessageChannel = existingAccount
+    const userScopedExistingAccount =
+      visibility === 'user'
+        ? (input.existingAccount ??
+          (await this.connectedAccountRepository.findOne({
+            where: { handle, userWorkspaceId, visibility: 'user', workspaceId },
+          })))
+        : null;
+    const userScopedExistingMessageChannel = userScopedExistingAccount
       ? await this.messageChannelRepository.findOne({
-          where: { connectedAccountId: existingAccount.id, workspaceId },
+          where: {
+            connectedAccountId: userScopedExistingAccount.id,
+            workspaceId,
+          },
         })
       : null;
-
-    const existingCalendarChannel = existingAccount
+    const userScopedExistingCalendarChannel = userScopedExistingAccount
       ? await this.calendarChannelRepository.findOne({
-          where: { connectedAccountId: existingAccount.id, workspaceId },
+          where: {
+            connectedAccountId: userScopedExistingAccount.id,
+            workspaceId,
+          },
         })
       : null;
 
-    const shouldCreateMessageChannel =
-      !isDefined(existingMessageChannel) &&
-      Boolean(input.connectionParameters.IMAP);
-
-    const shouldCreateCalendarChannel =
-      !isDefined(existingCalendarChannel) &&
-      Boolean(input.connectionParameters.CALDAV);
-
-    await this.connectedAccountRepository.manager.transaction(
-      async (transactionManager: EntityManager) => {
-        const encryptedConnectionParameters =
-          this.connectedAccountTokenEncryptionService.encryptConnectionParameters(
-            {
-              connectionParameters: input.connectionParameters,
-              workspaceId,
-            },
+    const transactionResult =
+      await this.connectedAccountRepository.manager.transaction(
+        async (transactionManager: EntityManager) => {
+          const connectedAccountRepository = transactionManager.getRepository(
+            ConnectedAccountEntity,
           );
+          const messageChannelRepository =
+            transactionManager.getRepository(MessageChannelEntity);
+          const calendarChannelRepository = transactionManager.getRepository(
+            CalendarChannelEntity,
+          );
+          let existingAccount = userScopedExistingAccount;
 
-        await transactionManager.getRepository(ConnectedAccountEntity).save({
-          id: newOrExistingAccountId,
-          handle,
-          provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
-          connectionParameters: encryptedConnectionParameters,
-          userWorkspaceId,
-          workspaceId,
-          authFailedAt: null,
-        });
+          if (visibility === 'workspace') {
+            await transactionManager.query(
+              'SELECT pg_advisory_xact_lock(hashtext($1))',
+              [`workspace-shared-imap-smtp:${workspaceId}`],
+            );
+            existingAccount = await connectedAccountRepository.findOne({
+              lock: { mode: 'pessimistic_write' },
+              where: {
+                ...(isDefined(input.name)
+                  ? { archivedAt: IsNull(), name: input.name }
+                  : { handle }),
+                provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+                visibility,
+                workspaceId,
+              },
+            });
+          }
 
-        if (shouldCreateMessageChannel) {
-          await this.createMessageChannelService.createMessageChannel({
-            workspaceId,
-            connectedAccountId: newOrExistingAccountId,
+          if (
+            visibility === 'workspace' &&
+            isDefined(input.existingAccount) &&
+            existingAccount?.id !== input.existingAccount.id
+          ) {
+            throw new WorkspaceSharedConnectedAccountNotFoundError();
+          }
+
+          if (
+            isDefined(input.name) &&
+            isDefined(existingAccount) &&
+            existingAccount.handle !== handle
+          ) {
+            throw new WorkspaceSharedConnectedAccountConflictError();
+          }
+
+          const existingMessageChannel =
+            visibility === 'workspace' && isDefined(existingAccount)
+              ? await messageChannelRepository.findOne({
+                  where: {
+                    connectedAccountId: existingAccount.id,
+                    workspaceId,
+                  },
+                })
+              : userScopedExistingMessageChannel;
+          const existingCalendarChannel =
+            visibility === 'workspace' && isDefined(existingAccount)
+              ? await calendarChannelRepository.findOne({
+                  where: {
+                    connectedAccountId: existingAccount.id,
+                    workspaceId,
+                  },
+                })
+              : userScopedExistingCalendarChannel;
+          const connectedAccountId = existingAccount?.id ?? v4();
+          const encryptedConnectionParameters =
+            this.connectedAccountTokenEncryptionService.encryptConnectionParameters(
+              {
+                connectionParameters: input.connectionParameters,
+                workspaceId,
+              },
+            );
+
+          await connectedAccountRepository.save({
+            id: connectedAccountId,
             handle,
-            transactionManager,
-          });
-        }
-
-        if (shouldCreateCalendarChannel) {
-          await this.createCalendarChannelService.createCalendarChannel({
+            ...(isDefined(input.name) ? { name: input.name } : {}),
+            provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+            connectionParameters: encryptedConnectionParameters,
+            userWorkspaceId:
+              existingAccount?.userWorkspaceId ?? userWorkspaceId,
             workspaceId,
-            connectedAccountId: newOrExistingAccountId,
-            handle,
-            transactionManager,
+            visibility,
+            authFailedAt: null,
           });
-        }
-      },
-    );
+
+          const messageChannelId =
+            existingMessageChannel?.id ??
+            (isDefined(input.connectionParameters.IMAP)
+              ? await this.createMessageChannelService.createMessageChannel({
+                  workspaceId,
+                  connectedAccountId,
+                  handle,
+                  transactionManager,
+                })
+              : null);
+
+          if (
+            !isDefined(existingCalendarChannel) &&
+            isDefined(input.connectionParameters.CALDAV)
+          ) {
+            await this.createCalendarChannelService.createCalendarChannel({
+              workspaceId,
+              connectedAccountId,
+              handle,
+              transactionManager,
+            });
+          }
+
+          return {
+            connectedAccountId,
+            existingAccount,
+            existingCalendarChannel,
+            existingMessageChannel,
+            messageChannelId,
+            shouldCreateMessageChannel:
+              !isDefined(existingMessageChannel) &&
+              isDefined(input.connectionParameters.IMAP),
+          };
+        },
+      );
+    const {
+      connectedAccountId,
+      existingAccount,
+      existingCalendarChannel,
+      existingMessageChannel,
+      messageChannelId,
+      shouldCreateMessageChannel,
+    } = transactionResult;
 
     if (isDefined(existingAccount)) {
-      await this.accountsToReconnectService.removeAccountToReconnect(
-        userWorkspace.userId,
-        workspaceId,
-        newOrExistingAccountId,
-      );
+      const ownerUserWorkspace =
+        existingAccount.userWorkspaceId === userWorkspaceId
+          ? userWorkspace
+          : await this.userWorkspaceRepository.findOne({
+              where: {
+                id: existingAccount.userWorkspaceId,
+                workspaceId,
+              },
+            });
+
+      if (isDefined(ownerUserWorkspace)) {
+        await this.accountsToReconnectService.removeAccountToReconnect(
+          ownerUserWorkspace.userId,
+          workspaceId,
+          connectedAccountId,
+        );
+      }
     }
 
     if (shouldCreateMessageChannel) {
       const newMessageChannel = await this.messageChannelRepository.findOne({
         where: {
-          connectedAccountId: newOrExistingAccountId,
+          connectedAccountId,
           workspaceId,
         },
         relations: ['connectedAccount', 'messageFolders'],
@@ -174,9 +292,9 @@ export class ImapSmtpCalDavAPIService {
             messageChannel: newMessageChannel,
             workspaceId,
           });
-        } catch (error) {
+        } catch {
           this.logger.warn(
-            `Initial folder sync failed for account ${newOrExistingAccountId}, will retry on next scheduled sync: ${error?.message}`,
+            `Initial folder sync failed for account ${connectedAccountId}; retry scheduled`,
           );
         }
       }
@@ -216,6 +334,6 @@ export class ImapSmtpCalDavAPIService {
       );
     }
 
-    return newOrExistingAccountId;
+    return { connectedAccountId, messageChannelId };
   }
 }

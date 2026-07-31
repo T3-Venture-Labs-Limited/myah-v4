@@ -25,6 +25,8 @@ import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspac
 import { CalendarChannelSyncStatusService } from 'src/modules/calendar/common/services/calendar-channel-sync-status.service';
 import { CalendarEventListFetchJob } from 'src/modules/calendar/calendar-event-import-manager/jobs/calendar-event-list-fetch.job';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
+import { WorkspaceSharedConnectedAccountConflictError } from 'src/modules/connected-account/exceptions/workspace-shared-connected-account-conflict.error';
+import { WorkspaceSharedConnectedAccountNotFoundError } from 'src/modules/connected-account/exceptions/workspace-shared-connected-account-not-found.error';
 import { AccountsToReconnectService } from 'src/modules/connected-account/services/accounts-to-reconnect.service';
 import { ImapSmtpCalDavAPIService } from 'src/modules/connected-account/services/imap-smtp-caldav-apis.service';
 import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/services/message-channel-sync-status.service';
@@ -59,9 +61,29 @@ describe('ImapSmtpCalDavAPIService', () => {
   let service: ImapSmtpCalDavAPIService;
 
   const mockTransactionManagerSave = jest.fn();
+  const mockTransactionConnectedAccountFindOne = jest.fn();
+  const mockTransactionMessageChannelFindOne = jest.fn();
+  const mockTransactionCalendarChannelFindOne = jest.fn();
+  const mockTransactionManagerQuery = jest.fn();
   const mockTransactionManager = {
-    getRepository: jest.fn().mockReturnValue({
-      save: mockTransactionManagerSave,
+    query: mockTransactionManagerQuery,
+    getRepository: jest.fn((entity) => {
+      if (entity === ConnectedAccountEntity) {
+        return {
+          findOne: mockTransactionConnectedAccountFindOne,
+          save: mockTransactionManagerSave,
+        };
+      }
+
+      if (entity === MessageChannelEntity) {
+        return { findOne: mockTransactionMessageChannelFindOne };
+      }
+
+      if (entity === CalendarChannelEntity) {
+        return { findOne: mockTransactionCalendarChannelFindOne };
+      }
+
+      return { save: mockTransactionManagerSave };
     }),
   };
 
@@ -273,6 +295,15 @@ describe('ImapSmtpCalDavAPIService', () => {
 
       await service.upsertConnectedAccount(baseInput);
 
+      expect(mockConnectedAccountRepository.findOne).toHaveBeenCalledWith({
+        where: {
+          handle: 'test@example.com',
+          userWorkspaceId: 'user-workspace-id',
+          visibility: 'user',
+          workspaceId: 'workspace-id',
+        },
+      });
+
       expect(mockTransactionManagerSave).toHaveBeenCalledWith({
         id: 'mocked-uuid',
         handle: 'test@example.com',
@@ -282,6 +313,7 @@ describe('ImapSmtpCalDavAPIService', () => {
         ),
         userWorkspaceId: 'user-workspace-id',
         workspaceId: 'workspace-id',
+        visibility: 'user',
         authFailedAt: null,
       });
 
@@ -297,6 +329,186 @@ describe('ImapSmtpCalDavAPIService', () => {
       expect(
         mockCreateCalendarChannelService.createCalendarChannel,
       ).not.toHaveBeenCalled();
+    });
+
+    it('persists an explicitly workspace-shared account as workspace-visible', async () => {
+      mockConnectedAccountRepository.findOne.mockResolvedValue(null);
+      mockMessageChannelRepository.findOne.mockResolvedValue(null);
+      mockCalendarChannelRepository.findOne.mockResolvedValue(null);
+      mockUserWorkspaceRepository.findOne.mockResolvedValue({
+        id: 'user-workspace-id',
+        userId: 'user-id',
+      });
+
+      await service.upsertConnectedAccount({
+        ...baseInput,
+        visibility: 'workspace',
+      });
+
+      expect(mockTransactionManagerSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connectionParameters: withEncryptedPasswords(
+            baseInput.connectionParameters,
+          ),
+          visibility: 'workspace',
+        }),
+      );
+    });
+
+    it('serializes and replays a workspace-shared account inside its transaction', async () => {
+      const existingAccount = {
+        id: 'existing-account-id',
+        handle: 'test@example.com',
+        provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+        userWorkspaceId: 'first-user-workspace-id',
+        visibility: 'workspace',
+        workspaceId: 'workspace-id',
+      } as ConnectedAccountEntity;
+      const existingMessageChannel = {
+        id: 'existing-message-channel-id',
+        connectedAccountId: existingAccount.id,
+        syncStage: MessageChannelSyncStage.PENDING_CONFIGURATION,
+        workspaceId: 'workspace-id',
+      } as MessageChannelEntity;
+
+      mockTransactionConnectedAccountFindOne.mockResolvedValue(existingAccount);
+      mockTransactionMessageChannelFindOne.mockResolvedValue(
+        existingMessageChannel,
+      );
+      mockTransactionCalendarChannelFindOne.mockResolvedValue(null);
+
+      const result = await service.upsertConnectedAccount({
+        ...baseInput,
+        userWorkspaceId: 'second-user-workspace-id',
+        visibility: 'workspace',
+      });
+
+      expect(mockTransactionManagerQuery).toHaveBeenCalledWith(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        ['workspace-shared-imap-smtp:workspace-id'],
+      );
+      expect(mockTransactionConnectedAccountFindOne).toHaveBeenCalledWith({
+        lock: { mode: 'pessimistic_write' },
+        where: {
+          handle: 'test@example.com',
+          provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+          visibility: 'workspace',
+          workspaceId: 'workspace-id',
+        },
+      });
+      expect(
+        mockTransactionManagerQuery.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockTransactionConnectedAccountFindOne.mock.invocationCallOrder[0],
+      );
+      expect(mockConnectedAccountRepository.findOne).not.toHaveBeenCalled();
+      expect(
+        mockCreateMessageChannelService.createMessageChannel,
+      ).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        connectedAccountId: 'existing-account-id',
+        messageChannelId: 'existing-message-channel-id',
+      });
+    });
+
+    it('rejects a concurrently-created named shared account with a different handle', async () => {
+      const existingAccount = {
+        id: 'existing-account-id',
+        handle: 'other@example.com',
+        provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+        userWorkspaceId: 'first-user-workspace-id',
+        visibility: 'workspace',
+        workspaceId: 'workspace-id',
+      } as ConnectedAccountEntity;
+
+      mockTransactionConnectedAccountFindOne.mockResolvedValue(existingAccount);
+
+      await expect(
+        service.upsertConnectedAccount({
+          ...baseInput,
+          name: 'myah-workspace-outreach-mailbox',
+          visibility: 'workspace',
+        }),
+      ).rejects.toBeInstanceOf(WorkspaceSharedConnectedAccountConflictError);
+
+      expect(mockTransactionConnectedAccountFindOne).toHaveBeenCalledWith({
+        lock: { mode: 'pessimistic_write' },
+        where: {
+          archivedAt: expect.anything(),
+          name: 'myah-workspace-outreach-mailbox',
+          provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+          visibility: 'workspace',
+          workspaceId: 'workspace-id',
+        },
+      });
+      expect(mockTransactionManagerSave).not.toHaveBeenCalled();
+    });
+
+    it('rejects downgrading a workspace account through a user-scoped upsert', async () => {
+      const existingAccount = {
+        id: 'existing-account-id',
+        handle: 'test@example.com',
+        userWorkspaceId: 'user-workspace-id',
+        visibility: 'workspace',
+        workspaceId: 'workspace-id',
+      } as ConnectedAccountEntity;
+
+      await expect(
+        service.upsertConnectedAccount({
+          ...baseInput,
+          existingAccount,
+        }),
+      ).rejects.toBeInstanceOf(WorkspaceSharedConnectedAccountConflictError);
+
+      expect(
+        mockConnectedAccountRepository.manager.transaction,
+      ).not.toHaveBeenCalled();
+      expect(mockTransactionManagerSave).not.toHaveBeenCalled();
+    });
+
+    it('does not recreate an expected workspace account removed during validation', async () => {
+      const existingAccount = {
+        id: 'existing-account-id',
+        handle: 'test@example.com',
+        userWorkspaceId: 'user-workspace-id',
+        visibility: 'workspace',
+        workspaceId: 'workspace-id',
+      } as ConnectedAccountEntity;
+
+      mockTransactionConnectedAccountFindOne.mockResolvedValue(null);
+
+      await expect(
+        service.upsertConnectedAccount({
+          ...baseInput,
+          existingAccount,
+          name: 'myah-workspace-outreach-mailbox',
+          visibility: 'workspace',
+        }),
+      ).rejects.toBeInstanceOf(WorkspaceSharedConnectedAccountNotFoundError);
+
+      expect(mockTransactionManagerSave).not.toHaveBeenCalled();
+    });
+    it('keeps the workspace in the shared replay key', async () => {
+      mockTransactionConnectedAccountFindOne.mockResolvedValue(null);
+      mockTransactionMessageChannelFindOne.mockResolvedValue(null);
+      mockTransactionCalendarChannelFindOne.mockResolvedValue(null);
+
+      await service.upsertConnectedAccount({
+        ...baseInput,
+        workspaceId: 'other-workspace-id',
+        visibility: 'workspace',
+      });
+
+      expect(mockTransactionConnectedAccountFindOne).toHaveBeenCalledWith({
+        lock: { mode: 'pessimistic_write' },
+        where: expect.objectContaining({
+          workspaceId: 'other-workspace-id',
+        }),
+      });
+      expect(mockTransactionManagerQuery).toHaveBeenCalledWith(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        ['workspace-shared-imap-smtp:other-workspace-id'],
+      );
     });
 
     it('should preserve existing channels when updating account credentials', async () => {
@@ -361,6 +573,7 @@ describe('ImapSmtpCalDavAPIService', () => {
         ),
         userWorkspaceId: 'user-workspace-id',
         workspaceId: 'workspace-id',
+        visibility: 'user',
         authFailedAt: null,
       });
 
@@ -656,6 +869,7 @@ describe('ImapSmtpCalDavAPIService', () => {
         where: {
           handle: 'test@example.com',
           userWorkspaceId: 'user-workspace-id',
+          visibility: 'user',
           workspaceId: 'workspace-id',
         },
       });
@@ -669,6 +883,7 @@ describe('ImapSmtpCalDavAPIService', () => {
         ),
         userWorkspaceId: 'user-workspace-id',
         workspaceId: 'workspace-id',
+        visibility: 'user',
         authFailedAt: null,
       });
     });
