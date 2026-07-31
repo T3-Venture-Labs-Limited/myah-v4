@@ -10,7 +10,7 @@ import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 
-@RegisteredWorkspaceCommand('2.19.0', 1785240016001)
+@RegisteredWorkspaceCommand('2.19.0', 1785470249826)
 @Command({
   name: 'upgrade:2-19:synchronize-myah-inbox-metadata',
   description: 'Synchronize Inbox metadata for existing workspaces',

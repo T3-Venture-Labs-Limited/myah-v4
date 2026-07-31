@@ -25,7 +25,7 @@ const creatorNativeRelationFieldMetadataUniversalIdentifiers = new Set([
   '179b4088-ecec-5113-8397-5b85ffd3d542',
 ]);
 
-@RegisteredWorkspaceCommand('2.19.0', 1785240016002)
+@RegisteredWorkspaceCommand('2.19.0', 1785470249827)
 @Command({
   name: 'upgrade:2-19:synchronize-myah-creator-page-layout-metadata',
   description: 'Synchronize Creator page layout metadata for existing workspaces',

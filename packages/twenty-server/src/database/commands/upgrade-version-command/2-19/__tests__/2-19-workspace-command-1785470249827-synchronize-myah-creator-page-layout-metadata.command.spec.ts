@@ -56,7 +56,7 @@ const loadCommandModule =
   (): SynchronizeMyahCreatorPageLayoutMetadataCommandModule | undefined => {
     try {
       return require(
-        'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016002-synchronize-myah-creator-page-layout-metadata.command',
+        'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785470249827-synchronize-myah-creator-page-layout-metadata.command',
       ) as SynchronizeMyahCreatorPageLayoutMetadataCommandModule;
     } catch {
       return undefined;
@@ -127,7 +127,7 @@ describe('SynchronizeMyahCreatorPageLayoutMetadataCommand', () => {
       ),
     ).toMatchObject({
       version: '2.19.0',
-      timestamp: 1785240016002,
+      timestamp: 1785470249827,
     });
   });
 });

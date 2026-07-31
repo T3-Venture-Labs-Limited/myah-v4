@@ -38,7 +38,7 @@ const loadCommandModule =
   (): SynchronizeMyahInboxMetadataCommandModule | undefined => {
     try {
       return require(
-        'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016001-synchronize-myah-inbox-metadata.command',
+        'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785470249826-synchronize-myah-inbox-metadata.command',
       ) as SynchronizeMyahInboxMetadataCommandModule;
     } catch {
       return undefined;
@@ -88,7 +88,7 @@ describe('SynchronizeMyahInboxMetadataCommand', () => {
       ),
     ).toMatchObject({
       version: '2.19.0',
-      timestamp: 1785240016001,
+      timestamp: 1785470249826,
     });
   });
 });

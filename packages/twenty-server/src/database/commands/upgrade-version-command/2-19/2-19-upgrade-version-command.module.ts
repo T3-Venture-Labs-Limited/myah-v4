@@ -7,8 +7,8 @@ import { BackfillSystemUniqueIndexUniversalIdentifierCommand } from 'src/databas
 import { ResynchronizeMyahStandardApplicationCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785453080000-resynchronize-myah-standard-application.command';
 import { MigrateOpenRouterModelIdentitiesCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1784485121000-migrate-openrouter-model-identities.command';
 import { SynchronizeMyahCreatorCrmSearchMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016000-synchronize-myah-creator-crm-search-metadata.command';
-import { SynchronizeMyahInboxMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016001-synchronize-myah-inbox-metadata.command';
-import { SynchronizeMyahCreatorPageLayoutMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785240016002-synchronize-myah-creator-page-layout-metadata.command';
+import { SynchronizeMyahInboxMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785470249826-synchronize-myah-inbox-metadata.command';
+import { SynchronizeMyahCreatorPageLayoutMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785470249827-synchronize-myah-creator-page-layout-metadata.command';
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { MigrateMyahCreatorImportMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785283200000-migrate-myah-creator-import-metadata.command';
 import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
