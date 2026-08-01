@@ -3,6 +3,7 @@ import { type PageLayout } from '@/page-layout/types/PageLayout';
 
 export const toDraftPageLayout = (pageLayout: PageLayout): DraftPageLayout => ({
   id: pageLayout.id,
+  universalIdentifier: pageLayout.universalIdentifier,
   name: pageLayout.name,
   type: pageLayout.type,
   objectMetadataId: pageLayout.objectMetadataId,

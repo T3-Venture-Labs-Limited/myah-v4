@@ -590,6 +590,21 @@ export const MYAH_STANDARD_OBJECTS = {
       budgetNotes: {
         universalIdentifier: '97377e2b-ec51-5fef-891e-b2202cc69512',
       },
+      campaignBrief: {
+        universalIdentifier: '5cd5f294-970d-46ad-bc91-0f09bd63268b',
+      },
+      communicationGuidelines: {
+        universalIdentifier: '9904e0c4-200b-481e-a449-93ac20358f69',
+      },
+      replyRules: {
+        universalIdentifier: 'bd0cef09-5d02-4ce6-a8a0-d927540b3c51',
+      },
+      escalationBoundaries: {
+        universalIdentifier: 'bc7d1c71-766f-4c10-997d-4810be3011d0',
+      },
+      additionalNotes: {
+        universalIdentifier: '9342db95-0df0-460d-8611-2bbddfb0bc1c',
+      },
       campaignCreators: {
         universalIdentifier: '894c80f2-a478-5680-8c20-c7a86aa24fde',
       },
@@ -638,6 +653,26 @@ export const MYAH_STANDARD_OBJECTS = {
           },
           owner: {
             universalIdentifier: 'daec24c3-ee6f-4287-8608-e3520149dc4b',
+          },
+        },
+      },
+      vieweb4da94a: {
+        universalIdentifier: 'eb4da94a-d3da-4354-bb39-7478ac12bd35',
+        viewFields: {
+          campaignBrief: {
+            universalIdentifier: 'b7905ed5-e0d8-4ca0-a733-43b9b8e78596',
+          },
+          communicationGuidelines: {
+            universalIdentifier: '20cc5027-cec9-4259-9323-f9c69ed5c40b',
+          },
+          replyRules: {
+            universalIdentifier: '32eee0c6-5260-4f27-9af8-489356f28a28',
+          },
+          escalationBoundaries: {
+            universalIdentifier: 'fce3b6b4-2a46-4e1f-9944-22d5b989c033',
+          },
+          additionalNotes: {
+            universalIdentifier: '5d334bcb-90de-4e49-bc33-eeb7d7ee2e82',
           },
         },
       },

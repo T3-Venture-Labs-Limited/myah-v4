@@ -55,4 +55,15 @@ export const CAMPAIGN_WORKSPACE_CONFIG = {
     readinessWidgetUniversalIdentifier: '368b8c66-435d-4e5b-94b8-4d3f08fc283b',
     frontComponentUniversalIdentifier: '878a3fd2-67f7-40ee-91eb-8dd18dda843c',
   },
+  instructions: {
+    fieldsViewUniversalIdentifier: 'eb4da94a-d3da-4354-bb39-7478ac12bd35',
+    fieldsViewFieldUniversalIdentifiers: {
+      campaignBrief: 'b7905ed5-e0d8-4ca0-a733-43b9b8e78596',
+      communicationGuidelines: '20cc5027-cec9-4259-9323-f9c69ed5c40b',
+      replyRules: '32eee0c6-5260-4f27-9af8-489356f28a28',
+      escalationBoundaries: 'fce3b6b4-2a46-4e1f-9944-22d5b989c033',
+      additionalNotes: '5d334bcb-90de-4e49-bc33-eeb7d7ee2e82',
+    },
+    fieldsWidgetUniversalIdentifier: '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392',
+  },
 } as const;

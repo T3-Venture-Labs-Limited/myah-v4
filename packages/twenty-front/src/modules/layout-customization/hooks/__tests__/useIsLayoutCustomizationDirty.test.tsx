@@ -33,6 +33,7 @@ const MOCK_PAGE_LAYOUT: PageLayout = {
 };
 
 const MOCK_DRAFT_PAGE_LAYOUT = {
+  universalIdentifier: '20202020-0000-0000-0000-000000000001',
   id: PAGE_LAYOUT_ID_1,
   name: 'Test Layout',
   type: PageLayoutType.RECORD_PAGE,

@@ -456,7 +456,7 @@ describe('Myah standard metadata contract', () => {
     );
   });
 
-  it('materializes the Campaign lifecycle and owner contract', () => {
+  it('materializes the Campaign lifecycle, Instructions, and owner contract', () => {
     const fields = Object.values(
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     ).filter(isDefined);
@@ -574,6 +574,114 @@ describe('Myah standard metadata contract', () => {
       ]),
     );
     expect(campaignOverviewViewFields).toHaveLength(3);
+
+    const expectedCampaignInstructionFields = [
+      {
+        name: 'campaignBrief',
+        universalIdentifier: '5cd5f294-970d-46ad-bc91-0f09bd63268b',
+      },
+      {
+        name: 'communicationGuidelines',
+        universalIdentifier: '9904e0c4-200b-481e-a449-93ac20358f69',
+      },
+      {
+        name: 'replyRules',
+        universalIdentifier: 'bd0cef09-5d02-4ce6-a8a0-d927540b3c51',
+      },
+      {
+        name: 'escalationBoundaries',
+        universalIdentifier: 'bc7d1c71-766f-4c10-997d-4810be3011d0',
+      },
+      {
+        name: 'additionalNotes',
+        universalIdentifier: '9342db95-0df0-460d-8611-2bbddfb0bc1c',
+      },
+    ] as const;
+    const expectedCampaignInstructionViewFields = [
+      {
+        universalIdentifier: 'b7905ed5-e0d8-4ca0-a733-43b9b8e78596',
+        fieldMetadataUniversalIdentifier:
+          '5cd5f294-970d-46ad-bc91-0f09bd63268b',
+        position: 0,
+      },
+      {
+        universalIdentifier: '20cc5027-cec9-4259-9323-f9c69ed5c40b',
+        fieldMetadataUniversalIdentifier:
+          '9904e0c4-200b-481e-a449-93ac20358f69',
+        position: 1,
+      },
+      {
+        universalIdentifier: '32eee0c6-5260-4f27-9af8-489356f28a28',
+        fieldMetadataUniversalIdentifier:
+          'bd0cef09-5d02-4ce6-a8a0-d927540b3c51',
+        position: 2,
+      },
+      {
+        universalIdentifier: 'fce3b6b4-2a46-4e1f-9944-22d5b989c033',
+        fieldMetadataUniversalIdentifier:
+          'bc7d1c71-766f-4c10-997d-4810be3011d0',
+        position: 3,
+      },
+      {
+        universalIdentifier: '5d334bcb-90de-4e49-bc33-eeb7d7ee2e82',
+        fieldMetadataUniversalIdentifier:
+          '9342db95-0df0-460d-8611-2bbddfb0bc1c',
+        position: 4,
+      },
+    ] as const;
+    const campaignInstructionFields = fields.filter((field) =>
+      expectedCampaignInstructionFields.some(
+        ({ universalIdentifier }) =>
+          field.universalIdentifier === universalIdentifier,
+      ),
+    );
+    const campaignInstructionsView =
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier[
+        'eb4da94a-d3da-4354-bb39-7478ac12bd35'
+      ];
+    const campaignInstructionViewFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (viewField) =>
+          viewField.viewUniversalIdentifier ===
+          'eb4da94a-d3da-4354-bb39-7478ac12bd35',
+      );
+
+    expect(campaignInstructionFields).toEqual(
+      expect.arrayContaining(
+        expectedCampaignInstructionFields.map(({ universalIdentifier }) =>
+          expect.objectContaining({
+            universalIdentifier,
+            objectMetadataUniversalIdentifier:
+              MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+            type: FieldMetadataType.RICH_TEXT,
+            isNullable: true,
+          }),
+        ),
+      ),
+    );
+    expect(campaignInstructionFields).toHaveLength(5);
+    expect(campaignInstructionsView).toMatchObject({
+      name: 'Campaign Instructions Fields',
+      type: ViewType.FIELDS_WIDGET,
+    });
+    expect(
+      [...campaignInstructionViewFields]
+        .sort((left, right) => left.position - right.position)
+        .map(
+          ({
+            universalIdentifier,
+            fieldMetadataUniversalIdentifier,
+            position,
+          }) => ({
+            universalIdentifier,
+            fieldMetadataUniversalIdentifier,
+            position,
+          }),
+        ),
+    ).toEqual(expectedCampaignInstructionViewFields);
     expect(campaignTableViewFields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

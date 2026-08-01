@@ -69,6 +69,18 @@ export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
       icon: 'IconList',
     },
   }),
+  campaignInstructionsFields: createStandardViewFlatMetadata({
+    ...args,
+    objectName: 'campaign',
+    context: {
+      viewName: 'vieweb4da94a',
+      name: 'Campaign Instructions Fields',
+      type: ViewType.FIELDS_WIDGET,
+      key: null,
+      position: 2,
+      icon: 'IconFileText',
+    },
+  }),
   creatorLists: createStandardViewFlatMetadata({
     ...args,
     objectName: 'creatorList',
@@ -147,7 +159,10 @@ export const computeMyahBrandBrainUpdateProposalViews = (args: Args) =>
 export const computeMyahCampaignViews = (args: Args) =>
   Object.fromEntries(
     Object.entries(computeMyahViews(args)).filter(
-      ([key]) => key === 'campaigns' || key === 'campaignOverviewFields',
+      ([key]) =>
+        key === 'campaigns' ||
+        key === 'campaignOverviewFields' ||
+        key === 'campaignInstructionsFields',
     ),
   );
 export const computeMyahCreatorListViews = (args: Args) =>

@@ -8,4 +8,6 @@ export type DraftPageLayout = Pick<
   | 'objectMetadataId'
   | 'tabs'
   | 'defaultTabToFocusOnMobileAndSidePanelId'
->;
+> & {
+  universalIdentifier?: PageLayout['universalIdentifier'];
+};
