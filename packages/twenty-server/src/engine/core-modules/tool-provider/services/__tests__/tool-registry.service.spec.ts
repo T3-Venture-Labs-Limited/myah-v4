@@ -51,6 +51,49 @@ describe('ToolRegistryService', () => {
     ]);
   });
 
+  it('keeps the native selected-Inbox tool when a logic function has the same name', async () => {
+    const name = 'get_myah_inbox_thread_context';
+    const nativeDescriptor = {
+      name,
+      label: 'Get Inbox context',
+      description: 'Read selected Inbox context.',
+      inputSchema: { type: 'object', properties: {} },
+      category: 'MYAH_INBOX',
+      executionRef: { kind: 'static', toolId: name },
+    };
+    const logicFunctionDescriptor = {
+      ...nativeDescriptor,
+      category: 'LOGIC_FUNCTION',
+      executionRef: {
+        kind: 'logic_function',
+        logicFunctionUniversalIdentifier: 'legacy-inbox-function-id',
+      },
+    };
+    const nativeProvider = {
+      category: 'MYAH_INBOX',
+      isAvailable: jest.fn().mockResolvedValue(true),
+      generateDescriptors: jest.fn().mockResolvedValue([nativeDescriptor]),
+      executeStaticTool: jest.fn(),
+    };
+    const logicFunctionProvider = {
+      category: 'LOGIC_FUNCTION',
+      isAvailable: jest.fn().mockResolvedValue(true),
+      generateDescriptors: jest
+        .fn()
+        .mockResolvedValue([logicFunctionDescriptor]),
+      executeStaticTool: jest.fn(),
+    };
+    const registry = new ToolRegistryService(
+      [logicFunctionProvider, nativeProvider] as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(registry.getCatalog(context)).resolves.toEqual([
+      nativeDescriptor,
+    ]);
+  });
+
   it('hydrates the native implementation when eager loading colliding tools', async () => {
     const nativeProvider = provider({ category: 'BRAND_BRAIN' });
     const legacyProvider = provider({ category: 'LOGIC_FUNCTION' });

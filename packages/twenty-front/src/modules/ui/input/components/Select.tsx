@@ -145,7 +145,7 @@ export const Select = <Value extends SelectValue>({
     (options.length <= 1 &&
       !isDefined(pinnedOption) &&
       !isDefined(callToActionButton) &&
-      (!isDefined(emptyOption) || selectedOption !== emptyOption));
+      (!isDefined(emptyOption) || options.length === 0));
 
   const { closeDropdown } = useCloseDropdown();
 
@@ -226,6 +226,26 @@ export const Select = <Value extends SelectValue>({
                 />
               )}
               {withSearchInput === true && isNonEmptyArray(filteredOptions) && (
+                <DropdownMenuSeparator />
+              )}
+              {isDefined(emptyOption) && (
+                <DropdownMenuItemsContainer scrollable={false}>
+                  <MenuItemSelect
+                    LeftIcon={emptyOption.Icon}
+                    leftIconColor={emptyOption.iconThemeColor}
+                    text={emptyOption.label}
+                    contextualText={emptyOption.contextualText}
+                    selected={controlSelectedOption.value === emptyOption.value}
+                    needIconCheck={needIconCheck}
+                    onClick={() => {
+                      onChange?.(emptyOption.value);
+                      onBlur?.();
+                      closeDropdown(dropdownId);
+                    }}
+                  />
+                </DropdownMenuItemsContainer>
+              )}
+              {isDefined(emptyOption) && isNonEmptyArray(filteredOptions) && (
                 <DropdownMenuSeparator />
               )}
               {isDefined(pinnedOption) && (

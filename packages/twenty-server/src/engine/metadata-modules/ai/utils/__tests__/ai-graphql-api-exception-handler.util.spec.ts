@@ -60,4 +60,19 @@ describe('aiGraphqlApiExceptionHandler', () => {
       AiExceptionCode.MESSAGE_NOT_FOUND,
     );
   });
+
+  it('maps selected Inbox queue conflicts to a retryable CONFLICT', () => {
+    const error = new AiException(
+      'Selected Inbox messages cannot be queued',
+      AiExceptionCode.INBOX_SELECTION_CANNOT_BE_QUEUED,
+    );
+
+    const graphqlError = catchGraphqlError(error);
+
+    expect(graphqlError.extensions.code).toBe(ErrorCode.CONFLICT);
+    expect(graphqlError.extensions.subCode).toBe(
+      AiExceptionCode.INBOX_SELECTION_CANNOT_BE_QUEUED,
+    );
+    expect(graphqlError.extensions.userFriendlyMessage).toBeDefined();
+  });
 });

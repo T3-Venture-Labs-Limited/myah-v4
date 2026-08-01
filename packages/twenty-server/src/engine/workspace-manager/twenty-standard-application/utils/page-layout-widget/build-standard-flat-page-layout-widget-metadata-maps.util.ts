@@ -85,6 +85,7 @@ const RECORD_PAGE_FIELDS_VIEW_NAME_BY_OBJECT: Partial<
   workflowRun: 'workflowRunRecordPageFields',
   workflowVersion: 'workflowVersionRecordPageFields',
   brandBrainPage: 'brandBrainPageRecordPageFields',
+  creator: 'creatorRecordPageFields',
 };
 
 const buildRecordPageWidgetConfigurations = ({
@@ -176,12 +177,18 @@ const buildFieldsWidgetConfiguration = ({
 
   const viewId = views[recordPageFieldsViewName]?.id ?? null;
 
+  const myahRecordPageFieldsViewUniversalIdentifiers: Partial<
+    Record<AllStandardObjectName, string>
+  > = {
+    brandBrainPage: '2774101b-3c0b-485b-91f5-b92d30bdcb6e',
+    creator: 'fdbaccb5-56d4-4c36-98c7-0f5ab0b7cc1e',
+  };
   const viewUniversalIdentifier =
-    objectName === 'brandBrainPage'
-      ? '2774101b-3c0b-485b-91f5-b92d30bdcb6e'
-      : // @ts-expect-error standard object definitions are dynamically indexed
-        (STANDARD_OBJECTS[objectName].views?.[recordPageFieldsViewName]
-          ?.universalIdentifier ?? null);
+    myahRecordPageFieldsViewUniversalIdentifiers[objectName] ??
+    // @ts-expect-error standard object definitions are dynamically indexed
+    STANDARD_OBJECTS[objectName].views?.[recordPageFieldsViewName]
+      ?.universalIdentifier ??
+    null;
 
   return {
     configuration: {

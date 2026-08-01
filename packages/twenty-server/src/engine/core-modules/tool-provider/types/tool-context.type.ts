@@ -5,6 +5,11 @@ import { type CodeExecutionStreamEmitter } from 'src/engine/core-modules/tool-pr
 
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 
+export type MyahInboxSelectionContext = {
+  workspaceId: string;
+  threadId: string;
+};
+
 export type ToolContext = {
   workspaceId: string;
   roleId: string;
@@ -15,4 +20,5 @@ export type ToolContext = {
   threadId?: string;
   locale?: keyof typeof APP_LOCALES;
   onCodeExecutionUpdate?: CodeExecutionStreamEmitter;
+  myahInboxSelection?: MyahInboxSelectionContext;
 };

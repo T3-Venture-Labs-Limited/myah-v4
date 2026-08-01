@@ -24,7 +24,7 @@ export const StyledBubbleMenuContainer = styled.div`
     0px 2px 4px 0px ${themeCssVariables.background.transparent.light},
     0px 0px 4px 0px ${themeCssVariables.background.transparent.medium};
   display: inline-flex;
-  gap: 2px;
+  gap: ${themeCssVariables.spacing[1]};
   padding: 2px;
 `;
 

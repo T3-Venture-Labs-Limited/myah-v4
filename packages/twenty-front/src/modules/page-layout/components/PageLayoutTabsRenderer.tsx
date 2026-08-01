@@ -12,6 +12,7 @@ import { usePageLayoutAddTabStrategy } from '@/page-layout/hooks/usePageLayoutAd
 import { useReorderRecordPageLayoutTabs } from '@/page-layout/hooks/useReorderRecordPageLayoutTabs';
 import { PageLayoutMainContent } from '@/page-layout/PageLayoutMainContent';
 import { getScrollWrapperInstanceIdFromPageLayoutId } from '@/page-layout/utils/getScrollWrapperInstanceIdFromPageLayoutId';
+import { getPageLayoutTabListInitialActiveTabId } from '@/page-layout/utils/getPageLayoutTabListInitialActiveTabId';
 import { getTabListInstanceIdFromPageLayoutAndRecord } from '@/page-layout/utils/getTabListInstanceIdFromPageLayoutAndRecord';
 import { getTabsByDisplayMode } from '@/page-layout/utils/getTabsByDisplayMode';
 import { getTabsWithVisibleWidgets } from '@/page-layout/utils/getTabsWithVisibleWidgets';
@@ -70,7 +71,15 @@ const StyledScrollWrapperContainer = styled.div`
   }
 `;
 
-export const PageLayoutTabsRenderer = () => {
+export type PageLayoutTabsRendererRenderMode = 'all-tabs' | 'default-tab-only';
+
+type PageLayoutTabsRendererProps = {
+  renderMode?: PageLayoutTabsRendererRenderMode;
+};
+
+export const PageLayoutTabsRenderer = ({
+  renderMode = 'all-tabs',
+}: PageLayoutTabsRendererProps) => {
   const { currentPageLayout } = useCurrentPageLayoutOrThrow();
 
   const { isInSidePanel, layoutType, targetRecordIdentifier } =
@@ -143,8 +152,21 @@ export const PageLayoutTabsRenderer = () => {
 
   const sortedActiveTabs = sortTabsByPosition(tabsToRenderInTabList);
 
-  const activeTabExistsInCurrentPageLayout = currentPageLayout.tabs.some(
-    (tab) => tab.id === activeTabId,
+  const tabIdToRender =
+    renderMode === 'default-tab-only'
+      ? getPageLayoutTabListInitialActiveTabId({
+          activeTabId: null,
+          tabs: sortedActiveTabs,
+          defaultTabToFocusOnMobileAndSidePanelId:
+            currentPageLayout.defaultTabToFocusOnMobileAndSidePanelId ??
+            undefined,
+          isMobile,
+          isInSidePanel,
+        })
+      : activeTabId;
+
+  const tabToRenderExistsInCurrentPageLayout = currentPageLayout.tabs.some(
+    (tab) => tab.id === tabIdToRender,
   );
 
   return (
@@ -154,35 +176,39 @@ export const PageLayoutTabsRenderer = () => {
       )}
 
       <StyledTabsAndDashboardContainer>
-        <PageLayoutTabListEffect
-          tabs={sortedActiveTabs}
-          componentInstanceId={tabListInstanceId}
-          defaultTabToFocusOnMobileAndSidePanelId={
-            currentPageLayout.defaultTabToFocusOnMobileAndSidePanelId ??
-            undefined
-          }
-        />
-        {(sortedActiveTabs.length > 1 || isPageLayoutInEditMode) && (
-          <PageLayoutTabList
-            className="page-layout-tab-list-print-hidden"
-            tabs={sortedActiveTabs}
-            behaveAsLinks={!isInSidePanel && !isPageLayoutInEditMode}
-            isInSidePanel={isInSidePanel}
-            componentInstanceId={tabListInstanceId}
-            addTabStrategy={addTabStrategy}
-            isReorderEnabled={canEnableTabEditing}
-            onReorder={
-              canEnableTabEditing
-                ? (result, provided) =>
-                    reorderRecordPageTabs(
-                      result,
-                      provided,
-                      isDefined(pinnedLeftTab),
-                    )
-                : undefined
-            }
-            pageLayoutType={currentPageLayout.type}
-          />
+        {renderMode === 'all-tabs' && (
+          <>
+            <PageLayoutTabListEffect
+              tabs={sortedActiveTabs}
+              componentInstanceId={tabListInstanceId}
+              defaultTabToFocusOnMobileAndSidePanelId={
+                currentPageLayout.defaultTabToFocusOnMobileAndSidePanelId ??
+                undefined
+              }
+            />
+            {(sortedActiveTabs.length > 1 || isPageLayoutInEditMode) && (
+              <PageLayoutTabList
+                className="page-layout-tab-list-print-hidden"
+                tabs={sortedActiveTabs}
+                behaveAsLinks={!isInSidePanel && !isPageLayoutInEditMode}
+                isInSidePanel={isInSidePanel}
+                componentInstanceId={tabListInstanceId}
+                addTabStrategy={addTabStrategy}
+                isReorderEnabled={canEnableTabEditing}
+                onReorder={
+                  canEnableTabEditing
+                    ? (result, provided) =>
+                        reorderRecordPageTabs(
+                          result,
+                          provided,
+                          isDefined(pinnedLeftTab),
+                        )
+                    : undefined
+                }
+                pageLayoutType={currentPageLayout.type}
+              />
+            )}
+          </>
         )}
 
         <StyledScrollWrapperContainer>
@@ -193,9 +219,10 @@ export const PageLayoutTabsRenderer = () => {
             )}
             defaultEnableXScroll={false}
           >
-            {isDefined(activeTabId) && activeTabExistsInCurrentPageLayout && (
-              <PageLayoutMainContent tabId={activeTabId} />
-            )}
+            {isDefined(tabIdToRender) &&
+              tabToRenderExistsInCurrentPageLayout && (
+                <PageLayoutMainContent tabId={tabIdToRender} />
+              )}
           </ScrollWrapper>
         </StyledScrollWrapperContainer>
       </StyledTabsAndDashboardContainer>
