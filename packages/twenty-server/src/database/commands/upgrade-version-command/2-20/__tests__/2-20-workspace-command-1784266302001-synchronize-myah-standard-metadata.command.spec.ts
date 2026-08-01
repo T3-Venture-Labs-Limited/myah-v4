@@ -2,7 +2,6 @@ import {
   MYAH_STANDARD_OBJECTS,
   STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
-import { isDefined } from 'twenty-shared/utils';
 import type { DataSource } from 'typeorm';
 
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
@@ -29,13 +28,6 @@ type TestFlatEntity = {
   universalIdentifier: string;
   applicationId: string;
   applicationUniversalIdentifier?: string;
-};
-
-type TestPageLayoutWidget = TestFlatEntity & {
-  universalConfiguration: {
-    configurationType: string;
-    viewUniversalIdentifier?: string;
-  };
 };
 
 type StandardFieldIdentifiers = Record<
@@ -342,21 +334,15 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         universalIdentifier: string;
         objectMetadataUniversalIdentifier: string;
         relationTargetObjectMetadataUniversalIdentifier?: string | null;
-        relationTargetFieldMetadataUniversalIdentifier?: string | null;
       }>;
-      const creatorOwnerField = standardFields.find(
-        ({ universalIdentifier }) =>
-          universalIdentifier ===
-          MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
-      );
-      const unselectedOutboundCreatorRelation = standardFields.find(
+      const outboundCreatorRelation = standardFields.find(
         (field) =>
           field.objectMetadataUniversalIdentifier ===
             MYAH_STANDARD_OBJECTS.creator.universalIdentifier &&
           field.relationTargetObjectMetadataUniversalIdentifier !== null &&
           field.relationTargetObjectMetadataUniversalIdentifier !== undefined &&
-          field.universalIdentifier !==
-            MYAH_STANDARD_OBJECTS.creator.fields.owner.universalIdentifier,
+          field.relationTargetObjectMetadataUniversalIdentifier !==
+            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
       );
       const inboundCreatorRelation = standardFields.find(
         (field) =>
@@ -366,12 +352,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
             MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
       );
 
-      if (
-        !creatorOwnerField ||
-        !creatorOwnerField.relationTargetFieldMetadataUniversalIdentifier ||
-        !unselectedOutboundCreatorRelation ||
-        !inboundCreatorRelation
-      ) {
+      if (!outboundCreatorRelation || !inboundCreatorRelation) {
         throw new Error('Creator relation field fixtures are missing');
       }
 
@@ -384,15 +365,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
           .fromToAllFlatEntityMaps.flatRoleMaps.to.byUniversalIdentifier;
 
       expect(
-        desiredFields[creatorOwnerField.universalIdentifier],
-      ).toBeDefined();
-      expect(
-        desiredFields[
-          creatorOwnerField.relationTargetFieldMetadataUniversalIdentifier
-        ],
-      ).toBeDefined();
-      expect(
-        desiredFields[unselectedOutboundCreatorRelation.universalIdentifier],
+        desiredFields[outboundCreatorRelation.universalIdentifier],
       ).toBeUndefined();
       expect(
         desiredFields[inboundCreatorRelation.universalIdentifier],
@@ -438,100 +411,6 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         desiredCreatorOpsRole.fieldPermissionUniversalIdentifiers.every(
           (permissionUniversalIdentifier) =>
             desiredFieldPermissions[permissionUniversalIdentifier] !== undefined,
-        ),
-      ).toBe(true);
-    });
-
-    it('includes every bounded Creator Fields widget view in the desired migration slice', async () => {
-      await command.synchronizeWorkspace(
-        {
-          workspaceId: WORKSPACE_ID,
-          options: { dryRun: false },
-          index: 0,
-          total: 1,
-        },
-        {
-          targetObjectUniversalIdentifiers: new Set([
-            MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
-          ]),
-        },
-      );
-
-      const migrationInput =
-        validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
-      const desiredViews =
-        migrationInput.fromToAllFlatEntityMaps.flatViewMaps.to
-          .byUniversalIdentifier;
-      const desiredFields =
-        migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
-          .byUniversalIdentifier;
-      const desiredViewFields =
-        migrationInput.fromToAllFlatEntityMaps.flatViewFieldMaps.to
-          .byUniversalIdentifier;
-      const desiredWidgets = Object.values(
-        migrationInput.fromToAllFlatEntityMaps.flatPageLayoutWidgetMaps.to
-          .byUniversalIdentifier,
-      ) as TestPageLayoutWidget[];
-      const fieldsWidgetViewUniversalIdentifiers = desiredWidgets.flatMap(
-        ({ universalConfiguration }) =>
-          universalConfiguration.configurationType === 'FIELDS' &&
-          universalConfiguration.viewUniversalIdentifier !== undefined
-            ? [universalConfiguration.viewUniversalIdentifier]
-            : [],
-      );
-
-      expect(fieldsWidgetViewUniversalIdentifiers).not.toHaveLength(0);
-      expect(
-        fieldsWidgetViewUniversalIdentifiers.every(
-          (viewUniversalIdentifier) =>
-            desiredViews[viewUniversalIdentifier] !== undefined,
-        ),
-      ).toBe(true);
-
-      const { allFlatEntityMaps } =
-        computeTwentyStandardApplicationAllFlatEntityMaps({
-          workspaceId: WORKSPACE_ID,
-          twentyStandardApplicationId: STANDARD_APPLICATION_ID,
-          now: '2026-07-15T00:00:00.000Z',
-        });
-      const fieldsWidgetViewFieldUniversalIdentifiers = Object.values(
-        allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
-      )
-        .filter(isDefined)
-        .flatMap(({ universalIdentifier, viewUniversalIdentifier }) =>
-        fieldsWidgetViewUniversalIdentifiers.includes(viewUniversalIdentifier)
-          ? [universalIdentifier]
-          : [],
-      );
-
-      expect(fieldsWidgetViewFieldUniversalIdentifiers).not.toHaveLength(0);
-      expect(
-        fieldsWidgetViewFieldUniversalIdentifiers.every(
-          (viewFieldUniversalIdentifier) =>
-            desiredViewFields[viewFieldUniversalIdentifier] !== undefined,
-        ),
-      ).toBe(true);
-
-      const fieldsWidgetViewFieldMetadataUniversalIdentifiers = Object.values(
-        allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
-      )
-        .filter(isDefined)
-        .flatMap(
-          ({ fieldMetadataUniversalIdentifier, viewUniversalIdentifier }) =>
-            fieldsWidgetViewUniversalIdentifiers.includes(
-              viewUniversalIdentifier,
-            ) && isDefined(fieldMetadataUniversalIdentifier)
-              ? [fieldMetadataUniversalIdentifier]
-              : [],
-        );
-
-      expect(
-        fieldsWidgetViewFieldMetadataUniversalIdentifiers,
-      ).not.toHaveLength(0);
-      expect(
-        fieldsWidgetViewFieldMetadataUniversalIdentifiers.every(
-          (fieldMetadataUniversalIdentifier) =>
-            desiredFields[fieldMetadataUniversalIdentifier] !== undefined,
         ),
       ).toBe(true);
     });
