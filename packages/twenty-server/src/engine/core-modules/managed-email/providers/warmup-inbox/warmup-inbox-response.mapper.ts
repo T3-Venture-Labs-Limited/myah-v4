@@ -70,6 +70,8 @@ const asCount = (value: unknown): number => {
 
   return count;
 };
+const asOptionalCount = (value: unknown): number =>
+  value === undefined ? 0 : asCount(value);
 
 const asBoolean = (value: unknown): boolean => {
   if (typeof value !== 'boolean') return malformed();
@@ -286,7 +288,7 @@ export const mapWarmupInboxMetrics = (value: unknown): WarmupInboxMetrics => {
       landedInbox: asCount(landedInbox.value),
       landedSpam: asCount(landedSpam.value),
       landedCategory: asCount(landedCategory.value),
-      repliesReceived: asCount(main.replies_received),
+      repliesReceived: asOptionalCount(main.replies_received),
     },
     trend: asArray(data.schedule_metrics, MAX_WARMUP_METRIC_TRENDS).map(
       (trendValue) => {
@@ -297,7 +299,7 @@ export const mapWarmupInboxMetrics = (value: unknown): WarmupInboxMetrics => {
           landedInbox: asCount(trend.inbox),
           landedCategory: asCount(trend.category),
           landedSpam: asCount(trend.spam),
-          repliesReceived: asCount(trend.replies_received),
+          repliesReceived: asOptionalCount(trend.replies_received),
         };
       },
     ),

@@ -170,7 +170,7 @@ export class WarmupInboxClient {
     await this.executeWrite(
       (client) =>
         client.post(`/v1/inboxes/${encodeURIComponent(inboxId)}/start`),
-      200,
+      [200, 201],
       () => undefined,
       [409],
     );
@@ -182,7 +182,7 @@ export class WarmupInboxClient {
     await this.executeWrite(
       (client) =>
         client.post(`/v1/inboxes/${encodeURIComponent(inboxId)}/pause`),
-      201,
+      [200, 201],
       () => undefined,
       [409],
     );
@@ -235,8 +235,8 @@ export class WarmupInboxClient {
 
         if (
           metrics.inboxId !== inboxId ||
-          metrics.from.getTime() !== fromSeconds * 1_000 ||
-          metrics.to.getTime() !== toSeconds * 1_000
+          metrics.from.getTime() > fromSeconds * 1_000 ||
+          metrics.to.getTime() < toSeconds * 1_000
         ) {
           throw new WarmupInboxException(
             WarmupInboxExceptionCode.MALFORMED_RESPONSE,
@@ -287,7 +287,7 @@ export class WarmupInboxClient {
 
   private async executeWrite<T>(
     operation: (client: AxiosInstance) => Promise<AxiosResponse<unknown>>,
-    expectedStatus: number,
+    expectedStatus: number | number[],
     map: (value: unknown) => T,
     replayStatuses: number[] = [],
   ): Promise<T> {
@@ -324,7 +324,11 @@ export class WarmupInboxClient {
       throw new WarmupInboxException(WarmupInboxExceptionCode.REQUEST_FAILED);
     }
 
-    if (response.status !== expectedStatus) {
+    if (
+      !(
+        Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus]
+      ).includes(response.status)
+    ) {
       throw new WarmupInboxException(
         WarmupInboxExceptionCode.WRITE_OUTCOME_UNCERTAIN,
       );

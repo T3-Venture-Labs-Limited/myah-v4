@@ -18,7 +18,7 @@ const domainFixture = {
   expires_at: '2027-07-01T00:00:00.000Z',
   import: false,
   order_id: 'order-1',
-  mailbox_count: 1,
+  mailbox_count: '1',
   active: true,
   workspace_type: 'GOOGLE',
   prewarmed: false,
@@ -140,6 +140,102 @@ describe('IcemailClient', () => {
       params: { page: 1, limit: 50 },
     });
   });
+
+  it('normalizes the live canonical string mailbox count', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        success: true,
+        data: {
+          domains: [{ ...domainFixture, mailbox_count: '1' }],
+          total_count: 1,
+          page: 1,
+          limit: 50,
+        },
+      },
+      headers: {},
+    });
+
+    await expect(client.listDomains()).resolves.toMatchObject({
+      items: [{ mailboxCount: 1 }],
+    });
+  });
+  it('normalizes a zero-mailbox domain without a provider', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        success: true,
+        data: {
+          domains: [
+            { ...domainFixture, mailbox_count: '0', workspace_type: null },
+          ],
+          total_count: 1,
+          page: 1,
+          limit: 50,
+        },
+      },
+      headers: {},
+    });
+
+    await expect(client.listDomains()).resolves.toMatchObject({
+      items: [{ mailboxCount: 0, provider: null }],
+    });
+  });
+
+  it('rejects a providerless domain with mailboxes', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        success: true,
+        data: {
+          domains: [
+            { ...domainFixture, mailbox_count: '1', workspace_type: null },
+          ],
+          total_count: 1,
+          page: 1,
+          limit: 50,
+        },
+      },
+      headers: {},
+    });
+
+    await expectCode(
+      client.listDomains(),
+      IcemailExceptionCode.MALFORMED_RESPONSE,
+    );
+  });
+
+  it.each([1, '01', '9'.repeat(17)])(
+    'rejects the invalid provider mailbox count %p',
+    async (mailboxCount) => {
+      const { client, httpClient } = createClient();
+
+      httpClient.get.mockResolvedValue({
+        status: 200,
+        data: {
+          success: true,
+          data: {
+            domains: [{ ...domainFixture, mailbox_count: mailboxCount }],
+            total_count: 1,
+            page: 1,
+            limit: 50,
+          },
+        },
+        headers: {},
+      });
+
+      await expectCode(
+        client.listDomains(),
+        IcemailExceptionCode.MALFORMED_RESPONSE,
+      );
+    },
+  );
 
   it('maps exact availability pricing to integer cents', async () => {
     const { client, httpClient } = createClient();
@@ -494,11 +590,11 @@ describe('IcemailClient', () => {
         data: {
           domains: [
             {
-              id: 'prewarm-1',
+              domain_id: 'prewarm-1',
               domain: 'warm.com',
               per_domain_price: 5.5,
               per_mailbox_price: 2.5,
-              mailbox_count: 1,
+              mailbox_count: '1',
               active: true,
               pre_warm_mailbox: [
                 {
