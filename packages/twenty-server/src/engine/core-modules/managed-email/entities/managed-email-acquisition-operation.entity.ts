@@ -30,7 +30,7 @@ import {
 
 @Check(
   'CHK_MANAGED_EMAIL_ACQUISITION_REQUIRED_TEXT',
-  `btrim("idempotencyKey") <> '' AND btrim("proposalHash") <> '' AND btrim("quoteHash") <> '' AND btrim("catalogVersion") <> '' AND btrim("metronomeRateCardAlias") <> '' AND btrim("currency") <> '' AND btrim("state") <> ''`,
+  `btrim("idempotencyKey") <> '' AND btrim("proposalHash") <> '' AND btrim("quoteHash") <> '' AND btrim("catalogVersion") <> '' AND btrim("metronomeRateCardAlias") <> '' AND "currency" = 'USD' AND btrim("state") <> ''`,
 )
 @Check(
   'CHK_MANAGED_EMAIL_ACQUISITION_AMOUNT_ATTEMPTS',
@@ -103,7 +103,7 @@ export class ManagedEmailAcquisitionOperationEntity {
   expectedAmountCents: string;
 
   @Column({ type: 'text', update: false })
-  currency: string;
+  currency: 'USD';
 
   @Column({ type: 'timestamptz', update: false })
   servicePeriodStart: Date;

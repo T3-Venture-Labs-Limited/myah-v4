@@ -27,7 +27,7 @@ import { ManagedEmailDomainEntity } from './managed-email-domain.entity';
 
 @Check(
   'CHK_MANAGED_EMAIL_MAILBOX_IDENTITIES_NONEMPTY',
-  `btrim("address") <> '' AND btrim("normalizedAddress") <> '' AND btrim("providerType") <> '' AND btrim("providerConfigurationKey") <> '' AND btrim("readinessPolicyVersion") <> ''`,
+  `btrim("address") <> '' AND btrim("normalizedAddress") <> '' AND btrim("personaFirstName") <> '' AND btrim("personaLastName") <> '' AND btrim("personaSignature") <> '' AND btrim("providerType") <> '' AND btrim("providerConfigurationKey") <> '' AND btrim("readinessPolicyVersion") <> ''`,
 )
 @Check('CHK_MANAGED_EMAIL_MAILBOX_PERSONA_VERSION', '"personaVersion" >= 1')
 @Check(
@@ -83,12 +83,17 @@ export class ManagedEmailMailboxEntity {
 
   @Column({ type: 'text', update: false })
   normalizedAddress: string;
+  @Column({ type: 'text', update: false })
+  personaFirstName: string;
+
+  @Column({ type: 'text', update: false })
+  personaLastName: string;
 
   @Column({ type: 'text' })
   personaDisplayName: string;
 
-  @Column({ type: 'text' })
-  personaRole: string;
+  @Column({ nullable: true, type: 'text' })
+  personaRole: string | null;
 
   @Column({ type: 'text' })
   personaSignature: string;
