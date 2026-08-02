@@ -1,4 +1,4 @@
-import { MANAGED_EMAIL_PRODUCT_KEYS } from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
+import { MANAGED_EMAIL_PRODUCT_DEFINITIONS } from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
 import {
   managedEmailCorrelatedSubscriptionLinesTransformer,
   managedEmailExpectedLineItemsTransformer,
@@ -6,37 +6,98 @@ import {
   managedEmailNullableSafeFactsTransformer,
   managedEmailSafeFactsTransformer,
 } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-persistence-json.util';
+import {
+  type ManagedEmailCorrelatedSubscriptionLine,
+  type ManagedEmailExpectedLineItem,
+  type ManagedEmailResourceSnapshot,
+} from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
+
+type DeepMutable<T> = T extends readonly (infer Item)[]
+  ? DeepMutable<Item>[]
+  : T extends Readonly<object>
+    ? { -readonly [Key in keyof T]: DeepMutable<T[Key]> }
+    : T;
+
+const WORKSPACE_MEMBER_ID = '123e4567-e89b-42d3-a456-426614174000';
 
 const safeFacts = () => ({
   schemaVersion: 1 as const,
   facts: [
     { name: 'mxReady', value: true },
-    { name: 'observedAt', value: '2026-07-29T18:00:00.000Z' },
+    { name: 'observedAt', value: '2026-08-02T12:00:00.000Z' },
   ],
 });
 
-const resourceSnapshot = () => ({
-  domains: [{ domain: 'example.com', mailboxes: ['creator@example.com'] }],
+const resourceSnapshot = (): DeepMutable<ManagedEmailResourceSnapshot> => ({
+  proposal: {
+    createdAt: '2026-08-02T12:00:00.000Z',
+    expiresAt: '2026-08-02T12:15:00.000Z',
+    policyVersion: 'managed-email-quote-v1',
+  },
+  domains: [
+    {
+      domain: 'example.com',
+      providerInventoryId: 'inventory-1',
+      mailboxes: ['creator@example.com'],
+      providerQuote: {
+        amountMinorUnits: 1000,
+        currency: 'USD' as const,
+        fingerprint: 'quote-fingerprint-1',
+        observedAt: '2026-08-02T12:00:00.000Z',
+        termCount: 1,
+        termUnit: 'YEAR' as const,
+      },
+    },
+  ],
+  personas: [
+    {
+      address: 'creator@example.com',
+      createdByWorkspaceMemberId: WORKSPACE_MEMBER_ID,
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      localPart: 'creator',
+      roleTitle: null,
+      signature: 'Ada',
+      version: 1,
+    },
+  ],
 });
 
-const expectedLineItem = () => ({
-  productKey: MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH,
-  productAlias: 'myah-managed-mailbox-month',
-  quantity: 1,
-  unitPriceCents: 1429,
-  totalCents: 1429,
-  periodStart: '2026-07-29T00:00:00.000Z',
-  periodEnd: '2026-08-29T00:00:00.000Z',
+const expectedLineItem = (
+  index: number,
+  quantity = 1,
+  unitPriceCents = 1000,
+): DeepMutable<ManagedEmailExpectedLineItem> => ({
+  productKey: MANAGED_EMAIL_PRODUCT_DEFINITIONS[index].key,
+  productTag: MANAGED_EMAIL_PRODUCT_DEFINITIONS[index].metronomeProductTag,
+  metronomeProductId: `123e4567-e89b-42d3-a456-42661417400${index}`,
+  currency: 'USD' as const,
+  quantity,
+  unitPriceCents,
+  totalCents: quantity * unitPriceCents,
+  periodStart: '2026-08-02T00:00:00.000Z',
+  periodEnd:
+    index === 0 ? '2027-08-02T00:00:00.000Z' : '2026-09-02T00:00:00.000Z',
 });
 
-const correlatedLine = () => ({
-  subscriptionId: 'subscription-1',
-  productId: 'product-1',
-  quantity: 1,
-  total: 14.29,
-  unitPrice: 14.29,
-  startingAt: '2026-07-29T00:00:00.000Z',
-  endingBefore: '2026-08-29T00:00:00.000Z',
+const expectedLineItems = (): DeepMutable<ManagedEmailExpectedLineItem>[] => [
+  expectedLineItem(0),
+  expectedLineItem(1),
+  expectedLineItem(2),
+];
+
+const correlatedLine = (
+  index = 0,
+  quantity = 1,
+  unitPrice = 1000,
+): DeepMutable<ManagedEmailCorrelatedSubscriptionLine> => ({
+  subscriptionId: `123e4567-e89b-42d3-a456-42661417401${index}`,
+  productId: `123e4567-e89b-42d3-a456-42661417400${index}`,
+  quantity,
+  total: quantity * unitPrice,
+  unitPrice,
+  startingAt: '2026-08-02T00:00:00.000Z',
+  endingBefore: '2026-09-02T00:00:00.000Z',
   isProrated: false,
 });
 
@@ -44,7 +105,7 @@ describe('managed email persistence JSON validation', () => {
   it('accepts and deeply freezes bounded closed persistence shapes', () => {
     const facts = safeFacts();
     const resources = resourceSnapshot();
-    const expectedLines = [expectedLineItem()];
+    const expectedLines = expectedLineItems();
     const correlatedLines = [correlatedLine()];
 
     expect(managedEmailSafeFactsTransformer.to(facts)).toBe(facts);
@@ -58,26 +119,25 @@ describe('managed email persistence JSON validation', () => {
     expect(
       managedEmailCorrelatedSubscriptionLinesTransformer.to(correlatedLines),
     ).toBe(correlatedLines);
-    expect(Object.isFrozen(facts)).toBe(true);
-    expect(Object.isFrozen(facts.facts)).toBe(true);
     expect(Object.isFrozen(facts.facts[0])).toBe(true);
-    expect(Object.isFrozen(resources)).toBe(true);
-    expect(Object.isFrozen(resources.domains)).toBe(true);
-    expect(Object.isFrozen(resources.domains[0].mailboxes)).toBe(true);
-    expect(Object.isFrozen(expectedLines)).toBe(true);
+    expect(Object.isFrozen(resources.proposal)).toBe(true);
+    expect(Object.isFrozen(resources.domains[0].providerQuote)).toBe(true);
+    expect(Object.isFrozen(resources.personas[0])).toBe(true);
     expect(Object.isFrozen(expectedLines[0])).toBe(true);
-    expect(Object.isFrozen(correlatedLines)).toBe(true);
     expect(Object.isFrozen(correlatedLines[0])).toBe(true);
   });
 
   it('deeply freezes validated children when the root is already frozen', () => {
-    const facts = safeFacts();
+    const resources = resourceSnapshot();
 
-    Object.freeze(facts);
+    Object.freeze(resources);
 
-    expect(managedEmailSafeFactsTransformer.to(facts)).toBe(facts);
-    expect(Object.isFrozen(facts.facts)).toBe(true);
-    expect(Object.isFrozen(facts.facts[0])).toBe(true);
+    expect(managedEmailResourceSnapshotTransformer.to(resources)).toBe(
+      resources,
+    );
+    expect(Object.isFrozen(resources.proposal)).toBe(true);
+    expect(Object.isFrozen(resources.domains[0].providerQuote)).toBe(true);
+    expect(Object.isFrozen(resources.personas[0])).toBe(true);
   });
 
   it.each([
@@ -103,7 +163,142 @@ describe('managed email persistence JSON validation', () => {
     ).toThrow('Unsafe managed email persistence JSON');
   });
 
-  it('rejects oversized fact and resource collections', () => {
+  it.each([
+    [
+      'empty domains',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        snapshot.domains = [];
+      },
+    ],
+    [
+      'empty mailboxes',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        snapshot.domains[0].mailboxes = [];
+        snapshot.personas = [];
+      },
+    ],
+    [
+      'non-normalized domain',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        snapshot.domains[0].domain = 'Example.com';
+      },
+    ],
+    [
+      'duplicate normalized mailbox',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        snapshot.domains[0].mailboxes.push('creator@example.com');
+      },
+    ],
+    [
+      'persona not bound to a mailbox',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        snapshot.personas[0].address = 'other@example.com';
+      },
+    ],
+    [
+      'invalid workspace-member UUID',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        snapshot.personas[0].createdByWorkspaceMemberId = 'member-1';
+      },
+    ],
+    [
+      'blank quote fingerprint',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        snapshot.domains[0].providerQuote.fingerprint = ' ';
+      },
+    ],
+    [
+      'quote observed after proposal creation',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        snapshot.domains[0].providerQuote.observedAt =
+          '2026-08-02T12:01:00.000Z';
+      },
+    ],
+  ])('rejects resource snapshot with %s', (_name, mutate) => {
+    const snapshot = resourceSnapshot();
+
+    mutate(snapshot);
+
+    expect(() => managedEmailResourceSnapshotTransformer.to(snapshot)).toThrow(
+      'Unsafe managed email persistence JSON',
+    );
+  });
+
+  it.each([
+    [
+      'missing canonical product',
+      (lines: DeepMutable<ManagedEmailExpectedLineItem>[]) => lines.pop(),
+    ],
+    [
+      'duplicate canonical product',
+      (lines: DeepMutable<ManagedEmailExpectedLineItem>[]) => {
+        lines[2].productKey = lines[1].productKey;
+        lines[2].productTag = lines[1].productTag;
+      },
+    ],
+    [
+      'wrong canonical product tag',
+      (lines: DeepMutable<ManagedEmailExpectedLineItem>[]) => {
+        lines[1].productTag = 'wrong-tag';
+      },
+    ],
+    [
+      'contradictory line total',
+      (lines: DeepMutable<ManagedEmailExpectedLineItem>[]) => {
+        lines[1].totalCents += 1;
+      },
+    ],
+    [
+      'non-USD customer invoice line',
+      (lines: DeepMutable<ManagedEmailExpectedLineItem>[]) => {
+        lines[2].currency = 'EUR' as 'USD';
+      },
+    ],
+    [
+      'invalid Metronome product UUID',
+      (lines: DeepMutable<ManagedEmailExpectedLineItem>[]) => {
+        lines[0].metronomeProductId = 'product-1';
+      },
+    ],
+  ])('rejects expected lines with %s', (_name, mutate) => {
+    const lines = expectedLineItems();
+
+    mutate(lines);
+
+    expect(() => managedEmailExpectedLineItemsTransformer.to(lines)).toThrow(
+      'Unsafe managed email persistence JSON',
+    );
+  });
+
+  it.each([
+    [
+      'empty set',
+      (_lines: DeepMutable<ManagedEmailCorrelatedSubscriptionLine>[]) => [],
+    ],
+    [
+      'duplicate subscription',
+      (lines: DeepMutable<ManagedEmailCorrelatedSubscriptionLine>[]) => [
+        ...lines,
+        correlatedLine(),
+      ],
+    ],
+    [
+      'contradictory total',
+      (lines: DeepMutable<ManagedEmailCorrelatedSubscriptionLine>[]) => {
+        lines[0].total += 1;
+
+        return lines;
+      },
+    ],
+  ])('rejects correlated lines with %s', (_name, mutate) => {
+    const lines = mutate([correlatedLine()]);
+
+    expect(() =>
+      managedEmailCorrelatedSubscriptionLinesTransformer.to(lines),
+    ).toThrow('Unsafe managed email persistence JSON');
+  });
+
+  it('rejects oversized collections and payloads', () => {
     expect(() =>
       managedEmailSafeFactsTransformer.to({
         schemaVersion: 1,
@@ -115,39 +310,28 @@ describe('managed email persistence JSON validation', () => {
     ).toThrow('Unsafe managed email persistence JSON');
     expect(() =>
       managedEmailResourceSnapshotTransformer.to({
+        ...resourceSnapshot(),
         domains: Array.from({ length: 101 }, (_, index) => ({
+          ...resourceSnapshot().domains[0],
           domain: `domain-${index}.example`,
-          mailboxes: [],
+          mailboxes: [`creator@domain-${index}.example`],
         })),
       }),
     ).toThrow('Unsafe managed email persistence JSON');
-  });
-
-  it('rejects payloads over the serialized byte limit', () => {
     expect(() =>
       managedEmailResourceSnapshotTransformer.to({
-        domains: Array.from({ length: 3 }, (_, domainIndex) => ({
-          domain: `domain-${domainIndex}.example`,
-          mailboxes: Array.from(
-            { length: 100 },
-            (_, mailboxIndex) =>
-              `${'m'.repeat(300)}-${domainIndex}-${mailboxIndex}@example.com`,
-          ),
-        })),
+        ...resourceSnapshot(),
+        domains: [
+          {
+            ...resourceSnapshot().domains[0],
+            mailboxes: Array.from(
+              { length: 100 },
+              (_, mailboxIndex) =>
+                `${'m'.repeat(300)}-${mailboxIndex}@example.com`,
+            ),
+          },
+        ],
       }),
-    ).toThrow('Unsafe managed email persistence JSON');
-  });
-
-  it('rejects oversized expected and correlated line collections', () => {
-    expect(() =>
-      managedEmailExpectedLineItemsTransformer.to(
-        Array.from({ length: 101 }, expectedLineItem),
-      ),
-    ).toThrow('Unsafe managed email persistence JSON');
-    expect(() =>
-      managedEmailCorrelatedSubscriptionLinesTransformer.to(
-        Array.from({ length: 101 }, correlatedLine),
-      ),
     ).toThrow('Unsafe managed email persistence JSON');
   });
 

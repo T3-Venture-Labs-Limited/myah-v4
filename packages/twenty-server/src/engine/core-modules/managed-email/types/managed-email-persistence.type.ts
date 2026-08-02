@@ -13,15 +13,41 @@ export type ManagedEmailSafeFacts = {
 };
 
 export type ManagedEmailResourceSnapshot = {
+  readonly proposal: {
+    readonly createdAt: string;
+    readonly expiresAt: string;
+    readonly policyVersion: string;
+  };
   readonly domains: ReadonlyArray<{
     readonly domain: string;
+    readonly providerInventoryId?: string;
     readonly mailboxes: readonly string[];
+    readonly providerQuote: {
+      readonly amountMinorUnits: number;
+      readonly currency: 'USD';
+      readonly fingerprint: string;
+      readonly observedAt: string;
+      readonly termCount: 1;
+      readonly termUnit: 'YEAR';
+    };
+  }>;
+  readonly personas: ReadonlyArray<{
+    readonly address: string;
+    readonly createdByWorkspaceMemberId: string;
+    readonly firstName: string;
+    readonly lastName: string;
+    readonly localPart: string;
+    readonly roleTitle: string | null;
+    readonly signature: string;
+    readonly version: number;
   }>;
 };
 
 export type ManagedEmailExpectedLineItem = {
   readonly productKey: ManagedEmailProductKey;
-  readonly productAlias: string;
+  readonly productTag: string;
+  readonly metronomeProductId: string;
+  readonly currency: 'USD';
   readonly quantity: number;
   readonly unitPriceCents: number;
   readonly totalCents: number;

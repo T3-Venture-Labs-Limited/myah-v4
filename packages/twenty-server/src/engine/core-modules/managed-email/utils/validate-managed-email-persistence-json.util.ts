@@ -1,6 +1,10 @@
 import { type ValueTransformer } from 'typeorm';
 
-import { MANAGED_EMAIL_PRODUCT_KEYS } from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
+import {
+  MANAGED_EMAIL_PRODUCT_DEFINITIONS,
+  MANAGED_EMAIL_PRODUCT_KEYS,
+} from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
+import { type ManagedEmailProductKey } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
@@ -15,6 +19,10 @@ const MAX_DOMAIN_LENGTH = 253;
 const MAX_MAILBOX_LENGTH = 320;
 const MAX_IDENTIFIER_LENGTH = 256;
 const PERSISTENCE_JSON_ERROR = 'Unsafe managed email persistence JSON';
+const MAX_PERSONA_NAME_LENGTH = 128;
+const MAX_SIGNATURE_LENGTH = 4096;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const PRODUCT_KEYS: Record<string, true> = {
   [MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR]: true,
@@ -75,18 +83,23 @@ const assertString = (value: unknown, maximumLength: number): void => {
   }
 };
 
+const parseInstant = (value: unknown): number => {
+  assertString(value, MAX_IDENTIFIER_LENGTH);
+
+  const instant = Date.parse(value as string);
+
+  if (!Number.isFinite(instant)) {
+    fail();
+  }
+
+  return instant;
+};
+
 const assertDateRange = (start: unknown, end: unknown): void => {
-  assertString(start, MAX_IDENTIFIER_LENGTH);
-  assertString(end, MAX_IDENTIFIER_LENGTH);
+  const startInstant = parseInstant(start);
+  const endInstant = parseInstant(end);
 
-  const startInstant = Date.parse(start as string);
-  const endInstant = Date.parse(end as string);
-
-  if (
-    Number.isNaN(startInstant) ||
-    Number.isNaN(endInstant) ||
-    endInstant <= startInstant
-  ) {
+  if (endInstant <= startInstant) {
     fail();
   }
 };
@@ -97,14 +110,58 @@ const assertPositiveSafeInteger = (value: unknown): void => {
   }
 };
 
-const assertNonNegativeSafeInteger = (value: unknown): void => {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+const assertUuid = (value: unknown): void => {
+  assertString(value, 36);
+
+  if (!UUID_PATTERN.test(value as string)) {
     fail();
   }
 };
 
-const assertNonNegativeFiniteNumber = (value: unknown): void => {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+const assertNormalizedDomain = (value: unknown): void => {
+  assertString(value, MAX_DOMAIN_LENGTH);
+
+  if (
+    value !== (value as string).trim().toLowerCase() ||
+    (value as string).includes('@') ||
+    !(value as string).includes('.')
+  ) {
+    fail();
+  }
+};
+
+const parseNormalizedAddress = (
+  value: unknown,
+): { domain: string; localPart: string } => {
+  assertString(value, MAX_MAILBOX_LENGTH);
+
+  if (value !== (value as string).trim().toLowerCase()) {
+    fail();
+  }
+
+  const parts = (value as string).split('@');
+
+  if (parts.length !== 2 || parts[0] === '' || parts[1] === '') {
+    fail();
+  }
+
+  assertNormalizedDomain(parts[1]);
+
+  return { domain: parts[1], localPart: parts[0] };
+};
+
+const assertExactIntegerTotal = (
+  quantity: unknown,
+  unitPrice: unknown,
+  total: unknown,
+): void => {
+  assertPositiveSafeInteger(quantity);
+  assertPositiveSafeInteger(unitPrice);
+  assertPositiveSafeInteger(total);
+
+  const expectedTotal = (quantity as number) * (unitPrice as number);
+
+  if (!Number.isSafeInteger(expectedTotal) || total !== expectedTotal) {
     fail();
   }
 };
@@ -214,17 +271,132 @@ const validateSafeFacts = (value: unknown): ManagedEmailSafeFacts => {
 const validateResourceSnapshot = (
   value: unknown,
 ): ManagedEmailResourceSnapshot => {
-  assertRecord(value, ['domains']);
+  assertRecord(value, ['proposal', 'domains', 'personas']);
+  assertRecord(value.proposal, ['createdAt', 'expiresAt', 'policyVersion']);
+  assertDateRange(value.proposal.createdAt, value.proposal.expiresAt);
+  assertString(value.proposal.policyVersion, MAX_IDENTIFIER_LENGTH);
+
+  const proposalCreatedAt = parseInstant(value.proposal.createdAt);
+  const proposalExpiresAt = parseInstant(value.proposal.expiresAt);
+
   assertArray(value.domains, MAX_COLLECTION_ITEMS);
+  assertArray(value.personas, MAX_COLLECTION_ITEMS);
+
+  if (value.domains.length === 0 || value.personas.length === 0) {
+    fail();
+  }
+
+  const domains = new Set<string>();
+  const mailboxes = new Set<string>();
 
   for (const domain of value.domains) {
-    assertRecord(domain, ['domain', 'mailboxes']);
-    assertString(domain.domain, MAX_DOMAIN_LENGTH);
+    if (!isRecord(domain)) {
+      fail();
+    }
+
+    const domainKeys = Object.prototype.hasOwnProperty.call(
+      domain,
+      'providerInventoryId',
+    )
+      ? ['domain', 'providerInventoryId', 'mailboxes', 'providerQuote']
+      : ['domain', 'mailboxes', 'providerQuote'];
+
+    assertRecord(domain, domainKeys);
+    assertNormalizedDomain(domain.domain);
+
+    if (domains.has(domain.domain as string)) {
+      fail();
+    }
+    domains.add(domain.domain as string);
+
+    if (Object.prototype.hasOwnProperty.call(domain, 'providerInventoryId')) {
+      assertString(domain.providerInventoryId, MAX_IDENTIFIER_LENGTH);
+    }
+
     assertArray(domain.mailboxes, MAX_COLLECTION_ITEMS);
 
-    for (const mailbox of domain.mailboxes) {
-      assertString(mailbox, MAX_MAILBOX_LENGTH);
+    if (domain.mailboxes.length === 0) {
+      fail();
     }
+
+    for (const mailbox of domain.mailboxes) {
+      const parsedAddress = parseNormalizedAddress(mailbox);
+
+      if (
+        parsedAddress.domain !== domain.domain ||
+        mailboxes.has(mailbox as string)
+      ) {
+        fail();
+      }
+      mailboxes.add(mailbox as string);
+    }
+
+    assertRecord(domain.providerQuote, [
+      'amountMinorUnits',
+      'currency',
+      'fingerprint',
+      'observedAt',
+      'termCount',
+      'termUnit',
+    ]);
+    assertPositiveSafeInteger(domain.providerQuote.amountMinorUnits);
+    assertString(domain.providerQuote.fingerprint, MAX_IDENTIFIER_LENGTH);
+
+    const quoteObservedAt = parseInstant(domain.providerQuote.observedAt);
+
+    if (
+      domain.providerQuote.currency !== 'USD' ||
+      domain.providerQuote.termCount !== 1 ||
+      domain.providerQuote.termUnit !== 'YEAR' ||
+      quoteObservedAt > proposalCreatedAt ||
+      quoteObservedAt >= proposalExpiresAt
+    ) {
+      fail();
+    }
+  }
+
+  const personaAddresses = new Set<string>();
+
+  for (const persona of value.personas) {
+    assertRecord(persona, [
+      'address',
+      'createdByWorkspaceMemberId',
+      'firstName',
+      'lastName',
+      'localPart',
+      'roleTitle',
+      'signature',
+      'version',
+    ]);
+
+    const parsedAddress = parseNormalizedAddress(persona.address);
+
+    if (
+      !mailboxes.has(persona.address as string) ||
+      personaAddresses.has(persona.address as string) ||
+      persona.localPart !== parsedAddress.localPart
+    ) {
+      fail();
+    }
+    personaAddresses.add(persona.address as string);
+
+    assertUuid(persona.createdByWorkspaceMemberId);
+    assertString(persona.firstName, MAX_PERSONA_NAME_LENGTH);
+    assertString(persona.lastName, MAX_PERSONA_NAME_LENGTH);
+    assertString(persona.localPart, MAX_MAILBOX_LENGTH);
+    assertString(persona.signature, MAX_SIGNATURE_LENGTH);
+    assertPositiveSafeInteger(persona.version);
+
+    if (persona.roleTitle !== null) {
+      assertString(persona.roleTitle, MAX_PERSONA_NAME_LENGTH);
+    }
+  }
+
+  if (
+    personaAddresses.size !== mailboxes.size ||
+    [...mailboxes].some((mailbox) => !personaAddresses.has(mailbox))
+  ) {
+    fail();
   }
 
   assertBoundedJson(value);
@@ -235,16 +407,26 @@ const validateResourceSnapshot = (
 const validateExpectedLineItems = (
   value: unknown,
 ): readonly ManagedEmailExpectedLineItem[] => {
-  assertArray(value, MAX_COLLECTION_ITEMS);
+  assertArray(value, MANAGED_EMAIL_PRODUCT_DEFINITIONS.length);
 
-  if (value.length === 0) {
+  if (value.length !== MANAGED_EMAIL_PRODUCT_DEFINITIONS.length) {
     fail();
   }
+
+  const definitions = new Map(
+    MANAGED_EMAIL_PRODUCT_DEFINITIONS.map((definition) => [
+      definition.key,
+      definition,
+    ]),
+  );
+  const productKeys = new Set<string>();
 
   for (const line of value) {
     assertRecord(line, [
       'productKey',
-      'productAlias',
+      'productTag',
+      'metronomeProductId',
+      'currency',
       'quantity',
       'unitPriceCents',
       'totalCents',
@@ -252,15 +434,29 @@ const validateExpectedLineItems = (
       'periodEnd',
     ]);
     assertString(line.productKey, MAX_IDENTIFIER_LENGTH);
-    assertString(line.productAlias, MAX_IDENTIFIER_LENGTH);
+    assertString(line.productTag, MAX_IDENTIFIER_LENGTH);
+    assertUuid(line.metronomeProductId);
 
-    if (PRODUCT_KEYS[line.productKey as string] !== true) {
+    const definition = definitions.get(
+      line.productKey as ManagedEmailProductKey,
+    );
+
+    if (
+      PRODUCT_KEYS[line.productKey as string] !== true ||
+      definition === undefined ||
+      definition.metronomeProductTag !== line.productTag ||
+      productKeys.has(line.productKey as string) ||
+      line.currency !== 'USD'
+    ) {
       fail();
     }
+    productKeys.add(line.productKey as string);
 
-    assertPositiveSafeInteger(line.quantity);
-    assertNonNegativeSafeInteger(line.unitPriceCents);
-    assertNonNegativeSafeInteger(line.totalCents);
+    assertExactIntegerTotal(
+      line.quantity,
+      line.unitPriceCents,
+      line.totalCents,
+    );
     assertDateRange(line.periodStart, line.periodEnd);
   }
 
@@ -274,6 +470,12 @@ const validateCorrelatedSubscriptionLines = (
 ): readonly ManagedEmailCorrelatedSubscriptionLine[] => {
   assertArray(value, MAX_COLLECTION_ITEMS);
 
+  if (value.length === 0) {
+    fail();
+  }
+
+  const subscriptionIds = new Set<string>();
+
   for (const line of value) {
     assertRecord(line, [
       'subscriptionId',
@@ -285,11 +487,15 @@ const validateCorrelatedSubscriptionLines = (
       'endingBefore',
       'isProrated',
     ]);
-    assertString(line.subscriptionId, MAX_IDENTIFIER_LENGTH);
-    assertString(line.productId, MAX_IDENTIFIER_LENGTH);
-    assertPositiveSafeInteger(line.quantity);
-    assertNonNegativeFiniteNumber(line.total);
-    assertNonNegativeFiniteNumber(line.unitPrice);
+    assertUuid(line.subscriptionId);
+    assertUuid(line.productId);
+
+    if (subscriptionIds.has(line.subscriptionId as string)) {
+      fail();
+    }
+    subscriptionIds.add(line.subscriptionId as string);
+
+    assertExactIntegerTotal(line.quantity, line.unitPrice, line.total);
     assertDateRange(line.startingAt, line.endingBefore);
 
     if (typeof line.isProrated !== 'boolean') {

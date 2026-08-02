@@ -210,6 +210,8 @@ describe('managed email persistence entities', () => {
       'address',
       'normalizedAddress',
       'personaCreatedByWorkspaceMemberId',
+      'personaFirstName',
+      'personaLastName',
       'providerType',
       'providerConfigurationKey',
       'warmupMode',
@@ -224,6 +226,12 @@ describe('managed email persistence entities', () => {
     ).toMatchObject({
       default: 1,
       type: 'integer',
+    });
+    expect(
+      columnOptions(ManagedEmailMailboxEntity, 'personaRole'),
+    ).toMatchObject({
+      nullable: true,
+      type: 'text',
     });
     expect(
       columnOptions(ManagedEmailMailboxEntity, 'personaAuditEventId'),
@@ -343,7 +351,7 @@ describe('managed email persistence entities', () => {
     expectNamedCheck(
       ManagedEmailMailboxEntity,
       'CHK_MANAGED_EMAIL_MAILBOX_IDENTITIES_NONEMPTY',
-      `btrim("address") <> '' AND btrim("normalizedAddress") <> '' AND btrim("providerType") <> '' AND btrim("providerConfigurationKey") <> '' AND btrim("readinessPolicyVersion") <> ''`,
+      `btrim("address") <> '' AND btrim("normalizedAddress") <> '' AND btrim("personaFirstName") <> '' AND btrim("personaLastName") <> '' AND btrim("personaSignature") <> '' AND btrim("providerType") <> '' AND btrim("providerConfigurationKey") <> '' AND btrim("readinessPolicyVersion") <> ''`,
     );
   });
 
@@ -479,7 +487,7 @@ describe('managed email persistence entities', () => {
     expectNamedCheck(
       ManagedEmailAcquisitionOperationEntity,
       'CHK_MANAGED_EMAIL_ACQUISITION_REQUIRED_TEXT',
-      `btrim("idempotencyKey") <> '' AND btrim("proposalHash") <> '' AND btrim("quoteHash") <> '' AND btrim("catalogVersion") <> '' AND btrim("metronomeRateCardAlias") <> '' AND btrim("currency") <> '' AND btrim("state") <> ''`,
+      `btrim("idempotencyKey") <> '' AND btrim("proposalHash") <> '' AND btrim("quoteHash") <> '' AND btrim("catalogVersion") <> '' AND btrim("metronomeRateCardAlias") <> '' AND "currency" = 'USD' AND btrim("state") <> ''`,
     );
     expectNamedCheck(
       ManagedEmailAcquisitionOperationEntity,
