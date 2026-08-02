@@ -6,6 +6,7 @@ import { type TwentyConfigService } from 'src/engine/core-modules/twenty-config/
 
 import { WarmupInboxClient } from '../warmup-inbox.client';
 import { WarmupInboxExceptionCode } from '../warmup-inbox.exception';
+import { mapWarmupInboxMetrics } from '../warmup-inbox-response.mapper';
 
 const providerSecret = 'not-a-real-warmup-key';
 const mailboxSecret = 'not-a-real-mailbox-app-password';
@@ -504,7 +505,9 @@ describe('WarmupInboxClient', () => {
 
     httpClient.post
       .mockResolvedValueOnce({ status: 200, data: {}, headers: {} })
+      .mockResolvedValueOnce({ status: 201, data: {}, headers: {} })
       .mockRejectedValueOnce(axiosFailure(409))
+      .mockResolvedValueOnce({ status: 200, data: {}, headers: {} })
       .mockResolvedValueOnce({ status: 201, data: {}, headers: {} })
       .mockRejectedValueOnce(axiosFailure(409));
     httpClient.delete
@@ -513,12 +516,41 @@ describe('WarmupInboxClient', () => {
 
     await expect(client.start('inbox-1')).resolves.toBeUndefined();
     await expect(client.start('inbox-1')).resolves.toBeUndefined();
+    await expect(client.start('inbox-1')).resolves.toBeUndefined();
+    await expect(client.pause('inbox-1')).resolves.toBeUndefined();
     await expect(client.pause('inbox-1')).resolves.toBeUndefined();
     await expect(client.pause('inbox-1')).resolves.toBeUndefined();
     await expect(client.delete('inbox-1')).resolves.toBeUndefined();
     await expect(client.delete('inbox-1')).resolves.toBeUndefined();
-    expect(httpClient.post).toHaveBeenCalledTimes(4);
+    expect(httpClient.post).toHaveBeenCalledTimes(6);
     expect(httpClient.delete).toHaveBeenCalledTimes(2);
+  });
+
+  it('normalizes omitted optional reply counts to zero', () => {
+    const metrics = mapWarmupInboxMetrics({
+      inbox_id: 'inbox-1',
+      start_time: 1_782_864_000,
+      end_time: 1_782_950_400,
+      main_metrics: {
+        total_count: 0,
+        sent: 0,
+        landed_inbox: { value: 0, percent: '0%' },
+        landed_spam: { value: 0, percent: '0%' },
+        landed_category: { value: 0, percent: '0%' },
+      },
+      schedule_metrics: [
+        {
+          date: 'Jul 01, 2026',
+          queued: 2,
+          inbox: 0,
+          category: 0,
+          spam: 0,
+        },
+      ],
+    });
+
+    expect(metrics.totals.repliesReceived).toBe(0);
+    expect(metrics.trend[0].repliesReceived).toBe(0);
   });
 
   it('maps bounded metrics and returns null after delete', async () => {
@@ -590,25 +622,27 @@ describe('WarmupInboxClient', () => {
     ).resolves.toBeNull();
   });
 
-  it('normalizes metric ranges to the provider whole-second precision', async () => {
+  it('accepts a provider reporting range containing the requested seconds', async () => {
     const { client, httpClient } = createClient();
+
+    const metricsResponse = {
+      inbox_id: 'inbox-1',
+      start_time: 1_782_777_600,
+      end_time: 1_783_036_799,
+      main_metrics: {
+        total_count: 0,
+        sent: 0,
+        landed_inbox: { value: 0, percent: '0%' },
+        landed_spam: { value: 0, percent: '0%' },
+        landed_category: { value: 0, percent: '0%' },
+        replies_received: 0,
+      },
+      schedule_metrics: [],
+    };
 
     httpClient.get.mockResolvedValue({
       status: 200,
-      data: {
-        inbox_id: 'inbox-1',
-        start_time: 1_782_864_000,
-        end_time: 1_782_950_400,
-        main_metrics: {
-          total_count: 0,
-          sent: 0,
-          landed_inbox: { value: 0, percent: '0%' },
-          landed_spam: { value: 0, percent: '0%' },
-          landed_category: { value: 0, percent: '0%' },
-          replies_received: 0,
-        },
-        schedule_metrics: [],
-      },
+      data: metricsResponse,
       headers: {},
     });
 
@@ -618,9 +652,22 @@ describe('WarmupInboxClient', () => {
         to: new Date('2026-07-02T00:00:00.999Z'),
       }),
     ).resolves.toMatchObject({
-      from: new Date('2026-07-01T00:00:00.000Z'),
-      to: new Date('2026-07-02T00:00:00.000Z'),
+      from: new Date('2026-06-30T00:00:00.000Z'),
+      to: new Date('2026-07-02T23:59:59.000Z'),
     });
+    httpClient.get.mockResolvedValueOnce({
+      status: 200,
+      data: { ...metricsResponse, end_time: 1_782_950_399 },
+      headers: {},
+    });
+    await expectCode(
+      client.getMetrics('inbox-1', {
+        from: new Date('2026-07-01T00:00:00.999Z'),
+        to: new Date('2026-07-02T00:00:00.999Z'),
+      }),
+      WarmupInboxExceptionCode.MALFORMED_RESPONSE,
+    );
+
     expect(httpClient.get).toHaveBeenCalledWith('/v1/inboxes/inbox-1/metrics', {
       params: { from: 1_782_864_000, to: 1_782_950_400 },
     });

@@ -17,6 +17,7 @@ import {
 
 const MAX_COLLECTION_SIZE = 100;
 const MAX_STRING_LENGTH = 500;
+const MAX_SAFE_INTEGER_DECIMAL_LENGTH = 16;
 
 const malformed = (): never => {
   throw new IcemailException(IcemailExceptionCode.MALFORMED_RESPONSE);
@@ -58,6 +59,18 @@ const asNonNegativeInteger = (value: unknown): number => {
   if (!Number.isSafeInteger(value) || (value as number) < 0) return malformed();
 
   return value as number;
+};
+
+const asProviderCount = (value: unknown): number => {
+  if (
+    typeof value !== 'string' ||
+    value.length > MAX_SAFE_INTEGER_DECIMAL_LENGTH ||
+    !/^(?:0|[1-9]\d*)$/.test(value)
+  ) {
+    return malformed();
+  }
+
+  return asNonNegativeInteger(Number(value));
 };
 
 const asDate = (value: unknown): Date => {
@@ -177,17 +190,24 @@ export const mapIcemailDomainAvailability = (
 
 const mapDomain = (value: unknown): IcemailDomainSummary => {
   const domain = asRecord(value);
+  const mailboxCount = asProviderCount(domain.mailbox_count);
+  const provider =
+    domain.workspace_type === null
+      ? null
+      : asGoogleProvider(domain.workspace_type);
+
+  if (provider === null && mailboxCount !== 0) return malformed();
 
   return {
     id: asString(domain.domain_id),
     domain: asDomain(domain.domain),
     status: asString(domain.status),
     active: asBoolean(domain.active),
-    provider: asGoogleProvider(domain.workspace_type),
+    provider,
     purchased: !asBoolean(domain.import),
     prewarmed: asBoolean(domain.prewarmed),
     blacklisted: asBoolean(domain.blacklisted),
-    mailboxCount: asNonNegativeInteger(domain.mailbox_count),
+    mailboxCount,
     expiresAt: asNullableDate(domain.expires_at),
   };
 };
@@ -303,12 +323,12 @@ export const mapIcemailPrewarmedBundlePage = (
       const bundle = asRecord(rawBundle);
       const domain = asDomain(bundle.domain);
       const rawMailboxes = asArray(bundle.pre_warm_mailbox);
-      const mailboxCount = asNonNegativeInteger(bundle.mailbox_count);
+      const mailboxCount = asProviderCount(bundle.mailbox_count);
 
       if (mailboxCount !== rawMailboxes.length) return malformed();
 
       return {
-        inventoryId: asString(bundle.id),
+        inventoryId: asString(bundle.domain_id),
         domain,
         domainPriceCents: asCents(bundle.per_domain_price),
         mailboxPriceCents: asCents(bundle.per_mailbox_price),

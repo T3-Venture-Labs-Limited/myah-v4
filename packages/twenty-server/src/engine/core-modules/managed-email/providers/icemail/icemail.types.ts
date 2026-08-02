@@ -29,7 +29,7 @@ export type IcemailDomainSummary = {
   domain: string;
   status: string;
   active: boolean;
-  provider: IcemailManagedProvider;
+  provider: IcemailManagedProvider | null;
   purchased: boolean;
   prewarmed: boolean;
   blacklisted: boolean;
