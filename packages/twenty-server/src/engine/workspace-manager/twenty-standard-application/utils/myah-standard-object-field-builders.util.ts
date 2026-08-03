@@ -2722,6 +2722,96 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        campaignBrief: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'campaignBrief',
+            type: FieldMetadataType.RICH_TEXT,
+            label: 'Detailed Campaign brief',
+            description:
+              'The detailed campaign-specific brief: outcome, offer/context, intended creator work, and relevant operating context.',
+            icon: 'IconFileText',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        communicationGuidelines: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'communicationGuidelines',
+            type: FieldMetadataType.RICH_TEXT,
+            label: 'Communication guidelines',
+            description:
+              'Voice, claims, tone, channel, and communication constraints for campaign drafting.',
+            icon: 'IconFileText',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        replyRules: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'replyRules',
+            type: FieldMetadataType.RICH_TEXT,
+            label: 'Reply rules and approved answers',
+            description:
+              'Reply boundaries, approved answer patterns, and situations requiring a draft instead of action.',
+            icon: 'IconFileText',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        escalationBoundaries: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'escalationBoundaries',
+            type: FieldMetadataType.RICH_TEXT,
+            label: 'Escalation boundaries',
+            description:
+              'Situations that must be escalated to an operator and campaign-specific escalation constraints.',
+            icon: 'IconFileText',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        additionalNotes: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'additionalNotes',
+            type: FieldMetadataType.RICH_TEXT,
+            label: 'Additional notes',
+            description:
+              'Campaign-specific material not represented by another guided section.',
+            icon: 'IconFileText',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         campaignCreators: createStandardRelationFieldFlatMetadata({
           objectName: 'campaign',
           workspaceId: args.workspaceId,
