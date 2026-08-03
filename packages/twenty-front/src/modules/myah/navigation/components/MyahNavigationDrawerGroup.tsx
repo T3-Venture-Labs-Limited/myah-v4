@@ -1,3 +1,4 @@
+import { useNavigationDrawerExpanded } from '@/navigation/hooks/useNavigationDrawerExpanded';
 import { isMyahNavigationRouteActive } from '@/myah/navigation/utils/isMyahNavigationRouteActive';
 import { isNavigationSectionOpenFamilyState } from '@/myah/navigation/states/isNavigationSectionOpenFamilyState';
 import {
@@ -57,11 +58,13 @@ export const MyahNavigationDrawerGroup = ({
     isNavigationSectionOpenFamilyState,
     id,
   );
+  const isNavigationDrawerExpanded = useNavigationDrawerExpanded();
   const activeChildIndex = routes.findIndex((route) =>
     isMyahNavigationRouteActive({ route, pathname, search, hash }),
   );
   const hasActiveChild = activeChildIndex !== -1;
   const isExpanded = isNavigationSectionOpen || hasActiveChild;
+  const isGroupContentExpanded = !isNavigationDrawerExpanded || isExpanded;
 
   const toggle = () => {
     if (!hasActiveChild) {
@@ -74,15 +77,17 @@ export const MyahNavigationDrawerGroup = ({
 
   return (
     <NavigationDrawerSection>
-      <StyledGroupToggle
-        type="button"
-        aria-expanded={isExpanded}
-        onClick={toggle}
-      >
-        <Label>{label}</Label>
-      </StyledGroupToggle>
+      {isNavigationDrawerExpanded && (
+        <StyledGroupToggle
+          type="button"
+          aria-expanded={isExpanded}
+          onClick={toggle}
+        >
+          <Label>{label}</Label>
+        </StyledGroupToggle>
+      )}
       <AnimatedExpandableContainer
-        isExpanded={isExpanded}
+        isExpanded={isGroupContentExpanded}
         dimension="height"
         mode="fit-content"
         containAnimation
