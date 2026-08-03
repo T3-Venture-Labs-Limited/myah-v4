@@ -22,17 +22,46 @@ export type ManagedEmailProviderCost =
       termUnit: 'YEAR';
     }>;
 
+export type ManagedEmailPaymentProcessing = Readonly<{
+  maximumVariableFeeBasisPoints: number;
+  maximumFixedFeeMinorUnits: number;
+  currency: 'USD';
+  source: string;
+  verifiedAt: string;
+}>;
+
+export type ManagedEmailLandedProviderCost =
+  | Readonly<{
+      kind: 'SAME_CURRENCY';
+      amountMinorUnits: number;
+      currency: 'USD';
+      source: string;
+      verifiedAt: string;
+    }>
+  | Readonly<{
+      kind: 'FX_CEILING';
+      amountMinorUnits: number;
+      currency: 'USD';
+      sourceCurrency: Exclude<ManagedEmailCurrency, 'USD'>;
+      rateSource: string;
+      verifiedAt: string;
+      safetyBufferBasisPoints: number;
+    }>;
+
 export type ManagedEmailCustomerPrice =
   | Readonly<{
       kind: 'FIXED';
       amountMinorUnits: number;
-      currency: ManagedEmailCurrency;
-      maximumLandedProviderCostMinorUnits: number;
+      currency: 'USD';
+      minimumGrossMarginBasisPoints: 3000;
+      landedProviderCost: ManagedEmailLandedProviderCost;
+      paymentProcessing: ManagedEmailPaymentProcessing;
     }>
   | Readonly<{
       kind: 'PROVIDER_QUOTE_MARGIN';
       currency: 'USD';
       minimumGrossMarginBasisPoints: 3000;
+      paymentProcessing: ManagedEmailPaymentProcessing;
     }>;
 
 export type ManagedEmailProductDefinition = Readonly<{
