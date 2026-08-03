@@ -8,6 +8,7 @@ import { MyahNavigationDrawerSection } from '@/myah/navigation/components/MyahNa
 import { getMyahNavigationRoute } from '@/myah/navigation/myah-navigation-registry';
 import { useResolvedMyahNavigationRoutes } from '@/myah/navigation/hooks/useResolvedMyahNavigationRoutes';
 import { isNavigationSectionOpenFamilyState } from '@/myah/navigation/states/isNavigationSectionOpenFamilyState';
+import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
 import { type ResolvedMyahNavigationRoute } from '@/myah/navigation/types/MyahNavigationRoute';
 
 jest.mock('@/myah/navigation/hooks/useResolvedMyahNavigationRoutes');
@@ -58,13 +59,23 @@ const resolvedRoutes: ResolvedMyahNavigationRoute[] = [
   },
 ];
 
-const renderSection = (initialEntry = '/objects/campaigns') => {
+const renderSection = (
+  initialEntry = '/objects/campaigns',
+  isNavigationDrawerExpanded = true,
+  isCreatorCrmSectionOpen = true,
+) => {
   const store = createStore();
 
   store.set(
     isNavigationSectionOpenFamilyState.atomFamily('campaign-operations'),
     false,
   );
+  store.set(
+    isNavigationSectionOpenFamilyState.atomFamily('creator-crm'),
+    isCreatorCrmSectionOpen,
+  );
+  store.set(isNavigationDrawerExpandedState.atom, isNavigationDrawerExpanded);
+
   mockedUseResolvedMyahNavigationRoutes.mockReturnValue(resolvedRoutes);
 
   const user = userEvent.setup();
@@ -112,6 +123,27 @@ describe('MyahNavigationDrawerSection', () => {
     expect(brandBrainControl).toHaveAttribute('aria-disabled', 'true');
     expect(brandBrainControl).toHaveAttribute('tabindex', '-1');
     expect(brandBrainControl).not.toHaveAttribute('href');
+  });
+
+  it('removes group headers from the collapsed drawer while retaining group route controls', () => {
+    renderSection('/objects/campaigns', false);
+
+    expect(
+      screen.queryByRole('button', { name: 'Creator CRM' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Creators' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Creator Briefs.*Soon/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps routes from closed inactive groups visible in collapsed drawer', () => {
+    renderSection('/objects/campaigns', false, false);
+
+    expect(screen.getByRole('link', { name: 'Creators' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: /Creator Discovery.*Soon/i }),
+    ).toBeVisible();
   });
 
   it('toggles inactive groups with Enter and Space while keeping active groups open', async () => {
