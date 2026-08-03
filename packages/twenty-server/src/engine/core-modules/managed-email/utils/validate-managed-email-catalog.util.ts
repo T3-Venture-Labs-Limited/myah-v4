@@ -6,25 +6,80 @@ import {
 } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 
 const INVALID_CATALOG_ERROR = 'Managed email catalog is invalid';
+const BASIS_POINTS = 10_000;
+const MINIMUM_GROSS_MARGIN_BASIS_POINTS = 3000;
 
-export const minimumCustomerPriceMinorUnits = (
-  providerCostMinorUnits: number,
-): number => {
+const isValidIsoDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+
+  return (
+    Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
+};
+
+export const minimumCustomerPriceMinorUnits = ({
+  landedProviderCostMinorUnits,
+  maximumVariableFeeBasisPoints,
+  maximumFixedFeeMinorUnits,
+}: {
+  landedProviderCostMinorUnits: number;
+  maximumVariableFeeBasisPoints: number;
+  maximumFixedFeeMinorUnits: number;
+}): number => {
   if (
-    !Number.isSafeInteger(providerCostMinorUnits) ||
-    providerCostMinorUnits <= 0
+    !Number.isSafeInteger(landedProviderCostMinorUnits) ||
+    landedProviderCostMinorUnits <= 0 ||
+    !Number.isSafeInteger(maximumVariableFeeBasisPoints) ||
+    maximumVariableFeeBasisPoints < 0 ||
+    maximumVariableFeeBasisPoints >=
+      BASIS_POINTS - MINIMUM_GROSS_MARGIN_BASIS_POINTS ||
+    !Number.isSafeInteger(maximumFixedFeeMinorUnits) ||
+    maximumFixedFeeMinorUnits < 0
   ) {
     throw new Error(INVALID_CATALOG_ERROR);
   }
 
-  const result =
-    (BigInt(providerCostMinorUnits) * BigInt(10) + BigInt(6)) / BigInt(7);
+  const basisPoints = BigInt(BASIS_POINTS);
+  const variableFeeBasisPoints = BigInt(maximumVariableFeeBasisPoints);
+  const fixedFeeMinorUnits = BigInt(maximumFixedFeeMinorUnits);
+  const totalFixedCostMinorUnits =
+    BigInt(landedProviderCostMinorUnits) + fixedFeeMinorUnits;
+  const availableBasisPoints = BigInt(
+    BASIS_POINTS -
+      MINIMUM_GROSS_MARGIN_BASIS_POINTS -
+      maximumVariableFeeBasisPoints,
+  );
+  let priceMinorUnits =
+    (totalFixedCostMinorUnits * basisPoints +
+      availableBasisPoints -
+      BigInt(1)) /
+    availableBasisPoints;
 
-  if (result > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new Error(INVALID_CATALOG_ERROR);
+  while (priceMinorUnits <= BigInt(Number.MAX_SAFE_INTEGER)) {
+    const variableFeeMinorUnits =
+      (priceMinorUnits * variableFeeBasisPoints + basisPoints - BigInt(1)) /
+      basisPoints;
+    const marginMinorUnits =
+      priceMinorUnits -
+      BigInt(landedProviderCostMinorUnits) -
+      fixedFeeMinorUnits -
+      variableFeeMinorUnits;
+
+    if (
+      marginMinorUnits * basisPoints >=
+      priceMinorUnits * BigInt(MINIMUM_GROSS_MARGIN_BASIS_POINTS)
+    ) {
+      return Number(priceMinorUnits);
+    }
+
+    priceMinorUnits += BigInt(1);
   }
 
-  return Number(result);
+  throw new Error(INVALID_CATALOG_ERROR);
 };
 
 const hasApprovedProviderCost = (
@@ -55,36 +110,109 @@ const hasApprovedProviderCost = (
     providerCost.currency === approvedProviderCost.currency &&
     providerCost.source === approvedProviderCost.source &&
     providerCost.verifiedAt === approvedProviderCost.verifiedAt &&
-    /^\d{4}-\d{2}-\d{2}$/.test(providerCost.verifiedAt) &&
-    Number.isFinite(Date.parse(`${providerCost.verifiedAt}T00:00:00.000Z`))
+    isValidIsoDate(providerCost.verifiedAt)
   );
 };
 
+const hasValidEvidence = (source: string, verifiedAt: string): boolean =>
+  typeof source === 'string' &&
+  source.trim() !== '' &&
+  isValidIsoDate(verifiedAt);
+
+const hasValidPaymentProcessing = (
+  customerPrice: ManagedEmailCatalogProduct['customerPrice'],
+): boolean => {
+  const paymentProcessing = customerPrice.paymentProcessing;
+
+  return (
+    paymentProcessing.currency === 'USD' &&
+    Number.isSafeInteger(paymentProcessing.maximumVariableFeeBasisPoints) &&
+    paymentProcessing.maximumVariableFeeBasisPoints >= 0 &&
+    paymentProcessing.maximumVariableFeeBasisPoints <
+      BASIS_POINTS - MINIMUM_GROSS_MARGIN_BASIS_POINTS &&
+    Number.isSafeInteger(paymentProcessing.maximumFixedFeeMinorUnits) &&
+    paymentProcessing.maximumFixedFeeMinorUnits >= 0 &&
+    hasValidEvidence(paymentProcessing.source, paymentProcessing.verifiedAt)
+  );
+};
+
+const hasValidLandedProviderCost = (
+  product: ManagedEmailCatalogProduct,
+): boolean => {
+  if (
+    product.providerCost.kind !== 'FIXED' ||
+    product.customerPrice.kind !== 'FIXED'
+  ) {
+    return false;
+  }
+
+  const landedProviderCost = product.customerPrice.landedProviderCost;
+
+  if (
+    landedProviderCost.currency !== 'USD' ||
+    !Number.isSafeInteger(landedProviderCost.amountMinorUnits) ||
+    landedProviderCost.amountMinorUnits <= 0
+  ) {
+    return false;
+  }
+
+  if (landedProviderCost.kind === 'SAME_CURRENCY') {
+    return (
+      product.providerCost.currency === 'USD' &&
+      landedProviderCost.amountMinorUnits >=
+        product.providerCost.amountMinorUnits &&
+      hasValidEvidence(landedProviderCost.source, landedProviderCost.verifiedAt)
+    );
+  }
+
+  return (
+    landedProviderCost.kind === 'FX_CEILING' &&
+    product.providerCost.currency !== 'USD' &&
+    landedProviderCost.sourceCurrency === product.providerCost.currency &&
+    Number.isSafeInteger(landedProviderCost.safetyBufferBasisPoints) &&
+    landedProviderCost.safetyBufferBasisPoints >= 0 &&
+    landedProviderCost.safetyBufferBasisPoints < BASIS_POINTS &&
+    hasValidEvidence(
+      landedProviderCost.rateSource,
+      landedProviderCost.verifiedAt,
+    )
+  );
+};
 const hasValidCustomerPrice = (
   product: ManagedEmailCatalogProduct,
 ): boolean => {
   const { providerCost, customerPrice } = product;
 
+  if (
+    customerPrice.currency !== 'USD' ||
+    customerPrice.minimumGrossMarginBasisPoints !==
+      MINIMUM_GROSS_MARGIN_BASIS_POINTS ||
+    !hasValidPaymentProcessing(customerPrice)
+  ) {
+    return false;
+  }
+
   if (providerCost.kind === 'PROVIDER_QUOTE') {
     return (
       customerPrice.kind === 'PROVIDER_QUOTE_MARGIN' &&
-      customerPrice.currency === providerCost.currency &&
-      customerPrice.minimumGrossMarginBasisPoints === 3000
+      providerCost.currency === 'USD'
     );
   }
 
   return (
     customerPrice.kind === 'FIXED' &&
-    customerPrice.currency === providerCost.currency &&
     Number.isSafeInteger(customerPrice.amountMinorUnits) &&
     customerPrice.amountMinorUnits > 0 &&
-    Number.isSafeInteger(customerPrice.maximumLandedProviderCostMinorUnits) &&
-    customerPrice.maximumLandedProviderCostMinorUnits >=
-      providerCost.amountMinorUnits &&
+    hasValidLandedProviderCost(product) &&
     customerPrice.amountMinorUnits >=
-      minimumCustomerPriceMinorUnits(
-        customerPrice.maximumLandedProviderCostMinorUnits,
-      )
+      minimumCustomerPriceMinorUnits({
+        landedProviderCostMinorUnits:
+          customerPrice.landedProviderCost.amountMinorUnits,
+        maximumVariableFeeBasisPoints:
+          customerPrice.paymentProcessing.maximumVariableFeeBasisPoints,
+        maximumFixedFeeMinorUnits:
+          customerPrice.paymentProcessing.maximumFixedFeeMinorUnits,
+      })
   );
 };
 
@@ -136,12 +264,31 @@ export const validateManagedEmailCatalog = (
   }
 
   const products: ManagedEmailCatalogProduct[] = catalog.products.map(
-    (product) =>
-      Object.freeze({
+    (product) => {
+      const customerPrice =
+        product.customerPrice.kind === 'FIXED'
+          ? Object.freeze({
+              ...product.customerPrice,
+              landedProviderCost: Object.freeze({
+                ...product.customerPrice.landedProviderCost,
+              }),
+              paymentProcessing: Object.freeze({
+                ...product.customerPrice.paymentProcessing,
+              }),
+            })
+          : Object.freeze({
+              ...product.customerPrice,
+              paymentProcessing: Object.freeze({
+                ...product.customerPrice.paymentProcessing,
+              }),
+            });
+
+      return Object.freeze({
         ...product,
         providerCost: Object.freeze({ ...product.providerCost }),
-        customerPrice: Object.freeze({ ...product.customerPrice }),
-      }),
+        customerPrice,
+      });
+    },
   );
 
   return Object.freeze({

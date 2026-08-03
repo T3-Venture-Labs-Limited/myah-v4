@@ -19,8 +19,16 @@ type MutableManagedEmailCatalog = {
   products: Mutable<ManagedEmailCatalog['products'][number]>[];
 };
 
+const paymentProcessing = () => ({
+  maximumVariableFeeBasisPoints: 290,
+  maximumFixedFeeMinorUnits: 30,
+  currency: 'USD' as const,
+  source: 'Illustrative Stripe test fixture',
+  verifiedAt: '2026-08-03',
+});
+
 const validCatalog = (): MutableManagedEmailCatalog => ({
-  version: 'test-catalog-2026-08-02',
+  version: 'test-catalog-2026-08-03',
   products: [
     {
       ...structuredClone(MANAGED_EMAIL_PRODUCT_DEFINITIONS[0]),
@@ -28,24 +36,43 @@ const validCatalog = (): MutableManagedEmailCatalog => ({
         kind: 'PROVIDER_QUOTE_MARGIN',
         currency: 'USD',
         minimumGrossMarginBasisPoints: 3000,
+        paymentProcessing: paymentProcessing(),
       },
     },
     {
       ...structuredClone(MANAGED_EMAIL_PRODUCT_DEFINITIONS[1]),
       customerPrice: {
         kind: 'FIXED',
-        amountMinorUnits: 358,
+        amountMinorUnits: 419,
         currency: 'USD',
-        maximumLandedProviderCostMinorUnits: 250,
+        minimumGrossMarginBasisPoints: 3000,
+        landedProviderCost: {
+          kind: 'SAME_CURRENCY',
+          amountMinorUnits: 250,
+          currency: 'USD',
+          source: 'Illustrative same-currency test ceiling',
+          verifiedAt: '2026-08-03',
+        },
+        paymentProcessing: paymentProcessing(),
       },
     },
     {
       ...structuredClone(MANAGED_EMAIL_PRODUCT_DEFINITIONS[2]),
       customerPrice: {
         kind: 'FIXED',
-        amountMinorUnits: 3285,
-        currency: 'EUR',
-        maximumLandedProviderCostMinorUnits: 2299,
+        amountMinorUnits: 4070,
+        currency: 'USD',
+        minimumGrossMarginBasisPoints: 3000,
+        landedProviderCost: {
+          kind: 'FX_CEILING',
+          amountMinorUnits: 2700,
+          currency: 'USD',
+          sourceCurrency: 'EUR',
+          rateSource: 'Illustrative test FX policy',
+          verifiedAt: '2026-08-03',
+          safetyBufferBasisPoints: 500,
+        },
+        paymentProcessing: paymentProcessing(),
       },
     },
   ],
@@ -112,30 +139,66 @@ describe('validateManagedEmailCatalog', () => {
     );
     expect(Object.isFrozen(validated.products[0].providerCost)).toBe(true);
     expect(Object.isFrozen(validated.products[0].customerPrice)).toBe(true);
+    expect(
+      Object.isFrozen(validated.products[0].customerPrice.paymentProcessing),
+    ).toBe(true);
+    const fixedPrice = validated.products[2].customerPrice;
+
+    if (fixedPrice.kind !== 'FIXED') {
+      throw new Error('Expected fixed warmup test price');
+    }
+    expect(Object.isFrozen(fixedPrice.landedProviderCost)).toBe(true);
   });
 
-  it('calculates a 30 percent margin floor in one unchanged currency', () => {
-    expect(minimumCustomerPriceMinorUnits(1)).toBe(2);
-    expect(minimumCustomerPriceMinorUnits(70)).toBe(100);
-    expect(minimumCustomerPriceMinorUnits(101)).toBe(145);
-    expect(minimumCustomerPriceMinorUnits(250)).toBe(358);
-    expect(minimumCustomerPriceMinorUnits(2299)).toBe(3285);
+  it('calculates the exact 30 percent margin floor after payment processing', () => {
+    expect(
+      minimumCustomerPriceMinorUnits({
+        landedProviderCostMinorUnits: 1,
+        maximumVariableFeeBasisPoints: 0,
+        maximumFixedFeeMinorUnits: 0,
+      }),
+    ).toBe(2);
+    expect(
+      minimumCustomerPriceMinorUnits({
+        landedProviderCostMinorUnits: 250,
+        maximumVariableFeeBasisPoints: 0,
+        maximumFixedFeeMinorUnits: 0,
+      }),
+    ).toBe(358);
+    expect(
+      minimumCustomerPriceMinorUnits({
+        landedProviderCostMinorUnits: 250,
+        maximumVariableFeeBasisPoints: 290,
+        maximumFixedFeeMinorUnits: 30,
+      }),
+    ).toBe(419);
+    expect(
+      minimumCustomerPriceMinorUnits({
+        landedProviderCostMinorUnits: 2700,
+        maximumVariableFeeBasisPoints: 290,
+        maximumFixedFeeMinorUnits: 30,
+      }),
+    ).toBe(4070);
   });
 
   it('rejects a margin result outside the safe-integer boundary', () => {
     expect(() =>
-      minimumCustomerPriceMinorUnits(Number.MAX_SAFE_INTEGER),
+      minimumCustomerPriceMinorUnits({
+        landedProviderCostMinorUnits: Number.MAX_SAFE_INTEGER,
+        maximumVariableFeeBasisPoints: 290,
+        maximumFixedFeeMinorUnits: 30,
+      }),
     ).toThrow('Managed email catalog is invalid');
   });
 
-  it('rejects a fixed customer price below its same-currency landed-cost ceiling', () => {
+  it('rejects a fixed customer price below its post-fee margin floor', () => {
     const catalog = validCatalog();
-    const warmup = catalog.products[2];
+    const mailbox = catalog.products[1];
 
-    if (warmup.customerPrice.kind !== 'FIXED') {
-      throw new Error('Expected fixed warmup test price');
+    if (mailbox.customerPrice.kind !== 'FIXED') {
+      throw new Error('Expected fixed mailbox test price');
     }
-    warmup.customerPrice.amountMinorUnits = 3284;
+    mailbox.customerPrice.amountMinorUnits = 418;
 
     expect(() => validateManagedEmailCatalog(catalog)).toThrow(
       'Managed email catalog is invalid',
@@ -165,13 +228,50 @@ describe('validateManagedEmailCatalog', () => {
       },
     ],
     [
-      'cross-currency fixed price without an approved FX policy',
+      'non-USD customer price',
+      (c: MutableManagedEmailCatalog) => {
+        const warmup = c.products[2];
+
+        (warmup.customerPrice as { currency: string }).currency = 'EUR';
+      },
+    ],
+    [
+      'foreign provider cost without an FX ceiling',
       (c: MutableManagedEmailCatalog) => {
         const warmup = c.products[2];
 
         if (warmup.customerPrice.kind === 'FIXED') {
-          warmup.customerPrice.currency = 'USD';
+          warmup.customerPrice.landedProviderCost = {
+            kind: 'SAME_CURRENCY',
+            amountMinorUnits: 2700,
+            currency: 'USD',
+            source: 'Wrong same-currency claim',
+            verifiedAt: '2026-08-03',
+          };
         }
+      },
+    ],
+    [
+      'unknown landed-cost discriminant',
+      (c: MutableManagedEmailCatalog) => {
+        const warmup = c.products[2];
+
+        if (warmup.customerPrice.kind === 'FIXED') {
+          (warmup.customerPrice.landedProviderCost as { kind: string }).kind =
+            'UNKNOWN';
+        }
+      },
+    ],
+    [
+      'impossible evidence date',
+      (c: MutableManagedEmailCatalog) => {
+        c.products[0].customerPrice.paymentProcessing.verifiedAt = '2026-02-30';
+      },
+    ],
+    [
+      'blank payment-processing evidence',
+      (c: MutableManagedEmailCatalog) => {
+        c.products[0].customerPrice.paymentProcessing.source = ' ';
       },
     ],
     [
