@@ -143,6 +143,27 @@ export const RecordChip = ({
 
   return isDefined(onClick) && !shouldFollowLinkOnClick ? (
     <span
+      onClickCapture={(event) => {
+        if (triggerEvent !== 'MOUSE_DOWN' || event.detail !== 0) {
+          return;
+        }
+
+        const link =
+          event.target instanceof Element ? event.target.closest('a') : null;
+
+        if (!isDefined(link)) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        link.dispatchEvent(
+          new globalThis.MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      }}
       onKeyDown={(event) => {
         if (event.key === ' ') {
           event.preventDefault();

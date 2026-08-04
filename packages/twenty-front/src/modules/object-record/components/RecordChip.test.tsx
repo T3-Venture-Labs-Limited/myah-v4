@@ -136,11 +136,13 @@ describe('RecordChip identifier navigation', () => {
   );
 
   it.each([
-    ['Enter', '{Enter}'],
-    ['Space', ' '],
-  ])(
-    'uses a custom Creator List record-show handler without navigation on %s',
-    async (_activation, key) => {
+    ['CLICK', 'Enter', '{Enter}'],
+    ['CLICK', 'Space', ' '],
+    ['MOUSE_DOWN', 'Enter', '{Enter}'],
+    ['MOUSE_DOWN', 'Space', ' '],
+  ] as const)(
+    'uses a custom Creator List record-show handler without navigation on %s %s',
+    async (triggerEvent, _activation, key) => {
       const user = userEvent.setup();
       let activationElement: EventTarget | null = null;
 
@@ -153,7 +155,7 @@ describe('RecordChip identifier navigation', () => {
             objectNameSingular="creatorList"
             record={{ id: 'list-id' } as never}
             to="/objects/creator-lists/list-id"
-            triggerEvent="CLICK"
+            triggerEvent={triggerEvent}
             onClick={(event) => {
               activationElement = event.currentTarget;
               openGenericRecordInSidePanel(event);
@@ -175,6 +177,39 @@ describe('RecordChip identifier navigation', () => {
       );
     },
   );
+
+  it('uses a custom Creator List handler once without navigation on MOUSE_DOWN click activation', () => {
+    let activationElement: EventTarget | null = null;
+
+    render(
+      <MemoryRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        initialEntries={['/objects/creator-lists']}
+      >
+        <RecordChip
+          objectNameSingular="creatorList"
+          record={{ id: 'list-id' } as never}
+          to="/objects/creator-lists/list-id"
+          triggerEvent="MOUSE_DOWN"
+          onClick={(event) => {
+            activationElement = event.currentTarget;
+            openGenericRecordInSidePanel(event);
+          }}
+        />
+        <CurrentLocation />
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole('link', { name: /Creator List/ });
+
+    fireEvent.click(link);
+
+    expect(openGenericRecordInSidePanel).toHaveBeenCalledTimes(1);
+    expect(activationElement).toBe(link);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '/objects/creator-lists',
+    );
+  });
 
   it.each([
     ['CLICK', 'click'],

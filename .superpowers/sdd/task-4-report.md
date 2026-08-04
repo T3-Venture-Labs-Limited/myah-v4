@@ -369,3 +369,62 @@ It exits 2 solely with the documented baseline diagnostics in Front Components (
 ### Concerns
 
 The strict frontend typecheck retains its pre-existing unrelated diagnostics listed above. No formatter, lint, Nx, build, browser, push, deploy, or external action was run.
+
+## MOUSE_DOWN custom click activation repair
+
+### LSP reference evidence
+
+Before changing the exported `RecordChip` component, `typescript-language-server` `textDocument/references` found 51 `RecordChip` references across 21 frontend files after opening the component consumers, and exactly two `RecordChipProps` references (its declaration and component annotation). The consumer pass includes all direct component callers; no production caller provides an `onClick` override outside the existing native interception seam, so the repair stays within `RecordChip`.
+
+### RED
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+The added MOUSE_DOWN Enter and click regressions failed as expected: each callback was invoked zero times (`Expected number of calls: 1; Received number of calls: 0`). The other 11 RecordChip tests passed.
+
+### GREEN
+
+The focused RecordChip command passed after the repair:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       14 passed, 14 total
+Snapshots:   0 total
+```
+
+The required Task 1/Task 4 regression command also passed:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 4 passed, 4 total
+Tests:       28 passed, 28 total
+Snapshots:   0 total
+```
+
+Fresh strict frontend check:
+
+```bash
+npx tsgo -p packages/twenty-front/tsconfig.json --noEmit
+```
+
+The command exits 2 only with the existing baseline diagnostics: Front Components missing `twenty-front-component-renderer` plus its cascading implicit-any/type diagnostics; Myah Inbox `MyahInboxContext`; Settings billing `TabButtonProps.role`; SidePanel `MyahInboxContext`; and `RecordIndexPage.test.tsx` TS2556. It reports no diagnostic from `RecordChip.tsx` or `RecordChip.test.tsx`.
+
+### Self-review
+
+- The capture handler only runs for a supplied custom override, MOUSE_DOWN mode, and zero-detail keyboard/assistive clicks. It cancels that click, then dispatches the existing native MOUSE_DOWN trigger on the actual nested link, so the configured callback receives the real link current target exactly once.
+- Physical mouse activation keeps the existing MOUSE_DOWN callback path; the click has nonzero detail and is left to the existing LinkChip suppression. No custom override means the wrapper is not rendered, retaining native behavior.
+- The MOUSE_DOWN Space regression remains single-invocation, and the preserved no-override MOUSE_DOWN test still follows the native Creator List route.
+- No payload, table/Board, focus/layout, route, scope/cache, data/API/schema/migration/provider, or external-action behavior changed.
+
+### Commit
+
+`fix(myah): handle keyboard record chip activation`
+
+### Concerns
+
+The strict frontend typecheck retains only the documented unrelated baseline diagnostics. No formatter, linter, Nx, build, browser, push, deploy, or external action was run.
