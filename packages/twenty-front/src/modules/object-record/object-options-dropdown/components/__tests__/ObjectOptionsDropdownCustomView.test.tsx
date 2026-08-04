@@ -229,6 +229,9 @@ describe('ObjectOptionsDropdownCustomView', () => {
 
     render(<ObjectOptionsDropdownCustomView />);
 
+    expect(screen.getByTestId('selectable-item-ids')).toHaveTextContent(
+      'Visibility,Fields,Delete view',
+    );
     expect(screen.getByTestId('selectable-item-ids')).not.toHaveTextContent(
       'CalendarDateField',
     );

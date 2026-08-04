@@ -182,11 +182,11 @@ const CurrentLocation = () => {
   return <output data-testid="location">{location.pathname}</output>;
 };
 
-const renderWorkspace = () =>
+const renderWorkspace = (initialEntry = '/objects/creator-lists') =>
   render(
     <MemoryRouter
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      initialEntries={['/objects/creator-lists']}
+      initialEntries={[initialEntry]}
     >
       <CreatorListWorkspace />
       <CurrentLocation />
@@ -239,6 +239,15 @@ describe('CreatorListWorkspace', () => {
     expect(mockScopedCreatorIndex).toHaveBeenLastCalledWith(
       expect.objectContaining({ creatorListId: 'list-a' }),
     );
+  });
+
+  it('opens the selected Creator List pane from the Creator Lists return route', () => {
+    renderWorkspace('/objects/creator-lists?creatorListId=list-a');
+
+    expect(screen.getByTestId('scoped-creator-index-list-a')).toBeVisible();
+    expect(
+      screen.getByText('Viewing Creators for Creator List List A.'),
+    ).toBeVisible();
   });
 
   it('uses exact equal desktop panes, replaces stale selections, and closes without navigation', async () => {

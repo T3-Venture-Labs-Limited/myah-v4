@@ -728,7 +728,456 @@ npx oxfmt --check packages/twenty-front/src/modules/myah/creator-crm/contexts/Cr
 ### Commit
 
 Focused repair commit: `fix(myah): complete MYAH-229 review repairs`.
+Commit SHA: `9e94a4254`.
 
 ### Concerns
 
 None. No project-wide lint, Nx, build, browser, push, deployment, or external action was run.
+
+## Scoped native-index isolation repair
+
+### LSP reference evidence
+
+Before changing exported index seams, `typescript-language-server` `textDocument/references` was run from `packages/twenty-front`:
+
+- `RecordIndexSurfaceProps`: `RecordIndexSurface.tsx:43,52,238`.
+- `RecordIndexContextValue`: `RecordIndexContext.ts:15,39`; focused typed test consumers at `useOpenRecordFromIndexView.test.tsx:5,55` and `RecordTableWithWrappers.test.tsx:7,74`.
+- `ViewPickerDropdown`: its declaration plus both `ViewBar.tsx` render sites.
+
+The surface/view-picker callers and all production consumers of `VIEW_PICKER_DROPDOWN_ID`, `VIEW_SORT_DROPDOWN_ID`, and `ViewBarFilterDropdownIds.*` were migrated to the scoped control-ID context; remaining constant references are only the context defaults/formula, constants, stories, and an existing default-context test.
+
+### RED
+
+```bash
+cd packages/twenty-front
+npx jest src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx --config=jest.config.mjs --runInBand
+```
+
+The new scoped-view regression failed with `viewId: "creator-default-view"` instead of `"creator-secondary-view"`; the retry regression failed because no accessible Retry button existed.
+
+```bash
+npx jest src/modules/views/components/__tests__/ViewBarControlIds.test.tsx --config=jest.config.mjs --runInBand
+```
+
+Failed because `ViewBarControlIdsContext` did not exist.
+
+```bash
+npx jest src/modules/object-record/record-table/components/__tests__/RecordTableWithWrappers.test.tsx --config=jest.config.mjs --runInBand
+```
+
+The scoped table Ctrl/Cmd+A regression failed with `focusId: "record-index"` rather than `"record-index-creator-index-list-a"`.
+
+### GREEN
+
+Focused scoped-defect regressions:
+
+```text
+Test Suites: 3 passed, 3 total
+Tests:       10 passed, 10 total
+Snapshots:   0 total
+```
+
+Final planned regression command:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/record-index/components/__tests__/RecordIndexSurface.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useCreatorListContext.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListMembershipFilterEffect.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useApplyCreatorBulkRelationship.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/MyahCreatorBulkRemovalStaleContext.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 10 passed, 10 total
+Tests:       69 passed, 69 total
+Snapshots:   0 total
+```
+
+```bash
+npx tsgo -p packages/twenty-front/tsconfig.json --noEmit
+```
+
+Targeted `npx oxlint --type-aware` and `npx oxfmt --check` were run against each of the 36 changed source/test files enumerated in the commit boundary, excluding this report.
+
+`tsgo` exited 0 with no output; `oxlint` reported 0 warnings and 0 errors; `oxfmt` reported all 36 files correctly formatted.
+
+### Changed files
+
+- Native seam and scope: `RecordIndexContext.ts`, `RecordIndexSurface.tsx`, `RecordIndexViewBar.tsx`, `ViewBar.tsx`, `ViewPickerDropdown.tsx`, `ViewPickerListContent.tsx`, `CreatorListScopedCreatorIndex.tsx`.
+- Scoped control IDs: `ViewBarControlIdsContext.tsx`, `ViewPickerContentCreateMode.tsx`, `ViewPickerContentEditMode.tsx`, `useCloseAndResetViewPicker.ts`, `useOpenCreateViewDropown.ts`, `UpdateViewButtonGroup.tsx`, `CreateNewViewNoSelectionRecordCommand.tsx`, `ObjectOptionsDropdownMenuViewName.tsx`, and all ViewBar filter/advanced-filter descendants.
+- Focus routing: `useRecordIndexFocusId.ts`, `useResetFocusStackToRecordIndex.ts`, `RecordTableWithWrappers.tsx`, table Escape/navigation effects, and `useLeaveTableFocus.ts`.
+- Regressions: `CreatorListScopedCreatorIndex.test.tsx`, `ViewBarControlIds.test.tsx`, and `RecordTableWithWrappers.test.tsx`.
+
+### Self-review
+
+- View-picker, filter, sort, and advanced-filter IDs derive from each record-index ID; the main surface continues to use its existing focus identity while each scoped table owns a distinct one.
+- Scoped view selection is React-local to the List ID, invokes no URL-changing `changeView`, remounts the native surface by its selected view, and builds Creator record URLs from that active scoped view.
+- Pointer capture activates the table's focus identity before native descendants handle mouse input; Ctrl/Cmd+A, Escape, row navigation, and leave-table reset use the same identity.
+- The error path keeps Back intact and presents an accessible twenty-ui Retry button wired to `useFindOneRecord`'s real `refetch`.
+
+### Commit
+
+`8947d6ec9` — `fix(myah): isolate scoped native indexes`
+
+### Concerns
+
+None. No Nx/full lint/build/browser, push, deployment, or external action was run.
+
+## Scoped native-index isolation final verification
+
+### RED
+
+- `useLoadRecordIndexStates.test.tsx` initially failed because a scoped initial load left the scoped record-index field state empty.
+- `useChangeView.test.tsx` initially failed because the supplied scoped callback was not invoked and the shared URL setter remained the only transition path.
+- `ViewBarControlIds.test.tsx` initially failed because simultaneous record indexes received the same native-control IDs.
+- `CreatorListScopedCreatorIndex.test.tsx` and `RecordTableWithWrappers.test.tsx` initially failed for scoped create/delete transitions and table focus/click-listener isolation; the close regression initially observed no reset to `PageFocusId.RecordIndex`.
+
+### GREEN
+
+Focused isolation regressions:
+
+```bash
+cd packages/twenty-front
+npx jest src/modules/views/components/__tests__/ViewBarControlIds.test.tsx src/modules/views/hooks/__tests__/useChangeView.test.tsx src/modules/object-record/record-index/hooks/__tests__/useLoadRecordIndexStates.test.tsx src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx --config=jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 4 passed, 4 total
+Tests:       12 passed, 12 total
+Snapshots:   0 total
+```
+
+The prescribed MYAH-229 10-suite command completed with `10 passed, 10 total` and `70 passed, 70 total`.
+
+### Verification
+
+- `npx tsgo -p packages/twenty-front/tsconfig.json --noEmit` exited 0.
+- Targeted `npx oxlint --type-aware` across the changed source and regression files reported `0 warnings and 0 errors`.
+- Targeted `npx oxfmt --check` across those files reported all 48 files correctly formatted.
+- No Nx/full lint/build/browser, push, deployment, or external action was run.
+
+### Self-review
+
+- The initial view-field synchronization now carries the computed `recordIndexId` while retaining `skipGlobalIndexStates`, so the scoped table is initialized before SSE.
+- `ViewBarControlIdsProvider` encloses the complete mounted record-index surface. Picker, filters, sort, any-field search, update menu, object-options content, add-column, and remove-sorting controls derive per-surface IDs. The object-options context carries its scoped dropdown ID through selectable/focus/close sites.
+- `useChangeView` defaults to `useSetViewInUrl`, but scoped selection, creation, deletion, and dropdown paths pass the Creator List callback. The active scoped view stays React-local and supplies record-show URLs.
+- Click-outside activation is keyed by `recordTableId` in table, body, and cell-edit lifecycle hooks, preventing one table's drag/edit listener state from changing another's.
+- Scoped Close resets to `PageFocusId.RecordIndex` before preserving the existing source-aware DOM restoration path.
+
+### Commit
+
+`bfe412cdb` — `fix(myah): complete scoped native index isolation`
+
+### Concerns
+
+None.
+
+## Final audit repairs
+
+### LSP reference evidence
+
+Before changing the shared record-index identity derivation, `typescript-language-server` was initialized against this worktree and queried for `getRecordIndexIdFromObjectNamePluralAndViewId`. The server returned its declaration; the focused source-reference pass then identified the context builder and `RecordIndexSurface` as the namespace-producing paths. The repair adds a context-aware sibling derivation and moves both surface identities plus headless command construction onto it.
+
+### RED
+
+```bash
+npx jest packages/twenty-front/src/modules/command-menu-item/engine-command/utils/__tests__/buildHeadlessCommandContextApi.test.ts packages/twenty-front/src/modules/views/view-picker/components/__tests__/ViewPickerOptionDropdown.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/hooks/__tests__/useUpdateObjectViewOptions.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownLayoutOpenInContent.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+Observed the expected defects: scoped command context returned `creators-creator-view-a` instead of `creators-creator-view-a-creator-list-pane-list-a`; picker options rendered the unscoped menu ID; scoped Open In changed the main atom and selected the main value; and desktop still exposed `Back to Creator Lists` rather than `Close Creator List`.
+
+### GREEN
+
+The focused regression command passed:
+
+```text
+Test Suites: 5 passed, 5 total
+Tests:       16 passed, 16 total
+Snapshots:   0 total
+```
+
+### Verification
+
+- Prescribed MYAH-229 suite: 10 passed, 10 total; 72 passed tests.
+- `npx tsgo -p packages/twenty-front/tsconfig.json --noEmit`: exited 0 with no output.
+- Targeted `npx oxlint --type-aware`: 0 warnings and 0 errors across 12 changed source/test files.
+- Targeted `npx oxfmt --check`: all 12 changed source/test files correctly formatted.
+- No Nx/build/browser/push/deploy/external action was run.
+
+### Self-review
+
+- Main `recordIndexId` output stays byte-identical; isolated surfaces and headless commands now invoke the same context-aware derivation.
+- The picker menu now receives the exact ID used by its close actions.
+- Scoped Open In persists through its scoped current-view updater without touching the main atom; main-context updates retain both existing atom writes.
+- The scoped pane preserves its reset-then-close callback; only mobile uses Back semantics while desktop exposes Close semantics.
+
+### Commit
+
+`4ee02ffdd` — `fix(myah): repair final creator list audit findings`
+
+### Concerns
+
+None.
+
+## Concluding-review repairs
+
+### LSP
+
+No exported API or shared context contract changed. The repairs consume existing `viewType`, current-view, control-ID, context-store, and index-open seams, so no exported-symbol reference migration was required.
+
+### RED
+
+Before production edits, wrote one observable regression per finding and observed each fail:
+
+```bash
+cd packages/twenty-front
+npx jest src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx src/modules/views/view-picker/hooks/__tests__/useCloseAndResetViewPicker.test.tsx src/modules/object-record/record-board/hooks/__tests__/useRecordBoardCardHotkeys.test.tsx --config=jest.config.mjs --runInBand
+```
+
+- A missing List lookup rendered `Viewing Creators for Creator List list-a.`
+- Scoped picker cleanup closed legacy Kanban/View Type IDs and omitted the Calendar field ID.
+- Board Enter used the side-panel path instead of the index-open interceptor.
+
+After correcting test-only harness mocks, the remaining RED checks were:
+
+```bash
+cd packages/twenty-front
+npx jest src/modules/object-record/record-table/hooks/__tests__/useCreateNewIndexRecord.test.tsx src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownLayoutContent.test.tsx src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx --config=jest.config.mjs --runInBand
+```
+
+- Scoped Creator create used the main `SIDE_PANEL` atom rather than its current `RECORD_PAGE` view.
+- A forced Table still rendered Table/Kanban/Calendar and Board Layout controls; its Open In parent summarized global Side Panel rather than scoped Record Page.
+- The forced Table Fields summary showed the Board's `9 shown` instead of the scoped Table's `2 shown`.
+
+### GREEN
+
+```bash
+cd packages/twenty-front
+npx jest src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx src/modules/views/view-picker/hooks/__tests__/useCloseAndResetViewPicker.test.tsx src/modules/object-record/record-table/hooks/__tests__/useCreateNewIndexRecord.test.tsx src/modules/object-record/record-board/hooks/__tests__/useRecordBoardCardHotkeys.test.tsx src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownLayoutContent.test.tsx src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx --config=jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 6 passed, 6 total
+Tests:       18 passed, 18 total
+Snapshots:   0 total
+```
+
+### Verification
+
+- The exact MYAH-229 10-suite command from this report passed: 10 suites, 73 tests.
+- `npx tsgo -p packages/twenty-front/tsconfig.json --noEmit` exited 0 with no output.
+- Targeted `npx oxlint --type-aware` reported 0 warnings and 0 errors across the 12 changed source/test files.
+- Targeted `npx oxfmt --check` reported all 12 changed files correctly formatted.
+- No Nx/build/browser/push/deploy/external action was run.
+
+### Self-review
+
+- A right forced Table now hides all view-type, Calendar, Kanban/Group, and compact-layout mutation controls while retaining the native Fields and Open In routes. The Layout Open In summary uses the current view, and forced Table field counts use scoped visible table fields; non-forced Board retains its board summary.
+- Board keyboard activation calls the same index-open seam only when an interceptor exists, leaving the ordinary Board side-panel path unchanged.
+- Scoped picker cleanup uses all actual scoped nested picker IDs. Scoped Creator create uses the same current-view context-store rule as existing-record opening, preserving the main global fallback.
+- The workspace reports loading/error/success as before and reports a loaded missing List as unavailable rather than a successful Creator view.
+
+### Commit
+
+`6a0967f7b` — `fix(myah): complete MYAH-229 final review`
+
+### Concerns
+
+None.
+
+## Post-final-review scope repairs
+
+### LSP
+
+No exported symbol or shared context contract changed. The repairs consume the existing scoped record-index identity helper and existing filter/state seams, so no reference migration was required.
+
+### RED
+
+Before production edits, the five focused regressions failed:
+
+- Pagination saved only current filters, omitting the Creator List membership filter for both panel and record-page navigation.
+- The isolated view bar mounted once with `[]` query-only filters before membership initialization.
+- A forced Table with a stored Table view still exposed layout controls.
+- That stored Table view summarized Board fields (`9 shown`) instead of scoped Table fields (`2 shown`).
+- Interactive command context queried `creators-creator-view` instead of `creators-creator-view-creator-list-pane-list-a`.
+
+### GREEN
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/record-index/components/__tests__/RecordIndexSurface.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownLayoutContent.test.tsx packages/twenty-front/src/modules/command-menu-item/hooks/__tests__/useCurrentCommandMenuContextApi.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 5 passed, 5 total
+Tests:       20 passed, 20 total
+```
+
+### Verification
+
+- The prescribed MYAH-229 10-suite Jest command passed: 10 suites, 74 tests.
+- `npx tsgo -p packages/twenty-front/tsconfig.json --noEmit` exited 0.
+- Targeted `npx oxlint --type-aware` reported 0 warnings and 0 errors.
+- Targeted `npx oxfmt --check` confirmed all 14 changed source/test files are formatted.
+- No Nx/build/browser/push/deploy/external action was run.
+
+### Self-review
+
+- Parent pagination snapshots the effective filters with a no-extra-allocation fast path when no query-only filters exist; native main navigation remains unchanged.
+- The right Creator view bar and native container both wait for scope installation, so no pre-scope aggregate/view-picker query can mount.
+- The explicit `isLayoutLocked` option flows from the forced Table surface into Object Options and Layout controls. It hides Layout at the entry point, suppresses direct layout mutations, and consistently chooses scoped Table field counts. Unlocked Board behavior retains the Board summary.
+- Interactive and headless commands now use the same scoped record-index identity derivation.
+
+### Commit
+
+`c73269acb` — `fix(myah): scope creator list native controls`
+
+## Signoff-path repairs
+
+### LSP references
+
+Before changing exported surface/context and picker contracts, `typescript-language-server` `textDocument/references` was run from `packages/twenty-front`:
+
+- `RecordIndexSurfaceProps`: declaration, instance alias, and public surface wrapper.
+- `RecordIndexContextValue`: declaration and context provider.
+- `useCreateViewFromCurrentState`: declaration.
+
+The scoped `RecordIndexSurface` caller and native ViewBar/picker propagation were then updated together.
+
+### RED
+
+Before production edits:
+
+```bash
+npx jest packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownContent.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownDefaultView.test.tsx packages/twenty-front/src/modules/views/view-picker/hooks/__tests__/useCreateViewFromCurrentState.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+Observed expected failures: Creator URLs omitted `creatorListId`; scoped creation did not attach a Creator List member; locked Calendar subcontent remained reachable; Copy link to view remained visible; and the create payload persisted `CALENDAR` instead of forced `TABLE`.
+
+### GREEN
+
+```bash
+npx jest packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx packages/twenty-front/src/modules/object-record/record-table/hooks/__tests__/useCreateNewIndexRecord.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownContent.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownDefaultView.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownVisibilityContent.test.tsx packages/twenty-front/src/modules/views/view-picker/hooks/__tests__/useCreateViewFromCurrentState.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 6 passed, 6 total
+Tests:       18 passed, 18 total
+```
+
+### Verification
+
+- Prescribed MYAH-229 10-suite Jest command: `10 passed, 10 total`, `75 passed, 75 total`.
+- `npx tsgo -p packages/twenty-front/tsconfig.json --noEmit`: exited 0.
+- Targeted `npx oxlint --type-aware` across 21 changed source/test files: `0 warnings and 0 errors`.
+- Targeted `npx oxfmt --check` across the same files: all matched files correctly formatted.
+- No Nx/build/browser/push/deploy/external action was run.
+
+### Self-review
+
+- Creator links now retain `creatorListId` in the native record-show URL, so normal show-page rehydration keeps pagination scoped without restoring the prohibited standalone route.
+- Forced right panes carry a Table-only creation boundary through native picker create and clone paths, while ordinary pickers keep their variants and scoped `onViewChange`.
+- Layout lock excludes Calendar direct content as well as its menu controls; safe object options remain available.
+- Both default and custom-visibility native copy actions are absent for the local scoped pane rather than producing a false unscoped link.
+- Native create awaits the scoped success callback before opening the record. The callback creates the exact Creator List member once per List/Creator pair and releases its local key on failure.
+
+### Commit
+
+`c8e060e5a` — `fix(myah): complete creator list signoff repairs`
+
+### Concerns
+
+None.
+
+## Final source-complete repairs
+
+### LSP references
+
+`useQueryVariablesFromParentView` has one frontend caller, `useRecordShowPagePagination`; its optional filter input was added there without a wider caller migration.
+
+### RED
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+The forced-Table Calendar custom-view regression failed: its selectable IDs contained `CalendarDateField,CalendarView`.
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-show/hooks/__tests__/useRecordShowPagePagination.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+The record-show regression failed because `useCreatorListContextFromId('list-id')` was never called.
+
+### GREEN
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-show/hooks/__tests__/useRecordShowPagePagination.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+`2 passed, 2 total`; `6 passed, 6 total`.
+
+### Verification
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/record-index/components/__tests__/RecordIndexSurface.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useCreatorListContext.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListMembershipFilterEffect.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useApplyCreatorBulkRelationship.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/MyahCreatorBulkRemovalStaleContext.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+npx tsgo -p packages/twenty-front/tsconfig.json --noEmit
+npx oxlint --type-aware packages/twenty-front/src/modules/object-record/record-show/hooks/useRecordShowPagePagination.ts packages/twenty-front/src/modules/object-record/record-show/hooks/__tests__/useRecordShowPagePagination.test.tsx packages/twenty-front/src/modules/views/hooks/useQueryVariablesFromParentView.ts packages/twenty-front/src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx
+npx oxfmt --check packages/twenty-front/src/modules/object-record/record-show/hooks/useRecordShowPagePagination.ts packages/twenty-front/src/modules/object-record/record-show/hooks/__tests__/useRecordShowPagePagination.test.tsx packages/twenty-front/src/modules/views/hooks/useQueryVariablesFromParentView.ts packages/twenty-front/src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx
+```
+
+- MYAH-229 suite: `10 passed, 10 total`; `75 passed, 75 total`.
+- `tsgo`: exited 0 with no output.
+- Targeted `oxlint`: 0 warnings and 0 errors; targeted `oxfmt`: all five files formatted.
+- No Nx/build/browser/push/deploy/external action was run.
+
+### Commit
+
+`d38f299f8` — `fix(myah): preserve creator list record scope`
+
+### Concerns
+
+None.
+
+## Fresh-load, return-route, and locked-menu repairs
+
+### LSP references
+
+Before adding the loading-aware Creator List lookup, `typescript-language-server` `textDocument/references` was run from `packages/twenty-front` for `useCreatorListContextFromId`. It returned the declaration and legacy wrapper references in `useCreatorListContext.ts`; the existing public context hook remains unchanged. The additive loading-aware hook has one focused consumer: record-show pagination.
+
+### RED
+
+```bash
+npx jest src/modules/object-record/record-show/hooks/__tests__/useRecordShowPagePagination.test.tsx src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx --config=jest.config.mjs --runInBand
+```
+
+Observed the intended three failures:
+
+- pending Creator List validation never reached the loading-aware lookup;
+- `/objects/creator-lists?creatorListId=list-a` did not open the scoped List pane;
+- a locked stored Calendar view registered `Group` despite suppressing its JSX.
+
+### GREEN
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-show/hooks/__tests__/useRecordShowPagePagination.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useCreatorListContext.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/modules/object-record/object-options-dropdown/components/__tests__/ObjectOptionsDropdownCustomView.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+`4 passed, 4 total`; `27 passed, 27 total`.
+
+### Verification
+
+- Exact prescribed MYAH-229 Jest command: `10 passed, 10 total`; `76 passed, 76 total`.
+- `npx tsgo -p packages/twenty-front/tsconfig.json --noEmit`: exited 0 with no output.
+- Targeted `npx oxlint --type-aware` across seven changed files: `0 warnings and 0 errors`.
+- Targeted `npx oxfmt --check` across the same files: all matched files correctly formatted.
+- No Nx/build/browser/push/deploy/external action was run.
+
+### Self-review
+
+- The loading-aware lookup reuses `useFindOneRecord`; only a nonempty pending Creator List ID gates neighbor pagination, previous/next, index return, and navigation parameter construction. Absent and resolved-invalid IDs retain ordinary unscoped behavior.
+- A validated Creator List return now targets `/objects/creator-lists?creatorListId=<id>`. The workspace seeds its existing local selection from that route, so `RecordIndexPage` renders the Creator List branch rather than the legacy Creators filtering branch.
+- `Group` enters the selectable keyboard ID array under the same stored-type predicate that renders its `SelectableListItem`; locked Calendar menus therefore have no unreachable ArrowDown/Enter target. Other stored types and unlocked Calendar options are unchanged.
+
+### Commit
+
+`fix(myah): repair creator list record-show boundaries` (this commit).
+
+### Concerns
+
+None.

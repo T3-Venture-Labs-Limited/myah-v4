@@ -14,19 +14,20 @@ export type CreatorListContext = {
   };
 };
 
-export const useCreatorListContextFromId = (
+export const useCreatorListContextFromIdWithLoading = (
   creatorListId: string | undefined,
-): CreatorListContext | undefined => {
+) => {
   const { objectMetadataItems } = useObjectMetadataItems();
   const creatorObjectMetadataItem = objectMetadataItems.find(
     (item) => item.nameSingular === 'creator',
   );
-  const { record: creatorList } = useFindOneRecord({
-    objectNameSingular: 'creatorList',
-    objectRecordId: creatorListId ?? '',
-    recordGqlFields: { id: true, name: true },
-    skip: !creatorListId,
-  });
+  const { loading: isCreatorListLoading, record: creatorList } =
+    useFindOneRecord({
+      objectNameSingular: 'creatorList',
+      objectRecordId: creatorListId ?? '',
+      recordGqlFields: { id: true, name: true },
+      skip: !creatorListId,
+    });
   const creatorListName = creatorList?.name?.trim();
 
   const listMembershipsFieldMetadataItem =
@@ -43,7 +44,7 @@ export const useCreatorListContextFromId = (
       (fieldMetadataItem) => fieldMetadataItem.name === 'creatorList',
     );
 
-  return useMemo(() => {
+  const context = useMemo<CreatorListContext | undefined>(() => {
     if (
       !creatorListId ||
       !creatorListName ||
@@ -70,24 +71,30 @@ export const useCreatorListContextFromId = (
     creatorListName,
     listMembershipsFieldMetadataItem,
   ]);
+
+  return { context, isLoading: Boolean(creatorListId) && isCreatorListLoading };
 };
+
+export const useCreatorListContextFromId = (
+  creatorListId: string | undefined,
+): CreatorListContext | undefined =>
+  useCreatorListContextFromIdWithLoading(creatorListId).context;
 
 export const useCreatorListContext = (
   skipLegacyRecordLookup = false,
 ): CreatorListContext | undefined => {
   const [searchParams] = useSearchParams();
   const { objectMetadataItem } = useRecordIndexIdFromCurrentContextStore();
-  const hasCreatorListMembershipRelation =
-    objectMetadataItem.fields.some(
-      (fieldMetadataItem) =>
-        fieldMetadataItem.name === 'listMemberships' &&
-        fieldMetadataItem.relation !== undefined,
-    );
+  const hasCreatorListMembershipRelation = objectMetadataItem.fields.some(
+    (fieldMetadataItem) =>
+      fieldMetadataItem.name === 'listMemberships' &&
+      fieldMetadataItem.relation !== undefined,
+  );
 
   return useCreatorListContextFromId(
     !skipLegacyRecordLookup &&
-    objectMetadataItem.nameSingular === 'creator' &&
-    hasCreatorListMembershipRelation
+      objectMetadataItem.nameSingular === 'creator' &&
+      hasCreatorListMembershipRelation
       ? (searchParams.get('creatorListId') ?? undefined)
       : undefined,
   );

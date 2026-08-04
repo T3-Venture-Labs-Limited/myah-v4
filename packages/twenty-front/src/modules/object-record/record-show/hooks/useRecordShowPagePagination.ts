@@ -1,4 +1,4 @@
-import { useCreatorListContextFromId } from '@/myah/creator-crm/hooks/useCreatorListContext';
+import { useCreatorListContextFromIdWithLoading } from '@/myah/creator-crm/hooks/useCreatorListContext';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { lastShowPageRecordIdState } from '@/object-record/record-field/ui/states/lastShowPageRecordId';
@@ -42,11 +42,14 @@ export const useRecordShowPagePagination = (
     objectNameSingular,
   });
 
-  const creatorListContext = useCreatorListContextFromId(
+  const creatorListId =
     objectMetadataItem.nameSingular === 'creator'
       ? (searchParams.get('creatorListId') ?? undefined)
-      : undefined,
-  );
+      : undefined;
+  const {
+    context: creatorListContext,
+    isLoading: isCreatorListValidationLoading,
+  } = useCreatorListContextFromIdWithLoading(creatorListId);
   const creatorListMembershipFilter: RecordFilter | undefined =
     creatorListContext
       ? {
@@ -70,13 +73,6 @@ export const useRecordShowPagePagination = (
         : [],
       objectMetadataItem,
     });
-
-  const recordShowNavigationSearchParams = creatorListContext
-    ? {
-        creatorListId: creatorListContext.target.id,
-        viewId: viewIdQueryParam,
-      }
-    : { viewId: viewIdQueryParam };
 
   const orderByGqlFields = extractOrderByFieldNames(orderBy);
 
@@ -130,7 +126,8 @@ export const useRecordShowPagePagination = (
     : undefined;
 
   const hasKeysetFilters = isDefined(beforeFilter) && isDefined(afterFilter);
-  const skipNeighborQueries = loadingCurrentRecord || !hasKeysetFilters;
+  const skipNeighborQueries =
+    isCreatorListValidationLoading || loadingCurrentRecord || !hasKeysetFilters;
 
   const baseNeighborOptions = {
     skip: skipNeighborQueries,
@@ -186,6 +183,7 @@ export const useRecordShowPagePagination = (
     });
 
   const loading =
+    isCreatorListValidationLoading ||
     loadingRecordAfter ||
     loadingRecordBefore ||
     loadingCurrentRecord ||
@@ -198,10 +196,19 @@ export const useRecordShowPagePagination = (
 
   // oxlint-disable-next-line twenty/no-navigate-prefer-link
   const navigateToRecord = (targetRecordId: string) => {
+    if (isCreatorListValidationLoading) {
+      return;
+    }
+
     navigate(
       AppPath.RecordShowPage,
       { objectNameSingular, objectRecordId: targetRecordId },
-      recordShowNavigationSearchParams,
+      creatorListContext
+        ? {
+            creatorListId: creatorListContext.target.id,
+            viewId: viewIdQueryParam,
+          }
+        : { viewId: viewIdQueryParam },
     );
   };
 
@@ -230,10 +237,23 @@ export const useRecordShowPagePagination = (
   };
 
   const navigateToIndexView = () => {
+    if (isCreatorListValidationLoading) {
+      return;
+    }
+
     navigate(
       AppPath.RecordIndexPage,
-      { objectNamePlural: objectMetadataItem.namePlural },
-      recordShowNavigationSearchParams,
+      {
+        objectNamePlural: creatorListContext
+          ? 'creator-lists'
+          : objectMetadataItem.namePlural,
+      },
+      creatorListContext
+        ? {
+            creatorListId: creatorListContext.target.id,
+            viewId: viewIdQueryParam,
+          }
+        : { viewId: viewIdQueryParam },
     );
     setLastShowPageRecordId(objectRecordId);
   };

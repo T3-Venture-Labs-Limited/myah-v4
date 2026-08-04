@@ -5,6 +5,7 @@ import { RecordIndexContainerGater } from '@/object-record/record-index/componen
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { styled } from '@linaria/react';
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppPath } from 'twenty-shared/types';
 import { getAppPath } from 'twenty-shared/utils';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -90,9 +91,10 @@ const CreatorListSelectionStatus = ({
 
 export const CreatorListWorkspace = () => {
   const isMobile = useIsMobile();
+  const [searchParams] = useSearchParams();
   const [selectedCreatorListId, setSelectedCreatorListId] = useState<
     string | null
-  >(null);
+  >(searchParams.get('creatorListId'));
   const [lastOpenNavigation, setLastOpenNavigation] =
     useState<LastOpenNavigation | null>(null);
   const [scopedPaneElement, setScopedPaneElement] =

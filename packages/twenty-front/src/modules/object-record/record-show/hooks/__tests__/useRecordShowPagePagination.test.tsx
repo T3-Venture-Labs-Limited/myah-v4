@@ -7,11 +7,20 @@ const mockNavigate = jest.fn();
 const mockUseFindManyRecords = jest.fn();
 const mockUseQueryVariablesFromParentView = jest.fn();
 const mockUseCreatorListContextFromId = jest.fn();
+const mockUseCreatorListContextValidation = jest.fn();
 
 const creatorObjectMetadataItem = {
   id: 'creator-object',
   namePlural: 'creators',
   nameSingular: 'creator',
+};
+
+const creatorListContext = {
+  target: { id: 'list-id', kind: 'creator-list', label: 'Creator List' },
+  filter: {
+    fieldMetadataId: 'creator-list-memberships',
+    relationTargetFieldMetadataId: 'creator-list-member-creator-list',
+  },
 };
 
 jest.mock('react-router-dom', () => ({
@@ -34,6 +43,8 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
 jest.mock('@/myah/creator-crm/hooks/useCreatorListContext', () => ({
   useCreatorListContextFromId: (creatorListId: string | undefined) =>
     mockUseCreatorListContextFromId(creatorListId),
+  useCreatorListContextFromIdWithLoading: (creatorListId: string | undefined) =>
+    mockUseCreatorListContextValidation(creatorListId),
 }));
 
 jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
@@ -82,12 +93,10 @@ jest.mock('~/hooks/useNavigateApp', () => ({
 describe('useRecordShowPagePagination', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCreatorListContextFromId.mockReturnValue({
-      target: { id: 'list-id', kind: 'creator-list', label: 'Creator List' },
-      filter: {
-        fieldMetadataId: 'creator-list-memberships',
-        relationTargetFieldMetadataId: 'creator-list-member-creator-list',
-      },
+    mockUseCreatorListContextFromId.mockReturnValue(creatorListContext);
+    mockUseCreatorListContextValidation.mockReturnValue({
+      context: creatorListContext,
+      isLoading: false,
     });
     mockUseQueryVariablesFromParentView.mockReturnValue({
       filter: { name: { eq: 'Ada' } },
@@ -109,12 +118,39 @@ describe('useRecordShowPagePagination', () => {
       .mockReturnValue({ loading: false, records: [], totalCount: 0 });
   });
 
+  it('holds Creator List pagination until its validation lookup resolves', () => {
+    mockUseCreatorListContextFromId.mockReturnValue(undefined);
+    mockUseCreatorListContextValidation.mockReturnValue({
+      context: undefined,
+      isLoading: true,
+    });
+
+    const { result } = renderHook(() =>
+      useRecordShowPagePagination('creator', 'creator-current'),
+    );
+
+    expect(mockUseCreatorListContextValidation).toHaveBeenCalledWith('list-id');
+    expect(result.current.isLoadingPagination).toBe(true);
+
+    const [, ...paginationCalls] = mockUseFindManyRecords.mock.calls;
+
+    for (const [options] of paginationCalls) {
+      expect(options).toEqual(expect.objectContaining({ skip: true }));
+    }
+
+    act(() => result.current.navigateToNextRecord());
+    act(() => result.current.navigateToPreviousRecord());
+    act(() => result.current.navigateToIndexView());
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it('rehydrates a Creator List URL as a validated membership filter and preserves it across pagination navigation', () => {
     const { result } = renderHook(() =>
       useRecordShowPagePagination('creator', 'creator-current'),
     );
 
-    expect(mockUseCreatorListContextFromId).toHaveBeenCalledWith('list-id');
+    expect(mockUseCreatorListContextValidation).toHaveBeenCalledWith('list-id');
     expect(mockUseQueryVariablesFromParentView).toHaveBeenCalledWith({
       additionalRecordFilters: [
         {
@@ -144,13 +180,17 @@ describe('useRecordShowPagePagination', () => {
     expect(mockNavigate).toHaveBeenNthCalledWith(
       2,
       AppPath.RecordIndexPage,
-      { objectNamePlural: 'creators' },
+      { objectNamePlural: 'creator-lists' },
       { creatorListId: 'list-id', viewId: 'view-id' },
     );
   });
 
   it('keeps malformed Creator List URL IDs unscoped', () => {
     mockUseCreatorListContextFromId.mockReturnValue(undefined);
+    mockUseCreatorListContextValidation.mockReturnValue({
+      context: undefined,
+      isLoading: false,
+    });
 
     const { result } = renderHook(() =>
       useRecordShowPagePagination('creator', 'creator-current'),

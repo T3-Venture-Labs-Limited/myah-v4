@@ -134,7 +134,7 @@ export const ObjectOptionsDropdownCustomView = ({
     'Visibility',
     'Fields',
     ...(hasCalendarOptions ? ['CalendarDateField', 'CalendarView'] : []),
-    ...(!hasCalendarOptions ? ['Group'] : []),
+    ...(customViewData?.type !== ViewType.CALENDAR ? ['Group'] : []),
     'Delete view',
   ];
 
