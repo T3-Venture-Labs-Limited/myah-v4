@@ -102,7 +102,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
               workspace,
             ]
           : mutation === 'retryChatMessage'
-            ? ['thread-id', modelId, 'user-workspace-id', workspace]
+            ? ['thread-id', null, modelId, 'user-workspace-id', workspace]
             : mutation === 'answerAgentChatQuestion'
               ? [
                   'thread-id',
@@ -153,7 +153,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
             workspace,
           ]
         : mutation === 'retryChatMessage'
-          ? ['thread-id', modelId, 'user-workspace-id', workspace]
+          ? ['thread-id', null, modelId, 'user-workspace-id', workspace]
           : mutation === 'answerAgentChatQuestion'
             ? [
                 'thread-id',
@@ -193,6 +193,7 @@ describe('AgentChatResolver managed provider credit preflight', () => {
 
     await resolver.retryChatMessage(
       'thread-id',
+      null,
       AUTO_SELECT_SMART_MODEL_ID,
       'user-workspace-id',
       autoWorkspace,
@@ -205,5 +206,51 @@ describe('AgentChatResolver managed provider credit preflight', () => {
     expect(
       billingUsageService.hasAvailableCreditsOrThrow,
     ).not.toHaveBeenCalled();
+  });
+  it('forwards the current browsing context when retrying', async () => {
+    const { resolver, streaming } = buildResolver(true);
+    const browsingContext = {
+      type: 'myahInboxThreadSelection',
+      workspaceId: 'workspace-id',
+      threadId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+    } as never;
+
+    await resolver.retryChatMessage(
+      'thread-id',
+      browsingContext,
+      modelId,
+      'user-workspace-id',
+      workspace,
+    );
+
+    expect(streaming.retryLastFailedTurn).toHaveBeenCalledWith({
+      threadId: 'thread-id',
+      browsingContext,
+      modelId,
+      userWorkspaceId: 'user-workspace-id',
+      workspace,
+    });
+  });
+  it('rejects a selected Inbox message instead of queueing behind an active stream', async () => {
+    const { resolver, agentChatService, streaming } = buildResolver(true);
+
+    await expect(
+      resolver.sendChatMessage(
+        'thread-id',
+        'Read this selection',
+        'message-id',
+        {
+          type: 'myahInboxThreadSelection',
+          workspaceId: 'workspace-id',
+          threadId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+        },
+        modelId,
+        null,
+        'user-workspace-id',
+        workspace,
+      ),
+    ).rejects.toThrow('Selected Inbox messages cannot be queued');
+    expect(agentChatService.queueMessage).not.toHaveBeenCalled();
+    expect(streaming.streamAgentChat).not.toHaveBeenCalled();
   });
 });

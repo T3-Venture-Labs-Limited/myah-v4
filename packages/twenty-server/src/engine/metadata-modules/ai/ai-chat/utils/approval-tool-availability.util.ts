@@ -25,6 +25,10 @@ export const PRE_APPROVAL_SAFE_TOOL_NAMES = new Set([
   'prepare_outreach_email_draft',
 ]);
 
+export const MYAH_INBOX_SELECTION_TOOL_NAMES = [
+  'get_myah_inbox_thread_context',
+  'generate_myah_inbox_reply_proposal',
+] as const;
 export const allowRegisteredActionSenders = (
   excludedToolNames: Set<string>,
 ): void => {

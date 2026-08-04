@@ -127,11 +127,11 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
         migrate,
       } as unknown as MigrateMyahCreatorSocialLinksService,
     );
-  
+
     await expect(
       command.runOnWorkspace({ ...args, dataSource: undefined }),
     ).resolves.toBeUndefined();
-  
+
     expect(synchronizeWorkspace).not.toHaveBeenCalled();
     expect(migrate).not.toHaveBeenCalled();
   });

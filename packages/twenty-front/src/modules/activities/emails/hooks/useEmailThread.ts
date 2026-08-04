@@ -14,7 +14,6 @@ import {
   CoreObjectNameSingular,
   MessageParticipantRole,
 } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
 
 export const useEmailThread = (threadId: string | null) => {
   const { upsertRecordsInStore } = useUpsertRecordsInStore();
@@ -45,6 +44,8 @@ export const useEmailThread = (threadId: string | null) => {
     loading: messagesLoading,
     fetchMoreRecords,
     hasNextPage,
+    error: historyError,
+    refetch,
   } = useFindManyRecords<EmailThreadMessage>({
     limit: FETCH_ALL_MESSAGES_OPERATION_SIGNATURE.variables.limit,
     filter: FETCH_ALL_MESSAGES_OPERATION_SIGNATURE.variables.filter,
@@ -56,20 +57,26 @@ export const useEmailThread = (threadId: string | null) => {
   });
 
   const fetchMoreMessages = useCallback(() => {
-    if (!messagesLoading && hasNextPage) {
+    if (!messagesLoading && !historyError && hasNextPage) {
       fetchMoreRecords();
-    } else if (!hasNextPage) {
+    } else if (!hasNextPage && !historyError) {
       setIsMessagesFetchComplete(true);
     }
-  }, [fetchMoreRecords, messagesLoading, hasNextPage]);
+  }, [fetchMoreRecords, hasNextPage, historyError, messagesLoading]);
+
+  const refetchMessages = useCallback(() => {
+    setIsMessagesFetchComplete(false);
+
+    return refetch();
+  }, [refetch]);
 
   // When all messages fit in the first page, fetchMoreMessages is never called,
   // so we need to mark fetch as complete here to unblock downstream queries
   useEffect(() => {
-    if (!messagesLoading && !hasNextPage) {
+    if (!messagesLoading && !hasNextPage && !historyError) {
       setIsMessagesFetchComplete(true);
     }
-  }, [messagesLoading, hasNextPage]);
+  }, [hasNextPage, historyError, messagesLoading]);
 
   useEffect(() => {
     if (messages.length > 0 && isMessagesFetchComplete) {
@@ -136,22 +143,15 @@ export const useEmailThread = (threadId: string | null) => {
     loading: replyConnectedAccountLoading,
   } = useReplyConnectedAccount(lastMessageChannelId);
 
-  const messagesWithSender: EmailThreadMessageWithSender[] = messages
-    .map((message) => {
-      const sender = messageSenders.find(
-        (messageSender) => messageSender.messageId === message.id,
-      );
-
-      if (!sender) {
-        return null;
-      }
-
-      return {
-        ...message,
-        sender,
-      };
-    })
-    .filter(isDefined);
+  const messagesWithSender: EmailThreadMessageWithSender[] = messages.map(
+    (message) => ({
+      ...message,
+      sender:
+        messageSenders.find(
+          (messageSender) => messageSender.messageId === message.id,
+        ) ?? null,
+    }),
+  );
 
   const messageChannelLoading =
     replyConnectedAccountLoading || messageChannelMessageAssociationLoading;
@@ -164,8 +164,12 @@ export const useEmailThread = (threadId: string | null) => {
     connectedAccountHandle,
     connectedAccountProvider,
     threadLoading: messagesLoading,
+    isMessagesFetchComplete,
+    historyError,
+    refetchMessages,
     messageChannelLoading,
     lastMessageExternalId,
+    hasNextPage,
     fetchMoreMessages,
   };
 };

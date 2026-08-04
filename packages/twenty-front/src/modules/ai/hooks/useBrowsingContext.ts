@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
 import { type BrowsingContext } from '@/ai/types/BrowsingContext';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context-store/states/contextStoreCurrentObjectMetadataItemIdComponentState';
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
@@ -15,6 +16,10 @@ import { ContextStoreViewType } from '@/context-store/types/ContextStoreViewType
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
 import { getTabListInstanceIdFromPageLayoutId } from '@/page-layout/utils/getTabListInstanceIdFromPageLayoutId';
+import {
+  myahInboxSelectionWorkspaceIdState,
+  myahInboxSelectedThreadIdState,
+} from '@/myah/inbox/states/myahInboxSelectionState';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { useStore } from 'jotai';
 import { viewFromViewIdFamilySelector } from '@/views/states/selectors/viewFromViewIdFamilySelector';
@@ -24,6 +29,24 @@ export const useGetBrowsingContext = () => {
 
   const getBrowsingContext = useCallback((): BrowsingContext | null => {
     const instanceId = MAIN_CONTEXT_STORE_INSTANCE_ID;
+    const currentWorkspace = store.get(currentWorkspaceState.atom);
+    const selectedInboxThreadId = store.get(
+      myahInboxSelectedThreadIdState.atom,
+    );
+    const inboxSelectionWorkspaceId = store.get(
+      myahInboxSelectionWorkspaceIdState.atom,
+    );
+
+    if (
+      isDefined(selectedInboxThreadId) &&
+      inboxSelectionWorkspaceId === currentWorkspace?.id
+    ) {
+      return {
+        type: 'myahInboxThreadSelection',
+        workspaceId: inboxSelectionWorkspaceId,
+        threadId: selectedInboxThreadId,
+      };
+    }
 
     const pageType = store.get(
       contextStoreCurrentPageTypeComponentState.atomFamily({

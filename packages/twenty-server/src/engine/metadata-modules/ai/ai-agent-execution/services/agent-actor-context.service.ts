@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 
 import { type ActorMetadata, FieldActorSource } from 'twenty-shared/types';
+import { type Repository } from 'typeorm';
 
 import { buildCreatedByFromFullNameMetadata } from 'src/engine/core-modules/actor/utils/build-created-by-from-full-name-metadata.util';
+import { type FlatAuthContextUser } from 'src/engine/core-modules/auth/types/flat-auth-context-user.type';
+import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
+import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import {
   AiException,
   AiExceptionCode,
@@ -11,6 +18,7 @@ import {
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
 export type UserContext = {
   firstName: string;
@@ -25,6 +33,7 @@ export type AgentActorContext = {
   userId: string;
   userWorkspaceId: string;
   userContext: UserContext;
+  authContext: UserWorkspaceAuthContext;
 };
 
 @Injectable()
@@ -34,6 +43,8 @@ export class AgentActorContextService {
     private readonly userWorkspaceService: UserWorkspaceService,
     private readonly userRoleService: UserRoleService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    @InjectRepository(WorkspaceEntity)
+    private readonly workspaceRepository: Repository<WorkspaceEntity>,
   ) {}
 
   async buildUserAndAgentActorContext(
@@ -42,10 +53,12 @@ export class AgentActorContextService {
   ): Promise<AgentActorContext> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    const userWorkspace =
-      await this.userWorkspaceService.findById(userWorkspaceId);
+    const [userWorkspace, workspace] = await Promise.all([
+      this.userWorkspaceService.findByIdWithUser(userWorkspaceId),
+      this.workspaceRepository.findOne({ where: { id: workspaceId } }),
+    ]);
 
-    if (!userWorkspace) {
+    if (!userWorkspace?.user || !workspace) {
       throw new AiException(
         'User workspace not found',
         AiExceptionCode.AGENT_EXECUTION_FAILED,
@@ -56,7 +69,7 @@ export class AgentActorContextService {
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
           const workspaceMemberRepository =
-            await this.globalWorkspaceOrmManager.getRepository(
+            await this.globalWorkspaceOrmManager.getRepository<WorkspaceMemberWorkspaceEntity>(
               workspaceId,
               'workspaceMember',
               { shouldBypassPermissionChecks: true },
@@ -103,8 +116,17 @@ export class AgentActorContextService {
       timezone: workspaceMember.timeZone ?? null,
     };
 
+    const userAuthContext = buildUserAuthContext({
+      workspace: workspace as unknown as FlatWorkspace,
+      userWorkspaceId,
+      user: userWorkspace.user as unknown as FlatAuthContextUser,
+      workspaceMemberId: workspaceMember.id,
+      workspaceMember,
+    });
+
     return {
       actorContext,
+      authContext: userAuthContext,
       roleId,
       userId: userWorkspace.userId,
       userWorkspaceId,

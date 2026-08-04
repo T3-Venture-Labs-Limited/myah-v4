@@ -4,6 +4,7 @@ import { InformationBannerDeletedRecord } from '@/information-banner/components/
 import { RecordShowContainerContextStoreTargetedRecordsEffect } from '@/object-record/record-show/components/RecordShowContainerContextStoreTargetedRecordsEffect';
 import { RecordShowEffect } from '@/object-record/record-show/components/RecordShowEffect';
 import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
+import { type PageLayoutTabsRendererRenderMode } from '@/page-layout/components/PageLayoutTabsRenderer';
 import { PageLayoutRenderer } from '@/page-layout/components/PageLayoutRenderer';
 import { usePageLayoutIdForRecord } from '@/page-layout/hooks/usePageLayoutIdForRecord';
 import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
@@ -38,13 +39,17 @@ const StyledContentContainer = styled.div<{ isInSidePanel: boolean }>`
   overflow-y: auto;
 `;
 
+type PageLayoutRecordPageRendererProps = {
+  targetRecordIdentifier: TargetRecordIdentifier;
+  isInSidePanel: boolean;
+  renderMode?: PageLayoutTabsRendererRenderMode;
+};
+
 export const PageLayoutRecordPageRenderer = ({
   targetRecordIdentifier,
   isInSidePanel,
-}: {
-  targetRecordIdentifier: TargetRecordIdentifier;
-  isInSidePanel: boolean;
-}) => {
+  renderMode,
+}: PageLayoutRecordPageRendererProps) => {
   const recordDeletedAt = useAtomFamilySelectorValue(
     recordStoreFamilySelector,
     {
@@ -108,7 +113,10 @@ export const PageLayoutRecordPageRenderer = ({
             }}
           >
             {isDefined(pageLayoutId) && (
-              <PageLayoutRenderer pageLayoutId={pageLayoutId} />
+              <PageLayoutRenderer
+                pageLayoutId={pageLayoutId}
+                renderMode={renderMode}
+              />
             )}
           </LayoutRenderingProvider>
         </StyledContentContainer>

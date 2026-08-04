@@ -29,8 +29,15 @@ describe('AdminPanelManagedProviderBillingService', () => {
     }),
   });
 
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-19T10:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('journals then grants a credit to the exact workspace customer and contract', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-07-19T10:37:42.123Z'));
     const metronomeClientService = {
       createCustomerCredit: jest.fn().mockResolvedValue({
         creditId: 'credit-id',
@@ -128,7 +135,6 @@ describe('AdminPanelManagedProviderBillingService', () => {
       undefined,
       'edit-id',
     );
-    jest.useRealTimers();
   });
 
   it('returns immutable journal facts on an exact replay', async () => {
@@ -178,7 +184,6 @@ describe('AdminPanelManagedProviderBillingService', () => {
   });
 
   it('rejects a credit that does not end in the future before Metronome I/O', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-07-19T10:00:00.000Z'));
     const metronomeClientService = {
       createCustomerCredit: jest.fn(),
     };
@@ -214,10 +219,8 @@ describe('AdminPanelManagedProviderBillingService', () => {
       fundingJournalService.createPendingRateLimited,
     ).not.toHaveBeenCalled();
     expect(metronomeClientService.createCustomerCredit).not.toHaveBeenCalled();
-    jest.useRealTimers();
   });
   it('rejects an overlong sponsored-credit lifetime before journal or Metronome I/O', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-07-19T10:00:00.000Z'));
     const config = createConfig();
     config.get.mockImplementation((key: string) =>
       key === 'MANAGED_OPENROUTER_MAX_GRANT_LIFETIME_MS'
@@ -253,7 +256,6 @@ describe('AdminPanelManagedProviderBillingService', () => {
       fundingJournalService.createPendingRateLimited,
     ).not.toHaveBeenCalled();
     expect(metronomeClientService.createCustomerCredit).not.toHaveBeenCalled();
-    jest.useRealTimers();
   });
   it('fails closed for an unauthorized grant operator before any journal or provider I/O', async () => {
     const config = createConfig();

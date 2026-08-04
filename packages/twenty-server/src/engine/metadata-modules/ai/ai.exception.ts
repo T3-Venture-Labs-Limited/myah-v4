@@ -24,6 +24,7 @@ export enum AiExceptionCode {
   ROLE_NOT_FOUND = 'ROLE_NOT_FOUND',
   ROLE_CANNOT_BE_ASSIGNED_TO_AGENTS = 'ROLE_CANNOT_BE_ASSIGNED_TO_AGENTS',
   NO_FAILED_TURN_TO_RETRY = 'NO_FAILED_TURN_TO_RETRY',
+  INBOX_SELECTION_CANNOT_BE_QUEUED = 'INBOX_SELECTION_CANNOT_BE_QUEUED',
 }
 
 const getAiExceptionUserFriendlyMessage = (code: AiExceptionCode) => {
@@ -66,6 +67,8 @@ const getAiExceptionUserFriendlyMessage = (code: AiExceptionCode) => {
       return msg`This role cannot be assigned to agents.`;
     case AiExceptionCode.NO_FAILED_TURN_TO_RETRY:
       return msg`There is no failed message to retry.`;
+    case AiExceptionCode.INBOX_SELECTION_CANNOT_BE_QUEUED:
+      return msg`Wait for the current response to finish, then send this Inbox request again.`;
     default:
       assertUnreachable(code);
   }

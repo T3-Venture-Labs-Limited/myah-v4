@@ -27,6 +27,7 @@ export type CreateStandardPageLayoutArgs = {
 
 const MYAH_OBJECT_NAMES_BY_UNIVERSAL_IDENTIFIER: Record<string, string> = {
   '6a8289d7-8034-4f70-b3fa-47bc0e52828f': 'brandBrainPage',
+  '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de': 'creator',
 };
 export const findObjectNameByUniversalIdentifier = (
   objectUniversalIdentifier: string,

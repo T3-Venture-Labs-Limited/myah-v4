@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 
 import { type UIMessage } from 'ai';
 
@@ -51,7 +52,7 @@ type SpilledToolOutputResult = {
 export class BrandBrainPreflightService {
   private readonly logger = new Logger(BrandBrainPreflightService.name);
 
-  constructor(private readonly toolRegistry: ToolRegistryService) {}
+  constructor(private readonly moduleRef: ModuleRef) {}
 
   injectContextIntoLastUserMessage(
     messages: UIMessage[],
@@ -111,15 +112,17 @@ export class BrandBrainPreflightService {
       });
     }
 
-    const output = await this.toolRegistry.resolveAndExecute(
-      BRAND_BRAIN_GET_CONTEXT_TOOL_NAME,
-      {
-        brandNameOrSlug,
-        task: lastUserMessageText,
-      },
-      toolContext,
-      { compactOutput: true, spillLargeOutput: false },
-    );
+    const output = await this.moduleRef
+      .get(ToolRegistryService, { strict: false })
+      .resolveAndExecute(
+        BRAND_BRAIN_GET_CONTEXT_TOOL_NAME,
+        {
+          brandNameOrSlug,
+          task: lastUserMessageText,
+        },
+        toolContext,
+        { compactOutput: true, spillLargeOutput: false },
+      );
 
     const durationMs = Math.round(performance.now() - startedAt);
 

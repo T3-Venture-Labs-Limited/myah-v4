@@ -24,7 +24,7 @@ const StyledThreadMessageSentAt = styled.div`
 `;
 
 type EmailThreadMessageSenderProps = {
-  sender: EmailThreadMessageParticipant;
+  sender: EmailThreadMessageParticipant | null;
   sentAt: string;
 };
 
@@ -37,7 +37,11 @@ export const EmailThreadMessageSender = ({
 
   return (
     <StyledEmailThreadMessageSender>
-      <ParticipantChip participant={sender} variant="bold" />
+      {sender ? (
+        <ParticipantChip participant={sender} variant="bold" />
+      ) : (
+        <span>Unknown sender</span>
+      )}
       <StyledThreadMessageSentAt id={tooltipId}>
         {beautifyPastDateRelativeToNow(sentAt, localeCatalog)}
       </StyledThreadMessageSentAt>

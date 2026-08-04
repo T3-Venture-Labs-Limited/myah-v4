@@ -1,5 +1,6 @@
 import { streamText } from 'ai';
 
+import { createExecuteToolTool } from 'src/engine/core-modules/tool-provider/tools/execute-tool.tool';
 import { MANAGED_AI_TELEMETRY_CONFIG } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { ChatExecutionService } from 'src/engine/metadata-modules/ai/ai-chat/services/chat-execution.service';
@@ -16,11 +17,64 @@ jest.mock('ai', () => ({
     steps: Promise.resolve([]),
   })),
 }));
+jest.mock(
+  'src/engine/core-modules/tool-provider/tools/execute-tool.tool',
+  () => {
+    const actual = jest.requireActual(
+      'src/engine/core-modules/tool-provider/tools/execute-tool.tool',
+    );
+
+    return {
+      ...actual,
+      createExecuteToolTool: jest.fn(actual.createExecuteToolTool),
+    };
+  },
+);
+type ChatStreamTextOptions = {
+  messages: unknown[];
+  tools: {
+    execute_tool: {
+      execute: (input: {
+        toolName: string;
+        arguments: Record<string, unknown>;
+      }) => Promise<unknown>;
+    };
+    learn_tools: {
+      execute: (input: {
+        toolNames: string[];
+        aspects?: string[];
+      }) => Promise<unknown>;
+    };
+  };
+};
+
+const getLastChatStreamTextOptions = (): ChatStreamTextOptions => {
+  const options = jest.mocked(streamText).mock.lastCall?.[0];
+
+  if (!options) {
+    throw new Error('Expected streamText to be called');
+  }
+
+  return options as unknown as ChatStreamTextOptions;
+};
 
 const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
   const toolRegistry = {
     buildToolIndex: jest.fn().mockResolvedValue([]),
     getToolsByName: jest.fn().mockResolvedValue({}),
+    getToolInfo: jest.fn().mockImplementation((toolNames: string[]) =>
+      Promise.resolve(
+        toolNames.includes('send_email')
+          ? [
+              {
+                name: 'send_email',
+                description: 'Send email',
+                inputSchema: {},
+              },
+            ]
+          : [],
+      ),
+    ),
     resolveAndExecute: jest.fn().mockResolvedValue({ success: true }),
   };
   const skillService = {
@@ -53,6 +107,14 @@ const buildService = ({ managed = false }: { managed?: boolean } = {}) => {
       roleId: 'role-id',
       userId: 'user-id',
       userContext: { locale: 'en' },
+      authContext: {
+        type: 'user',
+        workspace: { id: 'workspace-id' },
+        userWorkspaceId: 'user-workspace-id',
+        user: { id: 'user-id' },
+        workspaceMemberId: 'workspace-member-id',
+        workspaceMember: { id: 'workspace-member-id' },
+      },
     }),
   };
   const workspaceDomainsService = {
@@ -153,8 +215,12 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
   });
 
   it('injects Brand Brain preflight context before streaming the model response', async () => {
-    const { service, brandBrainPreflightService, metricsService } =
-      buildService();
+    const {
+      service,
+      brandBrainPreflightService,
+      metricsService,
+      toolRegistry,
+    } = buildService();
 
     await service.streamChat({
       workspace: {
@@ -185,6 +251,23 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
     expect(brandBrainPreflightService.run).toHaveBeenCalledWith(
       expect.objectContaining({
         lastUserMessageText: 'Draft creator outreach for Acme Beauty Labs.',
+        toolContext: expect.objectContaining({
+          authContext: expect.objectContaining({
+            type: 'user',
+            userWorkspaceId: 'user-workspace-id',
+          }),
+        }),
+      }),
+    );
+    expect(toolRegistry.buildToolIndex).toHaveBeenCalledWith(
+      'workspace-id',
+      'role-id',
+      expect.objectContaining({
+        authContext: expect.objectContaining({
+          type: 'user',
+          userWorkspaceId: 'user-workspace-id',
+        }),
+        actorContext: { source: 'USER' },
       }),
     );
     expect(
@@ -213,6 +296,368 @@ describe('ChatExecutionService Brand Brain preflight integration', () => {
           cacheHit: 'false',
         }),
       }),
+    );
+  });
+
+  it('binds only the selected current-workspace Inbox thread into read/propose dispatch', async () => {
+    const selectedThreadId = '3ceef358-55fc-4d47-a7a8-2d8ac543641b';
+    const { service, toolRegistry } = buildService();
+    const toolEntry = (name: string) => ({
+      name,
+      label: name,
+      description: name,
+      category: 'MYAH_INBOX',
+      executionRef: { kind: 'static', toolId: name },
+    });
+
+    toolRegistry.buildToolIndex.mockResolvedValue([
+      toolEntry('get_myah_inbox_thread_context'),
+      toolEntry('generate_myah_inbox_reply_proposal'),
+      toolEntry('save_myah_inbox_draft'),
+      toolEntry('send_myah_inbox_reply'),
+    ]);
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'chat-thread-id',
+      browsingContext: {
+        type: 'myahInboxThreadSelection',
+        workspaceId: 'workspace-id',
+        threadId: selectedThreadId,
+      } as never,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'message-id',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Propose a reply to this selection.' }],
+        },
+      ],
+    });
+    const executeToolCalls = jest.mocked(createExecuteToolTool).mock.calls;
+    const options = executeToolCalls[executeToolCalls.length - 1]?.[2];
+    const allowedTools = [...(options?.allowedTools ?? [])];
+    const excludedTools = [...(options?.excludeTools ?? [])];
+    const streamTextCall = getLastChatStreamTextOptions();
+
+    expect(allowedTools).toEqual(
+      expect.arrayContaining([
+        'get_myah_inbox_thread_context',
+        'generate_myah_inbox_reply_proposal',
+      ]),
+    );
+    expect(excludedTools).not.toContain('get_myah_inbox_thread_context');
+    expect(excludedTools).not.toContain('generate_myah_inbox_reply_proposal');
+    expect(allowedTools).not.toEqual(
+      expect.arrayContaining([
+        'save_myah_inbox_draft',
+        'send_myah_inbox_reply',
+      ]),
+    );
+    expect(JSON.stringify(streamTextCall.messages)).toContain(
+      '<myah_inbox_selection',
+    );
+    expect(JSON.stringify(streamTextCall.messages)).not.toContain(
+      selectedThreadId,
+    );
+
+    const execution = streamTextCall.tools.execute_tool.execute({
+      toolName: 'get_myah_inbox_thread_context',
+      arguments: {},
+    });
+
+    await jest.runOnlyPendingTimersAsync();
+    await expect(execution).resolves.toEqual({ success: true });
+    expect(toolRegistry.resolveAndExecute).toHaveBeenCalledWith(
+      'get_myah_inbox_thread_context',
+      {},
+      expect.objectContaining({
+        workspaceId: 'workspace-id',
+        myahInboxSelection: {
+          workspaceId: 'workspace-id',
+          threadId: selectedThreadId,
+        },
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('blocks provider sends and schema discovery for a selected Inbox thread after generic approval', async () => {
+    const selectedThreadId = '3ceef358-55fc-4d47-a7a8-2d8ac543641b';
+    const { service, toolRegistry } = buildService();
+
+    toolRegistry.buildToolIndex.mockResolvedValue([
+      {
+        name: 'send_email',
+        label: 'Send email',
+        description: 'Send email',
+        category: 'ACTION',
+        executionRef: { kind: 'static', toolId: 'send_email' },
+      },
+    ]);
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'chat-thread-id',
+      browsingContext: {
+        type: 'myahInboxThreadSelection',
+        workspaceId: 'workspace-id',
+        threadId: selectedThreadId,
+      } as never,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'approved-message-id',
+          role: 'assistant',
+          parts: [
+            {
+              type: `tool-${REQUEST_APPROVAL_TOOL_NAME}`,
+              toolCallId: 'generic-approval-call',
+              state: 'output-available',
+              input: {},
+              output: {
+                result: {
+                  status: 'resolved',
+                  decision: 'approved',
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const streamTextCall = getLastChatStreamTextOptions();
+    const executeToolOptions = jest.mocked(createExecuteToolTool).mock
+      .lastCall?.[2];
+
+    expect(executeToolOptions?.excludeTools).toContain('send_email');
+    const execution = streamTextCall.tools.execute_tool.execute({
+      toolName: 'send_email',
+      arguments: {},
+    });
+    const learned = streamTextCall.tools.learn_tools.execute({
+      toolNames: ['send_email'],
+    });
+
+    await jest.runOnlyPendingTimersAsync();
+
+    await expect(execution).resolves.toEqual(
+      expect.objectContaining({
+        success: false,
+        message: 'Tool "send_email" is not available',
+      }),
+    );
+    await expect(learned).resolves.toEqual({
+      tools: [],
+      notFound: [],
+      message: 'No matching tools found.',
+    });
+    expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalled();
+    expect(toolRegistry.getToolInfo).toHaveBeenCalledWith(
+      [],
+      expect.anything(),
+      undefined,
+    );
+  });
+
+  it.each([
+    ['no browsing context', null],
+    [
+      'an ordinary record page',
+      {
+        type: 'recordPage',
+        objectNameSingular: 'messageThread',
+        recordId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+      },
+    ],
+  ])('denies Inbox dispatch with %s', async (_label, browsingContext) => {
+    const { service, toolRegistry } = buildService();
+
+    toolRegistry.buildToolIndex.mockResolvedValue([
+      {
+        name: 'get_myah_inbox_thread_context',
+        label: 'Get Inbox context',
+        description: 'Get Inbox context',
+        category: 'MYAH_INBOX',
+        executionRef: {
+          kind: 'static',
+          toolId: 'get_myah_inbox_thread_context',
+        },
+      },
+    ]);
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'chat-thread-id',
+      browsingContext: browsingContext as never,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'message-id',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Read that Inbox thread.' }],
+        },
+      ],
+    });
+    const streamTextCall = getLastChatStreamTextOptions();
+    const execution = streamTextCall.tools.execute_tool.execute({
+      toolName: 'get_myah_inbox_thread_context',
+      arguments: {
+        threadId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+      },
+    });
+
+    await jest.runOnlyPendingTimersAsync();
+    await expect(execution).resolves.toEqual(
+      expect.objectContaining({
+        success: false,
+        message: 'Tool "get_myah_inbox_thread_context" is not available',
+      }),
+    );
+    expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalled();
+    if (browsingContext?.type === 'recordPage') {
+      expect(JSON.stringify(streamTextCall.messages)).toContain(
+        'Do not call any tools based on this context.',
+      );
+    }
+  });
+
+  it('denies a cross-workspace Inbox selection before tool dispatch', async () => {
+    const { service, toolRegistry } = buildService();
+
+    toolRegistry.buildToolIndex.mockResolvedValue([
+      {
+        name: 'get_myah_inbox_thread_context',
+        label: 'Get Inbox context',
+        description: 'Get Inbox context',
+        category: 'MYAH_INBOX',
+        executionRef: {
+          kind: 'static',
+          toolId: 'get_myah_inbox_thread_context',
+        },
+      },
+    ]);
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'chat-thread-id',
+      browsingContext: {
+        type: 'myahInboxThreadSelection',
+        workspaceId: 'foreign-workspace-id',
+        threadId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+      } as never,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'message-id',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Read this selection.' }],
+        },
+      ],
+    });
+    const streamTextCall = getLastChatStreamTextOptions();
+    const execution = streamTextCall.tools.execute_tool.execute({
+      toolName: 'get_myah_inbox_thread_context',
+      arguments: {},
+    });
+
+    await jest.runOnlyPendingTimersAsync();
+    await expect(execution).resolves.toEqual(
+      expect.objectContaining({ success: false }),
+    );
+    expect(toolRegistry.resolveAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('returns the dispatcher denial for a stale selected Inbox thread', async () => {
+    const { service, toolRegistry } = buildService();
+    const selectedThreadId = '3ceef358-55fc-4d47-a7a8-2d8ac543641b';
+
+    toolRegistry.buildToolIndex.mockResolvedValue([
+      {
+        name: 'get_myah_inbox_thread_context',
+        label: 'Get Inbox context',
+        description: 'Get Inbox context',
+        category: 'MYAH_INBOX',
+        executionRef: {
+          kind: 'static',
+          toolId: 'get_myah_inbox_thread_context',
+        },
+      },
+    ]);
+    toolRegistry.resolveAndExecute.mockResolvedValue({
+      success: false,
+      message: 'Selected Inbox thread is not available',
+    });
+
+    await service.streamChat({
+      workspace: {
+        id: 'workspace-id',
+        smartModel: 'test-model',
+        aiAdditionalInstructions: null,
+      } as never,
+      userWorkspaceId: 'user-workspace-id',
+      threadId: 'chat-thread-id',
+      browsingContext: {
+        type: 'myahInboxThreadSelection',
+        workspaceId: 'workspace-id',
+        threadId: selectedThreadId,
+      } as never,
+      conversationSizeTokens: 10,
+      managedProviderRequestIdRoot: 'turn-id',
+      messages: [
+        {
+          id: 'message-id',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Read this selection.' }],
+        },
+      ],
+    });
+    const streamTextCall = getLastChatStreamTextOptions();
+    const execution = streamTextCall.tools.execute_tool.execute({
+      toolName: 'get_myah_inbox_thread_context',
+      arguments: {},
+    });
+
+    await jest.runOnlyPendingTimersAsync();
+    await expect(execution).resolves.toEqual({
+      success: false,
+      message: 'Selected Inbox thread is not available',
+    });
+    expect(toolRegistry.resolveAndExecute).toHaveBeenCalledWith(
+      'get_myah_inbox_thread_context',
+      {},
+      expect.objectContaining({
+        myahInboxSelection: {
+          workspaceId: 'workspace-id',
+          threadId: selectedThreadId,
+        },
+      }),
+      expect.any(Object),
     );
   });
 

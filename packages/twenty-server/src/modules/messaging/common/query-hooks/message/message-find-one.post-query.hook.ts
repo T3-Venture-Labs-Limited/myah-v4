@@ -41,14 +41,9 @@ export class MessageFindOnePostQueryHook implements WorkspacePostQueryHookInstan
       throw new ForbiddenError('Workspace is required');
     }
 
-    const userId = isUserAuthContext(authContext)
-      ? authContext.user.id
-      : undefined;
-
     await this.applyMessagesVisibilityRestrictionsService.applyMessagesVisibilityRestrictions(
       payload,
-      workspace.id,
-      userId,
+      authContext,
     );
   }
 }

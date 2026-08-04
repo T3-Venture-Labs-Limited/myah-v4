@@ -2371,34 +2371,6 @@ export interface ImapSmtpCaldavConnectionSuccess {
     __typename: 'ImapSmtpCaldavConnectionSuccess'
 }
 
-export interface WorkspaceMailboxConnectionStatus {
-    connectedAccountId: Scalars['UUID']
-    errorCode?: Scalars['String']
-    errorMessage?: Scalars['String']
-    lastSafeOperation: Scalars['String']
-    maskedHandle: Scalars['String']
-    messageChannelId: Scalars['UUID']
-    state: Scalars['String']
-    syncStage: Scalars['String']
-    syncStatus: Scalars['String']
-    updatedAt: Scalars['DateTime']
-    __typename: 'WorkspaceMailboxConnectionStatus'
-}
-
-export interface WorkspaceMailboxConnectionResult {
-    connectedAccountId: Scalars['UUID']
-    messageChannelId: Scalars['UUID']
-    status: WorkspaceMailboxConnectionStatus
-    __typename: 'WorkspaceMailboxConnectionResult'
-}
-
-export interface RevokeWorkspaceMailboxResult {
-    connectedAccountId: Scalars['UUID']
-    revoked: Scalars['Boolean']
-    state: Scalars['String']
-    __typename: 'RevokeWorkspaceMailboxResult'
-}
-
 export interface AgentMessagePart {
     id: Scalars['UUID']
     messageId: Scalars['UUID']
@@ -2459,6 +2431,34 @@ export interface ToolIndexEntry {
     icon?: Scalars['String']
     inputSchema?: Scalars['JSON']
     __typename: 'ToolIndexEntry'
+}
+
+export interface WorkspaceMailboxConnectionStatus {
+    connectedAccountId: Scalars['UUID']
+    errorCode?: Scalars['String']
+    errorMessage?: Scalars['String']
+    lastSafeOperation: Scalars['String']
+    maskedHandle: Scalars['String']
+    messageChannelId: Scalars['UUID']
+    state: Scalars['String']
+    syncStage: Scalars['String']
+    syncStatus: Scalars['String']
+    updatedAt: Scalars['DateTime']
+    __typename: 'WorkspaceMailboxConnectionStatus'
+}
+
+export interface WorkspaceMailboxConnectionResult {
+    connectedAccountId: Scalars['UUID']
+    messageChannelId: Scalars['UUID']
+    status: WorkspaceMailboxConnectionStatus
+    __typename: 'WorkspaceMailboxConnectionResult'
+}
+
+export interface RevokeWorkspaceMailboxResult {
+    connectedAccountId: Scalars['UUID']
+    revoked: Scalars['Boolean']
+    state: Scalars['String']
+    __typename: 'RevokeWorkspaceMailboxResult'
 }
 
 export interface ChannelSyncSuccess {
@@ -5626,37 +5626,6 @@ export interface ImapSmtpCaldavConnectionSuccessGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface WorkspaceMailboxConnectionStatusGenqlSelection{
-    connectedAccountId?: boolean | number
-    errorCode?: boolean | number
-    errorMessage?: boolean | number
-    lastSafeOperation?: boolean | number
-    maskedHandle?: boolean | number
-    messageChannelId?: boolean | number
-    state?: boolean | number
-    syncStage?: boolean | number
-    syncStatus?: boolean | number
-    updatedAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface WorkspaceMailboxConnectionResultGenqlSelection{
-    connectedAccountId?: boolean | number
-    messageChannelId?: boolean | number
-    status?: WorkspaceMailboxConnectionStatusGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface RevokeWorkspaceMailboxResultGenqlSelection{
-    connectedAccountId?: boolean | number
-    revoked?: boolean | number
-    state?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface AgentMessagePartGenqlSelection{
     id?: boolean | number
     messageId?: boolean | number
@@ -5719,6 +5688,37 @@ export interface ToolIndexEntryGenqlSelection{
     objectName?: boolean | number
     icon?: boolean | number
     inputSchema?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface WorkspaceMailboxConnectionStatusGenqlSelection{
+    connectedAccountId?: boolean | number
+    errorCode?: boolean | number
+    errorMessage?: boolean | number
+    lastSafeOperation?: boolean | number
+    maskedHandle?: boolean | number
+    messageChannelId?: boolean | number
+    state?: boolean | number
+    syncStage?: boolean | number
+    syncStatus?: boolean | number
+    updatedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface WorkspaceMailboxConnectionResultGenqlSelection{
+    connectedAccountId?: boolean | number
+    messageChannelId?: boolean | number
+    status?: WorkspaceMailboxConnectionStatusGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface RevokeWorkspaceMailboxResultGenqlSelection{
+    connectedAccountId?: boolean | number
+    revoked?: boolean | number
+    state?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6414,7 +6414,7 @@ export interface MutationGenqlSelection{
     updateCalendarChannel?: (CalendarChannelGenqlSelection & { __args: {input: UpdateCalendarChannelInput} })
     createChatThread?: AgentChatThreadGenqlSelection
     sendChatMessage?: (SendChatMessageResultGenqlSelection & { __args: {threadId: Scalars['UUID'], text: Scalars['String'], messageId: Scalars['UUID'], browsingContext?: (Scalars['JSON'] | null), modelId?: (Scalars['String'] | null), fileAttachments?: (FileAttachmentInput[] | null)} })
-    retryChatMessage?: (SendChatMessageResultGenqlSelection & { __args: {threadId: Scalars['UUID'], modelId?: (Scalars['String'] | null)} })
+    retryChatMessage?: (SendChatMessageResultGenqlSelection & { __args: {threadId: Scalars['UUID'], browsingContext?: (Scalars['JSON'] | null), modelId?: (Scalars['String'] | null)} })
     answerAgentChatQuestion?: (SendChatMessageResultGenqlSelection & { __args: {threadId: Scalars['UUID'], messageId: Scalars['UUID'], answers: AgentChatQuestionAnswerInput[], modelId?: (Scalars['String'] | null)} })
     resolveAgentChatApproval?: (SendChatMessageResultGenqlSelection & { __args: {threadId: Scalars['UUID'], messageId: Scalars['UUID'], decision: AgentChatApprovalDecisionInput, modelId?: (Scalars['String'] | null)} })
     stopAgentChatStream?: { __args: {threadId: Scalars['UUID']} }
@@ -8642,30 +8642,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
-    const WorkspaceMailboxConnectionStatus_possibleTypes: string[] = ['WorkspaceMailboxConnectionStatus']
-    export const isWorkspaceMailboxConnectionStatus = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionStatus => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionStatus"')
-      return WorkspaceMailboxConnectionStatus_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const WorkspaceMailboxConnectionResult_possibleTypes: string[] = ['WorkspaceMailboxConnectionResult']
-    export const isWorkspaceMailboxConnectionResult = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionResult => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionResult"')
-      return WorkspaceMailboxConnectionResult_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const RevokeWorkspaceMailboxResult_possibleTypes: string[] = ['RevokeWorkspaceMailboxResult']
-    export const isRevokeWorkspaceMailboxResult = (obj?: { __typename?: any } | null): obj is RevokeWorkspaceMailboxResult => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isRevokeWorkspaceMailboxResult"')
-      return RevokeWorkspaceMailboxResult_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
     const AgentMessagePart_possibleTypes: string[] = ['AgentMessagePart']
     export const isAgentMessagePart = (obj?: { __typename?: any } | null): obj is AgentMessagePart => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isAgentMessagePart"')
@@ -8694,6 +8670,30 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isToolIndexEntry = (obj?: { __typename?: any } | null): obj is ToolIndexEntry => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isToolIndexEntry"')
       return ToolIndexEntry_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const WorkspaceMailboxConnectionStatus_possibleTypes: string[] = ['WorkspaceMailboxConnectionStatus']
+    export const isWorkspaceMailboxConnectionStatus = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionStatus => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionStatus"')
+      return WorkspaceMailboxConnectionStatus_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const WorkspaceMailboxConnectionResult_possibleTypes: string[] = ['WorkspaceMailboxConnectionResult']
+    export const isWorkspaceMailboxConnectionResult = (obj?: { __typename?: any } | null): obj is WorkspaceMailboxConnectionResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceMailboxConnectionResult"')
+      return WorkspaceMailboxConnectionResult_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const RevokeWorkspaceMailboxResult_possibleTypes: string[] = ['RevokeWorkspaceMailboxResult']
+    export const isRevokeWorkspaceMailboxResult = (obj?: { __typename?: any } | null): obj is RevokeWorkspaceMailboxResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isRevokeWorkspaceMailboxResult"')
+      return RevokeWorkspaceMailboxResult_possibleTypes.includes(obj.__typename)
     }
     
 

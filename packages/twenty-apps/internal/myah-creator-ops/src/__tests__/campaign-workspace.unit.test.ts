@@ -9,6 +9,7 @@ import {
 import defaultRoleResult from 'src/default-role';
 import campaignOverviewReadinessFrontComponentResult from 'src/front-components/campaign-overview-readiness.front-component';
 import campaignRecordPageLayoutResult from 'src/page-layouts/campaign-record-page.page-layout';
+import campaignInstructionsPageLayoutTabResult from 'src/page-layout-tabs/campaign-instructions.page-layout-tab';
 
 const unwrapValidationResult = <T>(result: {
   success: boolean;
@@ -28,6 +29,9 @@ const campaignOverviewReadinessFrontComponent = unwrapValidationResult(
 );
 const campaignRecordPageLayout = unwrapValidationResult(
   campaignRecordPageLayoutResult,
+);
+const campaignInstructionsPageLayoutTab = unwrapValidationResult(
+  campaignInstructionsPageLayoutTabResult,
 );
 
 describe('Campaign workspace extension metadata', () => {
@@ -110,6 +114,17 @@ describe('Campaign workspace extension metadata', () => {
         frontComponentUniversalIdentifier:
           '878a3fd2-67f7-40ee-91eb-8dd18dda843c',
       },
+      instructions: {
+        fieldsViewUniversalIdentifier: 'eb4da94a-d3da-4354-bb39-7478ac12bd35',
+        fieldsViewFieldUniversalIdentifiers: {
+          campaignBrief: 'b7905ed5-e0d8-4ca0-a733-43b9b8e78596',
+          communicationGuidelines: '20cc5027-cec9-4259-9323-f9c69ed5c40b',
+          replyRules: '32eee0c6-5260-4f27-9af8-489356f28a28',
+          escalationBoundaries: 'fce3b6b4-2a46-4e1f-9944-22d5b989c033',
+          additionalNotes: '5d334bcb-90de-4e49-bc33-eeb7d7ee2e82',
+        },
+        fieldsWidgetUniversalIdentifier: '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392',
+      },
     });
 
     const universalIdentifiers = [
@@ -124,9 +139,15 @@ describe('Campaign workspace extension metadata', () => {
       CAMPAIGN_WORKSPACE_CONFIG.overview.fieldsWidgetUniversalIdentifier,
       CAMPAIGN_WORKSPACE_CONFIG.overview.readinessWidgetUniversalIdentifier,
       CAMPAIGN_WORKSPACE_CONFIG.overview.frontComponentUniversalIdentifier,
+      CAMPAIGN_WORKSPACE_CONFIG.instructions.fieldsViewUniversalIdentifier,
+      ...Object.values(
+        CAMPAIGN_WORKSPACE_CONFIG.instructions
+          .fieldsViewFieldUniversalIdentifiers,
+      ),
+      CAMPAIGN_WORKSPACE_CONFIG.instructions.fieldsWidgetUniversalIdentifier,
     ];
 
-    expect(universalIdentifiers).toHaveLength(15);
+    expect(universalIdentifiers).toHaveLength(22);
     expect(new Set(universalIdentifiers).size).toBe(
       universalIdentifiers.length,
     );
@@ -178,5 +199,38 @@ describe('Campaign workspace extension metadata', () => {
         CAMPAIGN_WORKSPACE_CONFIG.overview.frontComponentUniversalIdentifier,
       name: 'campaign-overview-readiness',
     });
+  });
+
+  it('registers the native Instructions tab independently of Overview', () => {
+    expect(campaignRecordPageLayout.tabs).toHaveLength(1);
+    expect(campaignRecordPageLayout.tabs?.[0]?.universalIdentifier).toBe(
+      CAMPAIGN_WORKSPACE_CONFIG.tabs.overview.universalIdentifier,
+    );
+    expect(campaignInstructionsPageLayoutTab).toMatchObject({
+      universalIdentifier:
+        CAMPAIGN_WORKSPACE_CONFIG.tabs.instructions.universalIdentifier,
+      pageLayoutUniversalIdentifier:
+        CAMPAIGN_WORKSPACE_CONFIG.pageLayoutUniversalIdentifier,
+      title: 'Instructions',
+      position: 30,
+      icon: 'IconFileText',
+      layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+    });
+    expect(campaignInstructionsPageLayoutTab.widgets).toEqual([
+      {
+        universalIdentifier:
+          CAMPAIGN_WORKSPACE_CONFIG.instructions
+            .fieldsWidgetUniversalIdentifier,
+        title: 'Campaign instructions',
+        type: 'FIELDS',
+        objectUniversalIdentifier: CAMPAIGN_OBJECT_UNIVERSAL_IDENTIFIER,
+        configuration: {
+          configurationType: 'FIELDS',
+          viewUniversalIdentifier:
+            CAMPAIGN_WORKSPACE_CONFIG.instructions
+              .fieldsViewUniversalIdentifier,
+        },
+      },
+    ]);
   });
 });

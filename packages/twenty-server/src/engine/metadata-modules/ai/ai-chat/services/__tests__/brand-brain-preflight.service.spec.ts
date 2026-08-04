@@ -23,7 +23,9 @@ const buildService = ({
     ),
   };
 
-  const service = new BrandBrainPreflightService(toolRegistry as never);
+  const service = new BrandBrainPreflightService({
+    get: jest.fn().mockReturnValue(toolRegistry),
+  } as never);
 
   return { service, toolRegistry };
 };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAtom, useStore } from 'jotai';
+import { useAtom } from 'jotai';
 
 import { BLOCK_SCHEMA } from '@/blocknote-editor/blocks/Schema';
 import { BlockEditor } from '@/blocknote-editor/components/BlockEditor';
@@ -10,11 +10,12 @@ import { parseInitialBlocknote } from '@/blocknote-editor/utils/parseInitialBloc
 import { prepareBodyWithSignedUrls } from '@/blocknote-editor/utils/prepareBodyWithSignedUrls';
 import { type Attachment } from '@/activities/files/types/Attachment';
 import { useUploadAttachmentFile } from '@/activities/files/hooks/useUploadAttachmentFile';
-import { getActivityTargetObjectFieldIdName } from '@/activities/utils/getActivityTargetObjectFieldIdName';
+import {
+  doesActivityTargetObjectSupportAttachments,
+  getActivityTargetObjectFieldIdName,
+} from '@/activities/utils/getActivityTargetObjectFieldIdName';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { modifyRecordFromCache } from '@/object-record/cache/utils/modifyRecordFromCache';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
@@ -52,14 +53,15 @@ export const RichTextFieldEditor = ({
   onBlur: onBlurOverride,
   editorRef,
 }: RichTextFieldEditorProps) => {
-  const store = useStore();
   const [recordInStore] = useAtom(recordStoreFamilyState.atomFamily(recordId));
-
-  const cache = useApolloCoreClient().cache;
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
   });
+  const { objectMetadataItem: attachmentObjectMetadataItem } =
+    useObjectMetadataItem({
+      objectNameSingular: CoreObjectNameSingular.Attachment,
+    });
 
   const fieldMetadataItem = objectMetadataItem.fields.find(
     (field) => field.name === fieldName,
@@ -82,6 +84,13 @@ export const RichTextFieldEditor = ({
   const attachmentTargetFieldIdName = getActivityTargetObjectFieldIdName({
     nameSingular: objectNameSingular,
   });
+  const doesObjectSupportAttachments =
+    doesActivityTargetObjectSupportAttachments({
+      attachmentFieldNames: attachmentObjectMetadataItem.fields
+        .map((field) => field.settings?.joinColumnName)
+        .filter(isDefined),
+      objectNameSingular,
+    });
 
   const { records: attachments } = useFindManyRecords<Attachment>({
     objectNameSingular: CoreObjectNameSingular.Attachment,
@@ -90,6 +99,7 @@ export const RichTextFieldEditor = ({
         eq: recordId,
       },
     },
+    skip: !doesObjectSupportAttachments,
   });
 
   const { syncAttachments } = useAttachmentSync(attachments);
@@ -117,7 +127,7 @@ export const RichTextFieldEditor = ({
       return;
     }
 
-    updateOneRecord({
+    void updateOneRecord({
       idToUpdate: recordId,
       objectNameSingular,
       updateOneRecordInput: {
@@ -126,55 +136,30 @@ export const RichTextFieldEditor = ({
           markdown: null,
         },
       },
-    });
+    }).catch(() => undefined);
   }, 300);
 
   const handleBodyChange = useCallback(
     async (newStringifiedBody: string) => {
-      const oldRecord = store.get(recordStoreFamilyState.atomFamily(recordId));
-
-      store.set(
-        recordStoreFamilyState.atomFamily(recordId),
-        (prev: typeof oldRecord) => ({
-          ...prev,
-          id: recordId,
-          [fieldName]: {
-            blocknote: newStringifiedBody,
-            markdown: null,
-          },
-          __typename: prev?.__typename ?? objectNameSingular,
-        }),
-      );
-
-      modifyRecordFromCache({
-        recordId,
-        fieldModifiers: {
-          [fieldName]: () => ({
-            blocknote: newStringifiedBody,
-            markdown: null,
-          }),
-        },
-        cache,
-        objectMetadataItem,
-      });
+      const oldFieldValue = (
+        recordInStore as
+          | Record<string, { blocknote?: string | null }>
+          | null
+          | undefined
+      )?.[fieldName];
 
       persistBodyDebounced(prepareBodyWithSignedUrls(newStringifiedBody));
 
-      const oldFieldValue = oldRecord?.[fieldName] as
-        | { blocknote?: string | null }
-        | undefined;
-
-      await syncAttachments(newStringifiedBody, oldFieldValue?.blocknote);
+      if (doesObjectSupportAttachments) {
+        await syncAttachments(newStringifiedBody, oldFieldValue?.blocknote);
+      }
     },
     [
-      store,
-      recordId,
+      recordInStore,
       fieldName,
-      objectNameSingular,
-      cache,
-      objectMetadataItem,
       persistBodyDebounced,
       syncAttachments,
+      doesObjectSupportAttachments,
     ],
   );
 
@@ -208,7 +193,9 @@ export const RichTextFieldEditor = ({
     initialContent: initialBody,
     domAttributes: { editor: { class: 'editor' } },
     schema: BLOCK_SCHEMA,
-    uploadFile: handleEditorBuiltInUploadFile,
+    uploadFile: doesObjectSupportAttachments
+      ? handleEditorBuiltInUploadFile
+      : undefined,
     placeholders: {
       default: t`Type '/' for commands, '@' for mentions`,
     },

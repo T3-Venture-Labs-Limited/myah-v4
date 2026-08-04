@@ -13,7 +13,7 @@ import { useUpdatePageLayoutWithTabsAndWidgets } from '@/page-layout/hooks/useUp
 import { pageLayoutCurrentLayoutsComponentState } from '@/page-layout/states/pageLayoutCurrentLayoutsComponentState';
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
 import { pageLayoutPersistedComponentState } from '@/page-layout/states/pageLayoutPersistedComponentState';
-import { type DraftPageLayout } from '@/page-layout/types/DraftPageLayout';
+import { toDraftPageLayout } from '@/page-layout/utils/toDraftPageLayout';
 import { type PageLayout } from '@/page-layout/types/PageLayout';
 import { convertPageLayoutDraftToUpdateInput } from '@/page-layout/utils/convertPageLayoutDraftToUpdateInput';
 import { convertPageLayoutToTabLayouts } from '@/page-layout/utils/convertPageLayoutToTabLayouts';
@@ -93,15 +93,7 @@ export const useSaveLayoutCustomization = () => {
           continue;
         }
 
-        const persistedAsDraft: DraftPageLayout = {
-          id: persisted.id,
-          name: persisted.name,
-          type: persisted.type,
-          objectMetadataId: persisted.objectMetadataId,
-          tabs: persisted.tabs,
-          defaultTabToFocusOnMobileAndSidePanelId:
-            persisted.defaultTabToFocusOnMobileAndSidePanelId,
-        };
+        const persistedAsDraft = toDraftPageLayout(persisted);
 
         const isPageLayoutStructureDirty = !isDeeplyEqual(
           draft,

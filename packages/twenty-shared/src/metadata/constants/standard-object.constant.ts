@@ -55,6 +55,9 @@ export const STANDARD_OBJECTS = {
       targetWorkflow: {
         universalIdentifier: '20202020-f1e8-4c9d-8a7b-3f5e1d2c9a8b',
       },
+      targetCreator: {
+        universalIdentifier: '179b4088-ecec-5113-8397-5b85ffd3d542',
+      },
       position: {
         universalIdentifier: 'cef8f62c-cd46-4444-8cbb-17d463b7464a',
       },
@@ -1424,6 +1427,27 @@ export const STANDARD_OBJECTS = {
       subject: {
         universalIdentifier: 'a8ddbf8c-1137-45d1-b89e-5ffbd83f67c8',
       },
+      creator: {
+        universalIdentifier: '2bab4cc0-d1d8-4394-b506-9c49a8b414a5',
+      },
+      myahCampaign: {
+        universalIdentifier: 'f7e38f36-1901-40df-b6c1-cfff373f472f',
+      },
+      inboxOwner: {
+        universalIdentifier: 'eb7f2495-3cc2-4db5-9744-1172ab8a44e8',
+      },
+      inboxState: {
+        universalIdentifier: '5047d99f-a82c-4a68-ad39-efd9665a182c',
+      },
+      snoozedUntil: {
+        universalIdentifier: 'ff39959f-533d-4a41-b022-2744628ada69',
+      },
+      myahReplyDraftBody: {
+        universalIdentifier: '8ec8253f-9b54-46d5-9b55-ac1829c10f4f',
+      },
+      myahReplyDraftRevision: {
+        universalIdentifier: 'dfcab7eb-b140-48b7-9252-ed4b9b0d5789',
+      },
     },
     indexes: {},
     views: {
@@ -2462,6 +2486,9 @@ export const STANDARD_OBJECTS = {
       targetMessageCampaign: {
         universalIdentifier: 'b2c3d4e5-6f70-4b81-8c92-03d4e5f60718',
       },
+      targetCreator: {
+        universalIdentifier: '81c0d29d-abc3-5b58-a15d-e573ea52de57',
+      },
       linkedRecordCachedName: {
         universalIdentifier: '20202020-cfdb-4bef-bbce-a29f41230934',
       },
@@ -3016,6 +3043,9 @@ export const STANDARD_OBJECTS = {
       },
       ownedCreators: {
         universalIdentifier: 'fe31748c-e0e8-40b2-b175-1759c817e54a',
+      },
+      ownedInboxThreads: {
+        universalIdentifier: '664b677e-8625-4442-bc1c-c836f541d0d1',
       },
       ownedCampaigns: {
         universalIdentifier: 'f24d1eb5-ee43-457f-bb4b-28fdf9d4e760',

@@ -9,4 +9,5 @@ export enum ToolCategory {
   WEBHOOK = 'WEBHOOK',
   LOGIC_FUNCTION = 'LOGIC_FUNCTION',
   BRAND_BRAIN = 'BRAND_BRAIN',
+  MYAH_INBOX = 'MYAH_INBOX',
 }

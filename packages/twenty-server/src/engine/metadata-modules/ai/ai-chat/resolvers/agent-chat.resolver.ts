@@ -236,6 +236,13 @@ export class AgentChatResolver {
       isDefined(thread.activeStreamId) ||
       isDefined(thread.pendingQuestionMessageId)
     ) {
+      if (browsingContext?.type === 'myahInboxThreadSelection') {
+        throw new AiException(
+          'Selected Inbox messages cannot be queued',
+          AiExceptionCode.INBOX_SELECTION_CANNOT_BE_QUEUED,
+        );
+      }
+
       const queuedMessage = await this.agentChatService.queueMessage({
         threadId,
         text,
@@ -285,6 +292,8 @@ export class AgentChatResolver {
   @Mutation(() => SendChatMessageResultDTO)
   async retryChatMessage(
     @Args('threadId', { type: () => UUIDScalarType }) threadId: string,
+    @Args('browsingContext', { type: () => GraphQLJSON, nullable: true })
+    browsingContext: BrowsingContextType | null,
     @Args('modelId', { type: () => String, nullable: true })
     modelId: string | undefined,
     @AuthUserWorkspaceId() userWorkspaceId: string,
@@ -308,6 +317,7 @@ export class AgentChatResolver {
 
     const result = await this.agentChatStreamingService.retryLastFailedTurn({
       threadId,
+      browsingContext: browsingContext ?? null,
       userWorkspaceId,
       workspace,
       modelId,

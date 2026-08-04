@@ -113,6 +113,8 @@ const StyledItem = styled.button<StyledItemProps>`
   margin-top: ${({ indentationLevel }) =>
     indentationLevel === 2 ? '2px' : '0'};
   min-width: 0;
+  opacity: ${({ isSoon, isNavigationDrawerExpanded }) =>
+    isSoon && !isNavigationDrawerExpanded ? 0.55 : 1};
   padding-bottom: ${themeCssVariables.spacing[1]};
   padding-left: ${themeCssVariables.spacing[1]};
   padding-right: ${({ hasRightOptions }) =>
@@ -120,7 +122,8 @@ const StyledItem = styled.button<StyledItemProps>`
       ? themeCssVariables.spacing['0.5']
       : themeCssVariables.spacing[1]};
   padding-top: ${themeCssVariables.spacing[1]};
-  pointer-events: ${({ isDisabled }) => (isDisabled ? 'none' : 'auto')};
+  pointer-events: ${({ isDisabled, isSoon, isNavigationDrawerExpanded }) =>
+    isDisabled && !(isSoon && !isNavigationDrawerExpanded) ? 'none' : 'auto'};
   text-decoration: none;
   user-select: none;
   width: ${({ isNavigationDrawerExpanded, hasRightOptions }) =>
@@ -129,11 +132,16 @@ const StyledItem = styled.button<StyledItemProps>`
       : `calc(100% - ${themeCssVariables.spacing['1.5']} + ${themeCssVariables.spacing[1]} + ${hasRightOptions ? themeCssVariables.spacing['0.5'] : themeCssVariables.spacing[1]})`};
 
   &:hover {
-    background: ${themeCssVariables.background.transparent.light};
-    color: ${({ variant }) =>
+    background: ${({ isSoon, isNavigationDrawerExpanded }) =>
+      isSoon && !isNavigationDrawerExpanded
+        ? 'transparent'
+        : themeCssVariables.background.transparent.light};
+    color: ${({ variant, isSoon, isNavigationDrawerExpanded }) =>
       variant === 'tertiary'
         ? themeCssVariables.font.color.tertiary
-        : themeCssVariables.font.color.primary};
+        : isSoon && !isNavigationDrawerExpanded
+          ? themeCssVariables.font.color.light
+          : themeCssVariables.font.color.primary};
   }
 
   &:hover .keyboard-shortcuts {
@@ -281,6 +289,7 @@ export const NavigationDrawerItem = ({
   const { navigationItemId } = useNavigationDrawerTooltip(label, to);
 
   const isSoon = modifier === 'soon';
+  const isFocusableSoonItem = isSoon && disabled && !isExpanded && !isMobile;
   const navigationTarget = disabled ? undefined : to;
   const navigationOnClick = disabled ? undefined : onClick;
 
@@ -358,8 +367,8 @@ export const NavigationDrawerItem = ({
         target={isExternalLink ? '_blank' : undefined}
         rel={isExternalLink ? 'noopener noreferrer' : undefined}
         draggable={isInternalLink ? false : undefined}
-        tabIndex={disabled ? -1 : undefined}
-        disabled={disabled}
+        tabIndex={disabled && !isFocusableSoonItem ? -1 : undefined}
+        disabled={disabled && !isFocusableSoonItem}
       >
         <StyledItemElementsContainer>
           {showBreadcrumb && (
@@ -379,11 +388,7 @@ export const NavigationDrawerItem = ({
                   <Icon
                     size={theme.icon.size.md}
                     stroke={theme.icon.stroke.md}
-                    color={
-                      showBreadcrumb && !isExpanded
-                        ? theme.font.color.light
-                        : 'currentColor'
-                    }
+                    color="currentColor"
                   />
                 </StyledIconBackgroundTile>
               </StyledIcon>
@@ -395,11 +400,7 @@ export const NavigationDrawerItem = ({
                   }}
                   size={theme.icon.size.md}
                   stroke={theme.icon.stroke.md}
-                  color={
-                    showBreadcrumb && !isExpanded
-                      ? theme.font.color.light
-                      : 'currentColor'
-                  }
+                  color="currentColor"
                 />
               </StyledIcon>
             ))}
@@ -476,7 +477,7 @@ export const NavigationDrawerItem = ({
       {!isExpanded && !isMobile && (
         <AppTooltip
           anchorSelect={`#${navigationItemId}`}
-          content={label}
+          content={isSoon ? t`Coming soon` : label}
           place={TooltipPosition.Right}
           delay={TooltipDelay.noDelay}
           positionStrategy="fixed"

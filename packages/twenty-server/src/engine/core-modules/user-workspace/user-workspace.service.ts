@@ -71,6 +71,15 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
     super(userWorkspaceRepository);
   }
 
+  async findByIdWithUser(
+    userWorkspaceId: string,
+  ): Promise<UserWorkspaceEntity | null> {
+    return this.userWorkspaceRepository.findOne({
+      where: { id: userWorkspaceId },
+      relations: { user: true },
+    });
+  }
+
   async updateUserWorkspaceLocaleForUserWorkspace({
     locale,
     userWorkspaceId,

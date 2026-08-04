@@ -70,6 +70,7 @@ describe('AgentChatStreamingService.retryLastFailedTurn', () => {
     threadId: 'thread-id',
     userWorkspaceId: 'user-workspace-id',
     workspace,
+    browsingContext: null,
   };
 
   it('rejects when the thread has no persisted stream error', async () => {
@@ -127,11 +128,17 @@ describe('AgentChatStreamingService.retryLastFailedTurn', () => {
   it('drops the failed output, re-enqueues the turn, and clears the error', async () => {
     const { service, threadRepository, messageQueueService, agentChatService } =
       buildService();
+    const browsingContext = {
+      type: 'myahInboxThreadSelection',
+      workspaceId: 'workspace-id',
+      threadId: '3ceef358-55fc-4d47-a7a8-2d8ac543641b',
+    };
 
     const result = await service.retryLastFailedTurn({
       ...retryArguments,
+      browsingContext,
       modelId: 'model-id',
-    });
+    } as never);
 
     expect(
       agentChatService.deleteAssistantMessagesForTurn,
@@ -145,6 +152,7 @@ describe('AgentChatStreamingService.retryLastFailedTurn', () => {
         modelId: 'model-id',
         hasTitle: true,
         conversationSizeTokens: 42,
+        browsingContext,
       }),
     );
     expect(threadRepository.update).toHaveBeenCalledWith(

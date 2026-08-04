@@ -182,6 +182,13 @@ export class AgentChatStreamingService {
       }));
 
     if (!claimed) {
+      if (browsingContext?.type === 'myahInboxThreadSelection') {
+        throw new AiException(
+          'Selected Inbox messages cannot be queued',
+          AiExceptionCode.INBOX_SELECTION_CANNOT_BE_QUEUED,
+        );
+      }
+
       const queuedMessage = await this.agentChatService.queueMessage({
         threadId,
         text,
@@ -265,11 +272,13 @@ export class AgentChatStreamingService {
     threadId,
     userWorkspaceId,
     workspace,
+    browsingContext,
     modelId,
   }: {
     threadId: string;
     userWorkspaceId: string;
     workspace: WorkspaceEntity;
+    browsingContext: BrowsingContextType | null;
     modelId?: string;
   }): Promise<{ streamId: string; messageId: string }> {
     const thread = await this.threadRepository.findOne(workspace.id, {
@@ -355,7 +364,7 @@ export class AgentChatStreamingService {
           userWorkspaceId,
           workspaceId: workspace.id,
           messages,
-          browsingContext: null,
+          browsingContext,
           modelId,
           lastUserMessageText: textPart?.text ?? '',
           lastUserMessageParts: retriedMessage.parts,

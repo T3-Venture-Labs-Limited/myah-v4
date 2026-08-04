@@ -1,6 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { MyahInboxModule } from 'src/engine/core-modules/myah-inbox/myah-inbox.module';
 import { RecordCrudModule } from 'src/engine/core-modules/record-crud/record-crud.module';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
 import { ActionToolProvider } from 'src/engine/core-modules/tool-provider/providers/action-tool.provider';
@@ -10,6 +11,7 @@ import { DatabaseToolProvider } from 'src/engine/core-modules/tool-provider/prov
 import { LogicFunctionToolProvider } from 'src/engine/core-modules/tool-provider/providers/logic-function-tool.provider';
 import { MetadataToolProvider } from 'src/engine/core-modules/tool-provider/providers/metadata-tool.provider';
 import { NavigationMenuItemToolProvider } from 'src/engine/core-modules/tool-provider/providers/navigation-menu-item-tool.provider';
+import { MyahInboxToolProvider } from 'src/engine/core-modules/tool-provider/providers/myah-inbox-tool.provider';
 import { ViewToolProvider } from 'src/engine/core-modules/tool-provider/providers/view-tool.provider';
 import { WebhookToolProvider } from 'src/engine/core-modules/tool-provider/providers/webhook-tool.provider';
 import { WorkflowToolProvider } from 'src/engine/core-modules/tool-provider/providers/workflow-tool.provider';
@@ -52,6 +54,7 @@ import { ToolRegistryService } from './services/tool-registry.service';
     RecordCrudModule,
     AiModelsModule,
     forwardRef(() => AiAgentExecutionModule),
+    forwardRef(() => MyahInboxModule),
     ObjectMetadataModule,
     FieldMetadataModule,
     PermissionsModule,
@@ -78,6 +81,7 @@ import { ToolRegistryService } from './services/tool-registry.service';
     MetadataToolProvider,
     NavigationMenuItemToolProvider,
     LogicFunctionToolProvider,
+    MyahInboxToolProvider,
     ViewToolProvider,
     WebhookToolProvider,
     WorkflowToolProvider,
@@ -98,6 +102,7 @@ import { ToolRegistryService } from './services/tool-registry.service';
         webhookProvider: WebhookToolProvider,
         workflowProvider: WorkflowToolProvider,
         dashboardProvider: DashboardToolProvider,
+        myahInboxProvider: MyahInboxToolProvider,
       ) => [
         actionProvider,
         brandBrainProvider,
@@ -109,6 +114,7 @@ import { ToolRegistryService } from './services/tool-registry.service';
         webhookProvider,
         workflowProvider,
         dashboardProvider,
+        myahInboxProvider,
       ],
       inject: [
         ActionToolProvider,
@@ -121,6 +127,7 @@ import { ToolRegistryService } from './services/tool-registry.service';
         WebhookToolProvider,
         WorkflowToolProvider,
         DashboardToolProvider,
+        MyahInboxToolProvider,
       ],
     },
     ToolRegistryService,
