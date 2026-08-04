@@ -25,6 +25,7 @@ import { getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId 
 import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS } from '@/ui/utilities/drag-select/constants/RecordIndecDragSelectBoundaryClass';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
@@ -47,6 +48,7 @@ export type RecordIndexSurfaceProps = {
   viewId: string;
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+  onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
 };
@@ -87,6 +89,7 @@ const RecordIndexSurfaceInstance = ({
   viewId,
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
+  onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters = [],
 }: RecordIndexSurfaceInstanceProps) => {
@@ -155,6 +158,7 @@ const RecordIndexSurfaceInstance = ({
               indexIdentifierUrl,
               onOpenRecordFromIndexView,
               onViewChange,
+              onRecordCreated,
               recordFieldByFieldMetadataItemId,
               labelIdentifierFieldMetadataItem,
               fieldMetadataItemByFieldMetadataItemId,
@@ -247,6 +251,7 @@ export const RecordIndexSurface = ({
   viewId,
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
+  onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters,
 }: RecordIndexSurfaceProps) => {
@@ -272,6 +277,7 @@ export const RecordIndexSurface = ({
       indexIdentifierUrl={indexIdentifierUrl}
       onOpenRecordFromIndexView={onOpenRecordFromIndexView}
       onViewChange={onViewChange}
+      onRecordCreated={onRecordCreated}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
     />
   );

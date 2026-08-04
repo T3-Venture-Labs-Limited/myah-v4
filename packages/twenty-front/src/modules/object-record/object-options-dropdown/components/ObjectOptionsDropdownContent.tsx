@@ -14,7 +14,15 @@ import { ObjectOptionsDropdownVisibilityContent } from '@/object-record/object-o
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 
 export const ObjectOptionsDropdownContent = () => {
-  const { currentContentId } = useObjectOptionsDropdown();
+  const { currentContentId, isLayoutLocked } = useObjectOptionsDropdown();
+
+  if (
+    isLayoutLocked &&
+    (currentContentId === 'calendarFields' ||
+      currentContentId === 'calendarView')
+  ) {
+    return <ObjectOptionsDropdownMenuContent />;
+  }
 
   switch (currentContentId) {
     case 'layout':

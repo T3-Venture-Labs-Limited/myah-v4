@@ -15,8 +15,10 @@ import { Button } from 'twenty-ui/input';
 
 export const ViewPickerEditButton = ({
   onViewChange,
+  forcedViewType,
 }: {
   onViewChange?: (viewId: string) => void;
+  forcedViewType?: ViewType;
 }) => {
   const { availableFieldsForGrouping, navigateToSelectSettings } =
     useGetAvailableFieldsToGroupRecordsBy();
@@ -40,9 +42,12 @@ export const ViewPickerEditButton = ({
   const viewPickerMainGroupByFieldMetadataId = useAtomComponentStateValue(
     viewPickerMainGroupByFieldMetadataIdComponentState,
   );
+  const resolvedViewPickerType = forcedViewType ?? viewPickerType;
 
-  const { createViewFromCurrentState } =
-    useCreateViewFromCurrentState(onViewChange);
+  const { createViewFromCurrentState } = useCreateViewFromCurrentState(
+    onViewChange,
+    forcedViewType,
+  );
   const { destroyViewFromCurrentState } = useDestroyViewFromCurrentState(
     undefined,
     onViewChange,
@@ -65,7 +70,7 @@ export const ViewPickerEditButton = ({
   }
 
   if (
-    viewPickerType === ViewType.KANBAN &&
+    resolvedViewPickerType === ViewType.KANBAN &&
     availableFieldsForGrouping.length === 0
   ) {
     return (
@@ -81,7 +86,7 @@ export const ViewPickerEditButton = ({
   }
 
   if (
-    viewPickerType === ViewType.TABLE ||
+    resolvedViewPickerType === ViewType.TABLE ||
     viewPickerMainGroupByFieldMetadataId !== ''
   ) {
     return (
@@ -94,7 +99,7 @@ export const ViewPickerEditButton = ({
         justify="center"
         disabled={
           viewPickerIsPersisting ||
-          (viewPickerType === ViewType.KANBAN &&
+          (resolvedViewPickerType === ViewType.KANBAN &&
             viewPickerMainGroupByFieldMetadataId === '')
         }
       />

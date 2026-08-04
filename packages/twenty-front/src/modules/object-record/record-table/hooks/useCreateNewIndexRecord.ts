@@ -4,6 +4,7 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 import { getLabelIdentifierFieldMetadataItem } from '@/object-metadata/utils/getLabelIdentifierFieldMetadataItem';
 import { useBuildRecordInputFromRLSPredicates } from '@/object-record/hooks/useBuildRecordInputFromRLSPredicates';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
+import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { recordGroupDefinitionsComponentSelector } from '@/object-record/record-group/states/selectors/recordGroupDefinitionsComponentSelector';
 import { getFieldMetadataItemGqlFieldName } from '@/object-metadata/utils/getFieldMetadataItemGqlFieldName';
 import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
@@ -77,6 +78,7 @@ export const useCreateNewIndexRecord = ({
     useBuildRecordInputFromRLSPredicates({
       objectMetadataItem,
     });
+  const { onRecordCreated } = useRecordIndexContextOrThrow();
 
   const createNewIndexRecord = useCallback(
     async (recordInput?: Partial<ObjectRecord>) => {
@@ -100,6 +102,8 @@ export const useCreateNewIndexRecord = ({
         id: recordId,
         ...mergedRecordInput,
       });
+
+      await onRecordCreated?.(createdRecord);
 
       if (
         recordIndexOpenRecordIn === ViewOpenRecordIn.SIDE_PANEL &&
@@ -185,6 +189,7 @@ export const useCreateNewIndexRecord = ({
       upsertRecordsInStore,
       closeSidePanelMenu,
       currentView?.openRecordIn,
+      onRecordCreated,
       contextStoreInstance?.instanceId,
     ],
   );

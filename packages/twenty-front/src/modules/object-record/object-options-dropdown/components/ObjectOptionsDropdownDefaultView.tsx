@@ -24,7 +24,7 @@ import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 export const ObjectOptionsDropdownDefaultView = () => {
   const { t } = useLingui();
-  const { dropdownId, onContentChange, recordIndexId } =
+  const { dropdownId, isLayoutLocked, onContentChange, recordIndexId } =
     useObjectOptionsDropdown();
 
   const { currentView } = useGetCurrentViewOnly();
@@ -38,7 +38,7 @@ export const ObjectOptionsDropdownDefaultView = () => {
 
   const selectableItemIdArray = [
     'Fields',
-    'Copy link to view',
+    ...(isLayoutLocked ? [] : ['Copy link to view']),
     'Create custom view',
   ];
 
@@ -95,23 +95,25 @@ export const ObjectOptionsDropdownDefaultView = () => {
         </DropdownMenuItemsContainer>
         <DropdownMenuSeparator />
         <DropdownMenuItemsContainer scrollable={false}>
-          <SelectableListItem
-            itemId="Copy link to view"
-            onEnter={() => {
-              const currentUrl = window.location.href;
-              copyToClipboard(currentUrl, t`Link copied to clipboard`);
-            }}
-          >
-            <MenuItem
-              focused={selectedItemId === 'Copy link to view'}
-              onClick={() => {
+          {!isLayoutLocked && (
+            <SelectableListItem
+              itemId="Copy link to view"
+              onEnter={() => {
                 const currentUrl = window.location.href;
                 copyToClipboard(currentUrl, t`Link copied to clipboard`);
               }}
-              LeftIcon={IconCopy}
-              text={t`Copy link to view`}
-            />
-          </SelectableListItem>
+            >
+              <MenuItem
+                focused={selectedItemId === 'Copy link to view'}
+                onClick={() => {
+                  const currentUrl = window.location.href;
+                  copyToClipboard(currentUrl, t`Link copied to clipboard`);
+                }}
+                LeftIcon={IconCopy}
+                text={t`Copy link to view`}
+              />
+            </SelectableListItem>
+          )}
           <SelectableListItem
             itemId="Create custom view"
             onEnter={handleCreateCustomView}

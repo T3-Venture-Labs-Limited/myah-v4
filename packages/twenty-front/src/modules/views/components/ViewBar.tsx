@@ -18,6 +18,7 @@ import { ViewBarRecordFilterEffect } from '@/views/components/ViewBarRecordFilte
 import { ViewBarRecordFilterGroupEffect } from '@/views/components/ViewBarRecordFilterGroupEffect';
 import { ViewBarRecordSortEffect } from '@/views/components/ViewBarRecordSortEffect';
 import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
+import { type ViewType } from '@/views/types/ViewType';
 import { UpdateViewButtonGroup } from './UpdateViewButtonGroup';
 import { ViewBarDetails } from './ViewBarDetails';
 
@@ -27,6 +28,7 @@ type ViewBarProps = {
   optionsDropdownButton: ReactNode;
   isReadOnly?: boolean;
   onViewChange?: (viewId: string) => void;
+  forcedViewType?: ViewType;
 };
 
 export const ViewBar = ({
@@ -35,6 +37,7 @@ export const ViewBar = ({
   optionsDropdownButton,
   isReadOnly = false,
   onViewChange,
+  forcedViewType,
 }: ViewBarProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
 
@@ -49,7 +52,12 @@ export const ViewBar = ({
       {isReadOnly ? (
         <TopBar
           className={className}
-          leftComponent={<ViewPickerDropdown onViewChange={onViewChange} />}
+          leftComponent={
+            <ViewPickerDropdown
+              onViewChange={onViewChange}
+              forcedViewType={forcedViewType}
+            />
+          }
         />
       ) : (
         <ObjectSortDropdownComponentInstanceContext.Provider
@@ -66,7 +74,12 @@ export const ViewBar = ({
           <ViewBarPageTitle />
           <TopBar
             className={className}
-            leftComponent={<ViewPickerDropdown onViewChange={onViewChange} />}
+            leftComponent={
+              <ViewPickerDropdown
+                onViewChange={onViewChange}
+                forcedViewType={forcedViewType}
+              />
+            }
             rightComponent={
               <>
                 <ObjectFilterDropdownComponentInstanceContext.Provider

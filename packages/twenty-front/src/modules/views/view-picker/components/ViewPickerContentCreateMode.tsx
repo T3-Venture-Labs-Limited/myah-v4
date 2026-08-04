@@ -48,8 +48,10 @@ const StyledFieldAvailableContainer = styled.div`
 
 export const ViewPickerContentCreateMode = ({
   onViewChange,
+  forcedViewType,
 }: {
   onViewChange?: (viewId: string) => void;
+  forcedViewType?: ViewType;
 }) => {
   const { t } = useLingui();
   const {
@@ -95,13 +97,16 @@ export const ViewPickerContentCreateMode = ({
   const [viewPickerType, setViewPickerType] = useAtomComponentState(
     viewPickerTypeComponentState,
   );
-  const { createViewFromCurrentState } =
-    useCreateViewFromCurrentState(onViewChange);
+  const { createViewFromCurrentState } = useCreateViewFromCurrentState(
+    onViewChange,
+    forcedViewType,
+  );
 
   const { availableFieldsForGrouping } =
     useGetAvailableFieldsToGroupRecordsBy();
 
   const { availableFieldsForCalendar } = useGetAvailableFieldsForCalendar();
+  const resolvedViewPickerType = forcedViewType ?? viewPickerType;
 
   useHotkeysOnFocusedElement({
     keys: [Key.Enter],
@@ -111,7 +116,7 @@ export const ViewPickerContentCreateMode = ({
       }
 
       if (
-        viewPickerType === ViewType.KANBAN &&
+        resolvedViewPickerType === ViewType.KANBAN &&
         availableFieldsForGrouping.length === 0
       ) {
         return;
@@ -123,13 +128,13 @@ export const ViewPickerContentCreateMode = ({
     dependencies: [
       viewPickerIsPersisting,
       createViewFromCurrentState,
-      viewPickerType,
+      resolvedViewPickerType,
       availableFieldsForGrouping,
       availableFieldsForCalendar,
     ],
   });
 
-  const defaultIcon = viewTypeIconMapping(viewPickerType).displayName;
+  const defaultIcon = viewTypeIconMapping(resolvedViewPickerType).displayName;
 
   const selectedIcon = useMemo(() => {
     if (hasManuallySelectedIcon) {
@@ -183,19 +188,21 @@ export const ViewPickerContentCreateMode = ({
           <Select
             label={t`View type`}
             fullWidth
-            value={viewPickerType}
+            value={resolvedViewPickerType}
             onChange={(value) => {
               setViewPickerIsDirty(true);
               setViewPickerType(value);
             }}
-            options={VIEW_PICKER_TYPE_SELECT_OPTIONS.map((option) => ({
+            options={VIEW_PICKER_TYPE_SELECT_OPTIONS.filter(
+              (option) => !forcedViewType || option.value === forcedViewType,
+            ).map((option) => ({
               ...option,
               label: t(option.label),
             }))}
             dropdownId={viewPickerViewTypeDropdownId}
           />
         </ViewPickerSelectContainer>
-        {viewPickerType === ViewType.KANBAN && (
+        {resolvedViewPickerType === ViewType.KANBAN && (
           <>
             <ViewPickerSelectContainer>
               <Select
@@ -226,7 +233,7 @@ export const ViewPickerContentCreateMode = ({
             )}
           </>
         )}
-        {viewPickerType === ViewType.CALENDAR && (
+        {resolvedViewPickerType === ViewType.CALENDAR && (
           <>
             <ViewPickerSelectContainer>
               <Select
@@ -261,7 +268,10 @@ export const ViewPickerContentCreateMode = ({
       <DropdownMenuSeparator />
       <DropdownMenuItemsContainer scrollable={false}>
         <ViewPickerSaveButtonContainer>
-          <ViewPickerCreateButton onViewChange={onViewChange} />
+          <ViewPickerCreateButton
+            onViewChange={onViewChange}
+            forcedViewType={forcedViewType}
+          />
         </ViewPickerSaveButtonContainer>
       </DropdownMenuItemsContainer>
     </DropdownContent>

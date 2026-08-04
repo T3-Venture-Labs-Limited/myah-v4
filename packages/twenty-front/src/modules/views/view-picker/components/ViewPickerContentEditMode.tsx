@@ -15,6 +15,7 @@ import { ViewPickerEditButton } from '@/views/view-picker/components/ViewPickerE
 import { ViewPickerIconAndNameContainer } from '@/views/view-picker/components/ViewPickerIconAndNameContainer';
 import { ViewPickerSaveButtonContainer } from '@/views/view-picker/components/ViewPickerSaveButtonContainer';
 import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
+import { type ViewType } from '@/views/types/ViewType';
 import { useUpdateViewFromCurrentState } from '@/views/view-picker/hooks/useUpdateViewFromCurrentState';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { viewPickerInputNameComponentState } from '@/views/view-picker/states/viewPickerInputNameComponentState';
@@ -26,8 +27,10 @@ import { IconChevronLeft } from 'twenty-ui/icon';
 
 export const ViewPickerContentEditMode = ({
   onViewChange,
+  forcedViewType,
 }: {
   onViewChange?: (viewId: string) => void;
+  forcedViewType?: ViewType;
 }) => {
   const { viewPickerDropdownId } = useViewBarControlIds();
   const { setViewPickerMode } = useViewPickerMode();
@@ -102,7 +105,10 @@ export const ViewPickerContentEditMode = ({
       <DropdownMenuSeparator />
       <DropdownMenuItemsContainer scrollable={false}>
         <ViewPickerSaveButtonContainer>
-          <ViewPickerEditButton onViewChange={onViewChange} />
+          <ViewPickerEditButton
+            onViewChange={onViewChange}
+            forcedViewType={forcedViewType}
+          />
         </ViewPickerSaveButtonContainer>
       </DropdownMenuItemsContainer>
     </DropdownContent>

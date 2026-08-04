@@ -16,6 +16,7 @@ import { ViewPickerListContent } from '@/views/view-picker/components/ViewPicker
 import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useUpdateViewFromCurrentState } from '@/views/view-picker/hooks/useUpdateViewFromCurrentState';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
+import { type ViewType } from '@/views/types/ViewType';
 import { isDefined } from 'twenty-shared/utils';
 import { IconChevronDown, IconList, useIcons } from 'twenty-ui/icon';
 import { OverflowingTextWithTooltip } from 'twenty-ui/surfaces';
@@ -55,10 +56,12 @@ const StyledViewName = styled.span`
 
 type ViewPickerDropdownProps = {
   onViewChange?: (viewId: string) => void;
+  forcedViewType?: ViewType;
 };
 
 export const ViewPickerDropdown = ({
   onViewChange,
+  forcedViewType,
 }: ViewPickerDropdownProps) => {
   const { theme } = useContext(ThemeContext);
   const { recordIndexId } = useRecordIndexContextOrThrow();
@@ -130,14 +133,20 @@ export const ViewPickerDropdown = ({
           case 'create-from-current':
             return (
               <>
-                <ViewPickerContentCreateMode onViewChange={onViewChange} />
+                <ViewPickerContentCreateMode
+                  onViewChange={onViewChange}
+                  forcedViewType={forcedViewType}
+                />
                 <ViewPickerContentEffect />
               </>
             );
           case 'edit':
             return (
               <>
-                <ViewPickerContentEditMode onViewChange={onViewChange} />
+                <ViewPickerContentEditMode
+                  onViewChange={onViewChange}
+                  forcedViewType={forcedViewType}
+                />
                 <ViewPickerContentEffect />
               </>
             );

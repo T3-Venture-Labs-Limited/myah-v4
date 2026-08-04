@@ -32,6 +32,7 @@ export const RecordIndexViewBar = ({
       <ViewBar
         isReadOnly={hasCurrentViewNonReadableFields}
         viewBarId={recordIndexId}
+        forcedViewType={recordIndexViewTypeOverride}
         onViewChange={onViewChange}
         optionsDropdownButton={
           <ObjectOptionsDropdown

@@ -14,8 +14,10 @@ import { Button } from 'twenty-ui/input';
 
 export const ViewPickerCreateButton = ({
   onViewChange,
+  forcedViewType,
 }: {
   onViewChange?: (viewId: string) => void;
+  forcedViewType?: ViewType;
 }) => {
   const { t } = useLingui();
   const { availableFieldsForGrouping, navigateToSelectSettings } =
@@ -37,8 +39,10 @@ export const ViewPickerCreateButton = ({
     viewPickerCalendarFieldMetadataIdComponentState,
   );
 
-  const { createViewFromCurrentState } =
-    useCreateViewFromCurrentState(onViewChange);
+  const { createViewFromCurrentState } = useCreateViewFromCurrentState(
+    onViewChange,
+    forcedViewType,
+  );
   const { destroyViewFromCurrentState } = useDestroyViewFromCurrentState(
     undefined,
     onViewChange,

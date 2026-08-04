@@ -31,7 +31,8 @@ import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 export const ObjectOptionsDropdownVisibilityContent = () => {
   const { t } = useLingui();
-  const { dropdownId, resetContent } = useObjectOptionsDropdown();
+  const { dropdownId, isLayoutLocked, resetContent } =
+    useObjectOptionsDropdown();
   const { currentView } = useGetCurrentViewOnly();
   const { updateCurrentView } = useUpdateCurrentView();
   const { copyToClipboard } = useCopyToClipboard();
@@ -131,22 +132,23 @@ export const ObjectOptionsDropdownVisibilityContent = () => {
               disabled={!canPersistChanges}
             />
           </SelectableListItem>
-          {currentVisibility === ViewVisibility.WORKSPACE && (
-            <>
-              <DropdownMenuSeparator />
-              <SelectableListItem
-                itemId="Copy view link"
-                onEnter={handleCopyLink}
-              >
-                <MenuItem
-                  focused={selectedItemId === 'Copy view link'}
-                  onClick={handleCopyLink}
-                  LeftIcon={IconCopy}
-                  text={t`Copy view link`}
-                />
-              </SelectableListItem>
-            </>
-          )}
+          {!isLayoutLocked &&
+            currentVisibility === ViewVisibility.WORKSPACE && (
+              <>
+                <DropdownMenuSeparator />
+                <SelectableListItem
+                  itemId="Copy view link"
+                  onEnter={handleCopyLink}
+                >
+                  <MenuItem
+                    focused={selectedItemId === 'Copy view link'}
+                    onClick={handleCopyLink}
+                    LeftIcon={IconCopy}
+                    text={t`Copy view link`}
+                  />
+                </SelectableListItem>
+              </>
+            )}
         </SelectableList>
       </DropdownMenuItemsContainer>
     </DropdownContent>

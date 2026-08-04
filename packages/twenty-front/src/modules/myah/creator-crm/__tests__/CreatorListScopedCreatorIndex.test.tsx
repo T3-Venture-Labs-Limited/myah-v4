@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { CreatorListScopedCreatorIndex } from '@/myah/creator-crm/components/CreatorListScopedCreatorIndex';
 import { useCreatorListBulkActionsContext } from '@/myah/creator-crm/contexts/CreatorListBulkActionsContext';
@@ -10,6 +10,7 @@ import { PageFocusId } from '@/types/PageFocusId';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 
 const mockResetFocusStackToRecordIndex = jest.fn();
+const mockApplyCreatorBulkRelationship = jest.fn();
 
 const ScopedBulkActionsContextValue = () => {
   const creatorListContext = useCreatorListBulkActionsContext();
@@ -32,6 +33,7 @@ const mockRecordIndexSurface = jest.fn(
     contextStoreInstanceId: string;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
+    onRecordCreated?: (record: { id: string }) => Promise<void>;
     onViewChange?: (viewId: string) => void;
     viewId: string;
   }) => (
@@ -96,9 +98,15 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
     contextStoreInstanceId: string;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
+    onRecordCreated?: (record: { id: string }) => Promise<void>;
     onViewChange?: (viewId: string) => void;
     viewId: string;
   }) => mockRecordIndexSurface(props),
+}));
+jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
+  useApplyCreatorBulkRelationship: () => ({
+    applyCreatorBulkRelationship: mockApplyCreatorBulkRelationship,
+  }),
 }));
 jest.mock(
   '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex',
@@ -231,6 +239,35 @@ describe('CreatorListScopedCreatorIndex', () => {
     expect(screen.getByTestId('creator-show-url')).toHaveTextContent(
       'viewId=creator-secondary-view',
     );
+    expect(screen.getByTestId('creator-show-url')).toHaveTextContent(
+      'creatorListId=list-a',
+    );
+  });
+
+  it('adds a newly created Creator to the selected List once', async () => {
+    resolveCreatorList('list-a', 'List A');
+    mockApplyCreatorBulkRelationship.mockResolvedValue(undefined);
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
+    );
+
+    const onRecordCreated =
+      mockRecordIndexSurface.mock.calls.at(-1)?.[0].onRecordCreated;
+
+    await act(async () => {
+      await onRecordCreated?.({ id: 'creator-1' });
+      await onRecordCreated?.({ id: 'creator-1' });
+    });
+
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledTimes(1);
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledWith({
+      target: { id: 'list-a', kind: 'creator-list', label: 'List A' },
+      creatorIdsToAdd: ['creator-1'],
+    });
   });
 
   it('retries a failed scoped Creator List lookup', () => {

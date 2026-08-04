@@ -13,6 +13,7 @@ const mockNavigate = jest.fn();
 const mockOpenRecordInSidePanel = jest.fn();
 const mockStore = { get: jest.fn(), set: jest.fn() };
 const mockUpsertRecordsInStore = jest.fn();
+const mockOnRecordCreated = jest.fn();
 
 jest.mock(
   '@/object-metadata/utils/getLabelIdentifierFieldMetadataItem',
@@ -60,6 +61,11 @@ jest.mock('@/side-panel/hooks/useSidePanelMenu', () => ({
   useSidePanelMenu: () => ({ closeSidePanelMenu: mockCloseSidePanelMenu }),
 }));
 
+jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
+  useRecordIndexContextOrThrow: () => ({
+    onRecordCreated: mockOnRecordCreated,
+  }),
+}));
 jest.mock(
   '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateCallbackState',
   () => ({
@@ -118,6 +124,7 @@ describe('useCreateNewIndexRecord', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockStore.get.mockReturnValue(ViewOpenRecordIn.SIDE_PANEL);
+    mockOnRecordCreated.mockResolvedValue(undefined);
   });
 
   it('uses the scoped current view Open In choice instead of the main index state', async () => {
@@ -141,5 +148,29 @@ describe('useCreateNewIndexRecord', () => {
       expect.anything(),
     );
     expect(mockOpenRecordInSidePanel).not.toHaveBeenCalled();
+  });
+
+  it('waits for the scoped create success callback before opening the new record', async () => {
+    mockOnRecordCreated.mockImplementation(async () => {
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    const { result } = renderHook(
+      () =>
+        useCreateNewIndexRecord({
+          instanceId: 'creator-list-pane-list-a',
+          objectMetadataItem,
+        }),
+      { wrapper: ScopedContextStoreWrapper },
+    );
+
+    await act(async () => {
+      await result.current.createNewIndexRecord();
+    });
+
+    expect(mockOnRecordCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'new-creator-id' }),
+    );
+    expect(mockNavigate).toHaveBeenCalled();
   });
 });

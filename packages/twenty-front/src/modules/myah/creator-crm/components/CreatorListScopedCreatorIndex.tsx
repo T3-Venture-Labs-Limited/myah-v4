@@ -1,5 +1,6 @@
-import { useCreatorListContextFromId } from '@/myah/creator-crm/hooks/useCreatorListContext';
 import { CreatorListBulkActionsContext } from '@/myah/creator-crm/contexts/CreatorListBulkActionsContext';
+import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
+import { useCreatorListContextFromId } from '@/myah/creator-crm/hooks/useCreatorListContext';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
@@ -84,6 +85,8 @@ export const CreatorListScopedCreatorIndex = ({
       ? selectedCreatorView.viewId
       : defaultCreatorView?.id;
   const { resetFocusStackToRecordIndex } = useResetFocusStackToRecordIndex();
+  const { applyCreatorBulkRelationship } = useApplyCreatorBulkRelationship();
+  const createdCreatorKeys = useMemo(() => new Set<string>(), []);
 
   const creatorListContext = useCreatorListContextFromId(creatorListId);
   const {
@@ -121,9 +124,9 @@ export const CreatorListScopedCreatorIndex = ({
           objectNameSingular: 'creator',
           objectRecordId: creatorId,
         },
-        { viewId: selectedCreatorViewId },
+        { creatorListId, viewId: selectedCreatorViewId },
       ),
-    [selectedCreatorViewId],
+    [creatorListId, selectedCreatorViewId],
   );
 
   const handleCreatorViewChange = useCallback(
@@ -131,6 +134,36 @@ export const CreatorListScopedCreatorIndex = ({
       setSelectedCreatorView({ creatorListId, viewId });
     },
     [creatorListId],
+  );
+  const handleCreatorCreated = useCallback(
+    async (creator: { id: string }) => {
+      if (!creatorListContext) {
+        return;
+      }
+
+      const creatorKey = `${creatorListId}:${creator.id}`;
+      if (createdCreatorKeys.has(creatorKey)) {
+        return;
+      }
+
+      createdCreatorKeys.add(creatorKey);
+
+      try {
+        await applyCreatorBulkRelationship({
+          target: creatorListContext.target,
+          creatorIdsToAdd: [creator.id],
+        });
+      } catch (error) {
+        createdCreatorKeys.delete(creatorKey);
+        throw error;
+      }
+    },
+    [
+      applyCreatorBulkRelationship,
+      createdCreatorKeys,
+      creatorListContext,
+      creatorListId,
+    ],
   );
   const handleClose = useCallback(() => {
     resetFocusStackToRecordIndex(PageFocusId.RecordIndex);
@@ -174,6 +207,7 @@ export const CreatorListScopedCreatorIndex = ({
           viewId={selectedCreatorViewId}
           onViewChange={handleCreatorViewChange}
           indexIdentifierUrl={creatorShowUrl}
+          onRecordCreated={handleCreatorCreated}
           initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
         />
       </CreatorListBulkActionsContext.Provider>
