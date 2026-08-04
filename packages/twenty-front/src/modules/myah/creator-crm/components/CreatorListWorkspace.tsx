@@ -77,7 +77,9 @@ const CreatorListSelectionStatus = ({
     ? `Loading Creator List ${creatorListId}.`
     : creatorListError
       ? `Unable to load Creator List ${creatorListId}.`
-      : `Viewing Creators for Creator List ${creatorListName || creatorListId}.`;
+      : !creatorList
+        ? `Creator List ${creatorListId} is unavailable.`
+        : `Viewing Creators for Creator List ${creatorListName || creatorListId}.`;
 
   return (
     <StyledSelectionStatus role="status" aria-live="polite">

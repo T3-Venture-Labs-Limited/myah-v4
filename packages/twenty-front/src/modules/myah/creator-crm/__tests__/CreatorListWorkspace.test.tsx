@@ -8,25 +8,28 @@ type LinariaTestState = {
   __creatorListWorkspaceRules?: string[];
 };
 
-const mockStyledInterpolations =
-  ((globalThis as typeof globalThis & LinariaTestState)
-    .__creatorListWorkspaceInterpolations ??= []);
-const mockStyledRules =
-  ((globalThis as typeof globalThis & LinariaTestState)
-    .__creatorListWorkspaceRules ??= []);
+const mockStyledInterpolations = ((
+  globalThis as typeof globalThis & LinariaTestState
+).__creatorListWorkspaceInterpolations ??= []);
+const mockStyledRules = ((
+  globalThis as typeof globalThis & LinariaTestState
+).__creatorListWorkspaceRules ??= []);
 
 jest.mock('@linaria/react', () => {
   const state = globalThis as typeof globalThis & LinariaTestState;
-  const interpolations =
-    (state.__creatorListWorkspaceInterpolations ??= []);
+  const interpolations = (state.__creatorListWorkspaceInterpolations ??= []);
   const rules = (state.__creatorListWorkspaceRules ??= []);
 
   return {
     styled: new Proxy(
       {},
       {
-        get: (_target, tag) =>
-          (strings: TemplateStringsArray, ...styleInterpolations: unknown[]) => {
+        get:
+          (_target, tag) =>
+          (
+            strings: TemplateStringsArray,
+            ...styleInterpolations: unknown[]
+          ) => {
             interpolations.push(...styleInterpolations);
             rules.push(strings.join(''));
 
@@ -243,9 +246,9 @@ describe('CreatorListWorkspace', () => {
     renderWorkspace();
 
     const gridTemplateColumns = mockStyledInterpolations.find(
-      (interpolation): interpolation is ((props: {
-        hasSelection: boolean;
-      }) => string) =>
+      (
+        interpolation,
+      ): interpolation is (props: { hasSelection: boolean }) => string =>
         typeof interpolation === 'function' &&
         interpolation({ hasSelection: true }) ===
           'minmax(0, 1fr) minmax(0, 1fr)',
@@ -268,7 +271,9 @@ describe('CreatorListWorkspace', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open List B' }));
 
-    expect(screen.queryByTestId('scoped-creator-index-list-a')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('scoped-creator-index-list-a'),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId('scoped-creator-index-list-b')).toBeVisible();
 
     await user.click(
@@ -307,7 +312,9 @@ describe('CreatorListWorkspace', () => {
 
     expect(screen.queryByTestId('creator-list-index')).not.toBeInTheDocument();
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'List: list-a' })).toHaveFocus(),
+      expect(
+        screen.getByRole('heading', { name: 'List: list-a' }),
+      ).toHaveFocus(),
     );
 
     await user.click(
@@ -405,6 +412,27 @@ describe('CreatorListWorkspace', () => {
     expect(screen.getByText('Loading Creator List list-a.')).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Open List B' }));
-    expect(screen.getByText('Unable to load Creator List list-b.')).toBeVisible();
+    expect(
+      screen.getByText('Unable to load Creator List list-b.'),
+    ).toBeVisible();
+  });
+
+  it('announces an unavailable selected List instead of a successful Creator view', async () => {
+    mockUseFindOneRecord.mockReturnValue({
+      error: undefined,
+      loading: false,
+      record: undefined,
+    });
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole('link', { name: 'List A' }));
+
+    expect(
+      screen.getByText('Creator List list-a is unavailable.'),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Viewing Creators for Creator List list-a.'),
+    ).not.toBeInTheDocument();
   });
 });
