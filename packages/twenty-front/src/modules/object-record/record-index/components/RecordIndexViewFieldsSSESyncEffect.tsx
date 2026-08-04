@@ -10,10 +10,12 @@ import { AllMetadataName } from '~/generated-metadata/graphql';
 
 type RecordIndexViewFieldsSSESyncEffectProps = {
   recordIndexId?: string;
+  skipGlobalIndexStates?: boolean;
 };
 
 export const RecordIndexViewFieldsSSESyncEffect = ({
   recordIndexId,
+  skipGlobalIndexStates,
 }: RecordIndexViewFieldsSSESyncEffectProps) => {
   const store = useStore();
 
@@ -43,6 +45,7 @@ export const RecordIndexViewFieldsSSESyncEffect = ({
 
       syncRecordIndexViewFields(currentView, objectMetadataItem, {
         recordIndexId,
+        skipGlobalIndexStates,
       });
     },
   });

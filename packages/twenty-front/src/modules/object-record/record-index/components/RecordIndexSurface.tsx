@@ -200,6 +200,7 @@ const RecordIndexSurfaceInstance = ({
               />
               <RecordIndexViewFieldsSSESyncEffect
                 recordIndexId={recordIndexId}
+                skipGlobalIndexStates={isIsolatedSurface}
               />
             </RecordComponentInstanceContextsWrapper>
           </ViewComponentInstanceContext.Provider>

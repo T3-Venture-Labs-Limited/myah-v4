@@ -146,6 +146,7 @@ jest.mock(
   () => ({
     RecordIndexViewFieldsSSESyncEffect: (props: {
       recordIndexId?: string;
+      skipGlobalIndexStates?: boolean;
     }) => {
       mockRecordIndexViewFieldsSSESync(props);
       return null;
@@ -384,6 +385,27 @@ describe('RecordIndexSurface', () => {
     expect(mockRecordIndexViewFieldsSSESync).toHaveBeenCalledWith({
       recordIndexId:
         'creators-creator-default-view-creator-list-pane-list-a',
+      skipGlobalIndexStates: true,
+    });
+  });
+
+  it('routes isolated VIEW_FIELD synchronization to its index without global writes', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-a"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listAFilter]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexViewFieldsSSESync).toHaveBeenCalledWith({
+        recordIndexId:
+          'creators-creator-default-view-creator-list-pane-list-a',
+        skipGlobalIndexStates: true,
+      });
     });
   });
 
