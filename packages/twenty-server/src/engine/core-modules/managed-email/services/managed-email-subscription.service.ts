@@ -8,6 +8,11 @@ import {
   type ManagedEmailExpectedLineItem,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
 import { MetronomeClientService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-client.service';
+import {
+  MetronomeClientException,
+  MetronomeClientExceptionCode,
+} from 'src/engine/core-modules/managed-provider-billing/metronome-client.exception';
+import { type MetronomeSubscriptionReceipt } from 'src/engine/core-modules/managed-provider-billing/types/metronome-subscription.type';
 import { MetronomeWorkspaceCustomerService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-workspace-customer.service';
 import { matchExactPaidMetronomeInvoice } from 'src/engine/core-modules/managed-provider-billing/utils/match-exact-paid-metronome-invoice.util';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
@@ -17,6 +22,8 @@ export type BeginManagedEmailPurchaseInput = Readonly<{
   acquisitionMode: ManagedEmailAcquisitionMode;
   actorWorkspaceMemberId: string;
   idempotencyKey: string;
+  providerConfigurationKey: string;
+  readinessPolicyVersion: string;
   quote: ManagedEmailQuote;
   workspaceId: string;
 }>;
@@ -33,25 +40,34 @@ export class ManagedEmailSubscriptionService {
   async beginPurchase(
     input: BeginManagedEmailPurchaseInput,
   ): Promise<ManagedEmailAcquisitionOperationEntity> {
+    const operation = await this.createPurchaseOperation(input);
+    return this.continueSubscriptionCreation({
+      operationId: operation.id,
+      workspaceId: input.workspaceId,
+    });
+  }
+  async createPurchaseOperation(
+    input: BeginManagedEmailPurchaseInput,
+  ): Promise<ManagedEmailAcquisitionOperationEntity> {
     this.validateInput(input);
     const prior = await this.acquisitionOperationRepository.findOneBy(
       input.workspaceId,
       { idempotencyKey: input.idempotencyKey },
     );
-
     if (prior !== null) {
       if (
         prior.quoteHash !== input.quote.quoteHash ||
         prior.proposalHash !== input.quote.proposalHash ||
         prior.acquisitionMode !== input.acquisitionMode ||
-        prior.authorizedActorWorkspaceMemberId !== input.actorWorkspaceMemberId
+        prior.authorizedActorWorkspaceMemberId !==
+          input.actorWorkspaceMemberId ||
+        prior.providerConfigurationKey !== input.providerConfigurationKey ||
+        prior.readinessPolicyVersion !== input.readinessPolicyVersion
       ) {
         throw new Error('Managed email purchase idempotency conflict');
       }
-
       return prior;
     }
-
     const servicePeriodStart = new Date(
       Math.min(
         ...input.quote.lines.map(({ startingAt }) => Date.parse(startingAt)),
@@ -76,52 +92,78 @@ export class ManagedEmailSubscriptionService {
         totalCents: line.amountCents,
         unitPriceCents: line.unitPriceCents,
       }));
-    const operation: ManagedEmailAcquisitionOperationEntity =
-      await this.acquisitionOperationRepository.save(input.workspaceId, {
-        acquisitionMode: input.acquisitionMode,
-        authorizedActorWorkspaceMemberId: input.actorWorkspaceMemberId,
-        catalogVersion: input.quote.catalogVersion,
-        correlatedSubscriptionLines: null,
-        currency: 'USD',
-        expectedAmountCents: String(input.quote.dueTodayCents),
-        expectedLineItems,
-        externalInvoiceId: null,
-        externalPaymentId: null,
-        idempotencyKey: input.idempotencyKey,
-        metronomeContractId: null,
-        metronomeCustomerId: null,
-        metronomeEditIds: null,
-        metronomeInvoiceId: null,
-        metronomeRateCardAlias: input.quote.metronomeRateCardAlias,
-        metronomeRateCardId: input.quote.metronomeRateCardId,
-        metronomeSubscriptionIds: null,
-        nextReconciliationAt: null,
-        paymentStatus: null,
-        proposalHash: input.quote.proposalHash,
-        providerIntentHash: null,
-        providerOutcome: null,
-        providerReceipt: null,
-        quoteHash: input.quote.quoteHash,
-        reconciliationAttemptCount: 0,
-        resourceSnapshot: input.quote.resourceSnapshot,
-        safeFailureCode: null,
-        servicePeriodEnd,
-        servicePeriodStart,
-        state: 'CREATING_SUBSCRIPTIONS',
-        workspaceId: input.workspaceId,
-      });
+    return this.acquisitionOperationRepository.save(input.workspaceId, {
+      acquisitionMode: input.acquisitionMode,
+      authorizedActorWorkspaceMemberId: input.actorWorkspaceMemberId,
+      catalogVersion: input.quote.catalogVersion,
+      correlatedSubscriptionLines: null,
+      currency: 'USD',
+      expectedAmountCents: String(input.quote.dueTodayCents),
+      expectedLineItems,
+      externalInvoiceId: null,
+      externalPaymentId: null,
+      idempotencyKey: input.idempotencyKey,
+      metronomeContractId: null,
+      metronomeCustomerId: null,
+      metronomeEditIds: null,
+      metronomeInvoiceId: null,
+      metronomeRateCardAlias: input.quote.metronomeRateCardAlias,
+      metronomeRateCardId: input.quote.metronomeRateCardId,
+      metronomeSubscriptionIds: null,
+      nextReconciliationAt: new Date(),
+      paymentStatus: null,
+      proposalHash: input.quote.proposalHash,
+      providerIntentHash: null,
+      providerConfigurationKey: input.providerConfigurationKey,
+      providerOutcome: null,
+      providerReceipt: null,
+      quoteHash: input.quote.quoteHash,
+      reconciliationAttemptCount: 0,
+      resourceSnapshot: input.quote.resourceSnapshot,
+      readinessPolicyVersion: input.readinessPolicyVersion,
+      safeFailureCode: null,
+      servicePeriodEnd,
+      servicePeriodStart,
+      state: 'CREATING_SUBSCRIPTIONS',
+      workspaceId: input.workspaceId,
+    });
+  }
+  async continueSubscriptionCreation({
+    operationId,
+    workspaceId,
+  }: {
+    operationId: string;
+    workspaceId: string;
+  }): Promise<ManagedEmailAcquisitionOperationEntity> {
+    const operation = await this.acquisitionOperationRepository.findOneBy(
+      workspaceId,
+      { id: operationId },
+    );
+    if (operation === null) {
+      throw new Error('Managed email acquisition operation was not found');
+    }
+    if (operation.state !== 'CREATING_SUBSCRIPTIONS') {
+      return operation;
+    }
     const customerId =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceCustomer(
-        input.workspaceId,
+        workspaceId,
       );
     const contractId =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceManagedEmailContract(
-        input.workspaceId,
+        workspaceId,
       );
-
+    if (
+      (operation.metronomeCustomerId !== null &&
+        operation.metronomeCustomerId !== customerId) ||
+      (operation.metronomeContractId !== null &&
+        operation.metronomeContractId !== contractId)
+    ) {
+      throw new Error('Managed email subscription identity conflict');
+    }
     await this.acquisitionOperationRepository.update(
-      input.workspaceId,
-      { id: operation.id },
+      workspaceId,
+      { id: operation.id, state: 'CREATING_SUBSCRIPTIONS' },
       {
         metronomeContractId: contractId,
         metronomeCustomerId: customerId,
@@ -129,30 +171,68 @@ export class ManagedEmailSubscriptionService {
     );
     operation.metronomeContractId = contractId;
     operation.metronomeCustomerId = customerId;
-
-    const metronomeEditIds: string[] = [];
-    const metronomeSubscriptionIds: string[] = [];
-
-    for (const line of input.quote.lines) {
-      const receipt = await this.metronomeClientService.addSubscription({
-        billingFrequency: line.billingFrequency,
+    const metronomeEditIds = [...(operation.metronomeEditIds ?? [])];
+    const metronomeSubscriptionIds = [
+      ...(operation.metronomeSubscriptionIds ?? []),
+    ];
+    if (
+      metronomeEditIds.length !== metronomeSubscriptionIds.length ||
+      metronomeSubscriptionIds.length > operation.expectedLineItems.length
+    ) {
+      throw new Error('Managed email subscription correlation is incomplete');
+    }
+    for (
+      let index = metronomeSubscriptionIds.length;
+      index < operation.expectedLineItems.length;
+      index += 1
+    ) {
+      const line = operation.expectedLineItems[index];
+      const subscriptionInput = {
+        billingFrequency:
+          line.productKey === 'managed_sending_domain_year'
+            ? ('ANNUAL' as const)
+            : ('MONTHLY' as const),
         contractId,
         customerId,
         productId: line.metronomeProductId,
         proration: {
-          invoiceBehavior: 'BILL_IMMEDIATELY',
+          invoiceBehavior: 'BILL_IMMEDIATELY' as const,
           isProrated: false,
         },
         quantity: line.quantity,
-        startingAt: line.startingAt,
+        startingAt: line.periodStart,
         uniquenessKey: `${operation.id}:${line.productKey}`,
-      });
+      };
+      let receipt: MetronomeSubscriptionReceipt;
 
+      try {
+        receipt =
+          await this.metronomeClientService.addSubscription(subscriptionInput);
+      } catch (error) {
+        if (
+          !(error instanceof MetronomeClientException) ||
+          ![
+            MetronomeClientExceptionCode.CONFLICT,
+            MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+          ].includes(error.code)
+        ) {
+          throw error;
+        }
+        const recovered =
+          await this.metronomeClientService.recoverAddedSubscription(
+            subscriptionInput,
+          );
+
+        if (recovered === null) {
+          throw error;
+        }
+        receipt = recovered;
+      }
       metronomeEditIds.push(receipt.metronomeEditId);
       metronomeSubscriptionIds.push(receipt.subscriptionId);
       await this.acquisitionOperationRepository.update(
-        input.workspaceId,
-        { id: operation.id },
+        workspaceId,
+        { id: operation.id, state: 'CREATING_SUBSCRIPTIONS' },
         {
           metronomeEditIds: [...metronomeEditIds],
           metronomeSubscriptionIds: [...metronomeSubscriptionIds],
@@ -161,14 +241,12 @@ export class ManagedEmailSubscriptionService {
       operation.metronomeEditIds = [...metronomeEditIds];
       operation.metronomeSubscriptionIds = [...metronomeSubscriptionIds];
     }
-
     await this.acquisitionOperationRepository.update(
-      input.workspaceId,
-      { id: operation.id },
+      workspaceId,
+      { id: operation.id, state: 'CREATING_SUBSCRIPTIONS' },
       { state: 'PAYMENT_PENDING' },
     );
     operation.state = 'PAYMENT_PENDING';
-
     return operation;
   }
 
@@ -280,6 +358,8 @@ export class ManagedEmailSubscriptionService {
       !input.workspaceId.trim() ||
       !input.actorWorkspaceMemberId.trim() ||
       !input.idempotencyKey.trim() ||
+      !input.providerConfigurationKey.trim() ||
+      !input.readinessPolicyVersion.trim() ||
       !input.quote.proposalHash.trim() ||
       !input.quote.quoteHash.trim() ||
       input.quote.lines.length !== 3

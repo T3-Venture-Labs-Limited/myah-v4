@@ -70,7 +70,10 @@ describe('ManagedEmailProposalService', () => {
           durationUnit: 'YEAR' as const,
         },
       })),
-    } as unknown as jest.Mocked<Pick<IcemailClient, 'checkDomainAvailability'>>;
+      listPrewarmedBundles: jest.fn(),
+    } as unknown as jest.Mocked<
+      Pick<IcemailClient, 'checkDomainAvailability' | 'listPrewarmedBundles'>
+    >;
     const insertWorkspaceEvent = jest.fn(async () => ({ success: true }));
     const eventLogEmitterService = {
       createContext: jest.fn(() => ({ insertWorkspaceEvent })),
@@ -176,6 +179,71 @@ describe('ManagedEmailProposalService', () => {
     expect(JSON.stringify(proposal)).not.toMatch(
       /providerId|providerType|credential|password|raw/i,
     );
+  });
+
+  it('builds a prewarmed proposal from server-resolved whole inventory', async () => {
+    const { icemailClient, service } = createService();
+
+    icemailClient.listPrewarmedBundles.mockResolvedValue({
+      items: [
+        {
+          domain: 'creator-partners.co',
+          domainPriceCents: 1000,
+          inventoryId: 'inventory-1',
+          mailboxCount: 2,
+          mailboxPriceCents: 250,
+          mailboxes: [
+            {
+              address: 'maya@creator-partners.co',
+              firstName: 'Maya',
+              lastName: 'Chen',
+              master: false,
+              provider: 'GOOGLE',
+            },
+            {
+              address: 'sam@creator-partners.co',
+              firstName: 'Sam',
+              lastName: 'Lee',
+              master: false,
+              provider: 'GOOGLE',
+            },
+          ],
+        },
+      ],
+    });
+
+    const proposal = await service.createPrewarmedProposal(
+      {
+        inventoryIds: ['inventory-1'],
+        personas: [
+          { ...personas[0], localPartPreference: 'maya' },
+          personas[2],
+        ],
+      },
+      { actorWorkspaceMemberId, workspaceId, workspaceSlug: 'creator' },
+    );
+
+    expect(proposal.mailboxCount).toBe(2);
+    expect(proposal.domains).toEqual([
+      expect.objectContaining({
+        domain: 'creator-partners.co',
+        providerInventoryId: 'inventory-1',
+        prewarmedProviderCosts: {
+          domainPriceCents: 1000,
+          mailboxPriceCents: 250,
+        },
+        mailboxes: [
+          expect.objectContaining({
+            address: 'maya@creator-partners.co',
+            signature: 'Maya — Creator Partnerships',
+          }),
+          expect.objectContaining({
+            address: 'sam@creator-partners.co',
+            signature: 'Sam',
+          }),
+        ],
+      }),
+    ]);
   });
 
   it('rejects malformed counts, persona mismatches, and duplicate normalized addresses', async () => {

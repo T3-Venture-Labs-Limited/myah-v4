@@ -197,6 +197,70 @@ describe('ManagedEmailQuoteService', () => {
     expect(Object.isFrozen(quote.lines)).toBe(true);
   });
 
+  it('preserves prewarmed inventory identity and exact provider costs', () => {
+    const prewarmedProposal: ManagedEmailProposal = {
+      ...proposal,
+      domains: [
+        {
+          ...proposal.domains[0],
+          providerInventoryId: 'inventory-1',
+          prewarmedProviderCosts: {
+            domainPriceCents: 1000,
+            mailboxPriceCents: 250,
+          },
+        },
+      ],
+      mailboxCount: 2,
+    };
+
+    const quote = service.createQuote({
+      catalog,
+      metronomeProducts,
+      metronomeRateCardAlias: 'managed-email-test',
+      metronomeRateCardId: '123e4567-e89b-42d3-a456-426614174020',
+      now: new Date('2026-08-05T10:05:00.000Z'),
+      proposal: prewarmedProposal,
+    });
+
+    expect(quote.resourceSnapshot.domains).toEqual([
+      expect.objectContaining({
+        providerInventoryId: 'inventory-1',
+        prewarmedProviderCosts: {
+          domainPriceCents: 1000,
+          mailboxPriceCents: 250,
+        },
+      }),
+    ]);
+  });
+
+  it('rejects a prewarmed mailbox cost above the approved fixed catalog cost', () => {
+    const prewarmedProposal: ManagedEmailProposal = {
+      ...proposal,
+      domains: [
+        {
+          ...proposal.domains[0],
+          providerInventoryId: 'inventory-1',
+          prewarmedProviderCosts: {
+            domainPriceCents: 1000,
+            mailboxPriceCents: 251,
+          },
+        },
+      ],
+      mailboxCount: 2,
+    };
+
+    expect(() =>
+      service.createQuote({
+        catalog,
+        metronomeProducts,
+        metronomeRateCardAlias: 'managed-email-test',
+        metronomeRateCardId: '123e4567-e89b-42d3-a456-426614174020',
+        now: new Date('2026-08-05T10:05:00.000Z'),
+        proposal: prewarmedProposal,
+      }),
+    ).toThrow('Managed email prewarmed mailbox cost is not covered');
+  });
+
   it('rejects expired proposals and provider quotes that cannot form one exact product line', () => {
     expect(() =>
       service.createQuote({

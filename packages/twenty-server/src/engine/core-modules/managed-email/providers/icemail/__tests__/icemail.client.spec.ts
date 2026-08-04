@@ -88,14 +88,20 @@ const expectCode = async (
 describe('IcemailClient', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('fails closed before creating an HTTP client while managed email is disabled', async () => {
-    const { client, secureHttpClientService } = createClient(false);
-
-    await expectCode(
-      client.listDomains(),
-      IcemailExceptionCode.CONFIGURATION_DISABLED,
-    );
-    expect(secureHttpClientService.getHttpClient).not.toHaveBeenCalled();
+  it('keeps configured recovery reads available while admission is disabled', async () => {
+    const { client, httpClient, secureHttpClientService } = createClient(false);
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        success: true,
+        data: { domains: [domainFixture], total_count: 1, page: 1, limit: 50 },
+      },
+      headers: {},
+    });
+    await expect(client.listDomains()).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: 'domain-1' })],
+    });
+    expect(secureHttpClientService.getHttpClient).toHaveBeenCalledTimes(1);
   });
 
   it('uses the server-side key, bounded first-page read, and read-only retries', async () => {
@@ -138,6 +144,52 @@ describe('IcemailClient', () => {
     });
     expect(httpClient.get).toHaveBeenCalledWith('/domain', {
       params: { page: 1, limit: 50 },
+    });
+  });
+
+  it('collects bounded recovery reads across provider pages', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          success: true,
+          data: {
+            domains: [
+              {
+                ...domainFixture,
+                domain: 'unrelated.com',
+                domain_id: 'unrelated-domain',
+              },
+            ],
+            total_count: 2,
+            page: 1,
+            limit: 50,
+          },
+        },
+        headers: {},
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          success: true,
+          data: {
+            domains: [domainFixture],
+            total_count: 2,
+            page: 2,
+            limit: 50,
+          },
+        },
+        headers: {},
+      });
+
+    await expect(client.listAllDomains()).resolves.toHaveLength(2);
+    expect(httpClient.get).toHaveBeenNthCalledWith(1, '/domain', {
+      params: { page: 1, limit: 50 },
+    });
+    expect(httpClient.get).toHaveBeenNthCalledWith(2, '/domain', {
+      params: { page: 2, limit: 50 },
     });
   });
 

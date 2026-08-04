@@ -6,48 +6,145 @@ import { FastInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/
 @RegisteredInstanceCommand('2.20.0', 1785325829908)
 export class CreateManagedEmailFastInstanceCommand implements FastInstanceCommand {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query('CREATE TABLE "core"."managedEmailAcquisitionOperation" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "workspaceId" uuid NOT NULL, "idempotencyKey" text NOT NULL, "acquisitionMode" text NOT NULL, "authorizedActorWorkspaceMemberId" uuid NOT NULL, "proposalHash" text NOT NULL, "quoteHash" text NOT NULL, "resourceSnapshot" jsonb NOT NULL, "catalogVersion" text NOT NULL, "metronomeRateCardId" uuid NOT NULL, "metronomeRateCardAlias" text NOT NULL, "expectedLineItems" jsonb NOT NULL, "expectedAmountCents" bigint NOT NULL, "currency" text NOT NULL, "servicePeriodStart" TIMESTAMP WITH TIME ZONE NOT NULL, "servicePeriodEnd" TIMESTAMP WITH TIME ZONE NOT NULL, "metronomeCustomerId" uuid, "metronomeContractId" uuid, "metronomeEditIds" uuid array, "metronomeSubscriptionIds" uuid array, "metronomeInvoiceId" uuid, "externalInvoiceId" text, "externalPaymentId" text, "paymentStatus" text, "correlatedSubscriptionLines" jsonb, "providerIntentHash" text, "providerReceipt" jsonb, "providerOutcome" text, "state" text NOT NULL, "reconciliationAttemptCount" integer NOT NULL DEFAULT \'0\', "nextReconciliationAt" TIMESTAMP WITH TIME ZONE, "safeFailureCode" text, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_IDEMPOTENCY" UNIQUE ("workspaceId", "idempotencyKey"), CONSTRAINT "CHK_MANAGED_EMAIL_ACQUISITION_SERVICE_PERIOD" CHECK ("servicePeriodEnd" > "servicePeriodStart"), CONSTRAINT "CHK_MANAGED_EMAIL_ACQUISITION_AMOUNT_ATTEMPTS" CHECK ("expectedAmountCents" > 0 AND "reconciliationAttemptCount" >= 0), CONSTRAINT "CHK_MANAGED_EMAIL_ACQUISITION_REQUIRED_TEXT" CHECK (btrim("idempotencyKey") <> \'\' AND btrim("proposalHash") <> \'\' AND btrim("quoteHash") <> \'\' AND btrim("catalogVersion") <> \'\' AND btrim("metronomeRateCardAlias") <> \'\' AND btrim("currency") <> \'\' AND btrim("state") <> \'\'), CONSTRAINT "PK_fdbc6cfa8261066de968e2b81c2" PRIMARY KEY ("id"))');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_ACQUISITION_RECONCILIATION_DUE" ON "core"."managedEmailAcquisitionOperation" ("nextReconciliationAt") WHERE "nextReconciliationAt" IS NOT NULL');
-    await queryRunner.query('CREATE TABLE "core"."managedEmailDomain" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "workspaceId" uuid NOT NULL, "domain" text NOT NULL, "normalizedDomain" text NOT NULL, "acquisitionMode" text NOT NULL, "providerType" text NOT NULL, "providerConfigurationKey" text NOT NULL, "providerOrderId" text, "providerDomainId" text, "infrastructureState" text NOT NULL, "dnsReadinessFacts" jsonb NOT NULL, "expiresAt" TIMESTAMP WITH TIME ZONE, "paidThrough" TIMESTAMP WITH TIME ZONE, "renewalEnabled" boolean NOT NULL, "cancelAtPeriodEnd" boolean NOT NULL, "metronomeSubscriptionId" uuid, "lastReconciledAt" TIMESTAMP WITH TIME ZONE, "nextReconciliationAt" TIMESTAMP WITH TIME ZONE, "safeFailureCode" text, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_MANAGED_EMAIL_DOMAIN_WORKSPACE_ID" UNIQUE ("workspaceId", "id"), CONSTRAINT "UQ_MANAGED_EMAIL_DOMAIN_WORKSPACE_NORMALIZED" UNIQUE ("workspaceId", "normalizedDomain"), CONSTRAINT "CHK_MANAGED_EMAIL_DOMAIN_IDENTITIES_NONEMPTY" CHECK (btrim("domain") <> \'\' AND btrim("normalizedDomain") <> \'\' AND btrim("providerType") <> \'\' AND btrim("providerConfigurationKey") <> \'\'), CONSTRAINT "PK_159543e8b42359686a6f5d2b6ea" PRIMARY KEY ("id"))');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_DOMAIN_EXPIRY" ON "core"."managedEmailDomain" ("expiresAt") ');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_DOMAIN_PAID_THROUGH" ON "core"."managedEmailDomain" ("paidThrough") ');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_DOMAIN_RECONCILIATION_DUE" ON "core"."managedEmailDomain" ("nextReconciliationAt") WHERE "nextReconciliationAt" IS NOT NULL');
-    await queryRunner.query('CREATE UNIQUE INDEX "IDX_MANAGED_EMAIL_DOMAIN_PROVIDER_ID_UNIQUE" ON "core"."managedEmailDomain" ("providerConfigurationKey", "providerDomainId") WHERE "providerDomainId" IS NOT NULL');
-    await queryRunner.query('CREATE TABLE "core"."managedEmailMailbox" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "workspaceId" uuid NOT NULL, "managedEmailDomainId" uuid NOT NULL, "address" text NOT NULL, "normalizedAddress" text NOT NULL, "personaDisplayName" text NOT NULL, "personaRole" text NOT NULL, "personaSignature" text NOT NULL, "personaCreatedByWorkspaceMemberId" uuid NOT NULL, "personaVersion" integer NOT NULL DEFAULT \'1\', "personaUpdatedByWorkspaceMemberId" uuid, "personaAuditEventId" uuid, "providerType" text NOT NULL, "providerConfigurationKey" text NOT NULL, "providerOrderId" text, "providerMailboxId" text, "infrastructureState" text NOT NULL, "infrastructurePaidThrough" TIMESTAMP WITH TIME ZONE, "metronomeMailboxSubscriptionId" uuid, "connectedAccountId" uuid, "messageChannelId" uuid, "warmupMode" text NOT NULL, "warmupProviderKey" text, "warmupProviderConfigurationKey" text, "warmupEnrollmentId" text, "warmupState" text NOT NULL, "warmupPaidThrough" TIMESTAMP WITH TIME ZONE, "warmupCancelAtPeriodEnd" boolean NOT NULL, "metronomeWarmupSubscriptionId" uuid, "readinessPolicyVersion" text NOT NULL, "campaignEligibility" text NOT NULL, "policySafeDailyCapacity" integer NOT NULL, "adminDailyCap" integer, "healthFacts" jsonb NOT NULL, "lastHealthEvaluatedAt" TIMESTAMP WITH TIME ZONE, "nextReconciliationAt" TIMESTAMP WITH TIME ZONE, "safeFailureCode" text, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_MANAGED_EMAIL_MAILBOX_WORKSPACE_NORMALIZED" UNIQUE ("workspaceId", "normalizedAddress"), CONSTRAINT "CHK_MANAGED_EMAIL_MAILBOX_CAPACITIES" CHECK ("policySafeDailyCapacity" >= 0 AND ("adminDailyCap" IS NULL OR ("adminDailyCap" >= 0 AND "adminDailyCap" <= "policySafeDailyCapacity"))), CONSTRAINT "CHK_MANAGED_EMAIL_MAILBOX_PERSONA_VERSION" CHECK ("personaVersion" >= 1), CONSTRAINT "CHK_MANAGED_EMAIL_MAILBOX_IDENTITIES_NONEMPTY" CHECK (btrim("address") <> \'\' AND btrim("normalizedAddress") <> \'\' AND btrim("providerType") <> \'\' AND btrim("providerConfigurationKey") <> \'\' AND btrim("readinessPolicyVersion") <> \'\'), CONSTRAINT "PK_3c5135fd510d70b9913a8664ebd" PRIMARY KEY ("id"))');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_LAST_HEALTH_EVALUATED" ON "core"."managedEmailMailbox" ("lastHealthEvaluatedAt") ');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_WARMUP_PAID_THROUGH" ON "core"."managedEmailMailbox" ("warmupPaidThrough") ');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_INFRASTRUCTURE_PAID_THROUGH" ON "core"."managedEmailMailbox" ("infrastructurePaidThrough") ');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_RECONCILIATION_DUE" ON "core"."managedEmailMailbox" ("nextReconciliationAt") WHERE "nextReconciliationAt" IS NOT NULL');
-    await queryRunner.query('CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_DOMAIN" ON "core"."managedEmailMailbox" ("managedEmailDomainId") ');
-    await queryRunner.query('CREATE UNIQUE INDEX "IDX_MANAGED_EMAIL_MAILBOX_PROVIDER_ID_UNIQUE" ON "core"."managedEmailMailbox" ("providerConfigurationKey", "providerMailboxId") WHERE "providerMailboxId" IS NOT NULL');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailAcquisitionOperation" ADD CONSTRAINT "FK_85b3f0b4be3d9b9c51b95f66cf8" FOREIGN KEY ("workspaceId") REFERENCES "core"."workspace"("id") ON DELETE CASCADE ON UPDATE NO ACTION');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailDomain" ADD CONSTRAINT "FK_f1964c52d948351e480d610a7a6" FOREIGN KEY ("workspaceId") REFERENCES "core"."workspace"("id") ON DELETE CASCADE ON UPDATE NO ACTION');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_8e9074f05a56d27a60ea43e15d4" FOREIGN KEY ("workspaceId") REFERENCES "core"."workspace"("id") ON DELETE CASCADE ON UPDATE NO ACTION');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_27cc5d4db81d206391025f7ef97" FOREIGN KEY ("workspaceId", "managedEmailDomainId") REFERENCES "core"."managedEmailDomain"("workspaceId","id") ON DELETE CASCADE ON UPDATE NO ACTION');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_100dc1201c28ba7b6ef9565eee5" FOREIGN KEY ("connectedAccountId") REFERENCES "core"."connectedAccount"("id") ON DELETE SET NULL ON UPDATE NO ACTION');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_a71e00b78dbff38460aaa87cd0d" FOREIGN KEY ("messageChannelId") REFERENCES "core"."messageChannel"("id") ON DELETE SET NULL ON UPDATE NO ACTION');
+    await queryRunner.query(
+      'CREATE TABLE "core"."managedEmailAcquisitionOperation" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "workspaceId" uuid NOT NULL, "idempotencyKey" text NOT NULL, "acquisitionMode" text NOT NULL, "providerConfigurationKey" text NOT NULL, "readinessPolicyVersion" text NOT NULL, "authorizedActorWorkspaceMemberId" uuid NOT NULL, "proposalHash" text NOT NULL, "quoteHash" text NOT NULL, "resourceSnapshot" jsonb NOT NULL, "catalogVersion" text NOT NULL, "metronomeRateCardId" uuid NOT NULL, "metronomeRateCardAlias" text NOT NULL, "expectedLineItems" jsonb NOT NULL, "expectedAmountCents" bigint NOT NULL, "currency" text NOT NULL, "servicePeriodStart" TIMESTAMP WITH TIME ZONE NOT NULL, "servicePeriodEnd" TIMESTAMP WITH TIME ZONE NOT NULL, "metronomeCustomerId" uuid, "metronomeContractId" uuid, "metronomeEditIds" uuid array, "metronomeSubscriptionIds" uuid array, "metronomeInvoiceId" uuid, "externalInvoiceId" text, "externalPaymentId" text, "paymentStatus" text, "correlatedSubscriptionLines" jsonb, "providerIntentHash" text, "providerReceipt" jsonb, "providerOutcome" text, "state" text NOT NULL, "reconciliationAttemptCount" integer NOT NULL DEFAULT \'0\', "nextReconciliationAt" TIMESTAMP WITH TIME ZONE, "safeFailureCode" text, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_IDEMPOTENCY" UNIQUE ("workspaceId", "idempotencyKey"), CONSTRAINT "CHK_MANAGED_EMAIL_ACQUISITION_SERVICE_PERIOD" CHECK ("servicePeriodEnd" > "servicePeriodStart"), CONSTRAINT "CHK_MANAGED_EMAIL_ACQUISITION_AMOUNT_ATTEMPTS" CHECK ("expectedAmountCents" > 0 AND "reconciliationAttemptCount" >= 0), CONSTRAINT "CHK_MANAGED_EMAIL_ACQUISITION_REQUIRED_TEXT" CHECK (btrim("idempotencyKey") <> \'\' AND btrim("providerConfigurationKey") <> \'\' AND btrim("readinessPolicyVersion") <> \'\' AND btrim("proposalHash") <> \'\' AND btrim("quoteHash") <> \'\' AND btrim("catalogVersion") <> \'\' AND btrim("metronomeRateCardAlias") <> \'\' AND btrim("currency") <> \'\' AND btrim("state") <> \'\'), CONSTRAINT "PK_fdbc6cfa8261066de968e2b81c2" PRIMARY KEY ("id"))',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_ACQUISITION_RECONCILIATION_DUE" ON "core"."managedEmailAcquisitionOperation" ("nextReconciliationAt") WHERE "nextReconciliationAt" IS NOT NULL',
+    );
+    await queryRunner.query(
+      'CREATE TABLE "core"."managedEmailDomain" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "workspaceId" uuid NOT NULL, "domain" text NOT NULL, "normalizedDomain" text NOT NULL, "acquisitionMode" text NOT NULL, "providerType" text NOT NULL, "providerConfigurationKey" text NOT NULL, "providerOrderId" text, "providerDomainId" text, "infrastructureState" text NOT NULL, "dnsReadinessFacts" jsonb NOT NULL, "expiresAt" TIMESTAMP WITH TIME ZONE, "paidThrough" TIMESTAMP WITH TIME ZONE, "renewalEnabled" boolean NOT NULL, "cancelAtPeriodEnd" boolean NOT NULL, "metronomeSubscriptionId" uuid, "lastReconciledAt" TIMESTAMP WITH TIME ZONE, "nextReconciliationAt" TIMESTAMP WITH TIME ZONE, "safeFailureCode" text, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_MANAGED_EMAIL_DOMAIN_WORKSPACE_ID" UNIQUE ("workspaceId", "id"), CONSTRAINT "UQ_MANAGED_EMAIL_DOMAIN_WORKSPACE_NORMALIZED" UNIQUE ("workspaceId", "normalizedDomain"), CONSTRAINT "CHK_MANAGED_EMAIL_DOMAIN_IDENTITIES_NONEMPTY" CHECK (btrim("domain") <> \'\' AND btrim("normalizedDomain") <> \'\' AND btrim("providerType") <> \'\' AND btrim("providerConfigurationKey") <> \'\'), CONSTRAINT "PK_159543e8b42359686a6f5d2b6ea" PRIMARY KEY ("id"))',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_DOMAIN_EXPIRY" ON "core"."managedEmailDomain" ("expiresAt") ',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_DOMAIN_PAID_THROUGH" ON "core"."managedEmailDomain" ("paidThrough") ',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_DOMAIN_RECONCILIATION_DUE" ON "core"."managedEmailDomain" ("nextReconciliationAt") WHERE "nextReconciliationAt" IS NOT NULL',
+    );
+    await queryRunner.query(
+      'CREATE UNIQUE INDEX "IDX_MANAGED_EMAIL_DOMAIN_PROVIDER_ID_UNIQUE" ON "core"."managedEmailDomain" ("providerConfigurationKey", "providerDomainId") WHERE "providerDomainId" IS NOT NULL',
+    );
+    await queryRunner.query(
+      'CREATE TABLE "core"."managedEmailMailbox" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "workspaceId" uuid NOT NULL, "managedEmailDomainId" uuid NOT NULL, "address" text NOT NULL, "normalizedAddress" text NOT NULL, "personaDisplayName" text NOT NULL, "personaRole" text NOT NULL, "personaSignature" text NOT NULL, "personaCreatedByWorkspaceMemberId" uuid NOT NULL, "personaVersion" integer NOT NULL DEFAULT \'1\', "personaUpdatedByWorkspaceMemberId" uuid, "personaAuditEventId" uuid, "providerType" text NOT NULL, "providerConfigurationKey" text NOT NULL, "providerOrderId" text, "providerMailboxId" text, "infrastructureState" text NOT NULL, "infrastructurePaidThrough" TIMESTAMP WITH TIME ZONE, "metronomeMailboxSubscriptionId" uuid, "connectedAccountId" uuid, "messageChannelId" uuid, "warmupMode" text NOT NULL, "warmupProviderKey" text, "warmupProviderConfigurationKey" text, "warmupEnrollmentId" text, "warmupState" text NOT NULL, "warmupPaidThrough" TIMESTAMP WITH TIME ZONE, "warmupCancelAtPeriodEnd" boolean NOT NULL, "metronomeWarmupSubscriptionId" uuid, "readinessPolicyVersion" text NOT NULL, "campaignEligibility" text NOT NULL, "policySafeDailyCapacity" integer NOT NULL, "adminDailyCap" integer, "healthFacts" jsonb NOT NULL, "lastHealthEvaluatedAt" TIMESTAMP WITH TIME ZONE, "nextReconciliationAt" TIMESTAMP WITH TIME ZONE, "safeFailureCode" text, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_MANAGED_EMAIL_MAILBOX_WORKSPACE_NORMALIZED" UNIQUE ("workspaceId", "normalizedAddress"), CONSTRAINT "CHK_MANAGED_EMAIL_MAILBOX_CAPACITIES" CHECK ("policySafeDailyCapacity" >= 0 AND ("adminDailyCap" IS NULL OR ("adminDailyCap" >= 0 AND "adminDailyCap" <= "policySafeDailyCapacity"))), CONSTRAINT "CHK_MANAGED_EMAIL_MAILBOX_PERSONA_VERSION" CHECK ("personaVersion" >= 1), CONSTRAINT "CHK_MANAGED_EMAIL_MAILBOX_IDENTITIES_NONEMPTY" CHECK (btrim("address") <> \'\' AND btrim("normalizedAddress") <> \'\' AND btrim("providerType") <> \'\' AND btrim("providerConfigurationKey") <> \'\' AND btrim("readinessPolicyVersion") <> \'\'), CONSTRAINT "PK_3c5135fd510d70b9913a8664ebd" PRIMARY KEY ("id"))',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_LAST_HEALTH_EVALUATED" ON "core"."managedEmailMailbox" ("lastHealthEvaluatedAt") ',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_WARMUP_PAID_THROUGH" ON "core"."managedEmailMailbox" ("warmupPaidThrough") ',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_INFRASTRUCTURE_PAID_THROUGH" ON "core"."managedEmailMailbox" ("infrastructurePaidThrough") ',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_RECONCILIATION_DUE" ON "core"."managedEmailMailbox" ("nextReconciliationAt") WHERE "nextReconciliationAt" IS NOT NULL',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "IDX_MANAGED_EMAIL_MAILBOX_DOMAIN" ON "core"."managedEmailMailbox" ("managedEmailDomainId") ',
+    );
+    await queryRunner.query(
+      'CREATE UNIQUE INDEX "IDX_MANAGED_EMAIL_MAILBOX_PROVIDER_ID_UNIQUE" ON "core"."managedEmailMailbox" ("providerConfigurationKey", "providerMailboxId") WHERE "providerMailboxId" IS NOT NULL',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailAcquisitionOperation" ADD CONSTRAINT "UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_ID" UNIQUE ("workspaceId", "id")',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailDomain" ADD "acquisitionOperationId" uuid NOT NULL',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" ADD "acquisitionOperationId" uuid NOT NULL',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailDomain" ADD CONSTRAINT "FK_bb33a43692e0a40331c3b4e3203" FOREIGN KEY ("workspaceId", "acquisitionOperationId") REFERENCES "core"."managedEmailAcquisitionOperation"("workspaceId","id") ON DELETE NO ACTION ON UPDATE NO ACTION',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_e68908f3851cdd9b784811271c0" FOREIGN KEY ("workspaceId", "acquisitionOperationId") REFERENCES "core"."managedEmailAcquisitionOperation"("workspaceId","id") ON DELETE NO ACTION ON UPDATE NO ACTION',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailAcquisitionOperation" ADD CONSTRAINT "FK_85b3f0b4be3d9b9c51b95f66cf8" FOREIGN KEY ("workspaceId") REFERENCES "core"."workspace"("id") ON DELETE CASCADE ON UPDATE NO ACTION',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailDomain" ADD CONSTRAINT "FK_f1964c52d948351e480d610a7a6" FOREIGN KEY ("workspaceId") REFERENCES "core"."workspace"("id") ON DELETE CASCADE ON UPDATE NO ACTION',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_8e9074f05a56d27a60ea43e15d4" FOREIGN KEY ("workspaceId") REFERENCES "core"."workspace"("id") ON DELETE CASCADE ON UPDATE NO ACTION',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_27cc5d4db81d206391025f7ef97" FOREIGN KEY ("workspaceId", "managedEmailDomainId") REFERENCES "core"."managedEmailDomain"("workspaceId","id") ON DELETE CASCADE ON UPDATE NO ACTION',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_100dc1201c28ba7b6ef9565eee5" FOREIGN KEY ("connectedAccountId") REFERENCES "core"."connectedAccount"("id") ON DELETE SET NULL ON UPDATE NO ACTION',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" ADD CONSTRAINT "FK_a71e00b78dbff38460aaa87cd0d" FOREIGN KEY ("messageChannelId") REFERENCES "core"."messageChannel"("id") ON DELETE SET NULL ON UPDATE NO ACTION',
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query('ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_a71e00b78dbff38460aaa87cd0d"');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_100dc1201c28ba7b6ef9565eee5"');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_27cc5d4db81d206391025f7ef97"');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_8e9074f05a56d27a60ea43e15d4"');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailDomain" DROP CONSTRAINT "FK_f1964c52d948351e480d610a7a6"');
-    await queryRunner.query('ALTER TABLE "core"."managedEmailAcquisitionOperation" DROP CONSTRAINT "FK_85b3f0b4be3d9b9c51b95f66cf8"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_PROVIDER_ID_UNIQUE"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_DOMAIN"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_RECONCILIATION_DUE"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_INFRASTRUCTURE_PAID_THROUGH"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_WARMUP_PAID_THROUGH"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_LAST_HEALTH_EVALUATED"');
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_e68908f3851cdd9b784811271c0"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailDomain" DROP CONSTRAINT "FK_bb33a43692e0a40331c3b4e3203"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_a71e00b78dbff38460aaa87cd0d"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_100dc1201c28ba7b6ef9565eee5"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_27cc5d4db81d206391025f7ef97"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailMailbox" DROP CONSTRAINT "FK_8e9074f05a56d27a60ea43e15d4"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailDomain" DROP CONSTRAINT "FK_f1964c52d948351e480d610a7a6"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedEmailAcquisitionOperation" DROP CONSTRAINT "FK_85b3f0b4be3d9b9c51b95f66cf8"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_PROVIDER_ID_UNIQUE"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_DOMAIN"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_RECONCILIATION_DUE"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_INFRASTRUCTURE_PAID_THROUGH"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_WARMUP_PAID_THROUGH"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_MAILBOX_LAST_HEALTH_EVALUATED"',
+    );
     await queryRunner.query('DROP TABLE "core"."managedEmailMailbox"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_DOMAIN_PROVIDER_ID_UNIQUE"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_DOMAIN_RECONCILIATION_DUE"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_DOMAIN_PAID_THROUGH"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_DOMAIN_EXPIRY"');
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_DOMAIN_PROVIDER_ID_UNIQUE"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_DOMAIN_RECONCILIATION_DUE"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_DOMAIN_PAID_THROUGH"',
+    );
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_DOMAIN_EXPIRY"',
+    );
     await queryRunner.query('DROP TABLE "core"."managedEmailDomain"');
-    await queryRunner.query('DROP INDEX "core"."IDX_MANAGED_EMAIL_ACQUISITION_RECONCILIATION_DUE"');
-    await queryRunner.query('DROP TABLE "core"."managedEmailAcquisitionOperation"');
+    await queryRunner.query(
+      'DROP INDEX "core"."IDX_MANAGED_EMAIL_ACQUISITION_RECONCILIATION_DUE"',
+    );
+    await queryRunner.query(
+      'DROP TABLE "core"."managedEmailAcquisitionOperation"',
+    );
   }
 }

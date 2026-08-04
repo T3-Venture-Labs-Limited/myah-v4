@@ -12,6 +12,22 @@ export type ManagedEmailSafeFacts = {
   readonly facts: readonly ManagedEmailSafeFact[];
 };
 
+export type ManagedEmailProviderReceipt = {
+  readonly domains: ReadonlyArray<{
+    readonly mailboxes: ReadonlyArray<{
+      readonly normalizedAddress: string;
+      readonly providerMailboxId: string;
+    }>;
+    readonly normalizedDomain: string;
+    readonly providerDomainId: string;
+    readonly providerOrderId: string | null;
+  }>;
+  readonly failedInventoryIds: readonly string[];
+  readonly orderIds: readonly string[];
+  readonly schemaVersion: 1;
+  readonly totalCostCents: number | null;
+};
+
 export type ManagedEmailResourceSnapshot = {
   readonly proposal: {
     readonly createdAt: string;
@@ -21,6 +37,10 @@ export type ManagedEmailResourceSnapshot = {
   readonly domains: ReadonlyArray<{
     readonly domain: string;
     readonly providerInventoryId?: string;
+    readonly prewarmedProviderCosts?: {
+      readonly domainPriceCents: number;
+      readonly mailboxPriceCents: number;
+    };
     readonly mailboxes: readonly string[];
     readonly providerQuote: {
       readonly amountMinorUnits: number;

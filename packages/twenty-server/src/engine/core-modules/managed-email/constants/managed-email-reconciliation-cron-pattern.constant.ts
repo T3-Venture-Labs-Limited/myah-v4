@@ -1,0 +1,1 @@
+export const MANAGED_EMAIL_RECONCILIATION_CRON_PATTERN = '*/1 * * * *';

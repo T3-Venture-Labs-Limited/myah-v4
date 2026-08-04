@@ -41,6 +41,7 @@ const ICEMAIL_READ_TIMEOUT_MS = 10_000;
 const ICEMAIL_WRITE_TIMEOUT_MS = 30_000;
 const ICEMAIL_FIRST_PAGE_LIMIT = 50;
 const ICEMAIL_PREWARM_PAGE_LIMIT = 100;
+const ICEMAIL_MAX_LIST_PAGES = 100;
 const MAX_INPUT_COLLECTION_SIZE = 100;
 const MAX_INPUT_STRING_LENGTH = 500;
 
@@ -65,11 +66,13 @@ export class IcemailClient {
     );
   }
 
-  async listPrewarmedBundles(): Promise<IcemailPrewarmedBundlePage> {
+  async listPrewarmedBundles(page = 1): Promise<IcemailPrewarmedBundlePage> {
+    const validatedPage = this.validatePage(page);
+
     return this.executeRead(
       (client) =>
         client.get('/prewarm', {
-          params: { page: 1, limit: ICEMAIL_PREWARM_PAGE_LIMIT },
+          params: { page: validatedPage, limit: ICEMAIL_PREWARM_PAGE_LIMIT },
         }),
       mapIcemailPrewarmedBundlePage,
     );
@@ -110,24 +113,36 @@ export class IcemailClient {
     );
   }
 
-  async listDomains(): Promise<IcemailPage<IcemailDomainSummary>> {
+  async listDomains(page = 1): Promise<IcemailPage<IcemailDomainSummary>> {
+    const validatedPage = this.validatePage(page);
+
     return this.executeRead(
       (client) =>
         client.get('/domain', {
-          params: { page: 1, limit: ICEMAIL_FIRST_PAGE_LIMIT },
+          params: { page: validatedPage, limit: ICEMAIL_FIRST_PAGE_LIMIT },
         }),
       mapIcemailDomainPage,
     );
   }
 
-  async listMailboxes(): Promise<IcemailPage<IcemailMailboxSummary>> {
+  async listMailboxes(page = 1): Promise<IcemailPage<IcemailMailboxSummary>> {
+    const validatedPage = this.validatePage(page);
+
     return this.executeRead(
       (client) =>
         client.get('/mailbox', {
-          params: { page: 1, limit: ICEMAIL_FIRST_PAGE_LIMIT },
+          params: { page: validatedPage, limit: ICEMAIL_FIRST_PAGE_LIMIT },
         }),
       mapIcemailMailboxPage,
     );
+  }
+
+  async listAllDomains(): Promise<IcemailDomainSummary[]> {
+    return this.collectPages((page) => this.listDomains(page));
+  }
+
+  async listAllMailboxes(): Promise<IcemailMailboxSummary[]> {
+    return this.collectPages((page) => this.listMailboxes(page));
   }
 
   async getDomain(domainId: string): Promise<IcemailDomainDetail | null> {
@@ -302,10 +317,6 @@ export class IcemailClient {
   }
 
   private createHttpClient(write: boolean): AxiosInstance {
-    if (!this.twentyConfigService.get('MANAGED_EMAIL_ENABLED')) {
-      throw new IcemailException(IcemailExceptionCode.CONFIGURATION_DISABLED);
-    }
-
     const baseURL = this.twentyConfigService.get('ICEMAIL_API_BASE_URL').trim();
     const apiKey = this.twentyConfigService.get('ICEMAIL_API_KEY').trim();
 
@@ -405,6 +416,44 @@ export class IcemailClient {
     }
 
     return ids;
+  }
+
+  private async collectPages<T>(
+    readPage: (page: number) => Promise<IcemailPage<T>>,
+  ): Promise<T[]> {
+    const items: T[] = [];
+    let expectedLimit: number | undefined;
+    let expectedTotal: number | undefined;
+
+    for (let page = 1; page <= ICEMAIL_MAX_LIST_PAGES; page += 1) {
+      const result = await readPage(page);
+
+      expectedLimit ??= result.limit;
+      expectedTotal ??= result.total;
+      if (
+        result.page !== page ||
+        result.limit !== expectedLimit ||
+        result.total !== expectedTotal ||
+        items.length + result.items.length > expectedTotal ||
+        (result.items.length === 0 && items.length < expectedTotal)
+      ) {
+        throw new IcemailException(IcemailExceptionCode.MALFORMED_RESPONSE);
+      }
+      items.push(...result.items);
+      if (items.length === expectedTotal) {
+        return items;
+      }
+    }
+
+    throw new IcemailException(IcemailExceptionCode.MALFORMED_RESPONSE);
+  }
+
+  private validatePage(page: number): number {
+    if (!Number.isSafeInteger(page) || page < 1) {
+      throw new IcemailException(IcemailExceptionCode.INVALID_INPUT);
+    }
+
+    return page;
   }
 
   private validateString(value: string): string {

@@ -9,6 +9,7 @@ import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
   type ManagedEmailResourceSnapshot,
+  type ManagedEmailProviderReceipt,
   type ManagedEmailSafeFacts,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
 import { validateSafeMetronomeEventProperties } from 'src/engine/core-modules/managed-provider-billing/utils/validate-safe-metronome-event-properties.util';
@@ -106,6 +107,12 @@ const assertDateRange = (start: unknown, end: unknown): void => {
 
 const assertPositiveSafeInteger = (value: unknown): void => {
   if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+    fail();
+  }
+};
+
+const assertNonNegativeSafeInteger = (value: unknown): void => {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
     fail();
   }
 };
@@ -268,6 +275,142 @@ const validateSafeFacts = (value: unknown): ManagedEmailSafeFacts => {
   return value as ManagedEmailSafeFacts;
 };
 
+const validateProviderReceipt = (
+  value: unknown,
+): ManagedEmailProviderReceipt => {
+  assertRecord(value, [
+    'schemaVersion',
+    'orderIds',
+    'domains',
+    'failedInventoryIds',
+    'totalCostCents',
+  ]);
+  if (value.schemaVersion !== 1) {
+    fail();
+  }
+  if (value.totalCostCents !== null) {
+    assertNonNegativeSafeInteger(value.totalCostCents);
+  }
+  assertArray(value.orderIds, MAX_COLLECTION_ITEMS);
+  assertArray(value.failedInventoryIds, MAX_COLLECTION_ITEMS);
+  assertArray(value.domains, MAX_COLLECTION_ITEMS);
+  const orderIds = new Set<string>();
+  for (const orderId of value.orderIds) {
+    assertString(orderId, MAX_IDENTIFIER_LENGTH);
+    if (orderIds.has(orderId as string)) fail();
+    orderIds.add(orderId as string);
+  }
+  const failedInventoryIds = new Set<string>();
+  for (const inventoryId of value.failedInventoryIds) {
+    assertString(inventoryId, MAX_IDENTIFIER_LENGTH);
+    if (failedInventoryIds.has(inventoryId as string)) fail();
+    failedInventoryIds.add(inventoryId as string);
+  }
+  const normalizedDomains = new Set<string>();
+  const providerDomainIds = new Set<string>();
+  const normalizedAddresses = new Set<string>();
+  const providerMailboxIds = new Set<string>();
+  let mailboxCount = 0;
+  for (const domain of value.domains) {
+    assertRecord(domain, [
+      'normalizedDomain',
+      'providerDomainId',
+      'providerOrderId',
+      'mailboxes',
+    ]);
+    assertNormalizedDomain(domain.normalizedDomain);
+    assertString(domain.providerDomainId, MAX_IDENTIFIER_LENGTH);
+    if (domain.providerOrderId !== null) {
+      assertString(domain.providerOrderId, MAX_IDENTIFIER_LENGTH);
+      if (!orderIds.has(domain.providerOrderId as string)) fail();
+    }
+    assertArray(domain.mailboxes, MAX_COLLECTION_ITEMS);
+    if (
+      normalizedDomains.has(domain.normalizedDomain as string) ||
+      providerDomainIds.has(domain.providerDomainId as string)
+    ) {
+      fail();
+    }
+    normalizedDomains.add(domain.normalizedDomain as string);
+    providerDomainIds.add(domain.providerDomainId as string);
+    for (const mailbox of domain.mailboxes) {
+      assertRecord(mailbox, ['normalizedAddress', 'providerMailboxId']);
+      const { domain: mailboxDomain } = parseNormalizedAddress(
+        mailbox.normalizedAddress,
+      );
+      assertString(mailbox.providerMailboxId, MAX_IDENTIFIER_LENGTH);
+      if (
+        mailboxDomain !== domain.normalizedDomain ||
+        normalizedAddresses.has(mailbox.normalizedAddress as string) ||
+        providerMailboxIds.has(mailbox.providerMailboxId as string)
+      ) {
+        fail();
+      }
+      normalizedAddresses.add(mailbox.normalizedAddress as string);
+      providerMailboxIds.add(mailbox.providerMailboxId as string);
+      mailboxCount += 1;
+    }
+  }
+  if (mailboxCount > MAX_COLLECTION_ITEMS) {
+    fail();
+  }
+  assertBoundedJson(value);
+  return value as ManagedEmailProviderReceipt;
+};
+
+export const assertManagedEmailProviderReceiptPartition = (
+  receipt: ManagedEmailProviderReceipt,
+  snapshot: ManagedEmailResourceSnapshot,
+): void => {
+  const expectedDomains = new Set(snapshot.domains.map(({ domain }) => domain));
+  const expectedInventoryIds = new Set(
+    snapshot.domains.flatMap(({ providerInventoryId }) =>
+      providerInventoryId === undefined ? [] : [providerInventoryId],
+    ),
+  );
+  if (
+    receipt.domains.some(
+      ({ normalizedDomain }) => !expectedDomains.has(normalizedDomain),
+    ) ||
+    receipt.failedInventoryIds.some(
+      (inventoryId) => !expectedInventoryIds.has(inventoryId),
+    )
+  ) {
+    throw new Error(
+      'Managed email provider receipt does not match resource snapshot',
+    );
+  }
+  for (const expectedDomain of snapshot.domains) {
+    const successful = receipt.domains.filter(
+      ({ normalizedDomain }) => normalizedDomain === expectedDomain.domain,
+    );
+    const failed =
+      expectedDomain.providerInventoryId === undefined
+        ? false
+        : receipt.failedInventoryIds.includes(
+            expectedDomain.providerInventoryId,
+          );
+    if (successful.length + Number(failed) !== 1) {
+      throw new Error(
+        'Managed email provider receipt does not match resource snapshot',
+      );
+    }
+    if (successful.length === 1) {
+      const expectedAddresses = [...expectedDomain.mailboxes].sort();
+      const actualAddresses = successful[0].mailboxes
+        .map(({ normalizedAddress }) => normalizedAddress)
+        .sort();
+      if (
+        JSON.stringify(actualAddresses) !== JSON.stringify(expectedAddresses)
+      ) {
+        throw new Error(
+          'Managed email provider receipt does not match resource snapshot',
+        );
+      }
+    }
+  }
+};
+
 const validateResourceSnapshot = (
   value: unknown,
 ): ManagedEmailResourceSnapshot => {
@@ -294,11 +437,26 @@ const validateResourceSnapshot = (
       fail();
     }
 
-    const domainKeys = Object.prototype.hasOwnProperty.call(
+    const hasProviderInventoryId = Object.prototype.hasOwnProperty.call(
       domain,
       'providerInventoryId',
-    )
-      ? ['domain', 'providerInventoryId', 'mailboxes', 'providerQuote']
+    );
+    const hasPrewarmedProviderCosts = Object.prototype.hasOwnProperty.call(
+      domain,
+      'prewarmedProviderCosts',
+    );
+
+    if (hasProviderInventoryId !== hasPrewarmedProviderCosts) {
+      fail();
+    }
+    const domainKeys = hasProviderInventoryId
+      ? [
+          'domain',
+          'providerInventoryId',
+          'prewarmedProviderCosts',
+          'mailboxes',
+          'providerQuote',
+        ]
       : ['domain', 'mailboxes', 'providerQuote'];
 
     assertRecord(domain, domainKeys);
@@ -311,6 +469,19 @@ const validateResourceSnapshot = (
 
     if (Object.prototype.hasOwnProperty.call(domain, 'providerInventoryId')) {
       assertString(domain.providerInventoryId, MAX_IDENTIFIER_LENGTH);
+    }
+    let prewarmedDomainPriceCents: number | null = null;
+    if (hasPrewarmedProviderCosts) {
+      const prewarmedProviderCosts = domain.prewarmedProviderCosts;
+
+      assertRecord(prewarmedProviderCosts, [
+        'domainPriceCents',
+        'mailboxPriceCents',
+      ]);
+      assertPositiveSafeInteger(prewarmedProviderCosts.domainPriceCents);
+      assertNonNegativeSafeInteger(prewarmedProviderCosts.mailboxPriceCents);
+      prewarmedDomainPriceCents =
+        prewarmedProviderCosts.domainPriceCents as number;
     }
 
     assertArray(domain.mailboxes, MAX_COLLECTION_ITEMS);
@@ -341,6 +512,12 @@ const validateResourceSnapshot = (
     ]);
     assertPositiveSafeInteger(domain.providerQuote.amountMinorUnits);
     assertString(domain.providerQuote.fingerprint, MAX_IDENTIFIER_LENGTH);
+    if (
+      prewarmedDomainPriceCents !== null &&
+      prewarmedDomainPriceCents !== domain.providerQuote.amountMinorUnits
+    ) {
+      fail();
+    }
 
     const quoteObservedAt = parseInstant(domain.providerQuote.observedAt);
 
@@ -513,6 +690,13 @@ export const managedEmailSafeFactsTransformer =
 
 export const managedEmailNullableSafeFactsTransformer =
   nullableTransformer(validateSafeFacts);
+
+export const managedEmailProviderReceiptTransformer = requiredTransformer(
+  validateProviderReceipt,
+);
+
+export const managedEmailNullableProviderReceiptTransformer =
+  nullableTransformer(validateProviderReceipt);
 
 export const managedEmailResourceSnapshotTransformer = requiredTransformer(
   validateResourceSnapshot,

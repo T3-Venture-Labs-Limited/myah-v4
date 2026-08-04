@@ -7,12 +7,20 @@ import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 
+import { ManagedEmailReconciliationCronCommand } from '../crons/commands/managed-email-reconciliation.cron.command';
+import { ManagedEmailReconciliationCronJob } from '../crons/managed-email-reconciliation.cron.job';
 import { ManagedEmailAcquisitionOperationEntity } from '../entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
+import { ReconcileManagedEmailAcquisitionJob } from '../jobs/reconcile-managed-email-acquisition.job';
 import { ManagedEmailModule } from '../managed-email.module';
 import { IcemailClient } from '../providers/icemail/icemail.client';
 import { WarmupInboxClient } from '../providers/warmup-inbox/warmup-inbox.client';
+import {
+  MANAGED_EMAIL_ACQUISITION_CLOCK,
+  MANAGED_EMAIL_SETUP_PASSWORD_FACTORY,
+  ManagedEmailAcquisitionService,
+} from '../services/managed-email-acquisition.service';
 import {
   MANAGED_EMAIL_PROPOSAL_CLOCK,
   MANAGED_EMAIL_PROPOSAL_ID_FACTORY,
@@ -23,6 +31,7 @@ import {
   MANAGED_EMAIL_QUOTE_ID_FACTORY,
   ManagedEmailQuoteService,
 } from '../services/managed-email-quote.service';
+import { ManagedEmailReconciliationService } from '../services/managed-email-reconciliation.service';
 import { ManagedEmailSubscriptionService } from '../services/managed-email-subscription.service';
 
 const ENTITIES = [
@@ -100,6 +109,11 @@ describe('ManagedEmailModule', () => {
       ManagedEmailProposalService,
       ManagedEmailQuoteService,
       ManagedEmailSubscriptionService,
+      ManagedEmailAcquisitionService,
+      ManagedEmailReconciliationService,
+      ReconcileManagedEmailAcquisitionJob,
+      ManagedEmailReconciliationCronJob,
+      ManagedEmailReconciliationCronCommand,
     ]) {
       expect(providers.filter((item) => item === service)).toHaveLength(1);
     }
@@ -108,18 +122,22 @@ describe('ManagedEmailModule', () => {
       MANAGED_EMAIL_PROPOSAL_ID_FACTORY,
       MANAGED_EMAIL_PROPOSAL_POLICY,
       MANAGED_EMAIL_QUOTE_ID_FACTORY,
+      MANAGED_EMAIL_ACQUISITION_CLOCK,
+      MANAGED_EMAIL_SETUP_PASSWORD_FACTORY,
     ]) {
       expect(providers).toEqual(
         expect.arrayContaining([expect.objectContaining({ provide: token })]),
       );
     }
-    expect(providers).toHaveLength(repositoryTokens.length + 9);
+    expect(providers).toHaveLength(repositoryTokens.length + 16);
     expect(exports).toEqual([
       ...repositoryTokens,
       IcemailClient,
       WarmupInboxClient,
       ManagedEmailProposalService,
       ManagedEmailQuoteService,
+      ManagedEmailAcquisitionService,
+      ManagedEmailReconciliationService,
       ManagedEmailSubscriptionService,
     ]);
   });

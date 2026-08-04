@@ -19,12 +19,12 @@ import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
   type ManagedEmailResourceSnapshot,
-  type ManagedEmailSafeFacts,
+  type ManagedEmailProviderReceipt,
 } from '../types/managed-email-persistence.type';
 import {
   managedEmailCorrelatedSubscriptionLinesTransformer,
   managedEmailExpectedLineItemsTransformer,
-  managedEmailNullableSafeFactsTransformer,
+  managedEmailNullableProviderReceiptTransformer,
   managedEmailResourceSnapshotTransformer,
 } from '../utils/validate-managed-email-persistence-json.util';
 
@@ -45,6 +45,7 @@ import {
   ['nextReconciliationAt'],
   { where: '"nextReconciliationAt" IS NOT NULL' },
 )
+@Unique('UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_ID', ['workspaceId', 'id'])
 @Unique('UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_IDEMPOTENCY', [
   'workspaceId',
   'idempotencyKey',
@@ -66,6 +67,12 @@ export class ManagedEmailAcquisitionOperationEntity {
 
   @Column({ type: 'text', update: false })
   acquisitionMode: ManagedEmailAcquisitionMode;
+
+  @Column({ type: 'text', update: false })
+  providerConfigurationKey: string;
+
+  @Column({ type: 'text', update: false })
+  readinessPolicyVersion: string;
 
   @Column({ type: 'uuid', update: false })
   authorizedActorWorkspaceMemberId: string;
@@ -149,10 +156,10 @@ export class ManagedEmailAcquisitionOperationEntity {
 
   @Column({
     nullable: true,
-    transformer: managedEmailNullableSafeFactsTransformer,
+    transformer: managedEmailNullableProviderReceiptTransformer,
     type: 'jsonb',
   })
-  providerReceipt: ManagedEmailSafeFacts | null;
+  providerReceipt: ManagedEmailProviderReceipt | null;
 
   @Column({ nullable: true, type: 'text' })
   providerOutcome: string | null;
