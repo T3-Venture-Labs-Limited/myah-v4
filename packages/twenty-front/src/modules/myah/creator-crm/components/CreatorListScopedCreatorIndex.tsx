@@ -141,7 +141,7 @@ export const CreatorListScopedCreatorIndex = ({
   return (
     <>
       <StyledScopeHeader>
-        <StyledScopeTitle>{`List: ${creatorListContext.target.label}`}</StyledScopeTitle>
+        <StyledScopeTitle tabIndex={-1}>{`List: ${creatorListContext.target.label}`}</StyledScopeTitle>
         <Button
           ariaLabel={t`Back to Creator Lists`}
           onClick={onClose}
