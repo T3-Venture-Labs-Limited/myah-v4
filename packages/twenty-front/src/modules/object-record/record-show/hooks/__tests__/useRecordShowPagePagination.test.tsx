@@ -181,7 +181,7 @@ describe('useRecordShowPagePagination', () => {
       2,
       AppPath.RecordIndexPage,
       { objectNamePlural: 'creator-lists' },
-      { creatorListId: 'list-id', viewId: 'view-id' },
+      { creatorListId: 'list-id' },
     );
   });
 

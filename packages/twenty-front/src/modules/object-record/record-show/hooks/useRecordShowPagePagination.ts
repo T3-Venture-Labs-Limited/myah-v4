@@ -249,10 +249,7 @@ export const useRecordShowPagePagination = (
           : objectMetadataItem.namePlural,
       },
       creatorListContext
-        ? {
-            creatorListId: creatorListContext.target.id,
-            viewId: viewIdQueryParam,
-          }
+        ? { creatorListId: creatorListContext.target.id }
         : { viewId: viewIdQueryParam },
     );
     setLastShowPageRecordId(objectRecordId);
