@@ -23,6 +23,7 @@ const StyledWorkspace = styled.div<{ hasSelection: boolean }>`
 const StyledPane = styled.div`
   display: flex;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
   min-width: 0;
 

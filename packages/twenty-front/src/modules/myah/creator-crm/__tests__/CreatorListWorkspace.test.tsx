@@ -305,6 +305,16 @@ describe('CreatorListWorkspace', () => {
     expect(screen.getByRole('button', { name: 'Open List A' })).toHaveFocus();
   });
 
+  it('uses a column-flex pane to stack the scoped header above the native table', () => {
+    renderWorkspace();
+
+    expect(mockStyledRules).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('flex-direction: column;'),
+      ]),
+    );
+  });
+
   it('wraps the active mobile pane in the full-height workspace layout', () => {
     mockUseIsMobile.mockReturnValue(true);
     renderWorkspace();
