@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { MyahCreatorBulkActions } from '@/myah/creator-crm/components/MyahCreatorBulkActions';
+import { CreatorListBulkActionsContext } from '@/myah/creator-crm/contexts/CreatorListBulkActionsContext';
 
 const CREATOR_OBJECT_UNIVERSAL_IDENTIFIER =
   '5ca82f72-9778-4ae1-8a8e-9b762c4ce0de';
@@ -243,9 +244,8 @@ describe('MyahCreatorBulkActions', () => {
     });
 
     render(
-      <MyahCreatorBulkActions
-        contextStoreInstanceId="creator-list-pane-list-scoped"
-        creatorListContext={{
+      <CreatorListBulkActionsContext.Provider
+        value={{
           target: {
             kind: 'creator-list',
             id: 'scoped-list',
@@ -256,7 +256,11 @@ describe('MyahCreatorBulkActions', () => {
             relationTargetFieldMetadataId: 'creator-list-member-creator-list',
           },
         }}
-      />,
+      >
+        <MyahCreatorBulkActions
+          contextStoreInstanceId="creator-list-pane-list-scoped"
+        />
+      </CreatorListBulkActionsContext.Provider>,
     );
 
     fireEvent.click(

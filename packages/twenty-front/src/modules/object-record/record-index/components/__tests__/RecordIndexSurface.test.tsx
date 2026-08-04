@@ -359,33 +359,19 @@ describe('RecordIndexSurface', () => {
     );
   });
 
-  it('passes an isolated List action context to its native header', async () => {
-    const creatorListContext = {
-      target: {
-        kind: 'creator-list' as const,
-        id: 'list-a',
-        label: 'List A',
-      },
-      filter: {
-        fieldMetadataId: 'creator-list-memberships',
-        relationTargetFieldMetadataId: 'creator-list-member-creator-list',
-      },
-    };
-
+  it('does not pass feature context into its generic header', async () => {
     renderSurface(
       <RecordIndexSurface
         contextStoreInstanceId="creator-list-pane-list-a"
         objectNameSingular="creator"
         viewId="creator-default-view"
         indexIdentifierUrl={creatorShowUrl}
-        creatorListContext={creatorListContext}
       />,
     );
 
     await waitFor(() => {
       expect(mockRecordIndexPageHeader).toHaveBeenLastCalledWith({
         contextStoreInstanceId: 'creator-list-pane-list-a',
-        creatorListContext,
       });
     });
   });

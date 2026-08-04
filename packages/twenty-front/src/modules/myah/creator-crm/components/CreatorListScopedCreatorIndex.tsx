@@ -1,4 +1,5 @@
 import { useCreatorListContextFromId } from '@/myah/creator-crm/hooks/useCreatorListContext';
+import { CreatorListBulkActionsContext } from '@/myah/creator-crm/contexts/CreatorListBulkActionsContext';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
@@ -71,14 +72,12 @@ export const CreatorListScopedCreatorIndex = ({
     objectMetadataItemId: creatorObjectMetadataItem?.id ?? '',
   });
   const creatorListContext = useCreatorListContextFromId(creatorListId);
-  const {
-    loading: isCreatorListLoading,
-    error: creatorListError,
-  } = useFindOneRecord({
-    objectNameSingular: 'creatorList',
-    objectRecordId: creatorListId,
-    recordGqlFields: { id: true, name: true },
-  });
+  const { loading: isCreatorListLoading, error: creatorListError } =
+    useFindOneRecord({
+      objectNameSingular: 'creatorList',
+      objectRecordId: creatorListId,
+      recordGqlFields: { id: true, name: true },
+    });
   const creatorListRelationFilter = useMemo<RecordFilter | undefined>(() => {
     if (!creatorListContext) {
       return undefined;
@@ -130,15 +129,16 @@ export const CreatorListScopedCreatorIndex = ({
     ) : !defaultCreatorView ? (
       <StyledScopeState>{t`Loading Creator view…`}</StyledScopeState>
     ) : (
-      <RecordIndexSurface
-        key={creatorListId}
-        contextStoreInstanceId={`creator-list-pane-${creatorListId}`}
-        objectNameSingular="creator"
-        viewId={defaultCreatorView.id}
-        indexIdentifierUrl={creatorShowUrl}
-        initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
-        creatorListContext={creatorListContext}
-      />
+      <CreatorListBulkActionsContext.Provider value={creatorListContext}>
+        <RecordIndexSurface
+          key={creatorListId}
+          contextStoreInstanceId={`creator-list-pane-${creatorListId}`}
+          objectNameSingular="creator"
+          viewId={defaultCreatorView.id}
+          indexIdentifierUrl={creatorShowUrl}
+          initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
+        />
+      </CreatorListBulkActionsContext.Provider>
     );
 
   return (

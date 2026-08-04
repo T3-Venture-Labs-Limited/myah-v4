@@ -55,11 +55,13 @@ type LastOpenNavigation = {
   request: RecordIndexOpenRequest;
 };
 
+type CreatorListSelectionStatusProps = {
+  creatorListId: string;
+};
+
 const CreatorListSelectionStatus = ({
   creatorListId,
-}: {
-  creatorListId: string;
-}) => {
+}: CreatorListSelectionStatusProps) => {
   const {
     error: creatorListError,
     loading: isCreatorListLoading,
@@ -149,7 +151,7 @@ export const CreatorListWorkspace = () => {
   }, [isMobile, scopedPaneElement, selectedCreatorListId]);
 
   useEffect(() => {
-    if (selectedCreatorListId || !isMobile) {
+    if (selectedCreatorListId) {
       return;
     }
 

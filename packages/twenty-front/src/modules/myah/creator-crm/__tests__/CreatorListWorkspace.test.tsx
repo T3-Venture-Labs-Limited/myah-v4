@@ -281,6 +281,22 @@ describe('CreatorListWorkspace', () => {
     );
   });
 
+  it('restores desktop focus only after Close', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    const arrow = screen.getByRole('button', { name: 'Open List A' });
+    fireEvent.click(arrow);
+
+    expect(arrow).not.toHaveFocus();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Back to Creator Lists' }),
+    );
+
+    expect(arrow).toHaveFocus();
+  });
+
   it('replaces Lists with the selected full-screen Creator pane on mobile and restores name-link focus on Back', async () => {
     mockUseIsMobile.mockReturnValue(true);
     const user = userEvent.setup();

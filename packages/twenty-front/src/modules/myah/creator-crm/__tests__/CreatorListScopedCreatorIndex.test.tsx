@@ -1,10 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { CreatorListScopedCreatorIndex } from '@/myah/creator-crm/components/CreatorListScopedCreatorIndex';
+import { useCreatorListBulkActionsContext } from '@/myah/creator-crm/contexts/CreatorListBulkActionsContext';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
 import { FieldMetadataType } from 'twenty-shared/types';
+
+const ScopedBulkActionsContextValue = () => {
+  const creatorListContext = useCreatorListBulkActionsContext();
+
+  return (
+    <output data-testid="scoped-bulk-actions-context">
+      {creatorListContext?.target.id}
+    </output>
+  );
+};
 
 const mockRecordIndexSurface = jest.fn(
   ({
@@ -19,6 +30,7 @@ const mockRecordIndexSurface = jest.fn(
       data-testid="record-index-surface"
     >
       {`Rows for ${initialQueryOnlyRecordFilters[0]?.value}`}
+      <ScopedBulkActionsContextValue />
     </div>
   ),
 );
@@ -134,12 +146,6 @@ describe('CreatorListScopedCreatorIndex', () => {
       'creator-list-pane-list-a',
     );
     expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
-      creatorListContext: {
-        target: {
-          id: 'list-a',
-          label: 'List A',
-        },
-      },
       initialQueryOnlyRecordFilters: [
         {
           fieldMetadataId: 'creator-list-memberships',
@@ -151,6 +157,12 @@ describe('CreatorListScopedCreatorIndex', () => {
       objectNameSingular: 'creator',
       viewId: 'creator-default-view',
     });
+    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+      'creatorListContext',
+    );
+    expect(screen.getByTestId('scoped-bulk-actions-context')).toHaveTextContent(
+      'list-a',
+    );
   });
 
   it.each([

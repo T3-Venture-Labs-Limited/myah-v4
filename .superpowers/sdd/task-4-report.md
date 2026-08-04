@@ -638,3 +638,97 @@ Focused repair commit: `fix(myah): repair MYAH-229 lint findings`.
 ### Concerns
 
 The supplied baseline count says five, but both fresh lint runs report the six unchanged diagnostics enumerated above; no documented baseline source was changed.
+
+## Final whole-branch review repairs
+
+### LSP reference evidence
+
+Before changing exported `RecordIndexSurfaceProps`, `RecordIndexPageHeaderProps`, and `MyahCreatorBulkActionsProps`, `typescript-language-server` `textDocument/references` was queried from `packages/twenty-front`:
+
+- `RecordIndexSurfaceProps`: declaration, local instance alias, and surface component annotation at `RecordIndexSurface.tsx:46,56,245`.
+- `RecordIndexPageHeaderProps`: declaration and header component annotation at `RecordIndexPageHeader.tsx:39,47`.
+- `MyahCreatorBulkActionsProps`: declaration and component annotation at `MyahCreatorBulkActions.tsx:37,45`.
+- `CreatorListContext`: declaration and its two hook return types at `useCreatorListContext.ts:9,19,77`.
+
+The exported prop types had no external type consumers. Narrow JSX reference checks found the single feature-scope `creatorListContext` surface call and every generic forwarding hop; all were removed in the same cutover.
+
+### RED
+
+Before production edits, ran:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/record-index/components/__tests__/RecordIndexSurface.test.tsx packages/twenty-front/src/modules/object-record/record-table/components/__tests__/RecordTableContextProvider.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/MyahCreatorBulkActions.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+Observed the expected failures:
+
+- The isolated table trigger used the global `SIDE_PANEL` state and emitted `CLICK`, rather than the scoped Creator view's `RECORD_PAGE` `MOUSE_DOWN`.
+- The isolated open dispatcher invoked the side panel rather than navigating for the scoped `RECORD_PAGE` view.
+- Desktop Close did not restore focus to the still-connected identifier control.
+- The feature-owned context module did not exist, and the generic header still received the Myah context prop.
+
+### GREEN
+
+After the minimal native composition, the same focused RED command passed:
+
+```text
+Test Suites: 6 passed, 6 total
+Tests:       32 passed, 32 total
+Snapshots:   0 total
+```
+
+Final planned regression command:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/record-index/components/__tests__/RecordIndexSurface.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useCreatorListContext.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListMembershipFilterEffect.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useApplyCreatorBulkRelationship.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/MyahCreatorBulkRemovalStaleContext.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 10 passed, 10 total
+Tests:       67 passed, 67 total
+Snapshots:   0 total
+```
+
+Direct coverage for the new table-mode and bulk-action-context contracts:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-table/components/__tests__/RecordTableContextProvider.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/MyahCreatorBulkActions.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 2 passed, 2 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+```
+
+Direct frontend typecheck:
+
+```bash
+npx tsgo -p packages/twenty-front/tsconfig.json --noEmit
+```
+
+Exited 0 with no output.
+
+Targeted changed-source checks:
+
+```bash
+npx oxlint --type-aware packages/twenty-front/src/modules/myah/creator-crm/contexts/CreatorListBulkActionsContext.ts packages/twenty-front/src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx packages/twenty-front/src/modules/myah/creator-crm/components/CreatorListWorkspace.tsx packages/twenty-front/src/modules/myah/creator-crm/components/MyahCreatorBulkActions.tsx packages/twenty-front/src/modules/object-record/record-index/components/RecordIndexPageHeader.tsx packages/twenty-front/src/modules/object-record/record-index/components/RecordIndexSurface.tsx packages/twenty-front/src/modules/object-record/record-index/hooks/useOpenRecordFromIndexView.ts packages/twenty-front/src/modules/object-record/record-table/components/RecordTableContextProvider.tsx
+npx oxfmt --check packages/twenty-front/src/modules/myah/creator-crm/contexts/CreatorListBulkActionsContext.ts packages/twenty-front/src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx packages/twenty-front/src/modules/myah/creator-crm/components/CreatorListWorkspace.tsx packages/twenty-front/src/modules/myah/creator-crm/components/MyahCreatorBulkActions.tsx packages/twenty-front/src/modules/object-record/record-index/components/RecordIndexPageHeader.tsx packages/twenty-front/src/modules/object-record/record-index/components/RecordIndexSurface.tsx packages/twenty-front/src/modules/object-record/record-index/hooks/useOpenRecordFromIndexView.ts packages/twenty-front/src/modules/object-record/record-table/components/RecordTableContextProvider.tsx
+```
+
+`oxlint` reported 0 warnings and 0 errors; `oxfmt` reported every file correctly formatted.
+
+### Self-review
+
+- Scoped record tables branch on the existing context-store instance and consume the scoped current view's `openRecordIn`; the main branch retains its existing global atom. The native open dispatcher likewise reads the global atom only for the main/no-context path and otherwise uses the scoped current view, with the native side-panel default while that view is unresolved.
+- Close focus restoration no longer excludes desktop. It still returns while selected, first focuses the retained connected activation element, then uses the existing source-aware remount fallback; it does not read `document.activeElement`.
+- `RecordIndexSurface` and `RecordIndexPageHeader` no longer declare, receive, or forward Myah List context. The ready scoped Creator surface supplies the already validated List context through `CreatorListBulkActionsContext`; `MyahCreatorBulkActions` suppresses the legacy URL adapter when that scoped value is present and preserves the existing adapter otherwise.
+- The focused `CreatorListSelectionStatusProps` type now follows frontend component prop naming. No data/API/schema/migration/provider action, global write, legacy non-List behavior, scoped filter, cache, selection/action path, native permissions, or mobile layout changed.
+
+### Commit
+
+Focused repair commit: `fix(myah): complete MYAH-229 review repairs`.
+
+### Concerns
+
+None. No project-wide lint, Nx, build, browser, push, deployment, or external action was run.

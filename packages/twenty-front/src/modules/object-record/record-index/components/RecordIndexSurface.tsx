@@ -15,10 +15,7 @@ import {
   type RecordIndexOpenRequest,
 } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordIndexLoadBaseOnContextStoreEffect } from '@/object-record/record-index/components/RecordIndexLoadBaseOnContextStoreEffect';
-import {
-  RecordIndexPageHeader,
-  type RecordIndexPageHeaderProps,
-} from '@/object-record/record-index/components/RecordIndexPageHeader';
+import { RecordIndexPageHeader } from '@/object-record/record-index/components/RecordIndexPageHeader';
 import { RecordIndexSurfaceContextStoreInitEffect } from '@/object-record/record-index/components/RecordIndexSurfaceContextStoreInitEffect';
 import { RecordIndexViewBar } from '@/object-record/record-index/components/RecordIndexViewBar';
 import { RecordIndexViewFieldsSSESyncEffect } from '@/object-record/record-index/components/RecordIndexViewFieldsSSESyncEffect';
@@ -50,7 +47,6 @@ export type RecordIndexSurfaceProps = {
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
-  creatorListContext?: RecordIndexPageHeaderProps['creatorListContext'];
 };
 
 type RecordIndexSurfaceInstanceProps = RecordIndexSurfaceProps;
@@ -90,7 +86,6 @@ const RecordIndexSurfaceInstance = ({
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
   initialQueryOnlyRecordFilters = [],
-  creatorListContext,
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -184,7 +179,6 @@ const RecordIndexSurfaceInstance = ({
                   header={
                     <RecordIndexPageHeader
                       contextStoreInstanceId={contextStoreInstanceId}
-                      creatorListContext={creatorListContext}
                     />
                   }
                   secondaryBar={
@@ -241,7 +235,6 @@ export const RecordIndexSurface = ({
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
   initialQueryOnlyRecordFilters,
-  creatorListContext,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -265,7 +258,6 @@ export const RecordIndexSurface = ({
       indexIdentifierUrl={indexIdentifierUrl}
       onOpenRecordFromIndexView={onOpenRecordFromIndexView}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
-      creatorListContext={creatorListContext}
     />
   );
 };
