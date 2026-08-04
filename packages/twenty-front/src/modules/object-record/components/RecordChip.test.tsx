@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { RecordChip } from '@/object-record/components/RecordChip';
@@ -106,16 +107,6 @@ describe('RecordChip identifier navigation', () => {
       triggerEvent: 'MOUSE_DOWN' as const,
       activate: (link: HTMLElement) => fireEvent.mouseDown(link),
     },
-    {
-      activation: 'Enter',
-      triggerEvent: 'CLICK' as const,
-      activate: (link: HTMLElement) => fireEvent.click(link, { detail: 0 }),
-    },
-    {
-      activation: 'Space',
-      triggerEvent: 'CLICK' as const,
-      activate: (link: HTMLElement) => fireEvent.click(link, { detail: 0 }),
-    },
   ])(
     'uses a custom Creator List record-show handler without navigation on $activation',
     ({ triggerEvent, activate }) => {
@@ -136,6 +127,42 @@ describe('RecordChip identifier navigation', () => {
       );
 
       activate(screen.getByRole('link', { name: /Creator List/ }));
+
+      expect(openGenericRecordInSidePanel).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('status')).toHaveTextContent(
+        '/objects/creator-lists',
+      );
+    },
+  );
+
+  it.each([
+    ['Enter', '{Enter}'],
+    ['Space', ' '],
+  ])(
+    'uses a custom Creator List record-show handler without navigation on %s',
+    async (_activation, key) => {
+      const user = userEvent.setup();
+
+      render(
+        <MemoryRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          initialEntries={['/objects/creator-lists']}
+        >
+          <RecordChip
+            objectNameSingular="creatorList"
+            record={{ id: 'list-id' } as never}
+            to="/objects/creator-lists/list-id"
+            triggerEvent="CLICK"
+            onClick={openGenericRecordInSidePanel}
+          />
+          <CurrentLocation />
+        </MemoryRouter>,
+      );
+
+      const link = screen.getByRole('link', { name: /Creator List/ });
+      link.focus();
+
+      await user.keyboard(key);
 
       expect(openGenericRecordInSidePanel).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('status')).toHaveTextContent(

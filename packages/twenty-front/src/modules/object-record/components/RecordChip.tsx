@@ -112,7 +112,7 @@ export const RecordChip = ({
     isDefined(to) &&
     /^\/objects\/creators\?creatorListId=[^&#]+$/.test(to);
 
-  return (
+  const recordChip = (
     <LinkChip
       size={size}
       maxWidth={maxWidth}
@@ -139,5 +139,20 @@ export const RecordChip = ({
       onClick={shouldFollowLinkOnClick ? undefined : handleCustomClick}
       triggerEvent={triggerEvent}
     />
+  );
+
+  return isDefined(onClick) && !shouldFollowLinkOnClick ? (
+    <span
+      onKeyDown={(event) => {
+        if (event.key === ' ') {
+          event.preventDefault();
+          onClick(event as unknown as MouseEvent);
+        }
+      }}
+    >
+      {recordChip}
+    </span>
+  ) : (
+    recordChip
   );
 };
