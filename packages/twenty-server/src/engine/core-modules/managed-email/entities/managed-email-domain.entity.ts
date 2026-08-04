@@ -14,6 +14,8 @@ import {
 
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
+import { ManagedEmailAcquisitionOperationEntity } from './managed-email-acquisition-operation.entity';
+
 import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailInfrastructureState } from '../enums/managed-email-infrastructure-state.enum';
 import { type ManagedEmailSafeFacts } from '../types/managed-email-persistence.type';
@@ -51,6 +53,16 @@ export class ManagedEmailDomainEntity {
   @ManyToOne(() => WorkspaceEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspaceId' })
   workspace: Relation<WorkspaceEntity>;
+
+  @Column({ type: 'uuid', update: false })
+  acquisitionOperationId: string;
+
+  @ManyToOne(() => ManagedEmailAcquisitionOperationEntity)
+  @JoinColumn([
+    { name: 'workspaceId', referencedColumnName: 'workspaceId' },
+    { name: 'acquisitionOperationId', referencedColumnName: 'id' },
+  ])
+  acquisitionOperation: Relation<ManagedEmailAcquisitionOperationEntity>;
 
   @Column({ type: 'text', update: false })
   domain: string;

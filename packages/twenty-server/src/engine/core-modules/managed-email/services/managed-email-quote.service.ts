@@ -96,6 +96,30 @@ export class ManagedEmailQuoteService {
     const products = new Map(
       catalog.products.map((product) => [product.key, product]),
     );
+    const mailboxProduct = this.getProduct(
+      products,
+      MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH,
+    );
+    const prewarmedMailboxCosts = proposal.domains.flatMap(
+      ({ prewarmedProviderCosts }) =>
+        prewarmedProviderCosts === undefined
+          ? []
+          : [prewarmedProviderCosts.mailboxPriceCents],
+    );
+    const fixedMailboxProviderCost =
+      mailboxProduct.providerCost.kind === 'FIXED' &&
+      mailboxProduct.providerCost.currency === 'USD'
+        ? mailboxProduct.providerCost.amountMinorUnits
+        : null;
+
+    if (
+      prewarmedMailboxCosts.length > 0 &&
+      (prewarmedMailboxCosts.length !== proposal.domains.length ||
+        fixedMailboxProviderCost === null ||
+        prewarmedMailboxCosts.some((cost) => cost > fixedMailboxProviderCost))
+    ) {
+      throw new Error('Managed email prewarmed mailbox cost is not covered');
+    }
     const startingAt = new Date(now);
     const lines = [
       this.createLine({
@@ -114,10 +138,7 @@ export class ManagedEmailQuoteService {
         billingFrequency: 'MONTHLY',
         metronomeProductId:
           metronomeProducts[MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH],
-        product: this.getProduct(
-          products,
-          MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH,
-        ),
+        product: mailboxProduct,
         quantity: proposal.mailboxCount,
         startingAt,
       }),
@@ -220,15 +241,33 @@ export class ManagedEmailQuoteService {
   private createResourceSnapshot(
     proposal: ManagedEmailProposal,
   ): ManagedEmailResourceSnapshot {
-    const domains = proposal.domains.map((domain) =>
-      Object.freeze({
+    const domains = proposal.domains.map((domain) => {
+      const hasInventoryIdentity = domain.providerInventoryId !== undefined;
+      const hasPrewarmedCosts = domain.prewarmedProviderCosts !== undefined;
+
+      if (hasInventoryIdentity !== hasPrewarmedCosts) {
+        throw new Error('Managed email prewarmed proposal is invalid');
+      }
+      return Object.freeze({
         domain: domain.domain,
+        ...(domain.providerInventoryId === undefined ||
+        domain.prewarmedProviderCosts === undefined
+          ? {}
+          : {
+              prewarmedProviderCosts: Object.freeze({
+                domainPriceCents:
+                  domain.prewarmedProviderCosts.domainPriceCents,
+                mailboxPriceCents:
+                  domain.prewarmedProviderCosts.mailboxPriceCents,
+              }),
+              providerInventoryId: domain.providerInventoryId,
+            }),
         mailboxes: Object.freeze(
           domain.mailboxes.map(({ address }) => address),
         ),
         providerQuote: Object.freeze({ ...domain.providerQuote }),
-      }),
-    );
+      });
+    });
     const personas = proposal.domains.flatMap(({ mailboxes }) =>
       mailboxes.map((persona) => Object.freeze({ ...persona })),
     );

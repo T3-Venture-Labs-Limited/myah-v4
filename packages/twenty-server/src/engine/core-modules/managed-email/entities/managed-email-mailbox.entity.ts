@@ -23,6 +23,8 @@ import { ManagedEmailWarmupState } from '../enums/managed-email-warmup-state.enu
 import { type ManagedEmailSafeFacts } from '../types/managed-email-persistence.type';
 import { managedEmailSafeFactsTransformer } from '../utils/validate-managed-email-persistence-json.util';
 
+import { ManagedEmailAcquisitionOperationEntity } from './managed-email-acquisition-operation.entity';
+
 import { ManagedEmailDomainEntity } from './managed-email-domain.entity';
 
 @Check(
@@ -67,6 +69,16 @@ export class ManagedEmailMailboxEntity {
   @ManyToOne(() => WorkspaceEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspaceId' })
   workspace: Relation<WorkspaceEntity>;
+
+  @Column({ type: 'uuid', update: false })
+  acquisitionOperationId: string;
+
+  @ManyToOne(() => ManagedEmailAcquisitionOperationEntity)
+  @JoinColumn([
+    { name: 'workspaceId', referencedColumnName: 'workspaceId' },
+    { name: 'acquisitionOperationId', referencedColumnName: 'id' },
+  ])
+  acquisitionOperation: Relation<ManagedEmailAcquisitionOperationEntity>;
 
   @Column({ type: 'uuid', update: false })
   managedEmailDomainId: string;

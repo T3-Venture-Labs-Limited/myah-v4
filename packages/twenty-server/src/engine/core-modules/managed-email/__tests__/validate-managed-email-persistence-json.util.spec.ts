@@ -2,6 +2,8 @@ import { MANAGED_EMAIL_PRODUCT_DEFINITIONS } from 'src/engine/core-modules/manag
 import {
   managedEmailCorrelatedSubscriptionLinesTransformer,
   managedEmailExpectedLineItemsTransformer,
+  managedEmailNullableProviderReceiptTransformer,
+  managedEmailProviderReceiptTransformer,
   managedEmailResourceSnapshotTransformer,
   managedEmailNullableSafeFactsTransformer,
   managedEmailSafeFactsTransformer,
@@ -10,6 +12,7 @@ import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
   type ManagedEmailResourceSnapshot,
+  type ManagedEmailProviderReceipt,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
 
 type DeepMutable<T> = T extends readonly (infer Item)[]
@@ -28,6 +31,26 @@ const safeFacts = () => ({
   ],
 });
 
+const providerReceipt = (): DeepMutable<ManagedEmailProviderReceipt> => ({
+  domains: [
+    {
+      mailboxes: [
+        {
+          normalizedAddress: 'creator@example.com',
+          providerMailboxId: 'provider-mailbox-1',
+        },
+      ],
+      normalizedDomain: 'example.com',
+      providerDomainId: 'provider-domain-1',
+      providerOrderId: 'provider-order-1',
+    },
+  ],
+  failedInventoryIds: [],
+  orderIds: ['provider-order-1'],
+  schemaVersion: 1,
+  totalCostCents: null,
+});
+
 const resourceSnapshot = (): DeepMutable<ManagedEmailResourceSnapshot> => ({
   proposal: {
     createdAt: '2026-08-02T12:00:00.000Z',
@@ -38,6 +61,10 @@ const resourceSnapshot = (): DeepMutable<ManagedEmailResourceSnapshot> => ({
     {
       domain: 'example.com',
       providerInventoryId: 'inventory-1',
+      prewarmedProviderCosts: {
+        domainPriceCents: 1000,
+        mailboxPriceCents: 250,
+      },
       mailboxes: ['creator@example.com'],
       providerQuote: {
         amountMinorUnits: 1000,
@@ -122,6 +149,9 @@ describe('managed email persistence JSON validation', () => {
     expect(Object.isFrozen(facts.facts[0])).toBe(true);
     expect(Object.isFrozen(resources.proposal)).toBe(true);
     expect(Object.isFrozen(resources.domains[0].providerQuote)).toBe(true);
+    expect(Object.isFrozen(resources.domains[0].prewarmedProviderCosts)).toBe(
+      true,
+    );
     expect(Object.isFrozen(resources.personas[0])).toBe(true);
     expect(Object.isFrozen(expectedLines[0])).toBe(true);
     expect(Object.isFrozen(correlatedLines[0])).toBe(true);
@@ -212,6 +242,26 @@ describe('managed email persistence JSON validation', () => {
       (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
         snapshot.domains[0].providerQuote.observedAt =
           '2026-08-02T12:01:00.000Z';
+      },
+    ],
+    [
+      'inventory identity without exact provider costs',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        delete snapshot.domains[0].prewarmedProviderCosts;
+      },
+    ],
+    [
+      'provider costs without inventory identity',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        delete snapshot.domains[0].providerInventoryId;
+      },
+    ],
+    [
+      'negative prewarmed provider cost',
+      (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
+        if (snapshot.domains[0].prewarmedProviderCosts !== undefined) {
+          snapshot.domains[0].prewarmedProviderCosts.mailboxPriceCents = -1;
+        }
       },
     ],
   ])('rejects resource snapshot with %s', (_name, mutate) => {
@@ -335,8 +385,21 @@ describe('managed email persistence JSON validation', () => {
     ).toThrow('Unsafe managed email persistence JSON');
   });
 
+  it('accepts a bounded provider receipt and rejects credential fields', () => {
+    const receipt = providerReceipt();
+    expect(managedEmailProviderReceiptTransformer.to(receipt)).toBe(receipt);
+    expect(Object.isFrozen(receipt.domains[0].mailboxes[0])).toBe(true);
+    expect(() =>
+      managedEmailProviderReceiptTransformer.to({
+        ...providerReceipt(),
+        password: 'secret',
+      }),
+    ).toThrow('Unsafe managed email persistence JSON');
+  });
+
   it('preserves nullable receipt and correlation fields', () => {
     expect(managedEmailNullableSafeFactsTransformer.to(null)).toBeNull();
+    expect(managedEmailNullableProviderReceiptTransformer.to(null)).toBeNull();
     expect(
       managedEmailCorrelatedSubscriptionLinesTransformer.from(null),
     ).toBeNull();

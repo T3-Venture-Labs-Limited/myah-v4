@@ -5,9 +5,13 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventLogEmitterService } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.service';
 import { MANAGED_EMAIL_PERSONAS_PROPOSED_EVENT } from 'src/engine/core-modules/event-logs/emit/events/workspace-event/managed-email/managed-email-personas-proposed';
 import { IcemailClient } from 'src/engine/core-modules/managed-email/providers/icemail/icemail.client';
-import { type IcemailDomainAvailabilityItem } from 'src/engine/core-modules/managed-email/providers/icemail/icemail.types';
+import {
+  type IcemailDomainAvailabilityItem,
+  type IcemailPrewarmedBundle,
+} from 'src/engine/core-modules/managed-email/providers/icemail/icemail.types';
 import {
   type CreateManagedEmailProposalInput,
+  type CreatePrewarmedManagedEmailProposalInput,
   type ManagedEmailProposal,
   type ManagedEmailProposalContext,
   type ManagedEmailProposalDomain,
@@ -48,6 +52,26 @@ const quoteFingerprint = (quote: IcemailDomainAvailabilityItem): string =>
         domain: quote.domain,
         termCount: quote.price.duration,
         termUnit: quote.price.durationUnit,
+      }),
+    )
+    .digest('hex');
+
+const prewarmedQuoteFingerprint = (bundle: IcemailPrewarmedBundle): string =>
+  createHash('sha256')
+    .update(
+      JSON.stringify({
+        domain: bundle.domain,
+        domainPriceCents: bundle.domainPriceCents,
+        inventoryId: bundle.inventoryId,
+        mailboxPriceCents: bundle.mailboxPriceCents,
+        mailboxes: bundle.mailboxes.map(
+          ({ address, firstName, lastName, provider }) => ({
+            address,
+            firstName,
+            lastName,
+            provider,
+          }),
+        ),
       }),
     )
     .digest('hex');
@@ -162,6 +186,125 @@ export class ManagedEmailProposalService {
       expiresAt: new Date(createdAt.getTime() + this.policy.proposalTtlMs),
       id: this.idFactory(),
       mailboxCount: input.mailboxCount,
+      policyVersion: this.policy.version,
+      workspaceId: context.workspaceId,
+    });
+
+    await this.eventLogEmitterService
+      ?.createContext({ workspaceId: context.workspaceId })
+      .insertWorkspaceEvent(MANAGED_EMAIL_PERSONAS_PROPOSED_EVENT, {
+        actorWorkspaceMemberId: context.actorWorkspaceMemberId,
+        personaCount: personas.length,
+        personaVersions: personas.map(({ version }) => version),
+        policyVersion: this.policy.version,
+        proposalId: proposal.id,
+      });
+
+    return proposal;
+  }
+
+  async createPrewarmedProposal(
+    input: CreatePrewarmedManagedEmailProposalInput,
+    context: ManagedEmailProposalContext,
+  ): Promise<ManagedEmailProposal> {
+    this.validatePolicy();
+    if (
+      !Array.isArray(input.inventoryIds) ||
+      input.inventoryIds.length < 1 ||
+      input.inventoryIds.length > MAX_MAILBOX_COUNT ||
+      new Set(input.inventoryIds).size !== input.inventoryIds.length ||
+      input.inventoryIds.some((inventoryId) => !inventoryId.trim())
+    ) {
+      throw new Error('Managed email prewarmed proposal input is invalid');
+    }
+    const personas = this.normalizePersonas(
+      { mailboxCount: input.personas.length, personas: input.personas },
+      context,
+    );
+    const page = await this.icemailClient.listPrewarmedBundles();
+    const bundles = input.inventoryIds.map((inventoryId) => {
+      const matches = page.items.filter(
+        (bundle) => bundle.inventoryId === inventoryId,
+      );
+
+      if (matches.length !== 1) {
+        throw new Error('Managed email prewarmed inventory is unavailable');
+      }
+      return matches[0];
+    });
+    const createdAt = this.now();
+    let personaIndex = 0;
+    const domains = bundles.map((bundle) => {
+      const domain = bundle.domain.trim().toLowerCase();
+
+      if (
+        domain !== bundle.domain ||
+        bundle.mailboxCount !== bundle.mailboxes.length ||
+        !Number.isSafeInteger(bundle.domainPriceCents) ||
+        bundle.domainPriceCents <= 0 ||
+        !Number.isSafeInteger(bundle.mailboxPriceCents) ||
+        bundle.mailboxPriceCents < 0
+      ) {
+        throw new Error('Managed email prewarmed inventory is invalid');
+      }
+      const mailboxes = bundle.mailboxes.map((providerMailbox) => {
+        const persona = personas[personaIndex];
+        const address = providerMailbox.address.trim().toLowerCase();
+        const separator = address.lastIndexOf('@');
+        const localPart = address.slice(0, separator);
+        const addressDomain = address.slice(separator + 1);
+
+        personaIndex += 1;
+        if (
+          persona === undefined ||
+          address !== providerMailbox.address ||
+          separator < 1 ||
+          addressDomain !== domain ||
+          persona.localPart !== localPart ||
+          persona.firstName !==
+            this.normalizeWhitespace(providerMailbox.firstName) ||
+          persona.lastName !==
+            this.normalizeWhitespace(providerMailbox.lastName)
+        ) {
+          throw new Error(
+            'Managed email prewarmed persona confirmation is invalid',
+          );
+        }
+        return freezePersona({ ...persona, address });
+      });
+
+      return freezeDomain({
+        domain,
+        mailboxes,
+        prewarmedProviderCosts: {
+          domainPriceCents: bundle.domainPriceCents,
+          mailboxPriceCents: bundle.mailboxPriceCents,
+        },
+        providerInventoryId: bundle.inventoryId,
+        providerQuote: {
+          amountMinorUnits: bundle.domainPriceCents,
+          currency: 'USD',
+          fingerprint: prewarmedQuoteFingerprint(bundle),
+          observedAt: createdAt.toISOString(),
+          termCount: 1,
+          termUnit: 'YEAR',
+        },
+      });
+    });
+
+    if (
+      personaIndex !== personas.length ||
+      new Set(domains.map(({ domain }) => domain)).size !== domains.length
+    ) {
+      throw new Error('Managed email prewarmed inventory is invalid');
+    }
+    const proposal = Object.freeze({
+      createdAt: new Date(createdAt),
+      disclosures: DISCLOSURES,
+      domains: Object.freeze(domains),
+      expiresAt: new Date(createdAt.getTime() + this.policy.proposalTtlMs),
+      id: this.idFactory(),
+      mailboxCount: personas.length,
       policyVersion: this.policy.version,
       workspaceId: context.workspaceId,
     });

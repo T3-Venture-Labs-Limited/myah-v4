@@ -1534,6 +1534,138 @@ describe('MetronomeClientService', () => {
     );
   });
 
+  it('recovers one exact added subscription from contract edit history', async () => {
+    const getEditHistory = jest.fn().mockResolvedValue({
+      data: [
+        {
+          add_subscriptions: [
+            {
+              billing_periods: {},
+              collection_schedule: 'ADVANCE',
+              ending_before: '2027-08-01T00:00:00.000Z',
+              id: 'subscription-id',
+              proration: {
+                invoice_behavior: 'BILL_IMMEDIATELY',
+                is_prorated: true,
+                rounding: {
+                  decimal_places: 0,
+                  rounding_method: 'HALF_UP',
+                },
+              },
+              quantity_management_mode: 'QUANTITY_ONLY',
+              quantity_schedule: [
+                {
+                  quantity: 3,
+                  starting_at: '2026-08-01T00:00:00.000Z',
+                },
+              ],
+              starting_at: '2026-08-01T00:00:00.000Z',
+              subscription_rate: {
+                billing_frequency: 'MONTHLY',
+                product: { id: 'product-id', name: 'Mailbox' },
+              },
+            },
+          ],
+          id: 'edit-id',
+          uniqueness_key: 'add-subscription-1',
+        },
+      ],
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { getEditHistory } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+    const input: MetronomeAddSubscriptionInput = {
+      billingFrequency: 'MONTHLY',
+      contractId: 'contract-id',
+      customerId: 'customer-id',
+      endingBefore: '2027-08-01T00:00:00.000Z',
+      productId: 'product-id',
+      quantity: 3,
+      startingAt: '2026-08-01T00:00:00.000Z',
+      uniquenessKey: 'add-subscription-1',
+      proration: {
+        invoiceBehavior: 'BILL_IMMEDIATELY',
+        isProrated: true,
+        rounding: { decimalPlaces: 0, roundingMethod: 'HALF_UP' },
+      },
+    };
+
+    await expect(service.recoverAddedSubscription(input)).resolves.toEqual({
+      metronomeEditId: 'edit-id',
+      subscriptionId: 'subscription-id',
+    });
+    expect(getEditHistory).toHaveBeenCalledWith({
+      contract_id: 'contract-id',
+      customer_id: 'customer-id',
+    });
+  });
+
+  it('fails closed when a recovered subscription does not exactly match', async () => {
+    const getEditHistory = jest.fn().mockResolvedValue({
+      data: [
+        {
+          add_subscriptions: [
+            {
+              collection_schedule: 'ADVANCE',
+              id: 'subscription-id',
+              proration: {
+                invoice_behavior: 'BILL_IMMEDIATELY',
+                is_prorated: false,
+              },
+              quantity_management_mode: 'QUANTITY_ONLY',
+              quantity_schedule: [
+                {
+                  quantity: 1,
+                  starting_at: '2026-08-01T00:00:00.000Z',
+                },
+              ],
+              starting_at: '2026-08-01T00:00:00.000Z',
+              subscription_rate: {
+                billing_frequency: 'MONTHLY',
+                product: { id: 'different-product', name: 'Wrong' },
+              },
+            },
+          ],
+          id: 'edit-id',
+          uniqueness_key: 'add-subscription-1',
+        },
+      ],
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { getEditHistory } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.recoverAddedSubscription({
+        billingFrequency: 'MONTHLY',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        productId: 'product-id',
+        quantity: 1,
+        startingAt: '2026-08-01T00:00:00.000Z',
+        uniquenessKey: 'add-subscription-1',
+        proration: {
+          invoiceBehavior: 'BILL_IMMEDIATELY',
+          isProrated: false,
+        },
+      }),
+    ).rejects.toThrow('Metronome subscription recovery mismatch');
+  });
+
   it('schedules an exact subscription quantity boundary and returns edit identity', async () => {
     const edit = jest.fn().mockResolvedValue({
       data: {

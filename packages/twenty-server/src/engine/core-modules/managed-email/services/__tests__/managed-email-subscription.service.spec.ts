@@ -5,6 +5,10 @@ import { ManagedEmailAcquisitionOperationEntity } from 'src/engine/core-modules/
 import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailSubscriptionService } from 'src/engine/core-modules/managed-email/services/managed-email-subscription.service';
 import { type ManagedEmailQuote } from 'src/engine/core-modules/managed-email/types/managed-email-quote.type';
+import {
+  MetronomeClientException,
+  MetronomeClientExceptionCode,
+} from 'src/engine/core-modules/managed-provider-billing/metronome-client.exception';
 import { type MetronomeClientService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-client.service';
 import { type MetronomeWorkspaceCustomerService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-workspace-customer.service';
 
@@ -181,6 +185,7 @@ describe('ManagedEmailSubscriptionService', () => {
           metronomeEditId: '123e4567-e89b-42d3-a456-426614174032',
           subscriptionId: '123e4567-e89b-42d3-a456-426614174042',
         }),
+      recoverAddedSubscription: jest.fn(),
       createCustomerCredit: jest.fn(),
       getRateCard: jest.fn().mockResolvedValue({
         aliases: [],
@@ -200,6 +205,7 @@ describe('ManagedEmailSubscriptionService', () => {
         | 'getPrepaidBalance'
         | 'getRateCard'
         | 'listInvoicesFirstPage'
+        | 'recoverAddedSubscription'
       >
     >;
     const workspaceCustomerService = {
@@ -243,7 +249,9 @@ describe('ManagedEmailSubscriptionService', () => {
         acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
         actorWorkspaceMemberId,
         idempotencyKey: 'purchase-1',
+        providerConfigurationKey: 'icemail-production-v1',
         quote,
+        readinessPolicyVersion: 'readiness-v1',
         workspaceId,
       }),
     ).resolves.toMatchObject({ id: operationId, state: 'PAYMENT_PENDING' });
@@ -258,6 +266,9 @@ describe('ManagedEmailSubscriptionService', () => {
         metronomeContractId: null,
         metronomeCustomerId: null,
         quoteHash: quote.quoteHash,
+        nextReconciliationAt: expect.any(Date),
+        providerConfigurationKey: 'icemail-production-v1',
+        readinessPolicyVersion: 'readiness-v1',
         resourceSnapshot: quote.resourceSnapshot,
         state: 'CREATING_SUBSCRIPTIONS',
         workspaceId,
@@ -305,6 +316,54 @@ describe('ManagedEmailSubscriptionService', () => {
     expect(metronomeClient.createCustomerCredit).not.toHaveBeenCalled();
   });
 
+  it('recovers an accepted subscription edit after an idempotency conflict', async () => {
+    const { metronomeClient, persisted, service } = createService();
+
+    metronomeClient.addSubscription
+      .mockReset()
+      .mockRejectedValueOnce(
+        new MetronomeClientException(MetronomeClientExceptionCode.CONFLICT),
+      )
+      .mockResolvedValueOnce({
+        metronomeEditId: '123e4567-e89b-42d3-a456-426614174031',
+        subscriptionId: '123e4567-e89b-42d3-a456-426614174041',
+      })
+      .mockResolvedValueOnce({
+        metronomeEditId: '123e4567-e89b-42d3-a456-426614174032',
+        subscriptionId: '123e4567-e89b-42d3-a456-426614174042',
+      });
+    metronomeClient.recoverAddedSubscription.mockResolvedValueOnce({
+      metronomeEditId: '123e4567-e89b-42d3-a456-426614174030',
+      subscriptionId: '123e4567-e89b-42d3-a456-426614174040',
+    });
+
+    await expect(
+      service.beginPurchase({
+        acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+        actorWorkspaceMemberId,
+        idempotencyKey: 'purchase-1',
+        providerConfigurationKey: 'icemail-production-v1',
+        quote,
+        readinessPolicyVersion: 'readiness-v1',
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({ state: 'PAYMENT_PENDING' });
+
+    expect(metronomeClient.recoverAddedSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contractId: '123e4567-e89b-42d3-a456-426614174051',
+        customerId: '123e4567-e89b-42d3-a456-426614174050',
+        productId: quote.lines[0].metronomeProductId,
+        uniquenessKey: `${operationId}:${MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR}`,
+      }),
+    );
+    expect(persisted.get(operationId)?.metronomeSubscriptionIds).toEqual([
+      '123e4567-e89b-42d3-a456-426614174040',
+      '123e4567-e89b-42d3-a456-426614174041',
+      '123e4567-e89b-42d3-a456-426614174042',
+    ]);
+  });
+
   it('returns an exact replay and rejects a conflicting replay before any remote call', async () => {
     const { metronomeClient, service, workspaceCustomerService } =
       createService();
@@ -312,6 +371,8 @@ describe('ManagedEmailSubscriptionService', () => {
       acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
       actorWorkspaceMemberId,
       idempotencyKey: 'purchase-1',
+      providerConfigurationKey: 'icemail-production-v1',
+      readinessPolicyVersion: 'readiness-v1',
       quote,
       workspaceId,
     };
@@ -337,6 +398,8 @@ describe('ManagedEmailSubscriptionService', () => {
       acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
       actorWorkspaceMemberId,
       idempotencyKey: 'purchase-1',
+      providerConfigurationKey: 'icemail-production-v1',
+      readinessPolicyVersion: 'readiness-v1',
       quote,
       workspaceId,
     });

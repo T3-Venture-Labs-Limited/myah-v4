@@ -58,12 +58,43 @@ describe('CreateManagedEmailFastInstanceCommand', () => {
 
       const statements = query.mock.calls.map((call) => call[0] as string);
       const sql = statements.join('\n');
+      const operationCreate = statements.find((statement) =>
+        statement.includes(
+          'CREATE TABLE "core"."managedEmailAcquisitionOperation"',
+        ),
+      );
 
-      expect(statements).toHaveLength(20);
+      expect(statements).toHaveLength(25);
       expect(getCreatedTableNames(statements)).toEqual(TABLE_NAMES);
+      expect(operationCreate).toContain(
+        '"providerConfigurationKey" text NOT NULL',
+      );
+      expect(operationCreate).toContain(
+        '"readinessPolicyVersion" text NOT NULL',
+      );
+      expect(operationCreate).toContain(
+        `btrim("providerConfigurationKey") <> ''`,
+      );
+      expect(operationCreate).toContain(
+        `btrim("readinessPolicyVersion") <> ''`,
+      );
       expect(sql).toContain(
         'CONSTRAINT "UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_IDEMPOTENCY"',
       );
+      expect(sql).toContain(
+        'CONSTRAINT "UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_ID"',
+      );
+      expect(sql).toContain(
+        'ALTER TABLE "core"."managedEmailDomain" ADD "acquisitionOperationId" uuid NOT NULL',
+      );
+      expect(sql).toContain(
+        'ALTER TABLE "core"."managedEmailMailbox" ADD "acquisitionOperationId" uuid NOT NULL',
+      );
+      expect(
+        sql.match(
+          /FOREIGN KEY \("workspaceId", "acquisitionOperationId"\) REFERENCES "core"\."managedEmailAcquisitionOperation"\("workspaceId","id"\)/g,
+        ),
+      ).toHaveLength(2);
       expect(sql).toContain(
         'CONSTRAINT "UQ_MANAGED_EMAIL_DOMAIN_WORKSPACE_ID"',
       );
@@ -104,7 +135,7 @@ describe('CreateManagedEmailFastInstanceCommand', () => {
       const statements = query.mock.calls.map((call) => call[0] as string);
       const sql = statements.join('\n');
 
-      expect(statements).toHaveLength(20);
+      expect(statements).toHaveLength(22);
       expect(getDroppedTableNames(statements)).toEqual([
         'managedEmailMailbox',
         'managedEmailDomain',

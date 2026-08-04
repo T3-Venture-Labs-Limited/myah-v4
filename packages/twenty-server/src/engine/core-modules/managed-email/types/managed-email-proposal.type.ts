@@ -8,6 +8,11 @@ export type CreateManagedEmailProposalInput = {
   }>;
 };
 
+export type CreatePrewarmedManagedEmailProposalInput = {
+  inventoryIds: string[];
+  personas: CreateManagedEmailProposalInput['personas'];
+};
+
 export type ManagedEmailProposalPolicy = Readonly<{
   candidateDomains: (workspaceSlug: string, domainCount: number) => string[];
   maxMailboxesPerDomain: number;
@@ -35,6 +40,11 @@ export type ManagedEmailProposalPersona = Readonly<{
 export type ManagedEmailProposalDomain = Readonly<{
   domain: string;
   mailboxes: readonly ManagedEmailProposalPersona[];
+  providerInventoryId?: string;
+  prewarmedProviderCosts?: Readonly<{
+    domainPriceCents: number;
+    mailboxPriceCents: number;
+  }>;
   providerQuote: Readonly<{
     amountMinorUnits: number;
     currency: 'USD';
