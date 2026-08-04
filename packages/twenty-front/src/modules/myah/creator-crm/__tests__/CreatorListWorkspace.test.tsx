@@ -5,16 +5,21 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 
 type LinariaTestState = {
   __creatorListWorkspaceInterpolations?: unknown[];
+  __creatorListWorkspaceRules?: string[];
 };
 
 const mockStyledInterpolations =
   ((globalThis as typeof globalThis & LinariaTestState)
     .__creatorListWorkspaceInterpolations ??= []);
+const mockStyledRules =
+  ((globalThis as typeof globalThis & LinariaTestState)
+    .__creatorListWorkspaceRules ??= []);
 
 jest.mock('@linaria/react', () => {
   const state = globalThis as typeof globalThis & LinariaTestState;
   const interpolations =
     (state.__creatorListWorkspaceInterpolations ??= []);
+  const rules = (state.__creatorListWorkspaceRules ??= []);
 
   return {
     styled: new Proxy(
@@ -23,6 +28,7 @@ jest.mock('@linaria/react', () => {
         get: (_target, tag) =>
           (strings: TemplateStringsArray, ...styleInterpolations: unknown[]) => {
             interpolations.push(...styleInterpolations);
+            rules.push(strings.join(''));
 
             return ({
               children,
@@ -64,23 +70,40 @@ jest.mock(
       });
 
       return (
-        <div data-testid="native-creator-list-index">
-          <a
-            href={indexIdentifierUrl?.('list-a')}
-            onClick={(event) => {
-              event.preventDefault();
-              onOpenRecordFromIndexView?.('list-a');
-            }}
-          >
-            List A
-          </a>
-          <button
-            onClick={() => onOpenRecordFromIndexView?.('list-b')}
-            type="button"
-          >
-            Open List B
-          </button>
-        </div>
+        <>
+          <div data-testid="row-id-list-a">
+            <a
+              href={indexIdentifierUrl?.('list-a')}
+              onClick={(event) => {
+                event.preventDefault();
+                onOpenRecordFromIndexView?.('list-a');
+              }}
+            >
+              List A
+            </a>
+            <button
+              aria-label="Open List A"
+              onClick={() => onOpenRecordFromIndexView?.('list-a')}
+              type="button"
+            />
+          </div>
+          <div data-testid="row-id-list-b">
+            <a
+              href={indexIdentifierUrl?.('list-b')}
+              onClick={(event) => {
+                event.preventDefault();
+                onOpenRecordFromIndexView?.('list-b');
+              }}
+            >
+              List B
+            </a>
+            <button
+              aria-label="Open List B"
+              onClick={() => onOpenRecordFromIndexView?.('list-b')}
+              type="button"
+            />
+          </div>
+        </>
       );
     },
   }),
@@ -110,6 +133,12 @@ jest.mock(
   }),
 );
 
+const mockUseFindOneRecord = jest.fn();
+
+jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
+  useFindOneRecord: (args: unknown) => mockUseFindOneRecord(args),
+}));
+
 const CurrentLocation = () => {
   const location = useLocation();
 
@@ -130,6 +159,16 @@ const renderWorkspace = () =>
 describe('CreatorListWorkspace', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseFindOneRecord.mockImplementation(
+      ({ objectRecordId }: { objectRecordId: string }) => ({
+        error: undefined,
+        loading: false,
+        record: {
+          id: objectRecordId,
+          name: objectRecordId === 'list-a' ? 'List A' : 'List B',
+        },
+      }),
+    );
     mockUseIsMobile.mockReturnValue(false);
   });
 
@@ -190,7 +229,7 @@ describe('CreatorListWorkspace', () => {
     await user.click(screen.getByRole('link', { name: 'List A' }));
 
     expect(
-      screen.getByText('Viewing Creators for the selected Creator List.'),
+      screen.getByText('Viewing Creators for Creator List List A.'),
     ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Open List B' }));
@@ -208,7 +247,7 @@ describe('CreatorListWorkspace', () => {
     );
   });
 
-  it('replaces Lists with the selected full-screen Creator pane on mobile and restores focus on Back', async () => {
+  it('replaces Lists with the selected full-screen Creator pane on mobile and restores name-link focus on Back', async () => {
     mockUseIsMobile.mockReturnValue(true);
     const user = userEvent.setup();
     renderWorkspace();
@@ -227,5 +266,66 @@ describe('CreatorListWorkspace', () => {
 
     expect(screen.getByTestId('creator-list-index')).toBeVisible();
     expect(screen.getByRole('link', { name: 'List A' })).toHaveFocus();
+  });
+
+  it('restores identifier-arrow focus on mobile Back after the List index remounts', async () => {
+    mockUseIsMobile.mockReturnValue(true);
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole('button', { name: 'Open List A' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Back to Creator Lists' }),
+    );
+
+    expect(screen.getByRole('button', { name: 'Open List A' })).toHaveFocus();
+  });
+
+  it('wraps the active mobile pane in the full-height workspace layout', () => {
+    mockUseIsMobile.mockReturnValue(true);
+    renderWorkspace();
+
+    expect(screen.getByTestId('creator-list-mobile-pane')).toHaveClass(
+      'creator-list-mobile-pane',
+    );
+    expect(mockStyledRules).toContain(
+      '\n  display: flex;\n  flex: 1;\n  min-height: 0;\n  min-width: 0;\n',
+    );
+  });
+
+  it('announces each selected List with its resolved label', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole('link', { name: 'List A' }));
+    expect(
+      screen.getByText('Viewing Creators for Creator List List A.'),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Open List B' }));
+    expect(
+      screen.getByText('Viewing Creators for Creator List List B.'),
+    ).toBeVisible();
+  });
+
+  it('announces List loading and errors with the selected identity', async () => {
+    mockUseFindOneRecord.mockImplementation(
+      ({ objectRecordId }: { objectRecordId: string }) => ({
+        error:
+          objectRecordId === 'list-b'
+            ? new Error('Unable to load List B')
+            : undefined,
+        loading: objectRecordId === 'list-a',
+        record: undefined,
+      }),
+    );
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole('link', { name: 'List A' }));
+    expect(screen.getByText('Loading Creator List list-a.')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Open List B' }));
+    expect(screen.getByText('Unable to load Creator List list-b.')).toBeVisible();
   });
 });

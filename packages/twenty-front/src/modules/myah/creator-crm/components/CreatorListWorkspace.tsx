@@ -1,4 +1,5 @@
 import { CreatorListScopedCreatorIndex } from '@/myah/creator-crm/components/CreatorListScopedCreatorIndex';
+import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { RecordIndexContainerGater } from '@/object-record/record-index/components/RecordIndexContainerGater';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { styled } from '@linaria/react';
@@ -20,12 +21,20 @@ const StyledWorkspace = styled.div<{ hasSelection: boolean }>`
 
 const StyledPane = styled.div`
   display: flex;
+  flex: 1;
   min-height: 0;
   min-width: 0;
 
   &:not(:last-child) {
     border-right: 1px solid ${themeCssVariables.border.color.light};
   }
+`;
+
+const StyledMobileWorkspace = styled.div`
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
 `;
 
 const StyledSelectionStatus = styled.div`
@@ -36,12 +45,46 @@ const StyledSelectionStatus = styled.div`
   padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
 `;
 
+type ActivationControl =
+  | { type: 'name-link' }
+  | { buttonIndex: number; type: 'row-button' };
+
+const CreatorListSelectionStatus = ({
+  creatorListId,
+}: {
+  creatorListId: string;
+}) => {
+  const {
+    error: creatorListError,
+    loading: isCreatorListLoading,
+    record: creatorList,
+  } = useFindOneRecord({
+    objectNameSingular: 'creatorList',
+    objectRecordId: creatorListId,
+    recordGqlFields: { id: true, name: true },
+  });
+  const creatorListName = creatorList?.name?.trim();
+
+  const selectionStatus = isCreatorListLoading
+    ? `Loading Creator List ${creatorListId}.`
+    : creatorListError
+      ? `Unable to load Creator List ${creatorListId}.`
+      : `Viewing Creators for Creator List ${creatorListName || creatorListId}.`;
+
+  return (
+    <StyledSelectionStatus role="status" aria-live="polite">
+      {selectionStatus}
+    </StyledSelectionStatus>
+  );
+};
+
 export const CreatorListWorkspace = () => {
   const isMobile = useIsMobile();
   const [selectedCreatorListId, setSelectedCreatorListId] = useState<
     string | null
   >(null);
   const lastActivationElementRef = useRef<HTMLElement | null>(null);
+  const lastActivationControlRef = useRef<ActivationControl | null>(null);
   const lastActivatedCreatorListIdRef = useRef<string | null>(null);
   const scopedPaneRef = useRef<HTMLDivElement | null>(null);
 
@@ -54,12 +97,41 @@ export const CreatorListWorkspace = () => {
     [],
   );
 
-  const handleOpenCreatorList = useCallback((creatorListId: string) => {
-    lastActivationElementRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    lastActivatedCreatorListIdRef.current = creatorListId;
-    setSelectedCreatorListId(creatorListId);
-  }, []);
+  const handleOpenCreatorList = useCallback(
+    (creatorListId: string) => {
+      const activeElement =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      let activationControl: ActivationControl | null = null;
+
+      if (
+        activeElement instanceof HTMLAnchorElement &&
+        activeElement.getAttribute('href') === creatorListShowUrl(creatorListId)
+      ) {
+        activationControl = { type: 'name-link' };
+      } else if (activeElement instanceof HTMLButtonElement) {
+        const recordRow = activeElement.closest<HTMLElement>(
+          `[data-testid="row-id-${creatorListId}"]`,
+        );
+        const buttonIndex = recordRow
+          ? Array.from(recordRow.querySelectorAll('button')).indexOf(
+              activeElement,
+            )
+          : -1;
+
+        if (buttonIndex !== -1) {
+          activationControl = { buttonIndex, type: 'row-button' };
+        }
+      }
+
+      lastActivationElementRef.current = activeElement;
+      lastActivationControlRef.current = activationControl;
+      lastActivatedCreatorListIdRef.current = creatorListId;
+      setSelectedCreatorListId(creatorListId);
+    },
+    [creatorListShowUrl],
+  );
 
   const handleCloseCreatorList = useCallback(() => {
     setSelectedCreatorListId(null);
@@ -94,12 +166,24 @@ export const CreatorListWorkspace = () => {
     }
 
     const lastActivatedCreatorListId = lastActivatedCreatorListIdRef.current;
-    const lastActivationHref =
-      lastActivatedCreatorListId &&
-      creatorListShowUrl(lastActivatedCreatorListId);
-    const replacementActivationElement = Array.from(
-      document.querySelectorAll<HTMLElement>('a, button'),
-    ).find((element) => element.getAttribute('href') === lastActivationHref);
+    const lastActivationControl = lastActivationControlRef.current;
+    const recordRow = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-testid]'),
+    ).find(
+      (element) =>
+        element.dataset.testid === `row-id-${lastActivatedCreatorListId}`,
+    );
+    const replacementActivationElement =
+      lastActivationControl?.type === 'row-button'
+        ? recordRow?.querySelectorAll<HTMLElement>('button')[
+            lastActivationControl.buttonIndex
+          ]
+        : Array.from(document.querySelectorAll<HTMLElement>('a')).find(
+            (element) =>
+              element.getAttribute('href') ===
+              (lastActivatedCreatorListId &&
+                creatorListShowUrl(lastActivatedCreatorListId)),
+          );
 
     replacementActivationElement?.focus();
   }, [creatorListShowUrl, isMobile, selectedCreatorListId]);
@@ -125,16 +209,15 @@ export const CreatorListWorkspace = () => {
   return (
     <>
       {selectedCreatorListId && (
-        <StyledSelectionStatus role="status" aria-live="polite">
-          Viewing Creators for the selected Creator List.
-        </StyledSelectionStatus>
+        <CreatorListSelectionStatus creatorListId={selectedCreatorListId} />
       )}
       {isMobile ? (
-        selectedCreatorListId ? (
-          scopedCreatorIndex
-        ) : (
-          creatorListIndex
-        )
+        <StyledMobileWorkspace
+          className="creator-list-mobile-pane"
+          data-testid="creator-list-mobile-pane"
+        >
+          {selectedCreatorListId ? scopedCreatorIndex : creatorListIndex}
+        </StyledMobileWorkspace>
       ) : (
         <StyledWorkspace
           data-testid="creator-list-workspace"
