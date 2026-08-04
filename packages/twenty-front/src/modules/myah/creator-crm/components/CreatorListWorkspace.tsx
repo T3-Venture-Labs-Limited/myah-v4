@@ -4,7 +4,7 @@ import { type RecordIndexOpenRequest } from '@/object-record/record-index/contex
 import { RecordIndexContainerGater } from '@/object-record/record-index/components/RecordIndexContainerGater';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { styled } from '@linaria/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AppPath } from 'twenty-shared/types';
 import { getAppPath } from 'twenty-shared/utils';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -13,9 +13,7 @@ const StyledWorkspace = styled.div<{ hasSelection: boolean }>`
   display: grid;
   flex: 1;
   grid-template-columns: ${({ hasSelection }) =>
-    hasSelection
-      ? 'minmax(0, 1fr) minmax(0, 1fr)'
-      : 'minmax(0, 1fr)'};
+    hasSelection ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)'};
   min-height: 0;
   min-width: 0;
 `;
@@ -52,6 +50,11 @@ type ActivationControl =
   | { type: 'name-link' }
   | { type: 'record-board-card' };
 
+type LastOpenNavigation = {
+  activationControl: ActivationControl;
+  request: RecordIndexOpenRequest;
+};
+
 const CreatorListSelectionStatus = ({
   creatorListId,
 }: {
@@ -86,9 +89,10 @@ export const CreatorListWorkspace = () => {
   const [selectedCreatorListId, setSelectedCreatorListId] = useState<
     string | null
   >(null);
-  const lastOpenRequestRef = useRef<RecordIndexOpenRequest | null>(null);
-  const lastActivationControlRef = useRef<ActivationControl | null>(null);
-  const scopedPaneRef = useRef<HTMLDivElement | null>(null);
+  const [lastOpenNavigation, setLastOpenNavigation] =
+    useState<LastOpenNavigation | null>(null);
+  const [scopedPaneElement, setScopedPaneElement] =
+    useState<HTMLDivElement | null>(null);
 
   const creatorListShowUrl = useCallback(
     (creatorListId: string) =>
@@ -107,18 +111,20 @@ export const CreatorListWorkspace = () => {
       );
       const buttonIndex =
         recordRow && activationElement
-          ? Array.from(recordRow.querySelectorAll<HTMLElement>('button')).indexOf(
-              activationElement,
-            )
+          ? Array.from(
+              recordRow.querySelectorAll<HTMLElement>('button'),
+            ).indexOf(activationElement)
           : -1;
 
-      lastOpenRequestRef.current = request;
-      lastActivationControlRef.current =
-        source === 'table-identifier-action'
-          ? { buttonIndex: Math.max(buttonIndex, 0), type: 'row-button' }
-          : source === 'record-board-card'
-            ? { type: 'record-board-card' }
-            : { type: 'name-link' };
+      setLastOpenNavigation({
+        request,
+        activationControl:
+          source === 'table-identifier-action'
+            ? { buttonIndex: Math.max(buttonIndex, 0), type: 'row-button' }
+            : source === 'record-board-card'
+              ? { type: 'record-board-card' }
+              : { type: 'name-link' },
+      });
       setSelectedCreatorListId(recordId);
     },
     [],
@@ -129,28 +135,26 @@ export const CreatorListWorkspace = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedCreatorListId) {
-      if (!isMobile) {
-        return;
-      }
-
-      const scopeTitle = scopedPaneRef.current?.querySelector('h2');
-
-      if (scopeTitle instanceof HTMLElement) {
-        scopeTitle.focus();
-      } else {
-        scopedPaneRef.current?.focus();
-      }
-
+    if (!selectedCreatorListId || !isMobile || !scopedPaneElement) {
       return;
     }
 
-    if (!isMobile) {
+    const scopeTitle = scopedPaneElement.querySelector('h2');
+
+    if (scopeTitle instanceof HTMLElement) {
+      scopeTitle.focus();
+    } else {
+      scopedPaneElement.focus();
+    }
+  }, [isMobile, scopedPaneElement, selectedCreatorListId]);
+
+  useEffect(() => {
+    if (selectedCreatorListId || !isMobile) {
       return;
     }
 
-    const lastOpenRequest = lastOpenRequestRef.current;
-    const lastActivationControl = lastActivationControlRef.current;
+    const lastOpenRequest = lastOpenNavigation?.request;
+    const lastActivationControl = lastOpenNavigation?.activationControl;
 
     if (lastOpenRequest?.activationElement?.isConnected) {
       lastOpenRequest.activationElement.focus();
@@ -174,7 +178,7 @@ export const CreatorListWorkspace = () => {
             );
 
     replacementActivationElement?.focus();
-  }, [creatorListShowUrl, isMobile, selectedCreatorListId]);
+  }, [creatorListShowUrl, isMobile, lastOpenNavigation, selectedCreatorListId]);
 
   const creatorListIndex = (
     <StyledPane data-testid="creator-list-index">
@@ -186,7 +190,7 @@ export const CreatorListWorkspace = () => {
   );
 
   const scopedCreatorIndex = selectedCreatorListId && (
-    <StyledPane ref={scopedPaneRef} tabIndex={-1}>
+    <StyledPane ref={setScopedPaneElement} tabIndex={-1}>
       <CreatorListScopedCreatorIndex
         creatorListId={selectedCreatorListId}
         onClose={handleCloseCreatorList}

@@ -575,3 +575,66 @@ It exits 2 only for the known environment baseline: missing `twenty-front-compon
 ### Concerns
 
 None. The strict command retains only the known unrelated baseline listed above.
+
+## MYAH-229 lint repair
+
+### LSP reference evidence
+
+`typescript-language-server` `textDocument/references` for the unchanged exported `RecordIndexSurfaceProps` returned only its declaration, local `RecordIndexSurfaceInstanceProps` alias, and local surface component annotation (`RecordIndexSurface.tsx:46,56,245`). No exported type, public prop, or handler contract was renamed or changed.
+
+### RED
+
+```bash
+npx nx lint twenty-front
+```
+
+Before this repair, it reported 14 errors: the unchanged baseline diagnostics below plus MYAH-229 diagnostics in `RecordIndexContainerGater.tsx`, `useOpenRecordFromIndexView.ts`, `RecordIndexSurface.tsx`, and `CreatorListWorkspace.tsx`.
+
+### GREEN
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/record-index/components/__tests__/RecordIndexSurface.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useCreatorListContext.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListMembershipFilterEffect.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/useApplyCreatorBulkRelationship.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/MyahCreatorBulkRemovalStaleContext.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 10 passed, 10 total
+Tests:       65 passed, 65 total
+Snapshots:   0 total
+```
+
+```bash
+npx nx lint twenty-front
+```
+
+The final command reports no MYAH-229 diagnostics. It exits 1 with the exact unchanged baseline six errors:
+
+1. `RecordTableWidgetProvider.test.tsx:54` — `contextStoreCurrentObjectMetadataItemIdComponentState` variable naming.
+2. `RecordTableWidgetProvider.test.tsx:58` — `contextStoreCurrentViewIdComponentState` variable naming.
+3. `RecordTableWidgetProvider.test.tsx:62` — `contextStoreCurrentViewTypeComponentState` variable naming.
+4. `RecordTableWidgetContextStoreInitEffect.tsx:9` — `twenty(effect-components)`.
+5. `RecordIndexContainer.tsx:39` — `recordIndexViewTypeState` variable naming.
+6. `RecordIndexViewBar.tsx:18` — `recordIndexViewTypeState` variable naming.
+
+`npx oxfmt --check` on all four changed source files also passed.
+
+### Changed files
+
+- `packages/twenty-front/src/modules/object-record/record-index/components/RecordIndexContainerGater.tsx`
+- `packages/twenty-front/src/modules/object-record/record-index/hooks/useOpenRecordFromIndexView.ts`
+- `packages/twenty-front/src/modules/object-record/record-index/components/RecordIndexSurface.tsx`
+- `packages/twenty-front/src/modules/myah/creator-crm/components/CreatorListWorkspace.tsx`
+- `.superpowers/sdd/task-4-report.md`
+
+### Self-review
+
+- The surface keeps its existing public prop shape and explicit forwarding preserves every optional value while removing the forbidden spread.
+- The Creator List workspace stores navigation data and its pane element in reactive state. Separate forward and Back effects prevent a navigation-data update from restoring focus while the scoped pane remains selected; no `document.activeElement` access was added.
+- The named state read, merged context imports, source union, native default path, scoped surfaces, cache behavior, and non-List paths remain unchanged.
+
+### Commit
+
+Focused repair commit: `fix(myah): repair MYAH-229 lint findings`.
+
+### Concerns
+
+The supplied baseline count says five, but both fresh lint runs report the six unchanged diagnostics enumerated above; no documented baseline source was changed.

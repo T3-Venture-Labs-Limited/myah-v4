@@ -10,7 +10,10 @@ import { type RecordFilter } from '@/object-record/record-filter/types/RecordFil
 import { RecordIndexContainer } from '@/object-record/record-index/components/RecordIndexContainer';
 import { RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect } from '@/object-record/record-index/components/RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect';
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
-import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
+import {
+  RecordIndexContextProvider,
+  type RecordIndexOpenRequest,
+} from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordIndexLoadBaseOnContextStoreEffect } from '@/object-record/record-index/components/RecordIndexLoadBaseOnContextStoreEffect';
 import {
   RecordIndexPageHeader,
@@ -19,7 +22,6 @@ import {
 import { RecordIndexSurfaceContextStoreInitEffect } from '@/object-record/record-index/components/RecordIndexSurfaceContextStoreInitEffect';
 import { RecordIndexViewBar } from '@/object-record/record-index/components/RecordIndexViewBar';
 import { RecordIndexViewFieldsSSESyncEffect } from '@/object-record/record-index/components/RecordIndexViewFieldsSSESyncEffect';
-import { RecordIndexContextProvider } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useRecordIndexFieldMetadataDerivedStates } from '@/object-record/record-index/hooks/useRecordIndexFieldMetadataDerivedStates';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { getRecordIndexIdFromObjectNamePluralAndViewId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
@@ -51,6 +53,7 @@ export type RecordIndexSurfaceProps = {
   creatorListContext?: RecordIndexPageHeaderProps['creatorListContext'];
 };
 
+type RecordIndexSurfaceInstanceProps = RecordIndexSurfaceProps;
 
 type RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffectProps = {
   initialQueryOnlyRecordFilters: RecordFilter[];
@@ -88,7 +91,7 @@ const RecordIndexSurfaceInstance = ({
   onOpenRecordFromIndexView,
   initialQueryOnlyRecordFilters = [],
   creatorListContext,
-}: RecordIndexSurfaceProps) => {
+}: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -117,8 +120,10 @@ const RecordIndexSurfaceInstance = ({
   );
   const [isContextStoreInitialized, setIsContextStoreInitialized] =
     useState(false);
-  const [areInitialQueryOnlyRecordFiltersInitialized, setAreInitialQueryOnlyRecordFiltersInitialized] =
-    useState(false);
+  const [
+    areInitialQueryOnlyRecordFiltersInitialized,
+    setAreInitialQueryOnlyRecordFiltersInitialized,
+  ] = useState(false);
   const handleIndexRecordsLoaded = useCallback(() => {
     store.set(lastShowPageRecordIdState.atom, null);
   }, [store]);
@@ -229,19 +234,38 @@ const RecordIndexSurfaceInstance = ({
   );
 };
 
-export const RecordIndexSurface = (props: RecordIndexSurfaceProps) => {
+export const RecordIndexSurface = ({
+  contextStoreInstanceId,
+  objectNameSingular,
+  viewId,
+  indexIdentifierUrl,
+  onOpenRecordFromIndexView,
+  initialQueryOnlyRecordFilters,
+  creatorListContext,
+}: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
-    objectNameSingular: props.objectNameSingular,
+    objectNameSingular,
   });
   const recordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
     objectMetadataItem.namePlural,
-    props.contextStoreInstanceId === MAIN_CONTEXT_STORE_INSTANCE_ID
-      ? props.viewId
-      : `${props.viewId}-${props.contextStoreInstanceId}`,
+    contextStoreInstanceId === MAIN_CONTEXT_STORE_INSTANCE_ID
+      ? viewId
+      : `${viewId}-${contextStoreInstanceId}`,
   );
   const scopeKey = `${recordIndexId}-${JSON.stringify(
-    props.initialQueryOnlyRecordFilters ?? [],
+    initialQueryOnlyRecordFilters ?? [],
   )}`;
 
-  return <RecordIndexSurfaceInstance key={scopeKey} {...props} />;
+  return (
+    <RecordIndexSurfaceInstance
+      key={scopeKey}
+      contextStoreInstanceId={contextStoreInstanceId}
+      objectNameSingular={objectNameSingular}
+      viewId={viewId}
+      indexIdentifierUrl={indexIdentifierUrl}
+      onOpenRecordFromIndexView={onOpenRecordFromIndexView}
+      initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
+      creatorListContext={creatorListContext}
+    />
+  );
 };

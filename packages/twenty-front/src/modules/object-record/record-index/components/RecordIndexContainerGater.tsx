@@ -16,7 +16,7 @@ export const RecordIndexContainerGater = ({
   onOpenRecordFromIndexView,
 }: RecordIndexContainerGaterProps) => {
   const { objectMetadataItem } = useRecordIndexIdFromCurrentContextStore();
-  const viewId = useAtomComponentStateValue(
+  const contextStoreCurrentViewId = useAtomComponentStateValue(
     contextStoreCurrentViewIdComponentState,
     MAIN_CONTEXT_STORE_INSTANCE_ID,
   );
@@ -25,7 +25,7 @@ export const RecordIndexContainerGater = ({
       objectMetadataItem,
     });
 
-  if (!viewId) {
+  if (!contextStoreCurrentViewId) {
     return null;
   }
 
@@ -33,8 +33,10 @@ export const RecordIndexContainerGater = ({
     <RecordIndexSurface
       contextStoreInstanceId={MAIN_CONTEXT_STORE_INSTANCE_ID}
       objectNameSingular={objectMetadataItem.nameSingular}
-      viewId={viewId}
-      indexIdentifierUrl={indexIdentifierUrlOverride ?? defaultIndexIdentifierUrl}
+      viewId={contextStoreCurrentViewId}
+      indexIdentifierUrl={
+        indexIdentifierUrlOverride ?? defaultIndexIdentifierUrl
+      }
       onOpenRecordFromIndexView={onOpenRecordFromIndexView}
     />
   );

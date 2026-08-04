@@ -5,8 +5,10 @@ import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainCo
 import { contextStoreRecordShowParentViewComponentState } from '@/context-store/states/contextStoreRecordShowParentViewComponentState';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
-import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
-import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
+import {
+  type RecordIndexOpenRequest,
+  useRecordIndexContextOrThrow,
+} from '@/object-record/record-index/contexts/RecordIndexContext';
 import { recordIndexOpenRecordInState } from '@/object-record/record-index/states/recordIndexOpenRecordInState';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { canOpenObjectInSidePanel } from '@/object-record/utils/canOpenObjectInSidePanel';
