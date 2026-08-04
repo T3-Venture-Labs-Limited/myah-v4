@@ -124,6 +124,19 @@ jest.mock(
               type="button"
             />
           </div>
+          <div
+            aria-label="Open List A board card"
+            data-record-board-card-id="list-a"
+            data-testid="record-board-card-list-a"
+            onClick={(event) =>
+              onOpenRecordFromIndexView?.({
+                activationElement: event.currentTarget,
+                recordId: 'list-a',
+                source: 'record-board-card',
+              })
+            }
+            tabIndex={-1}
+          />
         </>
       );
     },
@@ -303,6 +316,22 @@ describe('CreatorListWorkspace', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Open List A' })).toHaveFocus();
+  });
+
+  it('restores board-card focus after activation without DOM focus movement', async () => {
+    mockUseIsMobile.mockReturnValue(true);
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    const boardCard = screen.getByTestId('record-board-card-list-a');
+    fireEvent.click(boardCard);
+    expect(document.activeElement).not.toBe(boardCard);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Back to Creator Lists' }),
+    );
+
+    expect(screen.getByTestId('record-board-card-list-a')).toHaveFocus();
   });
 
   it('uses a column-flex pane to stack the scoped header above the native table', () => {

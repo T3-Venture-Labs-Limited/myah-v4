@@ -8,7 +8,7 @@ import { createRequiredContext } from '~/utils/createRequiredContext';
 
 export type RecordIndexOpenRequest = {
   recordId: string;
-  source: 'record-chip' | 'table-identifier-action';
+  source: 'record-chip' | 'table-identifier-action' | 'record-board-card';
   activationElement?: HTMLElement;
 };
 

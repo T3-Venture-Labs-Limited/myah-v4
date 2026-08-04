@@ -47,9 +47,10 @@ const StyledSelectionStatus = styled.div`
   padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
 `;
 
-type ActivationControl = { buttonIndex: number; type: 'row-button' } | {
-  type: 'name-link';
-};
+type ActivationControl =
+  | { buttonIndex: number; type: 'row-button' }
+  | { type: 'name-link' }
+  | { type: 'record-board-card' };
 
 const CreatorListSelectionStatus = ({
   creatorListId,
@@ -114,7 +115,9 @@ export const CreatorListWorkspace = () => {
       lastActivationControlRef.current =
         source === 'table-identifier-action'
           ? { buttonIndex: Math.max(buttonIndex, 0), type: 'row-button' }
-          : { type: 'name-link' };
+          : source === 'record-board-card'
+            ? { type: 'record-board-card' }
+            : { type: 'name-link' };
       setSelectedCreatorListId(recordId);
     },
     [],
@@ -161,9 +164,13 @@ export const CreatorListWorkspace = () => {
         ? recordRow?.querySelectorAll<HTMLElement>('button')[
             lastActivationControl.buttonIndex
           ]
-        : document.querySelector<HTMLElement>(
-            `a[href="${creatorListShowUrl(lastOpenRequest?.recordId ?? '')}"]`,
-          );
+        : lastActivationControl?.type === 'record-board-card'
+          ? document.querySelector<HTMLElement>(
+              `[data-record-board-card-id="${lastOpenRequest?.recordId}"]`,
+            )
+          : document.querySelector<HTMLElement>(
+              `a[href="${creatorListShowUrl(lastOpenRequest?.recordId ?? '')}"]`,
+            );
 
     replacementActivationElement?.focus();
   }, [creatorListShowUrl, isMobile, selectedCreatorListId]);
