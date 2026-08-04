@@ -134,6 +134,12 @@ describe('CreatorListScopedCreatorIndex', () => {
       'creator-list-pane-list-a',
     );
     expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+      creatorListContext: {
+        target: {
+          id: 'list-a',
+          label: 'List A',
+        },
+      },
       initialQueryOnlyRecordFilters: [
         {
           fieldMetadataId: 'creator-list-memberships',

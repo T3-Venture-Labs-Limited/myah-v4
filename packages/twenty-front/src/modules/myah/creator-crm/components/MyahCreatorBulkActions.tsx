@@ -6,7 +6,10 @@ import {
   CreatorBulkRelationshipTargetPickerDialog,
   CREATOR_BULK_RELATIONSHIP_TARGET_PICKER_MODAL_ID,
 } from '@/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog';
-import { useCreatorListContext } from '@/myah/creator-crm/hooks/useCreatorListContext';
+import {
+  type CreatorListContext,
+  useCreatorListContext,
+} from '@/myah/creator-crm/hooks/useCreatorListContext';
 import {
   type CreatorBulkRelationshipAction,
   type CreatorBulkRelationshipTarget,
@@ -31,20 +34,30 @@ const CREATOR_OBJECT_UNIVERSAL_IDENTIFIER =
 const CREATOR_BULK_RELATIONSHIP_DROPDOWN_ID =
   'creator-bulk-relationship-dropdown';
 
-export const MyahCreatorBulkActions = () => {
+export type MyahCreatorBulkActionsProps = {
+  contextStoreInstanceId?: string;
+  creatorListContext?: CreatorListContext;
+};
+
+export const MyahCreatorBulkActions = ({
+  contextStoreInstanceId = MAIN_CONTEXT_STORE_INSTANCE_ID,
+  creatorListContext: explicitCreatorListContext,
+}: MyahCreatorBulkActionsProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
+  const urlCreatorListContext = useCreatorListContext();
   const { findObjectMetadataItemByNamePlural } =
     useFilteredObjectMetadataItems();
   const objectMetadataItem =
     findObjectMetadataItemByNamePlural(objectNamePlural);
-  const creatorListContext = useCreatorListContext();
+  const creatorListContext =
+    explicitCreatorListContext ?? urlCreatorListContext;
   const contextStoreTargetedRecordsRule = useAtomComponentStateValue(
     contextStoreTargetedRecordsRuleComponentState,
-    MAIN_CONTEXT_STORE_INSTANCE_ID,
+    contextStoreInstanceId,
   );
   const setContextStoreTargetedRecordsRule = useSetAtomComponentState(
     contextStoreTargetedRecordsRuleComponentState,
-    MAIN_CONTEXT_STORE_INSTANCE_ID,
+    contextStoreInstanceId,
   );
   const { closeModal, openModal } = useModal();
   const [targetKind, setTargetKind] =

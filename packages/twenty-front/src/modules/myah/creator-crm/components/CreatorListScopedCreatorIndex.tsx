@@ -156,6 +156,7 @@ export const CreatorListScopedCreatorIndex = ({
         viewId={defaultCreatorView.id}
         indexIdentifierUrl={creatorShowUrl}
         initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
+        creatorListContext={creatorListContext}
       />
     </>
   );

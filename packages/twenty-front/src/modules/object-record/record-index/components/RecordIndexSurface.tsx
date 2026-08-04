@@ -11,7 +11,10 @@ import { RecordIndexContainer } from '@/object-record/record-index/components/Re
 import { RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect } from '@/object-record/record-index/components/RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect';
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
 import { RecordIndexLoadBaseOnContextStoreEffect } from '@/object-record/record-index/components/RecordIndexLoadBaseOnContextStoreEffect';
-import { RecordIndexPageHeader } from '@/object-record/record-index/components/RecordIndexPageHeader';
+import {
+  RecordIndexPageHeader,
+  type RecordIndexPageHeaderProps,
+} from '@/object-record/record-index/components/RecordIndexPageHeader';
 import { RecordIndexSurfaceContextStoreInitEffect } from '@/object-record/record-index/components/RecordIndexSurfaceContextStoreInitEffect';
 import { RecordIndexViewBar } from '@/object-record/record-index/components/RecordIndexViewBar';
 import { RecordIndexViewFieldsSSESyncEffect } from '@/object-record/record-index/components/RecordIndexViewFieldsSSESyncEffect';
@@ -44,6 +47,7 @@ export type RecordIndexSurfaceProps = {
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (recordId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
+  creatorListContext?: RecordIndexPageHeaderProps['creatorListContext'];
 };
 
 
@@ -82,6 +86,7 @@ const RecordIndexSurfaceInstance = ({
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
   initialQueryOnlyRecordFilters = [],
+  creatorListContext,
 }: RecordIndexSurfaceProps) => {
   const store = useStore();
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -170,7 +175,12 @@ const RecordIndexSurfaceInstance = ({
               >
                 <PageTitle title={objectMetadataItem.labelPlural} />
                 <PageCardLayout
-                  header={<RecordIndexPageHeader />}
+                  header={
+                    <RecordIndexPageHeader
+                      contextStoreInstanceId={contextStoreInstanceId}
+                      creatorListContext={creatorListContext}
+                    />
+                  }
                   secondaryBar={
                     objectPermissions.canReadObjectRecords && (
                       <RecordIndexViewBar

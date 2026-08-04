@@ -24,6 +24,7 @@ const mockRecordIndexViewFieldsSSESync = jest.fn();
 let deferContextStoreInitialization = false;
 let mockInitializeContextStore: (() => void) | undefined;
 const mockQueryOnlyRecordFilterWrites = jest.fn();
+const mockRecordIndexPageHeader = jest.fn();
 
 const creatorObjectMetadataItem = {
   id: 'creator-object',
@@ -156,7 +157,10 @@ jest.mock(
 jest.mock(
   '@/object-record/record-index/components/RecordIndexPageHeader',
   () => ({
-    RecordIndexPageHeader: () => null,
+    RecordIndexPageHeader: (props: unknown) => {
+      mockRecordIndexPageHeader(props);
+      return null;
+    },
   }),
 );
 
@@ -229,7 +233,18 @@ jest.mock(
 );
 
 jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
-  PageCardLayout: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PageCardLayout: ({
+    children,
+    header,
+  }: {
+    children: React.ReactNode;
+    header: React.ReactNode;
+  }) => (
+    <>
+      {header}
+      {children}
+    </>
+  ),
 }));
 
 jest.mock('@/ui/utilities/page-title/components/PageTitle', () => ({
@@ -275,6 +290,7 @@ describe('RecordIndexSurface', () => {
     mockRecordIndexLoad.mockClear();
     mockRecordIndexViewFieldsSSESync.mockClear();
     mockQueryOnlyRecordFilterWrites.mockClear();
+    mockRecordIndexPageHeader.mockClear();
     deferContextStoreInitialization = false;
     mockInitializeContextStore = undefined;
   });
@@ -338,6 +354,37 @@ describe('RecordIndexSurface', () => {
         }),
       ]),
     );
+  });
+
+  it('passes an isolated List action context to its native header', async () => {
+    const creatorListContext = {
+      target: {
+        kind: 'creator-list' as const,
+        id: 'list-a',
+        label: 'List A',
+      },
+      filter: {
+        fieldMetadataId: 'creator-list-memberships',
+        relationTargetFieldMetadataId: 'creator-list-member-creator-list',
+      },
+    };
+
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-a"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        creatorListContext={creatorListContext}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexPageHeader).toHaveBeenLastCalledWith({
+        contextStoreInstanceId: 'creator-list-pane-list-a',
+        creatorListContext,
+      });
+    });
   });
 
   it('installs query-only filters before rendering the table container', async () => {
