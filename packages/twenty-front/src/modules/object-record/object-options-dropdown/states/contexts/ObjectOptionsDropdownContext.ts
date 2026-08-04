@@ -8,6 +8,7 @@ export type ObjectOptionsDropdownContextValue = {
   recordIndexId: string;
   objectMetadataItem: EnrichedObjectMetadataItem;
   viewType: ViewType;
+  isLayoutLocked: boolean;
   currentContentId: ObjectOptionsContentId | null;
   onContentChange: (key: ObjectOptionsContentId) => void;
   resetContent: () => void;

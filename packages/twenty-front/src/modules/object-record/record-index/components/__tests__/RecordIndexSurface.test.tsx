@@ -13,6 +13,7 @@ import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMeta
 import { ViewFilterOperand } from 'twenty-shared/types';
 
 const mockRecordIndexContainer = jest.fn();
+const mockRecordIndexViewBar = jest.fn();
 const mockRecordTableWidget = jest.fn();
 const mockReadOnlyWidgetEffect = jest.fn();
 const mockContextStoreIds: string[] = [];
@@ -42,36 +43,33 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
   }),
 }));
 
-jest.mock(
-  '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState',
-  () => {
-    const actual = jest.requireActual(
-      '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState',
-    );
+jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomComponentState', () => {
+  const actual = jest.requireActual(
+    '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState',
+  );
 
-    return {
-      ...actual,
-      useSetAtomComponentState: (
-        componentState: { key: string },
-        instanceId?: string,
-      ) => {
-        const setValue = actual.useSetAtomComponentState(
-          componentState,
-          instanceId,
-        );
+  return {
+    ...actual,
+    useSetAtomComponentState: (
+      componentState: { key: string },
+      instanceId?: string,
+    ) => {
+      const setValue = actual.useSetAtomComponentState(
+        componentState,
+        instanceId,
+      );
 
-        if (componentState.key !== 'queryOnlyRecordFiltersComponentState') {
-          return setValue;
-        }
+      if (componentState.key !== 'queryOnlyRecordFiltersComponentState') {
+        return setValue;
+      }
 
-        return (value: unknown) => {
-          mockQueryOnlyRecordFilterWrites({ instanceId, value });
-          setValue(value);
-        };
-      },
-    };
-  },
-);
+      return (value: unknown) => {
+        mockQueryOnlyRecordFilterWrites({ instanceId, value });
+        setValue(value);
+      };
+    },
+  };
+});
 
 jest.mock('@/object-record/hooks/useObjectPermissions', () => ({
   useObjectPermissions: () => ({
@@ -107,11 +105,8 @@ jest.mock(
       const queryOnlyRecordFilters = useAtomComponentStateValue(
         queryOnlyRecordFiltersComponentState,
       );
-      const {
-        indexIdentifierUrl,
-        onOpenRecordFromIndexView,
-        recordIndexId,
-      } = useRecordIndexContextOrThrow();
+      const { indexIdentifierUrl, onOpenRecordFromIndexView, recordIndexId } =
+        useRecordIndexContextOrThrow();
 
       mockRecordIndexContainer(
         queryOnlyRecordFilters,
@@ -150,12 +145,17 @@ jest.mock(
   }),
 );
 
-jest.mock(
-  '@/object-record/record-index/components/RecordIndexViewBar',
-  () => ({
-    RecordIndexViewBar: () => null,
-  }),
-);
+jest.mock('@/object-record/record-index/components/RecordIndexViewBar', () => ({
+  RecordIndexViewBar: (props: unknown) => {
+    const queryOnlyRecordFilters = useAtomComponentStateValue(
+      queryOnlyRecordFiltersComponentState,
+    );
+
+    mockRecordIndexViewBar(queryOnlyRecordFilters, props);
+
+    return null;
+  },
+}));
 
 jest.mock(
   '@/object-record/record-index/components/RecordIndexPageHeader',
@@ -239,12 +239,15 @@ jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
   PageCardLayout: ({
     children,
     header,
+    secondaryBar,
   }: {
     children: React.ReactNode;
     header: React.ReactNode;
+    secondaryBar: React.ReactNode;
   }) => (
     <>
       {header}
+      {secondaryBar}
       {children}
     </>
   ),
@@ -293,6 +296,7 @@ describe('RecordIndexSurface', () => {
     mockRecordIndexLoad.mockClear();
     mockRecordIndexViewFieldsSSESync.mockClear();
     mockQueryOnlyRecordFilterWrites.mockClear();
+    mockRecordIndexViewBar.mockClear();
     mockRecordIndexPageHeader.mockClear();
     deferContextStoreInitialization = false;
     mockInitializeContextStore = undefined;
@@ -326,9 +330,9 @@ describe('RecordIndexSurface', () => {
 
     expect(mockRecordTableWidget).not.toHaveBeenCalled();
     expect(mockReadOnlyWidgetEffect).not.toHaveBeenCalled();
-    expect(mockRecordIndexContainer.mock.calls.map(([filters]) => filters)).toEqual(
-      expect.arrayContaining([[listAFilter], [listBFilter]]),
-    );
+    expect(
+      mockRecordIndexContainer.mock.calls.map(([filters]) => filters),
+    ).toEqual(expect.arrayContaining([[listAFilter], [listBFilter]]));
     expect(mockContextStoreIds).toEqual(
       expect.arrayContaining([
         'creator-list-pane-list-a',
@@ -394,6 +398,26 @@ describe('RecordIndexSurface', () => {
     expect(mockRecordIndexContainer.mock.calls.at(-1)?.[0]).toEqual([
       listAFilter,
     ]);
+  });
+
+  it('mounts the isolated view bar only after its membership filters are installed', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-a"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listAFilter]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexViewBar).toHaveBeenCalled();
+    });
+
+    expect(
+      mockRecordIndexViewBar.mock.calls.map(([recordFilters]) => recordFilters),
+    ).not.toContainEqual([]);
   });
 
   it('retains canonical record-index identity for the main context gater', async () => {
@@ -490,13 +514,11 @@ describe('RecordIndexSurface', () => {
       expect(mockRecordIndexContainer).toHaveBeenCalled();
     });
     expect(mockRecordIndexLoad).toHaveBeenCalledWith({
-      recordIndexId:
-        'creators-creator-default-view-creator-list-pane-list-a',
+      recordIndexId: 'creators-creator-default-view-creator-list-pane-list-a',
       skipGlobalIndexStates: true,
     });
     expect(mockRecordIndexViewFieldsSSESync).toHaveBeenCalledWith({
-      recordIndexId:
-        'creators-creator-default-view-creator-list-pane-list-a',
+      recordIndexId: 'creators-creator-default-view-creator-list-pane-list-a',
       skipGlobalIndexStates: true,
     });
   });
@@ -514,8 +536,7 @@ describe('RecordIndexSurface', () => {
 
     await waitFor(() => {
       expect(mockRecordIndexViewFieldsSSESync).toHaveBeenCalledWith({
-        recordIndexId:
-          'creators-creator-default-view-creator-list-pane-list-a',
+        recordIndexId: 'creators-creator-default-view-creator-list-pane-list-a',
         skipGlobalIndexStates: true,
       });
     });

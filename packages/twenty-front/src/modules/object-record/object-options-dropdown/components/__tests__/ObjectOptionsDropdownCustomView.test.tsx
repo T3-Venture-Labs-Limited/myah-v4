@@ -14,8 +14,11 @@ const mockObjectOptions = {
   onContentChange: jest.fn(),
   onViewChange: undefined,
   recordIndexId: 'creator-list-index',
+  isLayoutLocked: false,
   viewType: ViewType.TABLE,
 };
+
+let mockCurrentViewType = ViewType.KANBAN;
 
 jest.mock(
   '@/object-record/object-options-dropdown/components/ObjectOptionsDropdownMenuViewName',
@@ -41,7 +44,7 @@ jest.mock('@/views/hooks/useGetCurrentViewOnly', () => ({
       isCompact: false,
       key: null,
       name: 'Creator Board',
-      type: ViewType.KANBAN,
+      type: mockCurrentViewType,
       visibility: 'WORKSPACE',
     },
   }),
@@ -170,7 +173,39 @@ jest.mock('twenty-ui/navigation', () => ({
 }));
 
 describe('ObjectOptionsDropdownCustomView', () => {
+  beforeEach(() => {
+    mockCurrentViewType = ViewType.KANBAN;
+    mockObjectOptions.isLayoutLocked = false;
+  });
+
+  it('hides Layout when the rendered Table layout is locked, regardless of the stored view type', () => {
+    for (const storedViewType of [
+      ViewType.TABLE,
+      ViewType.KANBAN,
+      ViewType.CALENDAR,
+    ]) {
+      mockCurrentViewType = storedViewType;
+      mockObjectOptions.isLayoutLocked = true;
+
+      const { unmount } = render(<ObjectOptionsDropdownCustomView />);
+
+      expect(screen.queryByText(/^Layout/)).not.toBeInTheDocument();
+
+      unmount();
+    }
+  });
+
   it('summarizes fields from the forced Table scope instead of Board fields', () => {
+    render(<ObjectOptionsDropdownCustomView />);
+
+    expect(screen.getByText('Fields 2 shown')).toBeVisible();
+    expect(screen.queryByText('Fields 9 shown')).not.toBeInTheDocument();
+  });
+
+  it('summarizes fields from the forced Table scope for stored Table views', () => {
+    mockCurrentViewType = ViewType.TABLE;
+    mockObjectOptions.isLayoutLocked = true;
+
     render(<ObjectOptionsDropdownCustomView />);
 
     expect(screen.getByText('Fields 2 shown')).toBeVisible();

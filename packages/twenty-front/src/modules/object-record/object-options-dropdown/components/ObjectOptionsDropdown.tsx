@@ -19,6 +19,7 @@ type ObjectOptionsDropdownProps = {
   objectMetadataItem: EnrichedObjectMetadataItem;
   recordIndexId: string;
   onViewChange?: (viewId: string) => void;
+  isLayoutLocked?: boolean;
 };
 
 export const ObjectOptionsDropdown = ({
@@ -26,6 +27,7 @@ export const ObjectOptionsDropdown = ({
   objectMetadataItem,
   onViewChange,
   viewType,
+  isLayoutLocked = false,
 }: ObjectOptionsDropdownProps) => {
   const { currentContentId, handleContentChange, handleResetContent } =
     useDropdownContextCurrentContentId<ObjectOptionsContentId>();
@@ -59,6 +61,7 @@ export const ObjectOptionsDropdown = ({
           <ObjectOptionsDropdownContext.Provider
             value={{
               viewType,
+              isLayoutLocked,
               objectMetadataItem,
               recordIndexId,
               currentContentId,

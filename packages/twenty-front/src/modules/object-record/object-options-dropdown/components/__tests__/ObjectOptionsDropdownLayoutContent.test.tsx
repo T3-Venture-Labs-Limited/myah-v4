@@ -6,11 +6,14 @@ import { ViewOpenRecordIn } from '~/generated-metadata/graphql';
 
 const mockObjectOptions = {
   dropdownId: 'creator-list-options',
+  isLayoutLocked: true,
   objectMetadataItem: { fields: [] },
   onContentChange: jest.fn(),
   resetContent: jest.fn(),
   viewType: ViewType.TABLE,
 };
+
+let mockCurrentViewType = ViewType.KANBAN;
 
 jest.mock(
   '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown',
@@ -32,7 +35,7 @@ jest.mock('@/views/hooks/useGetCurrentViewOnly', () => ({
       isCompact: false,
       key: null,
       openRecordIn: ViewOpenRecordIn.RECORD_PAGE,
-      type: ViewType.KANBAN,
+      type: mockCurrentViewType,
     },
   }),
 }));
@@ -174,6 +177,10 @@ jest.mock('twenty-ui/navigation', () => ({
 }));
 
 describe('ObjectOptionsDropdownLayoutContent', () => {
+  beforeEach(() => {
+    mockCurrentViewType = ViewType.KANBAN;
+  });
+
   it('keeps Open In but suppresses view-type and Board layout controls for a forced Table', () => {
     render(<ObjectOptionsDropdownLayoutContent />);
 
@@ -183,6 +190,16 @@ describe('ObjectOptionsDropdownLayoutContent', () => {
     expect(screen.queryByText('Calendar')).not.toBeInTheDocument();
     expect(screen.queryByText('Group')).not.toBeInTheDocument();
     expect(screen.queryByText('Compact view')).not.toBeInTheDocument();
+  });
+
+  it('suppresses view-type controls for a locked Table with a stored Table view', () => {
+    mockCurrentViewType = ViewType.TABLE;
+
+    render(<ObjectOptionsDropdownLayoutContent />);
+
+    expect(screen.queryByText('Table')).not.toBeInTheDocument();
+    expect(screen.queryByText('Kanban')).not.toBeInTheDocument();
+    expect(screen.queryByText('Calendar')).not.toBeInTheDocument();
   });
 
   it('summarizes Open In from the scoped current view rather than main state', () => {

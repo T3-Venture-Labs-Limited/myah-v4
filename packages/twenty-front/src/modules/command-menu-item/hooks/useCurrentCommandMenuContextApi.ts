@@ -14,7 +14,7 @@ import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPe
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
 import { hasAnySoftDeleteFilterOnViewComponentSelector } from '@/object-record/record-filter/states/hasAnySoftDeleteFilterOnView';
 import { recordStoreRecordsSelector } from '@/object-record/record-store/states/selectors/recordStoreRecordsSelector';
-import { getRecordIndexIdFromObjectNamePluralAndViewId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
+import { getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
 import { currentPageLayoutIdState } from '@/page-layout/states/currentPageLayoutIdState';
 import { isDashboardInEditModeComponentState } from '@/page-layout/states/isDashboardInEditModeComponentState';
 import { SIDE_PANEL_COMPONENT_INSTANCE_ID } from '@/side-panel/constants/SidePanelComponentInstanceId';
@@ -106,10 +106,12 @@ export const useCurrentCommandMenuContextApi = (): CommandMenuContextApi => {
     contextStoreCurrentViewIdComponentState,
   );
 
-  const recordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
-    objectMetadataItem?.namePlural ?? '',
-    contextStoreCurrentViewId ?? '',
-  );
+  const recordIndexId =
+    getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId(
+      objectMetadataItem?.namePlural ?? '',
+      contextStoreCurrentViewId ?? '',
+      contextStoreInstanceId,
+    );
 
   const hasAnySoftDeleteFilterOnView = useAtomComponentSelectorValue(
     hasAnySoftDeleteFilterOnViewComponentSelector,

@@ -47,16 +47,15 @@ export const ObjectOptionsDropdownLayoutContent = () => {
   const { t } = useLingui();
 
   const {
+    isLayoutLocked,
     objectMetadataItem,
     resetContent,
     onContentChange,
     dropdownId,
-    viewType,
   } = useObjectOptionsDropdown();
 
   const { currentView } = useGetCurrentViewOnly();
-  const isViewTypeForced =
-    viewType === ViewType.TABLE && currentView?.type !== ViewType.TABLE;
+  const isViewTypeForced = isLayoutLocked;
   const openRecordIn = currentView?.openRecordIn ?? ViewOpenRecordIn.SIDE_PANEL;
   const { updateCurrentView } = useUpdateCurrentView();
 

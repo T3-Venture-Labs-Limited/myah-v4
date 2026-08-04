@@ -192,7 +192,9 @@ const RecordIndexSurfaceInstance = ({
                       />
                     }
                     secondaryBar={
-                      objectPermissions.canReadObjectRecords && (
+                      objectPermissions.canReadObjectRecords &&
+                      (!isIsolatedSurface ||
+                        areInitialQueryOnlyRecordFiltersInitialized) && (
                         <RecordIndexViewBar
                           recordIndexViewTypeOverride={
                             isIsolatedSurface ? ViewType.TABLE : undefined

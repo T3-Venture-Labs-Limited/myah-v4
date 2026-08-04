@@ -19,6 +19,8 @@ export const RecordIndexViewBar = ({
   const resolvedRecordIndexViewType =
     recordIndexViewTypeOverride ?? recordIndexViewType;
 
+  const isLayoutLocked = recordIndexViewTypeOverride !== undefined;
+
   const { objectNamePlural, recordIndexId, objectMetadataItem, onViewChange } =
     useRecordIndexContextOrThrow();
 
@@ -37,6 +39,7 @@ export const RecordIndexViewBar = ({
             onViewChange={onViewChange}
             objectMetadataItem={objectMetadataItem}
             viewType={resolvedRecordIndexViewType ?? ViewType.TABLE}
+            isLayoutLocked={isLayoutLocked}
           />
         }
       />

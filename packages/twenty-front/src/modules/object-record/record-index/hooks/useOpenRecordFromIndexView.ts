@@ -6,6 +6,7 @@ import { ContextStoreComponentInstanceContext } from '@/context-store/states/con
 import { contextStoreRecordShowParentViewComponentState } from '@/context-store/states/contextStoreRecordShowParentViewComponentState';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
+import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
 import {
   type RecordIndexOpenRequest,
   useRecordIndexContextOrThrow,
@@ -35,6 +36,11 @@ export const useOpenRecordFromIndexView = () => {
 
   const currentRecordFilters = useAtomComponentStateCallbackState(
     currentRecordFiltersComponentState,
+    recordIndexId,
+  );
+
+  const queryOnlyRecordFilters = useAtomComponentStateCallbackState(
+    queryOnlyRecordFiltersComponentState,
     recordIndexId,
   );
 
@@ -68,7 +74,14 @@ export const useOpenRecordFromIndexView = () => {
           ? (currentView?.openRecordIn ?? ViewOpenRecordIn.SIDE_PANEL)
           : store.get(recordIndexOpenRecordInState.atom);
 
-      const parentViewFilters = store.get(currentRecordFilters);
+      const currentParentViewFilters = store.get(currentRecordFilters);
+
+      const queryOnlyParentViewFilters = store.get(queryOnlyRecordFilters);
+
+      const parentViewFilters =
+        queryOnlyParentViewFilters.length === 0
+          ? currentParentViewFilters
+          : [...currentParentViewFilters, ...queryOnlyParentViewFilters];
 
       const parentViewSorts = store.get(currentRecordSorts);
 
@@ -113,6 +126,7 @@ export const useOpenRecordFromIndexView = () => {
     },
     [
       currentRecordFilters,
+      queryOnlyRecordFilters,
       currentRecordSorts,
       currentRecordFilterGroups,
       recordIndexId,

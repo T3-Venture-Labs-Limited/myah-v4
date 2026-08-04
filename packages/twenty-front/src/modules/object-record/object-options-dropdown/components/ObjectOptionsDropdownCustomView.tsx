@@ -51,6 +51,7 @@ export const ObjectOptionsDropdownCustomView = ({
   const {
     closeDropdown,
     dropdownId,
+    isLayoutLocked,
     objectMetadataItem,
     onContentChange,
     onViewChange,
@@ -101,7 +102,8 @@ export const ObjectOptionsDropdownCustomView = ({
   );
 
   const visibleFieldsCount =
-    viewType === ViewType.TABLE && currentView?.type !== ViewType.TABLE
+    isLayoutLocked ||
+    (viewType === ViewType.TABLE && currentView?.type !== ViewType.TABLE)
       ? visibleRecordFields.length
       : visibleBoardFields.length;
 
@@ -125,7 +127,7 @@ export const ObjectOptionsDropdownCustomView = ({
   };
 
   const selectableItemIdArray = [
-    'Layout',
+    ...(isLayoutLocked ? [] : ['Layout']),
     'Visibility',
     'Fields',
     ...(customViewData?.type === ViewType.CALENDAR
@@ -154,22 +156,24 @@ export const ObjectOptionsDropdownCustomView = ({
         selectableItemIdArray={selectableItemIdArray}
       >
         <DropdownMenuItemsContainer scrollable={false}>
-          <SelectableListItem
-            itemId="Layout"
-            onEnter={() => onContentChange('layout')}
-          >
-            <MenuItem
-              focused={selectedItemId === 'Layout'}
-              onClick={() => onContentChange('layout')}
-              LeftIcon={viewTypeIconMapping(
-                customViewData?.type ?? ViewType.TABLE,
-              )}
-              text={t`Layout`}
-              contextualText={t(getViewTypeLabel(customViewData.type))}
-              contextualTextPosition="right"
-              hasSubMenu
-            />
-          </SelectableListItem>
+          {!isLayoutLocked && (
+            <SelectableListItem
+              itemId="Layout"
+              onEnter={() => onContentChange('layout')}
+            >
+              <MenuItem
+                focused={selectedItemId === 'Layout'}
+                onClick={() => onContentChange('layout')}
+                LeftIcon={viewTypeIconMapping(
+                  customViewData?.type ?? ViewType.TABLE,
+                )}
+                text={t`Layout`}
+                contextualText={t(getViewTypeLabel(customViewData.type))}
+                contextualTextPosition="right"
+                hasSubMenu
+              />
+            </SelectableListItem>
+          )}
           <SelectableListItem
             itemId="Visibility"
             onEnter={() => onContentChange('visibility')}
