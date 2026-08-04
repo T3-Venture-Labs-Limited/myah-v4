@@ -136,8 +136,19 @@ jest.mock('@/ui/layout/dropdown/components/DropdownMenuSeparator', () => ({
 }));
 
 jest.mock('@/ui/layout/selectable-list/components/SelectableList', () => ({
-  SelectableList: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
+  SelectableList: ({
+    children,
+    selectableItemIdArray,
+  }: {
+    children: React.ReactNode;
+    selectableItemIdArray: string[];
+  }) => (
+    <>
+      <output data-testid="selectable-item-ids">
+        {selectableItemIdArray.join(',')}
+      </output>
+      {children}
+    </>
   ),
 }));
 
@@ -210,5 +221,21 @@ describe('ObjectOptionsDropdownCustomView', () => {
 
     expect(screen.getByText('Fields 2 shown')).toBeVisible();
     expect(screen.queryByText('Fields 9 shown')).not.toBeInTheDocument();
+  });
+
+  it('omits Calendar options at the source when a Calendar custom view is forced to Table', () => {
+    mockCurrentViewType = ViewType.CALENDAR;
+    mockObjectOptions.isLayoutLocked = true;
+
+    render(<ObjectOptionsDropdownCustomView />);
+
+    expect(screen.getByTestId('selectable-item-ids')).not.toHaveTextContent(
+      'CalendarDateField',
+    );
+    expect(screen.getByTestId('selectable-item-ids')).not.toHaveTextContent(
+      'CalendarView',
+    );
+    expect(screen.queryByText('Date field')).not.toBeInTheDocument();
+    expect(screen.queryByText('Calendar view')).not.toBeInTheDocument();
   });
 });

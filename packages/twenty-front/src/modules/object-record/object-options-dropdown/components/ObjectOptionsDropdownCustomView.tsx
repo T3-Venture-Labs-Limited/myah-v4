@@ -126,14 +126,15 @@ export const ObjectOptionsDropdownCustomView = ({
     onBackToDefault?.();
   };
 
+  const hasCalendarOptions =
+    !isLayoutLocked && customViewData?.type === ViewType.CALENDAR;
+
   const selectableItemIdArray = [
     ...(isLayoutLocked ? [] : ['Layout']),
     'Visibility',
     'Fields',
-    ...(customViewData?.type === ViewType.CALENDAR
-      ? ['CalendarDateField', 'CalendarView']
-      : []),
-    ...(customViewData?.type !== ViewType.CALENDAR ? ['Group'] : []),
+    ...(hasCalendarOptions ? ['CalendarDateField', 'CalendarView'] : []),
+    ...(!hasCalendarOptions ? ['Group'] : []),
     'Delete view',
   ];
 
@@ -195,7 +196,7 @@ export const ObjectOptionsDropdownCustomView = ({
         </DropdownMenuItemsContainer>
         <DropdownMenuSeparator />
         <DropdownMenuItemsContainer scrollable={false}>
-          {customViewData?.type === ViewType.CALENDAR && (
+          {hasCalendarOptions && (
             <>
               <div id="calendar-date-field-picker-menu-item">
                 <SelectableListItem

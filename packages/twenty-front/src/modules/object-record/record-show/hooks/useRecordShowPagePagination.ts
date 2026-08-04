@@ -1,17 +1,20 @@
-import { useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-
+import { useCreatorListContextFromId } from '@/myah/creator-crm/hooks/useCreatorListContext';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { lastShowPageRecordIdState } from '@/object-record/record-field/ui/states/lastShowPageRecordId';
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { computeCursorArgFilter } from '@/object-record/graphql/utils/computeCursorArgFilter';
 import { extractOrderByFieldNames } from '@/object-record/graphql/utils/extractOrderByFieldNames';
 import { reverseOrderBy } from '@/object-record/graphql/utils/reverseOrderBy';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useQueryVariablesFromParentView } from '@/views/hooks/useQueryVariablesFromParentView';
-import { AppPath } from 'twenty-shared/types';
+import { AppPath, ViewFilterOperand } from 'twenty-shared/types';
 import { combineFilters, isDefined } from 'twenty-shared/utils';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
+import { useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+
+const CREATOR_LIST_RECORD_SHOW_FILTER_ID = 'creator-list-record-show-filter';
 
 export const useRecordShowPagePagination = (
   propsObjectNameSingular: string,
@@ -39,10 +42,41 @@ export const useRecordShowPagePagination = (
     objectNameSingular,
   });
 
+  const creatorListContext = useCreatorListContextFromId(
+    objectMetadataItem.nameSingular === 'creator'
+      ? (searchParams.get('creatorListId') ?? undefined)
+      : undefined,
+  );
+  const creatorListMembershipFilter: RecordFilter | undefined =
+    creatorListContext
+      ? {
+          id: CREATOR_LIST_RECORD_SHOW_FILTER_ID,
+          fieldMetadataId: creatorListContext.filter.fieldMetadataId,
+          relationTargetFieldMetadataId:
+            creatorListContext.filter.relationTargetFieldMetadataId,
+          type: 'RELATION',
+          operand: ViewFilterOperand.IS,
+          value: creatorListContext.target.id,
+          displayValue: '',
+          label: `List: ${creatorListContext.target.label}`,
+          subFieldName: null,
+        }
+      : undefined;
+
   const { filter, orderBy, isSoftDeleteFilterActive } =
     useQueryVariablesFromParentView({
+      additionalRecordFilters: creatorListMembershipFilter
+        ? [creatorListMembershipFilter]
+        : [],
       objectMetadataItem,
     });
+
+  const recordShowNavigationSearchParams = creatorListContext
+    ? {
+        creatorListId: creatorListContext.target.id,
+        viewId: viewIdQueryParam,
+      }
+    : { viewId: viewIdQueryParam };
 
   const orderByGqlFields = extractOrderByFieldNames(orderBy);
 
@@ -167,7 +201,7 @@ export const useRecordShowPagePagination = (
     navigate(
       AppPath.RecordShowPage,
       { objectNameSingular, objectRecordId: targetRecordId },
-      { viewId: viewIdQueryParam },
+      recordShowNavigationSearchParams,
     );
   };
 
@@ -199,7 +233,7 @@ export const useRecordShowPagePagination = (
     navigate(
       AppPath.RecordIndexPage,
       { objectNamePlural: objectMetadataItem.namePlural },
-      { viewId: viewIdQueryParam },
+      recordShowNavigationSearchParams,
     );
     setLastShowPageRecordId(objectRecordId);
   };
