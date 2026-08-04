@@ -9,12 +9,14 @@ export type RecordIndexSurfaceContextStoreInitEffectProps = {
   contextStoreInstanceId: string;
   objectMetadataItemId: string;
   viewId: string;
+  onInitialized?: () => void;
 };
 
 export const RecordIndexSurfaceContextStoreInitEffect = ({
   contextStoreInstanceId,
   objectMetadataItemId,
   viewId,
+  onInitialized,
 }: RecordIndexSurfaceContextStoreInitEffectProps) => {
   const setContextStoreCurrentObjectMetadataItemId = useSetAtomComponentState(
     contextStoreCurrentObjectMetadataItemIdComponentState,
@@ -33,12 +35,14 @@ export const RecordIndexSurfaceContextStoreInitEffect = ({
     setContextStoreCurrentObjectMetadataItemId(objectMetadataItemId);
     setContextStoreCurrentViewId(viewId);
     setContextStoreCurrentViewType(ContextStoreViewType.Table);
+    onInitialized?.();
   }, [
     objectMetadataItemId,
     setContextStoreCurrentObjectMetadataItemId,
     setContextStoreCurrentViewId,
     setContextStoreCurrentViewType,
     viewId,
+    onInitialized,
   ]);
 
   return null;

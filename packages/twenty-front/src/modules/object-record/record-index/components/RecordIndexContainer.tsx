@@ -29,8 +29,16 @@ const StyledContainerWithPadding = styled.div`
   min-height: 0;
 `;
 
-export const RecordIndexContainer = () => {
-  const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+type RecordIndexContainerProps = {
+  recordIndexViewTypeOverride?: ViewType;
+};
+
+export const RecordIndexContainer = ({
+  recordIndexViewTypeOverride,
+}: RecordIndexContainerProps) => {
+  const defaultRecordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+  const recordIndexViewType =
+    recordIndexViewTypeOverride ?? defaultRecordIndexViewType;
 
   const { recordIndexId, objectMetadataItem, objectNameSingular } =
     useRecordIndexContextOrThrow();

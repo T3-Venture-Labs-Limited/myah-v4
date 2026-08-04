@@ -8,8 +8,16 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { ViewBar } from '@/views/components/ViewBar';
 import { ViewType } from '@/views/types/ViewType';
 
-export const RecordIndexViewBar = () => {
-  const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+type RecordIndexViewBarProps = {
+  recordIndexViewTypeOverride?: ViewType;
+};
+
+export const RecordIndexViewBar = ({
+  recordIndexViewTypeOverride,
+}: RecordIndexViewBarProps) => {
+  const defaultRecordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+  const recordIndexViewType =
+    recordIndexViewTypeOverride ?? defaultRecordIndexViewType;
 
   const { objectNamePlural, recordIndexId, objectMetadataItem } =
     useRecordIndexContextOrThrow();

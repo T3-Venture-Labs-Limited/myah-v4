@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { act, useEffect } from 'react';
 
+import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
@@ -17,6 +19,10 @@ const mockRecordIndexConfigurations: Array<{
   onOpenRecordFromIndexView?: (recordId: string) => void;
   recordIndexId: string;
 }> = [];
+const mockRecordIndexLoad = jest.fn();
+const mockRecordIndexViewFieldsSSESync = jest.fn();
+let deferContextStoreInitialization = false;
+let mockInitializeContextStore: (() => void) | undefined;
 
 const creatorObjectMetadataItem = {
   id: 'creator-object',
@@ -57,7 +63,11 @@ jest.mock(
 jest.mock(
   '@/object-record/record-index/components/RecordIndexContainer',
   () => ({
-    RecordIndexContainer: () => {
+    RecordIndexContainer: ({
+      recordIndexViewTypeOverride,
+    }: {
+      recordIndexViewTypeOverride?: string;
+    }) => {
       const queryOnlyRecordFilters = useAtomComponentStateValue(
         queryOnlyRecordFiltersComponentState,
       );
@@ -67,7 +77,11 @@ jest.mock(
         recordIndexId,
       } = useRecordIndexContextOrThrow();
 
-      mockRecordIndexContainer(queryOnlyRecordFilters);
+      mockRecordIndexContainer(
+        queryOnlyRecordFilters,
+        recordIndexId,
+        recordIndexViewTypeOverride,
+      );
       mockRecordIndexIds.push(recordIndexId);
       mockRecordIndexConfigurations.push({
         indexIdentifierUrl,
@@ -117,14 +131,25 @@ jest.mock(
 jest.mock(
   '@/object-record/record-index/components/RecordIndexLoadBaseOnContextStoreEffect',
   () => ({
-    RecordIndexLoadBaseOnContextStoreEffect: () => null,
+    RecordIndexLoadBaseOnContextStoreEffect: (props: {
+      recordIndexId?: string;
+      skipGlobalIndexStates?: boolean;
+    }) => {
+      mockRecordIndexLoad(props);
+      return null;
+    },
   }),
 );
 
 jest.mock(
   '@/object-record/record-index/components/RecordIndexViewFieldsSSESyncEffect',
   () => ({
-    RecordIndexViewFieldsSSESyncEffect: () => null,
+    RecordIndexViewFieldsSSESyncEffect: (props: {
+      recordIndexId?: string;
+    }) => {
+      mockRecordIndexViewFieldsSSESync(props);
+      return null;
+    },
   }),
 );
 
@@ -132,6 +157,24 @@ jest.mock(
   '@/object-record/record-index/components/RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect',
   () => ({
     RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect: () => null,
+  }),
+);
+jest.mock(
+  '@/object-record/record-index/components/RecordIndexSurfaceContextStoreInitEffect',
+  () => ({
+    RecordIndexSurfaceContextStoreInitEffect: ({
+      onInitialized,
+    }: {
+      onInitialized?: () => void;
+    }) => {
+      mockInitializeContextStore = onInitialized;
+      useEffect(() => {
+        if (!deferContextStoreInitialization) {
+          onInitialized?.();
+        }
+      }, [onInitialized]);
+      return null;
+    },
   }),
 );
 jest.mock(
@@ -196,6 +239,10 @@ describe('RecordIndexSurface', () => {
     mockContextStoreIds.length = 0;
     mockRecordIndexIds.length = 0;
     mockRecordIndexConfigurations.length = 0;
+    mockRecordIndexLoad.mockClear();
+    mockRecordIndexViewFieldsSSESync.mockClear();
+    deferContextStoreInitialization = false;
+    mockInitializeContextStore = undefined;
   });
 
   it('mounts an isolated full native index without widget read-only constraints', async () => {
@@ -274,6 +321,115 @@ describe('RecordIndexSurface', () => {
       expect(screen.getByTestId('native-index-container')).toBeInTheDocument();
     });
 
-    expect(mockRecordIndexContainer).toHaveBeenLastCalledWith([listAFilter]);
+    expect(mockRecordIndexContainer.mock.calls.at(-1)?.[0]).toEqual([
+      listAFilter,
+    ]);
+  });
+
+  it('keeps the main context store native view state', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId={MAIN_CONTEXT_STORE_INSTANCE_ID}
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexContainer).toHaveBeenCalled();
+    });
+
+    expect(mockRecordIndexContainer).toHaveBeenCalledWith(
+      [],
+      'creators-creator-default-view-main-context-store',
+      undefined,
+    );
+    expect(mockRecordIndexLoad).toHaveBeenCalledWith({
+      recordIndexId: 'creators-creator-default-view-main-context-store',
+      skipGlobalIndexStates: false,
+    });
+  });
+
+  it('withholds context consumers until its context store is initialized', async () => {
+    deferContextStoreInitialization = true;
+
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-a"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listAFilter]}
+      />,
+    );
+
+    expect(mockRecordIndexLoad).not.toHaveBeenCalled();
+    expect(mockRecordIndexViewFieldsSSESync).not.toHaveBeenCalled();
+    expect(mockRecordIndexContainer).not.toHaveBeenCalled();
+
+    expect(mockInitializeContextStore).toBeDefined();
+    act(() => {
+      mockInitializeContextStore?.();
+    });
+
+    await waitFor(() => {
+      expect(mockRecordIndexContainer).toHaveBeenCalled();
+    });
+    expect(mockRecordIndexLoad).toHaveBeenCalledWith({
+      recordIndexId:
+        'creators-creator-default-view-creator-list-pane-list-a',
+      skipGlobalIndexStates: true,
+    });
+    expect(mockRecordIndexViewFieldsSSESync).toHaveBeenCalledWith({
+      recordIndexId:
+        'creators-creator-default-view-creator-list-pane-list-a',
+    });
+  });
+
+  it('reinitializes a changed surface identity and filter scope before mounting its table', async () => {
+    const { rerender } = renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-a"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listAFilter]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexContainer).toHaveBeenCalled();
+    });
+    mockRecordIndexContainer.mockClear();
+
+    rerender(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-b"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listBFilter]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexContainer).toHaveBeenCalled();
+    });
+
+    expect(mockRecordIndexContainer.mock.calls).toEqual(
+      expect.arrayContaining([
+        [
+          [listBFilter],
+          'creators-creator-default-view-creator-list-pane-list-b',
+          'TABLE',
+        ],
+      ]),
+    );
+    expect(mockRecordIndexContainer.mock.calls).not.toContainEqual([
+      [],
+      'creators-creator-default-view-creator-list-pane-list-b',
+      'TABLE',
+    ]);
   });
 });

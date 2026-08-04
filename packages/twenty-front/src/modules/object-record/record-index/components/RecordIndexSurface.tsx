@@ -1,5 +1,6 @@
-import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
 import { getCommandMenuIdFromRecordIndexId } from '@/command-menu-item/utils/getCommandMenuIdFromRecordIndexId';
+import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
+import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { RecordComponentInstanceContextsWrapper } from '@/object-record/components/RecordComponentInstanceContextsWrapper';
@@ -15,15 +16,16 @@ import { RecordIndexSurfaceContextStoreInitEffect } from '@/object-record/record
 import { RecordIndexViewBar } from '@/object-record/record-index/components/RecordIndexViewBar';
 import { RecordIndexViewFieldsSSESyncEffect } from '@/object-record/record-index/components/RecordIndexViewFieldsSSESyncEffect';
 import { RecordIndexContextProvider } from '@/object-record/record-index/contexts/RecordIndexContext';
-import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useRecordIndexFieldMetadataDerivedStates } from '@/object-record/record-index/hooks/useRecordIndexFieldMetadataDerivedStates';
+import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { getRecordIndexIdFromObjectNamePluralAndViewId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
-import { RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS } from '@/ui/utilities/drag-select/constants/RecordIndecDragSelectBoundaryClass';
-import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
+import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
+import { RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS } from '@/ui/utilities/drag-select/constants/RecordIndecDragSelectBoundaryClass';
 import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
+import { ViewType } from '@/views/types/ViewType';
 import { styled } from '@linaria/react';
 import { useStore } from 'jotai';
 import { useCallback, useEffect, useState } from 'react';
@@ -72,7 +74,7 @@ const RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect = ({
   return null;
 };
 
-export const RecordIndexSurface = ({
+const RecordIndexSurfaceInstance = ({
   contextStoreInstanceId,
   objectNameSingular,
   viewId,
@@ -93,6 +95,8 @@ export const RecordIndexSurface = ({
     objectMetadataItem.namePlural,
     `${viewId}-${contextStoreInstanceId}`,
   );
+  const isIsolatedSurface =
+    contextStoreInstanceId !== MAIN_CONTEXT_STORE_INSTANCE_ID;
   const {
     fieldDefinitionByFieldMetadataItemId,
     fieldMetadataItemByFieldMetadataItemId,
@@ -102,6 +106,8 @@ export const RecordIndexSurface = ({
     objectMetadataItem,
     recordIndexId,
   );
+  const [isContextStoreInitialized, setIsContextStoreInitialized] =
+    useState(false);
   const [areInitialQueryOnlyRecordFiltersInitialized, setAreInitialQueryOnlyRecordFiltersInitialized] =
     useState(false);
   const handleIndexRecordsLoaded = useCallback(() => {
@@ -119,64 +125,101 @@ export const RecordIndexSurface = ({
         contextStoreInstanceId={contextStoreInstanceId}
         objectMetadataItemId={objectMetadataItem.id}
         viewId={viewId}
+        onInitialized={() => setIsContextStoreInitialized(true)}
       />
-      <RecordIndexContextProvider
-        value={{
-          objectPermissionsByObjectMetadataId,
-          recordIndexId,
-          viewBarInstanceId: recordIndexId,
-          objectNamePlural: objectMetadataItem.namePlural,
-          objectNameSingular,
-          objectMetadataItem,
-          onIndexRecordsLoaded: handleIndexRecordsLoaded,
-          indexIdentifierUrl,
-          onOpenRecordFromIndexView,
-          recordFieldByFieldMetadataItemId,
-          labelIdentifierFieldMetadataItem,
-          fieldMetadataItemByFieldMetadataItemId,
-          fieldDefinitionByFieldMetadataItemId,
-        }}
-      >
-        <ViewComponentInstanceContext.Provider value={{ instanceId: recordIndexId }}>
-          <RecordComponentInstanceContextsWrapper componentInstanceId={recordIndexId}>
-            <RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect
-              initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
-              recordIndexId={recordIndexId}
-              onInitialized={handleInitialQueryOnlyRecordFiltersInitialized}
-            />
-            <CommandMenuComponentInstanceContext.Provider
-              value={{
-                instanceId: getCommandMenuIdFromRecordIndexId(recordIndexId),
-              }}
+      {isContextStoreInitialized && (
+        <RecordIndexContextProvider
+          value={{
+            objectPermissionsByObjectMetadataId,
+            recordIndexId,
+            viewBarInstanceId: recordIndexId,
+            objectNamePlural: objectMetadataItem.namePlural,
+            objectNameSingular,
+            objectMetadataItem,
+            onIndexRecordsLoaded: handleIndexRecordsLoaded,
+            indexIdentifierUrl,
+            onOpenRecordFromIndexView,
+            recordFieldByFieldMetadataItemId,
+            labelIdentifierFieldMetadataItem,
+            fieldMetadataItemByFieldMetadataItemId,
+            fieldDefinitionByFieldMetadataItemId,
+          }}
+        >
+          <ViewComponentInstanceContext.Provider
+            value={{ instanceId: recordIndexId }}
+          >
+            <RecordComponentInstanceContextsWrapper
+              componentInstanceId={recordIndexId}
             >
-              <PageTitle title={objectMetadataItem.labelPlural} />
-              <PageCardLayout
-                header={<RecordIndexPageHeader />}
-                secondaryBar={
-                  objectPermissions.canReadObjectRecords && <RecordIndexViewBar />
-                }
+              <RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect
+                initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
+                recordIndexId={recordIndexId}
+                onInitialized={handleInitialQueryOnlyRecordFiltersInitialized}
+              />
+              <CommandMenuComponentInstanceContext.Provider
+                value={{
+                  instanceId: getCommandMenuIdFromRecordIndexId(recordIndexId),
+                }}
               >
-                <StyledIndexContainer
-                  className={RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS}
-                >
-                  {objectPermissions.canReadObjectRecords ? (
-                    areInitialQueryOnlyRecordFiltersInitialized && (
-                      <>
-                        <RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect />
-                        <RecordIndexContainer />
-                      </>
+                <PageTitle title={objectMetadataItem.labelPlural} />
+                <PageCardLayout
+                  header={<RecordIndexPageHeader />}
+                  secondaryBar={
+                    objectPermissions.canReadObjectRecords && (
+                      <RecordIndexViewBar
+                        recordIndexViewTypeOverride={
+                          isIsolatedSurface ? ViewType.TABLE : undefined
+                        }
+                      />
                     )
-                  ) : (
-                    <RecordIndexEmptyStateNotShared />
-                  )}
-                </StyledIndexContainer>
-              </PageCardLayout>
-            </CommandMenuComponentInstanceContext.Provider>
-            <RecordIndexLoadBaseOnContextStoreEffect />
-            <RecordIndexViewFieldsSSESyncEffect />
-          </RecordComponentInstanceContextsWrapper>
-        </ViewComponentInstanceContext.Provider>
-      </RecordIndexContextProvider>
+                  }
+                >
+                  <StyledIndexContainer
+                    className={RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS}
+                  >
+                    {objectPermissions.canReadObjectRecords ? (
+                      areInitialQueryOnlyRecordFiltersInitialized && (
+                        <>
+                          <RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect />
+                          <RecordIndexContainer
+                            recordIndexViewTypeOverride={
+                              isIsolatedSurface ? ViewType.TABLE : undefined
+                            }
+                          />
+                        </>
+                      )
+                    ) : (
+                      <RecordIndexEmptyStateNotShared />
+                    )}
+                  </StyledIndexContainer>
+                </PageCardLayout>
+              </CommandMenuComponentInstanceContext.Provider>
+              <RecordIndexLoadBaseOnContextStoreEffect
+                recordIndexId={recordIndexId}
+                skipGlobalIndexStates={isIsolatedSurface}
+              />
+              <RecordIndexViewFieldsSSESyncEffect
+                recordIndexId={recordIndexId}
+              />
+            </RecordComponentInstanceContextsWrapper>
+          </ViewComponentInstanceContext.Provider>
+        </RecordIndexContextProvider>
+      )}
     </ContextStoreComponentInstanceContext.Provider>
   );
+};
+
+export const RecordIndexSurface = (props: RecordIndexSurfaceProps) => {
+  const { objectMetadataItem } = useObjectMetadataItem({
+    objectNameSingular: props.objectNameSingular,
+  });
+  const recordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
+    objectMetadataItem.namePlural,
+    `${props.viewId}-${props.contextStoreInstanceId}`,
+  );
+  const scopeKey = `${recordIndexId}-${JSON.stringify(
+    props.initialQueryOnlyRecordFilters ?? [],
+  )}`;
+
+  return <RecordIndexSurfaceInstance key={scopeKey} {...props} />;
 };
