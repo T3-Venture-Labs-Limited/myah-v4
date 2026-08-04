@@ -142,6 +142,7 @@ describe('RecordChip identifier navigation', () => {
     'uses a custom Creator List record-show handler without navigation on %s',
     async (_activation, key) => {
       const user = userEvent.setup();
+      let activationElement: EventTarget | null = null;
 
       render(
         <MemoryRouter
@@ -153,7 +154,10 @@ describe('RecordChip identifier navigation', () => {
             record={{ id: 'list-id' } as never}
             to="/objects/creator-lists/list-id"
             triggerEvent="CLICK"
-            onClick={openGenericRecordInSidePanel}
+            onClick={(event) => {
+              activationElement = event.currentTarget;
+              openGenericRecordInSidePanel(event);
+            }}
           />
           <CurrentLocation />
         </MemoryRouter>,
@@ -165,6 +169,7 @@ describe('RecordChip identifier navigation', () => {
       await user.keyboard(key);
 
       expect(openGenericRecordInSidePanel).toHaveBeenCalledTimes(1);
+      expect(activationElement).toBe(link);
       expect(screen.getByRole('status')).toHaveTextContent(
         '/objects/creator-lists',
       );

@@ -52,7 +52,7 @@ export const RecordTableCellFieldContextLabelIdentifier = ({
   const fieldDefinition =
     fieldDefinitionByFieldMetadataItemId[recordField.fieldMetadataItemId];
 
-  const handleChipClick = (event: MouseEvent) => {
+  const handleChipClick = (event: MouseEvent<HTMLElement>) => {
     onRecordIdentifierClick?.(rowIndex, recordId, event.currentTarget);
   };
 

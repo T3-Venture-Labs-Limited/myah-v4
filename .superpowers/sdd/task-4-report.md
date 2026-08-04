@@ -243,3 +243,71 @@ Snapshots:   0 total
 ### Concerns
 
 None. Per task constraint, no formatter, lint, Nx, build, browser UAT, push, rebase, deployment, or final validation was run.
+
+## Strict activation event callback repair
+
+### LSP reference evidence
+
+Before changing `RecordChipProps`, `typescript-language-server` references for `RecordChip` enumerated every component consumer, including the Board and Calendar header callbacks. A matching FieldContext reference pass identified the context declaration/provider consumers; the sole `onRecordChipClick` provider is the table identifier field context. `RecordTableCellButtons` has one caller, `RecordTableCellEditButton`.
+
+### RED
+
+The focused RecordChip regression was revised first to require that custom keyboard activation forward the link as the callback's current target:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+Before the repair, the Space case failed because the callback received the wrapper span rather than the link. The pre-repair strict frontend typecheck also reported the new activation-boundary diagnostics in `RecordBoardCardHeader.tsx`, `RecordCalendarCardHeader.tsx`, `RecordTableCellEditButton.tsx`, and `RecordTableCellFieldContextLabelIdentifier.tsx`.
+
+### GREEN
+
+The revised focused RecordChip test passed:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       11 passed, 11 total
+Snapshots:   0 total
+```
+
+Fresh Task 1/Task 4 regression run:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 4 passed, 4 total
+Tests:       25 passed, 25 total
+Snapshots:   0 total
+```
+
+Fresh strict check:
+
+```bash
+npx tsgo -p packages/twenty-front/tsconfig.json --noEmit
+```
+
+The command still exits 2 solely for the documented baseline diagnostics in front-components, Myah Inbox, Settings billing, SidePanel pages, and `RecordIndexPage.test.tsx`; it emits none of the four pre-repair event-boundary diagnostics and no new diagnostic from this change.
+
+### Changed files
+
+- `RecordChip.tsx`: requires `MouseEvent<HTMLElement>` and dispatches a genuine link mouse/click event for Space activation instead of casting a keyboard event.
+- `RecordChip.test.tsx`: verifies custom keyboard activation forwards the actual link current target.
+- `FieldContext.ts` and `RecordTableCellFieldContextLabelIdentifier.tsx`: carry the precise HTMLElement mouse event through the identifier-chip context.
+- `RecordTableCellButtons.tsx`: accepts the forwarded HTMLElement mouse event, allowing the existing edit-button callback to preserve its activation element.
+
+### Self-review
+
+- The event contract now matches `LinkChip` and the native index-open request's `HTMLElement` boundary; no cast, `Element`, `EventTarget`, or `any` weakens that path.
+- Space retains custom handling for both trigger modes by dispatching the same trigger event on the actual link; normal click/mousedown behavior and no-override navigation are unchanged.
+- Existing no-argument secondary table callbacks remain assignable to the widened callback arity; the first-column edit callback now receives the actual button event.
+- No workspace/layout/focus fallback, data/API/schema/migration/provider, route, scope, cache, or action behavior changed.
+
+### Commit
+
+`fix(myah): tighten record activation event types`
+
+### Concerns
+
+The required strict check has pre-existing unrelated failures described above; the targeted event diagnostics are resolved. No formatter, linter, Nx, build, browser UAT, push, or external action was run.

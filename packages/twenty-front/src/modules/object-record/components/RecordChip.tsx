@@ -33,7 +33,7 @@ export type RecordChipProps = {
   isLabelHidden?: boolean;
   isIconHidden?: boolean;
   triggerEvent?: TriggerEventType;
-  onClick?: (event: MouseEvent) => void;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
 };
 
 export const RecordChip = ({
@@ -146,7 +146,14 @@ export const RecordChip = ({
       onKeyDown={(event) => {
         if (event.key === ' ') {
           event.preventDefault();
-          onClick(event as unknown as MouseEvent);
+          event.currentTarget
+            .querySelector('a')
+            ?.dispatchEvent(
+              new globalThis.MouseEvent(
+                triggerEvent === 'CLICK' ? 'click' : 'mousedown',
+                { bubbles: true, cancelable: true },
+              ),
+            );
         }
       }}
     >
