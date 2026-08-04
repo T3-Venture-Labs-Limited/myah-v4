@@ -311,3 +311,61 @@ The command still exits 2 solely for the documented baseline diagnostics in fron
 ### Concerns
 
 The required strict check has pre-existing unrelated failures described above; the targeted event diagnostics are resolved. No formatter, linter, Nx, build, browser UAT, push, or external action was run.
+
+
+## Activation-boundary assertion removal
+
+### LSP reference evidence
+
+Before changing the exported `RecordIndexOpenRequest` test call, `typescript-language-server` was queried with `textDocument/references` for that type. The server advertises reference support and returned its declaration plus the `RecordIndexContextValue.onOpenRecordFromIndexView` callback-field reference. The focused source consumers were then compared against the existing seam; this repair changes no type declaration or callback contract.
+
+### RED
+
+After removing the two final assertion sites, the required strict command exposed the actual nullable-boundary diagnostic:
+
+```text
+CreatorListWorkspace.tsx(110,13): TS2345: Argument of type 'HTMLElement | undefined' is not assignable to parameter of type 'HTMLElement'.
+```
+
+The previous `HTMLButtonElement` assertion had hidden this legitimate optional-payload case. The open-request test's `as never` similarly prevented that test call from checking the exact request shape.
+
+### GREEN
+
+The minimal correction guards the optional activation element before comparing it to row controls typed as `HTMLElement`; it returns the same `-1` fallback when no element is supplied. The open-request regression now passes its typed `{ activationElement, recordId, source }` object directly.
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 4 passed, 4 total
+Tests:       25 passed, 25 total
+Snapshots:   0 total
+```
+
+The required strict check was then rerun:
+
+```bash
+npx tsgo -p packages/twenty-front/tsconfig.json --noEmit
+```
+
+It exits 2 solely with the documented baseline diagnostics in Front Components (missing `twenty-front-component-renderer` and its cascading types), Myah Inbox, Settings billing, SidePanel pages, and `RecordIndexPage.test.tsx`. It reports no diagnostic from `CreatorListWorkspace.tsx`, the activation request hook test, or either assertion removal.
+
+### Changed files
+
+- `packages/twenty-front/src/modules/myah/creator-crm/components/CreatorListWorkspace.tsx`
+- `packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx`
+
+### Self-review
+
+- `RecordIndexOpenRequest.activationElement` remains optional `HTMLElement`; neither the shared contract nor source union was narrowed or cast.
+- The workspace compares the supplied element only against `HTMLElement` controls and retains `-1` without an activation element.
+- Native actual-target routing, source-driven Back focus, desktop/mobile layout, scoped selection, and no-override behavior are untouched.
+
+### Commit
+
+`fix(myah): remove activation boundary assertions`
+
+### Concerns
+
+The strict frontend typecheck retains its pre-existing unrelated diagnostics listed above. No formatter, lint, Nx, build, browser, push, deploy, or external action was run.

@@ -86,7 +86,7 @@ describe('useOpenRecordFromIndexView', () => {
         activationElement,
         recordId: 'list-a',
         source: 'table-identifier-action',
-      } as never),
+      }),
     );
 
     expect(onOpenRecordFromIndexView).toHaveBeenCalledWith({

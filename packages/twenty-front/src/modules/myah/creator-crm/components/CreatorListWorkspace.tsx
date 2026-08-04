@@ -105,11 +105,12 @@ export const CreatorListWorkspace = () => {
       const recordRow = activationElement?.closest<HTMLElement>(
         `[data-testid="row-id-${recordId}"]`,
       );
-      const buttonIndex = recordRow
-        ? Array.from(recordRow.querySelectorAll('button')).indexOf(
-            activationElement as HTMLButtonElement,
-          )
-        : -1;
+      const buttonIndex =
+        recordRow && activationElement
+          ? Array.from(recordRow.querySelectorAll<HTMLElement>('button')).indexOf(
+              activationElement,
+            )
+          : -1;
 
       lastOpenRequestRef.current = request;
       lastActivationControlRef.current =
