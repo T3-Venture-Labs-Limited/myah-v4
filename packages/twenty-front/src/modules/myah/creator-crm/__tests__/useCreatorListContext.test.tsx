@@ -96,6 +96,17 @@ describe('useCreatorListContext', () => {
     });
   });
 
+  it('skips the legacy URL List record lookup when explicitly requested', () => {
+    renderHook(() => useCreatorListContext(true));
+
+    expect(mockUseFindOneRecord).toHaveBeenCalledWith({
+      objectNameSingular: 'creatorList',
+      objectRecordId: '',
+      recordGqlFields: { id: true, name: true },
+      skip: true,
+    });
+  });
+
   it('uses an explicit List ID instead of the legacy URL parameter', async () => {
     mockUseFindOneRecord.mockReturnValue({
       record: { id: 'list-from-prop', name: 'A' },

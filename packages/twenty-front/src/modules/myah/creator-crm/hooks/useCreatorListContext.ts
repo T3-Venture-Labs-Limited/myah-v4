@@ -72,7 +72,9 @@ export const useCreatorListContextFromId = (
   ]);
 };
 
-export const useCreatorListContext = (): CreatorListContext | undefined => {
+export const useCreatorListContext = (
+  skipLegacyRecordLookup = false,
+): CreatorListContext | undefined => {
   const [searchParams] = useSearchParams();
   const { objectMetadataItem } = useRecordIndexIdFromCurrentContextStore();
   const hasCreatorListMembershipRelation =
@@ -83,8 +85,9 @@ export const useCreatorListContext = (): CreatorListContext | undefined => {
     );
 
   return useCreatorListContextFromId(
+    !skipLegacyRecordLookup &&
     objectMetadataItem.nameSingular === 'creator' &&
-      hasCreatorListMembershipRelation
+    hasCreatorListMembershipRelation
       ? (searchParams.get('creatorListId') ?? undefined)
       : undefined,
   );

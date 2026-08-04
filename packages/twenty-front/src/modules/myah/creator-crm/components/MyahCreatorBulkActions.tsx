@@ -44,7 +44,9 @@ export const MyahCreatorBulkActions = ({
   creatorListContext: explicitCreatorListContext,
 }: MyahCreatorBulkActionsProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
-  const urlCreatorListContext = useCreatorListContext();
+  const urlCreatorListContext = useCreatorListContext(
+    explicitCreatorListContext !== undefined,
+  );
   const { findObjectMetadataItemByNamePlural } =
     useFilteredObjectMetadataItems();
   const objectMetadataItem =

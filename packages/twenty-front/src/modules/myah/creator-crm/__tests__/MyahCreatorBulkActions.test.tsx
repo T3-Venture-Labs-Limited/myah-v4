@@ -46,7 +46,9 @@ jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
 }));
 
 jest.mock('@/myah/creator-crm/hooks/useCreatorListContext', () => ({
-  useCreatorListContext: () => mockUseCreatorListContext(),
+  useCreatorListContext: (
+    ...args: Parameters<typeof mockUseCreatorListContext>
+  ) => mockUseCreatorListContext(...args),
 }));
 
 jest.mock('@/ui/layout/dropdown/components/Dropdown', () => ({
@@ -218,7 +220,16 @@ describe('MyahCreatorBulkActions', () => {
     ).toHaveAttribute('data-creator-ids', 'scoped-creator');
   });
 
-  it('uses the explicit scoped List target instead of the legacy URL context', () => {
+  it('uses the explicit scoped List target and skips the conflicting legacy URL context', () => {
+    mockUseAtomComponentStateValue.mockImplementation(
+      (_state, contextStoreInstanceId) => ({
+        mode: 'selection',
+        selectedRecordIds:
+          contextStoreInstanceId === 'creator-list-pane-list-scoped'
+            ? ['scoped-creator']
+            : ['main-creator'],
+      }),
+    );
     mockUseCreatorListContext.mockReturnValue({
       target: {
         kind: 'creator-list',
@@ -252,6 +263,10 @@ describe('MyahCreatorBulkActions', () => {
       screen.getByRole('button', { name: 'Remove from list' }),
     );
 
+    expect(mockUseCreatorListContext).toHaveBeenCalledWith(true);
     expect(screen.getByText('remove:Scoped List')).toBeVisible();
+    expect(
+      screen.getByTestId('creator-bulk-relationship-dialog'),
+    ).toHaveAttribute('data-creator-ids', 'scoped-creator');
   });
 });
