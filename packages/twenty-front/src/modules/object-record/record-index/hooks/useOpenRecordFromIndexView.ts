@@ -6,6 +6,7 @@ import { contextStoreRecordShowParentViewComponentState } from '@/context-store/
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
+import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { recordIndexOpenRecordInState } from '@/object-record/record-index/states/recordIndexOpenRecordInState';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { canOpenObjectInSidePanel } from '@/object-record/utils/canOpenObjectInSidePanel';
@@ -48,11 +49,12 @@ export const useOpenRecordFromIndexView = () => {
   const store = useStore();
 
   const openRecordFromIndexView = useCallback(
-    ({ recordId }: { recordId: string }) => {
+    (request: RecordIndexOpenRequest) => {
       if (onOpenRecordFromIndexView) {
-        onOpenRecordFromIndexView(recordId);
+        onOpenRecordFromIndexView(request);
         return;
       }
+      const { recordId } = request;
 
       const recordIndexOpenRecordIn = store.get(
         recordIndexOpenRecordInState.atom,

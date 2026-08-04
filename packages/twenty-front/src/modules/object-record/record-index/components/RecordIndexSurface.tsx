@@ -10,6 +10,7 @@ import { type RecordFilter } from '@/object-record/record-filter/types/RecordFil
 import { RecordIndexContainer } from '@/object-record/record-index/components/RecordIndexContainer';
 import { RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect } from '@/object-record/record-index/components/RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect';
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
+import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordIndexLoadBaseOnContextStoreEffect } from '@/object-record/record-index/components/RecordIndexLoadBaseOnContextStoreEffect';
 import {
   RecordIndexPageHeader,
@@ -45,7 +46,7 @@ export type RecordIndexSurfaceProps = {
   objectNameSingular: string;
   viewId: string;
   indexIdentifierUrl: (recordId: string) => string;
-  onOpenRecordFromIndexView?: (recordId: string) => void;
+  onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
   creatorListContext?: RecordIndexPageHeaderProps['creatorListContext'];
 };

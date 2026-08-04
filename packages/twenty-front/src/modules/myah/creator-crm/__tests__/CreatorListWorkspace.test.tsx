@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createElement as mockCreateElement, type ReactNode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -45,6 +45,7 @@ jest.mock('@linaria/react', () => {
 });
 
 import { CreatorListWorkspace } from '@/myah/creator-crm/components/CreatorListWorkspace';
+import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 
 const mockRecordIndexContainerGater = jest.fn();
 const mockScopedCreatorIndex = jest.fn();
@@ -62,7 +63,7 @@ jest.mock(
       onOpenRecordFromIndexView,
     }: {
       indexIdentifierUrl?: (recordId: string) => string;
-      onOpenRecordFromIndexView?: (recordId: string) => void;
+      onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
     }) => {
       mockRecordIndexContainerGater({
         indexIdentifierUrl,
@@ -76,14 +77,24 @@ jest.mock(
               href={indexIdentifierUrl?.('list-a')}
               onClick={(event) => {
                 event.preventDefault();
-                onOpenRecordFromIndexView?.('list-a');
+                onOpenRecordFromIndexView?.({
+                  activationElement: event.currentTarget,
+                  recordId: 'list-a',
+                  source: 'record-chip',
+                });
               }}
             >
               List A
             </a>
             <button
               aria-label="Open List A"
-              onClick={() => onOpenRecordFromIndexView?.('list-a')}
+              onClick={(event) =>
+                onOpenRecordFromIndexView?.({
+                  activationElement: event.currentTarget,
+                  recordId: 'list-a',
+                  source: 'table-identifier-action',
+                })
+              }
               type="button"
             />
           </div>
@@ -92,14 +103,24 @@ jest.mock(
               href={indexIdentifierUrl?.('list-b')}
               onClick={(event) => {
                 event.preventDefault();
-                onOpenRecordFromIndexView?.('list-b');
+                onOpenRecordFromIndexView?.({
+                  activationElement: event.currentTarget,
+                  recordId: 'list-b',
+                  source: 'record-chip',
+                });
               }}
             >
               List B
             </a>
             <button
               aria-label="Open List B"
-              onClick={() => onOpenRecordFromIndexView?.('list-b')}
+              onClick={(event) =>
+                onOpenRecordFromIndexView?.({
+                  activationElement: event.currentTarget,
+                  recordId: 'list-b',
+                  source: 'table-identifier-action',
+                })
+              }
               type="button"
             />
           </div>
@@ -268,12 +289,15 @@ describe('CreatorListWorkspace', () => {
     expect(screen.getByRole('link', { name: 'List A' })).toHaveFocus();
   });
 
-  it('restores identifier-arrow focus on mobile Back after the List index remounts', async () => {
+  it('restores identifier-arrow focus after activation without DOM focus movement', async () => {
     mockUseIsMobile.mockReturnValue(true);
     const user = userEvent.setup();
     renderWorkspace();
 
-    await user.click(screen.getByRole('button', { name: 'Open List A' }));
+    const arrow = screen.getByRole('button', { name: 'Open List A' });
+    fireEvent.click(arrow);
+    expect(document.activeElement).not.toBe(arrow);
+
     await user.click(
       screen.getByRole('button', { name: 'Back to Creator Lists' }),
     );

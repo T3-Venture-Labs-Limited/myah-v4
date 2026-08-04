@@ -1,13 +1,14 @@
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
+import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useHandleIndexIdentifierClick } from '@/object-record/record-index/hooks/useHandleIndexIdentifierClick';
 import { useRecordIndexIdFromCurrentContextStore } from '@/object-record/record-index/hooks/useRecordIndexIdFromCurrentContextStore';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 
 export type RecordIndexContainerGaterProps = {
   indexIdentifierUrl?: (recordId: string) => string;
-  onOpenRecordFromIndexView?: (recordId: string) => void;
+  onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
 };
 
 export const RecordIndexContainerGater = ({

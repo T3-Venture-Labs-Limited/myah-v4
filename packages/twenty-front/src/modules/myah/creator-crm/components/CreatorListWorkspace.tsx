@@ -1,5 +1,6 @@
 import { CreatorListScopedCreatorIndex } from '@/myah/creator-crm/components/CreatorListScopedCreatorIndex';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
+import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordIndexContainerGater } from '@/object-record/record-index/components/RecordIndexContainerGater';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { styled } from '@linaria/react';
@@ -45,9 +46,9 @@ const StyledSelectionStatus = styled.div`
   padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
 `;
 
-type ActivationControl =
-  | { type: 'name-link' }
-  | { buttonIndex: number; type: 'row-button' };
+type ActivationControl = { buttonIndex: number; type: 'row-button' } | {
+  type: 'name-link';
+};
 
 const CreatorListSelectionStatus = ({
   creatorListId,
@@ -83,9 +84,8 @@ export const CreatorListWorkspace = () => {
   const [selectedCreatorListId, setSelectedCreatorListId] = useState<
     string | null
   >(null);
-  const lastActivationElementRef = useRef<HTMLElement | null>(null);
+  const lastOpenRequestRef = useRef<RecordIndexOpenRequest | null>(null);
   const lastActivationControlRef = useRef<ActivationControl | null>(null);
-  const lastActivatedCreatorListIdRef = useRef<string | null>(null);
   const scopedPaneRef = useRef<HTMLDivElement | null>(null);
 
   const creatorListShowUrl = useCallback(
@@ -98,39 +98,25 @@ export const CreatorListWorkspace = () => {
   );
 
   const handleOpenCreatorList = useCallback(
-    (creatorListId: string) => {
-      const activeElement =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
-      let activationControl: ActivationControl | null = null;
+    (request: RecordIndexOpenRequest) => {
+      const { activationElement, recordId, source } = request;
+      const recordRow = activationElement?.closest<HTMLElement>(
+        `[data-testid="row-id-${recordId}"]`,
+      );
+      const buttonIndex = recordRow
+        ? Array.from(recordRow.querySelectorAll('button')).indexOf(
+            activationElement as HTMLButtonElement,
+          )
+        : -1;
 
-      if (
-        activeElement instanceof HTMLAnchorElement &&
-        activeElement.getAttribute('href') === creatorListShowUrl(creatorListId)
-      ) {
-        activationControl = { type: 'name-link' };
-      } else if (activeElement instanceof HTMLButtonElement) {
-        const recordRow = activeElement.closest<HTMLElement>(
-          `[data-testid="row-id-${creatorListId}"]`,
-        );
-        const buttonIndex = recordRow
-          ? Array.from(recordRow.querySelectorAll('button')).indexOf(
-              activeElement,
-            )
-          : -1;
-
-        if (buttonIndex !== -1) {
-          activationControl = { buttonIndex, type: 'row-button' };
-        }
-      }
-
-      lastActivationElementRef.current = activeElement;
-      lastActivationControlRef.current = activationControl;
-      lastActivatedCreatorListIdRef.current = creatorListId;
-      setSelectedCreatorListId(creatorListId);
+      lastOpenRequestRef.current = request;
+      lastActivationControlRef.current =
+        source === 'table-identifier-action'
+          ? { buttonIndex: Math.max(buttonIndex, 0), type: 'row-button' }
+          : { type: 'name-link' };
+      setSelectedCreatorListId(recordId);
     },
-    [creatorListShowUrl],
+    [],
   );
 
   const handleCloseCreatorList = useCallback(() => {
@@ -158,31 +144,24 @@ export const CreatorListWorkspace = () => {
       return;
     }
 
-    const lastActivationElement = lastActivationElementRef.current;
+    const lastOpenRequest = lastOpenRequestRef.current;
+    const lastActivationControl = lastActivationControlRef.current;
 
-    if (lastActivationElement?.isConnected) {
-      lastActivationElement.focus();
+    if (lastOpenRequest?.activationElement?.isConnected) {
+      lastOpenRequest.activationElement.focus();
       return;
     }
 
-    const lastActivatedCreatorListId = lastActivatedCreatorListIdRef.current;
-    const lastActivationControl = lastActivationControlRef.current;
-    const recordRow = Array.from(
-      document.querySelectorAll<HTMLElement>('[data-testid]'),
-    ).find(
-      (element) =>
-        element.dataset.testid === `row-id-${lastActivatedCreatorListId}`,
+    const recordRow = document.querySelector<HTMLElement>(
+      `[data-testid="row-id-${lastOpenRequest?.recordId}"]`,
     );
     const replacementActivationElement =
       lastActivationControl?.type === 'row-button'
         ? recordRow?.querySelectorAll<HTMLElement>('button')[
             lastActivationControl.buttonIndex
           ]
-        : Array.from(document.querySelectorAll<HTMLElement>('a')).find(
-            (element) =>
-              element.getAttribute('href') ===
-              (lastActivatedCreatorListId &&
-                creatorListShowUrl(lastActivatedCreatorListId)),
+        : document.querySelector<HTMLElement>(
+            `a[href="${creatorListShowUrl(lastOpenRequest?.recordId ?? '')}"]`,
           );
 
     replacementActivationElement?.focus();

@@ -3,7 +3,10 @@ import { act, useEffect } from 'react';
 
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
-import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
+import {
+  type RecordIndexOpenRequest,
+  useRecordIndexContextOrThrow,
+} from '@/object-record/record-index/contexts/RecordIndexContext';
 import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
@@ -16,7 +19,7 @@ const mockContextStoreIds: string[] = [];
 const mockRecordIndexIds: string[] = [];
 const mockRecordIndexConfigurations: Array<{
   indexIdentifierUrl: (recordId: string) => string;
-  onOpenRecordFromIndexView?: (recordId: string) => void;
+  onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
   recordIndexId: string;
 }> = [];
 const mockRecordIndexLoad = jest.fn();

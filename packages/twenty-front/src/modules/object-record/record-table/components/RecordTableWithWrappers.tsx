@@ -54,10 +54,18 @@ export const RecordTableWithWrappers = ({
   const { unfocusRecordTableRow } = useFocusedRecordTableRow(recordTableId);
   const { openRecordFromIndexView } = useOpenRecordFromIndexView();
 
-  const handleRecordIdentifierClick = (rowIndex: number, recordId: string) => {
+  const handleRecordIdentifierClick = (
+    rowIndex: number,
+    recordId: string,
+    activationElement?: HTMLElement,
+  ) => {
     activateRecordTableRow(rowIndex);
     unfocusRecordTableRow();
-    openRecordFromIndexView({ recordId });
+    openRecordFromIndexView({
+      activationElement,
+      recordId,
+      source: 'record-chip',
+    });
   };
 
   const { deleteOneRecord } = useDeleteOneRecord({ objectNameSingular });

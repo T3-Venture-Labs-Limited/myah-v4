@@ -6,9 +6,15 @@ import { type ColumnDefinition } from '@/object-record/record-table/types/Column
 import { type ObjectPermissions } from 'twenty-shared/types';
 import { createRequiredContext } from '~/utils/createRequiredContext';
 
+export type RecordIndexOpenRequest = {
+  recordId: string;
+  source: 'record-chip' | 'table-identifier-action';
+  activationElement?: HTMLElement;
+};
+
 export type RecordIndexContextValue = {
   indexIdentifierUrl: (recordId: string) => string;
-  onOpenRecordFromIndexView?: (recordId: string) => void;
+  onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
   onIndexRecordsLoaded: () => void;
   objectNamePlural: string;
   objectNameSingular: string;

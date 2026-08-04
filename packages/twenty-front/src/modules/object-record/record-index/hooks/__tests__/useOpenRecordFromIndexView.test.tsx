@@ -79,9 +79,21 @@ describe('useOpenRecordFromIndexView', () => {
       ),
     });
 
-    act(() => result.current.openRecordFromIndexView({ recordId: 'list-a' }));
+    const activationElement = document.createElement('button');
 
-    expect(onOpenRecordFromIndexView).toHaveBeenCalledWith('list-a');
+    act(() =>
+      result.current.openRecordFromIndexView({
+        activationElement,
+        recordId: 'list-a',
+        source: 'table-identifier-action',
+      } as never),
+    );
+
+    expect(onOpenRecordFromIndexView).toHaveBeenCalledWith({
+      activationElement,
+      recordId: 'list-a',
+      source: 'table-identifier-action',
+    });
     expect(mockOpenRecordInSidePanel).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockStore.set).not.toHaveBeenCalled();

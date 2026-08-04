@@ -38,6 +38,7 @@ export type OpenTableCellArgs = {
   isReadOnly: boolean;
   fieldDefinition: FieldDefinition<FieldMetadata>;
   recordId: string;
+  activationElement?: HTMLElement;
   isNavigating: boolean;
 };
 
@@ -86,6 +87,7 @@ export const useOpenRecordTableCell = (recordTableId: string) => {
 
   const openTableCell = useCallback(
     ({
+      activationElement,
       initialValue,
       cellPosition,
       isReadOnly,
@@ -124,7 +126,11 @@ export const useOpenRecordTableCell = (recordTableId: string) => {
           unfocusRecordTableRow();
         }
 
-        openRecordFromIndexView({ recordId });
+        openRecordFromIndexView({
+          activationElement,
+          recordId,
+          source: 'table-identifier-action',
+        });
 
         return;
       }

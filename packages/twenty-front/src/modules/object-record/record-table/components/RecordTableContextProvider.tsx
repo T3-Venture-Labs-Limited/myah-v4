@@ -21,7 +21,11 @@ type RecordTableContextProviderProps = {
   viewBarId: string;
   recordTableId: string;
   objectNameSingular: string;
-  onRecordIdentifierClick?: (rowIndex: number, recordId: string) => void;
+  onRecordIdentifierClick?: (
+    rowIndex: number,
+    recordId: string,
+    activationElement?: HTMLElement,
+  ) => void;
   children: ReactNode;
 };
 

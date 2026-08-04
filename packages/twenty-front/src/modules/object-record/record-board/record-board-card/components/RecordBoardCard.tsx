@@ -134,7 +134,10 @@ export const RecordBoardCard = () => {
   const handleCardClick = () => {
     activateBoardCard({ rowIndex, columnIndex });
     unfocusBoardCard();
-    openRecordFromIndexView({ recordId });
+    openRecordFromIndexView({
+      recordId,
+      source: 'table-identifier-action',
+    });
   };
 
   const onMouseLeaveBoard = useDebouncedCallback(() => {
