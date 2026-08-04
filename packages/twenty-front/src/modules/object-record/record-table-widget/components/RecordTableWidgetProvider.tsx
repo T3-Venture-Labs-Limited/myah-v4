@@ -73,6 +73,7 @@ export const RecordTableWidgetProvider = ({
       value={{ instanceId: `record-table-widget-${widgetId}` }}
     >
       <RecordTableWidgetContextStoreInitEffect
+        contextStoreInstanceId={`record-table-widget-${widgetId}`}
         objectMetadataItemId={objectMetadataItem.id}
         viewId={viewId}
       />
