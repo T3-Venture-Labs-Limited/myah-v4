@@ -8,6 +8,7 @@ import { createRequiredContext } from '~/utils/createRequiredContext';
 
 export type RecordIndexContextValue = {
   indexIdentifierUrl: (recordId: string) => string;
+  onOpenRecordFromIndexView?: (recordId: string) => void;
   onIndexRecordsLoaded: () => void;
   objectNamePlural: string;
   objectNameSingular: string;

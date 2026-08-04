@@ -96,6 +96,55 @@ describe('RecordChip identifier navigation', () => {
   });
 
   it.each([
+    {
+      activation: 'CLICK',
+      triggerEvent: 'CLICK' as const,
+      activate: (link: HTMLElement) => fireEvent.click(link),
+    },
+    {
+      activation: 'MOUSE_DOWN',
+      triggerEvent: 'MOUSE_DOWN' as const,
+      activate: (link: HTMLElement) => fireEvent.mouseDown(link),
+    },
+    {
+      activation: 'Enter',
+      triggerEvent: 'CLICK' as const,
+      activate: (link: HTMLElement) => fireEvent.click(link, { detail: 0 }),
+    },
+    {
+      activation: 'Space',
+      triggerEvent: 'CLICK' as const,
+      activate: (link: HTMLElement) => fireEvent.click(link, { detail: 0 }),
+    },
+  ])(
+    'uses a custom Creator List record-show handler without navigation on $activation',
+    ({ triggerEvent, activate }) => {
+      render(
+        <MemoryRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          initialEntries={['/objects/creator-lists']}
+        >
+          <RecordChip
+            objectNameSingular="creatorList"
+            record={{ id: 'list-id' } as never}
+            to="/objects/creator-lists/list-id"
+            triggerEvent={triggerEvent}
+            onClick={openGenericRecordInSidePanel}
+          />
+          <CurrentLocation />
+        </MemoryRouter>,
+      );
+
+      activate(screen.getByRole('link', { name: /Creator List/ }));
+
+      expect(openGenericRecordInSidePanel).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('status')).toHaveTextContent(
+        '/objects/creator-lists',
+      );
+    },
+  );
+
+  it.each([
     ['CLICK', 'click'],
     ['MOUSE_DOWN', 'mouseDown'],
   ] as const)(

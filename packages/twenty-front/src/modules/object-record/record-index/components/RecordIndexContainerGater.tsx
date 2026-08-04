@@ -31,7 +31,15 @@ const StyledIndexContainer = styled.div`
   width: 100%;
 `;
 
-export const RecordIndexContainerGater = () => {
+export type RecordIndexContainerGaterProps = {
+  indexIdentifierUrl?: (recordId: string) => string;
+  onOpenRecordFromIndexView?: (recordId: string) => void;
+};
+
+export const RecordIndexContainerGater = ({
+  indexIdentifierUrl: indexIdentifierUrlOverride,
+  onOpenRecordFromIndexView,
+}: RecordIndexContainerGaterProps) => {
   const store = useStore();
 
   const { recordIndexId, objectMetadataItem } =
@@ -42,9 +50,10 @@ export const RecordIndexContainerGater = () => {
     store.set(lastShowPageRecordIdState.atom, null);
   }, [store]);
 
-  const { indexIdentifierUrl } = useHandleIndexIdentifierClick({
-    objectMetadataItem,
-  });
+  const { indexIdentifierUrl: defaultIndexIdentifierUrl } =
+    useHandleIndexIdentifierClick({
+      objectMetadataItem,
+    });
 
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
   const objectPermissions = getObjectPermissionsForObject(
@@ -75,7 +84,9 @@ export const RecordIndexContainerGater = () => {
           objectNameSingular: objectMetadataItem.nameSingular,
           objectMetadataItem,
           onIndexRecordsLoaded: handleIndexRecordsLoaded,
-          indexIdentifierUrl,
+          indexIdentifierUrl:
+            indexIdentifierUrlOverride ?? defaultIndexIdentifierUrl,
+          onOpenRecordFromIndexView,
           recordFieldByFieldMetadataItemId,
           labelIdentifierFieldMetadataItem,
           fieldMetadataItemByFieldMetadataItemId,

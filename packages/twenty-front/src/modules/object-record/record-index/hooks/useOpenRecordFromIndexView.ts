@@ -20,7 +20,8 @@ import { useNavigateApp } from '~/hooks/useNavigateApp';
 export const useOpenRecordFromIndexView = () => {
   const { recordIndexId } = useRecordIndexContextOrThrow();
 
-  const { objectNameSingular } = useRecordIndexContextOrThrow();
+  const { objectNameSingular, onOpenRecordFromIndexView } =
+    useRecordIndexContextOrThrow();
 
   const navigate = useNavigateApp();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
@@ -48,6 +49,11 @@ export const useOpenRecordFromIndexView = () => {
 
   const openRecordFromIndexView = useCallback(
     ({ recordId }: { recordId: string }) => {
+      if (onOpenRecordFromIndexView) {
+        onOpenRecordFromIndexView(recordId);
+        return;
+      }
+
       const recordIndexOpenRecordIn = store.get(
         recordIndexOpenRecordInState.atom,
       );
@@ -106,6 +112,7 @@ export const useOpenRecordFromIndexView = () => {
       isMobile,
       closeSidePanelMenu,
       store,
+      onOpenRecordFromIndexView,
     ],
   );
 
