@@ -18,7 +18,7 @@ import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { useOpenCreateViewDropdown } from '@/views/hooks/useOpenCreateViewDropown';
 import { viewsFromObjectMetadataItemFamilySelector } from '@/views/states/selectors/viewsFromObjectMetadataItemFamilySelector';
 import { ViewPickerOptionDropdown } from '@/views/view-picker/components/ViewPickerOptionDropdown';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { viewPickerReferenceViewIdComponentState } from '@/views/view-picker/states/viewPickerReferenceViewIdComponentState';
 import { useLingui } from '@lingui/react/macro';
@@ -32,7 +32,13 @@ const StyledBoldDropdownMenuItemsContainerWrapper = styled.div`
   font-weight: ${themeCssVariables.font.weight.regular};
 `;
 
-export const ViewPickerListContent = () => {
+type ViewPickerListContentProps = {
+  onViewChange?: (viewId: string) => void;
+};
+
+export const ViewPickerListContent = ({
+  onViewChange,
+}: ViewPickerListContentProps) => {
   const { t } = useLingui();
 
   const { objectMetadataItem } = useContextStoreObjectMetadataItemOrThrow();
@@ -67,10 +73,16 @@ export const ViewPickerListContent = () => {
   const { changeView } = useChangeView();
 
   const { closeDropdown } = useCloseDropdown();
+  const { viewPickerDropdownId } = useViewBarControlIds();
 
   const handleViewSelect = (viewId: string) => {
-    changeView(viewId);
-    closeDropdown(VIEW_PICKER_DROPDOWN_ID);
+    if (onViewChange) {
+      onViewChange(viewId);
+    } else {
+      changeView(viewId);
+    }
+
+    closeDropdown(viewPickerDropdownId);
   };
 
   const { openCreateViewDropdown } = useOpenCreateViewDropdown();

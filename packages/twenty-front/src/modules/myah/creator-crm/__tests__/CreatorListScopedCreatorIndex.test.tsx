@@ -20,21 +20,32 @@ const ScopedBulkActionsContextValue = () => {
 const mockRecordIndexSurface = jest.fn(
   ({
     contextStoreInstanceId,
+    indexIdentifierUrl,
     initialQueryOnlyRecordFilters,
+    onViewChange,
+    viewId,
   }: {
     contextStoreInstanceId: string;
+    indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
+    onViewChange?: (viewId: string) => void;
+    viewId: string;
   }) => (
     <div
       data-context-store-id={contextStoreInstanceId}
       data-testid="record-index-surface"
     >
-      {`Rows for ${initialQueryOnlyRecordFilters[0]?.value}`}
+      {`Rows for ${initialQueryOnlyRecordFilters[0]?.value} in ${viewId}`}
+      <output data-testid="creator-show-url">
+        {indexIdentifierUrl('creator-1')}
+      </output>
+      <button onClick={() => onViewChange?.('creator-secondary-view')}>
+        Switch Creator view
+      </button>
       <ScopedBulkActionsContextValue />
     </div>
   ),
 );
-
 
 jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
   useObjectMetadataItems: () => ({
@@ -79,7 +90,10 @@ jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
 jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
   RecordIndexSurface: (props: {
     contextStoreInstanceId: string;
+    indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
+    onViewChange?: (viewId: string) => void;
+    viewId: string;
   }) => mockRecordIndexSurface(props),
 }));
 
@@ -87,10 +101,14 @@ jest.mock('@/views/hooks/useViewOrDefaultView', () => ({
   useViewOrDefaultView: jest.fn(),
 }));
 
-
 const listResponses = new Map<
   string,
-  { error?: Error; loading: boolean; record?: { id: string; name: string } }
+  {
+    error?: Error;
+    loading: boolean;
+    record?: { id: string; name: string };
+    refetch?: jest.Mock;
+  }
 >();
 
 const resolveCreatorList = (id: string, name: string) => {
@@ -118,26 +136,39 @@ describe('CreatorListScopedCreatorIndex', () => {
   it('withholds the native Creator surface until List scope and default view resolve', () => {
     listResponses.set('list-a', { loading: true });
     const { rerender } = render(
-      <CreatorListScopedCreatorIndex creatorListId="list-a" onClose={jest.fn()} />,
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
     );
 
     expect(screen.getByText('Loading Creator List…')).toBeVisible();
-    expect(screen.queryByTestId('record-index-surface')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('record-index-surface'),
+    ).not.toBeInTheDocument();
 
     resolveCreatorList('list-a', 'List A');
     (useViewOrDefaultView as jest.Mock).mockReturnValue({ view: undefined });
     rerender(
-      <CreatorListScopedCreatorIndex creatorListId="list-a" onClose={jest.fn()} />,
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
     );
 
     expect(screen.getByText('Loading Creator view…')).toBeVisible();
-    expect(screen.queryByTestId('record-index-surface')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('record-index-surface'),
+    ).not.toBeInTheDocument();
 
     (useViewOrDefaultView as jest.Mock).mockReturnValue({
       view: { id: 'creator-default-view' },
     });
     rerender(
-      <CreatorListScopedCreatorIndex creatorListId="list-a" onClose={jest.fn()} />,
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
     );
 
     expect(screen.getByRole('heading', { name: 'List: List A' })).toBeVisible();
@@ -149,8 +180,7 @@ describe('CreatorListScopedCreatorIndex', () => {
       initialQueryOnlyRecordFilters: [
         {
           fieldMetadataId: 'creator-list-memberships',
-          relationTargetFieldMetadataId:
-            'creator-list-member-creator-list',
+          relationTargetFieldMetadataId: 'creator-list-member-creator-list',
           value: 'list-a',
         },
       ],
@@ -163,6 +193,48 @@ describe('CreatorListScopedCreatorIndex', () => {
     expect(screen.getByTestId('scoped-bulk-actions-context')).toHaveTextContent(
       'list-a',
     );
+  });
+  it('changes only the scoped Creator view when its native picker selects a view', () => {
+    resolveCreatorList('list-a', 'List A');
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Switch Creator view' }),
+    );
+
+    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+      contextStoreInstanceId: 'creator-list-pane-list-a',
+      viewId: 'creator-secondary-view',
+    });
+    expect(screen.getByTestId('creator-show-url')).toHaveTextContent(
+      'viewId=creator-secondary-view',
+    );
+  });
+
+  it('retries a failed scoped Creator List lookup', () => {
+    const refetch = jest.fn();
+    listResponses.set('list-a', {
+      error: new Error('List request failed'),
+      loading: false,
+      refetch,
+    });
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it.each([

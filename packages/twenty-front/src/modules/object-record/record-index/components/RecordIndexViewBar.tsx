@@ -15,11 +15,11 @@ type RecordIndexViewBarProps = {
 export const RecordIndexViewBar = ({
   recordIndexViewTypeOverride,
 }: RecordIndexViewBarProps) => {
-  const defaultRecordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
-  const recordIndexViewType =
-    recordIndexViewTypeOverride ?? defaultRecordIndexViewType;
+  const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+  const resolvedRecordIndexViewType =
+    recordIndexViewTypeOverride ?? recordIndexViewType;
 
-  const { objectNamePlural, recordIndexId, objectMetadataItem } =
+  const { objectNamePlural, recordIndexId, objectMetadataItem, onViewChange } =
     useRecordIndexContextOrThrow();
 
   const { hasCurrentViewNonReadableFields } =
@@ -30,11 +30,12 @@ export const RecordIndexViewBar = ({
       <ViewBar
         isReadOnly={hasCurrentViewNonReadableFields}
         viewBarId={recordIndexId}
+        onViewChange={onViewChange}
         optionsDropdownButton={
           <ObjectOptionsDropdown
             recordIndexId={recordIndexId}
             objectMetadataItem={objectMetadataItem}
-            viewType={recordIndexViewType ?? ViewType.TABLE}
+            viewType={resolvedRecordIndexViewType ?? ViewType.TABLE}
           />
         }
       />

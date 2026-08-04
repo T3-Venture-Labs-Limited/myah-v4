@@ -46,6 +46,7 @@ export type RecordIndexSurfaceProps = {
   viewId: string;
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+  onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
 };
 
@@ -85,6 +86,7 @@ const RecordIndexSurfaceInstance = ({
   viewId,
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
+  onViewChange,
   initialQueryOnlyRecordFilters = [],
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
@@ -150,6 +152,7 @@ const RecordIndexSurfaceInstance = ({
             onIndexRecordsLoaded: handleIndexRecordsLoaded,
             indexIdentifierUrl,
             onOpenRecordFromIndexView,
+            onViewChange,
             recordFieldByFieldMetadataItemId,
             labelIdentifierFieldMetadataItem,
             fieldMetadataItemByFieldMetadataItemId,
@@ -234,6 +237,7 @@ export const RecordIndexSurface = ({
   viewId,
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
+  onViewChange,
   initialQueryOnlyRecordFilters,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -257,6 +261,7 @@ export const RecordIndexSurface = ({
       viewId={viewId}
       indexIdentifierUrl={indexIdentifierUrl}
       onOpenRecordFromIndexView={onOpenRecordFromIndexView}
+      onViewChange={onViewChange}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
     />
   );

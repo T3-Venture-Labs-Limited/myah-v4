@@ -1,9 +1,10 @@
 import { useRecordTableRowFocusHotkeys } from '@/object-record/record-table/hooks/useRecordTableRowFocusHotkeys';
-import { PageFocusId } from '@/types/PageFocusId';
+import { useRecordIndexFocusId } from '@/object-record/record-index/hooks/useRecordIndexFocusId';
 
 export const RecordTableBodyFocusKeyboardEffect = () => {
+  const recordIndexFocusId = useRecordIndexFocusId();
   useRecordTableRowFocusHotkeys({
-    focusId: PageFocusId.RecordIndex,
+    focusId: recordIndexFocusId,
   });
 
   return null;

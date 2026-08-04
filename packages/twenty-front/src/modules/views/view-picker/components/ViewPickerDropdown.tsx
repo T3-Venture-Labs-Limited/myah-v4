@@ -13,7 +13,7 @@ import { ViewPickerContentCreateMode } from '@/views/view-picker/components/View
 import { ViewPickerContentEditMode } from '@/views/view-picker/components/ViewPickerContentEditMode';
 import { ViewPickerContentEffect } from '@/views/view-picker/components/ViewPickerContentEffect';
 import { ViewPickerListContent } from '@/views/view-picker/components/ViewPickerListContent';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useUpdateViewFromCurrentState } from '@/views/view-picker/hooks/useUpdateViewFromCurrentState';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { isDefined } from 'twenty-shared/utils';
@@ -53,9 +53,16 @@ const StyledViewName = styled.span`
   }
 `;
 
-export const ViewPickerDropdown = () => {
+type ViewPickerDropdownProps = {
+  onViewChange?: (viewId: string) => void;
+};
+
+export const ViewPickerDropdown = ({
+  onViewChange,
+}: ViewPickerDropdownProps) => {
   const { theme } = useContext(ThemeContext);
   const { recordIndexId } = useRecordIndexContextOrThrow();
+  const { viewPickerDropdownId } = useViewBarControlIds();
   const recordIndexContextualViewName = useAtomComponentStateValue(
     recordIndexContextualViewNameComponentState,
     recordIndexId,
@@ -70,7 +77,7 @@ export const ViewPickerDropdown = () => {
 
   const isDropdownOpen = useAtomComponentStateValue(
     isDropdownOpenComponentState,
-    VIEW_PICKER_DROPDOWN_ID,
+    viewPickerDropdownId,
   );
 
   const { viewPickerMode, setViewPickerMode } = useViewPickerMode();
@@ -87,7 +94,7 @@ export const ViewPickerDropdown = () => {
 
   return (
     <Dropdown
-      dropdownId={VIEW_PICKER_DROPDOWN_ID}
+      dropdownId={viewPickerDropdownId}
       dropdownOffset={{ x: 0, y: 8 }}
       dropdownPlacement="bottom-start"
       onClickOutside={handleClickOutside}
@@ -118,7 +125,7 @@ export const ViewPickerDropdown = () => {
       dropdownComponents={(() => {
         switch (viewPickerMode) {
           case 'list':
-            return <ViewPickerListContent />;
+            return <ViewPickerListContent onViewChange={onViewChange} />;
           case 'create-empty':
           case 'create-from-current':
             return (

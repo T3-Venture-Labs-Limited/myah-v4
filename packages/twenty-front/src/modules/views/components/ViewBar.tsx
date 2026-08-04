@@ -9,7 +9,6 @@ import { ViewBarPageTitle } from '@/views/components/ViewBarPageTitle';
 import { ViewPickerDropdown } from '@/views/view-picker/components/ViewPickerDropdown';
 
 import { ObjectFilterDropdownComponentInstanceContext } from '@/object-record/object-filter-dropdown/states/contexts/ObjectFilterDropdownComponentInstanceContext';
-import { VIEW_SORT_DROPDOWN_ID } from '@/object-record/object-sort-dropdown/constants/ViewSortDropdownId';
 import { ObjectSortDropdownComponentInstanceContext } from '@/object-record/object-sort-dropdown/states/context/ObjectSortDropdownComponentInstanceContext';
 import { QueryParamsCleanupEffect } from '@/views/components/QueryParamsCleanupEffect';
 import { ViewBarAnyFieldFilterEffect } from '@/views/components/ViewBarAnyFieldFilterEffect';
@@ -18,7 +17,10 @@ import { ViewBarRecordFieldEffect } from '@/views/components/ViewBarRecordFieldE
 import { ViewBarRecordFilterEffect } from '@/views/components/ViewBarRecordFilterEffect';
 import { ViewBarRecordFilterGroupEffect } from '@/views/components/ViewBarRecordFilterGroupEffect';
 import { ViewBarRecordSortEffect } from '@/views/components/ViewBarRecordSortEffect';
-import { ViewBarFilterDropdownIds } from '@/views/constants/ViewBarFilterDropdownIds';
+import {
+  getViewBarControlIds,
+  ViewBarControlIdsProvider,
+} from '@/views/contexts/ViewBarControlIdsContext';
 import { UpdateViewButtonGroup } from './UpdateViewButtonGroup';
 import { ViewBarDetails } from './ViewBarDetails';
 
@@ -27,6 +29,7 @@ type ViewBarProps = {
   className?: string;
   optionsDropdownButton: ReactNode;
   isReadOnly?: boolean;
+  onViewChange?: (viewId: string) => void;
 };
 
 export const ViewBar = ({
@@ -34,6 +37,7 @@ export const ViewBar = ({
   className,
   optionsDropdownButton,
   isReadOnly = false,
+  onViewChange,
 }: ViewBarProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
 
@@ -41,48 +45,54 @@ export const ViewBar = ({
     return;
   }
 
-  if (isReadOnly) {
-    return (
-      <TopBar className={className} leftComponent={<ViewPickerDropdown />} />
-    );
-  }
+  const { filterDropdownId, viewSortDropdownId } =
+    getViewBarControlIds(viewBarId);
 
   return (
-    <ObjectSortDropdownComponentInstanceContext.Provider
-      value={{ instanceId: VIEW_SORT_DROPDOWN_ID }}
-    >
-      <ViewBarRecordFilterGroupEffect />
-      <ViewBarAnyFieldFilterEffect />
-      <ViewBarRecordFieldEffect />
-      <ViewBarRecordFilterEffect />
-      <ViewBarRecordSortEffect />
-      <QueryParamsFiltersEffect />
-      <QueryParamsSortsEffect />
-      <QueryParamsCleanupEffect />
-      <ViewBarPageTitle />
-      <TopBar
-        className={className}
-        leftComponent={<ViewPickerDropdown />}
-        rightComponent={
-          <>
-            <ObjectFilterDropdownComponentInstanceContext.Provider
-              value={{ instanceId: ViewBarFilterDropdownIds.MAIN }}
-            >
-              <ViewBarFilterDropdown />
-            </ObjectFilterDropdownComponentInstanceContext.Provider>
-            <ObjectSortDropdownButton />
-            {optionsDropdownButton}
-          </>
-        }
-        bottomComponent={
-          <ViewBarDetails
-            hasFilterButton
-            viewBarId={viewBarId}
-            objectNamePlural={objectNamePlural}
-            rightComponent={<UpdateViewButtonGroup />}
+    <ViewBarControlIdsProvider viewBarId={viewBarId}>
+      {isReadOnly ? (
+        <TopBar
+          className={className}
+          leftComponent={<ViewPickerDropdown onViewChange={onViewChange} />}
+        />
+      ) : (
+        <ObjectSortDropdownComponentInstanceContext.Provider
+          value={{ instanceId: viewSortDropdownId }}
+        >
+          <ViewBarRecordFilterGroupEffect />
+          <ViewBarAnyFieldFilterEffect />
+          <ViewBarRecordFieldEffect />
+          <ViewBarRecordFilterEffect />
+          <ViewBarRecordSortEffect />
+          <QueryParamsFiltersEffect />
+          <QueryParamsSortsEffect />
+          <QueryParamsCleanupEffect />
+          <ViewBarPageTitle />
+          <TopBar
+            className={className}
+            leftComponent={<ViewPickerDropdown onViewChange={onViewChange} />}
+            rightComponent={
+              <>
+                <ObjectFilterDropdownComponentInstanceContext.Provider
+                  value={{ instanceId: filterDropdownId }}
+                >
+                  <ViewBarFilterDropdown />
+                </ObjectFilterDropdownComponentInstanceContext.Provider>
+                <ObjectSortDropdownButton />
+                {optionsDropdownButton}
+              </>
+            }
+            bottomComponent={
+              <ViewBarDetails
+                hasFilterButton
+                viewBarId={viewBarId}
+                objectNamePlural={objectNamePlural}
+                rightComponent={<UpdateViewButtonGroup />}
+              />
+            }
           />
-        }
-      />
-    </ObjectSortDropdownComponentInstanceContext.Provider>
+        </ObjectSortDropdownComponentInstanceContext.Provider>
+      )}
+    </ViewBarControlIdsProvider>
   );
 };

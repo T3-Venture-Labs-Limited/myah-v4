@@ -21,7 +21,7 @@ import { ViewPickerIconAndNameContainer } from '@/views/view-picker/components/V
 import { ViewPickerSaveButtonContainer } from '@/views/view-picker/components/ViewPickerSaveButtonContainer';
 import { ViewPickerSelectContainer } from '@/views/view-picker/components/ViewPickerSelectContainer';
 import { VIEW_PICKER_CALENDAR_FIELD_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerCalendarFieldDropdownId';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { VIEW_PICKER_KANBAN_FIELD_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerKanbanFieldDropdownId';
 import { VIEW_PICKER_TYPE_SELECT_OPTIONS } from '@/views/view-picker/constants/ViewPickerTypeSelectOptions';
 import { VIEW_PICKER_VIEW_TYPE_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerViewTypeDropdownId';
@@ -51,6 +51,7 @@ const StyledFieldAvailableContainer = styled.div`
 
 export const ViewPickerContentCreateMode = () => {
   const { t } = useLingui();
+  const { viewPickerDropdownId } = useViewBarControlIds();
   const { viewPickerMode, setViewPickerMode } = useViewPickerMode();
   const [hasManuallySelectedIcon, setHasManuallySelectedIcon] = useState(false);
 
@@ -112,7 +113,7 @@ export const ViewPickerContentCreateMode = () => {
 
       await createViewFromCurrentState();
     },
-    focusId: VIEW_PICKER_DROPDOWN_ID,
+    focusId: viewPickerDropdownId,
     dependencies: [
       viewPickerIsPersisting,
       createViewFromCurrentState,

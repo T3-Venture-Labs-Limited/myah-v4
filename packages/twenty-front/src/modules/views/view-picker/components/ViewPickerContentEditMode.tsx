@@ -14,7 +14,7 @@ import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSe
 import { ViewPickerEditButton } from '@/views/view-picker/components/ViewPickerEditButton';
 import { ViewPickerIconAndNameContainer } from '@/views/view-picker/components/ViewPickerIconAndNameContainer';
 import { ViewPickerSaveButtonContainer } from '@/views/view-picker/components/ViewPickerSaveButtonContainer';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useUpdateViewFromCurrentState } from '@/views/view-picker/hooks/useUpdateViewFromCurrentState';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { viewPickerInputNameComponentState } from '@/views/view-picker/states/viewPickerInputNameComponentState';
@@ -25,6 +25,7 @@ import { t } from '@lingui/core/macro';
 import { IconChevronLeft } from 'twenty-ui/icon';
 
 export const ViewPickerContentEditMode = () => {
+  const { viewPickerDropdownId } = useViewBarControlIds();
   const { setViewPickerMode } = useViewPickerMode();
 
   const [viewPickerInputName, setViewPickerInputName] = useAtomComponentState(
@@ -51,7 +52,7 @@ export const ViewPickerContentEditMode = () => {
 
       await updateViewFromCurrentState();
     },
-    focusId: VIEW_PICKER_DROPDOWN_ID,
+    focusId: viewPickerDropdownId,
     dependencies: [viewPickerIsPersisting, updateViewFromCurrentState],
   });
 

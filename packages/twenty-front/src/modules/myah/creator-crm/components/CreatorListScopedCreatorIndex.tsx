@@ -8,9 +8,10 @@ import { type RecordFilter } from '@/object-record/record-filter/types/RecordFil
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { AppPath, ViewFilterOperand } from 'twenty-shared/types';
 import { getAppPath } from 'twenty-shared/utils';
+import { IconRefresh } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -71,13 +72,23 @@ export const CreatorListScopedCreatorIndex = ({
   const { view: defaultCreatorView } = useViewOrDefaultView({
     objectMetadataItemId: creatorObjectMetadataItem?.id ?? '',
   });
+  const [selectedCreatorView, setSelectedCreatorView] = useState<
+    { creatorListId: string; viewId: string } | undefined
+  >();
+  const selectedCreatorViewId =
+    selectedCreatorView?.creatorListId === creatorListId
+      ? selectedCreatorView.viewId
+      : defaultCreatorView?.id;
   const creatorListContext = useCreatorListContextFromId(creatorListId);
-  const { loading: isCreatorListLoading, error: creatorListError } =
-    useFindOneRecord({
-      objectNameSingular: 'creatorList',
-      objectRecordId: creatorListId,
-      recordGqlFields: { id: true, name: true },
-    });
+  const {
+    loading: isCreatorListLoading,
+    error: creatorListError,
+    refetch: refetchCreatorList,
+  } = useFindOneRecord({
+    objectNameSingular: 'creatorList',
+    objectRecordId: creatorListId,
+    recordGqlFields: { id: true, name: true },
+  });
   const creatorListRelationFilter = useMemo<RecordFilter | undefined>(() => {
     if (!creatorListContext) {
       return undefined;
@@ -104,9 +115,16 @@ export const CreatorListScopedCreatorIndex = ({
           objectNameSingular: 'creator',
           objectRecordId: creatorId,
         },
-        { viewId: defaultCreatorView?.id },
+        { viewId: selectedCreatorViewId },
       ),
-    [defaultCreatorView?.id],
+    [selectedCreatorViewId],
+  );
+
+  const handleCreatorViewChange = useCallback(
+    (viewId: string) => {
+      setSelectedCreatorView({ creatorListId, viewId });
+    },
+    [creatorListId],
   );
 
   const scopeContent =
@@ -123,10 +141,19 @@ export const CreatorListScopedCreatorIndex = ({
     ) : isCreatorListLoading ? (
       <StyledScopeState>{t`Loading Creator List…`}</StyledScopeState>
     ) : creatorListError ? (
-      <StyledScopeState>{t`Unable to load Creator List.`}</StyledScopeState>
+      <StyledScopeState>
+        {t`Unable to load Creator List.`}
+        <Button
+          Icon={IconRefresh}
+          ariaLabel={t`Retry`}
+          onClick={() => void refetchCreatorList()}
+          title={t`Retry`}
+          variant="secondary"
+        />
+      </StyledScopeState>
     ) : !creatorListContext || !creatorListRelationFilter ? (
       <StyledScopeState>{t`Creator List is unavailable.`}</StyledScopeState>
-    ) : !defaultCreatorView ? (
+    ) : !selectedCreatorViewId ? (
       <StyledScopeState>{t`Loading Creator view…`}</StyledScopeState>
     ) : (
       <CreatorListBulkActionsContext.Provider value={creatorListContext}>
@@ -134,7 +161,8 @@ export const CreatorListScopedCreatorIndex = ({
           key={creatorListId}
           contextStoreInstanceId={`creator-list-pane-${creatorListId}`}
           objectNameSingular="creator"
-          viewId={defaultCreatorView.id}
+          viewId={selectedCreatorViewId}
+          onViewChange={handleCreatorViewChange}
           indexIdentifierUrl={creatorShowUrl}
           initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
         />
