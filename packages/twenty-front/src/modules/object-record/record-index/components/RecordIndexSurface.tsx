@@ -46,6 +46,7 @@ export type RecordIndexSurfaceProps = {
   initialQueryOnlyRecordFilters?: RecordFilter[];
 };
 
+
 type RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffectProps = {
   initialQueryOnlyRecordFilters: RecordFilter[];
   recordIndexId: string;
@@ -93,7 +94,9 @@ const RecordIndexSurfaceInstance = ({
   );
   const recordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
     objectMetadataItem.namePlural,
-    `${viewId}-${contextStoreInstanceId}`,
+    contextStoreInstanceId === MAIN_CONTEXT_STORE_INSTANCE_ID
+      ? viewId
+      : `${viewId}-${contextStoreInstanceId}`,
   );
   const isIsolatedSurface =
     contextStoreInstanceId !== MAIN_CONTEXT_STORE_INSTANCE_ID;
@@ -216,7 +219,9 @@ export const RecordIndexSurface = (props: RecordIndexSurfaceProps) => {
   });
   const recordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
     objectMetadataItem.namePlural,
-    `${props.viewId}-${props.contextStoreInstanceId}`,
+    props.contextStoreInstanceId === MAIN_CONTEXT_STORE_INSTANCE_ID
+      ? props.viewId
+      : `${props.viewId}-${props.contextStoreInstanceId}`,
   );
   const scopeKey = `${recordIndexId}-${JSON.stringify(
     props.initialQueryOnlyRecordFilters ?? [],

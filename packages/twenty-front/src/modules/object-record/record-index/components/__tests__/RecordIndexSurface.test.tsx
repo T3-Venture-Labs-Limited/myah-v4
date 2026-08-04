@@ -327,7 +327,7 @@ describe('RecordIndexSurface', () => {
     ]);
   });
 
-  it('keeps the main context store native view state', async () => {
+  it('retains canonical record-index identity for the main context gater', async () => {
     renderSurface(
       <RecordIndexSurface
         contextStoreInstanceId={MAIN_CONTEXT_STORE_INSTANCE_ID}
@@ -343,11 +343,15 @@ describe('RecordIndexSurface', () => {
 
     expect(mockRecordIndexContainer).toHaveBeenCalledWith(
       [],
-      'creators-creator-default-view-main-context-store',
+      'creators-creator-default-view',
       undefined,
     );
     expect(mockRecordIndexLoad).toHaveBeenCalledWith({
-      recordIndexId: 'creators-creator-default-view-main-context-store',
+      recordIndexId: 'creators-creator-default-view',
+      skipGlobalIndexStates: false,
+    });
+    expect(mockRecordIndexViewFieldsSSESync).toHaveBeenCalledWith({
+      recordIndexId: 'creators-creator-default-view',
       skipGlobalIndexStates: false,
     });
   });
