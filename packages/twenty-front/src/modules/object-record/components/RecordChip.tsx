@@ -144,7 +144,14 @@ export const RecordChip = ({
   return isDefined(onClick) && !shouldFollowLinkOnClick ? (
     <span
       onClickCapture={(event) => {
-        if (triggerEvent !== 'MOUSE_DOWN' || event.detail !== 0) {
+        if (
+          triggerEvent !== 'MOUSE_DOWN' ||
+          event.detail !== 0 ||
+          event.altKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.shiftKey
+        ) {
           return;
         }
 

@@ -212,6 +212,37 @@ describe('RecordChip identifier navigation', () => {
   });
 
   it.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Meta', { metaKey: true }],
+  ] as const)(
+    'leaves a %s modified zero-detail MOUSE_DOWN click native',
+    (_modifier, modifierKeys) => {
+      render(
+        <MemoryRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          initialEntries={['/objects/creator-lists']}
+        >
+          <RecordChip
+            objectNameSingular="creatorList"
+            record={{ id: 'list-id' } as never}
+            to="/objects/creator-lists/list-id"
+            triggerEvent="MOUSE_DOWN"
+            onClick={openGenericRecordInSidePanel}
+          />
+          <CurrentLocation />
+        </MemoryRouter>,
+      );
+
+      const link = screen.getByRole('link', { name: /Creator List/ });
+
+      expect(
+        fireEvent.click(link, { detail: 0, ...modifierKeys }),
+      ).toBe(true);
+      expect(openGenericRecordInSidePanel).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
     ['CLICK', 'click'],
     ['MOUSE_DOWN', 'mouseDown'],
   ] as const)(
