@@ -130,14 +130,14 @@ export const ViewPickerDropdown = ({
           case 'create-from-current':
             return (
               <>
-                <ViewPickerContentCreateMode />
+                <ViewPickerContentCreateMode onViewChange={onViewChange} />
                 <ViewPickerContentEffect />
               </>
             );
           case 'edit':
             return (
               <>
-                <ViewPickerContentEditMode />
+                <ViewPickerContentEditMode onViewChange={onViewChange} />
                 <ViewPickerContentEffect />
               </>
             );

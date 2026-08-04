@@ -24,7 +24,11 @@ import { viewPickerSelectedIconComponentState } from '@/views/view-picker/states
 import { t } from '@lingui/core/macro';
 import { IconChevronLeft } from 'twenty-ui/icon';
 
-export const ViewPickerContentEditMode = () => {
+export const ViewPickerContentEditMode = ({
+  onViewChange,
+}: {
+  onViewChange?: (viewId: string) => void;
+}) => {
   const { viewPickerDropdownId } = useViewBarControlIds();
   const { setViewPickerMode } = useViewPickerMode();
 
@@ -98,7 +102,7 @@ export const ViewPickerContentEditMode = () => {
       <DropdownMenuSeparator />
       <DropdownMenuItemsContainer scrollable={false}>
         <ViewPickerSaveButtonContainer>
-          <ViewPickerEditButton />
+          <ViewPickerEditButton onViewChange={onViewChange} />
         </ViewPickerSaveButtonContainer>
       </DropdownMenuItemsContainer>
     </DropdownContent>

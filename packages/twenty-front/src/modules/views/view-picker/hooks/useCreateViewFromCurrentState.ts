@@ -16,7 +16,9 @@ import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
-export const useCreateViewFromCurrentState = () => {
+export const useCreateViewFromCurrentState = (
+  onViewChange?: (viewId: string) => void,
+) => {
   const { closeAndResetViewPicker } = useCloseAndResetViewPicker();
 
   const viewPickerInputNameCallbackState = useAtomComponentStateCallbackState(
@@ -56,7 +58,7 @@ export const useCreateViewFromCurrentState = () => {
   );
 
   const { createViewFromCurrentView } = useCreateViewFromCurrentView();
-  const { changeView } = useChangeView();
+  const { changeView } = useChangeView(onViewChange);
 
   const store = useStore();
 

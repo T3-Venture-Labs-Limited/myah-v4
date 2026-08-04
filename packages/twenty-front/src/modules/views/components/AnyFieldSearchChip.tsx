@@ -7,7 +7,8 @@ import { useLingui } from '@lingui/react/macro';
 import { IconFilter } from 'twenty-ui/icon';
 
 export const AnyFieldSearchChip = () => {
-  const { advancedFilterDropdownId } = useViewBarControlIds();
+  const { advancedFilterDropdownId, anyFieldSearchDropdownId } =
+    useViewBarControlIds();
   const { t } = useLingui();
 
   const { closeDropdown } = useCloseDropdown();
@@ -17,7 +18,7 @@ export const AnyFieldSearchChip = () => {
   );
 
   const handleRemoveClick = () => {
-    closeDropdown();
+    closeDropdown(anyFieldSearchDropdownId);
     setAnyFieldFilterValue('');
   };
 

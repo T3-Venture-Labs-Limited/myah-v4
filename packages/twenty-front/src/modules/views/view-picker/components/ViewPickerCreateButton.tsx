@@ -12,7 +12,11 @@ import { viewPickerTypeComponentState } from '@/views/view-picker/states/viewPic
 import { useLingui } from '@lingui/react/macro';
 import { Button } from 'twenty-ui/input';
 
-export const ViewPickerCreateButton = () => {
+export const ViewPickerCreateButton = ({
+  onViewChange,
+}: {
+  onViewChange?: (viewId: string) => void;
+}) => {
   const { t } = useLingui();
   const { availableFieldsForGrouping, navigateToSelectSettings } =
     useGetAvailableFieldsToGroupRecordsBy();
@@ -33,8 +37,12 @@ export const ViewPickerCreateButton = () => {
     viewPickerCalendarFieldMetadataIdComponentState,
   );
 
-  const { createViewFromCurrentState } = useCreateViewFromCurrentState();
-  const { destroyViewFromCurrentState } = useDestroyViewFromCurrentState();
+  const { createViewFromCurrentState } =
+    useCreateViewFromCurrentState(onViewChange);
+  const { destroyViewFromCurrentState } = useDestroyViewFromCurrentState(
+    undefined,
+    onViewChange,
+  );
 
   const handleCreateButtonClick = () => {
     createViewFromCurrentState();

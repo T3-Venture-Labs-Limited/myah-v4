@@ -1,4 +1,3 @@
-import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 import { useUpdateObjectViewOptions } from '@/object-record/object-options-dropdown/hooks/useUpdateObjectViewOptions';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
@@ -24,7 +23,7 @@ import {
 import { MenuItemSelect } from 'twenty-ui/navigation';
 
 export const ObjectOptionsDropdownLayoutOpenInContent = () => {
-  const { onContentChange } = useObjectOptionsDropdown();
+  const { dropdownId, onContentChange } = useObjectOptionsDropdown();
   const recordIndexOpenRecordIn = useAtomStateValue(
     recordIndexOpenRecordInState,
   );
@@ -37,7 +36,7 @@ export const ObjectOptionsDropdownLayoutOpenInContent = () => {
 
   const selectedItemId = useAtomComponentStateValue(
     selectedItemIdComponentState,
-    OBJECT_OPTIONS_DROPDOWN_ID,
+    dropdownId,
   );
 
   const selectableItemIdArray = [
@@ -59,8 +58,8 @@ export const ObjectOptionsDropdownLayoutOpenInContent = () => {
       </DropdownMenuHeader>
       <DropdownMenuItemsContainer>
         <SelectableList
-          selectableListInstanceId={OBJECT_OPTIONS_DROPDOWN_ID}
-          focusId={OBJECT_OPTIONS_DROPDOWN_ID}
+          selectableListInstanceId={dropdownId}
+          focusId={dropdownId}
           selectableItemIdArray={selectableItemIdArray}
         >
           <SelectableListItem

@@ -302,6 +302,7 @@ export const useLoadRecordIndexStates = () => {
         });
 
       syncRecordIndexViewFields(view, objectMetadataItem, {
+        recordIndexId,
         skipGlobalIndexStates,
       });
 

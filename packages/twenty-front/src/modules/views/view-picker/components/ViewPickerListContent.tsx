@@ -70,17 +70,13 @@ export const ViewPickerListContent = ({
   const { setViewPickerMode } = useViewPickerMode();
 
   const { performViewAPIUpdate } = usePerformViewAPIUpdate();
-  const { changeView } = useChangeView();
+  const { changeView } = useChangeView(onViewChange);
 
   const { closeDropdown } = useCloseDropdown();
   const { viewPickerDropdownId } = useViewBarControlIds();
 
   const handleViewSelect = (viewId: string) => {
-    if (onViewChange) {
-      onViewChange(viewId);
-    } else {
-      changeView(viewId);
-    }
+    changeView(viewId);
 
     closeDropdown(viewPickerDropdownId);
   };
@@ -172,6 +168,7 @@ export const ViewPickerListContent = ({
                         isIndexView={isIndexView}
                         isLastView={isLastView}
                         onEdit={handleEditViewButtonClick}
+                        onViewChange={onViewChange}
                         isCurrentView={isCurrentView}
                       />
                     }
@@ -207,6 +204,7 @@ export const ViewPickerListContent = ({
                         isIndexView={isIndexView}
                         isLastView={isLastView}
                         onEdit={handleEditViewButtonClick}
+                        onViewChange={onViewChange}
                         isCurrentView={isCurrentView}
                       />
                     }

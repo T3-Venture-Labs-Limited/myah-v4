@@ -31,17 +31,26 @@ describe('ViewBarControlIdsContext', () => {
       screen.getByTestId('right-controls').textContent ?? '{}',
     );
 
-    expect(leftControlIds.viewPickerDropdownId).not.toBe(
-      rightControlIds.viewPickerDropdownId,
-    );
-    expect(leftControlIds.viewSortDropdownId).not.toBe(
-      rightControlIds.viewSortDropdownId,
-    );
-    expect(leftControlIds.filterDropdownId).not.toBe(
-      rightControlIds.filterDropdownId,
-    );
-    expect(leftControlIds.advancedFilterDropdownId).not.toBe(
-      rightControlIds.advancedFilterDropdownId,
-    );
+    const scopedControlIdKeys = [
+      'advancedFilterDropdownId',
+      'anyFieldSearchDropdownId',
+      'filterDropdownId',
+      'hiddenTableColumnDropdownId',
+      'objectOptionsDropdownId',
+      'recordIndexRemoveSortingModalId',
+      'recordTableClickOutsideListenerId',
+      'updateViewDropdownId',
+      'viewPickerCalendarFieldDropdownId',
+      'viewPickerDropdownId',
+      'viewPickerKanbanFieldDropdownId',
+      'viewPickerViewTypeDropdownId',
+      'viewSortDropdownId',
+    ] as const;
+
+    for (const controlIdKey of scopedControlIdKeys) {
+      expect(leftControlIds[controlIdKey]).not.toBe(
+        rightControlIds[controlIdKey],
+      );
+    }
   });
 });

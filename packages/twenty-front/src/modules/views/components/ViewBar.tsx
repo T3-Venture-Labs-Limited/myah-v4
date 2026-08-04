@@ -17,10 +17,7 @@ import { ViewBarRecordFieldEffect } from '@/views/components/ViewBarRecordFieldE
 import { ViewBarRecordFilterEffect } from '@/views/components/ViewBarRecordFilterEffect';
 import { ViewBarRecordFilterGroupEffect } from '@/views/components/ViewBarRecordFilterGroupEffect';
 import { ViewBarRecordSortEffect } from '@/views/components/ViewBarRecordSortEffect';
-import {
-  getViewBarControlIds,
-  ViewBarControlIdsProvider,
-} from '@/views/contexts/ViewBarControlIdsContext';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { UpdateViewButtonGroup } from './UpdateViewButtonGroup';
 import { ViewBarDetails } from './ViewBarDetails';
 
@@ -41,15 +38,14 @@ export const ViewBar = ({
 }: ViewBarProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
 
+  const { filterDropdownId, viewSortDropdownId } = useViewBarControlIds();
+
   if (!objectNamePlural) {
     return;
   }
 
-  const { filterDropdownId, viewSortDropdownId } =
-    getViewBarControlIds(viewBarId);
-
   return (
-    <ViewBarControlIdsProvider viewBarId={viewBarId}>
+    <>
       {isReadOnly ? (
         <TopBar
           className={className}
@@ -93,6 +89,6 @@ export const ViewBar = ({
           />
         </ObjectSortDropdownComponentInstanceContext.Provider>
       )}
-    </ViewBarControlIdsProvider>
+    </>
   );
 };

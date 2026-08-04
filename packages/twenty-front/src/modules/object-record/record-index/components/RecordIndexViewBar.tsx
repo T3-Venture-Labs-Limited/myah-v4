@@ -34,6 +34,7 @@ export const RecordIndexViewBar = ({
         optionsDropdownButton={
           <ObjectOptionsDropdown
             recordIndexId={recordIndexId}
+            onViewChange={onViewChange}
             objectMetadataItem={objectMetadataItem}
             viewType={resolvedRecordIndexViewType ?? ViewType.TABLE}
           />

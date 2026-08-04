@@ -12,6 +12,7 @@ export type ObjectOptionsDropdownContextValue = {
   onContentChange: (key: ObjectOptionsContentId) => void;
   resetContent: () => void;
   dropdownId: string;
+  onViewChange?: (viewId: string) => void;
   handleRecordGroupOrderChangeWithModal?: OnDragEndResponder;
 };
 

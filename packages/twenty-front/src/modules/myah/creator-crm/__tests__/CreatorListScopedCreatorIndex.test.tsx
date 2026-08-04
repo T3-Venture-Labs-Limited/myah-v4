@@ -6,6 +6,9 @@ import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
 import { FieldMetadataType } from 'twenty-shared/types';
+import { PageFocusId } from '@/types/PageFocusId';
+
+const mockResetFocusStackToRecordIndex = jest.fn();
 
 const ScopedBulkActionsContextValue = () => {
   const creatorListContext = useCreatorListBulkActionsContext();
@@ -96,6 +99,14 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
     viewId: string;
   }) => mockRecordIndexSurface(props),
 }));
+jest.mock(
+  '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex',
+  () => ({
+    useResetFocusStackToRecordIndex: () => ({
+      resetFocusStackToRecordIndex: mockResetFocusStackToRecordIndex,
+    }),
+  }),
+);
 
 jest.mock('@/views/hooks/useViewOrDefaultView', () => ({
   useViewOrDefaultView: jest.fn(),
@@ -235,6 +246,29 @@ describe('CreatorListScopedCreatorIndex', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the focus stack to the main index before closing the scoped pane', () => {
+    resolveCreatorList('list-a', 'List A');
+    const onClose = jest.fn();
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to Creator Lists' }),
+    );
+
+    expect(mockResetFocusStackToRecordIndex).toHaveBeenCalledWith(
+      PageFocusId.RecordIndex,
+    );
+    expect(
+      mockResetFocusStackToRecordIndex.mock.invocationCallOrder[0],
+    ).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 
   it.each([

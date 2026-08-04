@@ -4,8 +4,10 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
+import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
+import { PageFocusId } from '@/types/PageFocusId';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useCallback, useMemo, useState } from 'react';
@@ -79,6 +81,8 @@ export const CreatorListScopedCreatorIndex = ({
     selectedCreatorView?.creatorListId === creatorListId
       ? selectedCreatorView.viewId
       : defaultCreatorView?.id;
+  const { resetFocusStackToRecordIndex } = useResetFocusStackToRecordIndex();
+
   const creatorListContext = useCreatorListContextFromId(creatorListId);
   const {
     loading: isCreatorListLoading,
@@ -126,6 +130,10 @@ export const CreatorListScopedCreatorIndex = ({
     },
     [creatorListId],
   );
+  const handleClose = useCallback(() => {
+    resetFocusStackToRecordIndex(PageFocusId.RecordIndex);
+    onClose();
+  }, [onClose, resetFocusStackToRecordIndex]);
 
   const scopeContent =
     !creatorObjectMetadataItem || !creatorListObjectMetadataItem ? (
@@ -179,7 +187,7 @@ export const CreatorListScopedCreatorIndex = ({
         </StyledScopeTitle>
         <Button
           ariaLabel={t`Back to Creator Lists`}
-          onClick={onClose}
+          onClick={handleClose}
           title={t`Back to Creator Lists`}
           variant="secondary"
         />

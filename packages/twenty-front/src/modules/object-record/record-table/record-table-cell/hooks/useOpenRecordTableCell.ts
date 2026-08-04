@@ -11,7 +11,7 @@ import { useDragSelect } from '@/ui/utilities/drag-select/hooks/useDragSelect';
 import { useClickOutsideListener } from '@/ui/utilities/pointer-event/hooks/useClickOutsideListener';
 import { useOpenFieldInputEditMode } from '@/object-record/record-field/ui/hooks/useOpenFieldInputEditMode';
 import { recordIndexOpenRecordInState } from '@/object-record/record-index/states/recordIndexOpenRecordInState';
-import { RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
+import { getRecordTableClickOutsideListenerId } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
 import { recordTableCellEditModePositionComponentState } from '@/object-record/record-table/states/recordTableCellEditModePositionComponentState';
 import { getDropdownFocusIdForRecordField } from '@/object-record/utils/getDropdownFocusIdForRecordField';
 import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
@@ -97,7 +97,7 @@ export const useOpenRecordTableCell = (recordTableId: string) => {
     }: OpenTableCellArgs) => {
       store.set(
         clickOutsideListenerIsActivatedComponentState.atomFamily({
-          instanceId: RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID,
+          instanceId: getRecordTableClickOutsideListenerId(recordTableId),
         }),
         false,
       );
@@ -202,6 +202,7 @@ export const useOpenRecordTableCell = (recordTableId: string) => {
       openRecordFromIndexView,
       activateRecordTableRow,
       unfocusRecordTableRow,
+      recordTableId,
       store,
     ],
   );
