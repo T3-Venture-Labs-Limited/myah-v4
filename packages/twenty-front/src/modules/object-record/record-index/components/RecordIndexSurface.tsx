@@ -124,13 +124,15 @@ const RecordIndexSurfaceInstance = ({
     <ContextStoreComponentInstanceContext.Provider
       value={{ instanceId: contextStoreInstanceId }}
     >
-      <RecordIndexSurfaceContextStoreInitEffect
-        contextStoreInstanceId={contextStoreInstanceId}
-        objectMetadataItemId={objectMetadataItem.id}
-        viewId={viewId}
-        onInitialized={() => setIsContextStoreInitialized(true)}
-      />
-      {isContextStoreInitialized && (
+      {isIsolatedSurface && (
+        <RecordIndexSurfaceContextStoreInitEffect
+          contextStoreInstanceId={contextStoreInstanceId}
+          objectMetadataItemId={objectMetadataItem.id}
+          viewId={viewId}
+          onInitialized={() => setIsContextStoreInitialized(true)}
+        />
+      )}
+      {(!isIsolatedSurface || isContextStoreInitialized) && (
         <RecordIndexContextProvider
           value={{
             objectPermissionsByObjectMetadataId,
@@ -154,11 +156,13 @@ const RecordIndexSurfaceInstance = ({
             <RecordComponentInstanceContextsWrapper
               componentInstanceId={recordIndexId}
             >
-              <RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect
-                initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
-                recordIndexId={recordIndexId}
-                onInitialized={handleInitialQueryOnlyRecordFiltersInitialized}
-              />
+              {isIsolatedSurface && (
+                <RecordIndexSurfaceInitialQueryOnlyRecordFiltersEffect
+                  initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
+                  recordIndexId={recordIndexId}
+                  onInitialized={handleInitialQueryOnlyRecordFiltersInitialized}
+                />
+              )}
               <CommandMenuComponentInstanceContext.Provider
                 value={{
                   instanceId: getCommandMenuIdFromRecordIndexId(recordIndexId),
@@ -181,7 +185,8 @@ const RecordIndexSurfaceInstance = ({
                     className={RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS}
                   >
                     {objectPermissions.canReadObjectRecords ? (
-                      areInitialQueryOnlyRecordFiltersInitialized && (
+                      (!isIsolatedSurface ||
+                        areInitialQueryOnlyRecordFiltersInitialized) && (
                         <>
                           <RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect />
                           <RecordIndexContainer

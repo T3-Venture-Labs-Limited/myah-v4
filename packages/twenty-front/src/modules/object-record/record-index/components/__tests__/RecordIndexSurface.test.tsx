@@ -23,6 +23,7 @@ const mockRecordIndexLoad = jest.fn();
 const mockRecordIndexViewFieldsSSESync = jest.fn();
 let deferContextStoreInitialization = false;
 let mockInitializeContextStore: (() => void) | undefined;
+const mockQueryOnlyRecordFilterWrites = jest.fn();
 
 const creatorObjectMetadataItem = {
   id: 'creator-object',
@@ -36,6 +37,37 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
     objectMetadataItem: creatorObjectMetadataItem,
   }),
 }));
+
+jest.mock(
+  '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState',
+  () => {
+    const actual = jest.requireActual(
+      '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState',
+    );
+
+    return {
+      ...actual,
+      useSetAtomComponentState: (
+        componentState: { key: string },
+        instanceId?: string,
+      ) => {
+        const setValue = actual.useSetAtomComponentState(
+          componentState,
+          instanceId,
+        );
+
+        if (componentState.key !== 'queryOnlyRecordFiltersComponentState') {
+          return setValue;
+        }
+
+        return (value: unknown) => {
+          mockQueryOnlyRecordFilterWrites({ instanceId, value });
+          setValue(value);
+        };
+      },
+    };
+  },
+);
 
 jest.mock('@/object-record/hooks/useObjectPermissions', () => ({
   useObjectPermissions: () => ({
@@ -242,6 +274,7 @@ describe('RecordIndexSurface', () => {
     mockRecordIndexConfigurations.length = 0;
     mockRecordIndexLoad.mockClear();
     mockRecordIndexViewFieldsSSESync.mockClear();
+    mockQueryOnlyRecordFilterWrites.mockClear();
     deferContextStoreInitialization = false;
     mockInitializeContextStore = undefined;
   });
@@ -354,6 +387,45 @@ describe('RecordIndexSurface', () => {
       recordIndexId: 'creators-creator-default-view',
       skipGlobalIndexStates: false,
     });
+  });
+
+  it('renders the main context without the isolated initialization gate', () => {
+    deferContextStoreInitialization = true;
+
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId={MAIN_CONTEXT_STORE_INSTANCE_ID}
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+      />,
+    );
+
+    expect(mockRecordIndexContainer).toHaveBeenCalledWith(
+      [],
+      'creators-creator-default-view',
+      undefined,
+    );
+    expect(mockInitializeContextStore).toBeUndefined();
+  });
+
+  it('does not write default query-only filters for the main context', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId={MAIN_CONTEXT_STORE_INSTANCE_ID}
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexContainer).toHaveBeenCalled();
+    });
+
+    await act(async () => {});
+
+    expect(mockQueryOnlyRecordFilterWrites).not.toHaveBeenCalled();
   });
 
   it('withholds context consumers until its context store is initialized', async () => {
