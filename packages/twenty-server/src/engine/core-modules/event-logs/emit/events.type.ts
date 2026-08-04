@@ -31,6 +31,10 @@ import {
   type ImpersonationTrackEvent,
 } from 'src/engine/core-modules/event-logs/emit/events/workspace-event/impersonation/impersonation';
 import {
+  type MANAGED_EMAIL_PERSONAS_PROPOSED_EVENT,
+  type ManagedEmailPersonasProposedTrackEvent,
+} from 'src/engine/core-modules/event-logs/emit/events/workspace-event/managed-email/managed-email-personas-proposed';
+import {
   type SERVER_ADMIN_ACCESS_CHANGED_EVENT,
   type ServerAdminAccessChangedTrackEvent,
 } from 'src/engine/core-modules/event-logs/emit/events/workspace-event/server-admin/server-admin-access-changed';
@@ -64,7 +68,8 @@ export type TrackEventName =
   | typeof USER_SIGNUP_EVENT
   | typeof WORKSPACE_CREATED_EVENT
   | typeof PAYMENT_RECEIVED_EVENT
-  | typeof SERVER_ADMIN_ACCESS_CHANGED_EVENT;
+  | typeof SERVER_ADMIN_ACCESS_CHANGED_EVENT
+  | typeof MANAGED_EMAIL_PERSONAS_PROPOSED_EVENT;
 
 export interface TrackEvents {
   [CUSTOM_DOMAIN_ACTIVATED_EVENT]: CustomDomainActivatedTrackEvent;
@@ -80,6 +85,7 @@ export interface TrackEvents {
   [WORKSPACE_CREATED_EVENT]: WorkspaceCreatedTrackEvent;
   [PAYMENT_RECEIVED_EVENT]: PaymentReceivedTrackEvent;
   [SERVER_ADMIN_ACCESS_CHANGED_EVENT]: ServerAdminAccessChangedTrackEvent;
+  [MANAGED_EMAIL_PERSONAS_PROPOSED_EVENT]: ManagedEmailPersonasProposedTrackEvent;
 }
 
 export type TrackEventProperties<T extends TrackEventName> =
