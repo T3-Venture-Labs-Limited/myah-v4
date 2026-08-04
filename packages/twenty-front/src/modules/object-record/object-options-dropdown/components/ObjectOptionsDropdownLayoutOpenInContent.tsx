@@ -34,6 +34,8 @@ export const ObjectOptionsDropdownLayoutOpenInContent = () => {
     objectMetadataItem.nameSingular,
   );
 
+  const openRecordIn = currentView?.openRecordIn ?? recordIndexOpenRecordIn;
+
   const selectedItemId = useAtomComponentStateValue(
     selectedItemIdComponentState,
     dropdownId,
@@ -77,7 +79,7 @@ export const ObjectOptionsDropdownLayoutOpenInContent = () => {
             <MenuItemSelect
               LeftIcon={IconLayoutSidebarRight}
               text={t`Side Panel`}
-              selected={recordIndexOpenRecordIn === ViewOpenRecordIn.SIDE_PANEL}
+              selected={openRecordIn === ViewOpenRecordIn.SIDE_PANEL}
               focused={selectedItemId === ViewOpenRecordIn.SIDE_PANEL}
               onClick={() => {
                 if (!canOpenInSidePanel) {
@@ -104,9 +106,7 @@ export const ObjectOptionsDropdownLayoutOpenInContent = () => {
             <MenuItemSelect
               LeftIcon={IconLayoutNavbar}
               text={t`Record Page`}
-              selected={
-                recordIndexOpenRecordIn === ViewOpenRecordIn.RECORD_PAGE
-              }
+              selected={openRecordIn === ViewOpenRecordIn.RECORD_PAGE}
               onClick={() =>
                 setAndPersistOpenRecordIn(
                   ViewOpenRecordIn.RECORD_PAGE,

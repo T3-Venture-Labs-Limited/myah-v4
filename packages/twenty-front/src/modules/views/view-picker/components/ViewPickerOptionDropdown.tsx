@@ -135,7 +135,7 @@ export const ViewPickerOptionDropdown = ({
         isIconDisplayedOnHoverOnly={!shouldShowIconAlways}
         RightIcon={getVisibilityIcon()}
         dropdownPlacement="bottom-start"
-        dropdownId={`view-picker-options-${view.id}`}
+        dropdownId={dropdownId}
         selected={isCurrentView}
         dropdownContent={
           <DropdownContent>

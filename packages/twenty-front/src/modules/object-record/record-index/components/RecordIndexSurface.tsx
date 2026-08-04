@@ -21,7 +21,7 @@ import { RecordIndexViewBar } from '@/object-record/record-index/components/Reco
 import { RecordIndexViewFieldsSSESyncEffect } from '@/object-record/record-index/components/RecordIndexViewFieldsSSESyncEffect';
 import { useRecordIndexFieldMetadataDerivedStates } from '@/object-record/record-index/hooks/useRecordIndexFieldMetadataDerivedStates';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
-import { getRecordIndexIdFromObjectNamePluralAndViewId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
+import { getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
 import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS } from '@/ui/utilities/drag-select/constants/RecordIndecDragSelectBoundaryClass';
@@ -99,12 +99,12 @@ const RecordIndexSurfaceInstance = ({
     objectPermissionsByObjectMetadataId,
     objectMetadataItem.id,
   );
-  const recordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
-    objectMetadataItem.namePlural,
-    contextStoreInstanceId === MAIN_CONTEXT_STORE_INSTANCE_ID
-      ? viewId
-      : `${viewId}-${contextStoreInstanceId}`,
-  );
+  const recordIndexId =
+    getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId(
+      objectMetadataItem.namePlural,
+      viewId,
+      contextStoreInstanceId,
+    );
   const isIsolatedSurface =
     contextStoreInstanceId !== MAIN_CONTEXT_STORE_INSTANCE_ID;
   const {
@@ -251,12 +251,12 @@ export const RecordIndexSurface = ({
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
   });
-  const recordIndexId = getRecordIndexIdFromObjectNamePluralAndViewId(
-    objectMetadataItem.namePlural,
-    contextStoreInstanceId === MAIN_CONTEXT_STORE_INSTANCE_ID
-      ? viewId
-      : `${viewId}-${contextStoreInstanceId}`,
-  );
+  const recordIndexId =
+    getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId(
+      objectMetadataItem.namePlural,
+      viewId,
+      contextStoreInstanceId,
+    );
   const scopeKey = `${recordIndexId}-${JSON.stringify(
     initialQueryOnlyRecordFilters ?? [],
   )}`;

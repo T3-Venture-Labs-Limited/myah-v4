@@ -8,6 +8,7 @@ import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/ho
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
 import { PageFocusId } from '@/types/PageFocusId';
+import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useCallback, useMemo, useState } from 'react';
@@ -58,6 +59,7 @@ export const CreatorListScopedCreatorIndex = ({
   creatorListId,
   onClose,
 }: CreatorListScopedCreatorIndexProps) => {
+  const isMobile = useIsMobile();
   const { objectMetadataItems } = useObjectMetadataItems();
   const creatorObjectMetadataItem = objectMetadataItems.find(
     (item) => item.nameSingular === 'creator',
@@ -186,10 +188,11 @@ export const CreatorListScopedCreatorIndex = ({
             : t`Creator List`}
         </StyledScopeTitle>
         <Button
-          ariaLabel={t`Back to Creator Lists`}
+          ariaLabel={
+            isMobile ? t`Back to Creator Lists` : t`Close Creator List`
+          }
           onClick={handleClose}
-          title={t`Back to Creator Lists`}
-          variant="secondary"
+          title={isMobile ? t`Back to Creator Lists` : t`Close Creator List`}
         />
       </StyledScopeHeader>
       {scopeContent}

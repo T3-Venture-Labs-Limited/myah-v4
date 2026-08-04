@@ -7,6 +7,7 @@ import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPe
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { PageFocusId } from '@/types/PageFocusId';
+import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 
 const mockResetFocusStackToRecordIndex = jest.fn();
 
@@ -107,6 +108,9 @@ jest.mock(
     }),
   }),
 );
+jest.mock('@/ui/utilities/responsive/hooks/useIsMobile', () => ({
+  useIsMobile: jest.fn(),
+}));
 
 jest.mock('@/views/hooks/useViewOrDefaultView', () => ({
   useViewOrDefaultView: jest.fn(),
@@ -142,6 +146,7 @@ describe('CreatorListScopedCreatorIndex', () => {
     (useObjectPermissionsForObject as jest.Mock).mockReturnValue({
       canReadObjectRecords: true,
     });
+    (useIsMobile as jest.Mock).mockReturnValue(true);
   });
 
   it('withholds the native Creator surface until List scope and default view resolve', () => {
@@ -270,6 +275,34 @@ describe('CreatorListScopedCreatorIndex', () => {
       mockResetFocusStackToRecordIndex.mock.invocationCallOrder[0],
     ).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
+  it.each([
+    [true, 'Back to Creator Lists'],
+    [false, 'Close Creator List'],
+  ])(
+    'uses the %s-specific scoped pane control while preserving close focus restoration',
+    (isMobile, accessibleName) => {
+      resolveCreatorList('list-a', 'List A');
+      (useIsMobile as jest.Mock).mockReturnValue(isMobile);
+      const onClose = jest.fn();
+
+      render(
+        <CreatorListScopedCreatorIndex
+          creatorListId="list-a"
+          onClose={onClose}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: accessibleName }));
+
+      expect(mockResetFocusStackToRecordIndex).toHaveBeenCalledWith(
+        PageFocusId.RecordIndex,
+      );
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(
+        mockResetFocusStackToRecordIndex.mock.invocationCallOrder.at(-1),
+      ).toBeLessThan(onClose.mock.invocationCallOrder.at(-1) ?? Infinity);
+    },
+  );
 
   it.each([
     ['loading', 'Loading Creator List…'],
