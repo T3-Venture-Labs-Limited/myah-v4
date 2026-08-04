@@ -1,7 +1,10 @@
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { useSearchParams } from 'react-router-dom';
 
-import { useCreatorListContext } from '@/myah/creator-crm/hooks/useCreatorListContext';
+import {
+  useCreatorListContext,
+  useCreatorListContextFromId,
+} from '@/myah/creator-crm/hooks/useCreatorListContext';
 
 import { FieldMetadataType } from 'twenty-shared/types';
 
@@ -77,7 +80,7 @@ describe('useCreatorListContext', () => {
     });
   });
 
-  it('returns the exact List relationship filter target for a contextual Creator view', () => {
+  it('keeps the legacy URL scope when no explicit List ID is supplied', () => {
     const { result } = renderHook(() => useCreatorListContext());
 
     expect(result.current).toEqual({
@@ -91,6 +94,22 @@ describe('useCreatorListContext', () => {
         relationTargetFieldMetadataId: 'creator-list-member-creator-list',
       },
     });
+  });
+
+  it('uses an explicit List ID instead of the legacy URL parameter', async () => {
+    mockUseFindOneRecord.mockReturnValue({
+      record: { id: 'list-from-prop', name: 'A' },
+    });
+
+    const { result } = renderHook(() =>
+      useCreatorListContextFromId('list-from-prop'),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.target).toMatchObject({
+        id: 'list-from-prop',
+      }),
+    );
   });
 
   it.each([

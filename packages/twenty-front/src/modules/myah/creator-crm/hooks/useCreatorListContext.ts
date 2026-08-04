@@ -14,22 +14,25 @@ export type CreatorListContext = {
   };
 };
 
-export const useCreatorListContext = (): CreatorListContext | undefined => {
-  const [searchParams] = useSearchParams();
-  const creatorListId = searchParams.get('creatorListId');
+export const useCreatorListContextFromId = (
+  creatorListId: string | undefined,
+): CreatorListContext | undefined => {
   const { objectMetadataItems } = useObjectMetadataItems();
-  const { objectMetadataItem } = useRecordIndexIdFromCurrentContextStore();
+  const creatorObjectMetadataItem = objectMetadataItems.find(
+    (item) => item.nameSingular === 'creator',
+  );
   const { record: creatorList } = useFindOneRecord({
     objectNameSingular: 'creatorList',
     objectRecordId: creatorListId ?? '',
     recordGqlFields: { id: true, name: true },
-    skip: !creatorListId || objectMetadataItem.nameSingular !== 'creator',
+    skip: !creatorListId,
   });
   const creatorListName = creatorList?.name?.trim();
 
-  const listMembershipsFieldMetadataItem = objectMetadataItem.fields.find(
-    (fieldMetadataItem) => fieldMetadataItem.name === 'listMemberships',
-  );
+  const listMembershipsFieldMetadataItem =
+    creatorObjectMetadataItem?.fields.find(
+      (fieldMetadataItem) => fieldMetadataItem.name === 'listMemberships',
+    );
   const creatorListMemberObjectMetadataItem = objectMetadataItems.find(
     (item) =>
       item.id ===
@@ -42,10 +45,9 @@ export const useCreatorListContext = (): CreatorListContext | undefined => {
 
   return useMemo(() => {
     if (
-      objectMetadataItem.nameSingular !== 'creator' ||
       !creatorListId ||
       !creatorListName ||
-      !listMembershipsFieldMetadataItem ||
+      !listMembershipsFieldMetadataItem?.relation ||
       creatorListFieldMetadataItem?.type !== FieldMetadataType.RELATION
     ) {
       return undefined;
@@ -67,6 +69,23 @@ export const useCreatorListContext = (): CreatorListContext | undefined => {
     creatorListId,
     creatorListName,
     listMembershipsFieldMetadataItem,
-    objectMetadataItem.nameSingular,
   ]);
+};
+
+export const useCreatorListContext = (): CreatorListContext | undefined => {
+  const [searchParams] = useSearchParams();
+  const { objectMetadataItem } = useRecordIndexIdFromCurrentContextStore();
+  const hasCreatorListMembershipRelation =
+    objectMetadataItem.fields.some(
+      (fieldMetadataItem) =>
+        fieldMetadataItem.name === 'listMemberships' &&
+        fieldMetadataItem.relation !== undefined,
+    );
+
+  return useCreatorListContextFromId(
+    objectMetadataItem.nameSingular === 'creator' &&
+      hasCreatorListMembershipRelation
+      ? (searchParams.get('creatorListId') ?? undefined)
+      : undefined,
+  );
 };
