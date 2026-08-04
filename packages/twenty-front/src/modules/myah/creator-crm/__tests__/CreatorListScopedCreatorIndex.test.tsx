@@ -153,6 +153,40 @@ describe('CreatorListScopedCreatorIndex', () => {
     });
   });
 
+  it.each([
+    ['loading', 'Loading Creator List…'],
+    ['error', 'Unable to load Creator List.'],
+    ['forbidden', 'You do not have permission to view Creators.'],
+  ])('keeps Back available while the scoped pane is %s', (state, message) => {
+    const onClose = jest.fn();
+
+    if (state === 'error') {
+      listResponses.set('list-a', {
+        error: new Error('List request failed'),
+        loading: false,
+      });
+    }
+
+    if (state === 'forbidden') {
+      (useObjectPermissionsForObject as jest.Mock).mockReturnValueOnce({
+        canReadObjectRecords: false,
+      });
+    }
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={onClose}
+      />,
+    );
+
+    expect(screen.getByText(message)).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to Creator Lists' }),
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps List B visible when deferred List A resolves after selection changes', () => {
     listResponses.set('list-a', { loading: true });
     listResponses.set('list-b', { loading: true });

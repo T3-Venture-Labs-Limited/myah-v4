@@ -428,3 +428,150 @@ The command exits 2 only with the existing baseline diagnostics: Front Component
 ### Concerns
 
 The strict frontend typecheck retains only the documented unrelated baseline diagnostics. No formatter, linter, Nx, build, browser, push, deploy, or external action was run.
+
+## Modified MOUSE_DOWN click capture repair
+
+### LSP reference evidence
+
+`typescript-language-server` initialized against the workspace TypeScript 5.9.3 and advertised `referencesProvider: true`. Its `textDocument/references` result for `RecordChip` included the component declaration, the focused `RecordChip.test.tsx` call sites, and production consumers including Board/Card, Calendar, field display, relation, activity, and widget chips. This repair changes only the internal capture predicate: no prop contract or caller changed.
+
+### RED
+
+```bash
+cd packages/twenty-front && npx jest src/modules/object-record/components/RecordChip.test.tsx --config=jest.config.mjs
+```
+
+The new Ctrl/Meta zero-detail MOUSE_DOWN click cases failed as expected before the guard: `fireEvent.click` returned `false`, proving capture called `preventDefault`. The two assertions failed while the existing 14 tests passed.
+
+### GREEN
+
+The same focused RecordChip command passed after the guard:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       16 passed, 16 total
+Snapshots:   0 total
+```
+
+Focused Task 1/Task 4 coverage also passed:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 4 passed, 4 total
+Tests:       30 passed, 30 total
+Snapshots:   0 total
+```
+
+The requested strict frontend check was run:
+
+```bash
+npx tsgo -p packages/twenty-front/tsconfig.json --noEmit
+```
+
+It exits 2 with only the documented baseline diagnostics: missing `twenty-front-component-renderer` and cascading Front Components diagnostics; Myah Inbox `MyahInboxContext`; Settings billing `TabButtonProps.role`; SidePanel `MyahInboxContext`; and `RecordIndexPage.test.tsx` TS2556. There is no `RecordChip.tsx` or `RecordChip.test.tsx` diagnostic.
+
+### Changed files
+
+- `packages/twenty-front/src/modules/object-record/components/RecordChip.tsx`
+- `packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx`
+
+### Self-review
+
+- The zero-detail capture path now returns before cancellation or synthetic mousedown for every Alt, Ctrl, Meta, or Shift modified activation. Modified link semantics remain with native `useMouseDownNavigation`; the custom override does not run.
+- The existing unmodified zero-detail click regression still asserts one custom invocation, actual link target, and no navigation. Existing Enter and Space cases retain exact-once behavior, while the no-override MOUSE_DOWN route regression remains covered.
+- No callback contract, caller, routing, workspace, Task 2/3, non-List, data/API/schema, or external behavior changed.
+
+### Commit
+
+`c7b6155f9` — `fix(myah): preserve modified record chip clicks`
+
+### Concerns
+
+The strict frontend check retains only the pre-existing baseline listed above. No formatter, lint, Nx, build, browser, push, deployment, or external action was run.
+
+## Unavailable-state Back and page-test typing repair
+
+### LSP reference evidence
+
+No exported scoped-pane prop or hook signature changed. The scoped pane retains its existing `creatorListId`/`onClose` contract, and the page-test mock stops forwarding arguments instead of declaring a substitute hook signature; therefore no export references required migration.
+
+### RED
+
+Added loading, error, and forbidden scoped-pane regressions, then ran:
+
+```bash
+cd packages/twenty-front && npx jest src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx --config=jest.config.mjs --runInBand
+```
+
+The three new cases failed as expected because each unavailable-state early return rendered only its status and had no accessible `Back to Creator Lists` control.
+
+The pre-repair strict check also reported the Task-created diagnostic:
+
+```text
+packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx(17,38): error TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.
+```
+
+### GREEN
+
+The scoped pane now renders one header and Back control around every content state. Its existing `onClose` continues to clear workspace-owned selection; no nested shell or duplicate header was introduced. The page-test mock now invokes its local mock without forwarding the production hook arguments.
+
+Focused repair check:
+
+```text
+Test Suites: 2 passed, 2 total
+Tests:       9 passed, 9 total
+Snapshots:   0 total
+```
+
+Task 4 workspace regression:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       9 passed, 9 total
+Snapshots:   0 total
+```
+
+Focused Task 1/4 regression:
+
+```bash
+npx jest packages/twenty-front/src/modules/object-record/record-index/hooks/__tests__/useOpenRecordFromIndexView.test.tsx packages/twenty-front/src/modules/object-record/components/RecordChip.test.tsx packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListWorkspace.test.tsx packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx --config=packages/twenty-front/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 4 passed, 4 total
+Tests:       30 passed, 30 total
+Snapshots:   0 total
+```
+
+Strict frontend check:
+
+```bash
+npx tsgo -p packages/twenty-front/tsconfig.json --noEmit
+```
+
+It exits 2 only for the known environment baseline: missing `twenty-front-component-renderer` and its cascading Front Components diagnostics, Myah Inbox `MyahInboxContext`, Settings billing `TabButtonProps.role`, and SidePanel `MyahInboxContext`. It emits no `RecordIndexPage.test.tsx` TS2556 and no diagnostic from either changed scoped-pane file.
+
+### Changed files
+
+- `packages/twenty-front/src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx`
+- `packages/twenty-front/src/modules/myah/creator-crm/__tests__/CreatorListScopedCreatorIndex.test.tsx`
+- `packages/twenty-front/src/pages/object-record/__tests__/RecordIndexPage.test.tsx`
+- `.superpowers/sdd/task-4-report.md`
+
+### Self-review
+
+- Every unavailable guard now leaves the single scoped header and its Back action mounted, including missing metadata, both permission denials, List loading/error, missing relation context, and missing default Creator view.
+- The ready path retains that same header and native surface, preserving the desktop equal grid and mobile single-pane ownership in the workspace.
+- The page mock preserves the imported hook's production type at call sites and avoids the invalid `unknown[]` spread without an assertion.
+- No RecordChip, activation payload, focus-restoration, Task 2/3, cache, routing, data/API/schema/migration/provider, formatter, linter, Nx, build, browser, push, deployment, or external action changed.
+
+### Commit
+
+`fix(myah): keep creator list selection escapable`
+
+### Concerns
+
+None. The strict command retains only the known unrelated baseline listed above.

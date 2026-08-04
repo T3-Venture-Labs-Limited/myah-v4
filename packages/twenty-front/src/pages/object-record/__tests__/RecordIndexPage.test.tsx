@@ -13,8 +13,7 @@ const mockObjectMetadataItems = jest.fn();
 jest.mock(
   '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue',
   () => ({
-    useAtomComponentStateValue: (...args: unknown[]) =>
-      mockUseAtomComponentStateValue(...args),
+    useAtomComponentStateValue: () => mockUseAtomComponentStateValue(),
   }),
 );
 

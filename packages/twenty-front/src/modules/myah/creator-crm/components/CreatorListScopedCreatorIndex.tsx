@@ -110,45 +110,26 @@ export const CreatorListScopedCreatorIndex = ({
     [defaultCreatorView?.id],
   );
 
-  if (!creatorObjectMetadataItem || !creatorListObjectMetadataItem) {
-    return <StyledScopeState>{t`Creator List is unavailable.`}</StyledScopeState>;
-  }
-
-  if (!creatorPermissions.canReadObjectRecords) {
-    return <StyledScopeState>{t`You do not have permission to view Creators.`}</StyledScopeState>;
-  }
-
-  if (!creatorListPermissions.canReadObjectRecords) {
-    return <StyledScopeState>{t`You do not have permission to view Creator Lists.`}</StyledScopeState>;
-  }
-
-  if (isCreatorListLoading) {
-    return <StyledScopeState>{t`Loading Creator List…`}</StyledScopeState>;
-  }
-
-  if (creatorListError) {
-    return <StyledScopeState>{t`Unable to load Creator List.`}</StyledScopeState>;
-  }
-
-  if (!creatorListContext || !creatorListRelationFilter) {
-    return <StyledScopeState>{t`Creator List is unavailable.`}</StyledScopeState>;
-  }
-
-  if (!defaultCreatorView) {
-    return <StyledScopeState>{t`Loading Creator view…`}</StyledScopeState>;
-  }
-
-  return (
-    <>
-      <StyledScopeHeader>
-        <StyledScopeTitle tabIndex={-1}>{`List: ${creatorListContext.target.label}`}</StyledScopeTitle>
-        <Button
-          ariaLabel={t`Back to Creator Lists`}
-          onClick={onClose}
-          title={t`Back to Creator Lists`}
-          variant="secondary"
-        />
-      </StyledScopeHeader>
+  const scopeContent =
+    !creatorObjectMetadataItem || !creatorListObjectMetadataItem ? (
+      <StyledScopeState>{t`Creator List is unavailable.`}</StyledScopeState>
+    ) : !creatorPermissions.canReadObjectRecords ? (
+      <StyledScopeState>
+        {t`You do not have permission to view Creators.`}
+      </StyledScopeState>
+    ) : !creatorListPermissions.canReadObjectRecords ? (
+      <StyledScopeState>
+        {t`You do not have permission to view Creator Lists.`}
+      </StyledScopeState>
+    ) : isCreatorListLoading ? (
+      <StyledScopeState>{t`Loading Creator List…`}</StyledScopeState>
+    ) : creatorListError ? (
+      <StyledScopeState>{t`Unable to load Creator List.`}</StyledScopeState>
+    ) : !creatorListContext || !creatorListRelationFilter ? (
+      <StyledScopeState>{t`Creator List is unavailable.`}</StyledScopeState>
+    ) : !defaultCreatorView ? (
+      <StyledScopeState>{t`Loading Creator view…`}</StyledScopeState>
+    ) : (
       <RecordIndexSurface
         key={creatorListId}
         contextStoreInstanceId={`creator-list-pane-${creatorListId}`}
@@ -158,6 +139,24 @@ export const CreatorListScopedCreatorIndex = ({
         initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
         creatorListContext={creatorListContext}
       />
+    );
+
+  return (
+    <>
+      <StyledScopeHeader>
+        <StyledScopeTitle tabIndex={-1}>
+          {creatorListContext
+            ? `List: ${creatorListContext.target.label}`
+            : t`Creator List`}
+        </StyledScopeTitle>
+        <Button
+          ariaLabel={t`Back to Creator Lists`}
+          onClick={onClose}
+          title={t`Back to Creator Lists`}
+          variant="secondary"
+        />
+      </StyledScopeHeader>
+      {scopeContent}
     </>
   );
 };
