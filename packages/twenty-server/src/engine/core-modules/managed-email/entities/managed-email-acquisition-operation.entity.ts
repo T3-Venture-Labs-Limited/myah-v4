@@ -20,11 +20,13 @@ import {
   type ManagedEmailExpectedLineItem,
   type ManagedEmailResourceSnapshot,
   type ManagedEmailProviderReceipt,
+  type ManagedEmailRenewalProjection,
 } from '../types/managed-email-persistence.type';
 import {
   managedEmailCorrelatedSubscriptionLinesTransformer,
   managedEmailExpectedLineItemsTransformer,
   managedEmailNullableProviderReceiptTransformer,
+  managedEmailNullableRenewalProjectionTransformer,
   managedEmailResourceSnapshotTransformer,
 } from '../utils/validate-managed-email-persistence-json.util';
 
@@ -44,6 +46,11 @@ import {
   'IDX_MANAGED_EMAIL_ACQUISITION_RECONCILIATION_DUE',
   ['nextReconciliationAt'],
   { where: '"nextReconciliationAt" IS NOT NULL' },
+)
+@Index(
+  'IDX_MANAGED_EMAIL_ACQUISITION_SUBSCRIPTION_RECONCILIATION_DUE',
+  ['nextSubscriptionReconciliationAt'],
+  { where: '"nextSubscriptionReconciliationAt" IS NOT NULL' },
 )
 @Unique('UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_ID', ['workspaceId', 'id'])
 @Unique('UQ_MANAGED_EMAIL_ACQUISITION_WORKSPACE_IDEMPOTENCY', [
@@ -161,6 +168,13 @@ export class ManagedEmailAcquisitionOperationEntity {
   })
   providerReceipt: ManagedEmailProviderReceipt | null;
 
+  @Column({
+    nullable: true,
+    transformer: managedEmailNullableRenewalProjectionTransformer,
+    type: 'jsonb',
+  })
+  pendingRenewalProjection: ManagedEmailRenewalProjection | null;
+
   @Column({ nullable: true, type: 'text' })
   providerOutcome: string | null;
 
@@ -172,6 +186,9 @@ export class ManagedEmailAcquisitionOperationEntity {
 
   @Column({ nullable: true, type: 'timestamptz' })
   nextReconciliationAt: Date | null;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  nextSubscriptionReconciliationAt: Date | null;
 
   @Column({ nullable: true, type: 'text' })
   safeFailureCode: string | null;

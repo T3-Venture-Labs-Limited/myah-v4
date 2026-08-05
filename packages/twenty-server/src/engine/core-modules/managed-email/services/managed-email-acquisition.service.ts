@@ -48,6 +48,7 @@ export const MANAGED_EMAIL_SETUP_PASSWORD_FACTORY = Symbol(
 
 const ICEMAIL_PROVIDER_TYPE = 'ICEMAIL';
 const RECONCILIATION_DELAY_MS = 60_000;
+const SUBSCRIPTION_RECONCILIATION_LEAD_MS = 2 * 60 * 60 * 1000;
 const TERMINAL_STATES = new Set([
   'PROVIDER_FAILED',
   'PROVIDER_PARTIAL',
@@ -187,6 +188,7 @@ export class ManagedEmailAcquisitionService {
     }
 
     this.assertExactPaidEntitlement(operation);
+    await this.projectPaidEntitlements(operation);
     const providerIntentHash = this.createProviderIntentHash(operation);
     const claim = await this.operationRepository.update(
       workspaceId,
@@ -917,6 +919,95 @@ export class ManagedEmailAcquisitionService {
     }
 
     return operation;
+  }
+
+  private async projectPaidEntitlements(
+    operation: ManagedEmailAcquisitionOperationEntity,
+  ): Promise<void> {
+    const correlatedLines = operation.correlatedSubscriptionLines;
+
+    if (correlatedLines === null) {
+      throw new Error('Managed email payment correlation is incomplete');
+    }
+
+    const paidThroughFor = (
+      productKey:
+        | 'managed_sending_domain_year'
+        | 'managed_mailbox_month'
+        | 'managed_warmup_month',
+    ): Date => {
+      const expected = operation.expectedLineItems.find(
+        (line) => line.productKey === productKey,
+      );
+      const correlated =
+        expected === undefined
+          ? undefined
+          : correlatedLines.find(
+              (line) => line.productId === expected.metronomeProductId,
+            );
+      const paidThrough =
+        correlated === undefined
+          ? Number.NaN
+          : Date.parse(correlated.endingBefore);
+
+      if (!Number.isFinite(paidThrough)) {
+        throw new Error('Managed email payment correlation is incomplete');
+      }
+
+      return new Date(paidThrough);
+    };
+
+    const domainPaidThrough = paidThroughFor('managed_sending_domain_year');
+    const mailboxPaidThrough = paidThroughFor('managed_mailbox_month');
+    const warmupPaidThrough = paidThroughFor('managed_warmup_month');
+    const domains = await this.domainRepository.find(operation.workspaceId, {
+      where: { acquisitionOperationId: operation.id },
+    });
+    const mailboxes = await this.mailboxRepository.find(operation.workspaceId, {
+      where: { acquisitionOperationId: operation.id },
+    });
+
+    if (domains.length === 0 || mailboxes.length === 0) {
+      throw new Error('Managed email paid resources are missing');
+    }
+
+    for (const domain of domains) {
+      await this.domainRepository.update(
+        operation.workspaceId,
+        { id: domain.id },
+        { paidThrough: domainPaidThrough },
+      );
+    }
+    for (const mailbox of mailboxes) {
+      await this.mailboxRepository.update(
+        operation.workspaceId,
+        { id: mailbox.id },
+        {
+          infrastructurePaidThrough: mailboxPaidThrough,
+          warmupPaidThrough,
+        },
+      );
+    }
+
+    const earliestPaidThrough = Math.min(
+      domainPaidThrough.getTime(),
+      mailboxPaidThrough.getTime(),
+      warmupPaidThrough.getTime(),
+    );
+    const nextSubscriptionReconciliationAt = new Date(
+      earliestPaidThrough - SUBSCRIPTION_RECONCILIATION_LEAD_MS,
+    );
+    const updated = await this.operationRepository.update(
+      operation.workspaceId,
+      { id: operation.id },
+      { nextSubscriptionReconciliationAt },
+    );
+
+    if (updated.affected !== 1) {
+      throw new Error('Managed email acquisition operation was not found');
+    }
+    operation.nextSubscriptionReconciliationAt =
+      nextSubscriptionReconciliationAt;
   }
 
   private assertExactPaidEntitlement(

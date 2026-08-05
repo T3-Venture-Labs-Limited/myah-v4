@@ -6,10 +6,18 @@ import {
   ManagedEmailMailboxActivationCronJob,
 } from 'src/engine/core-modules/managed-email/crons/managed-email-mailbox-activation.cron.job';
 import {
+  MANAGED_EMAIL_PERIOD_BOUNDARY_CRON_PATTERN,
+  ManagedEmailPeriodBoundaryCronJob,
+} from 'src/engine/core-modules/managed-email/crons/managed-email-period-boundary.cron.job';
+import {
   MANAGED_EMAIL_READINESS_CRON_PATTERN,
   ManagedEmailReadinessCronJob,
 } from 'src/engine/core-modules/managed-email/crons/managed-email-readiness.cron.job';
 import { ManagedEmailReconciliationCronJob } from 'src/engine/core-modules/managed-email/crons/managed-email-reconciliation.cron.job';
+import {
+  MANAGED_EMAIL_SUBSCRIPTION_RECONCILIATION_CRON_PATTERN,
+  ManagedEmailSubscriptionReconciliationCronJob,
+} from 'src/engine/core-modules/managed-email/crons/managed-email-subscription-reconciliation.cron.job';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
@@ -26,6 +34,14 @@ const MANAGED_EMAIL_RECOVERY_CRONS = [
   {
     jobName: ManagedEmailReadinessCronJob.name,
     pattern: MANAGED_EMAIL_READINESS_CRON_PATTERN,
+  },
+  {
+    jobName: ManagedEmailSubscriptionReconciliationCronJob.name,
+    pattern: MANAGED_EMAIL_SUBSCRIPTION_RECONCILIATION_CRON_PATTERN,
+  },
+  {
+    jobName: ManagedEmailPeriodBoundaryCronJob.name,
+    pattern: MANAGED_EMAIL_PERIOD_BOUNDARY_CRON_PATTERN,
   },
 ] as const;
 

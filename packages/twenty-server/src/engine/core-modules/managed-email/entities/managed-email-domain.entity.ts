@@ -17,6 +17,7 @@ import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.ent
 import { ManagedEmailAcquisitionOperationEntity } from './managed-email-acquisition-operation.entity';
 
 import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
+import { ManagedEmailLifecycleAction } from '../enums/managed-email-lifecycle-action.enum';
 import { ManagedEmailInfrastructureState } from '../enums/managed-email-infrastructure-state.enum';
 import { type ManagedEmailSafeFacts } from '../types/managed-email-persistence.type';
 import { managedEmailSafeFactsTransformer } from '../utils/validate-managed-email-persistence-json.util';
@@ -34,6 +35,11 @@ import { managedEmailSafeFactsTransformer } from '../utils/validate-managed-emai
   'IDX_MANAGED_EMAIL_DOMAIN_RECONCILIATION_DUE',
   ['nextReconciliationAt'],
   { where: '"nextReconciliationAt" IS NOT NULL' },
+)
+@Index(
+  'IDX_MANAGED_EMAIL_DOMAIN_PERIOD_BOUNDARY_DUE',
+  ['nextPeriodBoundaryAt'],
+  { where: '"nextPeriodBoundaryAt" IS NOT NULL' },
 )
 @Index('IDX_MANAGED_EMAIL_DOMAIN_PAID_THROUGH', ['paidThrough'])
 @Index('IDX_MANAGED_EMAIL_DOMAIN_EXPIRY', ['expiresAt'])
@@ -111,6 +117,15 @@ export class ManagedEmailDomainEntity {
 
   @Column({ nullable: true, type: 'timestamptz' })
   nextReconciliationAt: Date | null;
+
+  @Column({ nullable: true, type: 'text' })
+  pendingLifecycleAction: ManagedEmailLifecycleAction | null;
+
+  @Column({ nullable: true, type: 'text' })
+  pendingLifecycleKey: string | null;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  nextPeriodBoundaryAt: Date | null;
 
   @Column({ nullable: true, type: 'text' })
   safeFailureCode: string | null;

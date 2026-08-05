@@ -431,6 +431,7 @@ describe('managed email persistence entities', () => {
       'correlatedSubscriptionLines',
       'providerIntentHash',
       'providerReceipt',
+      'pendingRenewalProjection',
       'providerOutcome',
     ]) {
       expect(
@@ -447,6 +448,7 @@ describe('managed email persistence entities', () => {
       'expectedLineItems',
       'correlatedSubscriptionLines',
       'providerReceipt',
+      'pendingRenewalProjection',
     ]) {
       expect(
         columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)

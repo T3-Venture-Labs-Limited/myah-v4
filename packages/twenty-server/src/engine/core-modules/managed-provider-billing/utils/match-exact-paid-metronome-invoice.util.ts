@@ -115,6 +115,7 @@ const hasExactLineMultiset = (
 const isExactInvoice = (
   invoice: MetronomeInvoice,
   expected: ExpectedPaidMetronomeInvoice,
+  externalStatus: 'PAID' | 'PAYMENT_FAILED',
 ): boolean => {
   const expectedStart = toInstant(expected.startingAt);
   const expectedEnd = toInstant(expected.endingBefore);
@@ -139,19 +140,21 @@ const isExactInvoice = (
     externalInvoice.billingProvider === 'stripe' &&
     externalInvoice.invoiceId !== null &&
     externalInvoice.invoiceId.trim() !== '' &&
-    externalInvoice.externalPaymentId !== null &&
-    externalInvoice.externalPaymentId.trim() !== '' &&
-    externalInvoice.externalStatus === 'PAID' &&
+    (externalStatus !== 'PAID' ||
+      (externalInvoice.externalPaymentId !== null &&
+        externalInvoice.externalPaymentId.trim() !== '')) &&
+    externalInvoice.externalStatus === externalStatus &&
     isSafeInteger(externalInvoice.invoicedTotal) &&
     externalInvoice.invoicedTotal === expected.total &&
     hasExactLineMultiset(invoice.lines, expected.lines)
   );
 };
 
-export const matchExactPaidMetronomeInvoice = (
+export const matchExactMetronomeInvoice = (
   page: MetronomeInvoicePage,
   expected: ExpectedPaidMetronomeInvoice,
-): PaidMetronomeInvoiceReceipt | null => {
+  externalStatus: 'PAID' | 'PAYMENT_FAILED',
+): MetronomeInvoice | null => {
   if (
     page.hasNextPage ||
     expected.usdRateCardProof.contractId.trim() === '' ||
@@ -164,12 +167,20 @@ export const matchExactPaidMetronomeInvoice = (
   }
 
   const matches = page.invoices.filter((invoice) =>
-    isExactInvoice(invoice, expected),
+    isExactInvoice(invoice, expected, externalStatus),
   );
 
-  if (matches.length !== 1) return null;
+  return matches.length === 1 ? matches[0] : null;
+};
 
-  const invoice = matches[0];
+export const matchExactPaidMetronomeInvoice = (
+  page: MetronomeInvoicePage,
+  expected: ExpectedPaidMetronomeInvoice,
+): PaidMetronomeInvoiceReceipt | null => {
+  const invoice = matchExactMetronomeInvoice(page, expected, 'PAID');
+
+  if (invoice === null) return null;
+
   const externalInvoiceId = invoice.externalInvoice?.invoiceId;
   const externalPaymentId = invoice.externalInvoice?.externalPaymentId;
 
