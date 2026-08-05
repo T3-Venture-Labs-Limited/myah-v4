@@ -12,13 +12,15 @@ import { viewPickerTypeComponentState } from '@/views/view-picker/states/viewPic
 import { useLingui } from '@lingui/react/macro';
 import { Button } from 'twenty-ui/input';
 
+type ViewPickerCreateButtonProps = {
+  forcedViewType?: ViewType;
+  onViewChange?: (viewId: string) => void;
+};
+
 export const ViewPickerCreateButton = ({
   onViewChange,
   forcedViewType,
-}: {
-  onViewChange?: (viewId: string) => void;
-  forcedViewType?: ViewType;
-}) => {
+}: ViewPickerCreateButtonProps) => {
   const { t } = useLingui();
   const { availableFieldsForGrouping, navigateToSelectSettings } =
     useGetAvailableFieldsToGroupRecordsBy();

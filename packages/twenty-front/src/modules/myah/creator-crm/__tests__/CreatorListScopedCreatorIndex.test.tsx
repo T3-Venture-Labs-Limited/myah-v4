@@ -44,6 +44,7 @@ const mockRecordIndexSurface = jest.fn(
     onRecordCreated?: (record: { id: string }) => Promise<void>;
     onViewChange?: (viewId: string) => void;
     onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+    shouldPreserveParentViewStateOnOpen?: boolean;
     viewId: string;
   }) => (
     <div
@@ -113,6 +114,7 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
     onRecordCreated?: (record: { id: string }) => Promise<void>;
     onViewChange?: (viewId: string) => void;
     onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+    shouldPreserveParentViewStateOnOpen?: boolean;
     viewId: string;
   }) => mockRecordIndexSurface(props),
 }));
@@ -243,6 +245,7 @@ describe('CreatorListScopedCreatorIndex', () => {
       ],
       objectNameSingular: 'creator',
       viewId: 'creator-default-view',
+      shouldPreserveParentViewStateOnOpen: true,
     });
     expect(
       mockRecordIndexSurface.mock.calls.at(-1)?.[0].headerActionButton,
@@ -341,6 +344,29 @@ describe('CreatorListScopedCreatorIndex', () => {
       target: { id: 'list-a', kind: 'creator-list', label: 'List A' },
       creatorIdsToAdd: ['creator-1'],
     });
+  });
+
+  it('keeps native Creator creation successful when List membership creation fails', async () => {
+    resolveCreatorList('list-a', 'List A');
+    mockApplyCreatorBulkRelationship.mockRejectedValue(
+      new Error('Membership creation failed'),
+    );
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
+    );
+
+    const onRecordCreated =
+      mockRecordIndexSurface.mock.calls.at(-1)?.[0].onRecordCreated;
+
+    if (!onRecordCreated) {
+      throw new Error('Expected the scoped Creator surface to handle creation');
+    }
+
+    await expect(onRecordCreated({ id: 'creator-1' })).resolves.toBeUndefined();
   });
 
   it('retries a failed scoped Creator List lookup', () => {

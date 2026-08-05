@@ -26,8 +26,11 @@ import { useNavigateApp } from '~/hooks/useNavigateApp';
 export const useOpenRecordFromIndexView = () => {
   const { recordIndexId } = useRecordIndexContextOrThrow();
 
-  const { objectNameSingular, onOpenRecordFromIndexView } =
-    useRecordIndexContextOrThrow();
+  const {
+    objectNameSingular,
+    onOpenRecordFromIndexView,
+    shouldPreserveParentViewStateOnOpen,
+  } = useRecordIndexContextOrThrow();
 
   const navigate = useNavigateApp();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
@@ -62,11 +65,11 @@ export const useOpenRecordFromIndexView = () => {
 
   const openRecordFromIndexView = useCallback(
     (request: RecordIndexOpenRequest) => {
-      if (onOpenRecordFromIndexView) {
+      const { recordId } = request;
+      if (onOpenRecordFromIndexView && !shouldPreserveParentViewStateOnOpen) {
         onOpenRecordFromIndexView(request);
         return;
       }
-      const { recordId } = request;
 
       const recordIndexOpenRecordIn =
         contextStoreInstance?.instanceId &&
@@ -99,6 +102,10 @@ export const useOpenRecordFromIndexView = () => {
           parentViewSorts,
         },
       );
+      if (onOpenRecordFromIndexView) {
+        onOpenRecordFromIndexView(request);
+        return;
+      }
 
       if (
         !isMobile &&
@@ -139,6 +146,7 @@ export const useOpenRecordFromIndexView = () => {
       currentView?.openRecordIn,
       contextStoreInstance?.instanceId,
       onOpenRecordFromIndexView,
+      shouldPreserveParentViewStateOnOpen,
     ],
   );
 

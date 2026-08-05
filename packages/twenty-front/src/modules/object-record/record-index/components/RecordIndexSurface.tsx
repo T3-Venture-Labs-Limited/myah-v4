@@ -48,6 +48,7 @@ export type RecordIndexSurfaceProps = {
   viewId: string;
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+  shouldPreserveParentViewStateOnOpen?: boolean;
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
@@ -91,6 +92,7 @@ const RecordIndexSurfaceInstance = ({
   viewId,
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
+  shouldPreserveParentViewStateOnOpen,
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters = [],
@@ -161,6 +163,7 @@ const RecordIndexSurfaceInstance = ({
               onIndexRecordsLoaded: handleIndexRecordsLoaded,
               indexIdentifierUrl,
               onOpenRecordFromIndexView,
+              shouldPreserveParentViewStateOnOpen,
               onViewChange,
               onRecordCreated,
               recordFieldByFieldMetadataItemId,
@@ -259,6 +262,7 @@ export const RecordIndexSurface = ({
   viewId,
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
+  shouldPreserveParentViewStateOnOpen,
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters,
@@ -286,6 +290,7 @@ export const RecordIndexSurface = ({
       viewId={viewId}
       indexIdentifierUrl={indexIdentifierUrl}
       onOpenRecordFromIndexView={onOpenRecordFromIndexView}
+      shouldPreserveParentViewStateOnOpen={shouldPreserveParentViewStateOnOpen}
       onViewChange={onViewChange}
       onRecordCreated={onRecordCreated}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}

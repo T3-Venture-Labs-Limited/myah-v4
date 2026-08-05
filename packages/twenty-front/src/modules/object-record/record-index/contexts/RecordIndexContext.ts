@@ -16,6 +16,7 @@ export type RecordIndexOpenRequest = {
 export type RecordIndexContextValue = {
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+  shouldPreserveParentViewStateOnOpen?: boolean;
   onViewChange?: (viewId: string) => void;
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onIndexRecordsLoaded: () => void;

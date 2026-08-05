@@ -13,6 +13,10 @@ const mockStoreGet = jest.fn();
 const mockStoreSet = jest.fn();
 let mockCurrentViewOpenRecordIn = ViewOpenRecordIn.SIDE_PANEL;
 let mockQueryOnlyRecordFilters: unknown[] = [];
+let mockOnOpenRecordFromIndexView:
+  | ((request: { recordId: string; source: 'record-chip' }) => void)
+  | undefined;
+let mockShouldPreserveParentViewStateOnOpen = false;
 
 jest.mock('@/side-panel/hooks/useSidePanelMenu', () => ({
   useSidePanelMenu: () => ({ closeSidePanelMenu: mockCloseSidePanelMenu }),
@@ -60,6 +64,9 @@ jest.mock(
 jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
   useRecordIndexContextOrThrow: () => ({
     objectNameSingular: 'creator',
+    onOpenRecordFromIndexView: mockOnOpenRecordFromIndexView,
+    shouldPreserveParentViewStateOnOpen:
+      mockShouldPreserveParentViewStateOnOpen,
     recordIndexId: 'creator-list-pane-index',
   }),
 }));
@@ -129,6 +136,8 @@ describe('useOpenRecordFromIndexView', () => {
     mockStoreGet.mockClear();
     mockStoreSet.mockClear();
     mockQueryOnlyRecordFilters = [membershipFilter];
+    mockOnOpenRecordFromIndexView = undefined;
+    mockShouldPreserveParentViewStateOnOpen = false;
 
     mockStoreGet.mockImplementation((state) => {
       switch (state) {
@@ -184,4 +193,30 @@ describe('useOpenRecordFromIndexView', () => {
       }
     },
   );
+
+  it('preserves scoped parent pagination state before custom record navigation', () => {
+    mockOnOpenRecordFromIndexView = jest.fn();
+    mockShouldPreserveParentViewStateOnOpen = true;
+    const { result } = renderOpenRecordHook('creator-list-pane-list-a');
+
+    act(() => {
+      result.current.openRecordFromIndexView({
+        recordId: 'creator-a',
+        source: 'record-chip',
+      });
+    });
+
+    expect(mockStoreSet).toHaveBeenCalledWith(
+      'parent-view-main-context-store',
+      expect.objectContaining({
+        parentViewFilters: [storedRecordFilters[0], membershipFilter],
+      }),
+    );
+    expect(mockOnOpenRecordFromIndexView).toHaveBeenCalledWith({
+      recordId: 'creator-a',
+      source: 'record-chip',
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockOpenRecordInSidePanel).not.toHaveBeenCalled();
+  });
 });

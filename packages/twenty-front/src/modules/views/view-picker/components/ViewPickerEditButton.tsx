@@ -13,13 +13,15 @@ import { viewPickerTypeComponentState } from '@/views/view-picker/states/viewPic
 import { t } from '@lingui/core/macro';
 import { Button } from 'twenty-ui/input';
 
+type ViewPickerEditButtonProps = {
+  forcedViewType?: ViewType;
+  onViewChange?: (viewId: string) => void;
+};
+
 export const ViewPickerEditButton = ({
   onViewChange,
   forcedViewType,
-}: {
-  onViewChange?: (viewId: string) => void;
-  forcedViewType?: ViewType;
-}) => {
+}: ViewPickerEditButtonProps) => {
   const { availableFieldsForGrouping, navigateToSelectSettings } =
     useGetAvailableFieldsToGroupRecordsBy();
 

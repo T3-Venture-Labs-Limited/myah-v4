@@ -128,8 +128,12 @@ export const ViewPickerDropdown = ({
       dropdownComponents={(() => {
         switch (viewPickerMode) {
           case 'list':
-            return <ViewPickerListContent onViewChange={onViewChange} />;
-          case 'create-empty':
+            return (
+              <ViewPickerListContent
+                forcedViewType={forcedViewType}
+                onViewChange={onViewChange}
+              />
+            );
           case 'create-from-current':
             return (
               <>

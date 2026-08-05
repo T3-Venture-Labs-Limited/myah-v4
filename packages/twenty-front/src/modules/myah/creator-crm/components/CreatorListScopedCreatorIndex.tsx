@@ -152,9 +152,8 @@ export const CreatorListScopedCreatorIndex = ({
           target: creatorListContext.target,
           creatorIdsToAdd: [creator.id],
         });
-      } catch (error) {
+      } catch {
         createdCreatorKeys.delete(creatorKey);
-        throw error;
       }
     },
     [
@@ -210,6 +209,7 @@ export const CreatorListScopedCreatorIndex = ({
             isMobile ? handleOpenCreatorRecord : undefined
           }
           onRecordCreated={handleCreatorCreated}
+          shouldPreserveParentViewStateOnOpen={isMobile}
           initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
           headerTitle={creatorListContext.target.label}
           headerActionButton={

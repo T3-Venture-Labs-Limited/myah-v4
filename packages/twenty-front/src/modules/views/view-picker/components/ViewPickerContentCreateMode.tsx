@@ -46,13 +46,15 @@ const StyledFieldAvailableContainer = styled.div`
   width: calc(100% - ${themeCssVariables.spacing[4]});
 `;
 
+type ViewPickerContentCreateModeProps = {
+  forcedViewType?: ViewType;
+  onViewChange?: (viewId: string) => void;
+};
+
 export const ViewPickerContentCreateMode = ({
   onViewChange,
   forcedViewType,
-}: {
-  onViewChange?: (viewId: string) => void;
-  forcedViewType?: ViewType;
-}) => {
+}: ViewPickerContentCreateModeProps) => {
   const { t } = useLingui();
   const {
     viewPickerCalendarFieldDropdownId,

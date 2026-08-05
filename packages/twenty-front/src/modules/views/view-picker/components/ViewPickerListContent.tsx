@@ -18,6 +18,7 @@ import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { useOpenCreateViewDropdown } from '@/views/hooks/useOpenCreateViewDropown';
 import { viewsFromObjectMetadataItemFamilySelector } from '@/views/states/selectors/viewsFromObjectMetadataItemFamilySelector';
 import { ViewPickerOptionDropdown } from '@/views/view-picker/components/ViewPickerOptionDropdown';
+import { type ViewType } from '@/views/types/ViewType';
 import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { viewPickerReferenceViewIdComponentState } from '@/views/view-picker/states/viewPickerReferenceViewIdComponentState';
@@ -33,10 +34,12 @@ const StyledBoldDropdownMenuItemsContainerWrapper = styled.div`
 `;
 
 type ViewPickerListContentProps = {
+  forcedViewType?: ViewType;
   onViewChange?: (viewId: string) => void;
 };
 
 export const ViewPickerListContent = ({
+  forcedViewType,
   onViewChange,
 }: ViewPickerListContentProps) => {
   const { t } = useLingui();
@@ -48,15 +51,19 @@ export const ViewPickerListContent = ({
     { objectMetadataItemId: objectMetadataItem.id },
   );
 
-  const workspaceViews = viewsOnCurrentObject.filter(
+  const selectableViews = viewsOnCurrentObject.filter(
+    (view) => !forcedViewType || view.type === forcedViewType,
+  );
+
+  const workspaceViews = selectableViews.filter(
     (view) => view.visibility === ViewVisibility.WORKSPACE,
   );
 
-  const unlistedViews = viewsOnCurrentObject.filter(
+  const unlistedViews = selectableViews.filter(
     (view) => view.visibility === ViewVisibility.UNLISTED,
   );
 
-  const isLastView = viewsOnCurrentObject.length <= 1;
+  const isLastView = selectableViews.length <= 1;
 
   const shouldShowSectionLabels =
     workspaceViews.length > 0 && unlistedViews.length > 0;
