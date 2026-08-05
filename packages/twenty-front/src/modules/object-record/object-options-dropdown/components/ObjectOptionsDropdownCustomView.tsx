@@ -1,7 +1,7 @@
 import { ObjectOptionsDropdownMenuViewName } from '@/object-record/object-options-dropdown/components/ObjectOptionsDropdownMenuViewName';
-import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 import { useObjectOptionsForBoard } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsForBoard';
+import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
 import { recordIndexCalendarLayoutState } from '@/object-record/record-index/states/recordIndexCalendarLayoutState';
 import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
@@ -12,6 +12,7 @@ import { SelectableList } from '@/ui/layout/selectable-list/components/Selectabl
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { viewsFromObjectMetadataItemFamilySelector } from '@/views/states/selectors/viewsFromObjectMetadataItemFamilySelector';
@@ -47,8 +48,16 @@ export const ObjectOptionsDropdownCustomView = ({
   onBackToDefault,
 }: ObjectOptionsDropdownCustomViewProps) => {
   const { t } = useLingui();
-  const { recordIndexId, objectMetadataItem, onContentChange, closeDropdown } =
-    useObjectOptionsDropdown();
+  const {
+    closeDropdown,
+    dropdownId,
+    isLayoutLocked,
+    objectMetadataItem,
+    onContentChange,
+    onViewChange,
+    recordIndexId,
+    viewType,
+  } = useObjectOptionsDropdown();
 
   const { currentView } = useGetCurrentViewOnly();
 
@@ -87,10 +96,21 @@ export const ObjectOptionsDropdownCustomView = ({
     recordBoardId: recordIndexId,
     viewBarId: recordIndexId,
   });
+  const visibleRecordFields = useAtomComponentSelectorValue(
+    visibleRecordFieldsComponentSelector,
+    recordIndexId,
+  );
 
-  const visibleFieldsCount = visibleBoardFields.length;
+  const visibleFieldsCount =
+    isLayoutLocked ||
+    (viewType === ViewType.TABLE && currentView?.type !== ViewType.TABLE)
+      ? visibleRecordFields.length
+      : visibleBoardFields.length;
 
-  const { destroyViewFromCurrentState } = useDestroyViewFromCurrentState();
+  const { destroyViewFromCurrentState } = useDestroyViewFromCurrentState(
+    undefined,
+    onViewChange,
+  );
   const setViewPickerReferenceViewId = useSetAtomComponentState(
     viewPickerReferenceViewIdComponentState,
     recordIndexId,
@@ -106,20 +126,21 @@ export const ObjectOptionsDropdownCustomView = ({
     onBackToDefault?.();
   };
 
+  const hasCalendarOptions =
+    !isLayoutLocked && customViewData?.type === ViewType.CALENDAR;
+
   const selectableItemIdArray = [
-    'Layout',
+    ...(isLayoutLocked ? [] : ['Layout']),
     'Visibility',
     'Fields',
-    ...(customViewData?.type === ViewType.CALENDAR
-      ? ['CalendarDateField', 'CalendarView']
-      : []),
+    ...(hasCalendarOptions ? ['CalendarDateField', 'CalendarView'] : []),
     ...(customViewData?.type !== ViewType.CALENDAR ? ['Group'] : []),
     'Delete view',
   ];
 
   const selectedItemId = useAtomComponentStateValue(
     selectedItemIdComponentState,
-    OBJECT_OPTIONS_DROPDOWN_ID,
+    dropdownId,
   );
 
   if (!customViewData) {
@@ -131,27 +152,29 @@ export const ObjectOptionsDropdownCustomView = ({
       <ObjectOptionsDropdownMenuViewName currentView={customViewData} />
       <DropdownMenuSeparator />
       <SelectableList
-        selectableListInstanceId={OBJECT_OPTIONS_DROPDOWN_ID}
-        focusId={OBJECT_OPTIONS_DROPDOWN_ID}
+        selectableListInstanceId={dropdownId}
+        focusId={dropdownId}
         selectableItemIdArray={selectableItemIdArray}
       >
         <DropdownMenuItemsContainer scrollable={false}>
-          <SelectableListItem
-            itemId="Layout"
-            onEnter={() => onContentChange('layout')}
-          >
-            <MenuItem
-              focused={selectedItemId === 'Layout'}
-              onClick={() => onContentChange('layout')}
-              LeftIcon={viewTypeIconMapping(
-                customViewData?.type ?? ViewType.TABLE,
-              )}
-              text={t`Layout`}
-              contextualText={t(getViewTypeLabel(customViewData.type))}
-              contextualTextPosition="right"
-              hasSubMenu
-            />
-          </SelectableListItem>
+          {!isLayoutLocked && (
+            <SelectableListItem
+              itemId="Layout"
+              onEnter={() => onContentChange('layout')}
+            >
+              <MenuItem
+                focused={selectedItemId === 'Layout'}
+                onClick={() => onContentChange('layout')}
+                LeftIcon={viewTypeIconMapping(
+                  customViewData?.type ?? ViewType.TABLE,
+                )}
+                text={t`Layout`}
+                contextualText={t(getViewTypeLabel(customViewData.type))}
+                contextualTextPosition="right"
+                hasSubMenu
+              />
+            </SelectableListItem>
+          )}
           <SelectableListItem
             itemId="Visibility"
             onEnter={() => onContentChange('visibility')}
@@ -173,7 +196,7 @@ export const ObjectOptionsDropdownCustomView = ({
         </DropdownMenuItemsContainer>
         <DropdownMenuSeparator />
         <DropdownMenuItemsContainer scrollable={false}>
-          {customViewData?.type === ViewType.CALENDAR && (
+          {hasCalendarOptions && (
             <>
               <div id="calendar-date-field-picker-menu-item">
                 <SelectableListItem

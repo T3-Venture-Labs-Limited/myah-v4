@@ -3,13 +3,14 @@ import { useHeadlessCommandContextApi } from '@/command-menu-item/engine-command
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { useOpenDropdown } from '@/ui/layout/dropdown/hooks/useOpenDropdown';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
+import { getViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { viewPickerReferenceViewIdComponentState } from '@/views/view-picker/states/viewPickerReferenceViewIdComponentState';
 import { isDefined } from 'twenty-shared/utils';
 
 export const CreateNewViewNoSelectionRecordCommand = () => {
   const { currentViewId, recordIndexId } = useHeadlessCommandContextApi();
+  const { viewPickerDropdownId } = getViewBarControlIds(recordIndexId ?? '');
 
   const { openDropdown } = useOpenDropdown();
   const { closeSidePanelMenu } = useSidePanelMenu();
@@ -35,7 +36,7 @@ export const CreateNewViewNoSelectionRecordCommand = () => {
     }
     setViewPickerMode('create-empty');
     openDropdown({
-      dropdownComponentInstanceIdFromProps: VIEW_PICKER_DROPDOWN_ID,
+      dropdownComponentInstanceIdFromProps: viewPickerDropdownId,
     });
   };
 

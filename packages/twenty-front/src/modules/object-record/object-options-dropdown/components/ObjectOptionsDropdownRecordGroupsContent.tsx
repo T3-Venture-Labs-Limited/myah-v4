@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 
 import { isManyToOneRelationField } from '@/object-metadata/utils/isManyToOneRelationField';
-import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 import { RecordGroupsVisibilityDropdownSection } from '@/object-record/record-group/components/RecordGroupsVisibilityDropdownSection';
 import { useRecordGroupVisibility } from '@/object-record/record-group/hooks/useRecordGroupVisibility';
@@ -42,11 +41,12 @@ import {
 export const ObjectOptionsDropdownRecordGroupsContent = () => {
   const { t } = useLingui();
   const {
-    viewType,
     currentContentId,
+    dropdownId,
+    handleRecordGroupOrderChangeWithModal,
     onContentChange,
     resetContent,
-    handleRecordGroupOrderChangeWithModal,
+    viewType,
   } = useObjectOptionsDropdown();
 
   const { currentView } = useGetCurrentViewOnly();
@@ -102,7 +102,7 @@ export const ObjectOptionsDropdownRecordGroupsContent = () => {
 
   const selectedItemId = useAtomComponentStateValue(
     selectedItemIdComponentState,
-    OBJECT_OPTIONS_DROPDOWN_ID,
+    dropdownId,
   );
 
   const selectableItemIdArray = [
@@ -110,7 +110,7 @@ export const ObjectOptionsDropdownRecordGroupsContent = () => {
     'HideEmptyGroups',
   ];
 
-  const hiddenGroupsSelectableListId = `${OBJECT_OPTIONS_DROPDOWN_ID}-hidden-groups`;
+  const hiddenGroupsSelectableListId = `${dropdownId}-hidden-groups`;
 
   return (
     <DropdownContent>
@@ -126,8 +126,8 @@ export const ObjectOptionsDropdownRecordGroupsContent = () => {
       </DropdownMenuHeader>
       <DropdownMenuItemsContainer>
         <SelectableList
-          selectableListInstanceId={OBJECT_OPTIONS_DROPDOWN_ID}
-          focusId={OBJECT_OPTIONS_DROPDOWN_ID}
+          selectableListInstanceId={dropdownId}
+          focusId={dropdownId}
           selectableItemIdArray={selectableItemIdArray}
         >
           {currentView?.key !== 'INDEX' && (

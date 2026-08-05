@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import { RecordChip } from '@/object-record/components/RecordChip';
@@ -94,6 +95,150 @@ describe('RecordChip identifier navigation', () => {
     expect(openGenericRecordInSidePanel).not.toHaveBeenCalled();
     expect(openRecordInSidePanel).not.toHaveBeenCalled();
   });
+
+  it.each([
+    {
+      activation: 'CLICK',
+      triggerEvent: 'CLICK' as const,
+      activate: (link: HTMLElement) => fireEvent.click(link),
+    },
+    {
+      activation: 'MOUSE_DOWN',
+      triggerEvent: 'MOUSE_DOWN' as const,
+      activate: (link: HTMLElement) => fireEvent.mouseDown(link),
+    },
+  ])(
+    'uses a custom Creator List record-show handler without navigation on $activation',
+    ({ triggerEvent, activate }) => {
+      render(
+        <MemoryRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          initialEntries={['/objects/creator-lists']}
+        >
+          <RecordChip
+            objectNameSingular="creatorList"
+            record={{ id: 'list-id' } as never}
+            to="/objects/creator-lists/list-id"
+            triggerEvent={triggerEvent}
+            onClick={openGenericRecordInSidePanel}
+          />
+          <CurrentLocation />
+        </MemoryRouter>,
+      );
+
+      activate(screen.getByRole('link', { name: /Creator List/ }));
+
+      expect(openGenericRecordInSidePanel).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('status')).toHaveTextContent(
+        '/objects/creator-lists',
+      );
+    },
+  );
+
+  it.each([
+    ['CLICK', 'Enter', '{Enter}'],
+    ['CLICK', 'Space', ' '],
+    ['MOUSE_DOWN', 'Enter', '{Enter}'],
+    ['MOUSE_DOWN', 'Space', ' '],
+  ] as const)(
+    'uses a custom Creator List record-show handler without navigation on %s %s',
+    async (triggerEvent, _activation, key) => {
+      const user = userEvent.setup();
+      let activationElement: EventTarget | null = null;
+
+      render(
+        <MemoryRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          initialEntries={['/objects/creator-lists']}
+        >
+          <RecordChip
+            objectNameSingular="creatorList"
+            record={{ id: 'list-id' } as never}
+            to="/objects/creator-lists/list-id"
+            triggerEvent={triggerEvent}
+            onClick={(event) => {
+              activationElement = event.currentTarget;
+              openGenericRecordInSidePanel(event);
+            }}
+          />
+          <CurrentLocation />
+        </MemoryRouter>,
+      );
+
+      const link = screen.getByRole('link', { name: /Creator List/ });
+      link.focus();
+
+      await user.keyboard(key);
+
+      expect(openGenericRecordInSidePanel).toHaveBeenCalledTimes(1);
+      expect(activationElement).toBe(link);
+      expect(screen.getByRole('status')).toHaveTextContent(
+        '/objects/creator-lists',
+      );
+    },
+  );
+
+  it('uses a custom Creator List handler once without navigation on MOUSE_DOWN click activation', () => {
+    let activationElement: EventTarget | null = null;
+
+    render(
+      <MemoryRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        initialEntries={['/objects/creator-lists']}
+      >
+        <RecordChip
+          objectNameSingular="creatorList"
+          record={{ id: 'list-id' } as never}
+          to="/objects/creator-lists/list-id"
+          triggerEvent="MOUSE_DOWN"
+          onClick={(event) => {
+            activationElement = event.currentTarget;
+            openGenericRecordInSidePanel(event);
+          }}
+        />
+        <CurrentLocation />
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole('link', { name: /Creator List/ });
+
+    fireEvent.click(link);
+
+    expect(openGenericRecordInSidePanel).toHaveBeenCalledTimes(1);
+    expect(activationElement).toBe(link);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '/objects/creator-lists',
+    );
+  });
+
+  it.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Meta', { metaKey: true }],
+  ] as const)(
+    'leaves a %s modified zero-detail MOUSE_DOWN click native',
+    (_modifier, modifierKeys) => {
+      render(
+        <MemoryRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          initialEntries={['/objects/creator-lists']}
+        >
+          <RecordChip
+            objectNameSingular="creatorList"
+            record={{ id: 'list-id' } as never}
+            to="/objects/creator-lists/list-id"
+            triggerEvent="MOUSE_DOWN"
+            onClick={openGenericRecordInSidePanel}
+          />
+          <CurrentLocation />
+        </MemoryRouter>,
+      );
+
+      const link = screen.getByRole('link', { name: /Creator List/ });
+
+      expect(fireEvent.click(link, { detail: 0, ...modifierKeys })).toBe(true);
+      expect(openGenericRecordInSidePanel).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ['CLICK', 'click'],

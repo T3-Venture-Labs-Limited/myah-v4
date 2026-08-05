@@ -1,3 +1,5 @@
+import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
+import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
 import { recordIndexOpenRecordInState } from '@/object-record/record-index/states/recordIndexOpenRecordInState';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
@@ -7,10 +9,12 @@ import { type GraphQLView } from '@/views/types/GraphQLView';
 import { type ViewOpenRecordIn } from '~/generated-metadata/graphql';
 import { viewPickerInputNameComponentState } from '@/views/view-picker/states/viewPickerInputNameComponentState';
 import { viewPickerSelectedIconComponentState } from '@/views/view-picker/states/viewPickerSelectedIconComponentState';
-import { useCallback } from 'react';
+import { useCallback, useContext } from 'react';
 
 export const useUpdateObjectViewOptions = () => {
   const store = useStore();
+
+  const contextStoreInstance = useContext(ContextStoreComponentInstanceContext);
 
   const setRecordIndexOpenRecordIn = useSetAtomState(
     recordIndexOpenRecordInState,
@@ -29,13 +33,23 @@ export const useUpdateObjectViewOptions = () => {
   const setAndPersistOpenRecordIn = useCallback(
     (openRecordIn: ViewOpenRecordIn, view: GraphQLView | undefined) => {
       if (!view) return;
-      setRecordIndexOpenRecordIn(openRecordIn);
-      store.set(recordIndexOpenRecordInState.atom, openRecordIn);
+      if (
+        (contextStoreInstance?.instanceId ?? MAIN_CONTEXT_STORE_INSTANCE_ID) ===
+        MAIN_CONTEXT_STORE_INSTANCE_ID
+      ) {
+        setRecordIndexOpenRecordIn(openRecordIn);
+        store.set(recordIndexOpenRecordInState.atom, openRecordIn);
+      }
       updateCurrentView({
         openRecordIn,
       });
     },
-    [setRecordIndexOpenRecordIn, updateCurrentView, store],
+    [
+      contextStoreInstance?.instanceId,
+      setRecordIndexOpenRecordIn,
+      store,
+      updateCurrentView,
+    ],
   );
 
   const setAndPersistViewName = useCallback(
