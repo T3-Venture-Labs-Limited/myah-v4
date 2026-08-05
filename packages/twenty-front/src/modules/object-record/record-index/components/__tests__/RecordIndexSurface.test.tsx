@@ -23,6 +23,7 @@ const mockRecordIndexIds: string[] = [];
 const mockRecordIndexConfigurations: Array<{
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+  shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
   recordIndexId: string;
 }> = [];
 const mockRecordIndexLoad = jest.fn();
@@ -107,8 +108,12 @@ jest.mock(
       const queryOnlyRecordFilters = useAtomComponentStateValue(
         queryOnlyRecordFiltersComponentState,
       );
-      const { indexIdentifierUrl, onOpenRecordFromIndexView, recordIndexId } =
-        useRecordIndexContextOrThrow();
+      const {
+        indexIdentifierUrl,
+        onOpenRecordFromIndexView,
+        recordIndexId,
+        shouldUseIndexIdentifierUrlOnFullPageOpen,
+      } = useRecordIndexContextOrThrow();
 
       mockRecordIndexContainer(
         queryOnlyRecordFilters,
@@ -120,6 +125,7 @@ jest.mock(
         indexIdentifierUrl,
         onOpenRecordFromIndexView,
         recordIndexId,
+        shouldUseIndexIdentifierUrlOnFullPageOpen,
       });
 
       return <div data-testid="native-index-container" />;
@@ -313,6 +319,7 @@ describe('RecordIndexSurface', () => {
           viewId="creator-default-view"
           indexIdentifierUrl={creatorShowUrl}
           onOpenRecordFromIndexView={openRecordFromListA}
+          shouldUseIndexIdentifierUrlOnFullPageOpen
           initialQueryOnlyRecordFilters={[listAFilter]}
         />
         <RecordIndexSurface
@@ -354,6 +361,7 @@ describe('RecordIndexSurface', () => {
           onOpenRecordFromIndexView: openRecordFromListA,
           recordIndexId:
             'creators-creator-default-view-creator-list-pane-list-a',
+          shouldUseIndexIdentifierUrlOnFullPageOpen: true,
         }),
         expect.objectContaining({
           indexIdentifierUrl: creatorShowUrl,

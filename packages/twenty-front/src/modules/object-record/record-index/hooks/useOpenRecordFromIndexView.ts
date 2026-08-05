@@ -19,6 +19,7 @@ import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { ViewOpenRecordIn } from '~/generated-metadata/graphql';
 import { useStore } from 'jotai';
 import { useCallback, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppPath, SidePanelPages } from 'twenty-shared/types';
 import { useIsMobile } from 'twenty-ui/utilities';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
@@ -28,11 +29,14 @@ export const useOpenRecordFromIndexView = () => {
 
   const {
     objectNameSingular,
+    indexIdentifierUrl,
     onOpenRecordFromIndexView,
     shouldPreserveParentViewStateOnOpen,
+    shouldUseIndexIdentifierUrlOnFullPageOpen,
   } = useRecordIndexContextOrThrow();
 
   const navigate = useNavigateApp();
+  const navigateTo = useNavigate();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
 
   const isMobile = useIsMobile();
@@ -125,10 +129,14 @@ export const useOpenRecordFromIndexView = () => {
           closeSidePanelMenu();
         }
 
-        navigate(AppPath.RecordShowPage, {
-          objectNameSingular,
-          objectRecordId: recordId,
-        });
+        if (shouldUseIndexIdentifierUrlOnFullPageOpen) {
+          navigateTo(indexIdentifierUrl(recordId));
+        } else {
+          navigate(AppPath.RecordShowPage, {
+            objectNameSingular,
+            objectRecordId: recordId,
+          });
+        }
       }
     },
     [
@@ -147,6 +155,9 @@ export const useOpenRecordFromIndexView = () => {
       contextStoreInstance?.instanceId,
       onOpenRecordFromIndexView,
       shouldPreserveParentViewStateOnOpen,
+      shouldUseIndexIdentifierUrlOnFullPageOpen,
+      indexIdentifierUrl,
+      navigateTo,
     ],
   );
 

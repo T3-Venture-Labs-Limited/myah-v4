@@ -49,6 +49,7 @@ export type RecordIndexSurfaceProps = {
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
   shouldPreserveParentViewStateOnOpen?: boolean;
+  shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
@@ -93,6 +94,7 @@ const RecordIndexSurfaceInstance = ({
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
   shouldPreserveParentViewStateOnOpen,
+  shouldUseIndexIdentifierUrlOnFullPageOpen,
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters = [],
@@ -164,6 +166,7 @@ const RecordIndexSurfaceInstance = ({
               indexIdentifierUrl,
               onOpenRecordFromIndexView,
               shouldPreserveParentViewStateOnOpen,
+              shouldUseIndexIdentifierUrlOnFullPageOpen,
               onViewChange,
               onRecordCreated,
               recordFieldByFieldMetadataItemId,
@@ -263,6 +266,7 @@ export const RecordIndexSurface = ({
   indexIdentifierUrl,
   onOpenRecordFromIndexView,
   shouldPreserveParentViewStateOnOpen,
+  shouldUseIndexIdentifierUrlOnFullPageOpen,
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters,
@@ -291,6 +295,9 @@ export const RecordIndexSurface = ({
       indexIdentifierUrl={indexIdentifierUrl}
       onOpenRecordFromIndexView={onOpenRecordFromIndexView}
       shouldPreserveParentViewStateOnOpen={shouldPreserveParentViewStateOnOpen}
+      shouldUseIndexIdentifierUrlOnFullPageOpen={
+        shouldUseIndexIdentifierUrlOnFullPageOpen
+      }
       onViewChange={onViewChange}
       onRecordCreated={onRecordCreated}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}

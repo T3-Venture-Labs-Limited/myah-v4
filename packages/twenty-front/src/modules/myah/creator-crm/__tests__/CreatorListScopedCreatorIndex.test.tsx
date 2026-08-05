@@ -45,6 +45,7 @@ const mockRecordIndexSurface = jest.fn(
     onViewChange?: (viewId: string) => void;
     onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
     shouldPreserveParentViewStateOnOpen?: boolean;
+    shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
     viewId: string;
   }) => (
     <div
@@ -115,6 +116,7 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
     onViewChange?: (viewId: string) => void;
     onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
     shouldPreserveParentViewStateOnOpen?: boolean;
+    shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
     viewId: string;
   }) => mockRecordIndexSurface(props),
 }));
@@ -198,6 +200,9 @@ describe('CreatorListScopedCreatorIndex', () => {
 
     expect(screen.getByText('Loading Creator List…')).toBeVisible();
     expect(
+      screen.getByRole('button', { name: 'Back to Creator Lists' }),
+    ).toBeVisible();
+    expect(
       screen.queryByTestId('record-index-surface'),
     ).not.toBeInTheDocument();
 
@@ -246,6 +251,7 @@ describe('CreatorListScopedCreatorIndex', () => {
       objectNameSingular: 'creator',
       viewId: 'creator-default-view',
       shouldPreserveParentViewStateOnOpen: true,
+      shouldUseIndexIdentifierUrlOnFullPageOpen: true,
     });
     expect(
       mockRecordIndexSurface.mock.calls.at(-1)?.[0].headerActionButton,
@@ -389,6 +395,27 @@ describe('CreatorListScopedCreatorIndex', () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps mobile Back available when the Creator List lookup fails', () => {
+    listResponses.set('list-a', {
+      error: new Error('List request failed'),
+      loading: false,
+    });
+    const onClose = jest.fn();
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to Creator Lists' }),
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('resets the focus stack to the main index before closing the scoped pane', () => {
     resolveCreatorList('list-a', 'List A');
     const onClose = jest.fn();
@@ -412,26 +439,23 @@ describe('CreatorListScopedCreatorIndex', () => {
     ).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 
-  it('omits the native header action on desktop', () => {
+  it('provides a native close action on desktop', () => {
     resolveCreatorList('list-a', 'List A');
     (useIsMobile as jest.Mock).mockReturnValue(false);
+    const onClose = jest.fn();
 
     render(
       <CreatorListScopedCreatorIndex
         creatorListId="list-a"
-        onClose={jest.fn()}
+        onClose={onClose}
       />,
     );
 
-    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
-      headerTitle: 'List A',
-    });
-    expect(
-      mockRecordIndexSurface.mock.calls.at(-1)?.[0].headerActionButton,
-    ).toBeUndefined();
-    expect(
-      screen.queryByRole('button', { name: 'Back to Creator Lists' }),
-    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to Creator Lists' }),
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(
       mockRecordIndexSurface.mock.calls.at(-1)?.[0].onOpenRecordFromIndexView,
     ).toBeUndefined();

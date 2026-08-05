@@ -17,6 +17,10 @@ let mockOnOpenRecordFromIndexView:
   | ((request: { recordId: string; source: 'record-chip' }) => void)
   | undefined;
 let mockShouldPreserveParentViewStateOnOpen = false;
+let mockShouldUseIndexIdentifierUrlOnFullPageOpen = false;
+const mockIndexIdentifierUrl = jest.fn(
+  (recordId: string) => `/object/creator/${recordId}?creatorListId=list-a`,
+);
 
 jest.mock('@/side-panel/hooks/useSidePanelMenu', () => ({
   useSidePanelMenu: () => ({ closeSidePanelMenu: mockCloseSidePanelMenu }),
@@ -67,6 +71,9 @@ jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
     onOpenRecordFromIndexView: mockOnOpenRecordFromIndexView,
     shouldPreserveParentViewStateOnOpen:
       mockShouldPreserveParentViewStateOnOpen,
+    shouldUseIndexIdentifierUrlOnFullPageOpen:
+      mockShouldUseIndexIdentifierUrlOnFullPageOpen,
+    indexIdentifierUrl: mockIndexIdentifierUrl,
     recordIndexId: 'creator-list-pane-index',
   }),
 }));
@@ -110,6 +117,10 @@ jest.mock('jotai', () => {
 
 jest.mock('twenty-ui/utilities', () => ({ useIsMobile: () => false }));
 
+jest.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 jest.mock('~/hooks/useNavigateApp', () => ({
   useNavigateApp: () => mockNavigate,
 }));
@@ -138,6 +149,8 @@ describe('useOpenRecordFromIndexView', () => {
     mockQueryOnlyRecordFilters = [membershipFilter];
     mockOnOpenRecordFromIndexView = undefined;
     mockShouldPreserveParentViewStateOnOpen = false;
+    mockShouldUseIndexIdentifierUrlOnFullPageOpen = false;
+    mockIndexIdentifierUrl.mockClear();
 
     mockStoreGet.mockImplementation((state) => {
       switch (state) {
@@ -217,6 +230,24 @@ describe('useOpenRecordFromIndexView', () => {
       source: 'record-chip',
     });
     expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockOpenRecordInSidePanel).not.toHaveBeenCalled();
+  });
+
+  it('uses the scoped identifier URL for configured full-page opens', () => {
+    mockCurrentViewOpenRecordIn = ViewOpenRecordIn.RECORD_PAGE;
+    mockShouldUseIndexIdentifierUrlOnFullPageOpen = true;
+    const { result } = renderOpenRecordHook('creator-list-pane-list-a');
+
+    act(() => {
+      result.current.openRecordFromIndexView({
+        recordId: 'creator-a',
+        source: 'record-chip',
+      });
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/object/creator/creator-a?creatorListId=list-a',
+    );
     expect(mockOpenRecordInSidePanel).not.toHaveBeenCalled();
   });
 });

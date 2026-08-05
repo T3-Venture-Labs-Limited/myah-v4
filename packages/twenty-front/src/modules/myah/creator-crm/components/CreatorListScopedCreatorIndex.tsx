@@ -15,7 +15,7 @@ import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
-import { useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppPath, ViewFilterOperand, ViewType } from 'twenty-shared/types';
 import { getAppPath } from 'twenty-shared/utils';
@@ -167,22 +167,43 @@ export const CreatorListScopedCreatorIndex = ({
     resetFocusStackToRecordIndex(PageFocusId.RecordIndex);
     onClose();
   }, [onClose, resetFocusStackToRecordIndex]);
+  const closeAction = (
+    <IconButton
+      Icon={IconArrowLeft}
+      ariaLabel={t`Back to Creator Lists`}
+      dataTestId="creator-list-pane-back"
+      onClick={handleClose}
+    />
+  );
 
-  const scopeContent =
-    !creatorObjectMetadataItem || !creatorListObjectMetadataItem ? (
-      <StyledScopeState>{t`Creator List is unavailable.`}</StyledScopeState>
-    ) : !creatorPermissions.canReadObjectRecords ? (
-      <StyledScopeState>
-        {t`You do not have permission to view Creators.`}
-      </StyledScopeState>
-    ) : !creatorListPermissions.canReadObjectRecords ? (
-      <StyledScopeState>
-        {t`You do not have permission to view Creator Lists.`}
-      </StyledScopeState>
-    ) : isCreatorListLoading ? (
-      <StyledScopeState>{t`Loading Creator List…`}</StyledScopeState>
-    ) : creatorListError ? (
-      <StyledScopeState>
+  const renderScopeState = (content: ReactNode) => (
+    <StyledScopeState>
+      {closeAction}
+      {content}
+    </StyledScopeState>
+  );
+
+  if (!creatorObjectMetadataItem || !creatorListObjectMetadataItem) {
+    return renderScopeState(t`Creator List is unavailable.`);
+  }
+
+  if (!creatorPermissions.canReadObjectRecords) {
+    return renderScopeState(t`You do not have permission to view Creators.`);
+  }
+
+  if (!creatorListPermissions.canReadObjectRecords) {
+    return renderScopeState(
+      t`You do not have permission to view Creator Lists.`,
+    );
+  }
+
+  if (isCreatorListLoading) {
+    return renderScopeState(t`Loading Creator List…`);
+  }
+
+  if (creatorListError) {
+    return renderScopeState(
+      <>
         {t`Unable to load Creator List.`}
         <Button
           Icon={IconRefresh}
@@ -191,40 +212,37 @@ export const CreatorListScopedCreatorIndex = ({
           title={t`Retry`}
           variant="secondary"
         />
-      </StyledScopeState>
-    ) : !creatorListContext || !creatorListRelationFilter ? (
-      <StyledScopeState>{t`Creator List is unavailable.`}</StyledScopeState>
-    ) : !selectedCreatorViewId ? (
-      <StyledScopeState>{t`Loading Creator view…`}</StyledScopeState>
-    ) : (
-      <CreatorListBulkActionsContext.Provider value={creatorListContext}>
-        <RecordIndexSurface
-          key={creatorListId}
-          contextStoreInstanceId={`creator-list-pane-${creatorListId}`}
-          objectNameSingular="creator"
-          viewId={selectedCreatorViewId}
-          onViewChange={handleCreatorViewChange}
-          indexIdentifierUrl={creatorShowUrl}
-          onOpenRecordFromIndexView={
-            isMobile ? handleOpenCreatorRecord : undefined
-          }
-          onRecordCreated={handleCreatorCreated}
-          shouldPreserveParentViewStateOnOpen={isMobile}
-          initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
-          headerTitle={creatorListContext.target.label}
-          headerActionButton={
-            isMobile ? (
-              <IconButton
-                Icon={IconArrowLeft}
-                ariaLabel={t`Back to Creator Lists`}
-                dataTestId="creator-list-pane-back"
-                onClick={handleClose}
-              />
-            ) : undefined
-          }
-        />
-      </CreatorListBulkActionsContext.Provider>
+      </>,
     );
+  }
 
-  return scopeContent;
+  if (!creatorListContext || !creatorListRelationFilter) {
+    return renderScopeState(t`Creator List is unavailable.`);
+  }
+
+  if (!selectedCreatorViewId) {
+    return renderScopeState(t`Loading Creator view…`);
+  }
+
+  return (
+    <CreatorListBulkActionsContext.Provider value={creatorListContext}>
+      <RecordIndexSurface
+        key={creatorListId}
+        contextStoreInstanceId={`creator-list-pane-${creatorListId}`}
+        objectNameSingular="creator"
+        viewId={selectedCreatorViewId}
+        onViewChange={handleCreatorViewChange}
+        indexIdentifierUrl={creatorShowUrl}
+        onOpenRecordFromIndexView={
+          isMobile ? handleOpenCreatorRecord : undefined
+        }
+        shouldUseIndexIdentifierUrlOnFullPageOpen
+        onRecordCreated={handleCreatorCreated}
+        shouldPreserveParentViewStateOnOpen={isMobile}
+        initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
+        headerTitle={creatorListContext.target.label}
+        headerActionButton={closeAction}
+      />
+    </CreatorListBulkActionsContext.Provider>
+  );
 };
