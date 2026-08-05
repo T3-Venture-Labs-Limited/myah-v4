@@ -161,7 +161,11 @@ jest.mock(
       return (
         <section data-testid={`scoped-creator-index-${creatorListId}`}>
           <h2 tabIndex={-1}>{`List: ${creatorListId}`}</h2>
-          <button onClick={onClose} type="button">
+          <button
+            data-testid="creator-list-pane-back"
+            onClick={onClose}
+            type="button"
+          >
             Back to Creator Lists
           </button>
         </section>
@@ -302,7 +306,7 @@ describe('CreatorListWorkspace', () => {
     expect(screen.queryByTestId('creator-list-index')).not.toBeInTheDocument();
     await waitFor(() =>
       expect(
-        screen.getByRole('heading', { name: 'List: list-a' }),
+        screen.getByRole('button', { name: 'Back to Creator Lists' }),
       ).toHaveFocus(),
     );
 

@@ -103,13 +103,11 @@ export const CreatorListWorkspace = () => {
       return;
     }
 
-    const scopeTitle = scopedPaneElement.querySelector('h2');
+    const scopeBackButton = scopedPaneElement.querySelector<HTMLElement>(
+      '[data-testid="creator-list-pane-back"]',
+    );
 
-    if (scopeTitle instanceof HTMLElement) {
-      scopeTitle.focus();
-    } else {
-      scopedPaneElement.focus();
-    }
+    (scopeBackButton ?? scopedPaneElement).focus();
   }, [isMobile, scopedPaneElement, selectedCreatorListId]);
 
   useEffect(() => {

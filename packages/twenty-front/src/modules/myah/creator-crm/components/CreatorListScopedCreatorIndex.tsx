@@ -5,6 +5,7 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
+import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
@@ -15,6 +16,7 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppPath, ViewFilterOperand, ViewType } from 'twenty-shared/types';
 import { getAppPath } from 'twenty-shared/utils';
 import { IconArrowLeft, IconRefresh } from 'twenty-ui/icon';
@@ -44,6 +46,7 @@ export const CreatorListScopedCreatorIndex = ({
   onClose,
 }: CreatorListScopedCreatorIndexProps) => {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const { objectMetadataItems } = useObjectMetadataItems();
   const creatorObjectMetadataItem = objectMetadataItems.find(
     (item) => item.nameSingular === 'creator',
@@ -117,6 +120,12 @@ export const CreatorListScopedCreatorIndex = ({
         { creatorListId, viewId: selectedCreatorViewId },
       ),
     [creatorListId, selectedCreatorViewId],
+  );
+  const handleOpenCreatorRecord = useCallback(
+    ({ recordId }: RecordIndexOpenRequest) => {
+      navigate(creatorShowUrl(recordId));
+    },
+    [creatorShowUrl, navigate],
   );
 
   const handleCreatorViewChange = useCallback(
@@ -197,6 +206,9 @@ export const CreatorListScopedCreatorIndex = ({
           viewId={selectedCreatorViewId}
           onViewChange={handleCreatorViewChange}
           indexIdentifierUrl={creatorShowUrl}
+          onOpenRecordFromIndexView={
+            isMobile ? handleOpenCreatorRecord : undefined
+          }
           onRecordCreated={handleCreatorCreated}
           initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
           headerTitle={creatorListContext.target.label}
@@ -205,6 +217,7 @@ export const CreatorListScopedCreatorIndex = ({
               <IconButton
                 Icon={IconArrowLeft}
                 ariaLabel={t`Back to Creator Lists`}
+                dataTestId="creator-list-pane-back"
                 onClick={handleClose}
               />
             ) : undefined

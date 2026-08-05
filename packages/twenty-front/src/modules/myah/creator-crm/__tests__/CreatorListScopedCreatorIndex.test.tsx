@@ -5,6 +5,7 @@ import { CreatorListScopedCreatorIndex } from '@/myah/creator-crm/components/Cre
 import { useCreatorListBulkActionsContext } from '@/myah/creator-crm/contexts/CreatorListBulkActionsContext';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { PageFocusId } from '@/types/PageFocusId';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -13,6 +14,7 @@ import { FieldMetadataType, ViewType } from 'twenty-shared/types';
 
 const mockResetFocusStackToRecordIndex = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
+const mockNavigate = jest.fn();
 const mockUseAtomStateValue = useAtomStateValue as jest.Mock;
 
 const ScopedBulkActionsContextValue = () => {
@@ -41,6 +43,7 @@ const mockRecordIndexSurface = jest.fn(
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onRecordCreated?: (record: { id: string }) => Promise<void>;
     onViewChange?: (viewId: string) => void;
+    onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
     viewId: string;
   }) => (
     <div
@@ -109,6 +112,7 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onRecordCreated?: (record: { id: string }) => Promise<void>;
     onViewChange?: (viewId: string) => void;
+    onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
     viewId: string;
   }) => mockRecordIndexSurface(props),
 }));
@@ -135,6 +139,10 @@ jest.mock('@/views/hooks/useViewOrDefaultView', () => ({
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
   useAtomStateValue: jest.fn(),
 }));
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
 
 const listResponses = new Map<
   string,
@@ -153,6 +161,7 @@ const resolveCreatorList = (id: string, name: string) => {
 describe('CreatorListScopedCreatorIndex', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockNavigate.mockClear();
     listResponses.clear();
 
     (useFindOneRecord as jest.Mock).mockImplementation(
@@ -288,6 +297,26 @@ describe('CreatorListScopedCreatorIndex', () => {
     );
   });
 
+  it('keeps mobile Creator record opens within the selected List route', () => {
+    resolveCreatorList('list-a', 'List A');
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
+    );
+
+    mockRecordIndexSurface.mock.calls.at(-1)?.[0].onOpenRecordFromIndexView?.({
+      recordId: 'creator-1',
+      source: 'table-identifier-action',
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/object/creator/creator-1?creatorListId=list-a&viewId=creator-default-view',
+    );
+  });
+
   it('adds a newly created Creator to the selected List once', async () => {
     resolveCreatorList('list-a', 'List A');
     mockApplyCreatorBulkRelationship.mockResolvedValue(undefined);
@@ -377,6 +406,9 @@ describe('CreatorListScopedCreatorIndex', () => {
     expect(
       screen.queryByRole('button', { name: 'Back to Creator Lists' }),
     ).not.toBeInTheDocument();
+    expect(
+      mockRecordIndexSurface.mock.calls.at(-1)?.[0].onOpenRecordFromIndexView,
+    ).toBeUndefined();
   });
 
   it('keeps List B visible when deferred List A resolves after selection changes', () => {
