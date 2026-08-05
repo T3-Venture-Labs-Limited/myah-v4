@@ -1,0 +1,179 @@
+import { CreatorListScopedCreatorIndex } from '@/myah/creator-crm/components/CreatorListScopedCreatorIndex';
+import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
+import { RecordIndexContainerGater } from '@/object-record/record-index/components/RecordIndexContainerGater';
+import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
+import { styled } from '@linaria/react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { AppPath } from 'twenty-shared/types';
+import { getAppPath } from 'twenty-shared/utils';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
+
+const StyledWorkspace = styled.div<{ hasSelection: boolean }>`
+  display: grid;
+  flex: 1;
+  grid-template-columns: ${({ hasSelection }) =>
+    hasSelection ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)'};
+  min-height: 0;
+  min-width: 0;
+`;
+
+const StyledPane = styled.div`
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+
+  &:not(:last-child) {
+    border-right: 1px solid ${themeCssVariables.border.color.light};
+  }
+`;
+
+const StyledMobileWorkspace = styled.div`
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+`;
+
+type ActivationControl =
+  | { buttonIndex: number; type: 'row-button' }
+  | { type: 'name-link' }
+  | { type: 'record-board-card' };
+
+type LastOpenNavigation = {
+  activationControl: ActivationControl;
+  request: RecordIndexOpenRequest;
+};
+
+export const CreatorListWorkspace = () => {
+  const isMobile = useIsMobile();
+  const [searchParams] = useSearchParams();
+  const [selectedCreatorListId, setSelectedCreatorListId] = useState<
+    string | null
+  >(searchParams.get('creatorListId'));
+  const [lastOpenNavigation, setLastOpenNavigation] =
+    useState<LastOpenNavigation | null>(null);
+  const [scopedPaneElement, setScopedPaneElement] =
+    useState<HTMLDivElement | null>(null);
+
+  const creatorListShowUrl = useCallback(
+    (creatorListId: string) =>
+      getAppPath(AppPath.RecordShowPage, {
+        objectNameSingular: 'creatorList',
+        objectRecordId: creatorListId,
+      }),
+    [],
+  );
+
+  const handleOpenCreatorList = useCallback(
+    (request: RecordIndexOpenRequest) => {
+      const { activationElement, recordId, source } = request;
+      const recordRow = activationElement?.closest<HTMLElement>(
+        `[data-testid="row-id-${recordId}"]`,
+      );
+      const buttonIndex =
+        recordRow && activationElement
+          ? Array.from(
+              recordRow.querySelectorAll<HTMLElement>('button'),
+            ).indexOf(activationElement)
+          : -1;
+
+      setLastOpenNavigation({
+        request,
+        activationControl:
+          source === 'table-identifier-action'
+            ? { buttonIndex: Math.max(buttonIndex, 0), type: 'row-button' }
+            : source === 'record-board-card'
+              ? { type: 'record-board-card' }
+              : { type: 'name-link' },
+      });
+      setSelectedCreatorListId(recordId);
+    },
+    [],
+  );
+
+  const handleCloseCreatorList = useCallback(() => {
+    setSelectedCreatorListId(null);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCreatorListId || !isMobile || !scopedPaneElement) {
+      return;
+    }
+
+    const scopeBackButton = scopedPaneElement.querySelector<HTMLElement>(
+      '[data-testid="creator-list-pane-back"]',
+    );
+
+    (scopeBackButton ?? scopedPaneElement).focus();
+  }, [isMobile, scopedPaneElement, selectedCreatorListId]);
+
+  useEffect(() => {
+    if (selectedCreatorListId) {
+      return;
+    }
+
+    const lastOpenRequest = lastOpenNavigation?.request;
+    const lastActivationControl = lastOpenNavigation?.activationControl;
+
+    if (lastOpenRequest?.activationElement?.isConnected) {
+      lastOpenRequest.activationElement.focus();
+      return;
+    }
+
+    const recordRow = document.querySelector<HTMLElement>(
+      `[data-testid="row-id-${lastOpenRequest?.recordId}"]`,
+    );
+    const replacementActivationElement =
+      lastActivationControl?.type === 'row-button'
+        ? recordRow?.querySelectorAll<HTMLElement>('button')[
+            lastActivationControl.buttonIndex
+          ]
+        : lastActivationControl?.type === 'record-board-card'
+          ? document.querySelector<HTMLElement>(
+              `[data-record-board-card-id="${lastOpenRequest?.recordId}"]`,
+            )
+          : document.querySelector<HTMLElement>(
+              `a[href="${creatorListShowUrl(lastOpenRequest?.recordId ?? '')}"]`,
+            );
+
+    replacementActivationElement?.focus();
+  }, [creatorListShowUrl, isMobile, lastOpenNavigation, selectedCreatorListId]);
+
+  const creatorListIndex = (
+    <StyledPane data-testid="creator-list-index">
+      <RecordIndexContainerGater
+        indexIdentifierUrl={creatorListShowUrl}
+        onOpenRecordFromIndexView={handleOpenCreatorList}
+      />
+    </StyledPane>
+  );
+
+  const scopedCreatorIndex = selectedCreatorListId && (
+    <StyledPane ref={setScopedPaneElement} tabIndex={-1}>
+      <CreatorListScopedCreatorIndex
+        creatorListId={selectedCreatorListId}
+        onClose={handleCloseCreatorList}
+      />
+    </StyledPane>
+  );
+
+  return isMobile ? (
+    <StyledMobileWorkspace
+      className="creator-list-mobile-pane"
+      data-testid="creator-list-mobile-pane"
+    >
+      {selectedCreatorListId ? scopedCreatorIndex : creatorListIndex}
+    </StyledMobileWorkspace>
+  ) : (
+    <StyledWorkspace
+      data-testid="creator-list-workspace"
+      hasSelection={selectedCreatorListId !== null}
+    >
+      {creatorListIndex}
+      {scopedCreatorIndex}
+    </StyledWorkspace>
+  );
+};

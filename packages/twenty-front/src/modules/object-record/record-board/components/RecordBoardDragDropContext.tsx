@@ -6,10 +6,10 @@ import { useProcessBoardCardDrop } from '@/object-record/record-drag/hooks/usePr
 import { useStartRecordDrag } from '@/object-record/record-drag/hooks/useStartRecordDrag';
 import { originalDragSelectionComponentState } from '@/object-record/record-drag/states/originalDragSelectionComponentState';
 
-import { RECORD_INDEX_REMOVE_SORTING_MODAL_ID } from '@/object-record/record-index/constants/RecordIndexRemoveSortingModalId';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { getBoardCardDropBehavior } from '@/object-record/record-board/utils/getBoardCardDropBehavior';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useAtomComponentSelectorCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorCallbackState';
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
 import {
@@ -24,6 +24,7 @@ export const RecordBoardDragDropContext = ({
   children,
 }: React.PropsWithChildren) => {
   const { recordBoardId } = useContext(RecordBoardContext);
+  const { recordIndexRemoveSortingModalId } = useViewBarControlIds();
 
   const currentRecordSorts = useAtomComponentStateCallbackState(
     currentRecordSortsComponentState,
@@ -92,7 +93,7 @@ export const RecordBoardDragDropContext = ({
       if (boardCardDropBehavior.shouldBlockDrop) {
         store.set(isRecordBoardDropProcessingCallbackState, false);
         endRecordDrag();
-        openModal(RECORD_INDEX_REMOVE_SORTING_MODAL_ID);
+        openModal(recordIndexRemoveSortingModalId);
         return;
       }
 
@@ -115,6 +116,7 @@ export const RecordBoardDragDropContext = ({
       endRecordDrag,
       currentRecordSorts,
       openModal,
+      recordIndexRemoveSortingModalId,
       store,
       originalDragSelectionCallbackState,
       isRecordBoardDropProcessingCallbackState,

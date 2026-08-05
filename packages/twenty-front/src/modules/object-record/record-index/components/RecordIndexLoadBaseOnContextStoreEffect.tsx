@@ -7,7 +7,15 @@ import { viewFromViewIdFamilySelector } from '@/views/states/selectors/viewFromV
 import { useEffect, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
-export const RecordIndexLoadBaseOnContextStoreEffect = () => {
+type RecordIndexLoadBaseOnContextStoreEffectProps = {
+  recordIndexId?: string;
+  skipGlobalIndexStates?: boolean;
+};
+
+export const RecordIndexLoadBaseOnContextStoreEffect = ({
+  recordIndexId,
+  skipGlobalIndexStates,
+}: RecordIndexLoadBaseOnContextStoreEffectProps) => {
   const { loadRecordIndexStates } = useLoadRecordIndexStates();
   const contextStoreCurrentViewId = useAtomComponentStateValue(
     contextStoreCurrentViewIdComponentState,
@@ -36,7 +44,10 @@ export const RecordIndexLoadBaseOnContextStoreEffect = () => {
     }
 
     if (isDefined(view)) {
-      loadRecordIndexStates(view, objectMetadataItem);
+      loadRecordIndexStates(view, objectMetadataItem, {
+        recordIndexId,
+        skipGlobalIndexStates,
+      });
       setLoadedViewId(contextStoreCurrentViewId);
     }
   }, [
@@ -44,6 +55,8 @@ export const RecordIndexLoadBaseOnContextStoreEffect = () => {
     loadRecordIndexStates,
     loadedViewId,
     objectMetadataItem,
+    recordIndexId,
+    skipGlobalIndexStates,
     view,
   ]);
 

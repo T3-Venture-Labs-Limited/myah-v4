@@ -5,13 +5,15 @@ import { FocusComponentType } from '@/ui/utilities/focus/types/FocusComponentTyp
 export const useResetFocusStackToRecordIndex = () => {
   const { resetFocusStackToFocusItem } = useResetFocusStackToFocusItem();
 
-  const resetFocusStackToRecordIndex = () => {
+  const resetFocusStackToRecordIndex = (
+    recordIndexFocusId: string = PageFocusId.RecordIndex,
+  ) => {
     resetFocusStackToFocusItem({
       focusStackItem: {
-        focusId: PageFocusId.RecordIndex,
+        focusId: recordIndexFocusId,
         componentInstance: {
           componentType: FocusComponentType.PAGE,
-          componentInstanceId: PageFocusId.RecordIndex,
+          componentInstanceId: recordIndexFocusId,
         },
         globalHotkeysConfig: {
           enableGlobalHotkeysWithModifiers: true,

@@ -1,9 +1,7 @@
-import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 import { useSetViewTypeFromLayoutOptionsMenu } from '@/object-record/object-options-dropdown/hooks/useSetViewTypeFromLayoutOptionsMenu';
 import { recordIndexCalendarLayoutState } from '@/object-record/record-index/states/recordIndexCalendarLayoutState';
 import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
-import { recordIndexOpenRecordInState } from '@/object-record/record-index/states/recordIndexOpenRecordInState';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { DropdownMenuHeader } from '@/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader';
 import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent';
@@ -14,6 +12,7 @@ import { SelectableList } from '@/ui/layout/selectable-list/components/Selectabl
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { useUpdateCurrentView } from '@/views/hooks/useUpdateCurrentView';
 import { type GraphQLView } from '@/views/types/GraphQLView';
@@ -24,7 +23,6 @@ import {
 } from '@/views/types/ViewType';
 import { useGetAvailableFieldsForCalendar } from '@/views/view-picker/hooks/useGetAvailableFieldsForCalendar';
 import { useGetAvailableFieldsToGroupRecordsBy } from '@/views/view-picker/hooks/useGetAvailableFieldsToGroupRecordsBy';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useLingui } from '@lingui/react/macro';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
@@ -48,10 +46,17 @@ import {
 export const ObjectOptionsDropdownLayoutContent = () => {
   const { t } = useLingui();
 
-  const { objectMetadataItem, resetContent, onContentChange, dropdownId } =
-    useObjectOptionsDropdown();
+  const {
+    isLayoutLocked,
+    objectMetadataItem,
+    resetContent,
+    onContentChange,
+    dropdownId,
+  } = useObjectOptionsDropdown();
 
   const { currentView } = useGetCurrentViewOnly();
+  const isViewTypeForced = isLayoutLocked;
+  const openRecordIn = currentView?.openRecordIn ?? ViewOpenRecordIn.SIDE_PANEL;
   const { updateCurrentView } = useUpdateCurrentView();
 
   const isCompactModeActive = currentView?.isCompact ?? false;
@@ -64,10 +69,6 @@ export const ObjectOptionsDropdownLayoutContent = () => {
       });
     },
     [updateCurrentView],
-  );
-
-  const recordIndexOpenRecordIn = useAtomStateValue(
-    recordIndexOpenRecordInState,
   );
   const recordIndexCalendarLayout = useAtomStateValue(
     recordIndexCalendarLayoutState,
@@ -120,21 +121,23 @@ export const ObjectOptionsDropdownLayoutContent = () => {
   const isDefaultView = currentView?.key === 'INDEX';
   const nbsp = '\u00A0';
 
-  const selectableItemIdArray = [
-    ViewType.TABLE,
-    ...(isDefaultView ? [] : [ViewType.KANBAN]),
-    ...(!isDefaultView ? [ViewType.CALENDAR] : []),
-    ViewOpenRecordIn.SIDE_PANEL,
-    ...(currentView?.type === ViewType.KANBAN ? ['Group'] : []),
-    ...(currentView?.type === ViewType.CALENDAR
-      ? ['CalendarView', 'CalendarDateField']
-      : []),
-    ...(currentView?.type !== ViewType.TABLE ? ['Compact view'] : []),
-  ];
+  const selectableItemIdArray = isViewTypeForced
+    ? [ViewOpenRecordIn.SIDE_PANEL]
+    : [
+        ViewType.TABLE,
+        ...(isDefaultView ? [] : [ViewType.KANBAN]),
+        ...(!isDefaultView ? [ViewType.CALENDAR] : []),
+        ViewOpenRecordIn.SIDE_PANEL,
+        ...(currentView?.type === ViewType.KANBAN ? ['Group'] : []),
+        ...(currentView?.type === ViewType.CALENDAR
+          ? ['CalendarView', 'CalendarDateField']
+          : []),
+        ...(currentView?.type !== ViewType.TABLE ? ['Compact view'] : []),
+      ];
 
   const selectedItemId = useAtomComponentStateValue(
     selectedItemIdComponentState,
-    OBJECT_OPTIONS_DROPDOWN_ID,
+    dropdownId,
   );
 
   return (
@@ -152,75 +155,79 @@ export const ObjectOptionsDropdownLayoutContent = () => {
 
       {!!currentView && (
         <SelectableList
-          selectableListInstanceId={OBJECT_OPTIONS_DROPDOWN_ID}
-          focusId={OBJECT_OPTIONS_DROPDOWN_ID}
+          selectableListInstanceId={dropdownId}
+          focusId={dropdownId}
           selectableItemIdArray={selectableItemIdArray}
         >
           <DropdownMenuItemsContainer scrollable={false}>
-            <SelectableListItem
-              itemId={ViewType.TABLE}
-              onEnter={() => {
-                setAndPersistViewType(ViewType.TABLE);
-              }}
-            >
-              <MenuItemSelect
-                LeftIcon={IconTable}
-                text={t(getViewTypeLabel(ViewType.TABLE))}
-                selected={currentView?.type === ViewType.TABLE}
-                focused={selectedItemId === ViewType.TABLE}
-                onClick={async () => {
-                  if (currentView?.type !== ViewType.TABLE) {
-                    await setAndPersistViewType(ViewType.TABLE);
-                  }
-                }}
-              />
-            </SelectableListItem>
-            <SelectableListItem
-              itemId={ViewType.CALENDAR}
-              onEnter={() => {
-                setAndPersistViewType(ViewType.CALENDAR);
-              }}
-            >
-              <MenuItemSelect
-                LeftIcon={viewTypeIconMapping(ViewType.CALENDAR)}
-                text={t(getViewTypeLabel(ViewType.CALENDAR))}
-                selected={currentView?.type === ViewType.CALENDAR}
-                focused={selectedItemId === ViewType.CALENDAR}
-                onClick={handleSelectCalendarViewType}
-              />
-            </SelectableListItem>
-            <SelectableListItem
-              itemId={ViewType.KANBAN}
-              onEnter={() => {
-                setAndPersistViewType(ViewType.KANBAN);
-              }}
-            >
-              <MenuItemSelect
-                LeftIcon={viewTypeIconMapping(ViewType.KANBAN)}
-                text={t(getViewTypeLabel(ViewType.KANBAN))}
-                disabled={isDefaultView}
-                focused={selectedItemId === ViewType.KANBAN}
-                contextualText={
-                  isDefaultView ? (
-                    <>
-                      {nbsp}·{nbsp}
-                      <OverflowingTextWithTooltip
-                        text={t`Not available for default view`}
-                      />
-                    </>
-                  ) : availableFieldsForGrouping.length === 0 ? (
-                    t`Create Select...`
-                  ) : undefined
-                }
-                contextualTextPosition="right"
-                selected={currentView?.type === ViewType.KANBAN}
-                onClick={handleSelectKanbanViewType}
-              />
-            </SelectableListItem>
+            {!isViewTypeForced && (
+              <>
+                <SelectableListItem
+                  itemId={ViewType.TABLE}
+                  onEnter={() => {
+                    setAndPersistViewType(ViewType.TABLE);
+                  }}
+                >
+                  <MenuItemSelect
+                    LeftIcon={IconTable}
+                    text={t(getViewTypeLabel(ViewType.TABLE))}
+                    selected={currentView?.type === ViewType.TABLE}
+                    focused={selectedItemId === ViewType.TABLE}
+                    onClick={async () => {
+                      if (currentView?.type !== ViewType.TABLE) {
+                        await setAndPersistViewType(ViewType.TABLE);
+                      }
+                    }}
+                  />
+                </SelectableListItem>
+                <SelectableListItem
+                  itemId={ViewType.CALENDAR}
+                  onEnter={() => {
+                    setAndPersistViewType(ViewType.CALENDAR);
+                  }}
+                >
+                  <MenuItemSelect
+                    LeftIcon={viewTypeIconMapping(ViewType.CALENDAR)}
+                    text={t(getViewTypeLabel(ViewType.CALENDAR))}
+                    selected={currentView?.type === ViewType.CALENDAR}
+                    focused={selectedItemId === ViewType.CALENDAR}
+                    onClick={handleSelectCalendarViewType}
+                  />
+                </SelectableListItem>
+                <SelectableListItem
+                  itemId={ViewType.KANBAN}
+                  onEnter={() => {
+                    setAndPersistViewType(ViewType.KANBAN);
+                  }}
+                >
+                  <MenuItemSelect
+                    LeftIcon={viewTypeIconMapping(ViewType.KANBAN)}
+                    text={t(getViewTypeLabel(ViewType.KANBAN))}
+                    disabled={isDefaultView}
+                    focused={selectedItemId === ViewType.KANBAN}
+                    contextualText={
+                      isDefaultView ? (
+                        <>
+                          {nbsp}·{nbsp}
+                          <OverflowingTextWithTooltip
+                            text={t`Not available for default view`}
+                          />
+                        </>
+                      ) : availableFieldsForGrouping.length === 0 ? (
+                        t`Create Select...`
+                      ) : undefined
+                    }
+                    contextualTextPosition="right"
+                    selected={currentView?.type === ViewType.KANBAN}
+                    onClick={handleSelectKanbanViewType}
+                  />
+                </SelectableListItem>
+              </>
+            )}
           </DropdownMenuItemsContainer>
           <DropdownMenuSeparator />
           <DropdownMenuItemsContainer scrollable={false}>
-            {currentView?.type === ViewType.CALENDAR && (
+            {!isViewTypeForced && currentView?.type === ViewType.CALENDAR && (
               <>
                 <SelectableListItem
                   itemId="CalendarDateField"
@@ -267,7 +274,7 @@ export const ObjectOptionsDropdownLayoutContent = () => {
               <MenuItem
                 focused={selectedItemId === ViewOpenRecordIn.SIDE_PANEL}
                 LeftIcon={
-                  recordIndexOpenRecordIn === ViewOpenRecordIn.SIDE_PANEL
+                  openRecordIn === ViewOpenRecordIn.SIDE_PANEL
                     ? IconLayoutSidebarRight
                     : IconLayoutNavbar
                 }
@@ -276,7 +283,7 @@ export const ObjectOptionsDropdownLayoutContent = () => {
                   onContentChange('layoutOpenIn');
                 }}
                 contextualText={
-                  recordIndexOpenRecordIn === ViewOpenRecordIn.SIDE_PANEL
+                  openRecordIn === ViewOpenRecordIn.SIDE_PANEL
                     ? t`Side Panel`
                     : t`Record Page`
                 }
@@ -284,7 +291,7 @@ export const ObjectOptionsDropdownLayoutContent = () => {
                 hasSubMenu
               />
             </SelectableListItem>
-            {currentView?.type === ViewType.KANBAN && (
+            {!isViewTypeForced && currentView?.type === ViewType.KANBAN && (
               <SelectableListItem
                 itemId="Group"
                 onEnter={() => {
@@ -308,7 +315,7 @@ export const ObjectOptionsDropdownLayoutContent = () => {
                 />
               </SelectableListItem>
             )}
-            {currentView?.type !== ViewType.TABLE && (
+            {!isViewTypeForced && currentView?.type !== ViewType.TABLE && (
               <SelectableListItem
                 itemId="Compact view"
                 onEnter={() => {

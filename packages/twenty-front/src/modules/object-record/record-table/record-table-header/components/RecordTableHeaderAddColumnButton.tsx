@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react';
 
 import { hasRecordGroupsComponentSelector } from '@/object-record/record-group/states/selectors/hasRecordGroupsComponentSelector';
-import { HIDDEN_TABLE_COLUMN_DROPDOWN_ID } from '@/object-record/record-table/constants/HiddenTableColumnDropdownId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { RECORD_TABLE_COLUMN_ADD_COLUMN_BUTTON_WIDTH } from '@/object-record/record-table/constants/RecordTableColumnAddColumnButtonWidth';
 import { RECORD_TABLE_COLUMN_ADD_COLUMN_BUTTON_WIDTH_CLASS_NAME } from '@/object-record/record-table/constants/RecordTableColumnAddColumnButtonWidthClassName';
 import { RECORD_TABLE_ROW_HEIGHT } from '@/object-record/record-table/constants/RecordTableRowHeight';
@@ -94,6 +94,7 @@ export const RecordTableHeaderAddColumnButton = () => {
     isRecordTableScrolledVertically;
 
   const { visibleRecordFields } = useRecordTableContextOrThrow();
+  const { hiddenTableColumnDropdownId } = useViewBarControlIds();
 
   return (
     <StyledPlusIconHeaderCell
@@ -109,7 +110,7 @@ export const RecordTableHeaderAddColumnButton = () => {
       />
       <StyledDropdownContainer>
         <Dropdown
-          dropdownId={HIDDEN_TABLE_COLUMN_DROPDOWN_ID}
+          dropdownId={hiddenTableColumnDropdownId}
           clickableComponent={
             <StyledPlusIconContainer>
               <IconPlus size={theme.icon.size.md} />

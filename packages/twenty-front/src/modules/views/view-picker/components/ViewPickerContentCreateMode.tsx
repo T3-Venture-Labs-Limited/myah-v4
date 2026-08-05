@@ -20,11 +20,8 @@ import { ViewPickerCreateButton } from '@/views/view-picker/components/ViewPicke
 import { ViewPickerIconAndNameContainer } from '@/views/view-picker/components/ViewPickerIconAndNameContainer';
 import { ViewPickerSaveButtonContainer } from '@/views/view-picker/components/ViewPickerSaveButtonContainer';
 import { ViewPickerSelectContainer } from '@/views/view-picker/components/ViewPickerSelectContainer';
-import { VIEW_PICKER_CALENDAR_FIELD_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerCalendarFieldDropdownId';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
-import { VIEW_PICKER_KANBAN_FIELD_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerKanbanFieldDropdownId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { VIEW_PICKER_TYPE_SELECT_OPTIONS } from '@/views/view-picker/constants/ViewPickerTypeSelectOptions';
-import { VIEW_PICKER_VIEW_TYPE_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerViewTypeDropdownId';
 import { useCreateViewFromCurrentState } from '@/views/view-picker/hooks/useCreateViewFromCurrentState';
 import { useGetAvailableFieldsForCalendar } from '@/views/view-picker/hooks/useGetAvailableFieldsForCalendar';
 import { useGetAvailableFieldsToGroupRecordsBy } from '@/views/view-picker/hooks/useGetAvailableFieldsToGroupRecordsBy';
@@ -49,8 +46,22 @@ const StyledFieldAvailableContainer = styled.div`
   width: calc(100% - ${themeCssVariables.spacing[4]});
 `;
 
-export const ViewPickerContentCreateMode = () => {
+type ViewPickerContentCreateModeProps = {
+  forcedViewType?: ViewType;
+  onViewChange?: (viewId: string) => void;
+};
+
+export const ViewPickerContentCreateMode = ({
+  onViewChange,
+  forcedViewType,
+}: ViewPickerContentCreateModeProps) => {
   const { t } = useLingui();
+  const {
+    viewPickerCalendarFieldDropdownId,
+    viewPickerDropdownId,
+    viewPickerKanbanFieldDropdownId,
+    viewPickerViewTypeDropdownId,
+  } = useViewBarControlIds();
   const { viewPickerMode, setViewPickerMode } = useViewPickerMode();
   const [hasManuallySelectedIcon, setHasManuallySelectedIcon] = useState(false);
 
@@ -88,13 +99,16 @@ export const ViewPickerContentCreateMode = () => {
   const [viewPickerType, setViewPickerType] = useAtomComponentState(
     viewPickerTypeComponentState,
   );
-
-  const { createViewFromCurrentState } = useCreateViewFromCurrentState();
+  const { createViewFromCurrentState } = useCreateViewFromCurrentState(
+    onViewChange,
+    forcedViewType,
+  );
 
   const { availableFieldsForGrouping } =
     useGetAvailableFieldsToGroupRecordsBy();
 
   const { availableFieldsForCalendar } = useGetAvailableFieldsForCalendar();
+  const resolvedViewPickerType = forcedViewType ?? viewPickerType;
 
   useHotkeysOnFocusedElement({
     keys: [Key.Enter],
@@ -104,7 +118,7 @@ export const ViewPickerContentCreateMode = () => {
       }
 
       if (
-        viewPickerType === ViewType.KANBAN &&
+        resolvedViewPickerType === ViewType.KANBAN &&
         availableFieldsForGrouping.length === 0
       ) {
         return;
@@ -112,17 +126,17 @@ export const ViewPickerContentCreateMode = () => {
 
       await createViewFromCurrentState();
     },
-    focusId: VIEW_PICKER_DROPDOWN_ID,
+    focusId: viewPickerDropdownId,
     dependencies: [
       viewPickerIsPersisting,
       createViewFromCurrentState,
-      viewPickerType,
+      resolvedViewPickerType,
       availableFieldsForGrouping,
       availableFieldsForCalendar,
     ],
   });
 
-  const defaultIcon = viewTypeIconMapping(viewPickerType).displayName;
+  const defaultIcon = viewTypeIconMapping(resolvedViewPickerType).displayName;
 
   const selectedIcon = useMemo(() => {
     if (hasManuallySelectedIcon) {
@@ -176,19 +190,21 @@ export const ViewPickerContentCreateMode = () => {
           <Select
             label={t`View type`}
             fullWidth
-            value={viewPickerType}
+            value={resolvedViewPickerType}
             onChange={(value) => {
               setViewPickerIsDirty(true);
               setViewPickerType(value);
             }}
-            options={VIEW_PICKER_TYPE_SELECT_OPTIONS.map((option) => ({
+            options={VIEW_PICKER_TYPE_SELECT_OPTIONS.filter(
+              (option) => !forcedViewType || option.value === forcedViewType,
+            ).map((option) => ({
               ...option,
               label: t(option.label),
             }))}
-            dropdownId={VIEW_PICKER_VIEW_TYPE_DROPDOWN_ID}
+            dropdownId={viewPickerViewTypeDropdownId}
           />
         </ViewPickerSelectContainer>
-        {viewPickerType === ViewType.KANBAN && (
+        {resolvedViewPickerType === ViewType.KANBAN && (
           <>
             <ViewPickerSelectContainer>
               <Select
@@ -207,7 +223,7 @@ export const ViewPickerContentCreateMode = () => {
                       }))
                     : [{ value: '', label: t`No Select field` }]
                 }
-                dropdownId={VIEW_PICKER_KANBAN_FIELD_DROPDOWN_ID}
+                dropdownId={viewPickerKanbanFieldDropdownId}
               />
             </ViewPickerSelectContainer>
             {availableFieldsForGrouping.length === 0 && (
@@ -219,7 +235,7 @@ export const ViewPickerContentCreateMode = () => {
             )}
           </>
         )}
-        {viewPickerType === ViewType.CALENDAR && (
+        {resolvedViewPickerType === ViewType.CALENDAR && (
           <>
             <ViewPickerSelectContainer>
               <Select
@@ -238,7 +254,7 @@ export const ViewPickerContentCreateMode = () => {
                       }))
                     : [{ value: '', label: t`No Date field` }]
                 }
-                dropdownId={VIEW_PICKER_CALENDAR_FIELD_DROPDOWN_ID}
+                dropdownId={viewPickerCalendarFieldDropdownId}
               />
             </ViewPickerSelectContainer>
             {availableFieldsForCalendar.length === 0 && (
@@ -254,7 +270,10 @@ export const ViewPickerContentCreateMode = () => {
       <DropdownMenuSeparator />
       <DropdownMenuItemsContainer scrollable={false}>
         <ViewPickerSaveButtonContainer>
-          <ViewPickerCreateButton />
+          <ViewPickerCreateButton
+            onViewChange={onViewChange}
+            forcedViewType={forcedViewType}
+          />
         </ViewPickerSaveButtonContainer>
       </DropdownMenuItemsContainer>
     </DropdownContent>

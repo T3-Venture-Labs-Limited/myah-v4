@@ -5,7 +5,7 @@ import { RecordTableCellContext } from '@/object-record/record-table/contexts/Re
 import { RecordTableCellButtons } from '@/object-record/record-table/record-table-cell/components/RecordTableCellButtons';
 import { useGetSecondaryRecordTableCellButton } from '@/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton';
 import { useOpenRecordTableCellFromCell } from '@/object-record/record-table/record-table-cell/hooks/useOpenRecordTableCellFromCell';
-import { useContext } from 'react';
+import { useContext, type MouseEvent } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { IconArrowUpRight, IconPencil } from 'twenty-ui/icon';
 
@@ -24,9 +24,9 @@ export const RecordTableCellEditButton = () => {
       ? customButtonIcon
       : IconPencil;
 
-  const handleMainButtonClick = () => {
+  const handleMainButtonClick = (event: MouseEvent<HTMLElement>) => {
     if (!isFieldInputOnly && isFirstColumn) {
-      openTableCell(undefined, true);
+      openTableCell(undefined, true, event.currentTarget);
     } else {
       openTableCell();
     }

@@ -15,8 +15,13 @@ export const useOpenRecordTableCellFromCell = () => {
 
   const { cellPosition } = useContext(RecordTableCellContext);
 
-  const openTableCell = (initialValue?: string, isNavigating = false) => {
+  const openTableCell = (
+    initialValue?: string,
+    isNavigating = false,
+    activationElement?: HTMLElement,
+  ) => {
     onOpenTableCell({
+      activationElement,
       cellPosition,
       recordId,
       fieldDefinition,

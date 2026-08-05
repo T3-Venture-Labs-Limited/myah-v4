@@ -89,10 +89,14 @@ export const RecordBoardCardHeader = () => {
               objectNameSingular={objectMetadataItem.nameSingular}
               record={recordStore}
               variant={ChipVariant.Transparent}
-              onClick={() => {
+              onClick={(event) => {
                 activateBoardCard({ rowIndex, columnIndex });
                 unfocusBoardCard();
-                openRecordFromIndexView({ recordId });
+                openRecordFromIndexView({
+                  activationElement: event.currentTarget,
+                  recordId,
+                  source: 'record-chip',
+                });
               }}
               triggerEvent={triggerEvent}
             />

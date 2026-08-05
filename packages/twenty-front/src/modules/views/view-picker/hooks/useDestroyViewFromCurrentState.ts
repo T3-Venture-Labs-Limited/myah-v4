@@ -14,7 +14,10 @@ import { viewPickerIsDirtyComponentState } from '@/views/view-picker/states/view
 import { viewPickerIsPersistingComponentState } from '@/views/view-picker/states/viewPickerIsPersistingComponentState';
 import { viewPickerReferenceViewIdComponentState } from '@/views/view-picker/states/viewPickerReferenceViewIdComponentState';
 
-export const useDestroyViewFromCurrentState = (viewBarInstanceId?: string) => {
+export const useDestroyViewFromCurrentState = (
+  viewBarInstanceId?: string,
+  onViewChange?: (viewId: string) => void,
+) => {
   const { closeAndResetViewPicker } = useCloseAndResetViewPicker();
 
   const viewPickerIsPersistingCallbackState =
@@ -43,7 +46,7 @@ export const useDestroyViewFromCurrentState = (viewBarInstanceId?: string) => {
 
   const { currentView } = useGetCurrentViewOnly();
 
-  const { changeView } = useChangeView();
+  const { changeView } = useChangeView(onViewChange);
 
   const { performViewAPIDestroy } = usePerformViewAPIPersist();
   const { removeNavigationMenuItemsByViewIds } =

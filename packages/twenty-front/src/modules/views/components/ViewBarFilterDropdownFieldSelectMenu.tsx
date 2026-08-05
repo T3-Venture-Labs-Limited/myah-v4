@@ -21,7 +21,7 @@ import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/Gene
 import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { VIEW_BAR_FILTER_BOTTOM_MENU_ITEM_IDS } from '@/views/constants/ViewBarFilterBottomMenuItemIds';
-import { ViewBarFilterDropdownIds } from '@/views/constants/ViewBarFilterDropdownIds';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useLingui } from '@lingui/react/macro';
 import { IconX } from 'twenty-ui/icon';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -53,6 +53,7 @@ export const StyledInput = styled.input`
 `;
 
 export const ViewBarFilterDropdownFieldSelectMenu = () => {
+  const { filterDropdownId } = useViewBarControlIds();
   const [objectFilterDropdownSearchInput, setObjectFilterDropdownSearchInput] =
     useAtomComponentState(objectFilterDropdownSearchInputComponentState);
 
@@ -112,7 +113,7 @@ export const ViewBarFilterDropdownFieldSelectMenu = () => {
         <SelectableList
           selectableItemIdArray={selectableFieldMetadataItemIds}
           selectableListInstanceId={FILTER_FIELD_LIST_ID}
-          focusId={ViewBarFilterDropdownIds.MAIN}
+          focusId={filterDropdownId}
         >
           {shouldShowVisibleFields && (
             <>

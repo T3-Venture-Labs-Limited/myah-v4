@@ -1,3 +1,5 @@
+import { type MouseEvent } from 'react';
+
 import { styled } from '@linaria/react';
 import { type IconComponent } from 'twenty-ui/icon';
 import { LightIconButtonGroup } from 'twenty-ui/input';
@@ -22,7 +24,7 @@ const StyledButtonContainer = styled.div`
 `;
 
 type RecordTableCellButtonsProps = {
-  onClick?: () => void;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
   Icon: IconComponent;
 }[];
 

@@ -13,7 +13,7 @@ import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/fl
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
-import { getRecordIndexIdFromObjectNamePluralAndViewId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
+import { getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
 import { isDefined } from 'twenty-shared/utils';
 import {
   type EngineComponentKey,
@@ -113,9 +113,10 @@ export const buildHeadlessCommandContextApi = ({
 
   const recordIndexId =
     objectMetadataItem && currentViewId
-      ? getRecordIndexIdFromObjectNamePluralAndViewId(
+      ? getRecordIndexIdFromObjectNamePluralAndViewIdAndContextStoreInstanceId(
           objectMetadataItem.namePlural,
           currentViewId,
+          contextStoreInstanceId,
         )
       : null;
 

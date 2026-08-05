@@ -13,7 +13,15 @@ import { viewPickerTypeComponentState } from '@/views/view-picker/states/viewPic
 import { t } from '@lingui/core/macro';
 import { Button } from 'twenty-ui/input';
 
-export const ViewPickerEditButton = () => {
+type ViewPickerEditButtonProps = {
+  forcedViewType?: ViewType;
+  onViewChange?: (viewId: string) => void;
+};
+
+export const ViewPickerEditButton = ({
+  onViewChange,
+  forcedViewType,
+}: ViewPickerEditButtonProps) => {
   const { availableFieldsForGrouping, navigateToSelectSettings } =
     useGetAvailableFieldsToGroupRecordsBy();
 
@@ -36,9 +44,16 @@ export const ViewPickerEditButton = () => {
   const viewPickerMainGroupByFieldMetadataId = useAtomComponentStateValue(
     viewPickerMainGroupByFieldMetadataIdComponentState,
   );
+  const resolvedViewPickerType = forcedViewType ?? viewPickerType;
 
-  const { createViewFromCurrentState } = useCreateViewFromCurrentState();
-  const { destroyViewFromCurrentState } = useDestroyViewFromCurrentState();
+  const { createViewFromCurrentState } = useCreateViewFromCurrentState(
+    onViewChange,
+    forcedViewType,
+  );
+  const { destroyViewFromCurrentState } = useDestroyViewFromCurrentState(
+    undefined,
+    onViewChange,
+  );
 
   if (viewPickerMode === 'edit') {
     return (
@@ -57,7 +72,7 @@ export const ViewPickerEditButton = () => {
   }
 
   if (
-    viewPickerType === ViewType.KANBAN &&
+    resolvedViewPickerType === ViewType.KANBAN &&
     availableFieldsForGrouping.length === 0
   ) {
     return (
@@ -73,7 +88,7 @@ export const ViewPickerEditButton = () => {
   }
 
   if (
-    viewPickerType === ViewType.TABLE ||
+    resolvedViewPickerType === ViewType.TABLE ||
     viewPickerMainGroupByFieldMetadataId !== ''
   ) {
     return (
@@ -86,7 +101,7 @@ export const ViewPickerEditButton = () => {
         justify="center"
         disabled={
           viewPickerIsPersisting ||
-          (viewPickerType === ViewType.KANBAN &&
+          (resolvedViewPickerType === ViewType.KANBAN &&
             viewPickerMainGroupByFieldMetadataId === '')
         }
       />

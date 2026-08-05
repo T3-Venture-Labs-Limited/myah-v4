@@ -9,7 +9,7 @@ import { RecordTableContent } from '@/object-record/record-table/components/Reco
 import { RecordTableEmpty } from '@/object-record/record-table/components/RecordTableEmpty';
 import { RecordTableScrollToFocusedCellEffect } from '@/object-record/record-table/components/RecordTableScrollToFocusedCellEffect';
 import { RecordTableScrollToFocusedRowEffect } from '@/object-record/record-table/components/RecordTableScrollToFocusedRowEffect';
-import { RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
+import { getRecordTableClickOutsideListenerId } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useResetTableRowSelection } from '@/object-record/record-table/hooks/internal/useResetTableRowSelection';
 import { isRecordTableEmptyStateHiddenComponentState } from '@/object-record/record-table/states/isRecordTableEmptyStateHiddenComponentState';
@@ -34,7 +34,7 @@ export const RecordTable = () => {
   const tableBodyRef = useRef<HTMLDivElement>(null);
 
   const { toggleClickOutside } = useClickOutsideListener(
-    RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID,
+    getRecordTableClickOutsideListenerId(recordTableId),
   );
 
   const isRecordTableInitialLoading = useAtomComponentStateValue(

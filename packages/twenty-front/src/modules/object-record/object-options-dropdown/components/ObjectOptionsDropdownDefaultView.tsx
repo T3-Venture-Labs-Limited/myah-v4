@@ -1,4 +1,3 @@
-import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
@@ -25,7 +24,8 @@ import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 export const ObjectOptionsDropdownDefaultView = () => {
   const { t } = useLingui();
-  const { recordIndexId, onContentChange } = useObjectOptionsDropdown();
+  const { dropdownId, isLayoutLocked, onContentChange, recordIndexId } =
+    useObjectOptionsDropdown();
 
   const { currentView } = useGetCurrentViewOnly();
 
@@ -38,20 +38,20 @@ export const ObjectOptionsDropdownDefaultView = () => {
 
   const selectableItemIdArray = [
     'Fields',
-    'Copy link to view',
+    ...(isLayoutLocked ? [] : ['Copy link to view']),
     'Create custom view',
   ];
 
   const selectedItemId = useAtomComponentStateValue(
     selectedItemIdComponentState,
-    OBJECT_OPTIONS_DROPDOWN_ID,
+    dropdownId,
   );
 
   const { openCreateViewDropdown } = useOpenCreateViewDropdown(recordIndexId);
   const { closeDropdown } = useCloseDropdown();
 
   const handleCreateCustomView = () => {
-    closeDropdown(OBJECT_OPTIONS_DROPDOWN_ID);
+    closeDropdown(dropdownId);
 
     openCreateViewDropdown(currentView);
   };
@@ -73,8 +73,8 @@ export const ObjectOptionsDropdownDefaultView = () => {
       </DropdownMenuItemsContainer>
       <DropdownMenuSeparator />
       <SelectableList
-        selectableListInstanceId={OBJECT_OPTIONS_DROPDOWN_ID}
-        focusId={OBJECT_OPTIONS_DROPDOWN_ID}
+        selectableListInstanceId={dropdownId}
+        focusId={dropdownId}
         selectableItemIdArray={selectableItemIdArray}
       >
         <DropdownMenuItemsContainer scrollable={false}>
@@ -95,23 +95,25 @@ export const ObjectOptionsDropdownDefaultView = () => {
         </DropdownMenuItemsContainer>
         <DropdownMenuSeparator />
         <DropdownMenuItemsContainer scrollable={false}>
-          <SelectableListItem
-            itemId="Copy link to view"
-            onEnter={() => {
-              const currentUrl = window.location.href;
-              copyToClipboard(currentUrl, t`Link copied to clipboard`);
-            }}
-          >
-            <MenuItem
-              focused={selectedItemId === 'Copy link to view'}
-              onClick={() => {
+          {!isLayoutLocked && (
+            <SelectableListItem
+              itemId="Copy link to view"
+              onEnter={() => {
                 const currentUrl = window.location.href;
                 copyToClipboard(currentUrl, t`Link copied to clipboard`);
               }}
-              LeftIcon={IconCopy}
-              text={t`Copy link to view`}
-            />
-          </SelectableListItem>
+            >
+              <MenuItem
+                focused={selectedItemId === 'Copy link to view'}
+                onClick={() => {
+                  const currentUrl = window.location.href;
+                  copyToClipboard(currentUrl, t`Link copied to clipboard`);
+                }}
+                LeftIcon={IconCopy}
+                text={t`Copy link to view`}
+              />
+            </SelectableListItem>
+          )}
           <SelectableListItem
             itemId="Create custom view"
             onEnter={handleCreateCustomView}

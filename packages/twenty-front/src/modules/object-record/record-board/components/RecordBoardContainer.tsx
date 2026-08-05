@@ -11,7 +11,7 @@ import { RecordBoardComponentInstanceContext } from '@/object-record/record-boar
 import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
 
 import { RecordIndexRemoveSortingModal } from '@/object-record/record-index/components/RecordIndexRemoveSortingModal';
-import { RECORD_INDEX_REMOVE_SORTING_MODAL_ID } from '@/object-record/record-index/constants/RecordIndexRemoveSortingModalId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 
 import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
@@ -55,9 +55,11 @@ export const RecordBoardContainer = ({
       ...args,
     });
 
+  const { recordIndexRemoveSortingModalId } = useViewBarControlIds();
+
   const isModalOpened = useAtomComponentStateValue(
     isModalOpenedComponentState,
-    RECORD_INDEX_REMOVE_SORTING_MODAL_ID,
+    recordIndexRemoveSortingModalId,
   );
 
   if (!isDefined(recordIndexGroupFieldMetadataItem)) {

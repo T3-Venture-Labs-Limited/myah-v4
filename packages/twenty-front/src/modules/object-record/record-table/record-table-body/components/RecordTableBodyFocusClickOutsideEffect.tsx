@@ -1,6 +1,6 @@
 import { COMMAND_MENU_DROPDOWN_CLICK_OUTSIDE_ID } from '@/command-menu-item/constants/CommandMenuDropdownClickOutsideId';
 import { COMMAND_MENU_CLICK_OUTSIDE_ID } from '@/command-menu/constants/CommandMenuClickOutsideId';
-import { RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
+import { getRecordTableClickOutsideListenerId } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
 import { SIDE_PANEL_CLICK_OUTSIDE_ID } from '@/side-panel/constants/SidePanelClickOutsideId';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useLeaveTableFocus } from '@/object-record/record-table/hooks/internal/useLeaveTableFocus';
@@ -33,7 +33,7 @@ export const RecordTableBodyFocusClickOutsideEffect = ({
       MODAL_BACKDROP_CLICK_OUTSIDE_ID,
       SIDE_PANEL_CLICK_OUTSIDE_ID,
     ],
-    listenerId: RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID,
+    listenerId: getRecordTableClickOutsideListenerId(recordTableId),
     refs: [tableBodyRef],
     callback: () => {
       if (

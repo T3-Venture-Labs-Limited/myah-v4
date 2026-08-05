@@ -5,7 +5,7 @@ import { RecordComponentInstanceContextsWrapper } from '@/object-record/componen
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { RecordIndexContextProvider } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useRecordIndexFieldMetadataDerivedStates } from '@/object-record/record-index/hooks/useRecordIndexFieldMetadataDerivedStates';
-import { RecordTableWidgetContextStoreInitEffect } from '@/object-record/record-table-widget/components/RecordTableWidgetContextStoreInitEffect';
+import { RecordTableWidgetContextStoreInitializer } from '@/object-record/record-table-widget/components/RecordTableWidgetContextStoreInitEffect';
 import { RecordTableWidgetViewLoadEffect } from '@/object-record/record-table-widget/components/RecordTableWidgetViewLoadEffect';
 import { getRecordIndexIdFromObjectNamePluralAndViewId } from '@/object-record/utils/getRecordIndexIdFromObjectNamePluralAndViewId';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
@@ -72,7 +72,8 @@ export const RecordTableWidgetProvider = ({
     <ContextStoreComponentInstanceContext.Provider
       value={{ instanceId: `record-table-widget-${widgetId}` }}
     >
-      <RecordTableWidgetContextStoreInitEffect
+      <RecordTableWidgetContextStoreInitializer
+        contextStoreInstanceId={`record-table-widget-${widgetId}`}
         objectMetadataItemId={objectMetadataItem.id}
         viewId={viewId}
       />

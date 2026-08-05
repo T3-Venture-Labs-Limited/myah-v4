@@ -7,6 +7,8 @@ import { useRecordBoardSelection } from '@/object-record/record-board/hooks/useR
 import { useResetRecordBoardSelection } from '@/object-record/record-board/hooks/useResetRecordBoardSelection';
 import { RecordBoardCardContext } from '@/object-record/record-board/record-board-card/contexts/RecordBoardCardContext';
 import { isRecordBoardCardSelectedComponentFamilyState } from '@/object-record/record-board/states/isRecordBoardCardSelectedComponentFamilyState';
+import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
+import { useOpenRecordFromIndexView } from '@/object-record/record-index/hooks/useOpenRecordFromIndexView';
 import { recordBoardSelectedRecordIdsComponentSelector } from '@/object-record/record-board/states/selectors/recordBoardSelectedRecordIdsComponentSelector';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
 import { useAtomComponentFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateValue';
@@ -20,6 +22,8 @@ export const useRecordBoardCardHotkeys = (focusId: string) => {
     RecordBoardCardContext,
   );
 
+  const { onOpenRecordFromIndexView } = useRecordIndexContextOrThrow();
+  const { openRecordFromIndexView } = useOpenRecordFromIndexView();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
   const { activateBoardCard } = useActiveRecordBoardCard();
   const { setRecordAsSelected } = useRecordBoardSelection();
@@ -44,11 +48,18 @@ export const useRecordBoardCardHotkeys = (focusId: string) => {
   };
 
   const handleOpenRecordInSidePanel = () => {
-    openRecordInSidePanel({
-      recordId,
-      objectNameSingular: objectMetadataItem.nameSingular,
-      isNewRecord: false,
-    });
+    if (onOpenRecordFromIndexView) {
+      openRecordFromIndexView({
+        recordId,
+        source: 'record-board-card',
+      });
+    } else {
+      openRecordInSidePanel({
+        recordId,
+        objectNameSingular: objectMetadataItem.nameSingular,
+        isNewRecord: false,
+      });
+    }
 
     activateBoardCard({
       rowIndex,

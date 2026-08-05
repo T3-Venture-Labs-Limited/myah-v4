@@ -110,6 +110,7 @@ const createStory = (contentId: ObjectOptionsContentId | null): Story => ({
             <ObjectOptionsDropdownContext.Provider
               value={{
                 viewType: ViewType.TABLE,
+                isLayoutLocked: false,
                 objectMetadataItem: companyObjectMetadataItem,
                 recordIndexId: instanceId,
                 currentContentId: contentId,

@@ -1,7 +1,6 @@
 import { useDropdownContextCurrentContentId } from '@/dropdown-context-state-management/hooks/useDropdownContextCurrentContentId';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { ObjectOptionsDropdownContent } from '@/object-record/object-options-dropdown/components/ObjectOptionsDropdownContent';
-import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { ObjectOptionsDropdownContext } from '@/object-record/object-options-dropdown/states/contexts/ObjectOptionsDropdownContext';
 import { type ObjectOptionsContentId } from '@/object-record/object-options-dropdown/types/ObjectOptionsContentId';
 import { RecordGroupReorderConfirmationModal } from '@/object-record/record-group/components/RecordGroupReorderConfirmationModal';
@@ -11,6 +10,7 @@ import { StyledHeaderDropdownButton } from '@/ui/layout/dropdown/components/Styl
 import { DROPDOWN_OFFSET_Y } from '@/ui/layout/dropdown/constants/DropdownOffsetY';
 import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { type ViewType } from '@/views/types/ViewType';
 import { Trans } from '@lingui/react/macro';
 
@@ -18,19 +18,25 @@ type ObjectOptionsDropdownProps = {
   viewType: ViewType;
   objectMetadataItem: EnrichedObjectMetadataItem;
   recordIndexId: string;
+  onViewChange?: (viewId: string) => void;
+  isLayoutLocked?: boolean;
 };
 
 export const ObjectOptionsDropdown = ({
   recordIndexId,
   objectMetadataItem,
+  onViewChange,
   viewType,
+  isLayoutLocked = false,
 }: ObjectOptionsDropdownProps) => {
   const { currentContentId, handleContentChange, handleResetContent } =
     useDropdownContextCurrentContentId<ObjectOptionsContentId>();
 
+  const { objectOptionsDropdownId } = useViewBarControlIds();
+
   const isDropdownOpen = useAtomComponentStateValue(
     isDropdownOpenComponentState,
-    OBJECT_OPTIONS_DROPDOWN_ID,
+    objectOptionsDropdownId,
   );
 
   const {
@@ -43,7 +49,7 @@ export const ObjectOptionsDropdown = ({
   return (
     <>
       <Dropdown
-        dropdownId={OBJECT_OPTIONS_DROPDOWN_ID}
+        dropdownId={objectOptionsDropdownId}
         dropdownOffset={{ y: DROPDOWN_OFFSET_Y }}
         clickableComponent={
           <StyledHeaderDropdownButton isUnfolded={isDropdownOpen}>
@@ -55,12 +61,14 @@ export const ObjectOptionsDropdown = ({
           <ObjectOptionsDropdownContext.Provider
             value={{
               viewType,
+              isLayoutLocked,
               objectMetadataItem,
               recordIndexId,
               currentContentId,
               onContentChange: handleContentChange,
               resetContent: handleResetContent,
-              dropdownId: OBJECT_OPTIONS_DROPDOWN_ID,
+              dropdownId: objectOptionsDropdownId,
+              onViewChange,
               handleRecordGroupOrderChangeWithModal,
             }}
           >

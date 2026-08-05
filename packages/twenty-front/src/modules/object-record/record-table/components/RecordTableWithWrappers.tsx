@@ -1,5 +1,6 @@
 import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
 import { useOpenRecordFromIndexView } from '@/object-record/record-index/hooks/useOpenRecordFromIndexView';
+import { useRecordIndexFocusId } from '@/object-record/record-index/hooks/useRecordIndexFocusId';
 import { RecordTable } from '@/object-record/record-table/components/RecordTable';
 import { RecordTableComponentInstance } from '@/object-record/record-table/components/RecordTableComponentInstance';
 import { RecordTableContextProvider } from '@/object-record/record-table/components/RecordTableContextProvider';
@@ -8,7 +9,7 @@ import { useSelectAllRows } from '@/object-record/record-table/hooks/internal/us
 import { useActiveRecordTableRow } from '@/object-record/record-table/hooks/useActiveRecordTableRow';
 import { useFocusedRecordTableRow } from '@/object-record/record-table/hooks/useFocusedRecordTableRow';
 import { RecordTableRecordLimitReloadEffect } from '@/object-record/record-table/virtualization/components/RecordTableRecordLimitReloadEffect';
-import { PageFocusId } from '@/types/PageFocusId';
+import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { styled } from '@linaria/react';
@@ -34,6 +35,8 @@ export const RecordTableWithWrappers = ({
   recordTableId,
   viewBarId,
 }: RecordTableWithWrappersProps) => {
+  const recordIndexFocusId = useRecordIndexFocusId();
+  const { resetFocusStackToRecordIndex } = useResetFocusStackToRecordIndex();
   const { selectAllRows } = useSelectAllRows(recordTableId);
 
   const handleSelectAllRows = () => {
@@ -43,8 +46,8 @@ export const RecordTableWithWrappers = ({
   useHotkeysOnFocusedElement({
     keys: ['ctrl+a,meta+a'],
     callback: handleSelectAllRows,
-    focusId: PageFocusId.RecordIndex,
-    dependencies: [handleSelectAllRows],
+    focusId: recordIndexFocusId,
+    dependencies: [handleSelectAllRows, recordIndexFocusId],
     options: {
       enableOnFormTags: false,
     },
@@ -54,13 +57,25 @@ export const RecordTableWithWrappers = ({
   const { unfocusRecordTableRow } = useFocusedRecordTableRow(recordTableId);
   const { openRecordFromIndexView } = useOpenRecordFromIndexView();
 
-  const handleRecordIdentifierClick = (rowIndex: number, recordId: string) => {
+  const handleRecordIdentifierClick = (
+    rowIndex: number,
+    recordId: string,
+    activationElement?: HTMLElement,
+  ) => {
     activateRecordTableRow(rowIndex);
     unfocusRecordTableRow();
-    openRecordFromIndexView({ recordId });
+    openRecordFromIndexView({
+      activationElement,
+      recordId,
+      source: 'record-chip',
+    });
   };
 
   const { deleteOneRecord } = useDeleteOneRecord({ objectNameSingular });
+
+  const handleTablePointerDown = () => {
+    resetFocusStackToRecordIndex(recordIndexFocusId);
+  };
 
   return (
     <RecordTableComponentInstance recordTableId={recordTableId}>
@@ -71,7 +86,9 @@ export const RecordTableWithWrappers = ({
         onRecordIdentifierClick={handleRecordIdentifierClick}
       >
         <EntityDeleteContext.Provider value={deleteOneRecord}>
-          <StyledRecordTablePrintBoundary>
+          <StyledRecordTablePrintBoundary
+            onMouseDownCapture={handleTablePointerDown}
+          >
             <ScrollWrapper
               componentInstanceId={`record-table-scroll-${recordTableId}`}
             >
