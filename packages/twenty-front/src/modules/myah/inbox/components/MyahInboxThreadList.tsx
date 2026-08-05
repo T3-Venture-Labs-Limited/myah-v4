@@ -1,4 +1,7 @@
-import { MyahInboxThreadFilters } from '@/myah/inbox/components/MyahInboxThreadFilters';
+import {
+  MyahInboxThreadFilters,
+  type MyahInboxRefreshStatus,
+} from '@/myah/inbox/components/MyahInboxThreadFilters';
 import { MyahInboxThreadRow } from '@/myah/inbox/components/MyahInboxThreadRow';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { type MyahInboxFilters } from '@/myah/inbox/states/myahInboxSelectionState';
@@ -55,11 +58,15 @@ type MyahInboxThreadListProps = {
   selectedThreadId: string | null;
   loading: boolean;
   loadingMore: boolean;
+  isRefreshing: boolean;
+  refreshStatus: MyahInboxRefreshStatus;
+  refreshError: string | null;
   error: { message: string } | undefined;
   hasNextPage: boolean;
   onSelectThread: (threadId: string) => void;
   onFiltersChange: (filters: MyahInboxFilters) => void;
   onLoadMore: () => void;
+  onRefresh: () => void;
   onRetry: () => void;
 };
 
@@ -69,11 +76,15 @@ export const MyahInboxThreadList = ({
   selectedThreadId,
   loading,
   loadingMore,
+  isRefreshing,
+  refreshStatus,
+  refreshError,
   error,
   hasNextPage,
   onSelectThread,
   onFiltersChange,
   onLoadMore,
+  onRefresh,
   onRetry,
 }: MyahInboxThreadListProps) => {
   // oxlint-disable-next-line twenty/no-state-useref -- DOM refs coordinate roving keyboard focus.
@@ -203,7 +214,7 @@ export const MyahInboxThreadList = ({
               }
               variant="secondary"
               size="small"
-              disabled={loadingMore}
+              disabled={loadingMore || isRefreshing}
               onClick={onLoadMore}
             />
           </StyledLoadMore>
@@ -216,7 +227,13 @@ export const MyahInboxThreadList = ({
     <StyledListPanel aria-label="Inbox conversations">
       <MyahInboxThreadFilters
         filters={filters}
+        loading={loading}
+        loadingMore={loadingMore}
+        isRefreshing={isRefreshing}
+        refreshStatus={refreshStatus}
+        refreshError={refreshError}
         onFiltersChange={onFiltersChange}
+        onRefresh={onRefresh}
       />
       {renderBody()}
     </StyledListPanel>

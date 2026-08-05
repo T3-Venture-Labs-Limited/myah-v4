@@ -1,5 +1,7 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
+import { MessageParticipantRole } from 'twenty-shared/types';
+
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 
 import {
@@ -442,6 +444,7 @@ describe('MyahInboxQueryService', () => {
   });
 
   it.each([
+    ['thread', { threadId: 'not-a-uuid' }],
     ['Campaign', { campaignId: 'not-a-uuid' }],
     ['owner', { owner: 'not-a-uuid' }],
   ])(
@@ -488,6 +491,38 @@ describe('MyahInboxQueryService', () => {
     expect(whereSql).toContain(':messageVisibilityFull');
     expect(whereSql).not.toContain(
       ':messageVisibilityMetadata) AND latest_message.text',
+    );
+    expect(calls.operations.lastIndexOf('where')).toBeLessThan(
+      calls.operations.indexOf('limit'),
+    );
+  });
+
+  it('searches the latest non-deleted sender by name or handle without a sender join before pagination', async () => {
+    const { service, calls } = createService();
+
+    await service.listThreads(
+      listInput({ first: 10, search: 'private phrase' }),
+    );
+
+    const whereSql = allWhereSql(calls);
+
+    expect(whereSql).toMatch(
+      /OR EXISTS \(\s*SELECT 1\s*FROM "[^"]+"\."messageParticipant" search_sender/,
+    );
+    expect(whereSql).toContain('search_sender."messageId" = latest_message.id');
+    expect(whereSql).toContain('search_sender."deletedAt" IS NULL');
+    expect(whereSql).toContain('search_sender.role = :fromParticipantRole');
+    expect(whereSql).toContain('search_sender."displayName" ILIKE :search');
+    expect(whereSql).toContain('search_sender.handle ILIKE :search');
+    expect(calls.where).toContainEqual([
+      expect.stringContaining('search_sender."displayName" ILIKE :search'),
+      { search: '%private phrase%' },
+    ]);
+    expect(calls.parameters).toMatchObject({
+      fromParticipantRole: MessageParticipantRole.FROM,
+    });
+    expect(calls.joins.some(([, alias]) => alias === 'search_sender')).toBe(
+      false,
     );
     expect(calls.operations.lastIndexOf('where')).toBeLessThan(
       calls.operations.indexOf('limit'),
