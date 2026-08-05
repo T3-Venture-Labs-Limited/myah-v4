@@ -35,6 +35,11 @@ const fixtureMarker = 'MYAH212-INTEGRATION-TASK7';
 const campaignName = 'MYAH-212 UAT · Summer Creator Launch';
 
 const markers = {
+  senderEmail: 'myah245.sender@creator.test',
+  senderDisplayName: 'MYAH245 Sender Display',
+  subjectSenderEmail: 'myah245.subject-sender@creator.test',
+  metadataSenderEmail: 'myah245.metadata-sender@creator.test',
+  hiddenSenderEmail: 'myah245.hidden-sender@creator.test',
   prefix: fixtureMarker,
   tied: `${fixtureMarker} TIED`,
   ownerSubject: `${fixtureMarker} owner-private subject`,
@@ -124,6 +129,8 @@ type MessageFixture = {
   text: string;
   receivedAt: string;
   deletedAssociation?: boolean;
+  senderHandle?: string;
+  senderDisplayName?: string;
 };
 
 const messageFixtures: MessageFixture[] = [
@@ -138,6 +145,8 @@ const messageFixtures: MessageFixture[] = [
     subject: `${markers.tied} linked`,
     text: 'Task 7 tied linked body',
     receivedAt: timestamps.tied,
+    senderHandle: markers.senderEmail,
+    senderDisplayName: markers.senderDisplayName,
   },
   {
     id: '21270000-2002-4000-8000-000000000002',
@@ -150,6 +159,7 @@ const messageFixtures: MessageFixture[] = [
     subject: `${markers.tied} unlinked readable`,
     text: 'Task 7 tied unlinked readable body',
     receivedAt: timestamps.tied,
+    senderHandle: markers.senderEmail,
   },
   {
     id: '21270000-2003-4000-8000-000000000003',
@@ -186,6 +196,7 @@ const messageFixtures: MessageFixture[] = [
     subject: markers.subjectVisible,
     text: markers.subjectMaskedBody,
     receivedAt: '2026-07-24T08:00:00.000Z',
+    senderHandle: markers.subjectSenderEmail,
   },
   {
     id: '21270000-2006-4000-8000-000000000006',
@@ -198,6 +209,7 @@ const messageFixtures: MessageFixture[] = [
     subject: markers.metadataMaskedSubject,
     text: markers.metadataMaskedBody,
     receivedAt: '2026-07-24T07:00:00.000Z',
+    senderHandle: markers.metadataSenderEmail,
   },
   {
     id: '21270000-2007-4000-8000-000000000007',
@@ -273,6 +285,7 @@ const messageFixtures: MessageFixture[] = [
     text: `${markers.hiddenOnly} body`,
     receivedAt: timestamps.hiddenNewest,
     deletedAssociation: true,
+    senderHandle: markers.hiddenSenderEmail,
   },
   {
     id: '21270000-2010-4000-8000-000000000010',
@@ -545,8 +558,8 @@ const seedNativeRecords = async (operatorAccessToken: string) => {
       data: {
         messageId: message.id,
         role: MessageParticipantRole.FROM,
-        handle: `${message.externalId}@creator.test`,
-        displayName: 'Task 7 Creator',
+        handle: message.senderHandle ?? `${message.externalId}@creator.test`,
+        displayName: message.senderDisplayName ?? 'Task 7 Creator',
       },
       token: operatorAccessToken,
     });

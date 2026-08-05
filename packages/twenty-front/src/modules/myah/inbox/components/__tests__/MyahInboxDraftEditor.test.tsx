@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import type * as ReactType from 'react';
 
@@ -112,6 +113,22 @@ describe('MyahInboxDraftEditor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSaveDraft.mockReset();
+  });
+
+  it('accepts a literal at-sign in the shared reply draft', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MyahInboxDraftEditor
+        {...defaultProps}
+        initialBody={{ markdown: '', blocknote: null }}
+      />,
+    );
+
+    const draft = screen.getByLabelText('Shared reply draft');
+    await user.type(draft, '@');
+
+    expect(draft).toHaveValue('@');
   });
 
   it('saves with the last confirmed revision and announces success', async () => {

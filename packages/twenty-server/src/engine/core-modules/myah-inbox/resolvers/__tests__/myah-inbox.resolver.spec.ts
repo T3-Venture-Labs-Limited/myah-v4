@@ -69,6 +69,48 @@ describe('MyahInboxResolver', () => {
     });
   });
 
+  it('passes a validated thread, search, state, and Campaign filter to the authenticated query', async () => {
+    const threadId = '20202020-0b5c-4178-bed7-d371f6411eaa';
+    const campaignId = '20202020-f7c5-4e2f-a44a-240b2d3a9d02';
+    const input = Object.assign(new MyahInboxThreadsInput(), {
+      first: 25,
+      threadId,
+      search: 'sender name',
+      states: ['NEEDS_REPLY'],
+      campaignId,
+    });
+    const listThreads = jest.fn().mockResolvedValue({
+      edges: [],
+      pageInfo: { endCursor: null, hasNextPage: false },
+    });
+    const resolver = new MyahInboxResolver(
+      { listThreads } as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      validate(input, { whitelist: true, forbidNonWhitelisted: true }),
+    ).resolves.toEqual([]);
+    await resolver.myahInboxThreads(
+      input,
+      workspace as never,
+      workspaceMemberId,
+    );
+
+    expect(listThreads).toHaveBeenCalledWith({
+      first: 25,
+      threadId,
+      search: 'sender name',
+      states: ['NEEDS_REPLY'],
+      campaignId,
+      authContext: userAuthContext,
+      user: userAuthContext.user,
+      workspace,
+      workspaceMemberId,
+    });
+  });
+
   it('fails closed if invoked outside user auth even when guards are bypassed in a direct call', async () => {
     jest.mocked(getWorkspaceAuthContext).mockReturnValue({
       type: 'system',

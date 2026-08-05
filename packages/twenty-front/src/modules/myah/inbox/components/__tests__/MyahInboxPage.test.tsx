@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
 import { StrictMode } from 'react';
 import { flushSync } from 'react-dom';
@@ -56,7 +62,7 @@ jest.mock('twenty-ui/input', () => ({
 }));
 
 const mockUseMyahInboxThreads = jest.fn();
-const mockRefetch = jest.fn();
+const mockRefresh = jest.fn();
 let mockIsMobile = false;
 let mockCurrentWorkspaceId = 'workspace-1';
 
@@ -77,13 +83,33 @@ jest.mock('@/myah/inbox/components/MyahInboxThreadList', () => ({
     threads,
     selectedThreadId,
     onSelectThread,
+    onRefresh,
+    isRefreshing,
+    refreshStatus,
+    refreshError,
   }: {
     threads: Array<{ id: string; subject: string | null }>;
     selectedThreadId: string | null;
     onSelectThread: (id: string) => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
+    refreshStatus?: 'idle' | 'refreshing' | 'succeeded' | 'failed';
+    refreshError?: string | null;
   }) => (
     <div aria-label="Thread list test double">
       <output aria-label="Selected thread">{selectedThreadId ?? 'none'}</output>
+      {threads.some((thread) => thread.id === selectedThreadId) && (
+        <output aria-label="Selected list row">{selectedThreadId}</output>
+      )}
+      <output aria-label="Refresh status">{refreshStatus ?? 'missing'}</output>
+      <button
+        aria-label="Refresh Inbox"
+        disabled={isRefreshing}
+        onClick={() => onRefresh?.()}
+      >
+        Refresh Inbox
+      </button>
+      {refreshError && <div role="alert">{refreshError}</div>}
       {threads.map((thread) => (
         <button key={thread.id} onClick={() => onSelectThread(thread.id)}>
           Select {thread.subject}
@@ -189,6 +215,34 @@ const threads = [
   },
 ];
 
+type RefreshResult = {
+  status: 'success' | 'failed' | 'ignored';
+  selectedThread: (typeof threads)[number] | null;
+};
+
+const createDeferred = <Value,>() => {
+  let resolve: (value: Value) => void = () => {};
+  const promise = new Promise<Value>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+};
+
+const createInboxState = (overrides: Record<string, unknown> = {}) => ({
+  threads,
+  loading: false,
+  loadingMore: false,
+  error: undefined,
+  hasNextPage: false,
+  loadMore: jest.fn(),
+  refresh: mockRefresh,
+  isRefreshing: false,
+  refreshStatus: 'idle' as const,
+  refreshError: null,
+  ...overrides,
+});
+
 const renderPage = (store = createStore()) => ({
   store,
   ...render(
@@ -201,17 +255,14 @@ const renderPage = (store = createStore()) => ({
 describe('MyahInboxPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockRefetch.mockReset();
+    mockRefresh.mockReset();
+    mockRefresh.mockResolvedValue({
+      status: 'success',
+      selectedThread: threads[0],
+    });
     mockIsMobile = false;
     mockCurrentWorkspaceId = 'workspace-1';
-    mockUseMyahInboxThreads.mockReturnValue({
-      threads,
-      loading: false,
-      error: undefined,
-      hasNextPage: false,
-      loadMore: jest.fn(),
-      refetch: mockRefetch,
-    });
+    mockUseMyahInboxThreads.mockReturnValue(createInboxState());
   });
 
   it('uses the exact native page-card shell, header, and side-panel control', () => {
@@ -290,7 +341,7 @@ describe('MyahInboxPage', () => {
       error: undefined,
       hasNextPage: false,
       loadMore: jest.fn(),
-      refetch: mockRefetch,
+      refresh: mockRefresh,
     });
 
     rerender(
@@ -322,7 +373,7 @@ describe('MyahInboxPage', () => {
       error: undefined,
       hasNextPage: false,
       loadMore: jest.fn(),
-      refetch: mockRefetch,
+      refresh: mockRefresh,
     });
     rerender(
       <JotaiProvider store={store}>
@@ -343,7 +394,7 @@ describe('MyahInboxPage', () => {
       error: undefined,
       hasNextPage: false,
       loadMore: jest.fn(),
-      refetch: mockRefetch,
+      refresh: mockRefresh,
     });
     rerender(
       <JotaiProvider store={store}>
@@ -384,7 +435,7 @@ describe('MyahInboxPage', () => {
       error: undefined,
       hasNextPage: false,
       loadMore: jest.fn(),
-      refetch: jest.fn(),
+      refresh: jest.fn(),
     });
 
     rerender(
@@ -398,7 +449,11 @@ describe('MyahInboxPage', () => {
     );
   });
 
-  it('announces a successful header update, refetches, and keeps an eligible selection', async () => {
+  it('announces a successful header update, refreshes, and keeps an eligible selection', async () => {
+    mockRefresh.mockResolvedValue({
+      status: 'success',
+      selectedThread: threads[1],
+    });
     renderPage();
 
     await waitFor(() =>
@@ -409,11 +464,15 @@ describe('MyahInboxPage', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Select Second conversation' }),
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Update conversation test double' }),
-    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Update conversation test double',
+        }),
+      );
+    });
 
-    expect(mockRefetch).toHaveBeenCalledTimes(1);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Conversation updated')).toHaveAttribute(
       'role',
       'status',
@@ -446,7 +505,7 @@ describe('MyahInboxPage', () => {
       error: undefined,
       hasNextPage: false,
       loadMore: jest.fn(),
-      refetch: mockRefetch,
+      refresh: mockRefresh,
     });
     rerender(
       <JotaiProvider store={store}>
@@ -500,7 +559,7 @@ describe('MyahInboxPage', () => {
         error: undefined,
         hasNextPage: false,
         loadMore: jest.fn(),
-        refetch: mockRefetch,
+        refresh: mockRefresh,
       });
       flushSync(() => {
         root.render(
@@ -519,7 +578,7 @@ describe('MyahInboxPage', () => {
     }
   });
 
-  it('scopes the sidebar thread bridge to selection, page, and workspace', async () => {
+  it('does not auto-select after a workspace starts with an initialized empty Inbox', async () => {
     const store = createStore();
     store.set(myahInboxFiltersState.atom, {
       owner: 'ME',
@@ -544,7 +603,7 @@ describe('MyahInboxPage', () => {
       error: undefined,
       hasNextPage: false,
       loadMore: jest.fn(),
-      refetch: jest.fn(),
+      refresh: jest.fn(),
     });
     rerender(
       <JotaiProvider store={store}>
@@ -580,7 +639,7 @@ describe('MyahInboxPage', () => {
       error: undefined,
       hasNextPage: false,
       loadMore: jest.fn(),
-      refetch: jest.fn(),
+      refresh: jest.fn(),
     });
     rerender(
       <JotaiProvider store={store}>
@@ -589,11 +648,9 @@ describe('MyahInboxPage', () => {
     );
 
     await waitFor(() =>
-      expect(store.get(myahInboxSelectedThreadIdState.atom)).toBe('thread-1'),
+      expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull(),
     );
-    expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBe(
-      'workspace-2',
-    );
+    expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
 
     unmount();
 
@@ -601,6 +658,382 @@ describe('MyahInboxPage', () => {
       expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull();
       expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
     });
+  });
+
+  it('keeps a selected first-page thread when refresh adds a newer row', async () => {
+    const refreshDeferred = createDeferred<RefreshResult>();
+    const refresh = jest.fn(() => refreshDeferred.promise);
+    const newerThread = {
+      ...threads[0],
+      id: 'thread-newer',
+      subject: 'Newer conversation',
+    };
+    const store = createStore();
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({ refresh, refreshStatus: 'refreshing' }),
+    );
+    const { rerender } = renderPage(store);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+    expect(refresh).toHaveBeenCalledWith('thread-1');
+
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({
+        threads: [newerThread, ...threads],
+        refresh,
+        refreshStatus: 'succeeded',
+      }),
+    );
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await act(async () => {
+      refreshDeferred.resolve({
+        status: 'success',
+        selectedThread: threads[0],
+      });
+      await refreshDeferred.promise;
+    });
+
+    expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+      'thread-1',
+    );
+    expect(store.get(myahInboxSelectedThreadIdState.atom)).toBe('thread-1');
+    expect(screen.getByLabelText('Refresh status')).toHaveTextContent(
+      'succeeded',
+    );
+  });
+
+  it('retains a validated page-two selection after refresh removes it from the list', async () => {
+    const pageTwoThread = {
+      ...threads[1],
+      id: 'thread-page-two',
+      subject: 'Page two conversation',
+    };
+    const refreshDeferred = createDeferred<RefreshResult>();
+    const refresh = jest.fn(() => refreshDeferred.promise);
+    const store = createStore();
+    const { rerender } = renderPage(store);
+
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({ threads: [threads[0], pageTwoThread], refresh }),
+    );
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select Page two conversation' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+    expect(refresh).toHaveBeenCalledWith('thread-page-two');
+
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({
+        threads,
+        refresh,
+        isRefreshing: true,
+        refreshStatus: 'refreshing',
+      }),
+    );
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await act(async () => {
+      refreshDeferred.resolve({
+        status: 'success',
+        selectedThread: pageTwoThread,
+      });
+      await refreshDeferred.promise;
+    });
+
+    expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+      'thread-page-two',
+    );
+    expect(
+      screen.queryByLabelText('Selected list row'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Conversation panel thread-page-two'),
+    ).toBeVisible();
+    expect(store.get(myahInboxSelectedThreadIdState.atom)).toBe(
+      'thread-page-two',
+    );
+    expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBe(
+      'workspace-1',
+    );
+  });
+
+  it('clears a page-two selection without choosing a replacement when validation returns no thread', async () => {
+    const pageTwoThread = {
+      ...threads[1],
+      id: 'thread-page-two',
+      subject: 'Page two conversation',
+    };
+    const refreshDeferred = createDeferred<RefreshResult>();
+    const refresh = jest.fn(() => refreshDeferred.promise);
+    const store = createStore();
+    const { rerender } = renderPage(store);
+
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({ threads: [threads[0], pageTwoThread], refresh }),
+    );
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select Page two conversation' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+    expect(refresh).toHaveBeenCalledWith('thread-page-two');
+
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({
+        threads,
+        refresh,
+        isRefreshing: true,
+        refreshStatus: 'refreshing',
+      }),
+    );
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await act(async () => {
+      refreshDeferred.resolve({ status: 'success', selectedThread: null });
+      await refreshDeferred.promise;
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'none',
+      ),
+    );
+    expect(screen.getByText('Conversation panel none')).toBeVisible();
+    expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull();
+    expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
+    expect(
+      screen.queryByLabelText('Selected list row'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('preserves the selected panel while exposing a refresh-only failure', async () => {
+    const refreshDeferred = createDeferred<RefreshResult>();
+    const refresh = jest.fn(() => refreshDeferred.promise);
+    const store = createStore();
+    const { rerender } = renderPage(store);
+
+    mockUseMyahInboxThreads.mockReturnValue(createInboxState({ refresh }));
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+    expect(refresh).toHaveBeenCalledWith('thread-1');
+
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({
+        refresh,
+        refreshStatus: 'failed',
+        refreshError: new Error('Could not refresh Inbox.'),
+      }),
+    );
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await act(async () => {
+      refreshDeferred.resolve({ status: 'failed', selectedThread: null });
+      await refreshDeferred.promise;
+    });
+
+    expect(screen.getByText('Conversation panel thread-1')).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not refresh Inbox.',
+    );
+    expect(store.get(myahInboxSelectedThreadIdState.atom)).toBe('thread-1');
+  });
+
+  it('does not auto-select a first thread that arrives after an initialized empty scope', async () => {
+    const store = createStore();
+    mockUseMyahInboxThreads.mockReturnValue(createInboxState({ threads: [] }));
+    const { rerender } = renderPage(store);
+
+    await waitFor(() =>
+      expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull(),
+    );
+    mockUseMyahInboxThreads.mockReturnValue(createInboxState());
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+
+    expect(screen.getByLabelText('Selected thread')).toHaveTextContent('none');
+    expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
+  });
+
+  it.each(['workspace', 'state', 'campaign', 'owner', 'snooze', 'search'])(
+    'ignores a stale refresh validation after the %s scope changes',
+    async (scope) => {
+      const refreshDeferred = createDeferred<RefreshResult>();
+      const refresh = jest.fn(() => refreshDeferred.promise);
+      const store = createStore();
+      mockUseMyahInboxThreads.mockReturnValue(createInboxState({ refresh }));
+      const { rerender } = renderPage(store);
+
+      await waitFor(() =>
+        expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+          'thread-1',
+        ),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+      expect(refresh).toHaveBeenCalledWith('thread-1');
+
+      mockUseMyahInboxThreads.mockReturnValue(
+        createInboxState({ threads: [] }),
+      );
+      if (scope === 'workspace') {
+        mockCurrentWorkspaceId = 'workspace-2';
+      } else {
+        await act(async () => {
+          const currentFilters = store.get(myahInboxFiltersState.atom);
+          store.set(myahInboxFiltersState.atom, {
+            ...currentFilters,
+            ...(scope === 'state' ? { states: ['CLOSED'] } : {}),
+            ...(scope === 'campaign'
+              ? {
+                  campaignId: 'campaign-1',
+                  campaignWorkspaceId: 'workspace-1',
+                }
+              : {}),
+            ...(scope === 'owner' ? { owner: 'ME' } : {}),
+            ...(scope === 'snooze' ? { snoozeStatus: 'ACTIVE' } : {}),
+            ...(scope === 'search' ? { search: 'Ada' } : {}),
+          });
+        });
+      }
+      rerender(
+        <JotaiProvider store={store}>
+          <MyahInboxPage />
+        </JotaiProvider>,
+      );
+
+      await act(async () => {
+        refreshDeferred.resolve({
+          status: 'success',
+          selectedThread: threads[0],
+        });
+        await refreshDeferred.promise;
+      });
+
+      await waitFor(() =>
+        expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull(),
+      );
+      expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
+      expect(screen.getByText('Conversation panel none')).toBeVisible();
+      expect(screen.getByLabelText('Refresh status')).toHaveTextContent('idle');
+    },
+  );
+
+  it('does one same-scope refresh and clears the original selection once when validation returns null', async () => {
+    const refreshDeferred = createDeferred<RefreshResult>();
+    const refresh = jest.fn(() => refreshDeferred.promise);
+    const store = createStore();
+    mockUseMyahInboxThreads.mockReturnValue(createInboxState({ refresh }));
+    const { rerender } = renderPage(store);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledWith('thread-1');
+
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({ threads: [], refresh, refreshStatus: 'succeeded' }),
+    );
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await act(async () => {
+      refreshDeferred.resolve({ status: 'success', selectedThread: null });
+      await refreshDeferred.promise;
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'none',
+      ),
+    );
+    expect(screen.getByText('Conversation panel none')).toBeVisible();
+  });
+
+  it('does not let an older refresh clear a thread selected during its validation', async () => {
+    const refreshDeferred = createDeferred<RefreshResult>();
+    const refresh = jest.fn(() => refreshDeferred.promise);
+    const store = createStore();
+    mockUseMyahInboxThreads.mockReturnValue(createInboxState({ refresh }));
+    const { rerender } = renderPage(store);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Inbox' }));
+    expect(refresh).toHaveBeenCalledWith('thread-1');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select Second conversation' }),
+    );
+    mockUseMyahInboxThreads.mockReturnValue(
+      createInboxState({ refresh, refreshStatus: 'succeeded' }),
+    );
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+    await act(async () => {
+      refreshDeferred.resolve({ status: 'success', selectedThread: null });
+      await refreshDeferred.promise;
+    });
+
+    expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+      'thread-2',
+    );
+    expect(screen.getByText('Conversation panel thread-2')).toBeVisible();
+    expect(store.get(myahInboxSelectedThreadIdState.atom)).toBe('thread-2');
   });
 
   it('provides narrow-screen access to list and conversation panes', async () => {
