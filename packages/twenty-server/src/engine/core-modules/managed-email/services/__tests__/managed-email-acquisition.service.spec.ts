@@ -480,6 +480,35 @@ describe('ManagedEmailAcquisitionService', () => {
     expect(harness.icemailClient.buyPrewarmedBundles).not.toHaveBeenCalled();
   });
 
+  it('projects exact paid periods before starting provider fulfillment', async () => {
+    const harness = createHarness();
+
+    await harness.service.admit(admissionInput);
+    await harness.service.continue({
+      operationId: harness.operation.id,
+      workspaceId,
+    });
+
+    expect([...harness.domainRows.values()]).toEqual([
+      expect.objectContaining({
+        paidThrough: new Date('2027-08-05T12:00:00.000Z'),
+      }),
+    ]);
+    expect([...harness.mailboxRows.values()]).toEqual([
+      expect.objectContaining({
+        infrastructurePaidThrough: new Date('2026-09-05T12:00:00.000Z'),
+        warmupPaidThrough: new Date('2026-09-05T12:00:00.000Z'),
+      }),
+      expect.objectContaining({
+        infrastructurePaidThrough: new Date('2026-09-05T12:00:00.000Z'),
+        warmupPaidThrough: new Date('2026-09-05T12:00:00.000Z'),
+      }),
+    ]);
+    expect(harness.operation.nextSubscriptionReconciliationAt).toEqual(
+      new Date('2026-09-05T10:00:00.000Z'),
+    );
+  });
+
   it('revalidates and submits one domain-batched ordinary order after payment', async () => {
     const harness = createHarness();
     await harness.service.admit(admissionInput);
@@ -693,13 +722,15 @@ describe('ManagedEmailAcquisitionService', () => {
     if (originalUpdate === undefined) {
       throw new Error('Test operation is unavailable');
     }
-    harness.domainRepository.update.mockImplementationOnce(async () => ({
-      affected: 1,
-    }));
-    harness.domainRepository.update.mockImplementationOnce(async () => {
-      persistedBeforeProjection.push(originalUpdate.providerReceipt);
-      throw new Error('projection unavailable');
-    });
+    harness.domainRepository.update.mockImplementation(
+      async (_workspaceId, _criteria, patch) => {
+        if ('providerDomainId' in patch) {
+          persistedBeforeProjection.push(originalUpdate.providerReceipt);
+          throw new Error('projection unavailable');
+        }
+        return { affected: 1 };
+      },
+    );
 
     const result = await harness.service.continue({
       operationId: harness.operation.id,

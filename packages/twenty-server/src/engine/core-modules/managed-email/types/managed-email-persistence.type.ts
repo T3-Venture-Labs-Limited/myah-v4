@@ -85,3 +85,15 @@ export type ManagedEmailCorrelatedSubscriptionLine = {
   readonly endingBefore: string;
   readonly isProrated: boolean;
 };
+export type ManagedEmailRenewalProjection = {
+  readonly receipt: {
+    readonly externalInvoiceId: string;
+    readonly externalPaymentId: string;
+    readonly metronomeInvoiceId: string;
+  };
+  readonly resources: ReadonlyArray<{
+    readonly kind: 'domain' | 'mailbox' | 'warmup';
+    readonly resourceId: string;
+    readonly paidThrough: string;
+  }>;
+};

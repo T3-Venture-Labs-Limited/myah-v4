@@ -5,6 +5,7 @@ import {
   managedEmailNullableProviderReceiptTransformer,
   managedEmailProviderReceiptTransformer,
   managedEmailResourceSnapshotTransformer,
+  managedEmailNullableRenewalProjectionTransformer,
   managedEmailNullableSafeFactsTransformer,
   managedEmailSafeFactsTransformer,
 } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-persistence-json.util';
@@ -13,6 +14,7 @@ import {
   type ManagedEmailExpectedLineItem,
   type ManagedEmailResourceSnapshot,
   type ManagedEmailProviderReceipt,
+  type ManagedEmailRenewalProjection,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
 
 type DeepMutable<T> = T extends readonly (infer Item)[]
@@ -129,6 +131,35 @@ const correlatedLine = (
 });
 
 describe('managed email persistence JSON validation', () => {
+  it('validates nullable renewal projections and rejects duplicate targets', () => {
+    const projection: DeepMutable<ManagedEmailRenewalProjection> = {
+      receipt: {
+        externalInvoiceId: 'invoice-1',
+        externalPaymentId: 'payment-1',
+        metronomeInvoiceId: 'invoice-2',
+      },
+      resources: [
+        {
+          kind: 'domain',
+          resourceId: '123e4567-e89b-42d3-a456-426614174001',
+          paidThrough: '2026-08-02T00:00:00.000Z',
+        },
+      ],
+    };
+    const duplicateProjection: DeepMutable<ManagedEmailRenewalProjection> = {
+      ...projection,
+      resources: [...projection.resources, { ...projection.resources[0] }],
+    };
+    expect(
+      managedEmailNullableRenewalProjectionTransformer.to(projection),
+    ).toBe(projection);
+    expect(
+      managedEmailNullableRenewalProjectionTransformer.to(null),
+    ).toBeNull();
+    expect(() =>
+      managedEmailNullableRenewalProjectionTransformer.to(duplicateProjection),
+    ).toThrow('Unsafe managed email persistence JSON');
+  });
   it('accepts and deeply freezes bounded closed persistence shapes', () => {
     const facts = safeFacts();
     const resources = resourceSnapshot();

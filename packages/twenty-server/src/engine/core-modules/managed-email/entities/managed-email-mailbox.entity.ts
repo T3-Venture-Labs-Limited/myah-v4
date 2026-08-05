@@ -17,6 +17,7 @@ import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-ac
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 
 import { ManagedEmailCampaignEligibility } from '../enums/managed-email-campaign-eligibility.enum';
+import { ManagedEmailLifecycleAction } from '../enums/managed-email-lifecycle-action.enum';
 import { ManagedEmailInfrastructureState } from '../enums/managed-email-infrastructure-state.enum';
 import { ManagedEmailWarmupMode } from '../enums/managed-email-warmup-mode.enum';
 import { ManagedEmailWarmupState } from '../enums/managed-email-warmup-state.enum';
@@ -46,6 +47,11 @@ import { ManagedEmailDomainEntity } from './managed-email-domain.entity';
   'IDX_MANAGED_EMAIL_MAILBOX_RECONCILIATION_DUE',
   ['nextReconciliationAt'],
   { where: '"nextReconciliationAt" IS NOT NULL' },
+)
+@Index(
+  'IDX_MANAGED_EMAIL_MAILBOX_PERIOD_BOUNDARY_DUE',
+  ['nextPeriodBoundaryAt'],
+  { where: '"nextPeriodBoundaryAt" IS NOT NULL' },
 )
 @Index('IDX_MANAGED_EMAIL_MAILBOX_INFRASTRUCTURE_PAID_THROUGH', [
   'infrastructurePaidThrough',
@@ -136,6 +142,18 @@ export class ManagedEmailMailboxEntity {
 
   @Column({ type: 'text' })
   infrastructureState: ManagedEmailInfrastructureState;
+
+  @Column({ default: false, type: 'boolean' })
+  infrastructureCancelAtPeriodEnd: boolean;
+
+  @Column({ nullable: true, type: 'text' })
+  pendingLifecycleAction: ManagedEmailLifecycleAction | null;
+
+  @Column({ nullable: true, type: 'text' })
+  pendingLifecycleKey: string | null;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  nextPeriodBoundaryAt: Date | null;
 
   @Column({ nullable: true, type: 'timestamptz' })
   infrastructurePaidThrough: Date | null;

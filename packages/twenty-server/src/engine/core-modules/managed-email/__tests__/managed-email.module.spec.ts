@@ -9,9 +9,20 @@ import { ImapSmtpCaldavModule } from 'src/engine/core-modules/imap-smtp-caldav-c
 import { ManagedProviderBillingModule } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.module';
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
+import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 
 import { ManagedEmailReconciliationCronCommand } from '../crons/commands/managed-email-reconciliation.cron.command';
+import {
+  MANAGED_EMAIL_PERIOD_BOUNDARY_CRON_CLOCK,
+  MANAGED_EMAIL_PERIOD_BOUNDARY_CRON_PATTERN,
+  ManagedEmailPeriodBoundaryCronJob,
+} from '../crons/managed-email-period-boundary.cron.job';
+import {
+  MANAGED_EMAIL_SUBSCRIPTION_RECONCILIATION_CRON_CLOCK,
+  MANAGED_EMAIL_SUBSCRIPTION_RECONCILIATION_CRON_PATTERN,
+  ManagedEmailSubscriptionReconciliationCronJob,
+} from '../crons/managed-email-subscription-reconciliation.cron.job';
 import { MANAGED_EMAIL_READINESS_POLICY_RESOLVER } from '../constants/managed-email-readiness-policy.constant';
 import { ManagedEmailMailboxActivationCronJob } from '../crons/managed-email-mailbox-activation.cron.job';
 import {
@@ -23,8 +34,10 @@ import { ManagedEmailAcquisitionOperationEntity } from '../entities/managed-emai
 import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
 import { ActivateManagedEmailMailboxJob } from '../jobs/activate-managed-email-mailbox.job';
+import { ApplyManagedEmailPeriodBoundaryJob } from '../jobs/apply-managed-email-period-boundary.job';
 import { EvaluateManagedEmailReadinessJob } from '../jobs/evaluate-managed-email-readiness.job';
 import { ReconcileManagedEmailAcquisitionJob } from '../jobs/reconcile-managed-email-acquisition.job';
+import { ReconcileManagedEmailSubscriptionsJob } from '../jobs/reconcile-managed-email-subscriptions.job';
 import { ManagedEmailModule } from '../managed-email.module';
 import { IcemailClient } from '../providers/icemail/icemail.client';
 import { WarmupInboxClient } from '../providers/warmup-inbox/warmup-inbox.client';
@@ -51,6 +64,10 @@ import {
   MANAGED_EMAIL_QUOTE_ID_FACTORY,
   ManagedEmailQuoteService,
 } from '../services/managed-email-quote.service';
+import {
+  MANAGED_EMAIL_LIFECYCLE_CLOCK,
+  ManagedEmailLifecycleService,
+} from '../services/managed-email-lifecycle.service';
 import { ManagedEmailReconciliationService } from '../services/managed-email-reconciliation.service';
 import { ManagedEmailReadinessService } from '../services/managed-email-readiness.service';
 import {
@@ -107,6 +124,43 @@ describe('ManagedEmailModule', () => {
     );
   });
 
+  it('registers subscription and period-boundary recovery schedules', async () => {
+    const messageQueueService = {
+      add: jest.fn().mockResolvedValue(undefined),
+      addCron: jest.fn().mockResolvedValue(undefined),
+    };
+    const command = new ManagedEmailReconciliationCronCommand(
+      messageQueueService as never,
+    );
+
+    await command.run();
+
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      ManagedEmailSubscriptionReconciliationCronJob.name,
+      {},
+    );
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      ManagedEmailPeriodBoundaryCronJob.name,
+      {},
+    );
+    expect(messageQueueService.addCron).toHaveBeenCalledWith({
+      data: undefined,
+      jobName: ManagedEmailSubscriptionReconciliationCronJob.name,
+      options: {
+        repeat: {
+          pattern: MANAGED_EMAIL_SUBSCRIPTION_RECONCILIATION_CRON_PATTERN,
+        },
+      },
+    });
+    expect(messageQueueService.addCron).toHaveBeenCalledWith({
+      data: undefined,
+      jobName: ManagedEmailPeriodBoundaryCronJob.name,
+      options: {
+        repeat: { pattern: MANAGED_EMAIL_PERIOD_BOUNDARY_CRON_PATTERN },
+      },
+    });
+  });
+
   it('registers repositories, providers, and orchestration exactly once', () => {
     const imports = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,
@@ -127,7 +181,7 @@ describe('ManagedEmailModule', () => {
       getWorkspaceScopedRepositoryToken(entity),
     );
 
-    expect(imports).toHaveLength(5);
+    expect(imports).toHaveLength(6);
     expect(imports).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ module: TypeOrmModule }),
@@ -135,6 +189,7 @@ describe('ManagedEmailModule', () => {
         ImapSmtpCaldavModule,
         ManagedProviderBillingModule,
         SecureHttpClientModule,
+        PermissionsModule,
       ]),
     );
     expect(controllers).toEqual([]);
@@ -159,6 +214,11 @@ describe('ManagedEmailModule', () => {
       ReconcileManagedEmailAcquisitionJob,
       ManagedEmailReconciliationCronJob,
       ManagedEmailReconciliationCronCommand,
+      ManagedEmailLifecycleService,
+      ReconcileManagedEmailSubscriptionsJob,
+      ApplyManagedEmailPeriodBoundaryJob,
+      ManagedEmailSubscriptionReconciliationCronJob,
+      ManagedEmailPeriodBoundaryCronJob,
     ]) {
       expect(providers.filter((item) => item === service)).toHaveLength(1);
     }
@@ -174,12 +234,15 @@ describe('ManagedEmailModule', () => {
       MANAGED_EMAIL_WARMUP_CLOCK,
       MANAGED_EMAIL_READINESS_CRON_CLOCK,
       MANAGED_EMAIL_SETUP_PASSWORD_FACTORY,
+      MANAGED_EMAIL_LIFECYCLE_CLOCK,
+      MANAGED_EMAIL_SUBSCRIPTION_RECONCILIATION_CRON_CLOCK,
+      MANAGED_EMAIL_PERIOD_BOUNDARY_CRON_CLOCK,
     ]) {
       expect(providers).toEqual(
         expect.arrayContaining([expect.objectContaining({ provide: token })]),
       );
     }
-    expect(providers).toHaveLength(repositoryTokens.length + 29);
+    expect(providers).toHaveLength(repositoryTokens.length + 37);
     expect(exports).toEqual([
       ...repositoryTokens,
       IcemailClient,

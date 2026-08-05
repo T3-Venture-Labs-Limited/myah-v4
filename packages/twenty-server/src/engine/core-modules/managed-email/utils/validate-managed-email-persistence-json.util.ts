@@ -10,6 +10,7 @@ import {
   type ManagedEmailExpectedLineItem,
   type ManagedEmailResourceSnapshot,
   type ManagedEmailProviderReceipt,
+  type ManagedEmailRenewalProjection,
   type ManagedEmailSafeFacts,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
 import { validateSafeMetronomeEventProperties } from 'src/engine/core-modules/managed-provider-billing/utils/validate-safe-metronome-event-properties.util';
@@ -684,6 +685,45 @@ const validateCorrelatedSubscriptionLines = (
 
   return value as readonly ManagedEmailCorrelatedSubscriptionLine[];
 };
+const validateRenewalProjection = (
+  value: unknown,
+): ManagedEmailRenewalProjection => {
+  assertRecord(value, ['receipt', 'resources']);
+  assertRecord(value.receipt, [
+    'externalInvoiceId',
+    'externalPaymentId',
+    'metronomeInvoiceId',
+  ]);
+  assertString(value.receipt.externalInvoiceId, MAX_IDENTIFIER_LENGTH);
+  assertString(value.receipt.externalPaymentId, MAX_IDENTIFIER_LENGTH);
+  assertString(value.receipt.metronomeInvoiceId, MAX_IDENTIFIER_LENGTH);
+
+  assertArray(value.resources, MAX_COLLECTION_ITEMS);
+  if (value.resources.length === 0) {
+    fail();
+  }
+  const targets = new Set<string>();
+  for (const resource of value.resources) {
+    assertRecord(resource, ['kind', 'resourceId', 'paidThrough']);
+    if (
+      resource.kind !== 'domain' &&
+      resource.kind !== 'mailbox' &&
+      resource.kind !== 'warmup'
+    ) {
+      fail();
+    }
+    assertUuid(resource.resourceId);
+    assertString(resource.paidThrough, MAX_IDENTIFIER_LENGTH);
+    parseInstant(resource.paidThrough);
+    const target = `${resource.kind}:${resource.resourceId}`;
+    if (targets.has(target)) {
+      fail();
+    }
+    targets.add(target);
+  }
+  assertBoundedJson(value);
+  return value as ManagedEmailRenewalProjection;
+};
 
 export const managedEmailSafeFactsTransformer =
   requiredTransformer(validateSafeFacts);
@@ -708,3 +748,6 @@ export const managedEmailExpectedLineItemsTransformer = requiredTransformer(
 
 export const managedEmailCorrelatedSubscriptionLinesTransformer =
   nullableTransformer(validateCorrelatedSubscriptionLines);
+
+export const managedEmailNullableRenewalProjectionTransformer =
+  nullableTransformer(validateRenewalProjection);
