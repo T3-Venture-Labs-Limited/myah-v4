@@ -1,17 +1,29 @@
-import { MODULE_METADATA } from '@nestjs/common/constants';
+import {
+  MODULE_METADATA,
+  SELF_DECLARED_DEPS_METADATA,
+} from '@nestjs/common/constants';
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
 
 import { EventLogEmitterModule } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.module';
+import { ImapSmtpCaldavModule } from 'src/engine/core-modules/imap-smtp-caldav-connection/imap-smtp-caldav-connection.module';
 import { ManagedProviderBillingModule } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.module';
 import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 
 import { ManagedEmailReconciliationCronCommand } from '../crons/commands/managed-email-reconciliation.cron.command';
+import { MANAGED_EMAIL_READINESS_POLICY_RESOLVER } from '../constants/managed-email-readiness-policy.constant';
+import { ManagedEmailMailboxActivationCronJob } from '../crons/managed-email-mailbox-activation.cron.job';
+import {
+  MANAGED_EMAIL_READINESS_CRON_CLOCK,
+  ManagedEmailReadinessCronJob,
+} from '../crons/managed-email-readiness.cron.job';
 import { ManagedEmailReconciliationCronJob } from '../crons/managed-email-reconciliation.cron.job';
 import { ManagedEmailAcquisitionOperationEntity } from '../entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
+import { ActivateManagedEmailMailboxJob } from '../jobs/activate-managed-email-mailbox.job';
+import { EvaluateManagedEmailReadinessJob } from '../jobs/evaluate-managed-email-readiness.job';
 import { ReconcileManagedEmailAcquisitionJob } from '../jobs/reconcile-managed-email-acquisition.job';
 import { ManagedEmailModule } from '../managed-email.module';
 import { IcemailClient } from '../providers/icemail/icemail.client';
@@ -21,6 +33,14 @@ import {
   MANAGED_EMAIL_SETUP_PASSWORD_FACTORY,
   ManagedEmailAcquisitionService,
 } from '../services/managed-email-acquisition.service';
+import {
+  MANAGED_EMAIL_DNS_CLIENT,
+  ManagedEmailDnsResolverService,
+} from '../services/managed-email-dns-resolver.service';
+import {
+  MANAGED_EMAIL_MAILBOX_ACTIVATION_CLOCK,
+  ManagedEmailMailboxActivationService,
+} from '../services/managed-email-mailbox-activation.service';
 import {
   MANAGED_EMAIL_PROPOSAL_CLOCK,
   MANAGED_EMAIL_PROPOSAL_ID_FACTORY,
@@ -32,6 +52,11 @@ import {
   ManagedEmailQuoteService,
 } from '../services/managed-email-quote.service';
 import { ManagedEmailReconciliationService } from '../services/managed-email-reconciliation.service';
+import { ManagedEmailReadinessService } from '../services/managed-email-readiness.service';
+import {
+  MANAGED_EMAIL_WARMUP_CLOCK,
+  ManagedEmailWarmupService,
+} from '../services/managed-email-warmup.service';
 import { ManagedEmailSubscriptionService } from '../services/managed-email-subscription.service';
 
 const ENTITIES = [
@@ -71,6 +96,17 @@ describe('ManagedEmailModule', () => {
     }
   });
 
+  it('uses the registered activation clock token in the cron processor', () => {
+    const dependencies = Reflect.getMetadata(
+      SELF_DECLARED_DEPS_METADATA,
+      ManagedEmailMailboxActivationCronJob,
+    ) as Array<{ index: number; param: unknown }>;
+
+    expect(dependencies.find(({ index }) => index === 2)?.param).toBe(
+      MANAGED_EMAIL_MAILBOX_ACTIVATION_CLOCK,
+    );
+  });
+
   it('registers repositories, providers, and orchestration exactly once', () => {
     const imports = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,
@@ -91,11 +127,12 @@ describe('ManagedEmailModule', () => {
       getWorkspaceScopedRepositoryToken(entity),
     );
 
-    expect(imports).toHaveLength(4);
+    expect(imports).toHaveLength(5);
     expect(imports).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ module: TypeOrmModule }),
         EventLogEmitterModule,
+        ImapSmtpCaldavModule,
         ManagedProviderBillingModule,
         SecureHttpClientModule,
       ]),
@@ -108,6 +145,14 @@ describe('ManagedEmailModule', () => {
     for (const service of [
       ManagedEmailProposalService,
       ManagedEmailQuoteService,
+      ManagedEmailMailboxActivationService,
+      ActivateManagedEmailMailboxJob,
+      ManagedEmailMailboxActivationCronJob,
+      ManagedEmailDnsResolverService,
+      ManagedEmailReadinessService,
+      ManagedEmailWarmupService,
+      EvaluateManagedEmailReadinessJob,
+      ManagedEmailReadinessCronJob,
       ManagedEmailSubscriptionService,
       ManagedEmailAcquisitionService,
       ManagedEmailReconciliationService,
@@ -123,13 +168,18 @@ describe('ManagedEmailModule', () => {
       MANAGED_EMAIL_PROPOSAL_POLICY,
       MANAGED_EMAIL_QUOTE_ID_FACTORY,
       MANAGED_EMAIL_ACQUISITION_CLOCK,
+      MANAGED_EMAIL_MAILBOX_ACTIVATION_CLOCK,
+      MANAGED_EMAIL_READINESS_POLICY_RESOLVER,
+      MANAGED_EMAIL_DNS_CLIENT,
+      MANAGED_EMAIL_WARMUP_CLOCK,
+      MANAGED_EMAIL_READINESS_CRON_CLOCK,
       MANAGED_EMAIL_SETUP_PASSWORD_FACTORY,
     ]) {
       expect(providers).toEqual(
         expect.arrayContaining([expect.objectContaining({ provide: token })]),
       );
     }
-    expect(providers).toHaveLength(repositoryTokens.length + 16);
+    expect(providers).toHaveLength(repositoryTokens.length + 29);
     expect(exports).toEqual([
       ...repositoryTokens,
       IcemailClient,
@@ -137,6 +187,7 @@ describe('ManagedEmailModule', () => {
       ManagedEmailProposalService,
       ManagedEmailQuoteService,
       ManagedEmailAcquisitionService,
+      ManagedEmailReconciliationCronCommand,
       ManagedEmailReconciliationService,
       ManagedEmailSubscriptionService,
     ]);

@@ -9,6 +9,7 @@ import { StaleRegistrationCleanupCronCommand } from 'src/engine/core-modules/app
 import { ApplicationVersionCheckCronCommand } from 'src/engine/core-modules/application/application-upgrade/crons/commands/application-version-check.cron.command';
 import { BillingReminderCronCommand } from 'src/engine/core-modules/billing/reminders/crons/commands/billing-reminder.cron.command';
 import { ManagedProviderBillingRecoveryCronCommand } from 'src/engine/core-modules/managed-provider-billing/crons/commands/managed-provider-billing-recovery.cron.command';
+import { ManagedEmailReconciliationCronCommand } from 'src/engine/core-modules/managed-email/crons/commands/managed-email-reconciliation.cron.command';
 import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
 import { EventLogCleanupCronCommand } from 'src/engine/core-modules/event-logs/cleanup/commands/event-log-cleanup.cron.command';
 import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
@@ -70,6 +71,7 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly staleRegistrationCleanupCronCommand: StaleRegistrationCleanupCronCommand,
     private readonly billingReminderCronCommand: BillingReminderCronCommand,
     private readonly managedProviderBillingRecoveryCronCommand: ManagedProviderBillingRecoveryCronCommand,
+    private readonly managedEmailReconciliationCronCommand: ManagedEmailReconciliationCronCommand,
     private readonly twentyConfigService: TwentyConfigService,
   ) {
     super();
@@ -199,6 +201,10 @@ export class CronRegisterAllCommand extends CommandRunner {
         name: 'ManagedProviderBillingRecovery',
         command: this.managedProviderBillingRecoveryCronCommand,
         isEnabled: isMetronomeEnabled,
+      },
+      {
+        name: 'ManagedEmailRecovery',
+        command: this.managedEmailReconciliationCronCommand,
       },
       {
         name: 'ActionApprovalReconciliation',

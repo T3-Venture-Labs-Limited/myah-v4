@@ -5,8 +5,12 @@ import { In, IsNull } from 'typeorm';
 
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
+import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
+import { ActivateManagedEmailMailboxJob } from '../jobs/activate-managed-email-mailbox.job';
 import { ManagedEmailAcquisitionOperationEntity } from '../entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
@@ -95,6 +99,8 @@ export class ManagedEmailAcquisitionService {
     private readonly mailboxRepository: WorkspaceScopedRepository<ManagedEmailMailboxEntity>,
     private readonly subscriptionService: ManagedEmailSubscriptionService,
     private readonly icemailClient: IcemailClient,
+    @InjectMessageQueue(MessageQueue.workspaceQueue)
+    private readonly messageQueueService: MessageQueueService,
     private readonly twentyConfigService: TwentyConfigService,
     @Inject(MANAGED_EMAIL_ACQUISITION_CLOCK)
     private readonly now: () => Date = () => new Date(),
@@ -571,6 +577,10 @@ export class ManagedEmailAcquisitionService {
     );
     await this.persistProviderReceipt(operation, providerReceipt);
     await this.projectProviderReceipt(operation, providerReceipt);
+    await this.enqueueMailboxActivations(
+      operation.workspaceId,
+      providerReceipt,
+    );
     return this.completeProviderReceipt(operation, false);
   }
   private async persistPrewarmedReceipt(
@@ -599,7 +609,35 @@ export class ManagedEmailAcquisitionService {
     );
     await this.persistProviderReceipt(operation, providerReceipt, partial);
     await this.projectProviderReceipt(operation, providerReceipt);
+    await this.enqueueMailboxActivations(
+      operation.workspaceId,
+      providerReceipt,
+    );
     return this.completeProviderReceipt(operation, partial);
+  }
+  private async enqueueMailboxActivations(
+    workspaceId: string,
+    providerReceipt: ManagedEmailProviderReceipt,
+  ): Promise<void> {
+    for (const domain of providerReceipt.domains) {
+      for (const mailbox of domain.mailboxes) {
+        const entity = await this.mailboxRepository.findOneBy(workspaceId, {
+          providerMailboxId: mailbox.providerMailboxId,
+          normalizedAddress: mailbox.normalizedAddress,
+        });
+        if (!entity) {
+          throw new Error('Managed mailbox projection is unavailable');
+        }
+        await this.messageQueueService.add(
+          ActivateManagedEmailMailboxJob.name,
+          { mailboxId: entity.id, workspaceId },
+          {
+            id: `managed-email-mailbox-activation:${entity.id}`,
+            retryLimit: 3,
+          },
+        );
+      }
+    }
   }
   private async projectProviderReceipt(
     operation: ManagedEmailAcquisitionOperationEntity,
@@ -627,7 +665,8 @@ export class ManagedEmailAcquisitionService {
           { normalizedAddress: mailbox.normalizedAddress },
           {
             infrastructureState:
-              ManagedEmailInfrastructureState.PROVISIONING_MAILBOX,
+              ManagedEmailInfrastructureState.WAITING_FOR_CREDENTIALS,
+            nextReconciliationAt: this.now(),
             providerMailboxId: mailbox.providerMailboxId,
             providerOrderId: domain.providerOrderId,
           },

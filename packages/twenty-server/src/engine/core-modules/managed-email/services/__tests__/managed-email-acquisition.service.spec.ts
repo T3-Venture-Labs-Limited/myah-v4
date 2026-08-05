@@ -12,6 +12,8 @@ import {
 } from '../../providers/icemail/icemail.exception';
 import { type IcemailClient } from '../../providers/icemail/icemail.client';
 import { type ManagedEmailQuote } from '../../types/managed-email-quote.type';
+import { ActivateManagedEmailMailboxJob } from 'src/engine/core-modules/managed-email/jobs/activate-managed-email-mailbox.job';
+import { type MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { ManagedEmailAcquisitionService } from '../managed-email-acquisition.service';
 import { type ManagedEmailSubscriptionService } from '../managed-email-subscription.service';
 
@@ -265,6 +267,9 @@ const createHarness = ({
     }),
     reconcilePayment: jest.fn(async () => operation),
   };
+  const messageQueueService = {
+    add: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<Pick<MessageQueueService, 'add'>>;
   const icemailClient = {
     buyPrewarmedBundles: jest.fn(),
     checkDomainAvailability: jest.fn().mockResolvedValue({
@@ -320,6 +325,7 @@ const createHarness = ({
     mailboxRepository as unknown as WorkspaceScopedRepository<ManagedEmailMailboxEntity>,
     subscriptionService as unknown as ManagedEmailSubscriptionService,
     icemailClient as unknown as IcemailClient,
+    messageQueueService as unknown as MessageQueueService,
     config as never,
     () => now,
     () => 'temporary-setup-password',
@@ -332,6 +338,7 @@ const createHarness = ({
     mailboxRepository,
     mailboxRows,
     operation,
+    messageQueueService,
     operationRepository,
     operationRows,
     order,
@@ -558,11 +565,35 @@ describe('ManagedEmailAcquisitionService', () => {
       providerDomainId: 'domain-provider-1',
       providerOrderId: 'provider-order-1',
     });
+    expect(harness.messageQueueService.add).toHaveBeenCalledTimes(2);
+    expect(harness.messageQueueService.add).toHaveBeenNthCalledWith(
+      1,
+      ActivateManagedEmailMailboxJob.name,
+      {
+        mailboxId: 'generated-1',
+        workspaceId,
+      },
+      expect.objectContaining({
+        id: `managed-email-mailbox-activation:generated-1`,
+      }),
+    );
+    expect(
+      JSON.stringify(harness.messageQueueService.add.mock.calls),
+    ).not.toContain('temporary-setup-password');
     expect(
       [...harness.mailboxRows.values()].map(
         (mailbox) => mailbox.providerMailboxId,
       ),
     ).toEqual(['mailbox-provider-1', 'mailbox-provider-2']);
+    expect([...harness.mailboxRows.values()]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          infrastructureState:
+            ManagedEmailInfrastructureState.WAITING_FOR_CREDENTIALS,
+          nextReconciliationAt: expect.any(Date),
+        }),
+      ]),
+    );
   });
 
   it('returns an exact completed replay without a second provider write', async () => {
