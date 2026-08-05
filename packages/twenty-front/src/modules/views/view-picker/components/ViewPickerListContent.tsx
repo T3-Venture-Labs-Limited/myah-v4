@@ -167,7 +167,10 @@ export const ViewPickerListContent = ({
                     key={view.id}
                     draggableId={view.id}
                     index={index}
-                    isDragDisabled={workspaceViews.length === 1}
+                    isDragDisabled={
+                      forcedViewType !== undefined ||
+                      workspaceViews.length === 1
+                    }
                     itemComponent={
                       <ViewPickerOptionDropdown
                         view={view}
@@ -203,7 +206,9 @@ export const ViewPickerListContent = ({
                     key={view.id}
                     draggableId={view.id}
                     index={index}
-                    isDragDisabled={unlistedViews.length === 1}
+                    isDragDisabled={
+                      forcedViewType !== undefined || unlistedViews.length === 1
+                    }
                     itemComponent={
                       <ViewPickerOptionDropdown
                         view={view}

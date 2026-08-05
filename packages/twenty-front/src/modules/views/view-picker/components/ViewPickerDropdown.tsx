@@ -134,6 +134,7 @@ export const ViewPickerDropdown = ({
                 onViewChange={onViewChange}
               />
             );
+          case 'create-empty':
           case 'create-from-current':
             return (
               <>
