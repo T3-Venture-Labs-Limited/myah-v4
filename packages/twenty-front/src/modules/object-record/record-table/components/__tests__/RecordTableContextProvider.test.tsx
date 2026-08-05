@@ -27,9 +27,12 @@ jest.mock('@/object-record/hooks/useUpdateOneRecord', () => ({
   useUpdateOneRecord: () => ({ updateOneRecord: jest.fn() }),
 }));
 
-jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue', () => ({
-  useAtomComponentSelectorValue: () => [],
-}));
+jest.mock(
+  '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue',
+  () => ({
+    useAtomComponentSelectorValue: () => [],
+  }),
+);
 
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
   useAtomStateValue: () => mockUseAtomStateValue(),
@@ -42,7 +45,9 @@ jest.mock('@/views/hooks/useGetCurrentViewOnly', () => ({
 const RecordTableTriggerEvent = () => {
   const { triggerEvent } = useRecordTableContextOrThrow();
 
-  return <output data-testid="record-table-trigger-event">{triggerEvent}</output>;
+  return (
+    <output data-testid="record-table-trigger-event">{triggerEvent}</output>
+  );
 };
 
 const renderRecordTable = (contextStoreInstanceId: string) =>

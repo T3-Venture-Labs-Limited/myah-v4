@@ -1,5 +1,4 @@
 import { CreatorListScopedCreatorIndex } from '@/myah/creator-crm/components/CreatorListScopedCreatorIndex';
-import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordIndexContainerGater } from '@/object-record/record-index/components/RecordIndexContainerGater';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
@@ -38,14 +37,6 @@ const StyledMobileWorkspace = styled.div`
   min-width: 0;
 `;
 
-const StyledSelectionStatus = styled.div`
-  background: ${themeCssVariables.background.primary};
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.xs};
-  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
-`;
-
 type ActivationControl =
   | { buttonIndex: number; type: 'row-button' }
   | { type: 'name-link' }
@@ -54,39 +45,6 @@ type ActivationControl =
 type LastOpenNavigation = {
   activationControl: ActivationControl;
   request: RecordIndexOpenRequest;
-};
-
-type CreatorListSelectionStatusProps = {
-  creatorListId: string;
-};
-
-const CreatorListSelectionStatus = ({
-  creatorListId,
-}: CreatorListSelectionStatusProps) => {
-  const {
-    error: creatorListError,
-    loading: isCreatorListLoading,
-    record: creatorList,
-  } = useFindOneRecord({
-    objectNameSingular: 'creatorList',
-    objectRecordId: creatorListId,
-    recordGqlFields: { id: true, name: true },
-  });
-  const creatorListName = creatorList?.name?.trim();
-
-  const selectionStatus = isCreatorListLoading
-    ? `Loading Creator List ${creatorListId}.`
-    : creatorListError
-      ? `Unable to load Creator List ${creatorListId}.`
-      : !creatorList
-        ? `Creator List ${creatorListId} is unavailable.`
-        : `Viewing Creators for Creator List ${creatorListName || creatorListId}.`;
-
-  return (
-    <StyledSelectionStatus role="status" aria-live="polite">
-      {selectionStatus}
-    </StyledSelectionStatus>
-  );
 };
 
 export const CreatorListWorkspace = () => {
@@ -204,27 +162,20 @@ export const CreatorListWorkspace = () => {
     </StyledPane>
   );
 
-  return (
-    <>
-      {selectedCreatorListId && (
-        <CreatorListSelectionStatus creatorListId={selectedCreatorListId} />
-      )}
-      {isMobile ? (
-        <StyledMobileWorkspace
-          className="creator-list-mobile-pane"
-          data-testid="creator-list-mobile-pane"
-        >
-          {selectedCreatorListId ? scopedCreatorIndex : creatorListIndex}
-        </StyledMobileWorkspace>
-      ) : (
-        <StyledWorkspace
-          data-testid="creator-list-workspace"
-          hasSelection={selectedCreatorListId !== null}
-        >
-          {creatorListIndex}
-          {scopedCreatorIndex}
-        </StyledWorkspace>
-      )}
-    </>
+  return isMobile ? (
+    <StyledMobileWorkspace
+      className="creator-list-mobile-pane"
+      data-testid="creator-list-mobile-pane"
+    >
+      {selectedCreatorListId ? scopedCreatorIndex : creatorListIndex}
+    </StyledMobileWorkspace>
+  ) : (
+    <StyledWorkspace
+      data-testid="creator-list-workspace"
+      hasSelection={selectedCreatorListId !== null}
+    >
+      {creatorListIndex}
+      {scopedCreatorIndex}
+    </StyledWorkspace>
   );
 };

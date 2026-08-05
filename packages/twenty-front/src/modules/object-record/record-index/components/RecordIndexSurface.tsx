@@ -33,7 +33,7 @@ import { ViewType } from '@/views/types/ViewType';
 import { ViewBarControlIdsProvider } from '@/views/contexts/ViewBarControlIdsContext';
 import { styled } from '@linaria/react';
 import { useStore } from 'jotai';
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 
 const StyledIndexContainer = styled.div`
   display: flex;
@@ -51,6 +51,8 @@ export type RecordIndexSurfaceProps = {
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
+  headerTitle?: string;
+  headerActionButton?: ReactNode;
 };
 
 type RecordIndexSurfaceInstanceProps = RecordIndexSurfaceProps;
@@ -92,6 +94,8 @@ const RecordIndexSurfaceInstance = ({
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters = [],
+  headerTitle,
+  headerActionButton,
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -188,11 +192,15 @@ const RecordIndexSurfaceInstance = ({
                       getCommandMenuIdFromRecordIndexId(recordIndexId),
                   }}
                 >
-                  <PageTitle title={objectMetadataItem.labelPlural} />
+                  <PageTitle
+                    title={headerTitle ?? objectMetadataItem.labelPlural}
+                  />
                   <PageCardLayout
                     header={
                       <RecordIndexPageHeader
                         contextStoreInstanceId={contextStoreInstanceId}
+                        headerActionButton={headerActionButton}
+                        headerTitle={headerTitle}
                       />
                     }
                     secondaryBar={
@@ -254,6 +262,8 @@ export const RecordIndexSurface = ({
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters,
+  headerTitle,
+  headerActionButton,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -279,6 +289,8 @@ export const RecordIndexSurface = ({
       onViewChange={onViewChange}
       onRecordCreated={onRecordCreated}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
+      headerActionButton={headerActionButton}
+      headerTitle={headerTitle}
     />
   );
 };

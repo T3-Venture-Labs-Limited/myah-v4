@@ -170,12 +170,6 @@ jest.mock(
   }),
 );
 
-const mockUseFindOneRecord = jest.fn();
-
-jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
-  useFindOneRecord: (args: unknown) => mockUseFindOneRecord(args),
-}));
-
 const CurrentLocation = () => {
   const location = useLocation();
 
@@ -196,16 +190,6 @@ const renderWorkspace = (initialEntry = '/objects/creator-lists') =>
 describe('CreatorListWorkspace', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseFindOneRecord.mockImplementation(
-      ({ objectRecordId }: { objectRecordId: string }) => ({
-        error: undefined,
-        loading: false,
-        record: {
-          id: objectRecordId,
-          name: objectRecordId === 'list-a' ? 'List A' : 'List B',
-        },
-      }),
-    );
     mockUseIsMobile.mockReturnValue(false);
   });
 
@@ -241,13 +225,13 @@ describe('CreatorListWorkspace', () => {
     );
   });
 
-  it('opens the selected Creator List pane from the Creator Lists return route', () => {
+  it('opens the selected Creator List pane from the Creator Lists return route without a page-level status', () => {
     renderWorkspace('/objects/creator-lists?creatorListId=list-a');
 
     expect(screen.getByTestId('scoped-creator-index-list-a')).toBeVisible();
     expect(
-      screen.getByText('Viewing Creators for Creator List List A.'),
-    ).toBeVisible();
+      screen.queryByText(/Viewing Creators for Creator List/),
+    ).not.toBeInTheDocument();
   });
 
   it('uses exact equal desktop panes, replaces stale selections, and closes without navigation', async () => {
@@ -273,10 +257,6 @@ describe('CreatorListWorkspace', () => {
     expect(screen.getByTestId('creator-list-workspace')).toBeVisible();
 
     await user.click(screen.getByRole('link', { name: 'List A' }));
-
-    expect(
-      screen.getByText('Viewing Creators for Creator List List A.'),
-    ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Open List B' }));
 
@@ -386,62 +366,5 @@ describe('CreatorListWorkspace', () => {
     expect(mockStyledRules).toContain(
       '\n  display: flex;\n  flex: 1;\n  min-height: 0;\n  min-width: 0;\n',
     );
-  });
-
-  it('announces each selected List with its resolved label', async () => {
-    const user = userEvent.setup();
-    renderWorkspace();
-
-    await user.click(screen.getByRole('link', { name: 'List A' }));
-    expect(
-      screen.getByText('Viewing Creators for Creator List List A.'),
-    ).toBeVisible();
-
-    await user.click(screen.getByRole('button', { name: 'Open List B' }));
-    expect(
-      screen.getByText('Viewing Creators for Creator List List B.'),
-    ).toBeVisible();
-  });
-
-  it('announces List loading and errors with the selected identity', async () => {
-    mockUseFindOneRecord.mockImplementation(
-      ({ objectRecordId }: { objectRecordId: string }) => ({
-        error:
-          objectRecordId === 'list-b'
-            ? new Error('Unable to load List B')
-            : undefined,
-        loading: objectRecordId === 'list-a',
-        record: undefined,
-      }),
-    );
-    const user = userEvent.setup();
-    renderWorkspace();
-
-    await user.click(screen.getByRole('link', { name: 'List A' }));
-    expect(screen.getByText('Loading Creator List list-a.')).toBeVisible();
-
-    await user.click(screen.getByRole('button', { name: 'Open List B' }));
-    expect(
-      screen.getByText('Unable to load Creator List list-b.'),
-    ).toBeVisible();
-  });
-
-  it('announces an unavailable selected List instead of a successful Creator view', async () => {
-    mockUseFindOneRecord.mockReturnValue({
-      error: undefined,
-      loading: false,
-      record: undefined,
-    });
-    const user = userEvent.setup();
-    renderWorkspace();
-
-    await user.click(screen.getByRole('link', { name: 'List A' }));
-
-    expect(
-      screen.getByText('Creator List list-a is unavailable.'),
-    ).toBeVisible();
-    expect(
-      screen.queryByText('Viewing Creators for Creator List list-a.'),
-    ).not.toBeInTheDocument();
   });
 });

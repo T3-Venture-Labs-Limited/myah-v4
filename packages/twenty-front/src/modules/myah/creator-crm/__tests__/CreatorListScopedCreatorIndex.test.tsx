@@ -1,16 +1,19 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { type ReactNode } from 'react';
 
 import { CreatorListScopedCreatorIndex } from '@/myah/creator-crm/components/CreatorListScopedCreatorIndex';
 import { useCreatorListBulkActionsContext } from '@/myah/creator-crm/contexts/CreatorListBulkActionsContext';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
-import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
-import { FieldMetadataType } from 'twenty-shared/types';
 import { PageFocusId } from '@/types/PageFocusId';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
+import { FieldMetadataType, ViewType } from 'twenty-shared/types';
 
 const mockResetFocusStackToRecordIndex = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
+const mockUseAtomStateValue = useAtomStateValue as jest.Mock;
 
 const ScopedBulkActionsContextValue = () => {
   const creatorListContext = useCreatorListBulkActionsContext();
@@ -25,12 +28,15 @@ const ScopedBulkActionsContextValue = () => {
 const mockRecordIndexSurface = jest.fn(
   ({
     contextStoreInstanceId,
+    headerActionButton,
     indexIdentifierUrl,
     initialQueryOnlyRecordFilters,
     onViewChange,
     viewId,
   }: {
     contextStoreInstanceId: string;
+    headerActionButton?: ReactNode;
+    headerTitle?: string;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onRecordCreated?: (record: { id: string }) => Promise<void>;
@@ -41,6 +47,7 @@ const mockRecordIndexSurface = jest.fn(
       data-context-store-id={contextStoreInstanceId}
       data-testid="record-index-surface"
     >
+      {headerActionButton}
       {`Rows for ${initialQueryOnlyRecordFilters[0]?.value} in ${viewId}`}
       <output data-testid="creator-show-url">
         {indexIdentifierUrl('creator-1')}
@@ -96,6 +103,8 @@ jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
 jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
   RecordIndexSurface: (props: {
     contextStoreInstanceId: string;
+    headerActionButton?: ReactNode;
+    headerTitle?: string;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onRecordCreated?: (record: { id: string }) => Promise<void>;
@@ -122,6 +131,9 @@ jest.mock('@/ui/utilities/responsive/hooks/useIsMobile', () => ({
 
 jest.mock('@/views/hooks/useViewOrDefaultView', () => ({
   useViewOrDefaultView: jest.fn(),
+}));
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
+  useAtomStateValue: jest.fn(),
 }));
 
 const listResponses = new Map<
@@ -150,6 +162,13 @@ describe('CreatorListScopedCreatorIndex', () => {
     (useViewOrDefaultView as jest.Mock).mockReturnValue({
       view: { id: 'creator-default-view' },
     });
+    mockUseAtomStateValue.mockReturnValue([
+      {
+        id: 'creator-table-view',
+        objectMetadataId: 'creator-object',
+        type: ViewType.TABLE,
+      },
+    ]);
 
     (useObjectPermissionsForObject as jest.Mock).mockReturnValue({
       canReadObjectRecords: true,
@@ -173,6 +192,8 @@ describe('CreatorListScopedCreatorIndex', () => {
 
     resolveCreatorList('list-a', 'List A');
     (useViewOrDefaultView as jest.Mock).mockReturnValue({ view: undefined });
+    mockUseAtomStateValue.mockReturnValue([]);
+
     rerender(
       <CreatorListScopedCreatorIndex
         creatorListId="list-a"
@@ -195,12 +216,15 @@ describe('CreatorListScopedCreatorIndex', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'List: List A' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'List: List A' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId('record-index-surface')).toHaveAttribute(
       'data-context-store-id',
       'creator-list-pane-list-a',
     );
     expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+      headerTitle: 'List A',
       initialQueryOnlyRecordFilters: [
         {
           fieldMetadataId: 'creator-list-memberships',
@@ -211,12 +235,32 @@ describe('CreatorListScopedCreatorIndex', () => {
       objectNameSingular: 'creator',
       viewId: 'creator-default-view',
     });
+    expect(
+      mockRecordIndexSurface.mock.calls.at(-1)?.[0].headerActionButton,
+    ).toBeDefined();
     expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).not.toHaveProperty(
       'creatorListContext',
     );
     expect(screen.getByTestId('scoped-bulk-actions-context')).toHaveTextContent(
       'list-a',
     );
+  });
+
+  it('uses the first Creator table view when no index view exists', () => {
+    resolveCreatorList('list-a', 'List A');
+    (useViewOrDefaultView as jest.Mock).mockReturnValue({ view: undefined });
+
+    render(
+      <CreatorListScopedCreatorIndex
+        creatorListId="list-a"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+      contextStoreInstanceId: 'creator-list-pane-list-a',
+      viewId: 'creator-table-view',
+    });
   });
   it('changes only the scoped Creator view when its native picker selects a view', () => {
     resolveCreatorList('list-a', 'List A');
@@ -312,67 +356,27 @@ describe('CreatorListScopedCreatorIndex', () => {
       mockResetFocusStackToRecordIndex.mock.invocationCallOrder[0],
     ).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
-  it.each([
-    [true, 'Back to Creator Lists'],
-    [false, 'Close Creator List'],
-  ])(
-    'uses the %s-specific scoped pane control while preserving close focus restoration',
-    (isMobile, accessibleName) => {
-      resolveCreatorList('list-a', 'List A');
-      (useIsMobile as jest.Mock).mockReturnValue(isMobile);
-      const onClose = jest.fn();
 
-      render(
-        <CreatorListScopedCreatorIndex
-          creatorListId="list-a"
-          onClose={onClose}
-        />,
-      );
-
-      fireEvent.click(screen.getByRole('button', { name: accessibleName }));
-
-      expect(mockResetFocusStackToRecordIndex).toHaveBeenCalledWith(
-        PageFocusId.RecordIndex,
-      );
-      expect(onClose).toHaveBeenCalledTimes(1);
-      expect(
-        mockResetFocusStackToRecordIndex.mock.invocationCallOrder.at(-1),
-      ).toBeLessThan(onClose.mock.invocationCallOrder.at(-1) ?? Infinity);
-    },
-  );
-
-  it.each([
-    ['loading', 'Loading Creator List…'],
-    ['error', 'Unable to load Creator List.'],
-    ['forbidden', 'You do not have permission to view Creators.'],
-  ])('keeps Back available while the scoped pane is %s', (state, message) => {
-    const onClose = jest.fn();
-
-    if (state === 'error') {
-      listResponses.set('list-a', {
-        error: new Error('List request failed'),
-        loading: false,
-      });
-    }
-
-    if (state === 'forbidden') {
-      (useObjectPermissionsForObject as jest.Mock).mockReturnValueOnce({
-        canReadObjectRecords: false,
-      });
-    }
+  it('omits the native header action on desktop', () => {
+    resolveCreatorList('list-a', 'List A');
+    (useIsMobile as jest.Mock).mockReturnValue(false);
 
     render(
       <CreatorListScopedCreatorIndex
         creatorListId="list-a"
-        onClose={onClose}
+        onClose={jest.fn()}
       />,
     );
 
-    expect(screen.getByText(message)).toBeVisible();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Back to Creator Lists' }),
-    );
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+      headerTitle: 'List A',
+    });
+    expect(
+      mockRecordIndexSurface.mock.calls.at(-1)?.[0].headerActionButton,
+    ).toBeUndefined();
+    expect(
+      screen.queryByRole('button', { name: 'Back to Creator Lists' }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps List B visible when deferred List A resolves after selection changes', () => {
@@ -401,7 +405,12 @@ describe('CreatorListScopedCreatorIndex', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'List: List B' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'List: List B' }),
+    ).not.toBeInTheDocument();
+    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+      headerTitle: 'List B',
+    });
     expect(screen.getByTestId('record-index-surface')).toHaveTextContent(
       'Rows for list-b',
     );
@@ -417,7 +426,9 @@ describe('CreatorListScopedCreatorIndex', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'List: List B' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'List: List B' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId('record-index-surface')).toHaveTextContent(
       'Rows for list-b',
     );

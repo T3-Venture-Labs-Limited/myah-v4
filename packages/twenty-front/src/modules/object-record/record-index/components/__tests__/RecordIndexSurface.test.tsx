@@ -10,6 +10,8 @@ import {
 import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
+import { IconArrowLeft } from 'twenty-ui/icon';
+import { IconButton } from 'twenty-ui/input';
 import { ViewFilterOperand } from 'twenty-shared/types';
 
 const mockRecordIndexContainer = jest.fn();
@@ -363,10 +365,10 @@ describe('RecordIndexSurface', () => {
     );
   });
 
-  it('does not pass feature context into its generic header', async () => {
+  it('forwards no header overrides for an ordinary surface', async () => {
     renderSurface(
       <RecordIndexSurface
-        contextStoreInstanceId="creator-list-pane-list-a"
+        contextStoreInstanceId={MAIN_CONTEXT_STORE_INSTANCE_ID}
         objectNameSingular="creator"
         viewId="creator-default-view"
         indexIdentifierUrl={creatorShowUrl}
@@ -375,7 +377,34 @@ describe('RecordIndexSurface', () => {
 
     await waitFor(() => {
       expect(mockRecordIndexPageHeader).toHaveBeenLastCalledWith({
+        contextStoreInstanceId: MAIN_CONTEXT_STORE_INSTANCE_ID,
+        headerActionButton: undefined,
+        headerTitle: undefined,
+      });
+    });
+  });
+
+  it('forwards scoped header overrides to the native header', async () => {
+    const headerActionButton = (
+      <IconButton Icon={IconArrowLeft} ariaLabel="Back to Creator Lists" />
+    );
+
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-a"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        headerActionButton={headerActionButton}
+        headerTitle="List A"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexPageHeader).toHaveBeenLastCalledWith({
         contextStoreInstanceId: 'creator-list-pane-list-a',
+        headerActionButton,
+        headerTitle: 'List A',
       });
     });
   });

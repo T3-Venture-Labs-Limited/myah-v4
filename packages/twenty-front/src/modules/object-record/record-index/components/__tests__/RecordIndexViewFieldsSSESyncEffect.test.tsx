@@ -32,9 +32,12 @@ jest.mock(
   }),
 );
 
-jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue', () => ({
-  useAtomComponentStateValue: () => 'creator-default-view',
-}));
+jest.mock(
+  '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue',
+  () => ({
+    useAtomComponentStateValue: () => 'creator-default-view',
+  }),
+);
 
 jest.mock('jotai', () => ({
   ...jest.requireActual('jotai'),
@@ -44,7 +47,10 @@ jest.mock('jotai', () => ({
 describe('RecordIndexViewFieldsSSESyncEffect', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockStoreGet.mockReturnValue({ id: 'creator-default-view', viewFields: [] });
+    mockStoreGet.mockReturnValue({
+      id: 'creator-default-view',
+      viewFields: [],
+    });
   });
 
   it('syncs isolated VIEW_FIELD events to their index without global index writes', () => {
@@ -55,7 +61,8 @@ describe('RecordIndexViewFieldsSSESyncEffect', () => {
       />,
     );
 
-    const listener = mockUseListenToMetadataOperationBrowserEvent.mock.calls[0][0] as {
+    const listener = mockUseListenToMetadataOperationBrowserEvent.mock
+      .calls[0][0] as {
       onMetadataOperationBrowserEvent: () => void;
     };
 
@@ -65,8 +72,7 @@ describe('RecordIndexViewFieldsSSESyncEffect', () => {
       { id: 'creator-default-view', viewFields: [] },
       { id: 'creator-object' },
       {
-        recordIndexId:
-          'creators-creator-default-view-creator-list-pane-list-a',
+        recordIndexId: 'creators-creator-default-view-creator-list-pane-list-a',
         skipGlobalIndexStates: true,
       },
     );

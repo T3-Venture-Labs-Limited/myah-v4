@@ -235,9 +235,7 @@ describe('RecordChip identifier navigation', () => {
 
       const link = screen.getByRole('link', { name: /Creator List/ });
 
-      expect(
-        fireEvent.click(link, { detail: 0, ...modifierKeys }),
-      ).toBe(true);
+      expect(fireEvent.click(link, { detail: 0, ...modifierKeys })).toBe(true);
       expect(openGenericRecordInSidePanel).not.toHaveBeenCalled();
     },
   );

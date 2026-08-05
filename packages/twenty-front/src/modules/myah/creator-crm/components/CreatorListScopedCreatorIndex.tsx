@@ -8,38 +8,21 @@ import { RecordIndexSurface } from '@/object-record/record-index/components/Reco
 import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { useViewOrDefaultView } from '@/views/hooks/useViewOrDefaultView';
+import { viewsSelector } from '@/views/states/selectors/viewsSelector';
 import { PageFocusId } from '@/types/PageFocusId';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useCallback, useMemo, useState } from 'react';
-import { AppPath, ViewFilterOperand } from 'twenty-shared/types';
+import { AppPath, ViewFilterOperand, ViewType } from 'twenty-shared/types';
 import { getAppPath } from 'twenty-shared/utils';
-import { IconRefresh } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
+import { IconArrowLeft, IconRefresh } from 'twenty-ui/icon';
+import { Button, IconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const CREATOR_LIST_PANE_MEMBERSHIP_FILTER_ID =
   'b1a160cf-7c5a-4137-b55e-f676c0e9d955';
-
-const StyledScopeHeader = styled.div`
-  align-items: center;
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  justify-content: space-between;
-  padding: ${themeCssVariables.spacing[2]};
-`;
-
-const StyledScopeTitle = styled.h2`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.md};
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
 
 const StyledScopeState = styled.div`
   align-items: center;
@@ -77,13 +60,20 @@ export const CreatorListScopedCreatorIndex = ({
   const { view: defaultCreatorView } = useViewOrDefaultView({
     objectMetadataItemId: creatorObjectMetadataItem?.id ?? '',
   });
+  const views = useAtomStateValue(viewsSelector);
+  const firstCreatorTableView = views.find(
+    (view) =>
+      view.objectMetadataId === creatorObjectMetadataItem?.id &&
+      view.type === ViewType.TABLE,
+  );
+
   const [selectedCreatorView, setSelectedCreatorView] = useState<
     { creatorListId: string; viewId: string } | undefined
   >();
   const selectedCreatorViewId =
     selectedCreatorView?.creatorListId === creatorListId
       ? selectedCreatorView.viewId
-      : defaultCreatorView?.id;
+      : (defaultCreatorView?.id ?? firstCreatorTableView?.id);
   const { resetFocusStackToRecordIndex } = useResetFocusStackToRecordIndex();
   const { applyCreatorBulkRelationship } = useApplyCreatorBulkRelationship();
   const createdCreatorKeys = useMemo(() => new Set<string>(), []);
@@ -209,27 +199,19 @@ export const CreatorListScopedCreatorIndex = ({
           indexIdentifierUrl={creatorShowUrl}
           onRecordCreated={handleCreatorCreated}
           initialQueryOnlyRecordFilters={[creatorListRelationFilter]}
+          headerTitle={creatorListContext.target.label}
+          headerActionButton={
+            isMobile ? (
+              <IconButton
+                Icon={IconArrowLeft}
+                ariaLabel={t`Back to Creator Lists`}
+                onClick={handleClose}
+              />
+            ) : undefined
+          }
         />
       </CreatorListBulkActionsContext.Provider>
     );
 
-  return (
-    <>
-      <StyledScopeHeader>
-        <StyledScopeTitle tabIndex={-1}>
-          {creatorListContext
-            ? `List: ${creatorListContext.target.label}`
-            : t`Creator List`}
-        </StyledScopeTitle>
-        <Button
-          ariaLabel={
-            isMobile ? t`Back to Creator Lists` : t`Close Creator List`
-          }
-          onClick={handleClose}
-          title={isMobile ? t`Back to Creator Lists` : t`Close Creator List`}
-        />
-      </StyledScopeHeader>
-      {scopeContent}
-    </>
-  );
+  return scopeContent;
 };

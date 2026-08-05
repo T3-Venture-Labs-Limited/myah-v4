@@ -29,7 +29,6 @@ jest.mock('@/myah/creator-crm/components/CreatorListWorkspace', () => ({
   )),
 }));
 
-
 jest.mock(
   '@/myah/creator-crm/components/CreatorListMembershipFilterEffect',
   () => ({

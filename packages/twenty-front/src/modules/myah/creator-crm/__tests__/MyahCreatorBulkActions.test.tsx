@@ -204,9 +204,7 @@ describe('MyahCreatorBulkActions', () => {
     );
 
     render(
-      <MyahCreatorBulkActions
-        contextStoreInstanceId="creator-list-pane-list-scoped"
-      />,
+      <MyahCreatorBulkActions contextStoreInstanceId="creator-list-pane-list-scoped" />,
     );
 
     fireEvent.click(
@@ -257,15 +255,11 @@ describe('MyahCreatorBulkActions', () => {
           },
         }}
       >
-        <MyahCreatorBulkActions
-          contextStoreInstanceId="creator-list-pane-list-scoped"
-        />
+        <MyahCreatorBulkActions contextStoreInstanceId="creator-list-pane-list-scoped" />
       </CreatorListBulkActionsContext.Provider>,
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Remove from list' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from list' }));
 
     expect(mockUseCreatorListContext).toHaveBeenCalledWith(true);
     expect(screen.getByText('remove:Scoped List')).toBeVisible();

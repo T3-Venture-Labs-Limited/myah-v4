@@ -1,16 +1,16 @@
 import { RecordIndexSurfaceContextStoreInitEffect } from '@/object-record/record-index/components/RecordIndexSurfaceContextStoreInitEffect';
 
-type RecordTableWidgetContextStoreInitEffectProps = {
+type RecordTableWidgetContextStoreInitializerProps = {
   contextStoreInstanceId: string;
   objectMetadataItemId: string;
   viewId: string;
 };
 
-export const RecordTableWidgetContextStoreInitEffect = ({
+export const RecordTableWidgetContextStoreInitializer = ({
   contextStoreInstanceId,
   objectMetadataItemId,
   viewId,
-}: RecordTableWidgetContextStoreInitEffectProps) => {
+}: RecordTableWidgetContextStoreInitializerProps) => {
   return (
     <RecordIndexSurfaceContextStoreInitEffect
       contextStoreInstanceId={contextStoreInstanceId}

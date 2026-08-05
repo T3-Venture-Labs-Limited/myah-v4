@@ -51,22 +51,26 @@ jest.mock(
 );
 
 const ContextStoreState = () => {
-  const objectMetadataItemId = useAtomComponentStateValue(
+  const contextStoreCurrentObjectMetadataItemId = useAtomComponentStateValue(
     contextStoreCurrentObjectMetadataItemIdComponentState,
     'record-table-widget-widget-a',
   );
-  const viewId = useAtomComponentStateValue(
+  const contextStoreCurrentViewId = useAtomComponentStateValue(
     contextStoreCurrentViewIdComponentState,
     'record-table-widget-widget-a',
   );
-  const viewType = useAtomComponentStateValue(
+  const contextStoreCurrentViewType = useAtomComponentStateValue(
     contextStoreCurrentViewTypeComponentState,
     'record-table-widget-widget-a',
   );
 
   return (
     <output data-testid="context-store-state">
-      {JSON.stringify({ objectMetadataItemId, viewId, viewType })}
+      {JSON.stringify({
+        objectMetadataItemId: contextStoreCurrentObjectMetadataItemId,
+        viewId: contextStoreCurrentViewId,
+        viewType: contextStoreCurrentViewType,
+      })}
     </output>
   );
 };

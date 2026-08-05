@@ -36,9 +36,9 @@ type RecordIndexContainerProps = {
 export const RecordIndexContainer = ({
   recordIndexViewTypeOverride,
 }: RecordIndexContainerProps) => {
-  const defaultRecordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
-  const recordIndexViewType =
-    recordIndexViewTypeOverride ?? defaultRecordIndexViewType;
+  const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+  const resolvedRecordIndexViewType =
+    recordIndexViewTypeOverride ?? recordIndexViewType;
 
   const { recordIndexId, objectMetadataItem, objectNameSingular } =
     useRecordIndexContextOrThrow();
@@ -55,10 +55,10 @@ export const RecordIndexContainer = ({
       ) : (
         <>
           <RecordIndexFiltersToContextStoreEffect />
-          {recordIndexViewType === ViewType.TABLE && (
+          {resolvedRecordIndexViewType === ViewType.TABLE && (
             <RecordIndexTableContainer recordTableId={recordIndexId} />
           )}
-          {recordIndexViewType === ViewType.KANBAN && (
+          {resolvedRecordIndexViewType === ViewType.KANBAN && (
             <StyledContainerWithPadding>
               <RecordBoardContainer
                 recordBoardId={recordIndexId}
@@ -67,7 +67,7 @@ export const RecordIndexContainer = ({
               />
             </StyledContainerWithPadding>
           )}
-          {recordIndexViewType === ViewType.CALENDAR && (
+          {resolvedRecordIndexViewType === ViewType.CALENDAR && (
             <StyledContainerWithPadding>
               <RecordIndexCalendarContainer
                 recordCalendarInstanceId={recordIndexId}
