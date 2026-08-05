@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { createHash } from 'node:crypto';
 import { isEmail } from 'class-validator';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
@@ -35,6 +36,11 @@ import {
   type UpsertConnectedAccountInput,
   type UpsertConnectedAccountResult,
 } from 'src/modules/connected-account/services/imap-smtp-caldav-apis.service';
+
+const getManagedWorkspaceMailboxAccountName = (
+  idempotencyKey: string,
+): string =>
+  `myah-managed-${createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 48)}`;
 
 @Injectable()
 export class WorkspaceMailboxConnectionService {
@@ -134,6 +140,101 @@ export class WorkspaceMailboxConnectionService {
     };
   }
 
+  async connectManagedWorkspaceMailbox(input: {
+    accountType: 'IMAP_SMTP';
+    connectionParameters: PlaintextImapSmtpCaldavParams;
+    handle: string;
+    idempotencyKey: string;
+    workspaceId: string;
+  }): Promise<ConnectWorkspaceMailboxResult> {
+    const handle = input.handle.trim().toLowerCase();
+    if (
+      input.accountType !== 'IMAP_SMTP' ||
+      !isEmail(handle) ||
+      input.idempotencyKey.length === 0
+    ) {
+      throw new WorkspaceMailboxConnectionException('INVALID_CONFIGURATION');
+    }
+    const userWorkspace = await this.userWorkspaceRepository.findOne({
+      order: { createdAt: 'ASC' },
+      where: { workspaceId: input.workspaceId },
+    });
+    if (!userWorkspace)
+      throw new WorkspaceMailboxConnectionException('MAILBOX_NOT_FOUND');
+    const name = getManagedWorkspaceMailboxAccountName(input.idempotencyKey);
+    const existingAccount = await this.connectedAccountRepository.findOne({
+      where: {
+        archivedAt: IsNull(),
+        name,
+        provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+        visibility: 'workspace',
+        workspaceId: input.workspaceId,
+      },
+    });
+    if (existingAccount && existingAccount.handle !== handle) {
+      throw new WorkspaceMailboxConnectionException(
+        'MAILBOX_ALREADY_CONNECTED',
+      );
+    }
+    if (existingAccount) {
+      const messageChannel = await this.messageChannelRepository.findOne({
+        where: {
+          connectedAccountId: existingAccount.id,
+          workspaceId: input.workspaceId,
+        },
+      });
+      if (!messageChannel)
+        throw new WorkspaceMailboxConnectionException('UNKNOWN');
+      return {
+        connectedAccountId: existingAccount.id,
+        messageChannelId: messageChannel.id,
+        status: this.buildSafeStatus({
+          connectedAccountId: existingAccount.id,
+          handle,
+          lastSafeOperation: 'CONNECTED',
+          messageChannel,
+        }),
+      };
+    }
+    const connectionParameters =
+      await this.imapSmtpCaldavService.validateAndTestWorkspaceMailboxConnection(
+        {
+          connectionParameters: input.connectionParameters,
+          handle,
+        },
+      );
+    const result = await this.upsertWorkspaceMailbox({
+      connectionParameters,
+      existingAccount,
+      handle,
+      name,
+      userWorkspaceId: userWorkspace.id,
+      visibility: 'workspace',
+      workspaceId: input.workspaceId,
+    });
+    if (!result.messageChannelId)
+      throw new WorkspaceMailboxConnectionException('UNKNOWN');
+    const messageChannel = await this.messageChannelRepository.findOne({
+      where: {
+        connectedAccountId: result.connectedAccountId,
+        id: result.messageChannelId,
+        workspaceId: input.workspaceId,
+      },
+    });
+    if (!messageChannel)
+      throw new WorkspaceMailboxConnectionException('UNKNOWN');
+    return {
+      connectedAccountId: result.connectedAccountId,
+      messageChannelId: result.messageChannelId,
+      status: this.buildSafeStatus({
+        connectedAccountId: result.connectedAccountId,
+        handle,
+        lastSafeOperation: 'CONNECTED',
+        messageChannel,
+      }),
+    };
+  }
+
   rotateWorkspaceMailbox(
     input: ReplaceWorkspaceMailboxCredentialsInput,
   ): Promise<ConnectWorkspaceMailboxResult> {
@@ -173,6 +274,50 @@ export class WorkspaceMailboxConnectionService {
       throw new WorkspaceMailboxConnectionException('MAILBOX_NOT_FOUND');
     }
 
+    return this.buildSafeStatus({
+      authFailedAt: existingAccount.authFailedAt,
+      connectedAccountId,
+      handle: existingAccount.handle,
+      lastSafeOperation: 'CONNECTED',
+      messageChannel,
+    });
+  }
+  async getManagedWorkspaceMailboxStatus({
+    connectedAccountId,
+    idempotencyKey,
+    messageChannelId,
+    workspaceId,
+  }: {
+    connectedAccountId: string;
+    idempotencyKey: string;
+    messageChannelId: string;
+    workspaceId: string;
+  }): Promise<WorkspaceMailboxConnectionStatus> {
+    const existingAccount = await this.connectedAccountRepository.findOne({
+      where: {
+        archivedAt: IsNull(),
+        id: connectedAccountId,
+        name: getManagedWorkspaceMailboxAccountName(idempotencyKey),
+        provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+        visibility: 'workspace',
+        workspaceId,
+      },
+    });
+
+    if (!isDefined(existingAccount)) {
+      throw new WorkspaceMailboxConnectionException('MAILBOX_NOT_FOUND');
+    }
+    const messageChannel = await this.messageChannelRepository.findOne({
+      where: {
+        connectedAccountId,
+        id: messageChannelId,
+        workspaceId,
+      },
+    });
+
+    if (!isDefined(messageChannel)) {
+      throw new WorkspaceMailboxConnectionException('MAILBOX_NOT_FOUND');
+    }
     return this.buildSafeStatus({
       authFailedAt: existingAccount.authFailedAt,
       connectedAccountId,

@@ -129,14 +129,18 @@ const axiosFailure = (status?: number, code?: string) => ({
 describe('WarmupInboxClient', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('fails closed before creating an HTTP client while managed email is disabled', async () => {
-    const { client, secureHttpClientService } = createClient(false);
+  it('keeps existing recovery reads available while new admission is disabled', async () => {
+    const { client, httpClient, secureHttpClientService } = createClient(false);
 
-    await expectCode(
-      client.listInboxes(),
-      WarmupInboxExceptionCode.CONFIGURATION_DISABLED,
-    );
-    expect(secureHttpClientService.getHttpClient).not.toHaveBeenCalled();
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: { items: [] },
+      headers: {},
+    });
+
+    await expect(client.listInboxes()).resolves.toEqual([]);
+    expect(httpClient.get).toHaveBeenCalledWith('/v1/inboxes');
+    expect(secureHttpClientService.getHttpClient).toHaveBeenCalledTimes(1);
   });
 
   it('lists bounded customer-safe inbox summaries and finds an exact address', async () => {

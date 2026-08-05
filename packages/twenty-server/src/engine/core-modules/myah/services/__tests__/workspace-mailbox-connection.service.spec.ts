@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { IsNull } from 'typeorm';
 
 import {
   ConnectedAccountProvider,
@@ -604,6 +606,200 @@ describe('WorkspaceMailboxConnectionService', () => {
       }
 
       expect(metadataService.delete).not.toHaveBeenCalled();
+    });
+    it('allows distinct managed idempotency keys to create distinct workspace mailboxes', async () => {
+      const parameters = {
+        IMAP: {
+          host: 'imap.fake-provider.test',
+          port: 993,
+          username: 'managed@example.test',
+          password: 'fake-app-password' as PlaintextString,
+          connectionSecurity: EmailConnectionSecurity.SSL_TLS,
+        },
+        SMTP: {
+          host: 'smtp.fake-provider.test',
+          port: 465,
+          username: 'managed@example.test',
+          password: 'fake-app-password' as PlaintextString,
+          connectionSecurity: EmailConnectionSecurity.SSL_TLS,
+        },
+      } satisfies PlaintextImapSmtpCaldavParams;
+      apiService.upsertConnectedAccount
+        .mockResolvedValueOnce({
+          connectedAccountId: 'managed-account-1',
+          messageChannelId: 'managed-channel-1',
+        })
+        .mockResolvedValueOnce({
+          connectedAccountId: 'managed-account-2',
+          messageChannelId: 'managed-channel-2',
+        });
+
+      await service.connectManagedWorkspaceMailbox({
+        accountType: 'IMAP_SMTP',
+        connectionParameters: parameters,
+        handle: 'first@creator-partners.test',
+        idempotencyKey: 'managed-key-1',
+        workspaceId: 'workspace-id',
+      });
+      connectedAccountRepository.findOne.mockResolvedValue(null);
+      await service.connectManagedWorkspaceMailbox({
+        accountType: 'IMAP_SMTP',
+        connectionParameters: parameters,
+        handle: 'second@creator-partners.test',
+        idempotencyKey: 'managed-key-2',
+        workspaceId: 'workspace-id',
+      });
+
+      expect(apiService.upsertConnectedAccount).toHaveBeenCalledTimes(2);
+      const [firstCall, secondCall] = apiService.upsertConnectedAccount.mock
+        .calls as Array<[Record<string, unknown>]>;
+      expect(firstCall[0].name).not.toBe(secondCall[0].name);
+      expect(String(firstCall[0].name).length).toBeLessThanOrEqual(100);
+      expect(String(secondCall[0].name).length).toBeLessThanOrEqual(100);
+    });
+    it('uses the secure boundary for normal TLS on both IMAP and SMTP and replays idempotently', async () => {
+      const managedConnectionParameters = {
+        IMAP: {
+          host: 'imap.fake-provider.test',
+          port: 993,
+          username: 'managed@example.test',
+          password: 'fake-app-password' as PlaintextString,
+          connectionSecurity: EmailConnectionSecurity.SSL_TLS,
+        },
+        SMTP: {
+          host: 'smtp.fake-provider.test',
+          port: 465,
+          username: 'managed@example.test',
+          password: 'fake-app-password' as PlaintextString,
+          connectionSecurity: EmailConnectionSecurity.SSL_TLS,
+        },
+      } satisfies PlaintextImapSmtpCaldavParams;
+
+      const firstResult = await service.connectManagedWorkspaceMailbox({
+        accountType: 'IMAP_SMTP',
+        connectionParameters: managedConnectionParameters,
+        handle: 'managed@example.test',
+        idempotencyKey: 'managed-connection-replay-1',
+        workspaceId: 'workspace-id',
+      });
+
+      expect(
+        validationService.validateAndTestWorkspaceMailboxConnection,
+      ).toHaveBeenCalledWith({
+        connectionParameters: managedConnectionParameters,
+        handle: 'managed@example.test',
+      });
+      expect(
+        validationService.validateAndTestWorkspaceMailboxConnection,
+      ).toHaveBeenCalledTimes(1);
+      expect(firstResult).toEqual(
+        expect.objectContaining({
+          connectedAccountId: existingAccount.id,
+          messageChannelId: messageChannel.id,
+        }),
+      );
+
+      const managedReplayAccount = {
+        ...existingAccount,
+        handle: 'managed@example.test',
+        name: `myah-managed-${createHash('sha256').update('managed-connection-replay-1').digest('hex').slice(0, 48)}`,
+        visibility: 'workspace',
+        workspaceId: 'workspace-id',
+      } as ConnectedAccountEntity;
+      connectedAccountRepository.findOne.mockResolvedValue(
+        managedReplayAccount,
+      );
+      const replayResult = await service.connectManagedWorkspaceMailbox({
+        accountType: 'IMAP_SMTP',
+        connectionParameters: managedConnectionParameters,
+        handle: 'managed@example.test',
+        idempotencyKey: 'managed-connection-replay-1',
+        workspaceId: 'workspace-id',
+      });
+
+      expect(replayResult).toEqual(firstResult);
+      expect(apiService.upsertConnectedAccount).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a mailbox connection lookup from another workspace', async () => {
+      connectedAccountRepository.findOne.mockResolvedValue(null);
+      userWorkspaceRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.connectManagedWorkspaceMailbox({
+          accountType: 'IMAP_SMTP',
+          connectionParameters: {} as PlaintextImapSmtpCaldavParams,
+          handle: 'managed@example.test',
+          idempotencyKey: 'cross-workspace-connection-1',
+          workspaceId: 'other-workspace-id',
+        }),
+      ).rejects.toMatchObject({ code: 'MAILBOX_NOT_FOUND' });
+
+      expect(
+        validationService.validateAndTestWorkspaceMailboxConnection,
+      ).not.toHaveBeenCalled();
+      expect(apiService.upsertConnectedAccount).not.toHaveBeenCalled();
+    });
+    it('reads health only for the exact deterministic managed account and channel', async () => {
+      const idempotencyKey = 'managed-mailbox:mailbox-id';
+      const managedAccount = {
+        ...existingAccount,
+        id: 'managed-account-id',
+        handle: 'managed@example.test',
+        name: `myah-managed-${createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 48)}`,
+      } as ConnectedAccountEntity;
+      const managedChannel = {
+        ...messageChannel,
+        connectedAccountId: managedAccount.id,
+        id: 'managed-channel-id',
+      } as MessageChannelEntity;
+
+      connectedAccountRepository.findOne.mockResolvedValue(managedAccount);
+      messageChannelRepository.findOne.mockResolvedValue(managedChannel);
+
+      await expect(
+        service.getManagedWorkspaceMailboxStatus({
+          connectedAccountId: managedAccount.id,
+          idempotencyKey,
+          messageChannelId: managedChannel.id,
+          workspaceId: 'workspace-id',
+        }),
+      ).resolves.toMatchObject({
+        connectedAccountId: managedAccount.id,
+        messageChannelId: managedChannel.id,
+        state: 'CONNECTED',
+        syncStatus: MessageChannelSyncStatus.ACTIVE,
+      });
+      expect(connectedAccountRepository.findOne).toHaveBeenCalledWith({
+        where: {
+          archivedAt: IsNull(),
+          id: managedAccount.id,
+          name: managedAccount.name,
+          provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+          visibility: 'workspace',
+          workspaceId: 'workspace-id',
+        },
+      });
+      expect(messageChannelRepository.findOne).toHaveBeenCalledWith({
+        where: {
+          connectedAccountId: managedAccount.id,
+          id: managedChannel.id,
+          workspaceId: 'workspace-id',
+        },
+      });
+    });
+
+    it('rejects a managed status lookup when deterministic identity does not match', async () => {
+      connectedAccountRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.getManagedWorkspaceMailboxStatus({
+          connectedAccountId: 'managed-account-id',
+          idempotencyKey: 'managed-mailbox:mailbox-id',
+          messageChannelId: 'managed-channel-id',
+          workspaceId: 'workspace-id',
+        }),
+      ).rejects.toMatchObject({ code: 'MAILBOX_NOT_FOUND' });
     });
   });
 });

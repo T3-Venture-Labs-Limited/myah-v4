@@ -344,12 +344,6 @@ export class WarmupInboxClient {
   }
 
   private createHttpClient(write: boolean): AxiosInstance {
-    if (!this.twentyConfigService.get('MANAGED_EMAIL_ENABLED')) {
-      throw new WarmupInboxException(
-        WarmupInboxExceptionCode.CONFIGURATION_DISABLED,
-      );
-    }
-
     const baseURL = this.twentyConfigService
       .get('WARMUP_INBOX_API_BASE_URL')
       .trim();

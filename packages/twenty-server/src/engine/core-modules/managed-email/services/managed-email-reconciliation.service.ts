@@ -218,7 +218,8 @@ export class ManagedEmailReconciliationService {
           { normalizedAddress: mailbox.normalizedAddress },
           {
             infrastructureState:
-              ManagedEmailInfrastructureState.PROVISIONING_MAILBOX,
+              ManagedEmailInfrastructureState.WAITING_FOR_CREDENTIALS,
+            nextReconciliationAt: this.now(),
             providerMailboxId: mailbox.providerMailboxId,
             providerOrderId: domain.providerOrderId,
           },

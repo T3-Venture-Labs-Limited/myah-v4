@@ -5,11 +5,20 @@ import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-
 
 import { MANAGED_EMAIL_RECONCILIATION_CRON_PATTERN } from '../../constants/managed-email-reconciliation-cron-pattern.constant';
 import { ManagedEmailReconciliationCronCommand } from '../../crons/commands/managed-email-reconciliation.cron.command';
+import {
+  MANAGED_EMAIL_MAILBOX_ACTIVATION_CRON_PATTERN,
+  ManagedEmailMailboxActivationCronJob,
+} from '../../crons/managed-email-mailbox-activation.cron.job';
+import {
+  MANAGED_EMAIL_READINESS_CRON_PATTERN,
+  ManagedEmailReadinessCronJob,
+} from '../../crons/managed-email-readiness.cron.job';
 import { ManagedEmailReconciliationCronJob } from '../../crons/managed-email-reconciliation.cron.job';
 import { ManagedEmailAcquisitionOperationEntity } from '../../entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from '../../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../../entities/managed-email-mailbox.entity';
 import { ManagedEmailAcquisitionMode } from '../../enums/managed-email-acquisition-mode.enum';
+import { ManagedEmailInfrastructureState } from '../../enums/managed-email-infrastructure-state.enum';
 import { ReconcileManagedEmailAcquisitionJob } from '../../jobs/reconcile-managed-email-acquisition.job';
 import { type IcemailClient } from '../../providers/icemail/icemail.client';
 import { type ManagedEmailAcquisitionService } from '../managed-email-acquisition.service';
@@ -116,10 +125,12 @@ const createHarness = (operation = createOperation()) => {
     }),
   };
   const mailboxRepository = {
-    update: jest.fn(async () => {
-      events.push('mailbox');
-      return { affected: 1 };
-    }),
+    update: jest.fn(
+      async (_workspaceId: string, _criteria: object, _patch: object) => {
+        events.push('mailbox');
+        return { affected: 1 };
+      },
+    ),
   };
   const icemailClient = {
     listAllDomains: jest.fn().mockResolvedValue([domain]),
@@ -184,6 +195,15 @@ describe('ManagedEmailReconciliationService', () => {
       expect.objectContaining({ providerDomainId: 'provider-domain-1' }),
     );
     expect(harness.mailboxRepository.update).toHaveBeenCalledTimes(2);
+    for (const call of harness.mailboxRepository.update.mock.calls) {
+      expect(call[2]).toEqual(
+        expect.objectContaining({
+          infrastructureState:
+            ManagedEmailInfrastructureState.WAITING_FOR_CREDENTIALS,
+          nextReconciliationAt: expect.any(Date),
+        }),
+      );
+    }
   });
 
   it('projects only receipt-confirmed resources for a partial purchase', async () => {
@@ -415,7 +435,7 @@ describe('ManagedEmailReconciliationCronJob', () => {
 });
 
 describe('ManagedEmailReconciliationCronCommand', () => {
-  it('seeds an immediate scan and the recurring recovery schedule', async () => {
+  it('seeds immediate scans and recurring schedules for every recovery loop', async () => {
     const messageQueueService = {
       add: jest.fn(),
       addCron: jest.fn(),
@@ -430,6 +450,15 @@ describe('ManagedEmailReconciliationCronCommand', () => {
       ManagedEmailReconciliationCronJob.name,
       {},
     );
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      ManagedEmailMailboxActivationCronJob.name,
+      {},
+    );
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      ManagedEmailReadinessCronJob.name,
+      {},
+    );
+    expect(messageQueueService.add).toHaveBeenCalledTimes(3);
     expect(messageQueueService.addCron).toHaveBeenCalledWith({
       data: undefined,
       jobName: ManagedEmailReconciliationCronJob.name,
@@ -437,5 +466,20 @@ describe('ManagedEmailReconciliationCronCommand', () => {
         repeat: { pattern: MANAGED_EMAIL_RECONCILIATION_CRON_PATTERN },
       },
     });
+    expect(messageQueueService.addCron).toHaveBeenCalledWith({
+      data: undefined,
+      jobName: ManagedEmailMailboxActivationCronJob.name,
+      options: {
+        repeat: { pattern: MANAGED_EMAIL_MAILBOX_ACTIVATION_CRON_PATTERN },
+      },
+    });
+    expect(messageQueueService.addCron).toHaveBeenCalledWith({
+      data: undefined,
+      jobName: ManagedEmailReadinessCronJob.name,
+      options: {
+        repeat: { pattern: MANAGED_EMAIL_READINESS_CRON_PATTERN },
+      },
+    });
+    expect(messageQueueService.addCron).toHaveBeenCalledTimes(3);
   });
 });
