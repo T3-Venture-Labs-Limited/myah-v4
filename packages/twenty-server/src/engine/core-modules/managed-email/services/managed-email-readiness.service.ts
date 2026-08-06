@@ -14,9 +14,12 @@ const MAX_BASIS_POINTS = 10_000;
 const isBoundedInteger = (value: number, maximum: number): boolean =>
   Number.isSafeInteger(value) && value >= 0 && value <= maximum;
 
-const blocked = (safeReasonCode: string): ManagedEmailReadinessResult => ({
+const blocked = (
+  safeReasonCode: string,
+  policySafeDailyCapacity = 0,
+): ManagedEmailReadinessResult => ({
   campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
-  policySafeDailyCapacity: 0,
+  policySafeDailyCapacity,
   ready: false,
   safeReasonCode,
 });
@@ -53,6 +56,21 @@ export class ManagedEmailReadinessService {
       return blocked('INVALID_INPUT');
     }
 
+    let policyCapacity = 0;
+    let selectedDays = -1;
+
+    for (const point of policy.capacityCurve) {
+      if (
+        isBoundedInteger(point.days, MAX_CAPACITY) &&
+        isBoundedInteger(point.capacity, MAX_CAPACITY) &&
+        point.days <= input.warmupDays &&
+        point.days > selectedDays
+      ) {
+        selectedDays = point.days;
+        policyCapacity = point.capacity;
+      }
+    }
+
     const readinessBlocked =
       input.paid === false ||
       input.infrastructureActive === false ||
@@ -69,22 +87,7 @@ export class ManagedEmailReadinessService {
       input.hardProviderBlock;
 
     if (readinessBlocked) {
-      return blocked('READINESS_BLOCKED');
-    }
-
-    let policyCapacity = 0;
-    let selectedDays = -1;
-
-    for (const point of policy.capacityCurve) {
-      if (
-        isBoundedInteger(point.days, MAX_CAPACITY) &&
-        isBoundedInteger(point.capacity, MAX_CAPACITY) &&
-        point.days <= input.warmupDays &&
-        point.days > selectedDays
-      ) {
-        selectedDays = point.days;
-        policyCapacity = point.capacity;
-      }
+      return blocked('READINESS_BLOCKED', policyCapacity);
     }
 
     const effectiveCapacity =
@@ -96,7 +99,7 @@ export class ManagedEmailReadinessService {
       return {
         campaignEligibility:
           ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
-        policySafeDailyCapacity: 0,
+        policySafeDailyCapacity: policyCapacity,
         ready: false,
         safeReasonCode: 'CAPACITY_UNAVAILABLE',
       };
@@ -106,7 +109,7 @@ export class ManagedEmailReadinessService {
       return {
         campaignEligibility:
           ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
-        policySafeDailyCapacity: effectiveCapacity,
+        policySafeDailyCapacity: policyCapacity,
         ready: false,
         safeReasonCode: 'WARMUP_INCOMPLETE',
       };
@@ -118,7 +121,7 @@ export class ManagedEmailReadinessService {
       return {
         campaignEligibility:
           ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
-        policySafeDailyCapacity: effectiveCapacity,
+        policySafeDailyCapacity: policyCapacity,
         ready: false,
         safeReasonCode: 'HEALTH_EVIDENCE_UNAVAILABLE',
       };
@@ -133,7 +136,7 @@ export class ManagedEmailReadinessService {
       return {
         campaignEligibility:
           ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
-        policySafeDailyCapacity: effectiveCapacity,
+        policySafeDailyCapacity: policyCapacity,
         ready: false,
         safeReasonCode: 'HEALTH_REGRESSION',
       };
@@ -141,7 +144,7 @@ export class ManagedEmailReadinessService {
 
     return {
       campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
-      policySafeDailyCapacity: effectiveCapacity,
+      policySafeDailyCapacity: policyCapacity,
       ready: true,
       safeReasonCode: null,
     };

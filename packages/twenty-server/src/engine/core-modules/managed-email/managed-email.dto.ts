@@ -70,6 +70,8 @@ export class ManagedEmailMailboxDTO {
 
   @Field(() => String)
   id: string;
+  @Field(() => Boolean)
+  infrastructureCancelAtPeriodEnd: boolean;
 
   @Field(() => String)
   infrastructureState: string;
@@ -91,6 +93,8 @@ export class ManagedEmailMailboxDTO {
 
   @Field(() => Date, { nullable: true })
   servicePaidThrough: Date | null;
+  @Field(() => Boolean)
+  warmupCancelAtPeriodEnd: boolean;
 
   @Field(() => String)
   warmupState: string;

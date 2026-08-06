@@ -142,6 +142,8 @@ export class ManagedEmailCustomerService {
         domain: domain.domain,
         domainId: domain.id,
         id: mailbox.id,
+        infrastructureCancelAtPeriodEnd:
+          mailbox.infrastructureCancelAtPeriodEnd,
         infrastructureState: mailbox.infrastructureState,
         lastHealthEvaluatedAt: mailbox.lastHealthEvaluatedAt,
         personaDisplayName: mailbox.personaDisplayName,
@@ -149,6 +151,7 @@ export class ManagedEmailCustomerService {
         policySafeDailyCapacity: mailbox.policySafeDailyCapacity,
         safeFailureCode: mailbox.safeFailureCode,
         servicePaidThrough: mailbox.infrastructurePaidThrough,
+        warmupCancelAtPeriodEnd: mailbox.warmupCancelAtPeriodEnd,
         warmupPaidThrough: mailbox.warmupPaidThrough,
         warmupState: mailbox.warmupState,
       };
@@ -302,25 +305,36 @@ export class ManagedEmailCustomerService {
     ) {
       throw new Error('Managed email campaign cap cannot be raised');
     }
-    const capPatch =
-      input.dailyCap === null
-        ? { adminDailyCap: null }
-        : {
-            adminDailyCap: input.dailyCap,
-            ...(input.dailyCap === 0
-              ? {
-                  campaignEligibility:
-                    ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
-                }
-              : {}),
-          };
+    const effectiveDailyCap = input.dailyCap ?? mailbox.policySafeDailyCapacity;
+    const capPatch = {
+      adminDailyCap: input.dailyCap,
+      ...(effectiveDailyCap === 0
+        ? {
+            campaignEligibility:
+              ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
+          }
+        : mailbox.campaignEligibility ===
+              ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED &&
+            (mailbox.safeFailureCode === null ||
+              mailbox.safeFailureCode === 'CAPACITY_UNAVAILABLE')
+          ? {
+              campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
+              ...(mailbox.safeFailureCode === 'CAPACITY_UNAVAILABLE'
+                ? { safeFailureCode: null }
+                : {}),
+            }
+          : {}),
+    };
     const update = await this.mailboxRepository.update(
       input.workspaceId,
       {
         adminDailyCap:
           mailbox.adminDailyCap === null ? IsNull() : mailbox.adminDailyCap,
+        campaignEligibility: mailbox.campaignEligibility,
         id: mailbox.id,
         policySafeDailyCapacity: mailbox.policySafeDailyCapacity,
+        safeFailureCode:
+          mailbox.safeFailureCode === null ? IsNull() : mailbox.safeFailureCode,
       },
       capPatch,
     );

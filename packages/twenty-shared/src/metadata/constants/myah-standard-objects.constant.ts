@@ -520,6 +520,9 @@ export const MYAH_STANDARD_OBJECTS = {
       creator: { universalIdentifier: '730b323f-fae3-57e2-8e2e-62963106850a' },
       campaign: { universalIdentifier: '27ecf86e-08a4-5084-91d7-d305ab3363e1' },
       stage: { universalIdentifier: '427aad82-7fe4-516d-99b3-8d00161534f6' },
+      assignedManagedMailboxId: {
+        universalIdentifier: 'c1abf590-4797-5bd8-a820-07f55ffce9c0',
+      },
       selectedContactMethod: {
         universalIdentifier: 'b002caa0-6fb6-54a3-8111-a6dadf09e4ca',
       },

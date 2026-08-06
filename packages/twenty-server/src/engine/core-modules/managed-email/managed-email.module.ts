@@ -71,6 +71,10 @@ import {
   ManagedEmailMailboxActivationService,
 } from './services/managed-email-mailbox-activation.service';
 import { ManagedEmailReadinessService } from './services/managed-email-readiness.service';
+import {
+  MANAGED_EMAIL_CAMPAIGN_ELIGIBILITY_CLOCK,
+  ManagedEmailCampaignEligibilityService,
+} from './services/managed-email-campaign-eligibility.service';
 import { ManagedEmailSubscriptionService } from './services/managed-email-subscription.service';
 import {
   MANAGED_EMAIL_WARMUP_CLOCK,
@@ -134,6 +138,10 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
       useValue: () => randomBytes(24).toString('base64url'),
     },
     {
+      provide: MANAGED_EMAIL_CAMPAIGN_ELIGIBILITY_CLOCK,
+      useValue: () => new Date(),
+    },
+    {
       provide: MANAGED_EMAIL_READINESS_POLICY_RESOLVER,
       useValue: resolveManagedEmailReadinessPolicy,
     },
@@ -170,6 +178,7 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
     ManagedEmailMailboxActivationCronJob,
     ManagedEmailDnsResolverService,
     ManagedEmailReadinessService,
+    ManagedEmailCampaignEligibilityService,
     ManagedEmailWarmupService,
     EvaluateManagedEmailReadinessJob,
     ManagedEmailReadinessCronJob,
@@ -197,6 +206,7 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
     ManagedEmailReconciliationCronCommand,
     ManagedEmailReconciliationService,
     ManagedEmailSubscriptionService,
+    ManagedEmailCampaignEligibilityService,
   ],
 })
 export class ManagedEmailModule {}

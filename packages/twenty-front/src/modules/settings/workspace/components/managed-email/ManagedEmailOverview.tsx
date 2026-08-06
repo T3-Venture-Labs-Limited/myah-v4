@@ -3,15 +3,19 @@ import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMa
 import { ManagedEmailAcquisitionChooser } from '@/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser';
 import { ManagedEmailCreateFlow } from '@/settings/workspace/components/managed-email/ManagedEmailCreateFlow';
 import { ManagedEmailPrewarmedFlow } from '@/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow';
+import { ManagedEmailDetails } from '@/settings/workspace/components/managed-email/ManagedEmailDetails';
 import { ManagedEmailProgress } from '@/settings/workspace/components/managed-email/ManagedEmailProgress';
 import { ManagedEmailReview } from '@/settings/workspace/components/managed-email/ManagedEmailReview';
+import { ManagedMailboxTable } from '@/settings/workspace/components/managed-email/ManagedMailboxTable';
 import {
-  ManagedMailboxTable,
-  type ManagedMailboxTableItem,
-} from '@/settings/workspace/components/managed-email/ManagedMailboxTable';
-import {
+  CANCEL_MANAGED_EMAIL_DOMAIN_RENEWAL,
+  CANCEL_MANAGED_EMAIL_WARMUP,
   CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE,
+  PAUSE_MANAGED_EMAIL_WARMUP,
+  RESUME_MANAGED_EMAIL_WARMUP,
   RETRY_MANAGED_EMAIL_PAYMENT,
+  SET_MANAGED_EMAIL_CAMPAIGN_CAP,
+  STOP_MANAGED_EMAIL_MAILBOX,
 } from '@/settings/workspace/graphql/managed-email/managedEmailMutations';
 import {
   GET_MANAGED_EMAIL_OPERATION,
@@ -31,6 +35,8 @@ import { Section } from 'twenty-ui/layout';
 import { H2Title } from 'twenty-ui/typography';
 import {
   type ManagedEmailBundle,
+  type ManagedEmailDomain,
+  type ManagedEmailMailbox,
   type ManagedEmailOperation,
   type ManagedEmailOverview as ManagedEmailOverviewData,
   type ManagedEmailProposal,
@@ -47,7 +53,8 @@ const OPERATION_IDEMPOTENCY_STORAGE_KEY =
 
 type OverviewQueryData = {
   managedEmailOverview: ManagedEmailOverviewData;
-  managedEmailMailboxes: ManagedMailboxTableItem[];
+  managedEmailDomains: ManagedEmailDomain[];
+  managedEmailMailboxes: ManagedEmailMailbox[];
 };
 
 type BundlesQueryData = {
@@ -114,7 +121,7 @@ export const ManagedEmailOverview = () => {
     string | null
   >(restoredConfirmationIdempotencyKey);
 
-  const { data, loading, error } = useQuery<OverviewQueryData>(
+  const { data, loading, error, refetch } = useQuery<OverviewQueryData>(
     GET_MANAGED_EMAIL_OVERVIEW,
     { skip: canPurchase !== true },
   );
@@ -136,6 +143,14 @@ export const ManagedEmailOverview = () => {
     ConfirmPurchaseVariables
   >(CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE);
   const [retryPayment] = useMutation(RETRY_MANAGED_EMAIL_PAYMENT);
+  const [setCampaignCap] = useMutation(SET_MANAGED_EMAIL_CAMPAIGN_CAP);
+  const [cancelWarmup] = useMutation(CANCEL_MANAGED_EMAIL_WARMUP);
+  const [pauseWarmup] = useMutation(PAUSE_MANAGED_EMAIL_WARMUP);
+  const [resumeWarmup] = useMutation(RESUME_MANAGED_EMAIL_WARMUP);
+  const [stopMailbox] = useMutation(STOP_MANAGED_EMAIL_MAILBOX);
+  const [cancelDomainRenewal] = useMutation(
+    CANCEL_MANAGED_EMAIL_DOMAIN_RENEWAL,
+  );
   const { data: operationData } = useQuery<OperationQueryData>(
     GET_MANAGED_EMAIL_OPERATION,
     {
@@ -272,6 +287,17 @@ export const ManagedEmailOverview = () => {
     }
   };
 
+  const executeLifecycleAction = async (action: () => Promise<unknown>) => {
+    try {
+      await action();
+      await refetch();
+    } catch {
+      enqueueErrorSnackBar({
+        message: t`We could not update this managed email service. Please try again.`,
+      });
+    }
+  };
+
   if (canPurchase !== true || flow === 'CHOOSER') {
     return (
       <ManagedEmailAcquisitionChooser
@@ -396,6 +422,71 @@ export const ManagedEmailOverview = () => {
           <ManagedMailboxTable mailboxes={data.managedEmailMailboxes} />
         )}
       </Section>
+      {(data.managedEmailMailboxes.length > 0 ||
+        data.managedEmailDomains.length > 0) && (
+        <ManagedEmailDetails
+          domains={data.managedEmailDomains}
+          mailboxes={data.managedEmailMailboxes}
+          onSetCampaignCap={(mailboxId, dailyCap) =>
+            void executeLifecycleAction(() =>
+              setCampaignCap({
+                variables: {
+                  input: {
+                    dailyCap,
+                    idempotencyKey: crypto.randomUUID(),
+                    mailboxId,
+                  },
+                },
+              }),
+            )
+          }
+          onCancelWarmup={(mailboxId) =>
+            void executeLifecycleAction(() =>
+              cancelWarmup({
+                variables: {
+                  input: { idempotencyKey: crypto.randomUUID(), mailboxId },
+                },
+              }),
+            )
+          }
+          onPauseWarmup={(mailboxId) =>
+            void executeLifecycleAction(() =>
+              pauseWarmup({
+                variables: {
+                  input: { idempotencyKey: crypto.randomUUID(), mailboxId },
+                },
+              }),
+            )
+          }
+          onResumeWarmup={(mailboxId) =>
+            void executeLifecycleAction(() =>
+              resumeWarmup({
+                variables: {
+                  input: { idempotencyKey: crypto.randomUUID(), mailboxId },
+                },
+              }),
+            )
+          }
+          onStopMailbox={(mailboxId) =>
+            void executeLifecycleAction(() =>
+              stopMailbox({
+                variables: {
+                  input: { idempotencyKey: crypto.randomUUID(), mailboxId },
+                },
+              }),
+            )
+          }
+          onCancelDomainRenewal={(domainId) =>
+            void executeLifecycleAction(() =>
+              cancelDomainRenewal({
+                variables: {
+                  input: { domainId, idempotencyKey: crypto.randomUUID() },
+                },
+              }),
+            )
+          }
+        />
+      )}
     </>
   );
 };

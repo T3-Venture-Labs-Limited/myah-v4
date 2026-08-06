@@ -3,6 +3,7 @@ import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useBatchCreateManyRecords } from '@/object-record/hooks/useBatchCreateManyRecords';
 import { useDestroyManyRecords } from '@/object-record/hooks/useDestroyManyRecords';
+import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { t } from '@lingui/core/macro';
 import { useCallback } from 'react';
@@ -67,6 +68,7 @@ export const useApplyCreatorBulkRelationship = () => {
     useDestroyManyRecords({
       objectNameSingular: 'creatorListMember',
     });
+  const { updateOneRecord } = useUpdateOneRecord();
   const { objectMetadataItem: creatorObjectMetadataItem } =
     useObjectMetadataItem({
       objectNameSingular: 'creator',
@@ -180,25 +182,54 @@ export const useApplyCreatorBulkRelationship = () => {
     async ({
       target,
       creatorIdsToAdd,
+      campaignCreatorIdsToUpdate = [],
+      assignedManagedMailboxId,
     }: {
       target: CreatorBulkRelationshipTarget;
       creatorIdsToAdd: string[];
+      campaignCreatorIdsToUpdate?: string[];
+      assignedManagedMailboxId?: string | null;
     }) => {
-      if (creatorIdsToAdd.length === 0) {
+      const hasCampaignUpdates =
+        target.kind === 'campaign' &&
+        assignedManagedMailboxId !== undefined &&
+        campaignCreatorIdsToUpdate.length > 0;
+
+      if (creatorIdsToAdd.length === 0 && !hasCampaignUpdates) {
         return;
       }
 
       const recordsToCreate = creatorIdsToAdd.map((creatorId) =>
         target.kind === 'creator-list'
           ? { name: '', creatorId, creatorListId: target.id }
-          : { name: '', creatorId, campaignId: target.id },
+          : {
+              name: '',
+              creatorId,
+              campaignId: target.id,
+              ...(assignedManagedMailboxId ? { assignedManagedMailboxId } : {}),
+            },
       );
 
       try {
         if (target.kind === 'creator-list') {
-          await batchCreateCreatorListMembers({ recordsToCreate });
+          if (recordsToCreate.length > 0) {
+            await batchCreateCreatorListMembers({ recordsToCreate });
+          }
         } else {
-          await batchCreateCampaignCreators({ recordsToCreate });
+          if (hasCampaignUpdates) {
+            await Promise.all(
+              campaignCreatorIdsToUpdate.map((campaignCreatorId) =>
+                updateOneRecord({
+                  objectNameSingular: 'campaignCreator',
+                  idToUpdate: campaignCreatorId,
+                  updateOneRecordInput: { assignedManagedMailboxId },
+                }),
+              ),
+            );
+          }
+          if (recordsToCreate.length > 0) {
+            await batchCreateCampaignCreators({ recordsToCreate });
+          }
         }
       } catch {
         enqueueErrorSnackBar({
@@ -214,6 +245,7 @@ export const useApplyCreatorBulkRelationship = () => {
       batchCreateCreatorListMembers,
       enqueueErrorSnackBar,
       refetchCreatorRelationships,
+      updateOneRecord,
     ],
   );
 

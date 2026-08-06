@@ -69,7 +69,7 @@ describe('ManagedEmailReadinessService', () => {
   ])('hard-blocks on %s', (_name, overrides) => {
     expect(service().evaluate(readyInput(overrides as never))).toMatchObject({
       campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
-      policySafeDailyCapacity: 0,
+      policySafeDailyCapacity: 10,
       ready: false,
     });
   });
@@ -114,7 +114,7 @@ describe('ManagedEmailReadinessService', () => {
     });
   });
 
-  it('uses the lower administrator cap and never a caller-supplied provider running flag', () => {
+  it('uses the lower administrator cap without overwriting the policy capacity', () => {
     const input = readyInput({
       adminDailyCap: 3,
     }) as ManagedEmailReadinessInput & {
@@ -124,15 +124,31 @@ describe('ManagedEmailReadinessService', () => {
 
     expect(service().evaluate(input)).toMatchObject({
       campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
-      policySafeDailyCapacity: 3,
+      policySafeDailyCapacity: 10,
       ready: true,
+    });
+  });
+
+  it('hard-blocks readiness without destroying the policy capacity', () => {
+    expect(
+      service().evaluate(
+        readyInput({
+          adminDailyCap: 3,
+          dns: { dkim: true, dmarc: true, mx: false, spf: true },
+        }),
+      ),
+    ).toMatchObject({
+      campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
+      policySafeDailyCapacity: 10,
+      ready: false,
+      safeReasonCode: 'READINESS_BLOCKED',
     });
   });
 
   it('never marks a mailbox eligible when its effective capacity is zero', () => {
     expect(service().evaluate(readyInput({ adminDailyCap: 0 }))).toMatchObject({
       campaignEligibility: ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
-      policySafeDailyCapacity: 0,
+      policySafeDailyCapacity: 10,
       ready: false,
       safeReasonCode: 'CAPACITY_UNAVAILABLE',
     });

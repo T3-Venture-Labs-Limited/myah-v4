@@ -188,6 +188,9 @@ const setup = () => {
 describe('ManagedEmailWarmupService', () => {
   it('fails closed without an approved policy or paid entitlement and performs no provider work', async () => {
     const first = setup();
+    first.mailboxRepository.findOneBy.mockResolvedValue(
+      mailbox({ adminDailyCap: 3, policySafeDailyCapacity: 10 }),
+    );
     const unconfigured = new ManagedEmailWarmupService(
       first.mailboxRepository as never,
       first.warmupInboxClient as never,
@@ -207,6 +210,14 @@ describe('ManagedEmailWarmupService', () => {
     );
     await second.service.evaluateMailbox({ mailboxId, workspaceId });
 
+    expect(first.mailboxRepository.update).toHaveBeenCalledWith(
+      workspaceId,
+      { id: mailboxId, lastHealthEvaluatedAt: IsNull() },
+      expect.objectContaining({
+        campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
+        policySafeDailyCapacity: 10,
+      }),
+    );
     expect(first.warmupInboxClient.findByExactAddress).not.toHaveBeenCalled();
     expect(second.warmupInboxClient.findByExactAddress).not.toHaveBeenCalled();
     expect(second.mailboxRepository.update).toHaveBeenCalledWith(
@@ -399,17 +410,29 @@ describe('ManagedEmailWarmupService', () => {
     );
   });
 
-  it('hard-blocks provider action-required status regardless of running history', async () => {
+  it('hard-blocks provider status while preserving capacity for invalid health input', async () => {
     const test = setup();
     test.mailboxRepository.findOneBy.mockResolvedValue(
       mailbox({
+        adminDailyCap: 3,
+        policySafeDailyCapacity: 10,
         warmupEnrollmentId: 'warmup-1',
         warmupState: ManagedEmailWarmupState.WARMING,
       }),
     );
     test.warmupInboxClient.getInbox.mockResolvedValue({
       ...(await test.warmupInboxClient.getInbox('warmup-1')),
+      health: {
+        ...(await test.warmupInboxClient.getInbox('warmup-1')).health,
+        warmupDays: -1,
+      },
       status: 'banned',
+    });
+    test.readinessService.evaluate.mockReturnValue({
+      campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
+      policySafeDailyCapacity: 0,
+      ready: false,
+      safeReasonCode: 'INVALID_INPUT',
     });
 
     await test.service.evaluateMailbox({ mailboxId, workspaceId });
@@ -419,7 +442,7 @@ describe('ManagedEmailWarmupService', () => {
       { id: mailboxId, lastHealthEvaluatedAt: IsNull() },
       expect.objectContaining({
         campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
-        policySafeDailyCapacity: 0,
+        policySafeDailyCapacity: 10,
         warmupState: ManagedEmailWarmupState.ACTION_REQUIRED,
       }),
     );

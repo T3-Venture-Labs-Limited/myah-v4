@@ -1,3 +1,5 @@
+import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
+import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useLingui } from '@lingui/react/macro';
 import { Status } from 'twenty-ui/data-display';
 import { Button } from 'twenty-ui/input';
@@ -26,6 +28,7 @@ export const ManagedEmailProgress = ({
   operation,
 }: ManagedEmailProgressProps) => {
   const { t } = useLingui();
+  const { openModal } = useModal();
   const payment = paymentPresentation(operation.paymentStatus);
   const setupText = (() => {
     switch (operation.state) {
@@ -73,11 +76,21 @@ export const ManagedEmailProgress = ({
         </ol>
       </div>
       {operation.paymentStatus === 'PAYMENT_FAILED' && (
-        <Button
-          title={t`Retry payment`}
-          variant="primary"
-          onClick={onRetryPayment}
-        />
+        <>
+          <Button
+            title={t`Retry payment`}
+            variant="primary"
+            onClick={() => openModal('retry-managed-email-payment-modal')}
+          />
+          <ConfirmationModal
+            modalInstanceId="retry-managed-email-payment-modal"
+            title={t`Retry payment?`}
+            subtitle={t`This retries the saved payment for this managed mailbox order.`}
+            confirmButtonText={t`Retry payment`}
+            confirmButtonAccent="brand"
+            onConfirmClick={onRetryPayment}
+          />
+        </>
       )}
     </Section>
   );

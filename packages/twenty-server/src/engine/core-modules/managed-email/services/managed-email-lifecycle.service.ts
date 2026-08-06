@@ -410,8 +410,6 @@ export class ManagedEmailLifecycleService {
         const patch: MailboxLifecyclePatch =
           resourceType === 'mailbox'
             ? {
-                campaignEligibility:
-                  ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
                 infrastructureCancelAtPeriodEnd: true,
                 nextPeriodBoundaryAt: this.now(),
                 pendingLifecycleAction:
@@ -424,7 +422,6 @@ export class ManagedEmailLifecycleService {
                   ManagedEmailLifecycleAction.CANCEL_WARMUP_SUBSCRIPTION_PENDING,
                 pendingLifecycleKey: idempotencyKey,
                 warmupCancelAtPeriodEnd: true,
-                warmupState: ManagedEmailWarmupState.CANCEL_AT_PERIOD_END,
               };
 
         return this.persistMailboxIntentWithManager(

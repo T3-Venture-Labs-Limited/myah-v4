@@ -407,11 +407,13 @@ describe('ManagedEmailCustomerService', () => {
       personaDisplayName: 'Alex Example',
       personaRole: 'Founder',
       infrastructureState: 'ACTIVE',
+      infrastructureCancelAtPeriodEnd: false,
       warmupState: 'WARMING',
       campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
       policySafeDailyCapacity: 10,
       adminDailyCap: null,
       infrastructurePaidThrough: new Date('2026-09-01T00:00:00.000Z'),
+      warmupCancelAtPeriodEnd: true,
       warmupPaidThrough: new Date('2026-09-01T00:00:00.000Z'),
       lastHealthEvaluatedAt: new Date('2026-08-05T00:00:00.000Z'),
       safeFailureCode: null,
@@ -530,7 +532,9 @@ describe('ManagedEmailCustomerService', () => {
         address: 'alex@example.test',
         domain: 'example.test',
         id: mailboxId,
+        infrastructureCancelAtPeriodEnd: false,
         personaDisplayName: 'Alex Example',
+        warmupCancelAtPeriodEnd: true,
       }),
     ]);
 
@@ -706,7 +710,7 @@ describe('ManagedEmailCustomerService', () => {
     expect(test.acquisitionService.continue).toHaveBeenCalledTimes(1);
   });
 
-  it('atomically lowers a campaign cap and rejects attempts to raise it', async () => {
+  it('atomically changes a campaign cap within policy and rejects exceeding policy', async () => {
     const test = createService();
 
     await expect(
@@ -755,4 +759,56 @@ describe('ManagedEmailCustomerService', () => {
       }),
     ).rejects.toThrow('Managed email campaign cap cannot be raised');
   });
+
+  it.each([5, null] as const)(
+    'clears an admin-caused capacity block when setting the cap to %s',
+    async (dailyCap) => {
+      const test = createService({
+        mailbox: {
+          address: 'alex@example.test',
+          adminDailyCap: 0,
+          campaignEligibility:
+            ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
+          id: mailboxId,
+          infrastructureCancelAtPeriodEnd: false,
+          infrastructurePaidThrough: new Date('2026-09-01T00:00:00.000Z'),
+          infrastructureState: 'ACTIVE',
+          lastHealthEvaluatedAt: new Date('2026-08-05T00:00:00.000Z'),
+          managedEmailDomainId: domainId,
+          personaDisplayName: 'Alex Example',
+          personaRole: 'Founder',
+          policySafeDailyCapacity: 10,
+          safeFailureCode: 'CAPACITY_UNAVAILABLE',
+          warmupCancelAtPeriodEnd: false,
+          warmupPaidThrough: new Date('2026-09-01T00:00:00.000Z'),
+          warmupState: 'MAINTENANCE',
+          workspaceId: workspace.id,
+        },
+      });
+
+      await expect(
+        test.service.setCampaignCap({
+          actorId,
+          dailyCap,
+          idempotencyKey,
+          mailboxId,
+          workspaceId: workspace.id,
+        }),
+      ).resolves.toEqual({ accepted: true, operationId: mailboxId });
+      expect(test.mailboxRepository.update).toHaveBeenCalledWith(
+        workspace.id,
+        expect.objectContaining({
+          adminDailyCap: 0,
+          id: mailboxId,
+          policySafeDailyCapacity: 10,
+          safeFailureCode: 'CAPACITY_UNAVAILABLE',
+        }),
+        {
+          adminDailyCap: dailyCap,
+          campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
+          safeFailureCode: null,
+        },
+      );
+    },
+  );
 });

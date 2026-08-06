@@ -38,6 +38,7 @@ import { TWENTY_STANDARD_ALL_METADATA_NAME } from 'src/engine/workspace-manager/
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 const legacyActionId = randomUUID();
+const legacyCampaignCreatorId = randomUUID();
 const twentyServerRoot = resolve(__dirname, '../../..');
 const commandEntryPoint = resolve(twentyServerRoot, 'dist/command/command.js');
 
@@ -99,12 +100,13 @@ type CommandResult = {
 
 const runWorkspaceMigration = async (
   workspaceId: string,
+  commandName = 'upgrade:2-19:resynchronize-myah-standard-application',
 ): Promise<CommandResult> => {
   const child = spawn(
     process.execPath,
     [
       commandEntryPoint,
-      'upgrade:2-19:resynchronize-myah-standard-application',
+      commandName,
       '--workspace-id',
       workspaceId,
       '--verbose',
@@ -136,9 +138,13 @@ describe('outreach email workflow migration (PostgreSQL)', () => {
   let workspaceId: string;
   let schemaName: string;
   let commandResult: CommandResult;
+  let managedEmailCommandResult: CommandResult;
   let retainedLegacyAction: { id: string; name: string };
+  let retainedLegacyCampaignCreator: { id: string; name: string };
   let restoredColumnNames: string[];
+  let managedMailboxAssignmentColumnNames: string[];
   let legacyRowInserted = false;
+  let legacyCampaignCreatorRowInserted = false;
 
   beforeAll(async () => {
     dataSource = global.testDataSource;
@@ -231,6 +237,77 @@ describe('outreach email workflow migration (PostgreSQL)', () => {
 
     commandResult = await runWorkspaceMigration(workspaceId);
 
+    await dataSource.query(
+      `INSERT INTO "${schemaName}"."campaignCreator" ("id", "name")
+       VALUES ($1, $2)`,
+      [legacyCampaignCreatorId, 'Legacy campaign creator'],
+    );
+    legacyCampaignCreatorRowInserted = true;
+
+    const [managedMailboxAssignmentField] = await dataSource.query<
+      { id: string }[]
+    >(
+      `SELECT field_metadata."id"
+       FROM core."fieldMetadata" field_metadata
+       INNER JOIN core."objectMetadata" object_metadata
+         ON object_metadata."id" = field_metadata."objectMetadataId"
+       WHERE object_metadata."workspaceId" = $1
+         AND object_metadata."universalIdentifier" = $2
+         AND field_metadata."universalIdentifier" = $3`,
+      [
+        workspaceId,
+        MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaignCreator.fields.assignedManagedMailboxId
+          .universalIdentifier,
+      ],
+    );
+    if (!managedMailboxAssignmentField) {
+      throw new Error(
+        'The seeded Myah profile did not contain managed mailbox assignment',
+      );
+    }
+    await dataSource.query(
+      'DELETE FROM core."fieldPermission" WHERE "fieldMetadataId" = $1',
+      [managedMailboxAssignmentField.id],
+    );
+    await dataSource.query('DELETE FROM core."fieldMetadata" WHERE "id" = $1', [
+      managedMailboxAssignmentField.id,
+    ]);
+    await dataSource.query(
+      `ALTER TABLE "${schemaName}"."campaignCreator"
+       DROP COLUMN "assignedManagedMailboxId"`,
+    );
+    await flushWorkspaceMetadataRedisCache(workspaceId);
+
+    const [missingManagedMailboxAssignmentColumn] = await dataSource.query<
+      { columnName: string | null }[]
+    >(
+      `SELECT column_name AS "columnName"
+       FROM information_schema.columns
+       WHERE table_schema = $1
+         AND table_name = 'campaignCreator'
+         AND column_name = 'assignedManagedMailboxId'`,
+      [schemaName],
+    );
+    if (missingManagedMailboxAssignmentColumn !== undefined) {
+      throw new Error(
+        'Managed mailbox assignment column still exists before migration',
+      );
+    }
+
+    managedEmailCommandResult = await runWorkspaceMigration(
+      workspaceId,
+      'upgrade:2-20:synchronize-managed-email-campaign-assignment-metadata',
+    );
+    [retainedLegacyCampaignCreator] = await dataSource.query<
+      { id: string; name: string }[]
+    >(
+      `SELECT "id", "name"
+       FROM "${schemaName}"."campaignCreator"
+       WHERE "id" = $1`,
+      [legacyCampaignCreatorId],
+    );
+
     [retainedLegacyAction] = await dataSource.query<
       { id: string; name: string }[]
     >(
@@ -249,6 +326,16 @@ describe('outreach email workflow migration (PostgreSQL)', () => {
         [schemaName, outreachApprovalFieldNames],
       )
     ).map(({ columnName }) => columnName);
+    managedMailboxAssignmentColumnNames = (
+      await dataSource.query<{ columnName: string }[]>(
+        `SELECT column_name AS "columnName"
+         FROM information_schema.columns
+         WHERE table_schema = $1
+           AND table_name = 'campaignCreator'
+           AND column_name = 'assignedManagedMailboxId'`,
+        [schemaName],
+      )
+    ).map(({ columnName }) => columnName);
   }, 180_000);
 
   afterAll(async () => {
@@ -256,6 +343,16 @@ describe('outreach email workflow migration (PostgreSQL)', () => {
       await dataSource.query(
         `DELETE FROM "${schemaName}"."outreachAction" WHERE "id" = $1`,
         [legacyActionId],
+      );
+    }
+    if (
+      dataSource?.isInitialized &&
+      schemaName &&
+      legacyCampaignCreatorRowInserted
+    ) {
+      await dataSource.query(
+        `DELETE FROM "${schemaName}"."campaignCreator" WHERE "id" = $1`,
+        [legacyCampaignCreatorId],
       );
     }
   });
@@ -270,6 +367,16 @@ describe('outreach email workflow migration (PostgreSQL)', () => {
     );
   });
 
+  it('runs the managed email assignment migration for the selected workspace', () => {
+    expect(managedEmailCommandResult.exitCode).toBe(0);
+    expect(
+      `${managedEmailCommandResult.stdout}\n${managedEmailCommandResult.stderr}`,
+    ).toContain(`Running on workspace ${workspaceId} 1/1`);
+    expect(
+      `${managedEmailCommandResult.stdout}\n${managedEmailCommandResult.stderr}`,
+    ).toContain('Command completed!');
+  });
+
   it('retains existing Outreach Action values and restores every new column', () => {
     expect(retainedLegacyAction).toEqual({
       id: legacyActionId,
@@ -278,6 +385,16 @@ describe('outreach email workflow migration (PostgreSQL)', () => {
     expect(restoredColumnNames.sort()).toEqual(
       [...outreachApprovalFieldNames].sort(),
     );
+  });
+
+  it('adds managed mailbox assignment to existing Campaign Creator tables', () => {
+    expect(managedMailboxAssignmentColumnNames).toEqual([
+      'assignedManagedMailboxId',
+    ]);
+    expect(retainedLegacyCampaignCreator).toEqual({
+      id: legacyCampaignCreatorId,
+      name: 'Legacy campaign creator',
+    });
   });
 });
 
@@ -288,6 +405,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
   const outreachActionId = randomUUID();
   const connectedAccountId = randomUUID();
   const messageChannelId = randomUUID();
+  const managedMailboxId = randomUUID();
   const threadId = randomUUID();
   const subject = 'Approved partnership subject';
   const body = 'Approved partnership body';
@@ -427,9 +545,10 @@ describe('outreach email approval and send (PostgreSQL)', () => {
     );
     await dataSource.query(
       `INSERT INTO "${schemaName}"."campaignCreator" (
-        "id", "name", "creatorId", "campaignId", "selectedContactMethod"
-      ) VALUES ($1, 'Launch Campaign: Creator Name', $2, $3, 'EMAIL')`,
-      [campaignCreatorId, creatorId, campaignId],
+        "id", "name", "creatorId", "campaignId", "selectedContactMethod",
+        "assignedManagedMailboxId"
+      ) VALUES ($1, 'Launch Campaign: Creator Name', $2, $3, 'EMAIL', $4)`,
+      [campaignCreatorId, creatorId, campaignId, managedMailboxId],
     );
     await dataSource.query(
       `INSERT INTO "${schemaName}"."outreachAction" (
@@ -641,6 +760,14 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       } as never,
       connectedAccountRepository as never,
       messageChannelRepository as never,
+      {
+        assertEligible: async () => ({
+          id: managedMailboxId,
+          connectedAccountId,
+          messageChannelId,
+          effectiveDailyCap: 1,
+        }),
+      } as never,
     );
     project = jest.fn().mockResolvedValue(undefined);
     const projector = new ActionReceiptProjectorService(

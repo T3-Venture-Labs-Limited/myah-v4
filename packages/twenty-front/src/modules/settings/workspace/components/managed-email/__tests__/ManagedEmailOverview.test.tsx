@@ -1,6 +1,7 @@
 import { ManagedEmailOverview } from '@/settings/workspace/components/managed-email/ManagedEmailOverview';
 import {
   CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE,
+  PAUSE_MANAGED_EMAIL_WARMUP,
   RETRY_MANAGED_EMAIL_PAYMENT,
 } from '@/settings/workspace/graphql/managed-email/managedEmailMutations';
 import {
@@ -307,6 +308,39 @@ describe('ManagedEmailOverview', () => {
     expect(
       window.localStorage.getItem('managed-email-operation-idempotency-key'),
     ).toBe('original-confirmation-key');
+  });
+
+  it('confirms an immediate warmup pause before sending the lifecycle mutation', async () => {
+    const user = userEvent.setup();
+    renderOverview([
+      overviewMock,
+      {
+        request: {
+          query: PAUSE_MANAGED_EMAIL_WARMUP,
+          variables: (variables) =>
+            variables.input.mailboxId === 'mailbox-1' &&
+            typeof variables.input.idempotencyKey === 'string',
+        },
+        result: {
+          data: { pauseManagedEmailWarmup: { accepted: true } },
+        },
+      },
+      overviewMock,
+    ]);
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: /Maya Chen — maya@creator-network.com/,
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: /^Pause warmup/ }));
+
+    expect(
+      screen.getByText(
+        'This pauses warmup now. It does not cancel your warmup renewal.',
+      ),
+    ).toBeVisible();
+    await user.click(screen.getByTestId('confirmation-modal-confirm-button'));
   });
 
   it('shows the ordinary fallback when live prewarmed stock is empty', async () => {

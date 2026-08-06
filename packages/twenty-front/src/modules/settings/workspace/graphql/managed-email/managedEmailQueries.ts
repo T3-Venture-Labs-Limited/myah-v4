@@ -11,12 +11,33 @@ export const GET_MANAGED_EMAIL_OVERVIEW = gql`
       status
       warmingCount
     }
-    managedEmailMailboxes {
-      address
-      campaignEligibility
+    managedEmailDomains {
+      cancelAtPeriodEnd
+      dependentMailboxCount
       domain
       id
+      infrastructureState
+      paidThrough
+      renewalEnabled
+      safeFailureCode
+    }
+    managedEmailMailboxes {
+      address
+      adminDailyCap
+      campaignEligibility
+      domain
+      domainId
+      id
+      infrastructureCancelAtPeriodEnd
+      infrastructureState
+      lastHealthEvaluatedAt
       personaDisplayName
+      personaRole
+      policySafeDailyCapacity
+      safeFailureCode
+      servicePaidThrough
+      warmupCancelAtPeriodEnd
+      warmupPaidThrough
       warmupState
     }
   }

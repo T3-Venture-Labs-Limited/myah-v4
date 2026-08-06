@@ -647,7 +647,7 @@ describe('ManagedEmailLifecycleService', () => {
         ManagedEmailLifecycleAction.CANCEL_WARMUP_AT_PERIOD_END,
       pendingLifecycleKey: mailboxActionInput.idempotencyKey,
       warmupCancelAtPeriodEnd: true,
-      warmupState: ManagedEmailWarmupState.CANCEL_AT_PERIOD_END,
+      warmupState: ManagedEmailWarmupState.MAINTENANCE,
     });
     expect(
       test.metronomeClient.scheduleSubscriptionQuantity,
@@ -666,6 +666,22 @@ describe('ManagedEmailLifecycleService', () => {
       test.metronomeClient.scheduleSubscriptionQuantity.mock
         .invocationCallOrder[0],
     );
+  });
+
+  it('preserves an immediate warmup pause when renewal is cancelled', async () => {
+    const test = createHarness({
+      mailbox: {
+        warmupState: ManagedEmailWarmupState.PAUSED,
+      },
+      now: new Date('2026-08-20T00:00:00.000Z'),
+    });
+
+    await test.service.cancelWarmupAtPeriodEnd(mailboxActionInput);
+
+    expect(test.mailboxes[0]).toMatchObject({
+      warmupCancelAtPeriodEnd: true,
+      warmupState: ManagedEmailWarmupState.PAUSED,
+    });
   });
 
   it('preserves the shared subscription quantity for an active sibling', async () => {
@@ -841,7 +857,9 @@ describe('ManagedEmailLifecycleService', () => {
 
     expect(test.mailboxes[0]).toMatchObject({
       connectedAccountId: 'connected-account-1',
+      campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
       infrastructureCancelAtPeriodEnd: true,
+      infrastructureState: ManagedEmailInfrastructureState.ACTIVE,
       messageChannelId: 'message-channel-1',
       nextPeriodBoundaryAt: monthlyBoundary,
       pendingLifecycleAction:
