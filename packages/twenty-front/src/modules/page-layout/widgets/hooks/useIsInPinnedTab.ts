@@ -1,5 +1,4 @@
 import { usePageLayoutContentContext } from '@/page-layout/contexts/PageLayoutContentContext';
-import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageLayoutOrThrow';
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
 import { usePageLayoutHiddenWidgetTypes } from '@/page-layout/hooks/usePageLayoutHiddenWidgetTypes';
@@ -32,9 +31,6 @@ export const useIsInPinnedTab = () => {
     pageLayoutType: currentPageLayout.type,
     isMobile,
     isInSidePanel,
-    forceAllTabsInTabList:
-      currentPageLayout.universalIdentifier ===
-      MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
   });
 
   return {

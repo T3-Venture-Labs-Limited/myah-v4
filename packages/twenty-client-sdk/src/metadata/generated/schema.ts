@@ -1017,6 +1017,7 @@ export interface WorkflowVersionConfiguration {
 export interface PageLayoutTab {
     id: Scalars['UUID']
     applicationId: Scalars['UUID']
+    universalIdentifier: Scalars['UUID']
     title: Scalars['String']
     position: Scalars['Float']
     pageLayoutId: Scalars['UUID']
@@ -4188,6 +4189,7 @@ export interface WorkflowVersionConfigurationGenqlSelection{
 export interface PageLayoutTabGenqlSelection{
     id?: boolean | number
     applicationId?: boolean | number
+    universalIdentifier?: boolean | number
     title?: boolean | number
     position?: boolean | number
     pageLayoutId?: boolean | number

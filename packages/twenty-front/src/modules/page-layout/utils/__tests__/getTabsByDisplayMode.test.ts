@@ -240,19 +240,19 @@ describe('getTabsByDisplayMode', () => {
       expect(result.pinnedLeftTab).toBeUndefined();
     });
 
-    it('renders two desktop record-page tabs in the tab list when explicitly configured', () => {
-      const tabs = [createMockTab('tab-1'), createMockTab('tab-2')];
-      const pageLayout = createMockPageLayout(tabs);
+    it('uses Campaign information as the pinned desktop tab', () => {
+      const tabs = ['information', 'tasks', 'notes', 'agent', 'operations'].map(
+        createMockTab,
+      );
       const result = getTabsByDisplayMode({
-        tabs: pageLayout.tabs,
-        pageLayoutType: pageLayout.type,
+        tabs,
+        pageLayoutType: PageLayoutType.RECORD_PAGE,
         isMobile: false,
         isInSidePanel: false,
-        forceAllTabsInTabList: true,
       });
 
-      expect(result.pinnedLeftTab).toBeUndefined();
-      expect(result.tabsToRenderInTabList).toEqual(tabs);
+      expect(result.pinnedLeftTab).toEqual(tabs[0]);
+      expect(result.tabsToRenderInTabList).toEqual(tabs.slice(1));
     });
 
     it('pins the first desktop record-page tab when exactly two tabs exist', () => {

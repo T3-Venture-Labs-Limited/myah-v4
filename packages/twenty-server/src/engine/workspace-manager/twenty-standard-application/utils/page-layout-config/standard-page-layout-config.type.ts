@@ -17,6 +17,7 @@ export type StandardPageLayoutWidgetConfig = {
   conditionalDisplay?: PageLayoutWidgetConditionalDisplay | null;
   conditionalAvailabilityExpression?: string | null;
   fieldUniversalIdentifier?: string;
+  fieldsViewUniversalIdentifier?: string;
 };
 
 export type StandardPageLayoutTabConfig = {
@@ -46,6 +47,7 @@ export type StandardRecordPageWidgetConfig = {
   conditionalDisplay?: PageLayoutWidgetConditionalDisplay | null;
   conditionalAvailabilityExpression?: string | null;
   fieldUniversalIdentifier?: string;
+  fieldsViewUniversalIdentifier?: string;
 };
 
 export type StandardRecordPageTabConfig = {

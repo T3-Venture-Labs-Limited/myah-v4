@@ -93,11 +93,13 @@ const buildRecordPageWidgetConfigurations = ({
   layoutObjectName,
   standardObjectMetadataRelatedEntityIds,
   fieldUniversalIdentifier,
+  fieldsViewUniversalIdentifier,
 }: {
   widgetType: WidgetType;
   layoutObjectName: AllStandardObjectName | null;
   standardObjectMetadataRelatedEntityIds: BuildStandardFlatPageLayoutWidgetMetadataMapsArgs['standardObjectMetadataRelatedEntityIds'];
   fieldUniversalIdentifier?: string;
+  fieldsViewUniversalIdentifier?: string;
 }): {
   configuration: AllPageLayoutWidgetConfiguration;
   universalConfiguration: CreateStandardPageLayoutWidgetContext['universalConfiguration'];
@@ -106,6 +108,7 @@ const buildRecordPageWidgetConfigurations = ({
     return buildFieldsWidgetConfiguration({
       objectName: layoutObjectName,
       standardObjectMetadataRelatedEntityIds,
+      fieldsViewUniversalIdentifier,
     });
   }
 
@@ -141,9 +144,11 @@ const buildRecordPageWidgetConfigurations = ({
 const buildFieldsWidgetConfiguration = ({
   objectName,
   standardObjectMetadataRelatedEntityIds,
+  fieldsViewUniversalIdentifier,
 }: {
   objectName: AllStandardObjectName;
   standardObjectMetadataRelatedEntityIds: BuildStandardFlatPageLayoutWidgetMetadataMapsArgs['standardObjectMetadataRelatedEntityIds'];
+  fieldsViewUniversalIdentifier?: string;
 }): {
   configuration: AllPageLayoutWidgetConfiguration;
   universalConfiguration: CreateStandardPageLayoutWidgetContext['universalConfiguration'];
@@ -151,7 +156,7 @@ const buildFieldsWidgetConfiguration = ({
   const recordPageFieldsViewName =
     RECORD_PAGE_FIELDS_VIEW_NAME_BY_OBJECT[objectName];
 
-  if (!recordPageFieldsViewName) {
+  if (!recordPageFieldsViewName && !fieldsViewUniversalIdentifier) {
     return {
       configuration: {
         configurationType: WidgetConfigurationType.FIELDS,
@@ -166,6 +171,12 @@ const buildFieldsWidgetConfiguration = ({
     };
   }
 
+  const standardObjectViews = (
+    'views' in STANDARD_OBJECTS[objectName]
+      ? STANDARD_OBJECTS[objectName].views
+      : {}
+  ) as Record<string, { universalIdentifier: string }>;
+
   const views = standardObjectMetadataRelatedEntityIds[objectName]
     .views as Record<
     string,
@@ -175,7 +186,21 @@ const buildFieldsWidgetConfiguration = ({
     }
   >;
 
-  const viewId = views[recordPageFieldsViewName]?.id ?? null;
+  const fieldsView = fieldsViewUniversalIdentifier
+    ? Object.entries(standardObjectViews).find(
+        ([, view]) =>
+          view.universalIdentifier === fieldsViewUniversalIdentifier,
+      )
+    : undefined;
+
+  if (fieldsViewUniversalIdentifier && !fieldsView) {
+    throw new Error(
+      `Fields view ${fieldsViewUniversalIdentifier} is not defined on ${objectName}`,
+    );
+  }
+
+  const [fieldsViewName] = fieldsView ?? [recordPageFieldsViewName];
+  const viewId = fieldsViewName ? (views[fieldsViewName]?.id ?? null) : null;
 
   const myahRecordPageFieldsViewUniversalIdentifiers: Partial<
     Record<AllStandardObjectName, string>
@@ -184,10 +209,11 @@ const buildFieldsWidgetConfiguration = ({
     creator: 'fdbaccb5-56d4-4c36-98c7-0f5ab0b7cc1e',
   };
   const viewUniversalIdentifier =
+    fieldsViewUniversalIdentifier ??
     myahRecordPageFieldsViewUniversalIdentifiers[objectName] ??
-    // @ts-expect-error standard object definitions are dynamically indexed
-    STANDARD_OBJECTS[objectName].views?.[recordPageFieldsViewName]
-      ?.universalIdentifier ??
+    (recordPageFieldsViewName
+      ? standardObjectViews[recordPageFieldsViewName]?.universalIdentifier
+      : null) ??
     null;
 
   return {
@@ -293,6 +319,7 @@ const computeRecordPageWidgets = ({
             layoutObjectName,
             standardObjectMetadataRelatedEntityIds,
             fieldUniversalIdentifier: widget.fieldUniversalIdentifier,
+            fieldsViewUniversalIdentifier: widget.fieldsViewUniversalIdentifier,
           });
 
         allWidgets.push(

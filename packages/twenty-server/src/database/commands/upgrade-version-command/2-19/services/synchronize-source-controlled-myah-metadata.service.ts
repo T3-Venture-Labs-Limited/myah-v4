@@ -2,13 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RelationType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
 import { buildFromToAllUniversalFlatEntityMaps } from 'src/engine/core-modules/application/application-manifest/utils/build-from-to-all-universal-flat-entity-maps.util';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
+import { ALL_METADATA_ENTITY_BY_METADATA_NAME } from 'src/engine/metadata-modules/flat-entity/constant/all-metadata-entity-by-metadata-name.constant';
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
 import type { SyncableFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-from.type';
 import type { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
@@ -37,10 +38,25 @@ type MissingRelationPair = {
   source: FlatFieldMetadata;
   target: FlatFieldMetadata;
 };
+type ApplicationOwnedSyncableFlatEntity = SyncableFlatEntity & {
+  applicationUniversalIdentifier: string;
+};
+
+const isApplicationOwnedSyncableFlatEntity = (
+  flatEntity: SyncableFlatEntity | undefined,
+): flatEntity is ApplicationOwnedSyncableFlatEntity =>
+  isDefined(flatEntity) &&
+  'applicationUniversalIdentifier' in flatEntity &&
+  typeof flatEntity.applicationUniversalIdentifier === 'string';
 
 export type SourceControlledMyahMetadataSelection = Partial<
   Record<TwentyStandardMetadataName, ReadonlySet<string>>
 >;
+
+export type SynchronizeSourceControlledMyahMetadataOptions = {
+  synchronizeExistingSelectedMetadata?: boolean;
+  deletionSelection?: SourceControlledMyahMetadataSelection;
+};
 
 @Injectable()
 export class SynchronizeSourceControlledMyahMetadataService {
@@ -60,6 +76,10 @@ export class SynchronizeSourceControlledMyahMetadataService {
   async synchronizeWorkspace(
     { workspaceId, options, dataSource }: RunOnWorkspaceArgs,
     selection: SourceControlledMyahMetadataSelection,
+    {
+      synchronizeExistingSelectedMetadata = false,
+      deletionSelection = {},
+    }: SynchronizeSourceControlledMyahMetadataOptions = {},
   ): Promise<void> {
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
@@ -236,25 +256,32 @@ export class SynchronizeSourceControlledMyahMetadataService {
           : metadataName === 'objectMetadata'
             ? selectedObjectMetadataUniversalIdentifiers
             : selection[metadataName];
+      const deletionUniversalIdentifiers = deletionSelection[metadataName];
+      const fromSelectedUniversalIdentifiers = new Set([
+        ...(selectedUniversalIdentifiers ?? []),
+        ...(deletionUniversalIdentifiers ?? []),
+      ]);
       const fromFlatEntityMaps = fromFlatEntityMapsByKey[flatEntityMapsKey];
 
       dependencyAllFlatEntityMapsByKey[flatEntityMapsKey] = structuredClone(
         fromFlatEntityMaps,
       );
 
-      if (!selectedUniversalIdentifiers || selectedUniversalIdentifiers.size === 0) {
+      if (fromSelectedUniversalIdentifiers.size === 0) {
         continue;
       }
 
-      toFlatEntityMapsByKey[flatEntityMapsKey] =
-        getSubFlatEntityMapsByUniversalIdentifiersOrThrow({
-          flatEntityMaps: standardFlatEntityMapsByKey[flatEntityMapsKey],
-          universalIdentifiers: selectedUniversalIdentifiers,
-        });
+      if (selectedUniversalIdentifiers?.size) {
+        toFlatEntityMapsByKey[flatEntityMapsKey] =
+          getSubFlatEntityMapsByUniversalIdentifiersOrThrow({
+            flatEntityMaps: standardFlatEntityMapsByKey[flatEntityMapsKey],
+            universalIdentifiers: selectedUniversalIdentifiers,
+          });
+      }
       fromSelectedFlatEntityMapsByKey[flatEntityMapsKey] =
         getSubFlatEntityMapsByUniversalIdentifiersOrThrow({
           flatEntityMaps: fromFlatEntityMaps,
-          universalIdentifiers: selectedUniversalIdentifiers,
+          universalIdentifiers: fromSelectedUniversalIdentifiers,
         });
     }
 
@@ -271,7 +298,37 @@ export class SynchronizeSourceControlledMyahMetadataService {
         );
       });
 
-    if (!hasMissingSelectedMetadata || options.dryRun) {
+    const hasExistingSelectedDeletion = Object.entries(deletionSelection).some(
+      ([metadataName, universalIdentifiers]) => {
+        if (!universalIdentifiers?.size) {
+          return false;
+        }
+
+        const flatEntityMapsKey = getMetadataFlatEntityMapsKey(
+          metadataName as TwentyStandardMetadataName,
+        );
+        const currentFlatEntityMaps =
+          fromFlatEntityMapsByKey[flatEntityMapsKey];
+
+        return [...universalIdentifiers].some(
+          (universalIdentifier) =>
+            currentFlatEntityMaps.byUniversalIdentifier[universalIdentifier] !==
+            undefined,
+        );
+      },
+    );
+    const inferDeletionFromMissingEntities = Object.fromEntries(
+      Object.entries(deletionSelection)
+        .filter(([, universalIdentifiers]) => universalIdentifiers?.size)
+        .map(([metadataName]) => [metadataName, true]),
+    );
+
+    if (
+      (!hasMissingSelectedMetadata &&
+        !hasExistingSelectedDeletion &&
+        !synchronizeExistingSelectedMetadata) ||
+      options.dryRun
+    ) {
       return;
     }
 
@@ -282,7 +339,7 @@ export class SynchronizeSourceControlledMyahMetadataService {
           buildOptions: {
             applicationUniversalIdentifier:
               twentyStandardFlatApplication.universalIdentifier,
-            inferDeletionFromMissingEntities: {},
+            inferDeletionFromMissingEntities,
             isSystemBuild: true,
           },
           fromToAllFlatEntityMaps: buildFromToAllUniversalFlatEntityMaps({
@@ -317,6 +374,149 @@ export class SynchronizeSourceControlledMyahMetadataService {
         `Failed to synchronize source-controlled Myah metadata for workspace ${workspaceId}`,
       );
     }
+    if (
+      synchronizeExistingSelectedMetadata &&
+      (await this.transferSelectedMetadataOwnership({
+        fromAllFlatEntityMaps,
+        selection,
+        twentyStandardApplicationId: twentyStandardFlatApplication.id,
+        twentyStandardApplicationUniversalIdentifier:
+          twentyStandardFlatApplication.universalIdentifier,
+        workspaceId,
+      }))
+    ) {
+      await this.workspaceCacheService.flush(
+        workspaceId,
+        TWENTY_STANDARD_ALL_METADATA_NAME.map(getMetadataFlatEntityMapsKey),
+      );
+      await this.workspaceMetadataVersionService.incrementMetadataVersion(
+        workspaceId,
+      );
+    }
+  }
+
+  private async transferSelectedMetadataOwnership({
+    fromAllFlatEntityMaps,
+    selection,
+    twentyStandardApplicationId,
+    twentyStandardApplicationUniversalIdentifier,
+    workspaceId,
+  }: {
+    fromAllFlatEntityMaps: TwentyStandardAllFlatEntityMaps;
+    selection: SourceControlledMyahMetadataSelection;
+    twentyStandardApplicationId: string;
+    twentyStandardApplicationUniversalIdentifier: string;
+    workspaceId: string;
+  }): Promise<boolean> {
+    const metadataByLegacyApplicationUniversalIdentifier = new Map<
+      string,
+      Map<TwentyStandardMetadataName, string[]>
+    >();
+    const fromFlatEntityMapsByKey =
+      fromAllFlatEntityMaps as unknown as Record<
+        string,
+        SyncableFlatEntityMaps
+      >;
+
+    for (const metadataName of TWENTY_STANDARD_ALL_METADATA_NAME) {
+      const flatEntityMapsKey = getMetadataFlatEntityMapsKey(metadataName);
+      const currentEntities =
+        fromFlatEntityMapsByKey[flatEntityMapsKey].byUniversalIdentifier;
+      const selectedUniversalIdentifiers = selection[metadataName];
+
+      if (!selectedUniversalIdentifiers?.size) {
+        continue;
+      }
+
+      for (const universalIdentifier of selectedUniversalIdentifiers) {
+        const currentEntity = currentEntities[universalIdentifier];
+
+        if (!isApplicationOwnedSyncableFlatEntity(currentEntity)) {
+          continue;
+        }
+
+        const { applicationUniversalIdentifier } = currentEntity;
+
+        if (
+          applicationUniversalIdentifier ===
+          twentyStandardApplicationUniversalIdentifier
+        ) {
+          continue;
+        }
+
+        const metadataByName =
+          metadataByLegacyApplicationUniversalIdentifier.get(
+            applicationUniversalIdentifier,
+          ) ?? new Map<TwentyStandardMetadataName, string[]>();
+        const universalIdentifiers =
+          metadataByName.get(metadataName) ?? [];
+
+        universalIdentifiers.push(universalIdentifier);
+        metadataByName.set(metadataName, universalIdentifiers);
+        metadataByLegacyApplicationUniversalIdentifier.set(
+          applicationUniversalIdentifier,
+          metadataByName,
+        );
+      }
+    }
+
+    if (metadataByLegacyApplicationUniversalIdentifier.size === 0) {
+      return false;
+    }
+
+    const legacyApplications = await Promise.all(
+      [...metadataByLegacyApplicationUniversalIdentifier.keys()].map(
+        async (universalIdentifier) => ({
+          application: await this.applicationService.findByUniversalIdentifier({
+            universalIdentifier,
+            workspaceId,
+          }),
+          universalIdentifier,
+        }),
+      ),
+    );
+    const legacyApplicationIdByUniversalIdentifier = new Map(
+      legacyApplications.flatMap(({ application, universalIdentifier }) =>
+        isDefined(application)
+          ? [[universalIdentifier, application.id] as const]
+          : [],
+      ),
+    );
+    let didTransferOwnership = false;
+
+    await this.fieldMetadataRepository.manager.transaction(
+      async (entityManager) => {
+        for (const [
+          applicationUniversalIdentifier,
+          metadataByName,
+        ] of metadataByLegacyApplicationUniversalIdentifier) {
+          const legacyApplicationId =
+            legacyApplicationIdByUniversalIdentifier.get(
+              applicationUniversalIdentifier,
+            );
+
+          if (!isDefined(legacyApplicationId)) {
+            continue;
+          }
+
+          for (const [metadataName, universalIdentifiers] of metadataByName) {
+            const result = await entityManager.update(
+              ALL_METADATA_ENTITY_BY_METADATA_NAME[metadataName],
+              {
+                applicationId: legacyApplicationId,
+                universalIdentifier: In(universalIdentifiers),
+                workspaceId,
+              },
+              { applicationId: twentyStandardApplicationId },
+            );
+
+            didTransferOwnership ||= (result.affected ?? 0) > 0;
+          }
+        }
+      },
+    );
+
+    return didTransferOwnership;
   }
 
   // Deviation rationale: the normal migration runner creates schema columns with
