@@ -343,10 +343,34 @@ export class ManagedEmailLifecycleService {
       'mailbox',
     );
 
+    const warmupCancellationKey = `stop-mailbox-warmup:${input.idempotencyKey}`;
+    if (
+      mailbox.pendingLifecycleAction ===
+        ManagedEmailLifecycleAction.CANCEL_WARMUP_SUBSCRIPTION_PENDING &&
+      mailbox.pendingLifecycleKey === warmupCancellationKey
+    ) {
+      await this.recoverWarmupSubscriptionCancellation(mailbox);
+    }
+    if (
+      mailbox.warmupState !== ManagedEmailWarmupState.NOT_APPLICABLE &&
+      !mailbox.warmupCancelAtPeriodEnd
+    ) {
+      await this.cancelMailboxSubscriptionAtPeriodEnd(
+        mailbox,
+        warmupCancellationKey,
+        'warmup',
+      );
+    }
+
     await this.cancelMailboxSubscriptionAtPeriodEnd(
       mailbox,
       input.idempotencyKey,
       'mailbox',
+      {
+        pendingLifecycleAction:
+          ManagedEmailLifecycleAction.CANCEL_WARMUP_AT_PERIOD_END,
+        pendingLifecycleKey: warmupCancellationKey,
+      },
     );
   }
 
@@ -354,6 +378,10 @@ export class ManagedEmailLifecycleService {
     mailbox: ManagedEmailMailboxEntity,
     idempotencyKey: string,
     resourceType: 'mailbox' | 'warmup',
+    allowedPendingIntent?: Pick<
+      ManagedEmailMailboxEntity,
+      'pendingLifecycleAction' | 'pendingLifecycleKey'
+    >,
   ): Promise<void> {
     const operation = await this.acquisitionOperationRepository.findOneBy(
       mailbox.workspaceId,
@@ -429,6 +457,7 @@ export class ManagedEmailLifecycleService {
           currentMailbox,
           patch,
           manager,
+          allowedPendingIntent,
         );
       },
     );
@@ -1381,42 +1410,105 @@ export class ManagedEmailLifecycleService {
   private async stopMailboxAtBoundary(
     mailbox: ManagedEmailMailboxEntity,
   ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [
+          `managed-email-domain-lifecycle:${mailbox.workspaceId}:${mailbox.managedEmailDomainId}`,
+        ],
+      );
+      const currentMailbox = await this.requireMailbox(
+        mailbox.workspaceId,
+        mailbox.id,
+      );
+      if (
+        currentMailbox.pendingLifecycleAction !==
+        ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END
+      ) {
+        return;
+      }
+      await this.stopMailboxAtBoundaryUnderLock(currentMailbox);
+    });
+  }
+
+  private async stopMailboxAtBoundaryUnderLock(
+    mailbox: ManagedEmailMailboxEntity,
+  ): Promise<void> {
     const siblings = await this.mailboxRepository.find(mailbox.workspaceId, {
       where: { managedEmailDomainId: mailbox.managedEmailDomainId },
     });
     const now = this.now();
+    let waitUntil: Date | null = null;
     for (const sibling of siblings) {
-      const isDueForStop =
+      const isStopping =
         sibling.pendingLifecycleAction ===
           ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END &&
-        sibling.infrastructurePaidThrough !== null &&
-        sibling.infrastructurePaidThrough <= now;
-      if (!isDueForStop) {
+        sibling.infrastructurePaidThrough !== null;
+      const warmupRequiresDeletion =
+        sibling.warmupState !== ManagedEmailWarmupState.NOT_APPLICABLE &&
+        sibling.warmupState !== ManagedEmailWarmupState.DELETED;
+      if (
+        !isStopping ||
+        (warmupRequiresDeletion && sibling.warmupPaidThrough === null)
+      ) {
         await this.markMailboxReconciliationRequired(
           mailbox,
           'DEPENDENT_MAILBOX_OR_WARMUP_ACTIVE',
         );
         return;
       }
+      if (
+        sibling.infrastructurePaidThrough! > now &&
+        (waitUntil === null || sibling.infrastructurePaidThrough! > waitUntil)
+      ) {
+        waitUntil = sibling.infrastructurePaidThrough;
+      }
+      if (
+        warmupRequiresDeletion &&
+        sibling.warmupPaidThrough! > now &&
+        (waitUntil === null || sibling.warmupPaidThrough! > waitUntil)
+      ) {
+        waitUntil = sibling.warmupPaidThrough;
+      }
+    }
+    if (waitUntil !== null) {
+      const patch = {
+        nextPeriodBoundaryAt: waitUntil,
+        safeFailureCode: null,
+        ...(mailbox.infrastructureState ===
+          ManagedEmailInfrastructureState.RECONCILIATION_REQUIRED &&
+        mailbox.safeFailureCode === 'DEPENDENT_MAILBOX_OR_WARMUP_ACTIVE'
+          ? { infrastructureState: ManagedEmailInfrastructureState.ACTIVE }
+          : {}),
+      };
+      await this.mailboxRepository.update(
+        mailbox.workspaceId,
+        { id: mailbox.id },
+        patch,
+      );
+      Object.assign(mailbox, patch);
+      return;
+    }
 
-      const warmupIsInactive = new Set([
-        ManagedEmailWarmupState.NOT_APPLICABLE,
-        ManagedEmailWarmupState.PAUSED,
-        ManagedEmailWarmupState.DELETED,
-      ]).has(sibling.warmupState);
-      if (!warmupIsInactive) {
-        if (
-          sibling.warmupPaidThrough === null ||
-          sibling.warmupPaidThrough > now
-        ) {
-          await this.markMailboxReconciliationRequired(
-            mailbox,
-            'DEPENDENT_MAILBOX_OR_WARMUP_ACTIVE',
-          );
-          return;
-        }
+    for (const sibling of siblings) {
+      if (
+        sibling.warmupState === ManagedEmailWarmupState.NOT_APPLICABLE ||
+        sibling.warmupState === ManagedEmailWarmupState.DELETED
+      ) {
+        continue;
+      }
+      const isDeletionRecovery =
+        sibling.warmupState === ManagedEmailWarmupState.DELETING ||
+        (sibling.warmupState ===
+          ManagedEmailWarmupState.RECONCILIATION_REQUIRED &&
+          sibling.safeFailureCode === 'WARMUP_DELETE_UNCONFIRMED');
+      if (
+        sibling.warmupState !== ManagedEmailWarmupState.PAUSED &&
+        !isDeletionRecovery
+      ) {
         await this.pauseWarmupForMailboxStop(sibling);
       }
+      await this.deleteWarmupForMailboxStop(sibling);
     }
     const providerDomain = await this.requireDomain(
       mailbox.workspaceId,
@@ -1427,19 +1519,39 @@ export class ManagedEmailLifecycleService {
       'provider domain',
     );
 
-    if (
-      mailbox.infrastructureState ===
-      ManagedEmailInfrastructureState.RECONCILIATION_REQUIRED
-    ) {
+    const isIcemailDeletionRecovery = siblings.some(
+      (sibling) =>
+        sibling.infrastructureState ===
+          ManagedEmailInfrastructureState.DEACTIVATING ||
+        (sibling.infrastructureState ===
+          ManagedEmailInfrastructureState.RECONCILIATION_REQUIRED &&
+          (sibling.safeFailureCode === 'ICEMAIL_DELETE_UNCONFIRMED' ||
+            sibling.safeFailureCode === 'ICEMAIL_DELETE_PARTIAL')),
+    );
+    if (isIcemailDeletionRecovery) {
       if (!(await this.areProviderMailboxesAbsent(siblings))) {
-        await this.markMailboxReconciliationRequired(
-          mailbox,
+        await this.markStoppedSiblingsReconciliationRequired(
+          siblings,
           'ICEMAIL_DELETE_UNCONFIRMED',
         );
         return;
       }
       await this.completeStoppedSiblings(siblings);
       return;
+    }
+
+    const deactivatingPatch = {
+      campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
+      infrastructureState: ManagedEmailInfrastructureState.DEACTIVATING,
+      safeFailureCode: null,
+    };
+    for (const sibling of siblings) {
+      await this.mailboxRepository.update(
+        sibling.workspaceId,
+        { id: sibling.id },
+        deactivatingPatch,
+      );
+      Object.assign(sibling, deactivatingPatch);
     }
 
     try {
@@ -1455,15 +1567,15 @@ export class ManagedEmailLifecycleService {
         domainResult.failed ||
         domainResult.skipped
       ) {
-        await this.markMailboxReconciliationRequired(
-          mailbox,
+        await this.markStoppedSiblingsReconciliationRequired(
+          siblings,
           'ICEMAIL_DELETE_PARTIAL',
         );
         return;
       }
       if (!(await this.areProviderMailboxesAbsent(siblings))) {
-        await this.markMailboxReconciliationRequired(
-          mailbox,
+        await this.markStoppedSiblingsReconciliationRequired(
+          siblings,
           'ICEMAIL_DELETE_UNCONFIRMED',
         );
         return;
@@ -1474,15 +1586,18 @@ export class ManagedEmailLifecycleService {
         !this.isUncertainIcemailWrite(error) &&
         error instanceof IcemailException
       ) {
-        await this.markMailboxReconciliationRequired(mailbox, error.code);
+        await this.markStoppedSiblingsReconciliationRequired(
+          siblings,
+          error.code,
+        );
         throw error;
       }
       if (await this.areProviderMailboxesAbsent(siblings)) {
         await this.completeStoppedSiblings(siblings);
         return;
       }
-      await this.markMailboxReconciliationRequired(
-        mailbox,
+      await this.markStoppedSiblingsReconciliationRequired(
+        siblings,
         'ICEMAIL_DELETE_UNCONFIRMED',
       );
       throw error;
@@ -1535,6 +1650,75 @@ export class ManagedEmailLifecycleService {
     Object.assign(mailbox, patch);
   }
 
+  private async deleteWarmupForMailboxStop(
+    mailbox: ManagedEmailMailboxEntity,
+  ): Promise<void> {
+    const enrollmentId = this.requireProviderId(
+      mailbox.warmupEnrollmentId,
+      'warmup enrollment',
+    );
+    const isDeletionRecovery =
+      mailbox.warmupState === ManagedEmailWarmupState.DELETING ||
+      (mailbox.warmupState ===
+        ManagedEmailWarmupState.RECONCILIATION_REQUIRED &&
+        mailbox.safeFailureCode === 'WARMUP_DELETE_UNCONFIRMED');
+
+    if (isDeletionRecovery) {
+      const providerInbox = await this.warmupInboxClient.getInbox(enrollmentId);
+      if (providerInbox === null) {
+        await this.completeWarmupDeletion(mailbox);
+        return;
+      }
+      if (providerInbox.status !== 'paused') {
+        await this.pauseWarmupForMailboxStop(mailbox);
+      }
+    }
+
+    if (mailbox.warmupState !== ManagedEmailWarmupState.DELETING) {
+      const patch = {
+        safeFailureCode: null,
+        warmupState: ManagedEmailWarmupState.DELETING,
+      };
+      await this.mailboxRepository.update(
+        mailbox.workspaceId,
+        { id: mailbox.id },
+        patch,
+      );
+      Object.assign(mailbox, patch);
+    }
+
+    try {
+      await this.warmupInboxClient.delete(enrollmentId);
+    } catch (error) {
+      if (!this.isUncertainWarmupWrite(error)) throw error;
+      const providerInbox = await this.warmupInboxClient.getInbox(enrollmentId);
+      if (providerInbox !== null) {
+        await this.markWarmupReconciliationRequired(
+          mailbox,
+          'WARMUP_DELETE_UNCONFIRMED',
+        );
+        throw error;
+      }
+    }
+
+    await this.completeWarmupDeletion(mailbox);
+  }
+
+  private async completeWarmupDeletion(
+    mailbox: ManagedEmailMailboxEntity,
+  ): Promise<void> {
+    const patch = {
+      safeFailureCode: null,
+      warmupState: ManagedEmailWarmupState.DELETED,
+    };
+    await this.mailboxRepository.update(
+      mailbox.workspaceId,
+      { id: mailbox.id },
+      patch,
+    );
+    Object.assign(mailbox, patch);
+  }
+
   private async completeStoppedSiblings(
     siblings: ManagedEmailMailboxEntity[],
   ): Promise<void> {
@@ -1573,6 +1757,7 @@ export class ManagedEmailLifecycleService {
 
   private async markWarmupReconciliationRequired(
     mailbox: ManagedEmailMailboxEntity,
+    safeFailureCode = 'WARMUP_WRITE_UNCONFIRMED',
   ): Promise<void> {
     await this.mailboxRepository.update(
       mailbox.workspaceId,
@@ -1581,7 +1766,7 @@ export class ManagedEmailLifecycleService {
         nextPeriodBoundaryAt: new Date(
           this.now().getTime() + RECONCILIATION_RETRY_MS,
         ),
-        safeFailureCode: 'WARMUP_WRITE_UNCONFIRMED',
+        safeFailureCode,
         warmupState: ManagedEmailWarmupState.RECONCILIATION_REQUIRED,
       },
     );
@@ -1606,6 +1791,15 @@ export class ManagedEmailLifecycleService {
     );
   }
 
+  private async markStoppedSiblingsReconciliationRequired(
+    siblings: ManagedEmailMailboxEntity[],
+    safeFailureCode: string,
+  ): Promise<void> {
+    for (const sibling of siblings) {
+      await this.markMailboxReconciliationRequired(sibling, safeFailureCode);
+    }
+  }
+
   private async persistMailboxIntent(
     mailbox: ManagedEmailMailboxEntity,
     patch: MailboxLifecyclePatch,
@@ -1620,6 +1814,10 @@ export class ManagedEmailLifecycleService {
     mailbox: Pick<ManagedEmailMailboxEntity, 'id' | 'workspaceId'>,
     patch: MailboxLifecyclePatch,
     manager: EntityManager,
+    allowedPendingIntent?: Pick<
+      ManagedEmailMailboxEntity,
+      'pendingLifecycleAction' | 'pendingLifecycleKey'
+    >,
   ): Promise<ManagedEmailMailboxEntity> {
     const repository = this.mailboxRepository.withManager(manager);
     const persistedMailbox = await repository.findOne(mailbox.workspaceId, {
@@ -1636,7 +1834,13 @@ export class ManagedEmailLifecycleService {
       persistedMailbox.pendingLifecycleAction ===
         patch.pendingLifecycleAction &&
       persistedMailbox.pendingLifecycleKey === patch.pendingLifecycleKey;
-    if (!pendingSlotIsEmpty && !isIdempotentReplay) {
+    const isAllowedTransition =
+      allowedPendingIntent !== undefined &&
+      persistedMailbox.pendingLifecycleAction ===
+        allowedPendingIntent.pendingLifecycleAction &&
+      persistedMailbox.pendingLifecycleKey ===
+        allowedPendingIntent.pendingLifecycleKey;
+    if (!pendingSlotIsEmpty && !isIdempotentReplay && !isAllowedTransition) {
       throw new Error('Managed email mailbox has another pending action');
     }
     const result = await repository.update(

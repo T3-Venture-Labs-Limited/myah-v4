@@ -311,6 +311,7 @@ const createHarness = (options: HarnessOptions = {}) => {
       status: 'paused',
     }),
     pause: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue(undefined),
     start: jest.fn().mockResolvedValue(undefined),
   };
   const icemailClient = {
@@ -848,7 +849,7 @@ describe('ManagedEmailLifecycleService', () => {
     expect(paid.warmupInboxClient.start).toHaveBeenCalledWith('warmup-inbox-1');
   });
 
-  it('stops mailbox separately without deleting warmup or synced history', async () => {
+  it('stops mailbox without immediately deleting warmup or synced history', async () => {
     const test = createHarness({
       now: new Date('2026-08-20T00:00:00.000Z'),
     });
@@ -864,11 +865,21 @@ describe('ManagedEmailLifecycleService', () => {
       nextPeriodBoundaryAt: monthlyBoundary,
       pendingLifecycleAction:
         ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END,
-      warmupCancelAtPeriodEnd: false,
+      warmupCancelAtPeriodEnd: true,
     });
     expect(
       test.metronomeClient.scheduleSubscriptionQuantity,
-    ).toHaveBeenCalledWith(
+    ).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        quantity: 0,
+        subscriptionId: warmupSubscriptionId,
+      }),
+    );
+    expect(
+      test.metronomeClient.scheduleSubscriptionQuantity,
+    ).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         quantity: 0,
         subscriptionId: mailboxSubscriptionId,
@@ -876,6 +887,46 @@ describe('ManagedEmailLifecycleService', () => {
     );
     expect(test.warmupInboxClient.pause).not.toHaveBeenCalled();
     expect(test.icemailClient.deleteDomainMailboxes).not.toHaveBeenCalled();
+  });
+
+  it('recovers mailbox stop after a failed warmup subscription cancellation', async () => {
+    const test = createHarness({
+      now: new Date('2026-08-20T00:00:00.000Z'),
+    });
+    test.metronomeClient.scheduleSubscriptionQuantity
+      .mockRejectedValueOnce(new Error('warmup cancellation failed'))
+      .mockResolvedValue({
+        metronomeEditId: 'edit-2',
+        subscriptionId: warmupSubscriptionId,
+      });
+
+    await expect(
+      test.service.stopMailboxAtPeriodEnd(mailboxActionInput),
+    ).rejects.toThrow('warmup cancellation failed');
+    expect(test.mailboxes[0]).toMatchObject({
+      infrastructureCancelAtPeriodEnd: false,
+      pendingLifecycleAction:
+        ManagedEmailLifecycleAction.CANCEL_WARMUP_SUBSCRIPTION_PENDING,
+      warmupCancelAtPeriodEnd: true,
+    });
+
+    await test.service.stopMailboxAtPeriodEnd(mailboxActionInput);
+
+    expect(
+      test.metronomeClient.scheduleSubscriptionQuantity.mock.calls.map(
+        ([input]) => input.subscriptionId,
+      ),
+    ).toEqual([
+      warmupSubscriptionId,
+      warmupSubscriptionId,
+      mailboxSubscriptionId,
+    ]);
+    expect(test.mailboxes[0]).toMatchObject({
+      infrastructureCancelAtPeriodEnd: true,
+      pendingLifecycleAction:
+        ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END,
+      warmupCancelAtPeriodEnd: true,
+    });
   });
 
   it('blocks domain renewal disablement until every dependent mailbox is stopping', async () => {
@@ -1114,6 +1165,152 @@ describe('ManagedEmailLifecycleService', () => {
     );
   });
 
+  it('deletes warmup enrollments before deleting Icemail mailboxes at the paid-through boundary', async () => {
+    const test = createHarness({
+      mailbox: {
+        infrastructureCancelAtPeriodEnd: true,
+        nextPeriodBoundaryAt: monthlyBoundary,
+        pendingLifecycleAction:
+          ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END,
+        pendingLifecycleKey: 'stop-mailbox-1',
+      },
+    });
+    const sibling = makeMailbox({
+      id: '123e4567-e89b-42d3-a456-426614174099',
+      infrastructureCancelAtPeriodEnd: true,
+      nextPeriodBoundaryAt: monthlyBoundary,
+      pendingLifecycleAction:
+        ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END,
+      pendingLifecycleKey: 'stop-mailbox-2',
+      providerMailboxId: 'icemail-mailbox-2',
+      warmupState: ManagedEmailWarmupState.NOT_APPLICABLE,
+    });
+    test.mailboxes.push(sibling);
+
+    await test.service.applyPeriodBoundary({
+      resourceId: mailboxId,
+      resourceType: 'mailbox',
+      workspaceId,
+    });
+
+    expect(test.warmupInboxClient.pause).toHaveBeenCalledWith('warmup-inbox-1');
+    expect(test.warmupInboxClient.delete).toHaveBeenCalledWith(
+      'warmup-inbox-1',
+    );
+    expect(
+      test.warmupInboxClient.delete.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      test.icemailClient.deleteDomainMailboxes.mock.invocationCallOrder[0],
+    );
+    const deactivatingCallIndex =
+      test.mailboxRepository.update.mock.calls.findIndex(
+        ([, , patch]) =>
+          patch.infrastructureState ===
+          ManagedEmailInfrastructureState.DEACTIVATING,
+      );
+    expect(deactivatingCallIndex).toBeGreaterThanOrEqual(0);
+    expect(
+      test.mailboxRepository.update.mock.invocationCallOrder[
+        deactivatingCallIndex
+      ],
+    ).toBeLessThan(
+      test.icemailClient.deleteDomainMailboxes.mock.invocationCallOrder[0],
+    );
+    expect(test.mailboxRepository.update).toHaveBeenCalledWith(
+      workspaceId,
+      { id: sibling.id },
+      expect.objectContaining({
+        infrastructureState: ManagedEmailInfrastructureState.DEACTIVATING,
+      }),
+    );
+    expect(test.mailboxes[0]).toMatchObject({
+      infrastructureState: ManagedEmailInfrastructureState.INACTIVE,
+      warmupState: ManagedEmailWarmupState.DELETED,
+    });
+  });
+
+  it('serializes a domain delete and honors a sibling in-flight marker', async () => {
+    const test = createHarness({
+      mailbox: {
+        infrastructureCancelAtPeriodEnd: true,
+        infrastructureState: ManagedEmailInfrastructureState.DEACTIVATING,
+        nextPeriodBoundaryAt: monthlyBoundary,
+        pendingLifecycleAction:
+          ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END,
+        pendingLifecycleKey: 'stop-mailbox-1',
+        warmupState: ManagedEmailWarmupState.DELETED,
+      },
+    });
+    const sibling = makeMailbox({
+      id: '123e4567-e89b-42d3-a456-426614174099',
+      infrastructureCancelAtPeriodEnd: true,
+      nextPeriodBoundaryAt: monthlyBoundary,
+      pendingLifecycleAction:
+        ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END,
+      pendingLifecycleKey: 'stop-mailbox-2',
+      providerMailboxId: 'icemail-mailbox-2',
+      warmupState: ManagedEmailWarmupState.DELETED,
+    });
+    test.mailboxes.push(sibling);
+
+    await test.service.applyPeriodBoundary({
+      resourceId: sibling.id,
+      resourceType: 'mailbox',
+      workspaceId,
+    });
+
+    expect(test.entityManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`managed-email-domain-lifecycle:${workspaceId}:${domainId}`],
+    );
+    expect(test.icemailClient.deleteDomainMailboxes).not.toHaveBeenCalled();
+    expect(test.mailboxes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          infrastructureState: ManagedEmailInfrastructureState.INACTIVE,
+        }),
+        expect.objectContaining({
+          id: sibling.id,
+          infrastructureState: ManagedEmailInfrastructureState.INACTIVE,
+        }),
+      ]),
+    );
+  });
+
+  it('reconciles an uncertain warmup deletion by read without replaying it', async () => {
+    const test = createHarness({
+      mailbox: {
+        infrastructureCancelAtPeriodEnd: true,
+        nextPeriodBoundaryAt: monthlyBoundary,
+        pendingLifecycleAction:
+          ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END,
+        pendingLifecycleKey: 'stop-mailbox-1',
+        warmupState: ManagedEmailWarmupState.PAUSED,
+      },
+    });
+    test.warmupInboxClient.delete.mockRejectedValueOnce(
+      new WarmupInboxException(
+        WarmupInboxExceptionCode.WRITE_OUTCOME_UNCERTAIN,
+      ),
+    );
+    test.warmupInboxClient.getInbox.mockResolvedValueOnce(null);
+    await test.service.applyPeriodBoundary({
+      resourceId: mailboxId,
+      resourceType: 'mailbox',
+      workspaceId,
+    });
+
+    expect(test.warmupInboxClient.delete).toHaveBeenCalledTimes(1);
+    expect(test.warmupInboxClient.getInbox).toHaveBeenCalledWith(
+      'warmup-inbox-1',
+    );
+    expect(test.icemailClient.deleteDomainMailboxes).toHaveBeenCalledTimes(1);
+    expect(test.mailboxes[0]).toMatchObject({
+      infrastructureState: ManagedEmailInfrastructureState.INACTIVE,
+      warmupState: ManagedEmailWarmupState.DELETED,
+    });
+  });
+
   it('keeps local mailbox state recoverable for a skipped Icemail delete', async () => {
     const test = createHarness({
       mailbox: {
@@ -1203,7 +1400,7 @@ describe('ManagedEmailLifecycleService', () => {
       ManagedEmailInfrastructureState.RECONCILIATION_REQUIRED,
     );
     expect(sibling.infrastructureState).toBe(
-      ManagedEmailInfrastructureState.ACTIVE,
+      ManagedEmailInfrastructureState.RECONCILIATION_REQUIRED,
     );
   });
 
@@ -1367,6 +1564,47 @@ describe('ManagedEmailLifecycleService', () => {
     expect(test.icemailClient.deleteDomainMailboxes).not.toHaveBeenCalled();
     expect(test.mailboxes[1].infrastructureState).toBe(
       ManagedEmailInfrastructureState.ACTIVE,
+    );
+  });
+
+  it('waits for paid warmup expiry without entering Icemail delete recovery', async () => {
+    const now = new Date(monthlyBoundary);
+    const test = createHarness({
+      mailbox: {
+        infrastructureCancelAtPeriodEnd: true,
+        nextPeriodBoundaryAt: monthlyBoundary,
+        pendingLifecycleAction:
+          ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END,
+        pendingLifecycleKey: 'stop-mailbox-1',
+        warmupCancelAtPeriodEnd: true,
+        warmupPaidThrough: nextMonthlyBoundary,
+        warmupState: ManagedEmailWarmupState.PAUSED,
+      },
+      now,
+    });
+
+    await test.service.applyPeriodBoundary({
+      resourceId: mailboxId,
+      resourceType: 'mailbox',
+      workspaceId,
+    });
+
+    expect(test.mailboxes[0]).toMatchObject({
+      infrastructureState: ManagedEmailInfrastructureState.ACTIVE,
+      nextPeriodBoundaryAt: nextMonthlyBoundary,
+    });
+    expect(test.icemailClient.deleteDomainMailboxes).not.toHaveBeenCalled();
+
+    now.setTime(nextMonthlyBoundary.getTime());
+    await test.service.applyPeriodBoundary({
+      resourceId: mailboxId,
+      resourceType: 'mailbox',
+      workspaceId,
+    });
+
+    expect(test.icemailClient.deleteDomainMailboxes).toHaveBeenCalledTimes(1);
+    expect(test.mailboxes[0].infrastructureState).toBe(
+      ManagedEmailInfrastructureState.INACTIVE,
     );
   });
 
