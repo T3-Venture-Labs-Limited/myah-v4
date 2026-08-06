@@ -8,6 +8,7 @@ import { ImapSmtpCaldavModule } from 'src/engine/core-modules/imap-smtp-caldav-c
 import { ManagedProviderBillingModule } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.module';
 import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
 import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
@@ -29,10 +30,13 @@ import { ManagedEmailMailboxActivationCronJob } from './crons/managed-email-mail
 import { ManagedEmailReconciliationCronJob } from './crons/managed-email-reconciliation.cron.job';
 import {
   MANAGED_EMAIL_READINESS_POLICY_RESOLVER,
-  resolveManagedEmailReadinessPolicy,
+  createManagedEmailReadinessPolicyResolver,
+  managedEmailReadinessPolicies,
+  managedEmailSandboxReadinessPolicies,
 } from './constants/managed-email-readiness-policy.constant';
 import { ManagedEmailAcquisitionOperationEntity } from './entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from './entities/managed-email-domain.entity';
+import { ManagedEmailOfferEntity } from './entities/managed-email-offer.entity';
 import { ActivateManagedEmailMailboxJob } from './jobs/activate-managed-email-mailbox.job';
 import { ApplyManagedEmailPeriodBoundaryJob } from './jobs/apply-managed-email-period-boundary.job';
 import { EvaluateManagedEmailReadinessJob } from './jobs/evaluate-managed-email-readiness.job';
@@ -81,6 +85,14 @@ import {
   ManagedEmailWarmupService,
 } from './services/managed-email-warmup.service';
 import { ManagedEmailResolver } from './managed-email.resolver';
+import {
+  MANAGED_EMAIL_OFFER_CLOCK,
+  ManagedEmailOfferService,
+} from './services/managed-email-offer.service';
+import {
+  MANAGED_EMAIL_CATALOG_CLOCK,
+  ManagedEmailCatalogService,
+} from './services/managed-email-catalog.service';
 import { ManagedEmailCustomerService } from './services/managed-email-customer.service';
 
 @Module({
@@ -89,6 +101,7 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
       ManagedEmailDomainEntity,
       ManagedEmailMailboxEntity,
       ManagedEmailAcquisitionOperationEntity,
+      ManagedEmailOfferEntity,
     ]),
     SecureHttpClientModule,
     ImapSmtpCaldavModule,
@@ -100,18 +113,44 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
     provideWorkspaceScopedRepository(ManagedEmailDomainEntity),
     provideWorkspaceScopedRepository(ManagedEmailMailboxEntity),
     provideWorkspaceScopedRepository(ManagedEmailAcquisitionOperationEntity),
+    provideWorkspaceScopedRepository(ManagedEmailOfferEntity),
     IcemailClient,
     WarmupInboxClient,
     {
+      provide: MANAGED_EMAIL_DNS_CLIENT,
+      useFactory: createManagedEmailDnsClient,
+    },
+    {
       provide: MANAGED_EMAIL_PROPOSAL_POLICY,
-      useValue: Object.freeze({
-        candidateDomains: () => {
-          throw new Error('Managed email proposal policy is unavailable');
-        },
-        maxMailboxesPerDomain: 1,
-        proposalTtlMs: 1,
-        version: 'unconfigured',
-      }),
+      inject: [TwentyConfigService],
+      useFactory: (config: TwentyConfigService) =>
+        config.get('MANAGED_EMAIL_EXECUTION_MODE') === 'SANDBOX'
+          ? {
+              candidateDomains: (slug: string, count: number) =>
+                Array.from(
+                  { length: count },
+                  (_, index) => `${slug}-${index + 1}.test`,
+                ),
+              maxMailboxesPerDomain: 1,
+              proposalTtlMs: 15 * 60 * 1000,
+              version: 'sandbox-v1',
+            }
+          : {
+              candidateDomains: () => {
+                throw new Error('Managed email proposal policy is unavailable');
+              },
+              maxMailboxesPerDomain: 1,
+              proposalTtlMs: 1,
+              version: 'unconfigured',
+            },
+    },
+    {
+      provide: MANAGED_EMAIL_CATALOG_CLOCK,
+      useValue: () => new Date(),
+    },
+    {
+      provide: MANAGED_EMAIL_OFFER_CLOCK,
+      useValue: () => new Date(),
     },
     {
       provide: MANAGED_EMAIL_PROPOSAL_CLOCK,
@@ -143,11 +182,13 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
     },
     {
       provide: MANAGED_EMAIL_READINESS_POLICY_RESOLVER,
-      useValue: resolveManagedEmailReadinessPolicy,
-    },
-    {
-      provide: MANAGED_EMAIL_DNS_CLIENT,
-      useFactory: createManagedEmailDnsClient,
+      inject: [TwentyConfigService],
+      useFactory: (config: TwentyConfigService) =>
+        createManagedEmailReadinessPolicyResolver(
+          config.get('MANAGED_EMAIL_EXECUTION_MODE') === 'SANDBOX'
+            ? managedEmailSandboxReadinessPolicies
+            : managedEmailReadinessPolicies,
+        ),
     },
     {
       provide: MANAGED_EMAIL_WARMUP_CLOCK,
@@ -171,11 +212,13 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
     },
     ManagedEmailProposalService,
     ManagedEmailQuoteService,
+    ManagedEmailOfferService,
     ManagedEmailCustomerService,
     ManagedEmailResolver,
     ManagedEmailMailboxActivationService,
     ActivateManagedEmailMailboxJob,
     ManagedEmailMailboxActivationCronJob,
+    ManagedEmailCatalogService,
     ManagedEmailDnsResolverService,
     ManagedEmailReadinessService,
     ManagedEmailCampaignEligibilityService,
@@ -198,6 +241,7 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
     getWorkspaceScopedRepositoryToken(ManagedEmailDomainEntity),
     getWorkspaceScopedRepositoryToken(ManagedEmailMailboxEntity),
     getWorkspaceScopedRepositoryToken(ManagedEmailAcquisitionOperationEntity),
+    getWorkspaceScopedRepositoryToken(ManagedEmailOfferEntity),
     IcemailClient,
     WarmupInboxClient,
     ManagedEmailProposalService,

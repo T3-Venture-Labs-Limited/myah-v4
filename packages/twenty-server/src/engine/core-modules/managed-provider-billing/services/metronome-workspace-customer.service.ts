@@ -23,6 +23,11 @@ type InstallationRepository = Pick<
   'findOneBy' | 'update'
 >;
 
+export type MetronomeManagedEmailContract = Readonly<{
+  contractId: string;
+  rateCardId: string;
+}>;
+
 @Injectable()
 export class MetronomeWorkspaceCustomerService {
   constructor(
@@ -35,6 +40,45 @@ export class MetronomeWorkspaceCustomerService {
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
     private readonly twentyConfigService: TwentyConfigService,
   ) {}
+
+  async ensureStripeBillingConfiguration(
+    workspaceId: string,
+    stripeCustomerId: string,
+  ): Promise<unknown> {
+    if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
+      );
+    }
+    const installation = await this.installationRepository.findOneBy({
+      workspaceId,
+    });
+    if (!installation?.metronomeCustomerId) {
+      throw new Error('Workspace Metronome customer is not configured');
+    }
+    const existing = await this.metronomeClientService.getBillingConfiguration(
+      installation.metronomeCustomerId,
+    );
+    if (existing) {
+      if (
+        (existing as { billingProviderType?: string }).billingProviderType !==
+          'stripe' ||
+        (existing as { stripeCustomerId?: string }).stripeCustomerId !==
+          stripeCustomerId ||
+        (existing as { stripeCollectionMethod?: string })
+          .stripeCollectionMethod !== 'charge_automatically'
+      ) {
+        throw new Error('Metronome billing configuration mismatch');
+      }
+      return existing;
+    }
+    return this.metronomeClientService.createBillingConfiguration({
+      customerId: installation.metronomeCustomerId,
+      billingProviderType: 'stripe',
+      stripeCustomerId,
+      stripeCollectionMethod: 'charge_automatically',
+    });
+  }
 
   async ensureWorkspaceCustomer(workspaceId: string): Promise<string> {
     if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
@@ -116,7 +160,7 @@ export class MetronomeWorkspaceCustomerService {
 
   async ensureWorkspaceManagedEmailContract(
     workspaceId: string,
-  ): Promise<string> {
+  ): Promise<MetronomeManagedEmailContract> {
     if (!this.twentyConfigService.get('MANAGED_EMAIL_ENABLED')) {
       throw new MetronomeClientException(
         MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
@@ -172,7 +216,7 @@ export class MetronomeWorkspaceCustomerService {
     error: unknown;
     rateCardAlias: string;
     uniquenessKey: string;
-  }): Promise<string> {
+  }): Promise<MetronomeManagedEmailContract> {
     const matchingContracts = (
       await this.metronomeClientService.findCurrentContracts(customerId)
     ).filter((contract) => contract.uniquenessKey === uniquenessKey);
@@ -220,7 +264,7 @@ export class MetronomeWorkspaceCustomerService {
       throw this.createManagedEmailContractReconciliationError(error);
     }
 
-    return contract.id;
+    return { contractId: contract.id, rateCardId: contract.rateCardId };
   }
 
   private createManagedEmailContractReconciliationError(cause: unknown): Error {

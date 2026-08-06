@@ -10,7 +10,6 @@ export type CreateManagedEmailProposalInput = {
 
 export type CreatePrewarmedManagedEmailProposalInput = {
   inventoryIds: string[];
-  personas: CreateManagedEmailProposalInput['personas'];
 };
 
 export type ManagedEmailProposalPolicy = Readonly<{

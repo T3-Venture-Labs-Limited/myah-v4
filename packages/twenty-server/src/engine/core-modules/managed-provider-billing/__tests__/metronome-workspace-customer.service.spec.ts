@@ -658,7 +658,10 @@ describe('MetronomeWorkspaceCustomerService', () => {
 
     await expect(
       service.ensureWorkspaceManagedEmailContract(workspaceId),
-    ).resolves.toBe('created-contract-id');
+    ).resolves.toEqual({
+      contractId: 'created-contract-id',
+      rateCardId: 'managed-email-rate-card-id',
+    });
     expect(metronomeClientService.createContract).toHaveBeenCalledWith({
       billingProviderConfiguration: {
         billingProvider: 'stripe',
@@ -804,11 +807,112 @@ describe('MetronomeWorkspaceCustomerService', () => {
 
       await expect(
         service.ensureWorkspaceManagedEmailContract(workspaceId),
-      ).resolves.toBe('recovered-contract-id');
+      ).resolves.toEqual({
+        contractId: 'recovered-contract-id',
+        rateCardId: 'managed-email-rate-card-id',
+      });
       expect(metronomeClientService.createContract).toHaveBeenCalledTimes(1);
       expect(metronomeClientService.findCurrentContracts).toHaveBeenCalledTimes(
         1,
       );
+    },
+  );
+});
+
+describe('MetronomeWorkspaceCustomerService billing configuration', () => {
+  const workspaceId = 'workspace-id';
+  const stripeCustomerId = 'cus_workspace';
+
+  const createBillingConfigService = (existingConfiguration: unknown) => {
+    const installationRepository = {
+      findOneBy: jest.fn().mockResolvedValue({
+        workspaceId,
+        metronomeCustomerId: 'metronome-customer-id',
+        stripeCustomerId,
+      }),
+      update: jest.fn(),
+    };
+    const metronomeClientService = {
+      getBillingConfiguration: jest
+        .fn()
+        .mockResolvedValue(existingConfiguration),
+      createBillingConfiguration: jest.fn().mockResolvedValue({
+        id: 'billing-config-id',
+      }),
+    };
+    const workspaceRepository = { findOneBy: jest.fn() };
+    const config = { get: jest.fn().mockReturnValue(true) };
+
+    return {
+      service: new MetronomeWorkspaceCustomerService(
+        installationRepository as never,
+        metronomeClientService as never,
+        workspaceRepository as never,
+        config as never,
+      ),
+      installationRepository,
+      metronomeClientService,
+    };
+  };
+
+  it('creates the exact Stripe charge-automatically configuration before contract mutation', async () => {
+    const { service, metronomeClientService } =
+      createBillingConfigService(null);
+
+    await expect(
+      service.ensureStripeBillingConfiguration(workspaceId, stripeCustomerId),
+    ).resolves.toEqual({ id: 'billing-config-id' });
+    expect(
+      metronomeClientService.createBillingConfiguration,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customerId: 'metronome-customer-id',
+        billingProviderType: 'stripe',
+        stripeCustomerId,
+        stripeCollectionMethod: 'charge_automatically',
+      }),
+    );
+  });
+
+  it('recovers an exact existing configuration without creating another one', async () => {
+    const existing = {
+      id: 'billing-config-id',
+      billingProviderType: 'stripe',
+      stripeCustomerId,
+      stripeCollectionMethod: 'charge_automatically',
+    };
+    const { service, metronomeClientService } =
+      createBillingConfigService(existing);
+
+    await expect(
+      service.ensureStripeBillingConfiguration(workspaceId, stripeCustomerId),
+    ).resolves.toEqual(existing);
+    expect(
+      metronomeClientService.createBillingConfiguration,
+    ).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Stripe Customer', { stripeCustomerId: 'cus_other' }],
+    ['provider type', { billingProviderType: 'manual' }],
+    ['collection method', { stripeCollectionMethod: 'send_invoice' }],
+  ])(
+    'rejects an existing billing configuration with mismatched %s',
+    async (_, overrides) => {
+      const { service, metronomeClientService } = createBillingConfigService({
+        id: 'billing-config-id',
+        billingProviderType: 'stripe',
+        stripeCustomerId,
+        stripeCollectionMethod: 'charge_automatically',
+        ...overrides,
+      });
+
+      await expect(
+        service.ensureStripeBillingConfiguration(workspaceId, stripeCustomerId),
+      ).rejects.toThrow();
+      expect(
+        metronomeClientService.createBillingConfiguration,
+      ).not.toHaveBeenCalled();
     },
   );
 });

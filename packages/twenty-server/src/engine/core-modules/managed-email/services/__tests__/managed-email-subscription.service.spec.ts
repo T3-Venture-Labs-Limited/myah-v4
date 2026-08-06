@@ -11,6 +11,7 @@ import {
 } from 'src/engine/core-modules/managed-provider-billing/metronome-client.exception';
 import { type MetronomeClientService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-client.service';
 import { type MetronomeWorkspaceCustomerService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-workspace-customer.service';
+import { type ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
 
 const workspaceId = '123e4567-e89b-42d3-a456-426614174000';
 const actorWorkspaceMemberId = '123e4567-e89b-42d3-a456-426614174001';
@@ -171,6 +172,7 @@ describe('ManagedEmailSubscriptionService', () => {
       >
     >;
     const metronomeClient = {
+      assertRateCardLineItems: jest.fn().mockResolvedValue(undefined),
       addSubscription: jest
         .fn()
         .mockResolvedValueOnce({
@@ -200,6 +202,7 @@ describe('ManagedEmailSubscriptionService', () => {
     } as unknown as jest.Mocked<
       Pick<
         MetronomeClientService,
+        | 'assertRateCardLineItems'
         | 'addSubscription'
         | 'createCustomerCredit'
         | 'getPrepaidBalance'
@@ -212,17 +215,38 @@ describe('ManagedEmailSubscriptionService', () => {
       ensureWorkspaceCustomer: jest
         .fn()
         .mockResolvedValue('123e4567-e89b-42d3-a456-426614174050'),
-      ensureWorkspaceManagedEmailContract: jest
-        .fn()
-        .mockResolvedValue('123e4567-e89b-42d3-a456-426614174051'),
+      ensureWorkspaceManagedEmailContract: jest.fn().mockResolvedValue({
+        contractId: '123e4567-e89b-42d3-a456-426614174051',
+        rateCardId: quote.metronomeRateCardId,
+      }),
+      ensureStripeBillingConfiguration: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<
       Pick<
         MetronomeWorkspaceCustomerService,
-        'ensureWorkspaceCustomer' | 'ensureWorkspaceManagedEmailContract'
+        | 'ensureStripeBillingConfiguration'
+        | 'ensureWorkspaceCustomer'
+        | 'ensureWorkspaceManagedEmailContract'
+      >
+    >;
+    const managedProviderStripeService = {
+      assertPaidExternalInvoice: jest.fn().mockResolvedValue({
+        customerId: 'cus_managed_email_test',
+        invoiceId: 'in_exact',
+        metronomeInvoiceId: 'metronome-invoice-exact',
+        status: 'paid',
+      }),
+      assertWorkspacePaymentMethodReady: jest.fn().mockResolvedValue({
+        stripeCustomerId: 'cus_managed_email_test',
+      }),
+    } as unknown as jest.Mocked<
+      Pick<
+        ManagedProviderStripeService,
+        'assertPaidExternalInvoice' | 'assertWorkspacePaymentMethodReady'
       >
     >;
 
     return {
+      managedProviderStripeService,
       metronomeClient,
       persisted,
       repository,
@@ -230,6 +254,7 @@ describe('ManagedEmailSubscriptionService', () => {
         repository as unknown as WorkspaceScopedRepository<ManagedEmailAcquisitionOperationEntity>,
         metronomeClient as unknown as MetronomeClientService,
         workspaceCustomerService as unknown as MetronomeWorkspaceCustomerService,
+        managedProviderStripeService as unknown as ManagedProviderStripeService,
       ),
       workspaceCustomerService,
     };
@@ -249,6 +274,7 @@ describe('ManagedEmailSubscriptionService', () => {
         acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
         actorWorkspaceMemberId,
         idempotencyKey: 'purchase-1',
+        operationId,
         providerConfigurationKey: 'icemail-production-v1',
         quote,
         readinessPolicyVersion: 'readiness-v1',
@@ -263,6 +289,7 @@ describe('ManagedEmailSubscriptionService', () => {
         catalogVersion: quote.catalogVersion,
         expectedAmountCents: String(quote.dueTodayCents),
         idempotencyKey: 'purchase-1',
+        id: operationId,
         metronomeContractId: null,
         metronomeCustomerId: null,
         quoteHash: quote.quoteHash,
@@ -298,6 +325,18 @@ describe('ManagedEmailSubscriptionService', () => {
         },
       }),
     );
+    expect(metronomeClient.assertRateCardLineItems).toHaveBeenCalledWith({
+      lines: quote.lines.map((line) => ({
+        billingFrequency: line.billingFrequency,
+        productId: line.metronomeProductId,
+        startingAt: line.startingAt,
+        unitPriceCents: line.unitPriceCents,
+      })),
+      rateCardId: quote.metronomeRateCardId,
+    });
+    expect(
+      metronomeClient.assertRateCardLineItems.mock.invocationCallOrder[0],
+    ).toBeLessThan(metronomeClient.addSubscription.mock.invocationCallOrder[0]);
     expect(repository.update).toHaveBeenCalledTimes(5);
     expect(persisted.get(operationId)).toMatchObject({
       metronomeEditIds: [
@@ -314,6 +353,33 @@ describe('ManagedEmailSubscriptionService', () => {
     });
     expect(metronomeClient.getPrepaidBalance).not.toHaveBeenCalled();
     expect(metronomeClient.createCustomerCredit).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before subscription edits when the contract rate card differs from the persisted quote', async () => {
+    const { metronomeClient, service, workspaceCustomerService } =
+      createService();
+
+    workspaceCustomerService.ensureWorkspaceManagedEmailContract.mockResolvedValueOnce(
+      {
+        contractId: '123e4567-e89b-42d3-a456-426614174051',
+        rateCardId: '123e4567-e89b-42d3-a456-426614174099',
+      },
+    );
+
+    await expect(
+      service.beginPurchase({
+        acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+        actorWorkspaceMemberId,
+        idempotencyKey: 'purchase-1',
+        operationId,
+        providerConfigurationKey: 'icemail-production-v1',
+        quote,
+        readinessPolicyVersion: 'readiness-v1',
+        workspaceId,
+      }),
+    ).rejects.toThrow('Managed email subscription rate card mismatch');
+    expect(metronomeClient.assertRateCardLineItems).not.toHaveBeenCalled();
+    expect(metronomeClient.addSubscription).not.toHaveBeenCalled();
   });
 
   it('recovers an accepted subscription edit after an idempotency conflict', async () => {
@@ -342,6 +408,7 @@ describe('ManagedEmailSubscriptionService', () => {
         acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
         actorWorkspaceMemberId,
         idempotencyKey: 'purchase-1',
+        operationId,
         providerConfigurationKey: 'icemail-production-v1',
         quote,
         readinessPolicyVersion: 'readiness-v1',
@@ -371,6 +438,7 @@ describe('ManagedEmailSubscriptionService', () => {
       acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
       actorWorkspaceMemberId,
       idempotencyKey: 'purchase-1',
+      operationId,
       providerConfigurationKey: 'icemail-production-v1',
       readinessPolicyVersion: 'readiness-v1',
       quote,
@@ -392,12 +460,18 @@ describe('ManagedEmailSubscriptionService', () => {
   });
 
   it('projects only one exact paid Stripe invoice onto the operation', async () => {
-    const { metronomeClient, persisted, service } = createService();
+    const {
+      managedProviderStripeService,
+      metronomeClient,
+      persisted,
+      service,
+    } = createService();
 
     await service.beginPurchase({
       acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
       actorWorkspaceMemberId,
       idempotencyKey: 'purchase-1',
+      operationId,
       providerConfigurationKey: 'icemail-production-v1',
       readinessPolicyVersion: 'readiness-v1',
       quote,
@@ -496,5 +570,15 @@ describe('ManagedEmailSubscriptionService', () => {
         }),
       ),
     );
+    expect(
+      managedProviderStripeService.assertPaidExternalInvoice,
+    ).toHaveBeenCalledWith({
+      currency: 'USD',
+      expectedAmountCents: quote.dueTodayCents,
+      expectedPaymentIntentId: 'pi_exact',
+      metronomeInvoiceId: 'metronome-invoice-exact',
+      stripeInvoiceId: 'in_exact',
+      workspaceId,
+    });
   });
 });

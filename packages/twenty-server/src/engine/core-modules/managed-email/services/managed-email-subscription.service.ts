@@ -15,6 +15,8 @@ import {
 import { type MetronomeSubscriptionReceipt } from 'src/engine/core-modules/managed-provider-billing/types/metronome-subscription.type';
 import { MetronomeWorkspaceCustomerService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-workspace-customer.service';
 import { matchExactPaidMetronomeInvoice } from 'src/engine/core-modules/managed-provider-billing/utils/match-exact-paid-metronome-invoice.util';
+import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
+
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
@@ -22,6 +24,7 @@ export type BeginManagedEmailPurchaseInput = Readonly<{
   acquisitionMode: ManagedEmailAcquisitionMode;
   actorWorkspaceMemberId: string;
   idempotencyKey: string;
+  operationId: string;
   providerConfigurationKey: string;
   readinessPolicyVersion: string;
   quote: ManagedEmailQuote;
@@ -35,6 +38,7 @@ export class ManagedEmailSubscriptionService {
     private readonly acquisitionOperationRepository: WorkspaceScopedRepository<ManagedEmailAcquisitionOperationEntity>,
     private readonly metronomeClientService: MetronomeClientService,
     private readonly metronomeWorkspaceCustomerService: MetronomeWorkspaceCustomerService,
+    private readonly managedProviderStripeService: ManagedProviderStripeService,
   ) {}
 
   async beginPurchase(
@@ -56,6 +60,7 @@ export class ManagedEmailSubscriptionService {
     );
     if (prior !== null) {
       if (
+        prior.id !== input.operationId ||
         prior.quoteHash !== input.quote.quoteHash ||
         prior.proposalHash !== input.quote.proposalHash ||
         prior.acquisitionMode !== input.acquisitionMode ||
@@ -82,6 +87,7 @@ export class ManagedEmailSubscriptionService {
     );
     const expectedLineItems: readonly ManagedEmailExpectedLineItem[] =
       input.quote.lines.map((line) => ({
+        billingFrequency: line.billingFrequency,
         currency: 'USD',
         metronomeProductId: line.metronomeProductId,
         periodEnd: line.endingBefore,
@@ -93,6 +99,7 @@ export class ManagedEmailSubscriptionService {
         unitPriceCents: line.unitPriceCents,
       }));
     return this.acquisitionOperationRepository.save(input.workspaceId, {
+      id: input.operationId,
       acquisitionMode: input.acquisitionMode,
       authorizedActorWorkspaceMemberId: input.actorWorkspaceMemberId,
       catalogVersion: input.quote.catalogVersion,
@@ -145,14 +152,26 @@ export class ManagedEmailSubscriptionService {
     if (operation.state !== 'CREATING_SUBSCRIPTIONS') {
       return operation;
     }
+    const paymentMethod =
+      await this.managedProviderStripeService.assertWorkspacePaymentMethodReady(
+        { workspaceId },
+      );
     const customerId =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceCustomer(
         workspaceId,
       );
-    const contractId =
+    await this.metronomeWorkspaceCustomerService.ensureStripeBillingConfiguration(
+      workspaceId,
+      paymentMethod.stripeCustomerId,
+    );
+    const contract =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceManagedEmailContract(
         workspaceId,
       );
+    if (contract.rateCardId !== operation.metronomeRateCardId) {
+      throw new Error('Managed email subscription rate card mismatch');
+    }
+    const contractId = contract.contractId;
     if (
       (operation.metronomeCustomerId !== null &&
         operation.metronomeCustomerId !== customerId) ||
@@ -161,6 +180,15 @@ export class ManagedEmailSubscriptionService {
     ) {
       throw new Error('Managed email subscription identity conflict');
     }
+    await this.metronomeClientService.assertRateCardLineItems({
+      lines: operation.expectedLineItems.map((line) => ({
+        billingFrequency: line.billingFrequency,
+        productId: line.metronomeProductId,
+        startingAt: line.periodStart,
+        unitPriceCents: line.unitPriceCents,
+      })),
+      rateCardId: operation.metronomeRateCardId,
+    });
     await this.acquisitionOperationRepository.update(
       workspaceId,
       { id: operation.id, state: 'CREATING_SUBSCRIPTIONS' },
@@ -188,10 +216,7 @@ export class ManagedEmailSubscriptionService {
     ) {
       const line = operation.expectedLineItems[index];
       const subscriptionInput = {
-        billingFrequency:
-          line.productKey === 'managed_sending_domain_year'
-            ? ('ANNUAL' as const)
-            : ('MONTHLY' as const),
+        billingFrequency: line.billingFrequency,
         contractId,
         customerId,
         productId: line.metronomeProductId,
@@ -332,6 +357,14 @@ export class ManagedEmailSubscriptionService {
     if (receipt === null) {
       return operation;
     }
+    await this.managedProviderStripeService.assertPaidExternalInvoice({
+      currency: operation.currency,
+      expectedAmountCents: Number(operation.expectedAmountCents),
+      expectedPaymentIntentId: receipt.externalPaymentId,
+      metronomeInvoiceId: receipt.invoiceId,
+      stripeInvoiceId: receipt.externalInvoiceId,
+      workspaceId,
+    });
 
     const patch = {
       correlatedSubscriptionLines,
@@ -358,6 +391,7 @@ export class ManagedEmailSubscriptionService {
       !input.workspaceId.trim() ||
       !input.actorWorkspaceMemberId.trim() ||
       !input.idempotencyKey.trim() ||
+      !input.operationId.trim() ||
       !input.providerConfigurationKey.trim() ||
       !input.readinessPolicyVersion.trim() ||
       !input.quote.proposalHash.trim() ||

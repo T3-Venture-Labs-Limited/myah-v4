@@ -97,6 +97,7 @@ const expectedLineItem = (
   quantity = 1,
   unitPriceCents = 1000,
 ): DeepMutable<ManagedEmailExpectedLineItem> => ({
+  billingFrequency: index === 0 ? 'ANNUAL' : 'MONTHLY',
   productKey: MANAGED_EMAIL_PRODUCT_DEFINITIONS[index].key,
   productTag: MANAGED_EMAIL_PRODUCT_DEFINITIONS[index].metronomeProductTag,
   metronomeProductId: `123e4567-e89b-42d3-a456-42661417400${index}`,
@@ -321,6 +322,12 @@ describe('managed email persistence JSON validation', () => {
       'wrong canonical product tag',
       (lines: DeepMutable<ManagedEmailExpectedLineItem>[]) => {
         lines[1].productTag = 'wrong-tag';
+      },
+    ],
+    [
+      'wrong canonical billing frequency',
+      (lines: DeepMutable<ManagedEmailExpectedLineItem>[]) => {
+        lines[1].billingFrequency = 'ANNUAL';
       },
     ],
     [

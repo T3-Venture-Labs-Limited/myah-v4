@@ -601,6 +601,7 @@ const validateExpectedLineItems = (
 
   for (const line of value) {
     assertRecord(line, [
+      'billingFrequency',
       'productKey',
       'productTag',
       'metronomeProductId',
@@ -622,6 +623,7 @@ const validateExpectedLineItems = (
     if (
       PRODUCT_KEYS[line.productKey as string] !== true ||
       definition === undefined ||
+      definition.cadence !== line.billingFrequency ||
       definition.metronomeProductTag !== line.productTag ||
       productKeys.has(line.productKey as string) ||
       line.currency !== 'USD'

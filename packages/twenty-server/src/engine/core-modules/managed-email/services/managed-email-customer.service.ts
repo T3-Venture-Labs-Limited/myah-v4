@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable } from '@nestjs/common';
 import { IsNull } from 'typeorm';
 
@@ -15,6 +17,9 @@ import {
 import { ManagedEmailProposalInput } from 'src/engine/core-modules/managed-email/managed-email.input';
 import { ManagedEmailAcquisitionOperationEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-domain.entity';
+import { ManagedEmailCatalogService } from 'src/engine/core-modules/managed-email/services/managed-email-catalog.service';
+import { ManagedEmailOfferService } from 'src/engine/core-modules/managed-email/services/managed-email-offer.service';
+import { ManagedEmailReadinessService } from 'src/engine/core-modules/managed-email/services/managed-email-readiness.service';
 import { ManagedEmailMailboxEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-mailbox.entity';
 import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from 'src/engine/core-modules/managed-email/enums/managed-email-campaign-eligibility.enum';
@@ -44,13 +49,6 @@ type CampaignCapInput = MailboxActionInput &
     dailyCap: number | null;
   }>;
 
-type RetryPaymentInput = Readonly<{
-  actorId: string;
-  idempotencyKey: string;
-  operationId: string;
-  workspaceId: string;
-}>;
-
 @Injectable()
 export class ManagedEmailCustomerService {
   constructor(
@@ -63,7 +61,10 @@ export class ManagedEmailCustomerService {
     private readonly lifecycleService: ManagedEmailLifecycleService,
     private readonly acquisitionService: ManagedEmailAcquisitionService,
     private readonly proposalService: ManagedEmailProposalService,
+    private readonly catalogService: ManagedEmailCatalogService,
+    private readonly offerService: ManagedEmailOfferService,
     private readonly twentyConfigService: TwentyConfigService,
+    private readonly readinessService: ManagedEmailReadinessService,
   ) {}
 
   async overview(workspaceId: string): Promise<ManagedEmailOverviewDTO> {
@@ -158,13 +159,42 @@ export class ManagedEmailCustomerService {
     });
   }
 
-  async prewarmedBundles(
-    workspaceId: string,
-  ): Promise<ManagedEmailBundleDTO[]> {
+  async prewarmedBundles({
+    actorId,
+    workspaceId,
+  }: {
+    actorId: string;
+    workspaceId: string;
+  }): Promise<ManagedEmailBundleDTO[]> {
     this.assertAcquisitionAvailable(workspaceId);
-    throw new Error('Managed email customer catalog is unavailable');
-  }
+    const { bundles, observedAt } =
+      await this.proposalService.listPrewarmedBundles();
 
+    return Promise.all(
+      bundles.map(async (bundle) => {
+        const selection = await this.offerService.persistBundleSelection({
+          actorWorkspaceMemberId: actorId,
+          providerInventoryId: bundle.inventoryId,
+          workspaceId,
+        });
+
+        return {
+          bundleId: selection.id,
+          domain: bundle.domain,
+          mailboxCount: bundle.mailboxCount,
+          exclusiveWorkspaceUse: true,
+          providerType: bundle.mailboxes[0].provider,
+          observedAt,
+          mailboxes: bundle.mailboxes.map(
+            ({ address, firstName, lastName }) => ({
+              address,
+              displayName: `${firstName} ${lastName}`,
+            }),
+          ),
+        };
+      }),
+    );
+  }
   async newProposal({
     actorId,
     input,
@@ -191,7 +221,46 @@ export class ManagedEmailCustomerService {
         workspaceSlug,
       },
     );
+    return {
+      disclosures: proposal.disclosures,
+      domains: proposal.domains.map((domain) => ({
+        domain: domain.domain,
+        mailboxes: domain.mailboxes.map((mailbox) => ({
+          address: mailbox.address,
+          displayName: `${mailbox.firstName} ${mailbox.lastName}`,
+          roleTitle: mailbox.roleTitle,
+        })),
+      })),
+      expiresAt: proposal.expiresAt,
+      id: proposal.id,
+      mailboxCount: proposal.mailboxCount,
+      policyVersion: proposal.policyVersion,
+    };
+  }
 
+  async prewarmedProposal({
+    actorId,
+    bundleId,
+    workspaceId,
+  }: {
+    actorId: string;
+    bundleId: string;
+    workspaceId: string;
+  }): Promise<ManagedEmailProposalDTO> {
+    this.assertAcquisitionAvailable(workspaceId);
+    const providerInventoryId = await this.offerService.resolveBundleSelection({
+      actorWorkspaceMemberId: actorId,
+      bundleId,
+      workspaceId,
+    });
+    const proposal = await this.proposalService.createPrewarmedProposal(
+      { inventoryIds: [providerInventoryId] },
+      {
+        actorWorkspaceMemberId: actorId,
+        workspaceId,
+        workspaceSlug: workspaceId,
+      },
+    );
     return {
       disclosures: proposal.disclosures,
       domains: proposal.domains.map((domain) => ({
@@ -210,17 +279,43 @@ export class ManagedEmailCustomerService {
   }
 
   async quote({
+    actorId,
     proposalId,
     workspaceId,
   }: {
+    actorId?: string;
     proposalId: string;
     workspaceId: string;
   }): Promise<ManagedEmailQuoteDTO> {
     this.assertAcquisitionAvailable(workspaceId);
-    if (proposalId.trim() === '') {
-      throw new Error('Managed email proposal reference is invalid');
+    if (proposalId.trim() === '' || !actorId) {
+      throw new Error('Managed email quote request is invalid');
     }
-    throw new Error('Managed email quote storage is unavailable');
+    const proposal = await this.offerService.loadProposalForQuote({
+      actorWorkspaceMemberId: actorId,
+      proposalId,
+      workspaceId,
+    });
+    const quote = await this.catalogService.createQuote({ proposal });
+    await this.offerService.persistQuote({
+      actorWorkspaceMemberId: actorId,
+      proposalId: proposal.id,
+      quote,
+      workspaceId,
+    });
+    return {
+      ...quote,
+      lines: quote.lines.map((line) => ({
+        ...line,
+        endingBefore: new Date(line.endingBefore),
+        startingAt: new Date(line.startingAt),
+      })),
+      quoteFingerprint: quote.quoteHash,
+      quoteVersion: quote.catalogVersion,
+      isSandbox:
+        this.twentyConfigService.get('MANAGED_EMAIL_EXECUTION_MODE') ===
+        'SANDBOX',
+    };
   }
 
   async operation(
@@ -273,6 +368,9 @@ export class ManagedEmailCustomerService {
   }
 
   async purchase({
+    acquisitionMode,
+    actorId,
+    input,
     workspaceId,
   }: {
     acquisitionMode: ManagedEmailAcquisitionMode;
@@ -286,9 +384,38 @@ export class ManagedEmailCustomerService {
     workspaceId: string;
   }): Promise<ManagedEmailActionResultDTO> {
     this.assertAcquisitionAvailable(workspaceId);
-    throw new Error('Managed email quote storage is unavailable');
-  }
+    const providerConfigurationKey = this.twentyConfigService.get(
+      'MANAGED_EMAIL_PROVIDER_CONFIGURATION_KEY',
+    );
+    const readinessPolicyVersion = this.twentyConfigService.get(
+      'MANAGED_EMAIL_READINESS_POLICY_VERSION',
+    );
+    this.readinessService.assertApprovedPurchasePolicy({
+      policyVersion: readinessPolicyVersion,
+      providerConfigurationKey,
+    });
+    const reserved = await this.offerService.reserveQuoteForPurchase({
+      actorWorkspaceMemberId: actorId,
+      idempotencyKey: input.idempotencyKey,
+      operationId: randomUUID(),
+      quoteFingerprint: input.quoteFingerprint,
+      quoteId: input.quoteId,
+      quoteVersion: input.quoteVersion,
+      workspaceId,
+    });
+    await this.acquisitionService.admit({
+      acquisitionMode,
+      actorWorkspaceMemberId: actorId,
+      idempotencyKey: input.idempotencyKey,
+      operationId: reserved.operationId,
+      providerConfigurationKey,
+      quote: reserved.quote,
+      readinessPolicyVersion,
+      workspaceId,
+    });
 
+    return { accepted: true, operationId: reserved.operationId };
+  }
   async setCampaignCap(
     input: CampaignCapInput,
   ): Promise<ManagedEmailActionResultDTO> {
@@ -365,27 +492,6 @@ export class ManagedEmailCustomerService {
   ): Promise<ManagedEmailActionResultDTO> {
     await this.lifecycleService.resumeWarmup(input);
     return { accepted: true, operationId: input.mailboxId };
-  }
-
-  async retryPayment(
-    input: RetryPaymentInput,
-  ): Promise<ManagedEmailActionResultDTO> {
-    const operation = await this.operationRepository.findOneBy(
-      input.workspaceId,
-      {
-        id: input.operationId,
-        idempotencyKey: input.idempotencyKey,
-      },
-    );
-
-    if (operation === null) {
-      throw new Error('Managed email retry identity does not match');
-    }
-    await this.acquisitionService.continue({
-      operationId: input.operationId,
-      workspaceId: input.workspaceId,
-    });
-    return { accepted: true, operationId: input.operationId };
   }
 
   async stopMailbox(

@@ -18,6 +18,7 @@ import {
   type ManagedEmailProposalPersona,
   type ManagedEmailProposalPolicy,
 } from 'src/engine/core-modules/managed-email/types/managed-email-proposal.type';
+import { ManagedEmailOfferService } from './managed-email-offer.service';
 
 export const MANAGED_EMAIL_PROPOSAL_POLICY = Symbol(
   'MANAGED_EMAIL_PROPOSAL_POLICY',
@@ -101,7 +102,29 @@ export class ManagedEmailProposalService {
     private readonly idFactory: () => string = randomUUID,
     @Optional()
     private readonly eventLogEmitterService?: EventLogEmitterService,
+    @Optional()
+    private readonly offerService?: ManagedEmailOfferService,
   ) {}
+  async listPrewarmedBundles(): Promise<{
+    bundles: IcemailPrewarmedBundle[];
+    observedAt: Date;
+  }> {
+    const bundles: IcemailPrewarmedBundle[] = [];
+    let page = 1;
+    for (;;) {
+      const result = await this.icemailClient.listPrewarmedBundles(page);
+      if (result.items.length === 0) {
+        break;
+      }
+      for (const bundle of result.items) {
+        this.validatePrewarmedBundle(bundle);
+        bundles.push(bundle);
+      }
+      page += 1;
+    }
+
+    return { bundles, observedAt: this.now() };
+  }
 
   async createProposal(
     input: CreateManagedEmailProposalInput,
@@ -200,6 +223,12 @@ export class ManagedEmailProposalService {
         proposalId: proposal.id,
       });
 
+    await this.offerService?.persistProposal({
+      actorWorkspaceMemberId: context.actorWorkspaceMemberId,
+      proposal,
+      workspaceId: context.workspaceId,
+    });
+
     return proposal;
   }
 
@@ -213,17 +242,16 @@ export class ManagedEmailProposalService {
       input.inventoryIds.length < 1 ||
       input.inventoryIds.length > MAX_MAILBOX_COUNT ||
       new Set(input.inventoryIds).size !== input.inventoryIds.length ||
-      input.inventoryIds.some((inventoryId) => !inventoryId.trim())
+      input.inventoryIds.some((inventoryId) => !inventoryId.trim()) ||
+      !context.workspaceId.trim() ||
+      !context.actorWorkspaceMemberId.trim() ||
+      !context.workspaceSlug.trim()
     ) {
       throw new Error('Managed email prewarmed proposal input is invalid');
     }
-    const personas = this.normalizePersonas(
-      { mailboxCount: input.personas.length, personas: input.personas },
-      context,
-    );
-    const page = await this.icemailClient.listPrewarmedBundles();
+    const { bundles: availableBundles } = await this.listPrewarmedBundles();
     const bundles = input.inventoryIds.map((inventoryId) => {
-      const matches = page.items.filter(
+      const matches = availableBundles.filter(
         (bundle) => bundle.inventoryId === inventoryId,
       );
 
@@ -233,8 +261,8 @@ export class ManagedEmailProposalService {
       return matches[0];
     });
     const createdAt = this.now();
-    let personaIndex = 0;
     const domains = bundles.map((bundle) => {
+      this.validatePrewarmedBundle(bundle);
       const domain = bundle.domain.trim().toLowerCase();
 
       if (
@@ -248,29 +276,35 @@ export class ManagedEmailProposalService {
         throw new Error('Managed email prewarmed inventory is invalid');
       }
       const mailboxes = bundle.mailboxes.map((providerMailbox) => {
-        const persona = personas[personaIndex];
         const address = providerMailbox.address.trim().toLowerCase();
         const separator = address.lastIndexOf('@');
         const localPart = address.slice(0, separator);
         const addressDomain = address.slice(separator + 1);
+        const firstName = this.normalizeWhitespace(providerMailbox.firstName);
+        const lastName = this.normalizeWhitespace(providerMailbox.lastName);
+        const signature = `${firstName} ${lastName}`;
 
-        personaIndex += 1;
         if (
-          persona === undefined ||
           address !== providerMailbox.address ||
           separator < 1 ||
           addressDomain !== domain ||
-          persona.localPart !== localPart ||
-          persona.firstName !==
-            this.normalizeWhitespace(providerMailbox.firstName) ||
-          persona.lastName !==
-            this.normalizeWhitespace(providerMailbox.lastName)
+          !firstName ||
+          !lastName ||
+          signature.length > MAX_NAME_LENGTH ||
+          localPart.length > MAX_LOCAL_PART_LENGTH
         ) {
-          throw new Error(
-            'Managed email prewarmed persona confirmation is invalid',
-          );
+          throw new Error('Managed email prewarmed inventory is invalid');
         }
-        return freezePersona({ ...persona, address });
+        return freezePersona({
+          address,
+          createdByWorkspaceMemberId: context.actorWorkspaceMemberId,
+          firstName,
+          lastName,
+          localPart,
+          roleTitle: null,
+          signature,
+          version: 1,
+        });
       });
 
       return freezeDomain({
@@ -291,9 +325,11 @@ export class ManagedEmailProposalService {
         },
       });
     });
+    const personas = domains.flatMap(({ mailboxes }) => mailboxes);
 
     if (
-      personaIndex !== personas.length ||
+      personas.length < 1 ||
+      personas.length > MAX_MAILBOX_COUNT ||
       new Set(domains.map(({ domain }) => domain)).size !== domains.length
     ) {
       throw new Error('Managed email prewarmed inventory is invalid');
@@ -318,6 +354,12 @@ export class ManagedEmailProposalService {
         policyVersion: this.policy.version,
         proposalId: proposal.id,
       });
+
+    await this.offerService?.persistProposal({
+      actorWorkspaceMemberId: context.actorWorkspaceMemberId,
+      proposal,
+      workspaceId: context.workspaceId,
+    });
 
     return proposal;
   }
@@ -363,6 +405,37 @@ export class ManagedEmailProposalService {
       ...proposal,
       domains: Object.freeze(domains),
     });
+  }
+  private validatePrewarmedBundle(bundle: IcemailPrewarmedBundle): void {
+    const domain = bundle.domain.trim().toLowerCase();
+    if (
+      domain !== bundle.domain ||
+      !Number.isSafeInteger(bundle.mailboxCount) ||
+      bundle.mailboxCount !== bundle.mailboxes.length ||
+      !Number.isSafeInteger(bundle.domainPriceCents) ||
+      bundle.domainPriceCents <= 0 ||
+      !Number.isSafeInteger(bundle.mailboxPriceCents) ||
+      bundle.mailboxPriceCents < 0 ||
+      bundle.mailboxes.length === 0
+    ) {
+      throw new Error('Managed email prewarmed inventory is invalid');
+    }
+    const provider = bundle.mailboxes[0].provider;
+    const addresses = new Set<string>();
+    for (const mailbox of bundle.mailboxes) {
+      const address = mailbox.address.trim().toLowerCase();
+      const separator = address.lastIndexOf('@');
+      if (
+        mailbox.provider !== provider ||
+        address !== mailbox.address ||
+        separator < 1 ||
+        address.slice(separator + 1) !== domain ||
+        addresses.has(address)
+      ) {
+        throw new Error('Managed email prewarmed inventory is invalid');
+      }
+      addresses.add(address);
+    }
   }
 
   private normalizePersonas(

@@ -23,10 +23,12 @@ import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-ema
 import { ManagedEmailCampaignEligibility } from 'src/engine/core-modules/managed-email/enums/managed-email-campaign-eligibility.enum';
 import {
   ManagedEmailCampaignCapInput,
+  ManagedEmailPrewarmedProposalInput,
   ManagedEmailProposalInput,
 } from 'src/engine/core-modules/managed-email/managed-email.input';
 import { ManagedEmailResolver } from 'src/engine/core-modules/managed-email/managed-email.resolver';
 import { ManagedEmailCustomerService } from 'src/engine/core-modules/managed-email/services/managed-email-customer.service';
+import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 
@@ -55,7 +57,6 @@ const createResolver = () => {
     purchase: jest.fn().mockResolvedValue({ accepted: true }),
     quote: jest.fn().mockResolvedValue({ id: 'quote-id' }),
     resumeWarmup: jest.fn().mockResolvedValue({ accepted: true }),
-    retryPayment: jest.fn().mockResolvedValue({ accepted: true }),
     setCampaignCap: jest.fn().mockResolvedValue({ accepted: true }),
     stopMailbox: jest.fn().mockResolvedValue({ accepted: true }),
   };
@@ -81,6 +82,7 @@ describe('ManagedEmailResolver', () => {
       providers: [
         ManagedEmailResolver,
         { provide: ManagedEmailCustomerService, useValue: {} },
+        { provide: ManagedProviderStripeService, useValue: {} },
         { provide: PermissionsService, useValue: {} },
       ],
     }).compile();
@@ -108,11 +110,16 @@ describe('ManagedEmailResolver', () => {
         'cancelManagedEmailWarmup',
         'pauseManagedEmailWarmup',
         'resumeManagedEmailWarmup',
-        'retryManagedEmailPayment',
         'stopManagedEmailMailbox',
+        'prepareManagedEmailPaymentMethod',
+        'completeManagedEmailPaymentMethod',
         'cancelManagedEmailDomainRenewal',
       ]),
     );
+    expect(
+      Object.keys(schema.getMutationType()?.getFields() ?? {}),
+    ).not.toContain('retryManagedEmailPayment');
+    expect(schema.getType('ManagedEmailRetryPaymentInput')).toBeUndefined();
 
     for (const inputTypeName of [
       'ManagedEmailProposalInput',
@@ -124,7 +131,7 @@ describe('ManagedEmailResolver', () => {
       'ManagedEmailHealthDetailsInput',
       'ManagedEmailOperationInput',
       'ManagedEmailPersonaInput',
-      'ManagedEmailRetryPaymentInput',
+      'ManagedEmailCompletePaymentMethodInput',
     ]) {
       const inputType = schema.getType(inputTypeName);
 
@@ -157,6 +164,8 @@ describe('ManagedEmailResolver', () => {
       'ManagedEmailOperation',
       'ManagedEmailHealthDetails',
       'ManagedEmailActionResult',
+      'ManagedEmailPaymentSetup',
+      'ManagedEmailPaymentMethodStatus',
       'ManagedEmailDisclosures',
       'ManagedEmailProposalDomain',
       'ManagedEmailProposalMailbox',
@@ -269,6 +278,24 @@ describe('ManagedEmailResolver', () => {
     expect(capErrors.map(({ property }) => property)).toContain('dailyCap');
   });
 
+  it('accepts bounded opaque prewarmed inventory IDs and rejects invalid values', async () => {
+    await expect(
+      validate(
+        plainToInstance(ManagedEmailPrewarmedProposalInput, {
+          bundleId: 'bundle-creator-network-20260806',
+        }),
+      ),
+    ).resolves.toEqual([]);
+
+    for (const bundleId of ['', 'x'.repeat(256)]) {
+      await expect(
+        validate(
+          plainToInstance(ManagedEmailPrewarmedProposalInput, { bundleId }),
+        ),
+      ).resolves.not.toEqual([]);
+    }
+  });
+
   it.each([undefined, null])(
     'accepts an omitted or null optional persona role',
     async (roleTitle) => {
@@ -312,11 +339,6 @@ describe('ManagedEmailResolver', () => {
     );
     await resolver.resumeManagedEmailWarmup(
       mailboxInput,
-      workspace as never,
-      actorId,
-    );
-    await resolver.retryManagedEmailPayment(
-      { operationId, idempotencyKey },
       workspace as never,
       actorId,
     );
@@ -368,12 +390,6 @@ describe('ManagedEmailResolver', () => {
         workspaceId: workspace.id,
       });
     }
-    expect(customerService.retryPayment).toHaveBeenCalledWith({
-      actorId,
-      idempotencyKey,
-      operationId,
-      workspaceId: workspace.id,
-    });
     expect(customerService.cancelDomainRenewal).toHaveBeenCalledWith({
       actorId,
       domainId,
@@ -392,6 +408,7 @@ describe('ManagedEmailResolver', () => {
       input: purchaseInput,
       workspaceId: workspace.id,
     });
+    expect('retryManagedEmailPayment' in resolver).toBe(false);
   });
 });
 
@@ -476,6 +493,8 @@ describe('ManagedEmailCustomerService', () => {
       createProposal: jest.fn(),
       createPrewarmedProposal: jest.fn(),
     };
+    const catalogService = {};
+    const offerService = {};
     const twentyConfigService = {
       get: jest.fn((key: string) => {
         if (key === 'MANAGED_EMAIL_ENABLED') return enabled;
@@ -495,16 +514,20 @@ describe('ManagedEmailCustomerService', () => {
       lifecycleService,
       acquisitionService,
       proposalService,
+      catalogService,
+      offerService,
       twentyConfigService,
     );
 
     return {
       acquisitionService,
       domainRepository,
+      catalogService,
       lifecycleService,
       mailboxRepository,
       operationRepository,
       proposalService,
+      offerService,
       service,
       twentyConfigService,
     };
@@ -609,9 +632,12 @@ describe('ManagedEmailCustomerService', () => {
   it('fails closed before provider or payment calls when admission is disabled', async () => {
     const test = createService({ enabled: false });
 
-    await expect(test.service.prewarmedBundles(workspace.id)).rejects.toThrow(
-      'Managed email acquisition is unavailable',
-    );
+    await expect(
+      test.service.prewarmedBundles({
+        actorId,
+        workspaceId: workspace.id,
+      }),
+    ).rejects.toThrow('Managed email acquisition is unavailable');
     await expect(
       test.service.newProposal({
         actorId,
@@ -676,38 +702,6 @@ describe('ManagedEmailCustomerService', () => {
       idempotencyKey,
       workspaceId: workspace.id,
     });
-  });
-
-  it('binds payment retry to the operation durable idempotency key', async () => {
-    const test = createService();
-
-    await expect(
-      test.service.retryPayment({
-        actorId,
-        idempotencyKey,
-        operationId,
-        workspaceId: workspace.id,
-      }),
-    ).resolves.toEqual({ accepted: true, operationId });
-    expect(test.operationRepository.findOneBy).toHaveBeenCalledWith(
-      workspace.id,
-      { id: operationId, idempotencyKey },
-    );
-    expect(test.acquisitionService.continue).toHaveBeenCalledWith({
-      operationId,
-      workspaceId: workspace.id,
-    });
-
-    test.operationRepository.findOneBy.mockResolvedValueOnce(null);
-    await expect(
-      test.service.retryPayment({
-        actorId,
-        idempotencyKey: 'conflicting-key',
-        operationId,
-        workspaceId: workspace.id,
-      }),
-    ).rejects.toThrow('Managed email retry identity does not match');
-    expect(test.acquisitionService.continue).toHaveBeenCalledTimes(1);
   });
 
   it('atomically changes a campaign cap within policy and rejects exceeding policy', async () => {

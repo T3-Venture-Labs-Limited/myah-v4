@@ -66,6 +66,7 @@ const quote: ManagedEmailQuote = {
   currency: 'USD',
   disclosures: proposal.disclosures,
   dueTodayCents: 12345,
+  isSandbox: true,
   expiresAt: '2026-08-06T13:00:00.000Z',
   id: 'quote-1',
   lines: [
@@ -282,6 +283,25 @@ describe('managed email acquisition flow components', () => {
       ),
     ).toBeVisible();
     expect(screen.getByText('$123.45')).toBeVisible();
+    expect(screen.getByText('1 × $100.00 = $100.00')).toBeVisible();
+    expect(screen.getByText('1 × $23.45 = $23.45')).toBeVisible();
+    expect(
+      Array.from(document.querySelectorAll('time')).map((time) =>
+        time.getAttribute('dateTime'),
+      ),
+    ).toEqual([
+      '2026-08-06T12:00:00.000Z',
+      '2027-08-06T12:00:00.000Z',
+      '2026-08-06T12:00:00.000Z',
+      '2026-09-06T12:00:00.000Z',
+    ]);
+    expect(
+      screen.getByText(
+        'Cancel renewal now; service continues through paid-through.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByText(/non-production|sandbox/i)).toBeVisible();
+    expect(screen.getByText(/SetupIntent/i)).toBeVisible();
     expect(screen.getByText('Annual')).toBeVisible();
     expect(screen.getByText('Monthly')).toBeVisible();
     expect(
@@ -302,6 +322,22 @@ describe('managed email acquisition flow components', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
+  it('does not show the sandbox banner for a production quote', () => {
+    renderWithI18n(
+      <ManagedEmailReview
+        isConfirming={false}
+        onBack={jest.fn()}
+        onConfirm={jest.fn()}
+        proposal={proposal}
+        quote={{ ...quote, isSandbox: false }}
+      />,
+    );
+
+    expect(
+      screen.queryByText(/non-production|sandbox/i),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     ['PENDING', 'Payment pending'],
     ['PAYMENT_FAILED', 'Payment failed'],
@@ -311,7 +347,7 @@ describe('managed email acquisition flow components', () => {
     (paymentStatus, label) => {
       renderWithI18n(
         <ManagedEmailProgress
-          onRetryPayment={jest.fn()}
+          onReturnToOverview={jest.fn()}
           operation={operation(paymentStatus)}
         />,
       );
@@ -324,26 +360,24 @@ describe('managed email acquisition flow components', () => {
     },
   );
 
-  it('confirms a failed-payment retry before invoking the callback', async () => {
+  it('offers a truthful return action for failed payment without claiming a retry', async () => {
     const user = userEvent.setup();
-    const onRetryPayment = jest.fn();
+    const onReturnToOverview = jest.fn();
 
     renderWithI18n(
       <ManagedEmailProgress
-        onRetryPayment={onRetryPayment}
+        onReturnToOverview={onReturnToOverview}
         operation={operation('PAYMENT_FAILED')}
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /^Retry payment/ }));
-    expect(onRetryPayment).not.toHaveBeenCalled();
     expect(
-      screen.getByText(
-        'This retries the saved payment for this managed mailbox order.',
-      ),
-    ).toBeVisible();
-    await user.click(screen.getByTestId('confirmation-modal-confirm-button'));
-    expect(onRetryPayment).toHaveBeenCalledTimes(1);
+      screen.queryByRole('button', { name: /^Retry payment/ }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: /^Return to mailbox overview/ }),
+    );
+    expect(onReturnToOverview).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -357,7 +391,7 @@ describe('managed email acquisition flow components', () => {
   ])('renders durable %s setup progress', (state, label) => {
     renderWithI18n(
       <ManagedEmailProgress
-        onRetryPayment={jest.fn()}
+        onReturnToOverview={jest.fn()}
         operation={operation('PAID', state)}
       />,
     );

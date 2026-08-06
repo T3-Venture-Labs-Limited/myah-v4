@@ -52,6 +52,16 @@ export type MetronomeCurrentContract = {
   uniquenessKey: string | null;
 };
 
+export type MetronomeBillingConfiguration = Readonly<{
+  billingProviderType: 'stripe';
+  stripeCollectionMethod:
+    | 'charge_automatically'
+    | 'send_invoice'
+    | 'auto_charge_payment_intent'
+    | 'manually_charge_payment_intent';
+  stripeCustomerId: string;
+}>;
+
 export type MetronomeRateCard = {
   aliases: Array<{
     endingBefore: string | null;
@@ -60,6 +70,35 @@ export type MetronomeRateCard = {
   }>;
   fiatCreditType: { id: string; name: string } | null;
   id: string;
+};
+export type MetronomeRateCardProducts = {
+  rateCardId: string;
+  productIdsByTag: Record<string, string>;
+};
+
+export type MetronomeRateCardLineItem = Readonly<{
+  billingFrequency: 'ANNUAL' | 'MONTHLY';
+  productId: string;
+  startingAt: string;
+  unitPriceCents: number;
+}>;
+
+type MetronomeRateCardRate = {
+  billing_frequency?: 'MONTHLY' | 'QUARTERLY' | 'ANNUAL' | 'WEEKLY';
+  ending_before?: string;
+  product_id: string;
+  product_tags: string[];
+  rate: {
+    price?: number;
+    rate_type:
+      | 'FLAT'
+      | 'PERCENTAGE'
+      | 'SUBSCRIPTION'
+      | 'CUSTOM'
+      | 'TIERED'
+      | 'TIERED_PERCENTAGE';
+  };
+  starting_at: string;
 };
 
 export type MetronomeCustomer = {
@@ -130,7 +169,10 @@ export type MetronomeCustomerCreditReceipt = {
 export class MetronomeClientService {
   private client: Metronome | undefined;
 
-  constructor(private readonly twentyConfigService: TwentyConfigService) {}
+  constructor(
+    private readonly twentyConfigService: TwentyConfigService,
+    private readonly baseURL = 'https://api.metronome.com',
+  ) {}
 
   async findCustomerByIngestAlias(alias: string): Promise<MetronomeCustomer[]> {
     const client = this.getClient();
@@ -187,6 +229,68 @@ export class MetronomeClientService {
     } catch (error) {
       throw this.toWriteException(error);
     }
+  }
+  async getBillingConfiguration(
+    customerId: string,
+  ): Promise<MetronomeBillingConfiguration | null> {
+    const client = this.getClient();
+
+    try {
+      const response = await client.v1.customers.billingConfig.retrieve({
+        billing_provider_type: 'stripe',
+        customer_id: customerId,
+      });
+      const stripeCustomerId = response.data.billing_provider_customer_id;
+      const stripeCollectionMethod = response.data.stripe_collection_method;
+
+      if (
+        typeof stripeCustomerId !== 'string' ||
+        stripeCustomerId.trim() === '' ||
+        stripeCollectionMethod === undefined
+      ) {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.REQUEST_FAILED,
+        );
+      }
+
+      return {
+        billingProviderType: 'stripe',
+        stripeCollectionMethod,
+        stripeCustomerId,
+      };
+    } catch (error) {
+      if (this.getErrorStatus(error) === 404) {
+        return null;
+      }
+
+      if (error instanceof MetronomeClientException) {
+        throw error;
+      }
+
+      throw new MetronomeClientException(
+        this.getErrorStatus(error) === 429
+          ? MetronomeClientExceptionCode.RATE_LIMITED
+          : MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+  }
+
+  async createBillingConfiguration(input: {
+    customerId: string;
+    billingProviderType: 'stripe';
+    stripeCustomerId: string;
+    stripeCollectionMethod: 'charge_automatically';
+  }): Promise<void> {
+    const client = this.getClient();
+
+    await this.execute(() =>
+      client.v1.customers.billingConfig.create({
+        customer_id: input.customerId,
+        billing_provider_customer_id: input.stripeCustomerId,
+        billing_provider_type: input.billingProviderType,
+        stripe_collection_method: input.stripeCollectionMethod,
+      }),
+    );
   }
 
   async createContract({
@@ -616,6 +720,179 @@ export class MetronomeClientService {
             },
       id: rateCard.id,
     };
+  }
+
+  async resolveRateCardProducts({
+    alias,
+    at,
+    productTags,
+  }: {
+    alias: string;
+    at: Date;
+    productTags: string[];
+  }): Promise<MetronomeRateCardProducts> {
+    const client = this.getClient();
+    const cards: Array<{
+      id: string;
+      aliases?: Array<{
+        name: string;
+        starting_at?: string | null;
+        ending_before?: string | null;
+        startingAt?: string | null;
+        endingBefore?: string | null;
+      }>;
+    }> = [];
+    let nextPage: string | undefined;
+
+    do {
+      const response = await this.execute(() =>
+        client.v1.contracts.rateCards.list({
+          ...(nextPage === undefined ? {} : { next_page: nextPage }),
+        }),
+      );
+
+      cards.push(...(response.data as typeof cards));
+      nextPage = response.next_page ?? undefined;
+    } while (nextPage !== undefined);
+
+    const active = cards.filter((card) =>
+      (card.aliases ?? []).some((entry) =>
+        this.isActiveAt(
+          entry.starting_at ?? entry.startingAt,
+          entry.ending_before ?? entry.endingBefore,
+          at.getTime(),
+        ),
+      ),
+    );
+    const matchingActive = active.filter((card) =>
+      (card.aliases ?? []).some(
+        (entry) =>
+          entry.name === alias &&
+          this.isActiveAt(
+            entry.starting_at ?? entry.startingAt,
+            entry.ending_before ?? entry.endingBefore,
+            at.getTime(),
+          ),
+      ),
+    );
+
+    if (matchingActive.length !== 1) {
+      throw new Error(
+        `Expected exactly one active rate card for alias ${alias}`,
+      );
+    }
+
+    const rateCardId = matchingActive[0].id;
+    const rates = await this.listRateCardRates(rateCardId, at.toISOString());
+    const productIdsByTag: Record<string, string> = {};
+
+    for (const tag of productTags) {
+      const matches = [
+        ...new Set(
+          rates
+            .filter(
+              (rate) =>
+                rate.product_tags.includes(tag) &&
+                this.isActiveAt(
+                  rate.starting_at,
+                  rate.ending_before,
+                  at.getTime(),
+                ),
+            )
+            .map((rate) => rate.product_id),
+        ),
+      ];
+
+      if (matches.length !== 1) {
+        throw new Error(`Expected exactly one product for tag ${tag}`);
+      }
+
+      productIdsByTag[tag] = matches[0];
+    }
+
+    return { rateCardId, productIdsByTag };
+  }
+
+  async assertRateCardLineItems({
+    lines,
+    rateCardId,
+  }: {
+    lines: readonly MetronomeRateCardLineItem[];
+    rateCardId: string;
+  }): Promise<void> {
+    const startingTimes = lines.map(({ startingAt }) => Date.parse(startingAt));
+
+    if (
+      rateCardId.trim() === '' ||
+      lines.length === 0 ||
+      startingTimes.some((time) => !Number.isFinite(time))
+    ) {
+      throw new Error('Metronome rate card line proof is invalid');
+    }
+
+    const startingAt = new Date(Math.min(...startingTimes)).toISOString();
+    const rates = await this.listRateCardRates(rateCardId, startingAt);
+
+    for (const line of lines) {
+      const lineTime = Date.parse(line.startingAt);
+      const matchingRates = rates.filter(
+        (rate) =>
+          rate.product_id === line.productId &&
+          rate.billing_frequency === line.billingFrequency &&
+          this.isActiveAt(rate.starting_at, rate.ending_before, lineTime),
+      );
+
+      if (
+        matchingRates.length !== 1 ||
+        matchingRates[0].rate.rate_type !== 'FLAT' ||
+        matchingRates[0].rate.price !== line.unitPriceCents ||
+        !Number.isSafeInteger(line.unitPriceCents) ||
+        line.unitPriceCents <= 0
+      ) {
+        throw new Error('Metronome rate card line does not match the quote');
+      }
+    }
+  }
+
+  private async listRateCardRates(
+    rateCardId: string,
+    startingAt: string,
+  ): Promise<MetronomeRateCardRate[]> {
+    const client = this.getClient();
+    const rates: MetronomeRateCardRate[] = [];
+    let nextPage: string | undefined;
+
+    do {
+      const response = await this.execute(() =>
+        client.v1.contracts.rateCards.retrieveRateSchedule({
+          rate_card_id: rateCardId,
+          starting_at: startingAt,
+          ...(nextPage === undefined ? {} : { next_page: nextPage }),
+        }),
+      );
+
+      rates.push(...response.data);
+      nextPage = response.next_page ?? undefined;
+    } while (nextPage !== undefined);
+
+    return rates;
+  }
+
+  private isActiveAt(
+    startingAt: string | null | undefined,
+    endingBefore: string | null | undefined,
+    at: number,
+  ): boolean {
+    const starts =
+      startingAt === null || startingAt === undefined
+        ? Number.NEGATIVE_INFINITY
+        : Date.parse(startingAt);
+    const ends =
+      endingBefore === null || endingBefore === undefined
+        ? Number.POSITIVE_INFINITY
+        : Date.parse(endingBefore);
+
+    return Number.isFinite(at) && starts <= at && at < ends;
   }
 
   async getBillableMetricIds(productIds: string[]): Promise<string[]> {
@@ -1064,7 +1341,10 @@ export class MetronomeClientService {
   }
 
   private getClient(): Metronome {
-    if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
+    if (
+      !this.twentyConfigService.get('METRONOME_ENABLED') &&
+      !this.twentyConfigService.get('MANAGED_EMAIL_ENABLED')
+    ) {
       throw new MetronomeClientException(
         MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
       );
@@ -1076,6 +1356,7 @@ export class MetronomeClientService {
 
     try {
       this.client = new Metronome({
+        baseURL: this.baseURL,
         bearerToken: this.twentyConfigService.get('METRONOME_API_KEY'),
       });
     } catch {

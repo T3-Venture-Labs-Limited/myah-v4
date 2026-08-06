@@ -70,7 +70,10 @@ const detailFixture = {
   },
 };
 
-const createClient = (enabled = true) => {
+const createClient = (
+  enabled = true,
+  mode: 'PRODUCTION' | 'SANDBOX' = 'PRODUCTION',
+) => {
   const httpClient = {
     get: jest.fn(),
     post: jest.fn(),
@@ -79,12 +82,15 @@ const createClient = (enabled = true) => {
   } as unknown as jest.Mocked<AxiosInstance>;
   const secureHttpClientService = {
     getHttpClient: jest.fn(() => httpClient),
-  } as Pick<SecureHttpClientService, 'getHttpClient'>;
+    getInternalHttpClient: jest.fn(() => httpClient),
+  } as Pick<SecureHttpClientService, 'getHttpClient' | 'getInternalHttpClient'>;
   const twentyConfigService = {
     get: jest.fn((key: keyof ConfigVariables) => {
       switch (key) {
         case 'MANAGED_EMAIL_ENABLED':
           return enabled;
+        case 'MANAGED_EMAIL_EXECUTION_MODE':
+          return mode;
         case 'WARMUP_INBOX_API_BASE_URL':
           return 'https://api.warmup.test';
         case 'WARMUP_INBOX_API_KEY':
@@ -266,6 +272,53 @@ describe('WarmupInboxClient', () => {
     expect(secureHttpClientService.getHttpClient).toHaveBeenCalledWith(
       expect.objectContaining({ retries: 0, timeout: 30_000 }),
     );
+  });
+
+  it('forwards loopback GreenMail transport only in sandbox mode', async () => {
+    const { client, httpClient, secureHttpClientService } = createClient(
+      true,
+      'SANDBOX',
+    );
+    httpClient.post.mockResolvedValue({
+      status: 201,
+      data: { inbox_id: 'inbox-sandbox' },
+      headers: {},
+    });
+
+    await expect(
+      client.createAdvanced({
+        address: 'ada@sender.com',
+        senderFirstName: 'Ada',
+        senderLastName: 'Lovelace',
+        credential: {
+          username: 'ada@sender.com',
+          appPassword: mailboxSecret,
+          smtp: { host: '127.0.0.1', port: 3025, secure: false },
+          imap: { host: '127.0.0.1', port: 3143, secure: false },
+        },
+        policy,
+      }),
+    ).resolves.toEqual({ id: 'inbox-sandbox', replayed: false });
+
+    expect(httpClient.post).toHaveBeenCalledWith(
+      '/v1/inboxes/advanced',
+      expect.objectContaining({
+        smtp: expect.objectContaining({
+          host: '127.0.0.1',
+          port: 3025,
+          tls: false,
+        }),
+        imap: expect.objectContaining({
+          host: '127.0.0.1',
+          port: 3143,
+          tls: false,
+        }),
+      }),
+    );
+    expect(secureHttpClientService.getInternalHttpClient).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(secureHttpClientService.getHttpClient).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -43,7 +43,10 @@ const mailboxFixture = {
   billing_cycle: 'MONTHLY',
 };
 
-const createClient = (enabled = true) => {
+const createClient = (
+  enabled = true,
+  mode: 'PRODUCTION' | 'SANDBOX' = 'PRODUCTION',
+) => {
   const httpClient = {
     get: jest.fn(),
     post: jest.fn(),
@@ -52,12 +55,15 @@ const createClient = (enabled = true) => {
   } as unknown as jest.Mocked<AxiosInstance>;
   const secureHttpClientService = {
     getHttpClient: jest.fn(() => httpClient),
-  } as Pick<SecureHttpClientService, 'getHttpClient'>;
+    getInternalHttpClient: jest.fn(() => httpClient),
+  } as Pick<SecureHttpClientService, 'getHttpClient' | 'getInternalHttpClient'>;
   const twentyConfigService = {
     get: jest.fn((key: keyof ConfigVariables) => {
       switch (key) {
         case 'MANAGED_EMAIL_ENABLED':
           return enabled;
+        case 'MANAGED_EMAIL_EXECUTION_MODE':
+          return mode;
         case 'ICEMAIL_API_BASE_URL':
           return 'https://app.icemail.test/api/v1';
         case 'ICEMAIL_API_KEY':
@@ -102,6 +108,28 @@ describe('IcemailClient', () => {
       items: [expect.objectContaining({ id: 'domain-1' })],
     });
     expect(secureHttpClientService.getHttpClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the trusted internal client only for the loopback sandbox', async () => {
+    const { client, httpClient, secureHttpClientService } = createClient(
+      true,
+      'SANDBOX',
+    );
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        success: true,
+        data: { domains: [], total_count: 0, page: 1, limit: 50 },
+      },
+      headers: {},
+    });
+
+    await expect(client.listDomains()).resolves.toMatchObject({ items: [] });
+    expect(secureHttpClientService.getInternalHttpClient).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(secureHttpClientService.getHttpClient).not.toHaveBeenCalled();
   });
 
   it('uses the server-side key, bounded first-page read, and read-only retries', async () => {
@@ -355,7 +383,49 @@ describe('IcemailClient', () => {
     });
   });
 
-  it.each(['https://sender.com', 'sub.sender.com', 'sender.invalid', ''])(
+  it('accepts test-only domains for sandbox availability checks', async () => {
+    const { client, httpClient } = createClient(true, 'SANDBOX');
+
+    httpClient.get.mockResolvedValue({
+      status: 200,
+      data: {
+        success: true,
+        data: {
+          current_domain: {
+            domain: 'sender.test',
+            available: true,
+            pricing: {
+              tld: 'test',
+              price: 1.2,
+              currency: 'USD',
+              duration: 1,
+              duration_type: 'YEAR',
+            },
+          },
+          recommended_domains: [],
+        },
+      },
+      headers: {},
+    });
+
+    await expect(
+      client.checkDomainAvailability('Sender.test'),
+    ).resolves.toMatchObject({
+      domain: 'sender.test',
+      available: true,
+    });
+    expect(httpClient.get).toHaveBeenCalledWith('/domain/available', {
+      params: { domain: 'sender.test', page: 1 },
+    });
+  });
+
+  it.each([
+    'https://sender.com',
+    'sub.sender.com',
+    'sender.invalid',
+    'sender.test',
+    '',
+  ])(
     'rejects invalid availability domain %p before the provider call',
     async (domain) => {
       const { client, httpClient } = createClient();
@@ -460,6 +530,61 @@ describe('IcemailClient', () => {
     expect(httpClient.get).toHaveBeenNthCalledWith(
       2,
       '/mailbox/mailbox-1/app-password',
+    );
+  });
+
+  it('requires and preserves loopback GreenMail transport in sandbox mode', async () => {
+    const { client, httpClient } = createClient(true, 'SANDBOX');
+
+    httpClient.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { success: true, data: mailboxFixture },
+        headers: {},
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          success: true,
+          data: {
+            app_password: mailboxSecret,
+            forwarding: false,
+            smtp: { host: '127.0.0.1', port: 3025, tls: false },
+            imap: { host: '127.0.0.1', port: 3143, tls: false },
+          },
+        },
+        headers: {},
+      });
+
+    await expect(client.getMailboxCredential('mailbox-1')).resolves.toEqual({
+      username: 'ada@sender.com',
+      appPassword: mailboxSecret,
+      smtp: { host: '127.0.0.1', port: 3025, secure: false },
+      imap: { host: '127.0.0.1', port: 3143, secure: false },
+    });
+  });
+
+  it('rejects a sandbox credential response without GreenMail transport', async () => {
+    const { client, httpClient } = createClient(true, 'SANDBOX');
+
+    httpClient.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { success: true, data: mailboxFixture },
+        headers: {},
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          success: true,
+          data: { app_password: mailboxSecret, forwarding: false },
+        },
+        headers: {},
+      });
+
+    await expectCode(
+      client.getMailboxCredential('mailbox-1'),
+      IcemailExceptionCode.MALFORMED_RESPONSE,
     );
   });
 

@@ -184,42 +184,38 @@ describe('ManagedEmailProposalService', () => {
   it('builds a prewarmed proposal from server-resolved whole inventory', async () => {
     const { icemailClient, service } = createService();
 
-    icemailClient.listPrewarmedBundles.mockResolvedValue({
-      items: [
-        {
-          domain: 'creator-partners.co',
-          domainPriceCents: 1000,
-          inventoryId: 'inventory-1',
-          mailboxCount: 2,
-          mailboxPriceCents: 250,
-          mailboxes: [
-            {
-              address: 'maya@creator-partners.co',
-              firstName: 'Maya',
-              lastName: 'Chen',
-              master: false,
-              provider: 'GOOGLE',
-            },
-            {
-              address: 'sam@creator-partners.co',
-              firstName: 'Sam',
-              lastName: 'Lee',
-              master: false,
-              provider: 'GOOGLE',
-            },
-          ],
-        },
-      ],
-    });
+    icemailClient.listPrewarmedBundles
+      .mockResolvedValueOnce({
+        items: [
+          {
+            domain: 'creator-partners.co',
+            domainPriceCents: 1000,
+            inventoryId: 'inventory-1',
+            mailboxCount: 2,
+            mailboxPriceCents: 250,
+            mailboxes: [
+              {
+                address: 'maya@creator-partners.co',
+                firstName: 'Maya',
+                lastName: 'Chen',
+                master: false,
+                provider: 'GOOGLE',
+              },
+              {
+                address: 'sam@creator-partners.co',
+                firstName: 'Sam',
+                lastName: 'Lee',
+                master: false,
+                provider: 'GOOGLE',
+              },
+            ],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ items: [] });
 
     const proposal = await service.createPrewarmedProposal(
-      {
-        inventoryIds: ['inventory-1'],
-        personas: [
-          { ...personas[0], localPartPreference: 'maya' },
-          personas[2],
-        ],
-      },
+      { inventoryIds: ['inventory-1'] },
       { actorWorkspaceMemberId, workspaceId, workspaceSlug: 'creator' },
     );
 
@@ -235,11 +231,13 @@ describe('ManagedEmailProposalService', () => {
         mailboxes: [
           expect.objectContaining({
             address: 'maya@creator-partners.co',
-            signature: 'Maya — Creator Partnerships',
+            roleTitle: null,
+            signature: 'Maya Chen',
           }),
           expect.objectContaining({
             address: 'sam@creator-partners.co',
-            signature: 'Sam',
+            roleTitle: null,
+            signature: 'Sam Lee',
           }),
         ],
       }),

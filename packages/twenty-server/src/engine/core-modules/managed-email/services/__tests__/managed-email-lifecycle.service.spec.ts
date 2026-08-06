@@ -914,6 +914,100 @@ describe('ManagedEmailLifecycleService', () => {
     );
   });
 
+  it('marks a domain inactive only after Icemail confirms it is absent', async () => {
+    const test = createHarness({
+      domain: {
+        cancelAtPeriodEnd: true,
+        nextPeriodBoundaryAt: annualBoundary,
+        pendingLifecycleAction:
+          ManagedEmailLifecycleAction.DISABLE_DOMAIN_RENEWAL,
+        pendingLifecycleKey: 'disable-domain-1',
+        renewalEnabled: false,
+      },
+      now: annualBoundary,
+    });
+    test.icemailClient.getDomain.mockResolvedValueOnce(null);
+
+    await test.service.applyPeriodBoundary({
+      resourceId: domainId,
+      resourceType: 'domain',
+      workspaceId,
+    });
+
+    expect(test.icemailClient.getDomain).toHaveBeenCalledWith(
+      'icemail-domain-1',
+    );
+    expect(test.domains[0]).toMatchObject({
+      infrastructureState: ManagedEmailInfrastructureState.INACTIVE,
+      nextPeriodBoundaryAt: null,
+      pendingLifecycleAction: null,
+      safeFailureCode: null,
+    });
+  });
+
+  it('fails closed when Icemail domain termination is unverified', async () => {
+    const test = createHarness({
+      domain: {
+        cancelAtPeriodEnd: true,
+        nextPeriodBoundaryAt: annualBoundary,
+        pendingLifecycleAction:
+          ManagedEmailLifecycleAction.DISABLE_DOMAIN_RENEWAL,
+        pendingLifecycleKey: 'disable-domain-1',
+        renewalEnabled: false,
+      },
+      now: annualBoundary,
+    });
+
+    await test.service.applyPeriodBoundary({
+      resourceId: domainId,
+      resourceType: 'domain',
+      workspaceId,
+    });
+
+    expect(test.domains[0]).toMatchObject({
+      infrastructureState:
+        ManagedEmailInfrastructureState.RECONCILIATION_REQUIRED,
+      pendingLifecycleAction:
+        ManagedEmailLifecycleAction.DISABLE_DOMAIN_RENEWAL,
+      safeFailureCode: 'ICEMAIL_DOMAIN_TERMINATION_UNVERIFIED',
+    });
+    expect(test.domains[0].nextPeriodBoundaryAt).toBeInstanceOf(Date);
+  });
+
+  it('keeps domain termination pending when the Icemail read fails', async () => {
+    const test = createHarness({
+      domain: {
+        cancelAtPeriodEnd: true,
+        nextPeriodBoundaryAt: annualBoundary,
+        pendingLifecycleAction:
+          ManagedEmailLifecycleAction.DISABLE_DOMAIN_RENEWAL,
+        pendingLifecycleKey: 'disable-domain-1',
+        renewalEnabled: false,
+      },
+      now: annualBoundary,
+    });
+    test.icemailClient.getDomain.mockRejectedValueOnce(
+      new Error('provider unavailable'),
+    );
+
+    await expect(
+      test.service.applyPeriodBoundary({
+        resourceId: domainId,
+        resourceType: 'domain',
+        workspaceId,
+      }),
+    ).rejects.toThrow('provider unavailable');
+
+    expect(test.domains[0]).toMatchObject({
+      infrastructureState:
+        ManagedEmailInfrastructureState.RECONCILIATION_REQUIRED,
+      pendingLifecycleAction:
+        ManagedEmailLifecycleAction.DISABLE_DOMAIN_RENEWAL,
+      safeFailureCode: 'ICEMAIL_DOMAIN_READ_FAILED',
+    });
+    expect(test.domains[0].nextPeriodBoundaryAt).toBeInstanceOf(Date);
+  });
+
   it('applies a warmup period boundary idempotently', async () => {
     const test = createHarness({
       mailbox: {

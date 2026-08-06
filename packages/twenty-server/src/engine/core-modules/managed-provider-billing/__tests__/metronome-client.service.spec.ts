@@ -27,6 +27,8 @@ describe('MetronomeClientService', () => {
         switch (key) {
           case 'METRONOME_ENABLED':
             return false;
+          case 'MANAGED_EMAIL_ENABLED':
+            return false;
           case 'METRONOME_API_KEY':
           case 'METRONOME_RATE_CARD_ALIAS':
             return '';
@@ -49,6 +51,32 @@ describe('MetronomeClientService', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('constructs the SDK with the configured Metronome environment root', async () => {
+    const list = jest.fn().mockResolvedValue({ data: [] });
+    metronomeConstructor.mockImplementation(
+      () => ({ v1: { customers: { list } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService(
+      {
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return false;
+          if (key === 'MANAGED_EMAIL_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService,
+      'https://metronome.example',
+    );
+
+    await expect(
+      service.findCustomerByIngestAlias('myah-workspace:workspace-id'),
+    ).resolves.toEqual([]);
+    expect(metronomeConstructor).toHaveBeenCalledWith({
+      baseURL: 'https://metronome.example',
+      bearerToken: 'metronome-api-key',
+    });
   });
 
   it.each([
@@ -241,6 +269,7 @@ describe('MetronomeClientService', () => {
       },
     ]);
     expect(metronomeConstructor).toHaveBeenCalledWith({
+      baseURL: 'https://api.metronome.com',
       bearerToken: 'metronome-api-key',
     });
     expect(listCustomers).toHaveBeenCalledWith({
@@ -1314,6 +1343,73 @@ describe('MetronomeClientService', () => {
     );
   });
 
+  it('retrieves and normalizes the exact Stripe billing configuration', async () => {
+    const retrieveBillingConfig = jest.fn().mockResolvedValue({
+      data: {
+        billing_provider_customer_id: 'cus_123',
+        stripe_collection_method: 'charge_automatically',
+      },
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: {
+              billingConfig: { retrieve: retrieveBillingConfig },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.getBillingConfiguration('customer-id'),
+    ).resolves.toEqual({
+      billingProviderType: 'stripe',
+      stripeCollectionMethod: 'charge_automatically',
+      stripeCustomerId: 'cus_123',
+    });
+    expect(retrieveBillingConfig).toHaveBeenCalledWith({
+      billing_provider_type: 'stripe',
+      customer_id: 'customer-id',
+    });
+  });
+
+  it('returns no billing configuration only when Metronome reports not found', async () => {
+    const retrieveBillingConfig = jest
+      .fn()
+      .mockRejectedValue(
+        Object.assign(new Error('not found'), { status: 404 }),
+      );
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: {
+              billingConfig: { retrieve: retrieveBillingConfig },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.getBillingConfiguration('customer-id'),
+    ).resolves.toBeNull();
+  });
+
   it('creates a managed-email contract with Stripe direct delivery without a configuration ID', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-16T12:37:42.123Z'));
     const createContract = jest.fn().mockResolvedValue({
@@ -2176,6 +2272,290 @@ describe('MetronomeClientService', () => {
         code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
       });
       expect(createContract).toHaveBeenCalledTimes(1);
+    },
+  );
+});
+
+describe('MetronomeClientService rate-card product resolution', () => {
+  const metronomeConstructor = jest.mocked(Metronome);
+  const at = new Date('2026-08-06T12:00:00.000Z');
+  const makeConfig = () =>
+    ({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'redacted-in-test';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    }) as unknown as TwentyConfigService;
+
+  const configureSdk = ({
+    rateCardPages,
+    schedulePages,
+  }: {
+    rateCardPages: Array<{
+      data: unknown[];
+      next_page?: string | null;
+    }>;
+    schedulePages: Array<{
+      data: unknown[];
+      next_page?: string | null;
+    }>;
+  }) => {
+    const list = jest
+      .fn()
+      .mockImplementation(async () => rateCardPages.shift() ?? { data: [] });
+    const retrieveRateSchedule = jest
+      .fn()
+      .mockImplementation(
+        async () => schedulePages.shift() ?? { data: [], next_page: null },
+      );
+
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            contracts: {
+              rateCards: { list, retrieveRateSchedule },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+
+    return { list, retrieveRateSchedule };
+  };
+
+  const activeCard = {
+    id: 'active-card',
+    aliases: [
+      {
+        name: 'sandbox-managed-email',
+        starting_at: '2026-08-01T00:00:00.000Z',
+        ending_before: null,
+      },
+    ],
+  };
+  const domainRate = {
+    billing_frequency: 'ANNUAL',
+    ending_before: '2027-08-06T12:00:00.000Z',
+    entitled: true,
+    product_custom_fields: {},
+    product_id: 'domain-product',
+    product_name: 'Managed sending domain',
+    product_tags: ['myah-managed-sending-domain-year'],
+    rate: { rate_type: 'FLAT', price: 1000 },
+    starting_at: '2026-08-01T00:00:00.000Z',
+  };
+  const mailboxRate = {
+    billing_frequency: 'MONTHLY',
+    ending_before: '2026-09-06T12:00:00.000Z',
+    entitled: true,
+    product_custom_fields: {},
+    product_id: 'mailbox-product',
+    product_name: 'Managed mailbox',
+    product_tags: ['myah-managed-mailbox-month'],
+    rate: { rate_type: 'FLAT', price: 500 },
+    starting_at: '2026-08-01T00:00:00.000Z',
+  };
+
+  it('paginates rate cards and schedules, then maps exact active product tags', async () => {
+    const { list, retrieveRateSchedule } = configureSdk({
+      rateCardPages: [
+        {
+          data: [
+            {
+              id: 'inactive-card',
+              aliases: [
+                {
+                  name: 'sandbox-managed-email',
+                  starting_at: '2026-01-01T00:00:00.000Z',
+                  ending_before: '2026-08-01T00:00:00.000Z',
+                },
+              ],
+            },
+          ],
+          next_page: 'page-2',
+        },
+        { data: [activeCard], next_page: null },
+      ],
+      schedulePages: [
+        { data: [domainRate], next_page: 'schedule-page-2' },
+        { data: [mailboxRate], next_page: null },
+      ],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: [
+          'myah-managed-sending-domain-year',
+          'myah-managed-mailbox-month',
+        ],
+      }),
+    ).resolves.toEqual({
+      rateCardId: 'active-card',
+      productIdsByTag: {
+        'myah-managed-sending-domain-year': 'domain-product',
+        'myah-managed-mailbox-month': 'mailbox-product',
+      },
+    });
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(retrieveRateSchedule).toHaveBeenNthCalledWith(1, {
+      rate_card_id: 'active-card',
+      starting_at: at.toISOString(),
+    });
+    expect(retrieveRateSchedule).toHaveBeenNthCalledWith(2, {
+      next_page: 'schedule-page-2',
+      rate_card_id: 'active-card',
+      starting_at: at.toISOString(),
+    });
+  });
+
+  it('proves exact active flat-rate line prices and billing frequencies', async () => {
+    const { retrieveRateSchedule } = configureSdk({
+      rateCardPages: [],
+      schedulePages: [{ data: [domainRate, mailboxRate], next_page: null }],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.assertRateCardLineItems({
+        lines: [
+          {
+            billingFrequency: 'ANNUAL',
+            productId: 'domain-product',
+            startingAt: at.toISOString(),
+            unitPriceCents: 1000,
+          },
+          {
+            billingFrequency: 'MONTHLY',
+            productId: 'mailbox-product',
+            startingAt: at.toISOString(),
+            unitPriceCents: 500,
+          },
+        ],
+        rateCardId: 'active-card',
+      }),
+    ).resolves.toBeUndefined();
+    expect(retrieveRateSchedule).toHaveBeenCalledWith({
+      rate_card_id: 'active-card',
+      starting_at: at.toISOString(),
+    });
+  });
+
+  it.each([
+    {
+      name: 'missing product',
+      rates: [domainRate],
+      line: {
+        billingFrequency: 'MONTHLY' as const,
+        productId: 'missing-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 500,
+      },
+    },
+    {
+      name: 'wrong billing frequency',
+      rates: [mailboxRate],
+      line: {
+        billingFrequency: 'ANNUAL' as const,
+        productId: 'mailbox-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 500,
+      },
+    },
+    {
+      name: 'wrong unit price',
+      rates: [mailboxRate],
+      line: {
+        billingFrequency: 'MONTHLY' as const,
+        productId: 'mailbox-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 501,
+      },
+    },
+    {
+      name: 'unsupported rate type',
+      rates: [
+        {
+          ...mailboxRate,
+          rate: { is_prorated: true, quantity: 1, rate_type: 'SUBSCRIPTION' },
+        },
+      ],
+      line: {
+        billingFrequency: 'MONTHLY' as const,
+        productId: 'mailbox-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 500,
+      },
+    },
+    {
+      name: 'duplicate matching rate',
+      rates: [mailboxRate, { ...mailboxRate }],
+      line: {
+        billingFrequency: 'MONTHLY' as const,
+        productId: 'mailbox-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 500,
+      },
+    },
+  ])('rejects $name before a subscription edit', async ({ line, rates }) => {
+    configureSdk({
+      rateCardPages: [],
+      schedulePages: [{ data: rates, next_page: null }],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.assertRateCardLineItems({
+        lines: [line],
+        rateCardId: 'active-card',
+      }),
+    ).rejects.toThrow(/rate card line/i);
+  });
+
+  it.each([
+    {
+      name: 'missing alias',
+      cards: [{ id: 'card', aliases: [] }],
+      rates: [mailboxRate],
+      expected: /rate card/i,
+    },
+    {
+      name: 'duplicate active aliases',
+      cards: [activeCard, { ...activeCard, id: 'other-active-card' }],
+      rates: [mailboxRate],
+      expected: /exactly one/i,
+    },
+    {
+      name: 'missing product tag',
+      cards: [activeCard],
+      rates: [],
+      expected: /product|tag/i,
+    },
+    {
+      name: 'duplicate product tag',
+      cards: [activeCard],
+      rates: [mailboxRate, { ...mailboxRate, product_id: 'other-product' }],
+      expected: /exactly one/i,
+    },
+  ])(
+    'rejects $name before returning a partial catalog',
+    async ({ cards, expected, rates }) => {
+      configureSdk({
+        rateCardPages: [{ data: cards, next_page: null }],
+        schedulePages: [{ data: rates, next_page: null }],
+      });
+      const service = new MetronomeClientService(makeConfig());
+
+      await expect(
+        service.resolveRateCardProducts({
+          alias: 'sandbox-managed-email',
+          at,
+          productTags: ['myah-managed-mailbox-month'],
+        }),
+      ).rejects.toThrow(expected);
     },
   );
 });

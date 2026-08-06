@@ -1,10 +1,15 @@
 import { useSnackBarOnQueryError } from '@/apollo/hooks/useSnackBarOnQueryError';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 import { ManagedEmailAcquisitionChooser } from '@/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser';
 import { ManagedEmailCreateFlow } from '@/settings/workspace/components/managed-email/ManagedEmailCreateFlow';
 import { ManagedEmailPrewarmedFlow } from '@/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow';
 import { ManagedEmailDetails } from '@/settings/workspace/components/managed-email/ManagedEmailDetails';
 import { ManagedEmailProgress } from '@/settings/workspace/components/managed-email/ManagedEmailProgress';
+import {
+  ManagedEmailPaymentSetup,
+  type ManagedEmailPaymentSetup as ManagedEmailPaymentSetupData,
+} from '@/settings/workspace/components/managed-email/ManagedEmailPaymentSetup';
 import { ManagedEmailReview } from '@/settings/workspace/components/managed-email/ManagedEmailReview';
 import { ManagedMailboxTable } from '@/settings/workspace/components/managed-email/ManagedMailboxTable';
 import {
@@ -13,21 +18,25 @@ import {
   CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE,
   PAUSE_MANAGED_EMAIL_WARMUP,
   RESUME_MANAGED_EMAIL_WARMUP,
-  RETRY_MANAGED_EMAIL_PAYMENT,
   SET_MANAGED_EMAIL_CAMPAIGN_CAP,
   STOP_MANAGED_EMAIL_MAILBOX,
+  COMPLETE_MANAGED_EMAIL_PAYMENT_METHOD,
+  CONFIRM_MANAGED_EMAIL_PREWARMED_PURCHASE,
+  PREPARE_MANAGED_EMAIL_PAYMENT_METHOD,
 } from '@/settings/workspace/graphql/managed-email/managedEmailMutations';
 import {
   GET_MANAGED_EMAIL_OPERATION,
   GET_MANAGED_EMAIL_OVERVIEW,
   GET_MANAGED_EMAIL_PREWARMED_BUNDLES,
   GET_MANAGED_EMAIL_PROPOSAL,
+  GET_MANAGED_EMAIL_PREWARMED_PROPOSAL,
   GET_MANAGED_EMAIL_QUOTE,
 } from '@/settings/workspace/graphql/managed-email/managedEmailQueries';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { useLingui } from '@lingui/react/macro';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { Status } from 'twenty-ui/data-display';
 import { Button } from 'twenty-ui/input';
@@ -47,9 +56,75 @@ import {
 } from '~/generated-metadata/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
-const OPERATION_STORAGE_KEY = 'managed-email-operation-id';
-const OPERATION_IDEMPOTENCY_STORAGE_KEY =
-  'managed-email-operation-idempotency-key';
+const PURCHASE_INTENT_STORAGE_KEY_PREFIX = 'managed-email-purchase-intent';
+
+type ManagedEmailAcquisitionMode = 'NEW_MANAGED' | 'PREWARMED_INVENTORY';
+
+type PersistedPurchaseIntent = ManagedEmailPurchaseInput & {
+  acquisitionMode: ManagedEmailAcquisitionMode;
+  operationId: string | null;
+};
+
+const purchaseIntentStorageKey = (workspaceId: string) =>
+  `${PURCHASE_INTENT_STORAGE_KEY_PREFIX}:${workspaceId}`;
+
+const readPersistedPurchaseIntent = (
+  workspaceId: string,
+): PersistedPurchaseIntent | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const storageKey = purchaseIntentStorageKey(workspaceId);
+  const serialized = window.localStorage.getItem(storageKey);
+  if (serialized === null) {
+    return null;
+  }
+
+  try {
+    const value = JSON.parse(serialized) as Record<string, unknown>;
+    const isNonEmptyString = (candidate: unknown): candidate is string =>
+      typeof candidate === 'string' && candidate.trim() !== '';
+
+    if (
+      (value.acquisitionMode !== 'NEW_MANAGED' &&
+        value.acquisitionMode !== 'PREWARMED_INVENTORY') ||
+      !isNonEmptyString(value.idempotencyKey) ||
+      (value.operationId !== null && !isNonEmptyString(value.operationId)) ||
+      !isNonEmptyString(value.quoteFingerprint) ||
+      !isNonEmptyString(value.quoteId) ||
+      !isNonEmptyString(value.quoteVersion)
+    ) {
+      throw new Error('Invalid managed email purchase intent');
+    }
+
+    return {
+      acquisitionMode: value.acquisitionMode,
+      idempotencyKey: value.idempotencyKey,
+      operationId: value.operationId,
+      quoteFingerprint: value.quoteFingerprint,
+      quoteId: value.quoteId,
+      quoteVersion: value.quoteVersion,
+    };
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    return null;
+  }
+};
+
+const storePurchaseIntent = (
+  workspaceId: string,
+  intent: PersistedPurchaseIntent,
+) => {
+  window.localStorage.setItem(
+    purchaseIntentStorageKey(workspaceId),
+    JSON.stringify(intent),
+  );
+};
+
+const removeStoredPurchaseIntent = (workspaceId: string) => {
+  window.localStorage.removeItem(purchaseIntentStorageKey(workspaceId));
+};
 
 type OverviewQueryData = {
   managedEmailOverview: ManagedEmailOverviewData;
@@ -61,8 +136,31 @@ type BundlesQueryData = {
   managedEmailPrewarmedBundles: ManagedEmailBundle[];
 };
 
+type PaymentSetupData = {
+  prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetupData;
+};
+
+type CompletePaymentMethodData = {
+  completeManagedEmailPaymentMethod: {
+    ready: boolean;
+  };
+};
+
+type CompletePaymentMethodVariables = {
+  input: {
+    setupIntentId: string;
+  };
+};
+
+type PrewarmedProposalInput = {
+  bundleId: string;
+};
 type ProposalQueryData = {
   managedEmailProposal: ManagedEmailProposal;
+};
+
+type PrewarmedProposalQueryData = {
+  managedEmailPrewarmedProposal: ManagedEmailProposal;
 };
 
 type QuoteQueryData = {
@@ -74,7 +172,11 @@ type OperationQueryData = {
 };
 
 type ConfirmPurchaseData = {
-  confirmManagedEmailOrdinaryPurchase: {
+  confirmManagedEmailOrdinaryPurchase?: {
+    accepted: boolean;
+    operationId: string;
+  };
+  confirmManagedEmailPrewarmedPurchase?: {
     accepted: boolean;
     operationId: string;
   };
@@ -83,7 +185,6 @@ type ConfirmPurchaseData = {
 type ConfirmPurchaseVariables = {
   input: ManagedEmailPurchaseInput;
 };
-
 type AcquisitionFlow =
   | 'OVERVIEW'
   | 'CHOOSER'
@@ -92,39 +193,55 @@ type AcquisitionFlow =
   | 'PREWARMED_UNAVAILABLE'
   | 'ORDINARY'
   | 'REVIEW'
+  | 'PAYMENT'
   | 'PROGRESS';
 
-export const ManagedEmailOverview = () => {
+const ManagedEmailOverviewForWorkspace = ({
+  workspaceId,
+}: {
+  workspaceId: string;
+}) => {
   const { t } = useLingui();
   const navigate = useNavigateSettings();
   const { enqueueErrorSnackBar } = useSnackBar();
   const { [PermissionFlagType.BILLING]: canPurchase } = usePermissionFlagMap();
 
-  const restoredOperationId =
-    typeof window === 'undefined'
-      ? null
-      : window.localStorage.getItem(OPERATION_STORAGE_KEY);
-  const restoredConfirmationIdempotencyKey =
-    restoredOperationId === null
-      ? null
-      : window.localStorage.getItem(OPERATION_IDEMPOTENCY_STORAGE_KEY);
+  const [purchaseIntent, setPurchaseIntent] =
+    useState<PersistedPurchaseIntent | null>(() =>
+      readPersistedPurchaseIntent(workspaceId),
+    );
+  const shouldRecoverPurchaseIntent = useRef(purchaseIntent !== null);
+  const purchaseRecoveryAttempted = useRef(false);
+  const [purchaseRecoveryFailed, setPurchaseRecoveryFailed] = useState(false);
   const [operationId, setOperationId] = useState<string | null>(
-    restoredOperationId,
+    purchaseIntent?.operationId ?? null,
   );
   const [flow, setFlow] = useState<AcquisitionFlow>(
-    restoredOperationId ? 'PROGRESS' : 'OVERVIEW',
+    purchaseIntent ? 'PROGRESS' : 'OVERVIEW',
   );
   const [bundles, setBundles] = useState<ManagedEmailBundle[]>([]);
   const [proposal, setProposal] = useState<ManagedEmailProposal | null>(null);
   const [quote, setQuote] = useState<ManagedEmailQuote | null>(null);
   const [confirmationIdempotencyKey, setConfirmationIdempotencyKey] = useState<
     string | null
-  >(restoredConfirmationIdempotencyKey);
+  >(purchaseIntent?.idempotencyKey ?? null);
+  const [acquisitionMode, setAcquisitionMode] =
+    useState<ManagedEmailAcquisitionMode>(
+      purchaseIntent?.acquisitionMode ?? 'NEW_MANAGED',
+    );
+  const [paymentSetup, setPaymentSetup] =
+    useState<ManagedEmailPaymentSetupData | null>(null);
 
-  const { data, loading, error, refetch } = useQuery<OverviewQueryData>(
-    GET_MANAGED_EMAIL_OVERVIEW,
-    { skip: canPurchase !== true },
-  );
+  const {
+    data,
+    loading,
+    error,
+    refetch,
+    stopPolling: stopOverviewPolling,
+  } = useQuery<OverviewQueryData>(GET_MANAGED_EMAIL_OVERVIEW, {
+    pollInterval: operationId ? 5_000 : 0,
+    skip: canPurchase !== true,
+  });
   useSnackBarOnQueryError(error);
 
   const [loadBundles] = useLazyQuery<BundlesQueryData>(
@@ -138,11 +255,25 @@ export const ManagedEmailOverview = () => {
   const [loadQuote] = useLazyQuery<QuoteQueryData>(GET_MANAGED_EMAIL_QUOTE, {
     fetchPolicy: 'network-only',
   });
+  const [loadPrewarmedProposal] = useLazyQuery<PrewarmedProposalQueryData>(
+    GET_MANAGED_EMAIL_PREWARMED_PROPOSAL,
+    { fetchPolicy: 'network-only' },
+  );
   const [confirmPurchase, { loading: isConfirming }] = useMutation<
     ConfirmPurchaseData,
     ConfirmPurchaseVariables
   >(CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE);
-  const [retryPayment] = useMutation(RETRY_MANAGED_EMAIL_PAYMENT);
+  const [confirmPrewarmedPurchase, { loading: isConfirmingPrewarmed }] =
+    useMutation<ConfirmPurchaseData, ConfirmPurchaseVariables>(
+      CONFIRM_MANAGED_EMAIL_PREWARMED_PURCHASE,
+    );
+  const [preparePaymentMethod] = useMutation<PaymentSetupData>(
+    PREPARE_MANAGED_EMAIL_PAYMENT_METHOD,
+  );
+  const [completePaymentMethod] = useMutation<
+    CompletePaymentMethodData,
+    CompletePaymentMethodVariables
+  >(COMPLETE_MANAGED_EMAIL_PAYMENT_METHOD);
   const [setCampaignCap] = useMutation(SET_MANAGED_EMAIL_CAMPAIGN_CAP);
   const [cancelWarmup] = useMutation(CANCEL_MANAGED_EMAIL_WARMUP);
   const [pauseWarmup] = useMutation(PAUSE_MANAGED_EMAIL_WARMUP);
@@ -151,7 +282,67 @@ export const ManagedEmailOverview = () => {
   const [cancelDomainRenewal] = useMutation(
     CANCEL_MANAGED_EMAIL_DOMAIN_RENEWAL,
   );
-  const { data: operationData } = useQuery<OperationQueryData>(
+  useEffect(() => {
+    if (
+      canPurchase !== true ||
+      operationId !== null ||
+      purchaseIntent === null ||
+      !shouldRecoverPurchaseIntent.current ||
+      purchaseRecoveryAttempted.current
+    ) {
+      return;
+    }
+
+    purchaseRecoveryAttempted.current = true;
+    const variables = {
+      input: {
+        idempotencyKey: purchaseIntent.idempotencyKey,
+        quoteFingerprint: purchaseIntent.quoteFingerprint,
+        quoteId: purchaseIntent.quoteId,
+        quoteVersion: purchaseIntent.quoteVersion,
+      },
+    };
+    const confirmation =
+      purchaseIntent.acquisitionMode === 'PREWARMED_INVENTORY'
+        ? confirmPrewarmedPurchase({ variables })
+        : confirmPurchase({ variables });
+
+    void confirmation
+      .then((result) => {
+        const nextOperationId =
+          result.data?.confirmManagedEmailPrewarmedPurchase?.operationId ??
+          result.data?.confirmManagedEmailOrdinaryPurchase?.operationId;
+        if (!nextOperationId) {
+          throw new Error('Missing managed email operation');
+        }
+
+        const recoveredIntent = {
+          ...purchaseIntent,
+          operationId: nextOperationId,
+        };
+        storePurchaseIntent(workspaceId, recoveredIntent);
+        setPurchaseIntent(recoveredIntent);
+        setOperationId(nextOperationId);
+        setPurchaseRecoveryFailed(false);
+      })
+      .catch(() => {
+        setPurchaseRecoveryFailed(true);
+        enqueueErrorSnackBar({
+          message: t`We could not recover this saved order. Refresh to try again.`,
+        });
+      });
+  }, [
+    canPurchase,
+    confirmPrewarmedPurchase,
+    confirmPurchase,
+    enqueueErrorSnackBar,
+    operationId,
+    purchaseIntent,
+    t,
+    workspaceId,
+  ]);
+
+  const { data: operationData, stopPolling } = useQuery<OperationQueryData>(
     GET_MANAGED_EMAIL_OPERATION,
     {
       variables: { input: { operationId } },
@@ -165,17 +356,40 @@ export const ManagedEmailOverview = () => {
       return;
     }
 
-    if (operationData.managedEmailOperation) {
+    const operation = operationData.managedEmailOperation;
+    if (operation) {
+      const isTerminalProviderState = [
+        'PROVIDER_FAILED',
+        'PROVIDER_PARTIAL',
+        'PROVIDER_SUCCEEDED',
+      ].includes(operation.state);
+
+      if (
+        operation.paymentStatus === 'PAYMENT_FAILED' ||
+        isTerminalProviderState
+      ) {
+        stopPolling();
+        stopOverviewPolling();
+      }
+      if (operation.state === 'PROVIDER_SUCCEEDED') {
+        removeStoredPurchaseIntent(workspaceId);
+        setPurchaseIntent(null);
+        setConfirmationIdempotencyKey(null);
+        setOperationId(null);
+        setFlow('OVERVIEW');
+        void refetch();
+        return;
+      }
       setFlow('PROGRESS');
       return;
     }
 
-    window.localStorage.removeItem(OPERATION_STORAGE_KEY);
-    window.localStorage.removeItem(OPERATION_IDEMPOTENCY_STORAGE_KEY);
+    removeStoredPurchaseIntent(workspaceId);
+    setPurchaseIntent(null);
     setConfirmationIdempotencyKey(null);
     setOperationId(null);
     setFlow('OVERVIEW');
-  }, [operationData]);
+  }, [operationData, refetch, stopOverviewPolling, stopPolling, workspaceId]);
 
   const beginPrewarmedFlow = async () => {
     setFlow('PREWARMED_LOADING');
@@ -198,7 +412,6 @@ export const ManagedEmailOverview = () => {
     try {
       const proposalResult = await loadProposal({ variables: { input } });
       const nextProposal = proposalResult.data?.managedEmailProposal;
-
       if (!nextProposal) {
         throw new Error('Missing managed email proposal');
       }
@@ -207,11 +420,11 @@ export const ManagedEmailOverview = () => {
         variables: { input: { proposalId: nextProposal.id } },
       });
       const nextQuote = quoteResult.data?.managedEmailQuote;
-
       if (!nextQuote) {
         throw new Error('Missing managed email quote');
       }
 
+      setAcquisitionMode('NEW_MANAGED');
       setConfirmationIdempotencyKey(crypto.randomUUID());
       setProposal(nextProposal);
       setQuote(nextQuote);
@@ -223,37 +436,85 @@ export const ManagedEmailOverview = () => {
     }
   };
 
-  const confirmQuote = async () => {
+  const createPrewarmedProposalAndQuote = async (
+    bundle: ManagedEmailBundle,
+  ) => {
+    const input: PrewarmedProposalInput = { bundleId: bundle.bundleId };
+
+    try {
+      const proposalResult = await loadPrewarmedProposal({
+        variables: { input },
+      });
+      const nextProposal = proposalResult.data?.managedEmailPrewarmedProposal;
+      if (!nextProposal) {
+        throw new Error('Missing managed email prewarmed proposal');
+      }
+
+      const quoteResult = await loadQuote({
+        variables: { input: { proposalId: nextProposal.id } },
+      });
+      const nextQuote = quoteResult.data?.managedEmailQuote;
+      if (!nextQuote) {
+        throw new Error('Missing managed email quote');
+      }
+
+      setAcquisitionMode('PREWARMED_INVENTORY');
+      setConfirmationIdempotencyKey(crypto.randomUUID());
+      setProposal(nextProposal);
+      setQuote(nextQuote);
+      setFlow('REVIEW');
+    } catch {
+      enqueueErrorSnackBar({
+        message: t`We could not prepare this prewarmed mailbox order. Please try again.`,
+      });
+    }
+  };
+
+  const submitPurchase = async () => {
     if (!quote || !canPurchase) {
       return;
     }
 
     const idempotencyKey = confirmationIdempotencyKey ?? crypto.randomUUID();
+    const pendingIntent: PersistedPurchaseIntent = {
+      acquisitionMode,
+      idempotencyKey,
+      operationId: null,
+      quoteFingerprint: quote.quoteFingerprint,
+      quoteId: quote.id,
+      quoteVersion: quote.quoteVersion,
+    };
+    const variables = {
+      input: {
+        idempotencyKey,
+        quoteFingerprint: quote.quoteFingerprint,
+        quoteId: quote.id,
+        quoteVersion: quote.quoteVersion,
+      },
+    };
+
+    storePurchaseIntent(workspaceId, pendingIntent);
+    setPurchaseIntent(pendingIntent);
     setConfirmationIdempotencyKey(idempotencyKey);
 
     try {
-      const result = await confirmPurchase({
-        variables: {
-          input: {
-            idempotencyKey,
-            quoteFingerprint: quote.quoteFingerprint,
-            quoteId: quote.id,
-            quoteVersion: quote.quoteVersion,
-          },
-        },
-      });
+      const result =
+        acquisitionMode === 'PREWARMED_INVENTORY'
+          ? await confirmPrewarmedPurchase({ variables })
+          : await confirmPurchase({ variables });
       const nextOperationId =
+        result.data?.confirmManagedEmailPrewarmedPurchase?.operationId ??
         result.data?.confirmManagedEmailOrdinaryPurchase?.operationId;
-
       if (!nextOperationId) {
         throw new Error('Missing managed email operation');
       }
 
-      window.localStorage.setItem(OPERATION_STORAGE_KEY, nextOperationId);
-      window.localStorage.setItem(
-        OPERATION_IDEMPOTENCY_STORAGE_KEY,
-        idempotencyKey,
-      );
+      const confirmedIntent = {
+        ...pendingIntent,
+        operationId: nextOperationId,
+      };
+      storePurchaseIntent(workspaceId, confirmedIntent);
+      setPurchaseIntent(confirmedIntent);
       setOperationId(nextOperationId);
       setFlow('PROGRESS');
     } catch {
@@ -263,26 +524,38 @@ export const ManagedEmailOverview = () => {
     }
   };
 
-  const retryOperationPayment = async () => {
-    if (!operationId || !confirmationIdempotencyKey) {
-      enqueueErrorSnackBar({
-        message: t`We could not retry payment because the saved order identity is incomplete.`,
-      });
-      return;
-    }
-
+  const confirmQuote = async () => {
     try {
-      await retryPayment({
-        variables: {
-          input: {
-            idempotencyKey: confirmationIdempotencyKey,
-            operationId,
-          },
-        },
-      });
+      const result = await preparePaymentMethod();
+      const nextPaymentSetup = result.data?.prepareManagedEmailPaymentMethod;
+      if (!nextPaymentSetup) {
+        throw new Error('Missing managed email payment setup');
+      }
+      if (nextPaymentSetup.ready) {
+        await submitPurchase();
+        return;
+      }
+      setPaymentSetup(nextPaymentSetup);
+      setFlow('PAYMENT');
     } catch {
       enqueueErrorSnackBar({
-        message: t`We could not retry payment. Please try again.`,
+        message: t`We could not prepare card payment. Please try again.`,
+      });
+    }
+  };
+
+  const completeCardSetup = async (setupIntentId: string) => {
+    try {
+      const result = await completePaymentMethod({
+        variables: { input: { setupIntentId } },
+      });
+      if (result.data?.completeManagedEmailPaymentMethod?.ready !== true) {
+        throw new Error('Managed email payment method is not ready');
+      }
+      await submitPurchase();
+    } catch {
+      enqueueErrorSnackBar({
+        message: t`We could not save your payment method. Please retry.`,
       });
     }
   };
@@ -321,11 +594,9 @@ export const ManagedEmailOverview = () => {
       <ManagedEmailPrewarmedFlow
         bundles={bundles}
         onBack={() => setFlow('CHOOSER')}
-        onChooseBundle={() => {
-          enqueueErrorSnackBar({
-            message: t`Prewarmed mailbox purchase confirmation is not available yet.`,
-          });
-        }}
+        onChooseBundle={(bundle) =>
+          void createPrewarmedProposalAndQuote(bundle)
+        }
         onUseOrdinary={() => setFlow('ORDINARY')}
       />
     );
@@ -343,8 +614,14 @@ export const ManagedEmailOverview = () => {
   if (flow === 'REVIEW' && proposal && quote) {
     return (
       <ManagedEmailReview
-        isConfirming={isConfirming}
-        onBack={() => setFlow('ORDINARY')}
+        isConfirming={isConfirming || isConfirmingPrewarmed}
+        onBack={() =>
+          setFlow(
+            acquisitionMode === 'PREWARMED_INVENTORY'
+              ? 'PREWARMED'
+              : 'ORDINARY',
+          )
+        }
         onConfirm={confirmQuote}
         proposal={proposal}
         quote={quote}
@@ -352,13 +629,47 @@ export const ManagedEmailOverview = () => {
     );
   }
 
+  if (flow === 'PAYMENT' && paymentSetup) {
+    return (
+      <ManagedEmailPaymentSetup
+        paymentSetup={paymentSetup}
+        onBack={() => setFlow('REVIEW')}
+        onComplete={completeCardSetup}
+      />
+    );
+  }
+
   if (flow === 'PROGRESS') {
     const operation = operationData?.managedEmailOperation;
+    const returnToOverview = () => {
+      removeStoredPurchaseIntent(workspaceId);
+      setPurchaseIntent(null);
+      setConfirmationIdempotencyKey(null);
+      setOperationId(null);
+      setPurchaseRecoveryFailed(false);
+      setFlow('OVERVIEW');
+    };
+
+    if (purchaseRecoveryFailed) {
+      return (
+        <Section>
+          <H2Title
+            title={t`Saved order recovery paused`}
+            description={t`We could not recover this saved order. Refresh to try the same order identity again.`}
+          />
+          <Button
+            title={t`Return to mailbox overview`}
+            variant="secondary"
+            onClick={returnToOverview}
+          />
+        </Section>
+      );
+    }
 
     return operation ? (
       <ManagedEmailProgress
         operation={operation}
-        onRetryPayment={() => void retryOperationPayment()}
+        onReturnToOverview={returnToOverview}
       />
     ) : (
       <p>{t`Loading saved order…`}</p>
@@ -488,5 +799,20 @@ export const ManagedEmailOverview = () => {
         />
       )}
     </>
+  );
+};
+
+export const ManagedEmailOverview = () => {
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+
+  if (currentWorkspace === null) {
+    return null;
+  }
+
+  return (
+    <ManagedEmailOverviewForWorkspace
+      key={currentWorkspace.id}
+      workspaceId={currentWorkspace.id}
+    />
   );
 };

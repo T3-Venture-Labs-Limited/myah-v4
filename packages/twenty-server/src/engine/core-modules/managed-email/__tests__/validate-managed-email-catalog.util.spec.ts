@@ -43,15 +43,15 @@ const validCatalog = (): MutableManagedEmailCatalog => ({
       ...structuredClone(MANAGED_EMAIL_PRODUCT_DEFINITIONS[1]),
       customerPrice: {
         kind: 'FIXED',
-        amountMinorUnits: 419,
+        amountMinorUnits: 650,
         currency: 'USD',
         minimumGrossMarginBasisPoints: 3000,
         landedProviderCost: {
           kind: 'SAME_CURRENCY',
-          amountMinorUnits: 250,
+          amountMinorUnits: 400,
           currency: 'USD',
-          source: 'Illustrative same-currency test ceiling',
-          verifiedAt: '2026-08-03',
+          source: 'User-confirmed Icemail mailbox rate',
+          verifiedAt: '2026-08-06',
         },
         paymentProcessing: paymentProcessing(),
       },
@@ -98,10 +98,10 @@ describe('validateManagedEmailCatalog', () => {
         cadence: 'MONTHLY',
         providerCost: {
           kind: 'FIXED',
-          amountMinorUnits: 250,
+          amountMinorUnits: 400,
           currency: 'USD',
-          source: 'Icemail controlled purchase',
-          verifiedAt: '2026-07-26',
+          source: 'User-confirmed Icemail mailbox rate',
+          verifiedAt: '2026-08-06',
         },
       },
       {

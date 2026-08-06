@@ -1,6 +1,7 @@
 import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useLingui } from '@lingui/react/macro';
+import { Info } from 'twenty-ui/feedback';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { H2Title } from 'twenty-ui/typography';
@@ -56,6 +57,12 @@ export const ManagedEmailReview = ({
         title={t`Review managed mailboxes`}
         description={t`Confirm the proposed identities, service periods, and recurring charges.`}
       />
+      {quote.isSandbox && (
+        <Info
+          accent="blue"
+          text={t`Non-production sandbox: this checkout uses test-only services and cannot provision production mailboxes.`}
+        />
+      )}
       {proposal.domains.map((domain) => (
         <article key={domain.domain}>
           <h3>{domain.domain}</h3>
@@ -98,6 +105,9 @@ export const ManagedEmailReview = ({
       <p>{quote.disclosures.prepaidBalance}</p>
       <p>{quote.disclosures.managedServiceOwnership}</p>
       <p>{quote.disclosures.cancellation}</p>
+      <p>
+        {t`Before purchase, Stripe may ask you to complete a SetupIntent to save a payment method for the recurring services in this quote.`}
+      </p>
       <Button
         title={t`Confirm and pay ${dueToday}`}
         variant="primary"

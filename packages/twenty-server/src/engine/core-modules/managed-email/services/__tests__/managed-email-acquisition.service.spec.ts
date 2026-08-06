@@ -351,6 +351,7 @@ const admissionInput = {
   acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
   actorWorkspaceMemberId,
   idempotencyKey: 'purchase-1',
+  operationId: '123e4567-e89b-42d3-a456-426614174020',
   providerConfigurationKey: 'icemail-production-v1',
   quote,
   readinessPolicyVersion: 'readiness-v1',

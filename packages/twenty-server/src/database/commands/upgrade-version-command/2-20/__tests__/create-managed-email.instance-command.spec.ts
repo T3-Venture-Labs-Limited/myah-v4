@@ -1,6 +1,7 @@
 import { type QueryRunner } from 'typeorm';
 
 import { CreateManagedEmailFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1785325829908-create-managed-email';
+import { CreateManagedEmailOfferFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000003000-create-managed-email-offer';
 import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { type FastInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/fast-instance-command.interface';
@@ -242,6 +243,26 @@ describe('AddManagedEmailQuoteAndPersonaEvidenceFastInstanceCommand', () => {
     expect(restoreNotNullIndex).toBeGreaterThan(normalizeRoleIndex);
     expect(sql).not.toMatch(
       /actionApproval|actionExecution|instagram|managedProvider|customerAccount/i,
+    );
+  });
+});
+
+describe('CreateManagedEmailOfferFastInstanceCommand', () => {
+  it('creates unique workspace-scoped proposal and quote identities', async () => {
+    const query = jest.fn().mockResolvedValue(undefined);
+
+    await new CreateManagedEmailOfferFastInstanceCommand().up({
+      query,
+    } as unknown as QueryRunner);
+
+    const sql = query.mock.calls.map((call) => call[0] as string).join('\n');
+
+    expect(sql).toContain('"providerInventoryId" text');
+    expect(sql).toContain(
+      `CREATE UNIQUE INDEX "IDX_MANAGED_EMAIL_OFFER_PROPOSAL" ON "core"."managedEmailOffer" ("workspaceId", "proposalId") WHERE "kind" = 'PROPOSAL'`,
+    );
+    expect(sql).toContain(
+      'CREATE UNIQUE INDEX "IDX_MANAGED_EMAIL_OFFER_QUOTE" ON "core"."managedEmailOffer" ("workspaceId", "quoteId")',
     );
   });
 });

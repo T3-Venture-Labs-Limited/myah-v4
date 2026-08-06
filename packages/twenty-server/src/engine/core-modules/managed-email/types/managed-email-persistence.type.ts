@@ -64,6 +64,7 @@ export type ManagedEmailResourceSnapshot = {
 };
 
 export type ManagedEmailExpectedLineItem = {
+  readonly billingFrequency: 'ANNUAL' | 'MONTHLY';
   readonly productKey: ManagedEmailProductKey;
   readonly productTag: string;
   readonly metronomeProductId: string;

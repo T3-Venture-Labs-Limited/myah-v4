@@ -85,5 +85,31 @@ export const managedEmailReadinessPolicies: Readonly<
   Record<string, ManagedEmailReadinessPolicy>
 > = Object.freeze({});
 
+export const managedEmailSandboxReadinessPolicies = Object.freeze({
+  'sandbox-v1': Object.freeze({
+    approvalState: 'APPROVED',
+    capacityCurve: Object.freeze([{ days: 0, capacity: 10 }]),
+    dns: Object.freeze({
+      dkimSelector: 'sandbox',
+      expectedMxSuffixes: Object.freeze(['.test']),
+    }),
+    evaluationIntervalMs: 60_000,
+    maximumSpamPlacementBasisPoints: 10_000,
+    metricsLookbackMs: 60_000,
+    minimumInboxPlacementBasisPoints: 0,
+    minimumWarmupDays: 0,
+    providerConfigurationKey: 'sandbox-provider',
+    version: 'sandbox-v1',
+    warmupConfiguration: Object.freeze({
+      version: 'sandbox-v1',
+      strategy: 'progressive',
+      increasePerDay: 10,
+      maxSendsPerDay: 10,
+      replyRatePercent: 0,
+      startingBaseline: 1,
+    }),
+  }),
+} as const);
+
 export const resolveManagedEmailReadinessPolicy =
   createManagedEmailReadinessPolicyResolver(managedEmailReadinessPolicies);

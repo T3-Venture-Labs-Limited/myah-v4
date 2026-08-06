@@ -27,10 +27,10 @@ export const MANAGED_EMAIL_PRODUCT_DEFINITIONS = [
     cadence: 'MONTHLY',
     providerCost: {
       kind: 'FIXED',
-      amountMinorUnits: 250,
+      amountMinorUnits: 400,
       currency: 'USD',
-      source: 'Icemail controlled purchase',
-      verifiedAt: '2026-07-26',
+      source: 'User-confirmed Icemail mailbox rate',
+      verifiedAt: '2026-08-06',
     },
   },
   {

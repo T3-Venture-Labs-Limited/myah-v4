@@ -15,6 +15,7 @@ import {
   IcemailExceptionCode,
 } from 'src/engine/core-modules/managed-email/providers/icemail/icemail.exception';
 import { IcemailClient } from 'src/engine/core-modules/managed-email/providers/icemail/icemail.client';
+import { type IcemailDomainDetail } from 'src/engine/core-modules/managed-email/providers/icemail/icemail.types';
 import {
   WarmupInboxException,
   WarmupInboxExceptionCode,
@@ -1214,17 +1215,57 @@ export class ManagedEmailLifecycleService {
       return;
     }
 
-    await this.domainRepository.update(
-      workspaceId,
-      { id: domain.id },
-      {
-        infrastructureState: ManagedEmailInfrastructureState.INACTIVE,
-        nextPeriodBoundaryAt: null,
-        pendingLifecycleAction: null,
-        pendingLifecycleKey: null,
-        safeFailureCode: null,
-      },
+    const providerDomainId = this.requireProviderId(
+      domain.providerDomainId,
+      'provider domain',
     );
+    let providerDomain: IcemailDomainDetail | null;
+    try {
+      providerDomain = await this.icemailClient.getDomain(providerDomainId);
+    } catch (error) {
+      await this.markDomainReconciliationRequired(
+        domain,
+        'ICEMAIL_DOMAIN_READ_FAILED',
+      );
+      throw error;
+    }
+    if (providerDomain !== null) {
+      await this.markDomainReconciliationRequired(
+        domain,
+        'ICEMAIL_DOMAIN_TERMINATION_UNVERIFIED',
+      );
+      return;
+    }
+
+    const patch = {
+      infrastructureState: ManagedEmailInfrastructureState.INACTIVE,
+      nextPeriodBoundaryAt: null,
+      pendingLifecycleAction: null,
+      pendingLifecycleKey: null,
+      safeFailureCode: null,
+    };
+    await this.domainRepository.update(workspaceId, { id: domain.id }, patch);
+    Object.assign(domain, patch);
+  }
+
+  private async markDomainReconciliationRequired(
+    domain: ManagedEmailDomainEntity,
+    safeFailureCode: string,
+  ): Promise<void> {
+    const patch = {
+      infrastructureState:
+        ManagedEmailInfrastructureState.RECONCILIATION_REQUIRED,
+      nextPeriodBoundaryAt: new Date(
+        this.now().getTime() + RECONCILIATION_RETRY_MS,
+      ),
+      safeFailureCode,
+    };
+    await this.domainRepository.update(
+      domain.workspaceId,
+      { id: domain.id },
+      patch,
+    );
+    Object.assign(domain, patch);
   }
 
   private async applyMailboxBoundary(

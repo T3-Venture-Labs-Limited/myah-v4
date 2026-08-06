@@ -2441,6 +2441,10 @@ export type ManagedEmailCampaignCapInput = {
   mailboxId: Scalars['String']['input'];
 };
 
+export type ManagedEmailCompletePaymentMethodInput = {
+  setupIntentId: Scalars['String']['input'];
+};
+
 export type ManagedEmailDisclosures = {
   __typename?: 'ManagedEmailDisclosures';
   cancellation: Scalars['String']['output'];
@@ -2533,11 +2537,28 @@ export type ManagedEmailOverview = {
   warmingCount: Scalars['Int']['output'];
 };
 
+export type ManagedEmailPaymentMethodStatus = {
+  __typename?: 'ManagedEmailPaymentMethodStatus';
+  ready: Scalars['Boolean']['output'];
+};
+
+export type ManagedEmailPaymentSetup = {
+  __typename?: 'ManagedEmailPaymentSetup';
+  clientSecret: Scalars['String']['output'];
+  publishableKey: Scalars['String']['output'];
+  ready: Scalars['Boolean']['output'];
+  setupIntentId: Scalars['String']['output'];
+};
+
 export type ManagedEmailPersonaInput = {
   displayName: Scalars['String']['input'];
   localPartPreference: Scalars['String']['input'];
   roleTitle?: InputMaybe<Scalars['String']['input']>;
   signature: Scalars['String']['input'];
+};
+
+export type ManagedEmailPrewarmedProposalInput = {
+  bundleId: Scalars['String']['input'];
 };
 
 export type ManagedEmailProposal = {
@@ -2582,6 +2603,7 @@ export type ManagedEmailQuote = {
   dueTodayCents: Scalars['Int']['output'];
   expiresAt: Scalars['DateTime']['output'];
   id: Scalars['String']['output'];
+  isSandbox: Scalars['Boolean']['output'];
   lines: Array<ManagedEmailQuoteLine>;
   quoteFingerprint: Scalars['String']['output'];
   quoteVersion: Scalars['String']['output'];
@@ -2600,11 +2622,6 @@ export type ManagedEmailQuoteLine = {
   quantity: Scalars['Int']['output'];
   startingAt: Scalars['DateTime']['output'];
   unitPriceCents: Scalars['Int']['output'];
-};
-
-export type ManagedEmailRetryPaymentInput = {
-  idempotencyKey: Scalars['String']['input'];
-  operationId: Scalars['String']['input'];
 };
 
 export type ManagedProviderBillingStatus = {
@@ -2859,6 +2876,7 @@ export type Mutation = {
   checkPublicDomainValidRecords?: Maybe<DomainValidRecords>;
   checkoutSession: BillingSession;
   completeFileUpload: FileWithSignedUrl;
+  completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus;
   confirmManagedEmailOrdinaryPurchase: ManagedEmailActionResult;
   confirmManagedEmailPrewarmedPurchase: ManagedEmailActionResult;
   connectWorkspaceMailbox: WorkspaceMailboxConnectionResult;
@@ -2973,6 +2991,7 @@ export type Mutation = {
   /** @deprecated Use installApplication instead */
   installMarketplaceApp: Scalars['Boolean']['output'];
   pauseManagedEmailWarmup: ManagedEmailActionResult;
+  prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup;
   reconnectWorkspaceMailbox: WorkspaceMailboxConnectionResult;
   refreshEnterpriseValidityToken: Scalars['Boolean']['output'];
   removeCreatorListMemberIntent: Scalars['Boolean']['output'];
@@ -2990,7 +3009,6 @@ export type Mutation = {
   resolveAgentChatApproval: SendChatMessageResult;
   resumeManagedEmailWarmup: ManagedEmailActionResult;
   retryChatMessage: SendChatMessageResult;
-  retryManagedEmailPayment: ManagedEmailActionResult;
   revokeApiKey?: Maybe<ApiKey>;
   revokeWorkspaceMailbox: RevokeWorkspaceMailboxResult;
   rotateApplicationRegistrationClientSecret: RotateClientSecret;
@@ -3181,6 +3199,11 @@ export type MutationCheckoutSessionArgs = {
 
 export type MutationCompleteFileUploadArgs = {
   fileId: Scalars['String']['input'];
+};
+
+
+export type MutationCompleteManagedEmailPaymentMethodArgs = {
+  input: ManagedEmailCompletePaymentMethodInput;
 };
 
 
@@ -3821,11 +3844,6 @@ export type MutationRetryChatMessageArgs = {
   browsingContext?: InputMaybe<Scalars['JSON']['input']>;
   modelId?: InputMaybe<Scalars['String']['input']>;
   threadId: Scalars['UUID']['input'];
-};
-
-
-export type MutationRetryManagedEmailPaymentArgs = {
-  input: ManagedEmailRetryPaymentInput;
 };
 
 
@@ -4899,6 +4917,7 @@ export type Query = {
   managedEmailOperation?: Maybe<ManagedEmailOperation>;
   managedEmailOverview: ManagedEmailOverview;
   managedEmailPrewarmedBundles: Array<ManagedEmailBundle>;
+  managedEmailPrewarmedProposal: ManagedEmailProposal;
   managedEmailProposal: ManagedEmailProposal;
   managedEmailQuote: ManagedEmailQuote;
   managedProviderBillingStatus: ManagedProviderBillingStatus;
@@ -5287,6 +5306,11 @@ export type QueryManagedEmailHealthDetailsArgs = {
 
 export type QueryManagedEmailOperationArgs = {
   input: ManagedEmailOperationInput;
+};
+
+
+export type QueryManagedEmailPrewarmedProposalArgs = {
+  input: ManagedEmailPrewarmedProposalInput;
 };
 
 
@@ -8900,6 +8924,18 @@ export type GetUsageAnalyticsQueryVariables = Exact<{
 
 export type GetUsageAnalyticsQuery = { __typename?: 'Query', getUsageAnalytics: { __typename?: 'UsageAnalytics', periodStart: string, periodEnd: string, usageByUser: Array<{ __typename?: 'UsageBreakdownItem', key: string, label?: string | null, creditsUsed: number }>, usageByOperationType: Array<{ __typename?: 'UsageBreakdownItem', key: string, creditsUsed: number }>, usageByModel: Array<{ __typename?: 'UsageBreakdownItem', key: string, creditsUsed: number }>, timeSeries: Array<{ __typename?: 'UsageTimeSeries', date: string, creditsUsed: number }>, userDailyUsage?: { __typename?: 'UsageUserDaily', userWorkspaceId: string, dailyUsage: Array<{ __typename?: 'UsageTimeSeries', date: string, creditsUsed: number }> } | null } };
 
+export type PrepareManagedEmailPaymentMethodMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type PrepareManagedEmailPaymentMethodMutation = { __typename?: 'Mutation', prepareManagedEmailPaymentMethod: { __typename?: 'ManagedEmailPaymentSetup', clientSecret: string, publishableKey: string, ready: boolean, setupIntentId: string } };
+
+export type CompleteManagedEmailPaymentMethodMutationVariables = Exact<{
+  input: ManagedEmailCompletePaymentMethodInput;
+}>;
+
+
+export type CompleteManagedEmailPaymentMethodMutation = { __typename?: 'Mutation', completeManagedEmailPaymentMethod: { __typename?: 'ManagedEmailPaymentMethodStatus', ready: boolean } };
+
 export type ConfirmManagedEmailPrewarmedPurchaseMutationVariables = Exact<{
   input: ManagedEmailPurchaseInput;
 }>;
@@ -8913,13 +8949,6 @@ export type ConfirmManagedEmailOrdinaryPurchaseMutationVariables = Exact<{
 
 
 export type ConfirmManagedEmailOrdinaryPurchaseMutation = { __typename?: 'Mutation', confirmManagedEmailOrdinaryPurchase: { __typename?: 'ManagedEmailActionResult', accepted: boolean, operationId: string } };
-
-export type RetryManagedEmailPaymentMutationVariables = Exact<{
-  input: ManagedEmailRetryPaymentInput;
-}>;
-
-
-export type RetryManagedEmailPaymentMutation = { __typename?: 'Mutation', retryManagedEmailPayment: { __typename?: 'ManagedEmailActionResult', accepted: boolean, operationId: string } };
 
 export type SetManagedEmailCampaignCapMutationVariables = Exact<{
   input: ManagedEmailCampaignCapInput;
@@ -8980,12 +9009,19 @@ export type GetManagedEmailProposalQueryVariables = Exact<{
 
 export type GetManagedEmailProposalQuery = { __typename?: 'Query', managedEmailProposal: { __typename?: 'ManagedEmailProposal', expiresAt: string, id: string, mailboxCount: number, policyVersion: string, disclosures: { __typename?: 'ManagedEmailDisclosures', cancellation: string, managedServiceOwnership: string, prepaidBalance: string }, domains: Array<{ __typename?: 'ManagedEmailProposalDomain', domain: string, mailboxes: Array<{ __typename?: 'ManagedEmailProposalMailbox', address: string, displayName: string, roleTitle?: string | null }> }> } };
 
+export type GetManagedEmailPrewarmedProposalQueryVariables = Exact<{
+  input: ManagedEmailPrewarmedProposalInput;
+}>;
+
+
+export type GetManagedEmailPrewarmedProposalQuery = { __typename?: 'Query', managedEmailPrewarmedProposal: { __typename?: 'ManagedEmailProposal', expiresAt: string, id: string, mailboxCount: number, policyVersion: string, disclosures: { __typename?: 'ManagedEmailDisclosures', cancellation: string, managedServiceOwnership: string, prepaidBalance: string }, domains: Array<{ __typename?: 'ManagedEmailProposalDomain', domain: string, mailboxes: Array<{ __typename?: 'ManagedEmailProposalMailbox', address: string, displayName: string, roleTitle?: string | null }> }> } };
+
 export type GetManagedEmailQuoteQueryVariables = Exact<{
   input: ManagedEmailQuoteInput;
 }>;
 
 
-export type GetManagedEmailQuoteQuery = { __typename?: 'Query', managedEmailQuote: { __typename?: 'ManagedEmailQuote', currency: string, dueTodayCents: number, expiresAt: string, id: string, quoteFingerprint: string, quoteVersion: string, disclosures: { __typename?: 'ManagedEmailDisclosures', cancellation: string, managedServiceOwnership: string, prepaidBalance: string }, lines: Array<{ __typename?: 'ManagedEmailQuoteLine', amountCents: number, billingFrequency: string, endingBefore: string, productKey: string, quantity: number, startingAt: string, unitPriceCents: number }> } };
+export type GetManagedEmailQuoteQuery = { __typename?: 'Query', managedEmailQuote: { __typename?: 'ManagedEmailQuote', currency: string, dueTodayCents: number, isSandbox: boolean, expiresAt: string, id: string, quoteFingerprint: string, quoteVersion: string, disclosures: { __typename?: 'ManagedEmailDisclosures', cancellation: string, managedServiceOwnership: string, prepaidBalance: string }, lines: Array<{ __typename?: 'ManagedEmailQuoteLine', amountCents: number, billingFrequency: string, endingBefore: string, productKey: string, quantity: number, startingAt: string, unitPriceCents: number }> } };
 
 export type GetManagedEmailOperationQueryVariables = Exact<{
   input: ManagedEmailOperationInput;
@@ -9721,9 +9757,10 @@ export const DeleteUnsubscribeTopicDocument = {"kind":"Document","definitions":[
 export const UpdateUnsubscribeTopicDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateUnsubscribeTopic"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateUnsubscribeTopicInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateUnsubscribeTopic"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"visibility"}}]}}]}}]} as unknown as DocumentNode<UpdateUnsubscribeTopicMutation, UpdateUnsubscribeTopicMutationVariables>;
 export const UnsubscribePagePreviewUrlDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"UnsubscribePagePreviewUrl"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unsubscribePagePreviewUrl"}}]}}]} as unknown as DocumentNode<UnsubscribePagePreviewUrlQuery, UnsubscribePagePreviewUrlQueryVariables>;
 export const GetUsageAnalyticsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetUsageAnalytics"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UsageAnalyticsInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getUsageAnalytics"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"usageByUser"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"creditsUsed"}}]}},{"kind":"Field","name":{"kind":"Name","value":"usageByOperationType"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"creditsUsed"}}]}},{"kind":"Field","name":{"kind":"Name","value":"usageByModel"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"creditsUsed"}}]}},{"kind":"Field","name":{"kind":"Name","value":"timeSeries"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"creditsUsed"}}]}},{"kind":"Field","name":{"kind":"Name","value":"periodStart"}},{"kind":"Field","name":{"kind":"Name","value":"periodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"userDailyUsage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userWorkspaceId"}},{"kind":"Field","name":{"kind":"Name","value":"dailyUsage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"creditsUsed"}}]}}]}}]}}]}}]} as unknown as DocumentNode<GetUsageAnalyticsQuery, GetUsageAnalyticsQueryVariables>;
+export const PrepareManagedEmailPaymentMethodDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"PrepareManagedEmailPaymentMethod"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"prepareManagedEmailPaymentMethod"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"clientSecret"}},{"kind":"Field","name":{"kind":"Name","value":"publishableKey"}},{"kind":"Field","name":{"kind":"Name","value":"ready"}},{"kind":"Field","name":{"kind":"Name","value":"setupIntentId"}}]}}]}}]} as unknown as DocumentNode<PrepareManagedEmailPaymentMethodMutation, PrepareManagedEmailPaymentMethodMutationVariables>;
+export const CompleteManagedEmailPaymentMethodDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CompleteManagedEmailPaymentMethod"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailCompletePaymentMethodInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"completeManagedEmailPaymentMethod"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"ready"}}]}}]}}]} as unknown as DocumentNode<CompleteManagedEmailPaymentMethodMutation, CompleteManagedEmailPaymentMethodMutationVariables>;
 export const ConfirmManagedEmailPrewarmedPurchaseDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ConfirmManagedEmailPrewarmedPurchase"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailPurchaseInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"confirmManagedEmailPrewarmedPurchase"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accepted"}},{"kind":"Field","name":{"kind":"Name","value":"operationId"}}]}}]}}]} as unknown as DocumentNode<ConfirmManagedEmailPrewarmedPurchaseMutation, ConfirmManagedEmailPrewarmedPurchaseMutationVariables>;
 export const ConfirmManagedEmailOrdinaryPurchaseDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ConfirmManagedEmailOrdinaryPurchase"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailPurchaseInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"confirmManagedEmailOrdinaryPurchase"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accepted"}},{"kind":"Field","name":{"kind":"Name","value":"operationId"}}]}}]}}]} as unknown as DocumentNode<ConfirmManagedEmailOrdinaryPurchaseMutation, ConfirmManagedEmailOrdinaryPurchaseMutationVariables>;
-export const RetryManagedEmailPaymentDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RetryManagedEmailPayment"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailRetryPaymentInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"retryManagedEmailPayment"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accepted"}},{"kind":"Field","name":{"kind":"Name","value":"operationId"}}]}}]}}]} as unknown as DocumentNode<RetryManagedEmailPaymentMutation, RetryManagedEmailPaymentMutationVariables>;
 export const SetManagedEmailCampaignCapDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SetManagedEmailCampaignCap"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailCampaignCapInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"setManagedEmailCampaignCap"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accepted"}}]}}]}}]} as unknown as DocumentNode<SetManagedEmailCampaignCapMutation, SetManagedEmailCampaignCapMutationVariables>;
 export const CancelManagedEmailWarmupDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CancelManagedEmailWarmup"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailMailboxActionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cancelManagedEmailWarmup"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accepted"}}]}}]}}]} as unknown as DocumentNode<CancelManagedEmailWarmupMutation, CancelManagedEmailWarmupMutationVariables>;
 export const PauseManagedEmailWarmupDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"PauseManagedEmailWarmup"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailMailboxActionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"pauseManagedEmailWarmup"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"accepted"}}]}}]}}]} as unknown as DocumentNode<PauseManagedEmailWarmupMutation, PauseManagedEmailWarmupMutationVariables>;
@@ -9733,7 +9770,8 @@ export const CancelManagedEmailDomainRenewalDocument = {"kind":"Document","defin
 export const GetManagedEmailOverviewDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedEmailOverview"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedEmailOverview"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"acquisitionAvailable"}},{"kind":"Field","name":{"kind":"Name","value":"actionRequiredCount"}},{"kind":"Field","name":{"kind":"Name","value":"domainCount"}},{"kind":"Field","name":{"kind":"Name","value":"mailboxCount"}},{"kind":"Field","name":{"kind":"Name","value":"readyCount"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"warmingCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"managedEmailDomains"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cancelAtPeriodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"dependentMailboxCount"}},{"kind":"Field","name":{"kind":"Name","value":"domain"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"infrastructureState"}},{"kind":"Field","name":{"kind":"Name","value":"paidThrough"}},{"kind":"Field","name":{"kind":"Name","value":"renewalEnabled"}},{"kind":"Field","name":{"kind":"Name","value":"safeFailureCode"}}]}},{"kind":"Field","name":{"kind":"Name","value":"managedEmailMailboxes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"adminDailyCap"}},{"kind":"Field","name":{"kind":"Name","value":"campaignEligibility"}},{"kind":"Field","name":{"kind":"Name","value":"domain"}},{"kind":"Field","name":{"kind":"Name","value":"domainId"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"infrastructureCancelAtPeriodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"infrastructureState"}},{"kind":"Field","name":{"kind":"Name","value":"lastHealthEvaluatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"personaDisplayName"}},{"kind":"Field","name":{"kind":"Name","value":"personaRole"}},{"kind":"Field","name":{"kind":"Name","value":"policySafeDailyCapacity"}},{"kind":"Field","name":{"kind":"Name","value":"safeFailureCode"}},{"kind":"Field","name":{"kind":"Name","value":"servicePaidThrough"}},{"kind":"Field","name":{"kind":"Name","value":"warmupCancelAtPeriodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"warmupPaidThrough"}},{"kind":"Field","name":{"kind":"Name","value":"warmupState"}}]}}]}}]} as unknown as DocumentNode<GetManagedEmailOverviewQuery, GetManagedEmailOverviewQueryVariables>;
 export const GetManagedEmailPrewarmedBundlesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedEmailPrewarmedBundles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedEmailPrewarmedBundles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bundleId"}},{"kind":"Field","name":{"kind":"Name","value":"domain"}},{"kind":"Field","name":{"kind":"Name","value":"exclusiveWorkspaceUse"}},{"kind":"Field","name":{"kind":"Name","value":"mailboxCount"}},{"kind":"Field","name":{"kind":"Name","value":"mailboxes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}}]}},{"kind":"Field","name":{"kind":"Name","value":"observedAt"}}]}}]}}]} as unknown as DocumentNode<GetManagedEmailPrewarmedBundlesQuery, GetManagedEmailPrewarmedBundlesQueryVariables>;
 export const GetManagedEmailProposalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedEmailProposal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailProposalInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedEmailProposal"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"disclosures"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cancellation"}},{"kind":"Field","name":{"kind":"Name","value":"managedServiceOwnership"}},{"kind":"Field","name":{"kind":"Name","value":"prepaidBalance"}}]}},{"kind":"Field","name":{"kind":"Name","value":"domains"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"domain"}},{"kind":"Field","name":{"kind":"Name","value":"mailboxes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"roleTitle"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"mailboxCount"}},{"kind":"Field","name":{"kind":"Name","value":"policyVersion"}}]}}]}}]} as unknown as DocumentNode<GetManagedEmailProposalQuery, GetManagedEmailProposalQueryVariables>;
-export const GetManagedEmailQuoteDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedEmailQuote"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailQuoteInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedEmailQuote"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"currency"}},{"kind":"Field","name":{"kind":"Name","value":"disclosures"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cancellation"}},{"kind":"Field","name":{"kind":"Name","value":"managedServiceOwnership"}},{"kind":"Field","name":{"kind":"Name","value":"prepaidBalance"}}]}},{"kind":"Field","name":{"kind":"Name","value":"dueTodayCents"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"lines"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amountCents"}},{"kind":"Field","name":{"kind":"Name","value":"billingFrequency"}},{"kind":"Field","name":{"kind":"Name","value":"endingBefore"}},{"kind":"Field","name":{"kind":"Name","value":"productKey"}},{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"startingAt"}},{"kind":"Field","name":{"kind":"Name","value":"unitPriceCents"}}]}},{"kind":"Field","name":{"kind":"Name","value":"quoteFingerprint"}},{"kind":"Field","name":{"kind":"Name","value":"quoteVersion"}}]}}]}}]} as unknown as DocumentNode<GetManagedEmailQuoteQuery, GetManagedEmailQuoteQueryVariables>;
+export const GetManagedEmailPrewarmedProposalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedEmailPrewarmedProposal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailPrewarmedProposalInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedEmailPrewarmedProposal"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"disclosures"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cancellation"}},{"kind":"Field","name":{"kind":"Name","value":"managedServiceOwnership"}},{"kind":"Field","name":{"kind":"Name","value":"prepaidBalance"}}]}},{"kind":"Field","name":{"kind":"Name","value":"domains"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"domain"}},{"kind":"Field","name":{"kind":"Name","value":"mailboxes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"roleTitle"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"mailboxCount"}},{"kind":"Field","name":{"kind":"Name","value":"policyVersion"}}]}}]}}]} as unknown as DocumentNode<GetManagedEmailPrewarmedProposalQuery, GetManagedEmailPrewarmedProposalQueryVariables>;
+export const GetManagedEmailQuoteDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedEmailQuote"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailQuoteInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedEmailQuote"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"currency"}},{"kind":"Field","name":{"kind":"Name","value":"disclosures"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cancellation"}},{"kind":"Field","name":{"kind":"Name","value":"managedServiceOwnership"}},{"kind":"Field","name":{"kind":"Name","value":"prepaidBalance"}}]}},{"kind":"Field","name":{"kind":"Name","value":"dueTodayCents"}},{"kind":"Field","name":{"kind":"Name","value":"isSandbox"}},{"kind":"Field","name":{"kind":"Name","value":"expiresAt"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"lines"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amountCents"}},{"kind":"Field","name":{"kind":"Name","value":"billingFrequency"}},{"kind":"Field","name":{"kind":"Name","value":"endingBefore"}},{"kind":"Field","name":{"kind":"Name","value":"productKey"}},{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"startingAt"}},{"kind":"Field","name":{"kind":"Name","value":"unitPriceCents"}}]}},{"kind":"Field","name":{"kind":"Name","value":"quoteFingerprint"}},{"kind":"Field","name":{"kind":"Name","value":"quoteVersion"}}]}}]}}]} as unknown as DocumentNode<GetManagedEmailQuoteQuery, GetManagedEmailQuoteQueryVariables>;
 export const GetManagedEmailOperationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetManagedEmailOperation"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ManagedEmailOperationInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"managedEmailOperation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"acquisitionMode"}},{"kind":"Field","name":{"kind":"Name","value":"amountCents"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"currency"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"paymentStatus"}},{"kind":"Field","name":{"kind":"Name","value":"safeFailureCode"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<GetManagedEmailOperationQuery, GetManagedEmailOperationQueryVariables>;
 export const DeleteUserAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteUserAccount"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteUser"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<DeleteUserAccountMutation, DeleteUserAccountMutationVariables>;
 export const DeleteUserWorkspaceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteUserWorkspace"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"workspaceMemberIdToDelete"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteUserFromWorkspace"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"workspaceMemberIdToDelete"},"value":{"kind":"Variable","name":{"kind":"Name","value":"workspaceMemberIdToDelete"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<DeleteUserWorkspaceMutation, DeleteUserWorkspaceMutationVariables>;

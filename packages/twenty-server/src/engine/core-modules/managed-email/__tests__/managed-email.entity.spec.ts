@@ -3,6 +3,7 @@ import { getMetadataArgsStorage } from 'typeorm';
 import { ManagedEmailAcquisitionOperationEntity } from '../entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
+import { ManagedEmailOfferEntity } from '../entities/managed-email-offer.entity';
 import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from '../enums/managed-email-campaign-eligibility.enum';
 import { ManagedEmailInfrastructureState } from '../enums/managed-email-infrastructure-state.enum';
@@ -507,6 +508,18 @@ describe('managed email persistence entities', () => {
     expect(propertyNames.join(' ')).not.toMatch(
       /password|credential|secret|token|hostname|rawProvider|providerError/i,
     );
+  });
+
+  it('allows a quote to reference its proposal and persists one-time reservation identity', () => {
+    expectNamedIndex(
+      ManagedEmailOfferEntity,
+      'IDX_MANAGED_EMAIL_OFFER_PROPOSAL',
+      ['workspaceId', 'proposalId'],
+      { unique: true, where: `"kind" = 'PROPOSAL'` },
+    );
+    expect(
+      columnOptions(ManagedEmailOfferEntity, 'idempotencyKey')?.update,
+    ).not.toBe(false);
   });
 
   it('contains no credential or provider-payload columns in any managed email entity', () => {

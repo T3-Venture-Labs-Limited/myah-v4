@@ -74,6 +74,43 @@ describe('ManagedEmailReadinessService', () => {
     });
   });
 
+  it('authorizes purchase only for the exact approved provider policy', () => {
+    expect(() =>
+      service().assertApprovedPurchasePolicy({
+        policyVersion: approvedPolicy.version,
+        providerConfigurationKey: approvedPolicy.providerConfigurationKey,
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      service(null).assertApprovedPurchasePolicy({
+        policyVersion: approvedPolicy.version,
+        providerConfigurationKey: approvedPolicy.providerConfigurationKey,
+      }),
+    ).toThrow('Managed email readiness policy is unavailable');
+    expect(() =>
+      service({
+        ...approvedPolicy,
+        approvalState: 'UNAPPROVED',
+      }).assertApprovedPurchasePolicy({
+        policyVersion: approvedPolicy.version,
+        providerConfigurationKey: approvedPolicy.providerConfigurationKey,
+      }),
+    ).toThrow('Managed email readiness policy is unavailable');
+    expect(() =>
+      service().assertApprovedPurchasePolicy({
+        policyVersion: 'other-policy',
+        providerConfigurationKey: approvedPolicy.providerConfigurationKey,
+      }),
+    ).toThrow('Managed email readiness policy is unavailable');
+    expect(() =>
+      service().assertApprovedPurchasePolicy({
+        policyVersion: approvedPolicy.version,
+        providerConfigurationKey: 'other-provider',
+      }),
+    ).toThrow('Managed email readiness policy is unavailable');
+  });
+
   it('fails closed when the policy is absent, unapproved, or mismatched', () => {
     expect(service(null).evaluate(readyInput()).safeReasonCode).toBe(
       'POLICY_UNAVAILABLE',

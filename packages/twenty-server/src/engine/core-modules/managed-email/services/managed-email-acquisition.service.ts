@@ -59,6 +59,7 @@ export type AdmitManagedEmailAcquisitionInput = Readonly<{
   acquisitionMode: ManagedEmailAcquisitionMode;
   actorWorkspaceMemberId: string;
   idempotencyKey: string;
+  operationId: string;
   providerConfigurationKey: string;
   quote: ManagedEmailQuote;
   readinessPolicyVersion: string;
@@ -118,6 +119,7 @@ export class ManagedEmailAcquisitionService {
       acquisitionMode: input.acquisitionMode,
       actorWorkspaceMemberId: input.actorWorkspaceMemberId,
       idempotencyKey: input.idempotencyKey,
+      operationId: input.operationId,
       providerConfigurationKey: input.providerConfigurationKey,
       quote: input.quote,
       readinessPolicyVersion: input.readinessPolicyVersion,

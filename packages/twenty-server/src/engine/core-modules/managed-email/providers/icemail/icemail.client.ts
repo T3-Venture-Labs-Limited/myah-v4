@@ -7,7 +7,7 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 
 import { IcemailException, IcemailExceptionCode } from './icemail.exception';
 import {
-  mapIcemailAppPassword,
+  mapIcemailCredentialSecret,
   mapIcemailDomainAvailability,
   mapIcemailDomainDetail,
   mapIcemailDomainPage,
@@ -23,6 +23,7 @@ import {
   type IcemailDomainAvailability,
   type IcemailDomainDetail,
   type IcemailDomainSummary,
+  type IcemailProviderCredentialSecret,
   type IcemailMailboxCredential,
   type IcemailMailboxDeletionInput,
   type IcemailMailboxDeletionReceipt,
@@ -44,6 +45,10 @@ const ICEMAIL_PREWARM_PAGE_LIMIT = 100;
 const ICEMAIL_MAX_LIST_PAGES = 100;
 const MAX_INPUT_COLLECTION_SIZE = 100;
 const MAX_INPUT_STRING_LENGTH = 500;
+const ICEMAIL_PRODUCTION_DOMAIN_PATTERN =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:com|net|org|biz|live|info)$/;
+const ICEMAIL_SANDBOX_DOMAIN_PATTERN =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:com|net|org|biz|live|info|test)$/;
 
 @Injectable()
 export class IcemailClient {
@@ -62,7 +67,7 @@ export class IcemailClient {
         client.get('/domain/available', {
           params: { domain: normalizedDomain, page: 1 },
         }),
-      mapIcemailDomainAvailability,
+      (value) => mapIcemailDomainAvailability(value, this.domainPolicy()),
     );
   }
 
@@ -74,7 +79,7 @@ export class IcemailClient {
         client.get('/prewarm', {
           params: { page: validatedPage, limit: ICEMAIL_PREWARM_PAGE_LIMIT },
         }),
-      mapIcemailPrewarmedBundlePage,
+      (value) => mapIcemailPrewarmedBundlePage(value, this.domainPolicy()),
     );
   }
 
@@ -85,7 +90,7 @@ export class IcemailClient {
 
     return this.executeWrite(
       (client) => client.post('/prewarm/buy', { domain_ids: inventoryIds }),
-      mapIcemailPrewarmPurchaseReceipt,
+      (value) => mapIcemailPrewarmPurchaseReceipt(value, this.domainPolicy()),
     );
   }
 
@@ -109,7 +114,7 @@ export class IcemailClient {
             })),
           })),
         }),
-      mapIcemailOrderReceipt,
+      (value) => mapIcemailOrderReceipt(value, this.domainPolicy()),
     );
   }
 
@@ -121,7 +126,7 @@ export class IcemailClient {
         client.get('/domain', {
           params: { page: validatedPage, limit: ICEMAIL_FIRST_PAGE_LIMIT },
         }),
-      mapIcemailDomainPage,
+      (value) => mapIcemailDomainPage(value, this.domainPolicy()),
     );
   }
 
@@ -133,7 +138,7 @@ export class IcemailClient {
         client.get('/mailbox', {
           params: { page: validatedPage, limit: ICEMAIL_FIRST_PAGE_LIMIT },
         }),
-      mapIcemailMailboxPage,
+      (value) => mapIcemailMailboxPage(value, this.domainPolicy()),
     );
   }
 
@@ -150,7 +155,7 @@ export class IcemailClient {
 
     return this.executeRead(
       (client) => client.get(`/domain/${encodeURIComponent(id)}`),
-      mapIcemailDomainDetail,
+      (value) => mapIcemailDomainDetail(value, this.domainPolicy()),
       true,
     );
   }
@@ -160,7 +165,7 @@ export class IcemailClient {
 
     return this.executeRead(
       (client) => client.get(`/mailbox/${encodeURIComponent(id)}`),
-      mapIcemailMailboxDetail,
+      (value) => mapIcemailMailboxDetail(value, this.domainPolicy()),
       true,
     );
   }
@@ -173,18 +178,25 @@ export class IcemailClient {
 
     if (mailbox === null) return null;
 
-    const appPassword = await this.executeRead(
+    const credentialSecret = await this.executeRead(
       (client) => client.get(`/mailbox/${encodeURIComponent(id)}/app-password`),
-      mapIcemailAppPassword,
+      mapIcemailCredentialSecret,
     );
 
-    if (appPassword === null) return null;
+    if (credentialSecret === null) return null;
+
+    const transport =
+      this.twentyConfigService.get('MANAGED_EMAIL_EXECUTION_MODE') === 'SANDBOX'
+        ? this.requireSandboxTransport(credentialSecret.transport)
+        : {
+            smtp: { host: 'smtp.gmail.com', port: 465, secure: true } as const,
+            imap: { host: 'imap.gmail.com', port: 993, secure: true } as const,
+          };
 
     return {
       username: mailbox.address,
-      appPassword,
-      smtp: { host: 'smtp.gmail.com', port: 465, secure: true },
-      imap: { host: 'imap.gmail.com', port: 993, secure: true },
+      appPassword: credentialSecret.appPassword,
+      ...transport,
     };
   }
 
@@ -324,15 +336,46 @@ export class IcemailClient {
       throw new IcemailException(IcemailExceptionCode.CONFIGURATION_DISABLED);
     }
 
+    const timeout = write ? ICEMAIL_WRITE_TIMEOUT_MS : ICEMAIL_READ_TIMEOUT_MS;
+
+    if (
+      this.twentyConfigService.get('MANAGED_EMAIL_EXECUTION_MODE') === 'SANDBOX'
+    ) {
+      return this.secureHttpClientService.getInternalHttpClient({
+        baseURL,
+        headers: { 'x-api-key': apiKey },
+        timeout,
+      });
+    }
+
     return this.secureHttpClientService.getHttpClient({
       baseURL,
       headers: { 'x-api-key': apiKey },
       retries: write ? 0 : 2,
       ...(write ? {} : { shouldResetTimeout: true }),
-      timeout: write ? ICEMAIL_WRITE_TIMEOUT_MS : ICEMAIL_READ_TIMEOUT_MS,
+      timeout,
     });
   }
 
+  private requireSandboxTransport(
+    transport: IcemailProviderCredentialSecret['transport'],
+  ): NonNullable<IcemailProviderCredentialSecret['transport']> {
+    if (
+      transport === null ||
+      [transport.smtp, transport.imap].some(
+        (endpoint) =>
+          !['127.0.0.1', 'localhost', '[::1]'].includes(endpoint.host) ||
+          !Number.isSafeInteger(endpoint.port) ||
+          endpoint.port < 1 ||
+          endpoint.port > 65_535 ||
+          endpoint.secure !== false,
+      )
+    ) {
+      throw new IcemailException(IcemailExceptionCode.MALFORMED_RESPONSE);
+    }
+
+    return transport;
+  }
   private validateOrdinaryOrder(input: IcemailOrdinaryOrderInput) {
     if (
       !Array.isArray(input.domains) ||
@@ -385,19 +428,25 @@ export class IcemailClient {
     return domains;
   }
 
+  private domainPolicy(): 'PRODUCTION' | 'SANDBOX' {
+    return this.twentyConfigService.get('MANAGED_EMAIL_EXECUTION_MODE') ===
+      'SANDBOX'
+      ? 'SANDBOX'
+      : 'PRODUCTION';
+  }
+
   private normalizeDomain(value: string): string {
     if (typeof value !== 'string') {
       throw new IcemailException(IcemailExceptionCode.INVALID_INPUT);
     }
 
     const domain = value.trim().toLowerCase();
+    const pattern =
+      this.domainPolicy() === 'SANDBOX'
+        ? ICEMAIL_SANDBOX_DOMAIN_PATTERN
+        : ICEMAIL_PRODUCTION_DOMAIN_PATTERN;
 
-    if (
-      domain.length > 253 ||
-      !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:com|net|org|biz|live|info)$/.test(
-        domain,
-      )
-    ) {
+    if (domain.length > 253 || !pattern.test(domain)) {
       throw new IcemailException(IcemailExceptionCode.INVALID_INPUT);
     }
 

@@ -1,5 +1,3 @@
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useLingui } from '@lingui/react/macro';
 import { Status } from 'twenty-ui/data-display';
 import { Button } from 'twenty-ui/input';
@@ -8,7 +6,7 @@ import { H2Title } from 'twenty-ui/typography';
 import { type ManagedEmailOperation } from '~/generated-metadata/graphql';
 
 type ManagedEmailProgressProps = {
-  onRetryPayment: () => void;
+  onReturnToOverview: () => void;
   operation: ManagedEmailOperation;
 };
 
@@ -24,11 +22,10 @@ const paymentPresentation = (paymentStatus: string | null | undefined) => {
 };
 
 export const ManagedEmailProgress = ({
-  onRetryPayment,
+  onReturnToOverview,
   operation,
 }: ManagedEmailProgressProps) => {
   const { t } = useLingui();
-  const { openModal } = useModal();
   const payment = paymentPresentation(operation.paymentStatus);
   const setupText = (() => {
     switch (operation.state) {
@@ -75,22 +72,13 @@ export const ManagedEmailProgress = ({
           </li>
         </ol>
       </div>
-      {operation.paymentStatus === 'PAYMENT_FAILED' && (
-        <>
-          <Button
-            title={t`Retry payment`}
-            variant="primary"
-            onClick={() => openModal('retry-managed-email-payment-modal')}
-          />
-          <ConfirmationModal
-            modalInstanceId="retry-managed-email-payment-modal"
-            title={t`Retry payment?`}
-            subtitle={t`This retries the saved payment for this managed mailbox order.`}
-            confirmButtonText={t`Retry payment`}
-            confirmButtonAccent="brand"
-            onConfirmClick={onRetryPayment}
-          />
-        </>
+      {(operation.paymentStatus === 'PAYMENT_FAILED' ||
+        ['PROVIDER_FAILED', 'PROVIDER_PARTIAL'].includes(operation.state)) && (
+        <Button
+          title={t`Return to mailbox overview`}
+          variant="secondary"
+          onClick={onReturnToOverview}
+        />
       )}
     </Section>
   );

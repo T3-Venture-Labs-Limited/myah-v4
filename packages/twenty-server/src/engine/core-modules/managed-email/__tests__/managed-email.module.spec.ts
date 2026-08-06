@@ -32,6 +32,7 @@ import {
 import { ManagedEmailReconciliationCronJob } from '../crons/managed-email-reconciliation.cron.job';
 import { ManagedEmailAcquisitionOperationEntity } from '../entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
+import { ManagedEmailOfferEntity } from '../entities/managed-email-offer.entity';
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
 import { ActivateManagedEmailMailboxJob } from '../jobs/activate-managed-email-mailbox.job';
 import { ApplyManagedEmailPeriodBoundaryJob } from '../jobs/apply-managed-email-period-boundary.job';
@@ -69,6 +70,8 @@ import {
   MANAGED_EMAIL_LIFECYCLE_CLOCK,
   ManagedEmailLifecycleService,
 } from '../services/managed-email-lifecycle.service';
+import { ManagedEmailCatalogService } from '../services/managed-email-catalog.service';
+import { ManagedEmailOfferService } from '../services/managed-email-offer.service';
 import { ManagedEmailCustomerService } from '../services/managed-email-customer.service';
 import { ManagedEmailCampaignEligibilityService } from '../services/managed-email-campaign-eligibility.service';
 import { ManagedEmailReconciliationService } from '../services/managed-email-reconciliation.service';
@@ -83,6 +86,7 @@ const ENTITIES = [
   ManagedEmailDomainEntity,
   ManagedEmailMailboxEntity,
   ManagedEmailAcquisitionOperationEntity,
+  ManagedEmailOfferEntity,
 ];
 
 describe('ManagedEmailModule', () => {
@@ -125,6 +129,31 @@ describe('ManagedEmailModule', () => {
     expect(dependencies.find(({ index }) => index === 2)?.param).toBe(
       MANAGED_EMAIL_MAILBOX_ACTIVATION_CLOCK,
     );
+  });
+
+  it('registers explicit injection tokens for catalog and offer clocks', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      ManagedEmailModule,
+    ) as Array<{ provide?: unknown }>;
+
+    for (const [service, index] of [
+      [ManagedEmailCatalogService, 3],
+      [ManagedEmailOfferService, 1],
+    ] as const) {
+      const dependencies = Reflect.getMetadata(
+        SELF_DECLARED_DEPS_METADATA,
+        service,
+      ) as Array<{ index: number; param: unknown }> | undefined;
+      const token = dependencies?.find(
+        (dependency) => dependency.index === index,
+      )?.param;
+
+      expect(typeof token).toBe('symbol');
+      expect(providers).toEqual(
+        expect.arrayContaining([expect.objectContaining({ provide: token })]),
+      );
+    }
   });
 
   it('registers subscription and period-boundary recovery schedules', async () => {
@@ -201,6 +230,8 @@ describe('ManagedEmailModule', () => {
       1,
     );
     for (const service of [
+      ManagedEmailCatalogService,
+      ManagedEmailOfferService,
       ManagedEmailProposalService,
       ManagedEmailQuoteService,
       ManagedEmailCustomerService,
@@ -248,7 +279,7 @@ describe('ManagedEmailModule', () => {
         expect.arrayContaining([expect.objectContaining({ provide: token })]),
       );
     }
-    expect(providers).toHaveLength(repositoryTokens.length + 41);
+    expect(providers).toHaveLength(repositoryTokens.length + 45);
     expect(exports).toEqual([
       ...repositoryTokens,
       IcemailClient,
@@ -261,6 +292,91 @@ describe('ManagedEmailModule', () => {
       ManagedEmailSubscriptionService,
       ManagedEmailCampaignEligibilityService,
     ]);
+  });
+
+  it('selects deterministic sandbox proposal domains but keeps production proposal policy unavailable', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      ManagedEmailModule,
+    ) as Array<{
+      provide?: unknown;
+      useFactory?: (config: unknown) => {
+        candidateDomains: (
+          workspaceSlug: string,
+          domainCount: number,
+        ) => string[];
+      };
+      useValue?: {
+        candidateDomains: (
+          workspaceSlug: string,
+          domainCount: number,
+        ) => string[];
+      };
+    }>;
+    const provider = providers.find(
+      (item) => item.provide === MANAGED_EMAIL_PROPOSAL_POLICY,
+    );
+    expect(provider?.useFactory).toEqual(expect.any(Function));
+
+    const sandboxPolicy = provider?.useFactory?.({
+      get: (key: string) =>
+        key === 'MANAGED_EMAIL_EXECUTION_MODE' ? 'SANDBOX' : 'sandbox-v1',
+    });
+    const productionPolicy = provider?.useFactory?.({
+      get: (key: string) =>
+        key === 'MANAGED_EMAIL_EXECUTION_MODE' ? 'PRODUCTION' : 'v1',
+    });
+
+    expect(sandboxPolicy?.candidateDomains('creator', 2)).toEqual([
+      'creator-1.test',
+      'creator-2.test',
+    ]);
+    expect(
+      sandboxPolicy
+        ?.candidateDomains('creator', 2)
+        .every((domain) => domain.endsWith('.test')),
+    ).toBe(true);
+    expect(() => productionPolicy?.candidateDomains('creator', 1)).toThrow();
+  });
+
+  it('resolves an accelerated sandbox readiness policy and remains fail-closed in production', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      ManagedEmailModule,
+    ) as Array<{
+      provide?: unknown;
+      useFactory?: (config: unknown) => (version: string) => unknown;
+    }>;
+    const provider = providers.find(
+      (item) => item.provide === MANAGED_EMAIL_READINESS_POLICY_RESOLVER,
+    );
+    expect(provider?.useFactory).toEqual(expect.any(Function));
+
+    const sandboxResolver = provider?.useFactory?.({
+      get: (key: string) =>
+        key === 'MANAGED_EMAIL_EXECUTION_MODE' ? 'SANDBOX' : 'sandbox-v1',
+    });
+    const productionResolver = provider?.useFactory?.({
+      get: (key: string) =>
+        key === 'MANAGED_EMAIL_EXECUTION_MODE' ? 'PRODUCTION' : 'v1',
+    });
+    const sandboxPolicy = sandboxResolver?.('sandbox-v1') as
+      | {
+          version: string;
+          minimumWarmupDays: number;
+          providerConfigurationKey: string;
+        }
+      | null
+      | undefined;
+
+    expect(sandboxPolicy).toEqual(
+      expect.objectContaining({
+        version: 'sandbox-v1',
+        minimumWarmupDays: 0,
+        providerConfigurationKey: 'sandbox-provider',
+      }),
+    );
+    expect(productionResolver?.('v1')).toBeNull();
   });
 
   it('is registered and exported exactly once through MyahModule', () => {

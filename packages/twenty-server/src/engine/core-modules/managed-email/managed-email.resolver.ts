@@ -19,22 +19,26 @@ import {
   ManagedEmailMailboxDTO,
   ManagedEmailOperationDTO,
   ManagedEmailOverviewDTO,
+  ManagedEmailPaymentMethodStatusDTO,
+  ManagedEmailPaymentSetupDTO,
   ManagedEmailProposalDTO,
   ManagedEmailQuoteDTO,
 } from './managed-email.dto';
 import { ManagedEmailAcquisitionMode } from './enums/managed-email-acquisition-mode.enum';
 import {
   ManagedEmailCampaignCapInput,
+  ManagedEmailCompletePaymentMethodInput,
   ManagedEmailDomainActionInput,
   ManagedEmailHealthDetailsInput,
   ManagedEmailMailboxActionInput,
   ManagedEmailOperationInput,
+  ManagedEmailPrewarmedProposalInput,
   ManagedEmailProposalInput,
   ManagedEmailPurchaseInput,
   ManagedEmailQuoteInput,
-  ManagedEmailRetryPaymentInput,
 } from './managed-email.input';
 import { ManagedEmailCustomerService } from './services/managed-email-customer.service';
+import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
 
 @MetadataResolver()
 @UseGuards(
@@ -45,6 +49,7 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
 export class ManagedEmailResolver {
   constructor(
     private readonly managedEmailCustomerService: ManagedEmailCustomerService,
+    private readonly managedProviderStripeService?: ManagedProviderStripeService,
   ) {}
 
   @Query(() => ManagedEmailOverviewDTO)
@@ -71,8 +76,12 @@ export class ManagedEmailResolver {
   @Query(() => [ManagedEmailBundleDTO])
   async managedEmailPrewarmedBundles(
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() actorId: string,
   ): Promise<ManagedEmailBundleDTO[]> {
-    return this.managedEmailCustomerService.prewarmedBundles(workspace.id);
+    return this.managedEmailCustomerService.prewarmedBundles({
+      actorId,
+      workspaceId: workspace.id,
+    });
   }
 
   @Query(() => ManagedEmailProposalDTO)
@@ -93,11 +102,62 @@ export class ManagedEmailResolver {
   async managedEmailQuote(
     @Args('input') input: ManagedEmailQuoteInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() actorId: string,
   ): Promise<ManagedEmailQuoteDTO> {
     return this.managedEmailCustomerService.quote({
+      actorId,
       proposalId: input.proposalId,
       workspaceId: workspace.id,
     });
+  }
+
+  @Query(() => ManagedEmailProposalDTO)
+  async managedEmailPrewarmedProposal(
+    @Args('input') input: ManagedEmailPrewarmedProposalInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() actorId: string,
+  ): Promise<ManagedEmailProposalDTO> {
+    return this.managedEmailCustomerService.prewarmedProposal({
+      actorId,
+      bundleId: input.bundleId,
+      workspaceId: workspace.id,
+    });
+  }
+
+  @Mutation(() => ManagedEmailPaymentSetupDTO)
+  async prepareManagedEmailPaymentMethod(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<ManagedEmailPaymentSetupDTO> {
+    if (!this.managedProviderStripeService) {
+      throw new Error('Managed email payment is unavailable');
+    }
+    const result =
+      await this.managedProviderStripeService.prepareWorkspacePaymentMethod({
+        workspaceId: workspace.id,
+      });
+    return {
+      clientSecret: result.clientSecret,
+      publishableKey: result.publishableKey,
+      ready: result.ready,
+      setupIntentId: result.setupIntentId,
+    };
+  }
+
+  @Mutation(() => ManagedEmailPaymentMethodStatusDTO)
+  async completeManagedEmailPaymentMethod(
+    @Args('input') input: ManagedEmailCompletePaymentMethodInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<ManagedEmailPaymentMethodStatusDTO> {
+    if (!this.managedProviderStripeService) {
+      throw new Error('Managed email payment is unavailable');
+    }
+    await this.managedProviderStripeService.completeWorkspacePaymentMethodSetup(
+      {
+        setupIntentId: input.setupIntentId,
+        workspaceId: workspace.id,
+      },
+    );
+    return { ready: true };
   }
 
   @Query(() => ManagedEmailOperationDTO, { nullable: true })
@@ -208,20 +268,6 @@ export class ManagedEmailResolver {
       actorId,
       idempotencyKey: input.idempotencyKey,
       mailboxId: input.mailboxId,
-      workspaceId: workspace.id,
-    });
-  }
-
-  @Mutation(() => ManagedEmailActionResultDTO)
-  async retryManagedEmailPayment(
-    @Args('input') input: ManagedEmailRetryPaymentInput,
-    @AuthWorkspace() workspace: WorkspaceEntity,
-    @AuthWorkspaceMemberId() actorId: string,
-  ): Promise<ManagedEmailActionResultDTO> {
-    return this.managedEmailCustomerService.retryPayment({
-      actorId,
-      idempotencyKey: input.idempotencyKey,
-      operationId: input.operationId,
       workspaceId: workspace.id,
     });
   }

@@ -6,6 +6,7 @@ import {
   type IcemailMailboxDeletionReceipt,
   type IcemailMailboxDetail,
   type IcemailMailboxSummary,
+  type IcemailProviderCredentialSecret,
   type IcemailOrderReceipt,
   type IcemailPage,
   type IcemailPrewarmPurchaseReceipt,
@@ -18,6 +19,13 @@ import {
 const MAX_COLLECTION_SIZE = 100;
 const MAX_STRING_LENGTH = 500;
 const MAX_SAFE_INTEGER_DECIMAL_LENGTH = 16;
+
+export type IcemailDomainPolicy = 'PRODUCTION' | 'SANDBOX';
+
+const PRODUCTION_DOMAIN_PATTERN =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:com|net|org|biz|live|info)$/;
+const SANDBOX_DOMAIN_PATTERN =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:com|net|org|biz|live|info|test)$/;
 
 const malformed = (): never => {
   throw new IcemailException(IcemailExceptionCode.MALFORMED_RESPONSE);
@@ -55,6 +63,28 @@ const asBoolean = (value: unknown): boolean => {
   return value;
 };
 
+const asPort = (value: unknown): number => {
+  if (
+    !Number.isSafeInteger(value) ||
+    (value as number) < 1 ||
+    (value as number) > 65_535
+  ) {
+    return malformed();
+  }
+
+  return value as number;
+};
+
+const mapMailEndpoint = (value: unknown) => {
+  const endpoint = asRecord(value);
+
+  return {
+    host: asString(endpoint.host).trim().toLowerCase(),
+    port: asPort(endpoint.port),
+    secure: asBoolean(endpoint.tls),
+  };
+};
+
 const asNonNegativeInteger = (value: unknown): number => {
   if (!Number.isSafeInteger(value) || (value as number) < 0) return malformed();
 
@@ -84,29 +114,34 @@ const asDate = (value: unknown): Date => {
 const asNullableDate = (value: unknown): Date | null =>
   value === null ? null : asDate(value);
 
-const asDomain = (value: unknown): string => {
+const asDomain = (
+  value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
+): string => {
   const domain = asString(value).trim().toLowerCase();
+  const pattern =
+    policy === 'SANDBOX' ? SANDBOX_DOMAIN_PATTERN : PRODUCTION_DOMAIN_PATTERN;
 
-  if (
-    domain.length > 253 ||
-    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:com|net|org|biz|live|info)$/.test(
-      domain,
-    )
-  ) {
+  if (domain.length > 253 || !pattern.test(domain)) {
     return malformed();
   }
 
   return domain;
 };
 
-const asAddress = (value: unknown, expectedDomain?: string): string => {
+const asAddress = (
+  value: unknown,
+  expectedDomain?: string,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
+): string => {
   const address = asString(value).trim().toLowerCase();
   const parts = address.split('@');
 
   if (
     parts.length !== 2 ||
     parts[0].length === 0 ||
-    asDomain(parts[1]) !== (expectedDomain ?? asDomain(parts[1]))
+    asDomain(parts[1], policy) !==
+      (expectedDomain ?? asDomain(parts[1], policy))
   ) {
     return malformed();
   }
@@ -164,11 +199,11 @@ const mapPrice = (value: unknown): IcemailProviderPrice => {
   };
 };
 
-const mapAvailabilityItem = (value: unknown) => {
+const mapAvailabilityItem = (value: unknown, policy: IcemailDomainPolicy) => {
   const item = asRecord(value);
 
   return {
-    domain: asDomain(item.domain),
+    domain: asDomain(item.domain, policy),
     available: asBoolean(item.available),
     price: mapPrice(item.pricing),
   };
@@ -176,19 +211,23 @@ const mapAvailabilityItem = (value: unknown) => {
 
 export const mapIcemailDomainAvailability = (
   value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
 ): IcemailDomainAvailability => {
   const data = asRecord(unwrapData(value));
-  const current = mapAvailabilityItem(data.current_domain);
+  const current = mapAvailabilityItem(data.current_domain, policy);
 
   return {
     ...current,
-    alternatives: asArray(data.recommended_domains, 50).map(
-      mapAvailabilityItem,
+    alternatives: asArray(data.recommended_domains, 50).map((item) =>
+      mapAvailabilityItem(item, policy),
     ),
   };
 };
 
-const mapDomain = (value: unknown): IcemailDomainSummary => {
+const mapDomain = (
+  value: unknown,
+  policy: IcemailDomainPolicy,
+): IcemailDomainSummary => {
   const domain = asRecord(value);
   const mailboxCount = asProviderCount(domain.mailbox_count);
   const provider =
@@ -200,7 +239,7 @@ const mapDomain = (value: unknown): IcemailDomainSummary => {
 
   return {
     id: asString(domain.domain_id),
-    domain: asDomain(domain.domain),
+    domain: asDomain(domain.domain, policy),
     status: asString(domain.status),
     active: asBoolean(domain.active),
     provider,
@@ -214,30 +253,36 @@ const mapDomain = (value: unknown): IcemailDomainSummary => {
 
 export const mapIcemailDomainPage = (
   value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
 ): IcemailPage<IcemailDomainSummary> => {
   const data = asRecord(unwrapData(value));
 
   return {
-    items: asArray(data.domains, 50).map(mapDomain),
+    items: asArray(data.domains, 50).map((domain) => mapDomain(domain, policy)),
     total: asNonNegativeInteger(data.total_count),
     page: asNonNegativeInteger(data.page),
     limit: asNonNegativeInteger(data.limit),
   };
 };
 
-export const mapIcemailDomainDetail = (value: unknown): IcemailDomainDetail =>
-  mapDomain(unwrapData(value));
+export const mapIcemailDomainDetail = (
+  value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
+): IcemailDomainDetail => mapDomain(unwrapData(value), policy);
 
-const mapMailbox = (value: unknown): IcemailMailboxSummary => {
+const mapMailbox = (
+  value: unknown,
+  policy: IcemailDomainPolicy,
+): IcemailMailboxSummary => {
   const mailbox = asRecord(value);
   const domain = asRecord(mailbox.domains);
-  const normalizedDomain = asDomain(domain.domain);
+  const normalizedDomain = asDomain(domain.domain, policy);
 
   return {
     id: asString(mailbox.id),
     domainId: asString(domain.domain_id),
     domain: normalizedDomain,
-    address: asAddress(mailbox.username, normalizedDomain),
+    address: asAddress(mailbox.username, normalizedDomain, policy),
     firstName: asString(mailbox.first_name),
     lastName: asString(mailbox.last_name),
     provider: asGoogleProvider(mailbox.type),
@@ -250,32 +295,56 @@ const mapMailbox = (value: unknown): IcemailMailboxSummary => {
 
 export const mapIcemailMailboxPage = (
   value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
 ): IcemailPage<IcemailMailboxSummary> => {
   const data = asRecord(unwrapData(value));
 
   return {
-    items: asArray(data.mailboxes, 50).map(mapMailbox),
+    items: asArray(data.mailboxes, 50).map((mailbox) =>
+      mapMailbox(mailbox, policy),
+    ),
     total: asNonNegativeInteger(data.total_count),
     page: asNonNegativeInteger(data.page),
     limit: asNonNegativeInteger(data.limit),
   };
 };
 
-export const mapIcemailMailboxDetail = (value: unknown): IcemailMailboxDetail =>
-  mapMailbox(unwrapData(value));
+export const mapIcemailMailboxDetail = (
+  value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
+): IcemailMailboxDetail => mapMailbox(unwrapData(value), policy);
 
-export const mapIcemailAppPassword = (value: unknown): string | null => {
+export const mapIcemailCredentialSecret = (
+  value: unknown,
+): IcemailProviderCredentialSecret | null => {
   const data = asRecord(unwrapData(value));
 
-  return data.app_password === null ? null : asString(data.app_password);
+  if (data.app_password === null) return null;
+
+  const appPassword = asString(data.app_password);
+  const hasSmtp = data.smtp !== undefined;
+  const hasImap = data.imap !== undefined;
+
+  if (hasSmtp !== hasImap) return malformed();
+  if (!hasSmtp) return { appPassword, transport: null };
+  if (data.forwarding !== false) return malformed();
+
+  return {
+    appPassword,
+    transport: {
+      smtp: mapMailEndpoint(data.smtp),
+      imap: mapMailEndpoint(data.imap),
+    },
+  };
 };
 
 export const mapIcemailOrderReceipt = (
   value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
 ): IcemailOrderReceipt => ({
   domains: asArray(unwrapData(value)).map((rawDomain) => {
     const domain = asRecord(rawDomain);
-    const normalizedDomain = asDomain(domain.domain_name);
+    const normalizedDomain = asDomain(domain.domain_name, policy);
 
     if (domain.import !== false) return malformed();
     asGoogleProvider(domain.mailbox_type);
@@ -289,7 +358,7 @@ export const mapIcemailOrderReceipt = (
 
         return {
           id: asString(mailbox.mailbox_id),
-          address: asAddress(mailbox.username, normalizedDomain),
+          address: asAddress(mailbox.username, normalizedDomain, policy),
           firstName: asString(mailbox.first_name),
           lastName: asString(mailbox.last_name),
         };
@@ -301,11 +370,12 @@ export const mapIcemailOrderReceipt = (
 const mapPrewarmedMailbox = (
   value: unknown,
   expectedDomain: string,
+  policy: IcemailDomainPolicy,
 ): IcemailPrewarmedMailbox => {
   const mailbox = asRecord(value);
 
   return {
-    address: asAddress(mailbox.username, expectedDomain),
+    address: asAddress(mailbox.username, expectedDomain, policy),
     firstName: asString(mailbox.first_name),
     lastName: asString(mailbox.last_name),
     provider: asGoogleProvider(mailbox.type),
@@ -315,13 +385,14 @@ const mapPrewarmedMailbox = (
 
 export const mapIcemailPrewarmedBundlePage = (
   value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
 ): IcemailPrewarmedBundlePage => {
   const data = asRecord(unwrapData(value));
 
   return {
     items: asArray(data.domains).map((rawBundle) => {
       const bundle = asRecord(rawBundle);
-      const domain = asDomain(bundle.domain);
+      const domain = asDomain(bundle.domain, policy);
       const rawMailboxes = asArray(bundle.pre_warm_mailbox);
       const mailboxCount = asProviderCount(bundle.mailbox_count);
 
@@ -334,7 +405,7 @@ export const mapIcemailPrewarmedBundlePage = (
         mailboxPriceCents: asCents(bundle.per_mailbox_price),
         mailboxCount,
         mailboxes: rawMailboxes.map((mailbox) =>
-          mapPrewarmedMailbox(mailbox, domain),
+          mapPrewarmedMailbox(mailbox, domain, policy),
         ),
       };
     }),
@@ -343,11 +414,12 @@ export const mapIcemailPrewarmedBundlePage = (
 
 export const mapIcemailPrewarmPurchaseReceipt = (
   value: unknown,
+  policy: IcemailDomainPolicy = 'PRODUCTION',
 ): IcemailPrewarmPurchaseReceipt => {
   const data = asRecord(unwrapData(value));
   const successful = asArray(data.successful_domains, 50).map((rawDomain) => {
     const domain = asRecord(rawDomain);
-    const normalizedDomain = asDomain(domain.domain_name);
+    const normalizedDomain = asDomain(domain.domain_name, policy);
 
     return {
       domainId: asString(domain.domain_id),
@@ -357,7 +429,7 @@ export const mapIcemailPrewarmPurchaseReceipt = (
 
         return {
           id: asString(mailbox.mailbox_id),
-          ...mapPrewarmedMailbox(mailbox, normalizedDomain),
+          ...mapPrewarmedMailbox(mailbox, normalizedDomain, policy),
         };
       }),
     };

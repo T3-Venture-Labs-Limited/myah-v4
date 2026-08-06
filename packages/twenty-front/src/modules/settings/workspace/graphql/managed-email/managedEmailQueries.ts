@@ -83,6 +83,32 @@ export const GET_MANAGED_EMAIL_PROPOSAL = gql`
   }
 `;
 
+export const GET_MANAGED_EMAIL_PREWARMED_PROPOSAL = gql`
+  query GetManagedEmailPrewarmedProposal(
+    $input: ManagedEmailPrewarmedProposalInput!
+  ) {
+    managedEmailPrewarmedProposal(input: $input) {
+      disclosures {
+        cancellation
+        managedServiceOwnership
+        prepaidBalance
+      }
+      domains {
+        domain
+        mailboxes {
+          address
+          displayName
+          roleTitle
+        }
+      }
+      expiresAt
+      id
+      mailboxCount
+      policyVersion
+    }
+  }
+`;
+
 export const GET_MANAGED_EMAIL_QUOTE = gql`
   query GetManagedEmailQuote($input: ManagedEmailQuoteInput!) {
     managedEmailQuote(input: $input) {
@@ -93,6 +119,7 @@ export const GET_MANAGED_EMAIL_QUOTE = gql`
         prepaidBalance
       }
       dueTodayCents
+      isSandbox
       expiresAt
       id
       lines {

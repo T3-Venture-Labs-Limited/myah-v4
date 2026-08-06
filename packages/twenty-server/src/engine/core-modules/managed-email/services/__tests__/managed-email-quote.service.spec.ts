@@ -15,6 +15,9 @@ const paymentProcessing = {
   verifiedAt: '2026-08-03',
 };
 
+const mailboxProviderCostMinorUnits = 400;
+const mailboxCustomerPriceMinorUnits = 650;
+
 const catalog: ManagedEmailCatalog = {
   products: [
     {
@@ -29,11 +32,11 @@ const catalog: ManagedEmailCatalog = {
     {
       ...structuredClone(MANAGED_EMAIL_PRODUCT_DEFINITIONS[1]),
       customerPrice: {
-        amountMinorUnits: 419,
+        amountMinorUnits: mailboxCustomerPriceMinorUnits,
         currency: 'USD',
         kind: 'FIXED',
         landedProviderCost: {
-          amountMinorUnits: 250,
+          amountMinorUnits: mailboxProviderCostMinorUnits,
           currency: 'USD',
           kind: 'SAME_CURRENCY',
           source: 'Illustrative same-currency test ceiling',
@@ -165,7 +168,7 @@ describe('ManagedEmailQuoteService', () => {
         unitPriceCents: domainPrice,
       },
       {
-        amountCents: 419 * 4,
+        amountCents: mailboxCustomerPriceMinorUnits * 4,
         billingFrequency: 'MONTHLY',
         endingBefore: '2026-09-05T10:05:00.000Z',
         metronomeProductId:
@@ -174,7 +177,7 @@ describe('ManagedEmailQuoteService', () => {
         productTag: 'myah-managed-mailbox-month',
         quantity: 4,
         startingAt: '2026-08-05T10:05:00.000Z',
-        unitPriceCents: 419,
+        unitPriceCents: mailboxCustomerPriceMinorUnits,
       },
       {
         amountCents: 4070 * 4,
@@ -206,7 +209,7 @@ describe('ManagedEmailQuoteService', () => {
           providerInventoryId: 'inventory-1',
           prewarmedProviderCosts: {
             domainPriceCents: 1000,
-            mailboxPriceCents: 250,
+            mailboxPriceCents: mailboxProviderCostMinorUnits,
           },
         },
       ],
@@ -227,7 +230,7 @@ describe('ManagedEmailQuoteService', () => {
         providerInventoryId: 'inventory-1',
         prewarmedProviderCosts: {
           domainPriceCents: 1000,
-          mailboxPriceCents: 250,
+          mailboxPriceCents: mailboxProviderCostMinorUnits,
         },
       }),
     ]);
@@ -242,7 +245,7 @@ describe('ManagedEmailQuoteService', () => {
           providerInventoryId: 'inventory-1',
           prewarmedProviderCosts: {
             domainPriceCents: 1000,
-            mailboxPriceCents: 251,
+            mailboxPriceCents: mailboxProviderCostMinorUnits + 1,
           },
         },
       ],

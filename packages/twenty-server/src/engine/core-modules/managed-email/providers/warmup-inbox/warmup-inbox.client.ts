@@ -88,16 +88,16 @@ export class WarmupInboxClient {
             smtp: {
               username: validated.address,
               password: validated.appPassword,
-              host: 'smtp.gmail.com',
-              port: 465,
-              tls: true,
+              host: validated.smtp.host,
+              port: validated.smtp.port,
+              tls: validated.smtp.secure,
             },
             imap: {
               username: validated.address,
               password: validated.appPassword,
-              host: 'imap.gmail.com',
-              port: 993,
-              tls: true,
+              host: validated.imap.host,
+              port: validated.imap.port,
+              tls: validated.imap.secure,
             },
             frequency: validated.frequency,
             custom_oauth: null,
@@ -355,14 +355,26 @@ export class WarmupInboxClient {
       );
     }
 
+    const timeout = write
+      ? WARMUP_INBOX_WRITE_TIMEOUT_MS
+      : WARMUP_INBOX_READ_TIMEOUT_MS;
+
+    if (
+      this.twentyConfigService.get('MANAGED_EMAIL_EXECUTION_MODE') === 'SANDBOX'
+    ) {
+      return this.secureHttpClientService.getInternalHttpClient({
+        baseURL,
+        headers: { 'x-api-key': apiKey },
+        timeout,
+      });
+    }
+
     return this.secureHttpClientService.getHttpClient({
       baseURL,
       headers: { 'x-api-key': apiKey },
       retries: write ? 0 : 2,
       ...(write ? {} : { shouldResetTimeout: true }),
-      timeout: write
-        ? WARMUP_INBOX_WRITE_TIMEOUT_MS
-        : WARMUP_INBOX_READ_TIMEOUT_MS,
+      timeout,
     });
   }
 
@@ -381,6 +393,19 @@ export class WarmupInboxClient {
     const senderLastName = this.validateString(input.senderLastName);
     const credential = input.credential;
 
+    const isSandbox =
+      this.twentyConfigService.get('MANAGED_EMAIL_EXECUTION_MODE') ===
+      'SANDBOX';
+    const transportIsValid = isSandbox
+      ? this.isSandboxEndpoint(credential?.smtp) &&
+        this.isSandboxEndpoint(credential?.imap)
+      : credential?.smtp?.host === 'smtp.gmail.com' &&
+        credential.smtp.port === 465 &&
+        credential.smtp.secure === true &&
+        credential?.imap?.host === 'imap.gmail.com' &&
+        credential.imap.port === 993 &&
+        credential.imap.secure === true;
+
     if (
       typeof credential !== 'object' ||
       credential === null ||
@@ -388,12 +413,7 @@ export class WarmupInboxClient {
       typeof credential.appPassword !== 'string' ||
       credential.appPassword.length < 8 ||
       credential.appPassword.length > MAX_INPUT_STRING_LENGTH ||
-      credential.smtp?.host !== 'smtp.gmail.com' ||
-      credential.smtp.port !== 465 ||
-      credential.smtp.secure !== true ||
-      credential.imap?.host !== 'imap.gmail.com' ||
-      credential.imap.port !== 993 ||
-      credential.imap.secure !== true
+      !transportIsValid
     ) {
       throw new WarmupInboxException(WarmupInboxExceptionCode.INVALID_INPUT);
     }
@@ -403,8 +423,27 @@ export class WarmupInboxClient {
       senderFirstName,
       senderLastName,
       appPassword: credential.appPassword,
+      smtp: credential.smtp,
+      imap: credential.imap,
       frequency: this.validatePolicy(input.policy),
     };
+  }
+
+  private isSandboxEndpoint(
+    endpoint:
+      | { host: string; port: number; secure: boolean }
+      | null
+      | undefined,
+  ): boolean {
+    if (endpoint === null || endpoint === undefined) return false;
+
+    return (
+      ['127.0.0.1', 'localhost', '[::1]'].includes(endpoint.host) &&
+      Number.isSafeInteger(endpoint.port) &&
+      endpoint.port >= 1 &&
+      endpoint.port <= 65_535 &&
+      endpoint.secure === false
+    );
   }
 
   private validatePolicy(input: ManagedWarmupPolicyConfiguration) {

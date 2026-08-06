@@ -31,6 +31,25 @@ export class ManagedEmailReadinessService {
     private readonly resolvePolicy: ManagedEmailReadinessPolicyResolver,
   ) {}
 
+  assertApprovedPurchasePolicy({
+    policyVersion,
+    providerConfigurationKey,
+  }: {
+    policyVersion: string;
+    providerConfigurationKey: string;
+  }): void {
+    const policy = this.resolvePolicy(policyVersion);
+
+    if (
+      policy === null ||
+      policy.approvalState !== 'APPROVED' ||
+      policy.version !== policyVersion ||
+      policy.providerConfigurationKey !== providerConfigurationKey
+    ) {
+      throw new Error('Managed email readiness policy is unavailable');
+    }
+  }
+
   evaluate(input: ManagedEmailReadinessInput): ManagedEmailReadinessResult {
     const policy = this.resolvePolicy(input.policyVersion);
 

@@ -1,4 +1,24 @@
 import { gql } from '@apollo/client';
+export const PREPARE_MANAGED_EMAIL_PAYMENT_METHOD = gql`
+  mutation PrepareManagedEmailPaymentMethod {
+    prepareManagedEmailPaymentMethod {
+      clientSecret
+      publishableKey
+      ready
+      setupIntentId
+    }
+  }
+`;
+
+export const COMPLETE_MANAGED_EMAIL_PAYMENT_METHOD = gql`
+  mutation CompleteManagedEmailPaymentMethod(
+    $input: ManagedEmailCompletePaymentMethodInput!
+  ) {
+    completeManagedEmailPaymentMethod(input: $input) {
+      ready
+    }
+  }
+`;
 
 export const CONFIRM_MANAGED_EMAIL_PREWARMED_PURCHASE = gql`
   mutation ConfirmManagedEmailPrewarmedPurchase(
@@ -16,15 +36,6 @@ export const CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE = gql`
     $input: ManagedEmailPurchaseInput!
   ) {
     confirmManagedEmailOrdinaryPurchase(input: $input) {
-      accepted
-      operationId
-    }
-  }
-`;
-
-export const RETRY_MANAGED_EMAIL_PAYMENT = gql`
-  mutation RetryManagedEmailPayment($input: ManagedEmailRetryPaymentInput!) {
-    retryManagedEmailPayment(input: $input) {
       accepted
       operationId
     }

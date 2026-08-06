@@ -64,6 +64,24 @@ export class ManagedEmailProposalInput {
   personas: ManagedEmailPersonaInput[];
 }
 
+@InputType('ManagedEmailPrewarmedProposalInput')
+export class ManagedEmailPrewarmedProposalInput {
+  @Field(() => String)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(MAX_OPAQUE_REFERENCE_LENGTH)
+  bundleId: string;
+}
+
+@InputType('ManagedEmailCompletePaymentMethodInput')
+export class ManagedEmailCompletePaymentMethodInput {
+  @Field(() => String)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(MAX_OPAQUE_REFERENCE_LENGTH)
+  setupIntentId: string;
+}
+
 @InputType('ManagedEmailQuoteInput')
 export class ManagedEmailQuoteInput {
   @Field(() => String)
@@ -145,19 +163,6 @@ export class ManagedEmailMailboxActionInput {
   @Field(() => String)
   @IsUUID()
   mailboxId: string;
-}
-
-@InputType('ManagedEmailRetryPaymentInput')
-export class ManagedEmailRetryPaymentInput {
-  @Field(() => String)
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(MAX_IDEMPOTENCY_KEY_LENGTH)
-  idempotencyKey: string;
-
-  @Field(() => String)
-  @IsUUID()
-  operationId: string;
 }
 
 @InputType('ManagedEmailDomainActionInput')

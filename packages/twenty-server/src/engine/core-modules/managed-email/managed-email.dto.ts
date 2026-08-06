@@ -239,6 +239,29 @@ export class ManagedEmailQuoteDTO {
 
   @Field(() => String)
   quoteVersion: string;
+  @Field(() => Boolean)
+  isSandbox: boolean;
+}
+
+@ObjectType('ManagedEmailPaymentSetup')
+export class ManagedEmailPaymentSetupDTO {
+  @Field(() => String)
+  clientSecret: string;
+
+  @Field(() => String)
+  publishableKey: string;
+
+  @Field(() => String)
+  setupIntentId: string;
+
+  @Field(() => Boolean)
+  ready: boolean;
+}
+
+@ObjectType('ManagedEmailPaymentMethodStatus')
+export class ManagedEmailPaymentMethodStatusDTO {
+  @Field(() => Boolean)
+  ready: boolean;
 }
 
 @ObjectType('ManagedEmailOperation')

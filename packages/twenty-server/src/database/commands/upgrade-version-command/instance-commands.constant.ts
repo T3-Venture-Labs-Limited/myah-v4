@@ -117,6 +117,8 @@ import { RepairManagedProviderOperationRetentionFastInstanceCommand } from 'src/
 import { CreateManagedEmailFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1785325829908-create-managed-email';
 import { AddManagedEmailQuoteAndPersonaEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1785699702326-add-managed-email-quote-and-persona-evidence';
 import { AddManagedEmailLifecycleFieldsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000000000-add-managed-email-lifecycle-fields';
+import { AddManagedProviderStripeCustomerFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000002000-add-managed-provider-stripe-customer';
+import { CreateManagedEmailOfferFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000003000-create-managed-email-offer';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -235,4 +237,6 @@ export const INSTANCE_COMMANDS = [
   CreateManagedEmailFastInstanceCommand,
   AddManagedEmailQuoteAndPersonaEvidenceFastInstanceCommand,
   AddManagedEmailLifecycleFieldsFastInstanceCommand,
+  AddManagedProviderStripeCustomerFastInstanceCommand,
+  CreateManagedEmailOfferFastInstanceCommand,
 ];

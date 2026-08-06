@@ -55,11 +55,25 @@ export type IcemailMailboxSummary = {
 
 export type IcemailMailboxDetail = IcemailMailboxSummary;
 
+export type IcemailMailEndpoint = {
+  host: string;
+  port: number;
+  secure: boolean;
+};
+
+export type IcemailProviderCredentialSecret = {
+  appPassword: string;
+  transport: {
+    smtp: IcemailMailEndpoint;
+    imap: IcemailMailEndpoint;
+  } | null;
+};
+
 export type IcemailMailboxCredential = {
   username: string;
   appPassword: string;
-  smtp: { host: 'smtp.gmail.com'; port: 465; secure: true };
-  imap: { host: 'imap.gmail.com'; port: 993; secure: true };
+  smtp: IcemailMailEndpoint;
+  imap: IcemailMailEndpoint;
 };
 
 export type IcemailOrdinaryMailboxInput = {
