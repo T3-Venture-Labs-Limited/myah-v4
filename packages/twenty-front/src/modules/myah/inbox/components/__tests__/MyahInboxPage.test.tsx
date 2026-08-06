@@ -6,12 +6,14 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import type * as React from 'react';
 import { createRoot } from 'react-dom/client';
+import type * as MyahInboxDraftAutosaveModule from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 
 import { MyahInboxPage } from '@/myah/inbox/components/MyahInboxPage';
+import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
 import {
   myahInboxFiltersState,
   myahInboxSelectionWorkspaceIdState,
@@ -63,6 +65,30 @@ jest.mock('twenty-ui/input', () => ({
 
 const mockUseMyahInboxThreads = jest.fn();
 const mockRefresh = jest.fn();
+const mockUseMyahInboxDraftAutosaveController = jest.fn();
+let mockUseActualAutosave = false;
+const mockAutosaveDraftKey = {
+  workspaceId: 'workspace-1',
+  threadId: 'thread-1',
+};
+const MockAutosaveDraftProbeEffect = () => {
+  const controller =
+    mockActualMyahInboxDraftAutosave.useMyahInboxDraftAutosaveControllerContext();
+
+  useEffect(() => {
+    controller.reconcile({
+      key: mockAutosaveDraftKey,
+      revision: 2,
+      body: { markdown: '', blocknote: null },
+    });
+    controller.updateDraft({
+      key: mockAutosaveDraftKey,
+      body: { markdown: 'dirty draft', blocknote: null },
+    });
+  }, [controller]);
+
+  return null;
+};
 let mockIsMobile = false;
 let mockCurrentWorkspaceId = 'workspace-1';
 
@@ -74,9 +100,51 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxThreads', () => ({
   useMyahInboxThreads: (...args: unknown[]) => mockUseMyahInboxThreads(...args),
 }));
 
+jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
+  useMyahInboxThreadMutations: jest.fn(),
+}));
+
 jest.mock('@/ui/utilities/responsive/hooks/useIsMobile', () => ({
   useIsMobile: () => mockIsMobile,
 }));
+
+jest.mock('@/myah/inbox/hooks/useMyahInboxDraftAutosaveController', () => {
+  const actualAutosave = jest.requireActual<
+    typeof MyahInboxDraftAutosaveModule
+  >('@/myah/inbox/hooks/useMyahInboxDraftAutosaveController');
+  const { createElement } = jest.requireActual<typeof React>('react');
+
+  return {
+    MyahInboxDraftAutosaveProvider: ({
+      children,
+      controller,
+    }: {
+      children: React.ReactNode;
+      controller: MyahInboxDraftAutosaveModule.MyahInboxDraftAutosaveController;
+    }) =>
+      mockUseActualAutosave
+        ? createElement(actualAutosave.MyahInboxDraftAutosaveProvider, {
+            controller,
+            children,
+          })
+        : children,
+    useMyahInboxDraftAutosaveController: () =>
+      mockUseActualAutosave
+        ? actualAutosave.useMyahInboxDraftAutosaveController()
+        : mockUseMyahInboxDraftAutosaveController(),
+    useMyahInboxDraftAutosaveControllerContext: () =>
+      mockUseActualAutosave
+        ? actualAutosave.useMyahInboxDraftAutosaveControllerContext()
+        : mockUseMyahInboxDraftAutosaveController(),
+  };
+});
+
+const mockActualMyahInboxDraftAutosave = jest.requireActual<
+  typeof MyahInboxDraftAutosaveModule
+>('@/myah/inbox/hooks/useMyahInboxDraftAutosaveController');
+const mockUseMyahInboxThreadMutations = jest.mocked(
+  useMyahInboxThreadMutations,
+);
 
 jest.mock('@/myah/inbox/components/MyahInboxThreadList', () => ({
   MyahInboxThreadList: ({
@@ -126,14 +194,22 @@ jest.mock('@/myah/inbox/components/MyahInboxThreadPanel', () => ({
   }: {
     thread: { id: string; subject: string | null } | null;
     onThreadUpdated?: (message: string) => void;
-  }) => (
-    <div>
-      Conversation panel {thread?.id ?? 'none'}
-      <button onClick={() => onThreadUpdated?.('Conversation updated')}>
-        Update conversation test double
-      </button>
-    </div>
-  ),
+  }) => {
+    if (mockUseActualAutosave) {
+      return jest
+        .requireActual<typeof React>('react')
+        .createElement(MockAutosaveDraftProbeEffect);
+    }
+
+    return (
+      <div>
+        Conversation panel {thread?.id ?? 'none'}
+        <button onClick={() => onThreadUpdated?.('Conversation updated')}>
+          Update conversation test double
+        </button>
+      </div>
+    );
+  },
 }));
 
 jest.mock('@/ui/layout/page/components/PageHeader', () => ({
@@ -261,7 +337,12 @@ describe('MyahInboxPage', () => {
       selectedThread: threads[0],
     });
     mockIsMobile = false;
+    mockUseActualAutosave = false;
     mockCurrentWorkspaceId = 'workspace-1';
+    mockUseMyahInboxDraftAutosaveController.mockReturnValue({
+      flush: jest.fn(() => Promise.resolve()),
+      flushWorkspace: jest.fn(),
+    });
     mockUseMyahInboxThreads.mockReturnValue(createInboxState());
   });
 
@@ -326,6 +407,11 @@ describe('MyahInboxPage', () => {
     expect(screen.queryByText(/Context panel/)).not.toBeInTheDocument();
   });
   it('does not replace the initial selection after a refresh removes it', async () => {
+    const flush = jest.fn(() => Promise.resolve());
+    mockUseMyahInboxDraftAutosaveController.mockReturnValue({
+      flush,
+      flushWorkspace: jest.fn(),
+    });
     const store = createStore();
     const { rerender } = renderPage(store);
 
@@ -355,6 +441,10 @@ describe('MyahInboxPage', () => {
         'none',
       ),
     );
+    expect(flush).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      threadId: 'thread-1',
+    });
   });
   it('does not automatically select again after switching A to B to A', async () => {
     const store = createStore();
@@ -446,6 +536,118 @@ describe('MyahInboxPage', () => {
 
     expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
       'thread-2',
+    );
+  });
+
+  it('starts an outgoing-thread flush before immediately switching selection', async () => {
+    const store = createStore();
+    let selectedThreadIdAtFlush: string | null = null;
+    const flush = jest.fn(() => {
+      selectedThreadIdAtFlush = store.get(myahInboxSelectedThreadIdState.atom);
+
+      return Promise.resolve();
+    });
+    mockUseMyahInboxDraftAutosaveController.mockReturnValue({
+      flush,
+      flushWorkspace: jest.fn(),
+    });
+    renderPage(store);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select Second conversation' }),
+    );
+
+    expect(flush).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      threadId: 'thread-1',
+    });
+    expect(selectedThreadIdAtFlush).toBe('thread-1');
+    expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+      'thread-2',
+    );
+  });
+
+  it('starts dirty workspace flushes when the Inbox page unmounts', () => {
+    const flushWorkspace = jest.fn();
+    mockUseMyahInboxDraftAutosaveController.mockReturnValue({
+      flush: jest.fn(() => Promise.resolve()),
+      flushWorkspace,
+    });
+    const { unmount } = renderPage();
+
+    unmount();
+
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+  });
+
+  it('starts a best-effort workspace flush when the document becomes hidden', () => {
+    const flushWorkspace = jest.fn();
+    mockUseMyahInboxDraftAutosaveController.mockReturnValue({
+      flush: jest.fn(() => Promise.resolve()),
+      flushWorkspace,
+    });
+    renderPage();
+
+    const visibilityStateSpy = jest
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(flushWorkspace).toHaveBeenCalledWith('workspace-1');
+    visibilityStateSpy.mockRestore();
+  });
+
+  it('does not flush the workspace on an ordinary Inbox page rerender', () => {
+    const flushWorkspace = jest.fn();
+    mockUseMyahInboxDraftAutosaveController.mockImplementation(() => ({
+      flush: jest.fn(() => Promise.resolve()),
+      flushWorkspace,
+    }));
+    const store = createStore();
+    const { rerender } = renderPage(store);
+
+    flushWorkspace.mockClear();
+    rerender(
+      <JotaiProvider store={store}>
+        <MyahInboxPage />
+      </JotaiProvider>,
+    );
+
+    expect(flushWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('starts the unmount flush while the real autosave controller retains the dirty key', async () => {
+    mockUseActualAutosave = true;
+    const saveDraft = jest.fn().mockResolvedValue({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'dirty draft', blocknote: null },
+    });
+    mockUseMyahInboxThreadMutations.mockReturnValue({
+      saveDraft,
+    } as never);
+    const store = createStore();
+    store.set(myahInboxSelectedThreadIdState.atom, 'thread-1');
+    store.set(myahInboxSelectionWorkspaceIdState.atom, 'workspace-1');
+    const { unmount } = renderPage(store);
+    await waitFor(() =>
+      expect(screen.getByLabelText('Selected thread')).toHaveTextContent(
+        'thread-1',
+      ),
+    );
+    unmount();
+
+    await waitFor(() =>
+      expect(saveDraft).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        expectedRevision: 2,
+        body: { markdown: 'dirty draft', blocknote: null },
+      }),
     );
   });
 
@@ -783,6 +985,11 @@ describe('MyahInboxPage', () => {
     const refreshDeferred = createDeferred<RefreshResult>();
     const refresh = jest.fn(() => refreshDeferred.promise);
     const store = createStore();
+    const flush = jest.fn(() => Promise.resolve());
+    mockUseMyahInboxDraftAutosaveController.mockReturnValue({
+      flush,
+      flushWorkspace: jest.fn(),
+    });
     const { rerender } = renderPage(store);
 
     mockUseMyahInboxThreads.mockReturnValue(
@@ -830,6 +1037,10 @@ describe('MyahInboxPage', () => {
     expect(screen.getByText('Conversation panel none')).toBeVisible();
     expect(store.get(myahInboxSelectedThreadIdState.atom)).toBeNull();
     expect(store.get(myahInboxSelectionWorkspaceIdState.atom)).toBeNull();
+    expect(flush).toHaveBeenLastCalledWith({
+      workspaceId: 'workspace-1',
+      threadId: 'thread-page-two',
+    });
     expect(
       screen.queryByLabelText('Selected list row'),
     ).not.toBeInTheDocument();

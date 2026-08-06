@@ -2,6 +2,11 @@ import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxThreadList } from '@/myah/inbox/components/MyahInboxThreadList';
 import { MyahInboxThreadPanel } from '@/myah/inbox/components/MyahInboxThreadPanel';
 import {
+  MyahInboxDraftAutosaveProvider,
+  useMyahInboxDraftAutosaveController,
+  useMyahInboxDraftAutosaveControllerContext,
+} from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
+import {
   type MyahInboxThread,
   useMyahInboxThreads,
 } from '@/myah/inbox/hooks/useMyahInboxThreads';
@@ -77,10 +82,56 @@ type ThreadUpdateStatus = {
 };
 
 export const MyahInboxPage = () => {
-  const isMobile = useIsMobile();
-  const { theme } = useContext(ThemeContext);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const workspaceId = currentWorkspace?.id ?? null;
+  // The lifecycle effect reads the latest controller without resubscribing.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const draftAutosaveControllerRef = useRef<{
+    flushWorkspace: (workspaceId: string) => void;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      return;
+    }
+
+    const flushWorkspace = () => {
+      draftAutosaveControllerRef.current?.flushWorkspace(workspaceId);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushWorkspace();
+      }
+    };
+
+    window.addEventListener('pagehide', flushWorkspace);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pagehide', flushWorkspace);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      flushWorkspace();
+    };
+  }, [workspaceId]);
+
+  const draftAutosaveController = useMyahInboxDraftAutosaveController();
+  draftAutosaveControllerRef.current = draftAutosaveController;
+
+  return (
+    <MyahInboxDraftAutosaveProvider controller={draftAutosaveController}>
+      <MyahInboxPageContent workspaceId={workspaceId} />
+    </MyahInboxDraftAutosaveProvider>
+  );
+};
+
+const MyahInboxPageContent = ({
+  workspaceId,
+}: {
+  workspaceId: string | null;
+}) => {
+  const isMobile = useIsMobile();
+  const { theme } = useContext(ThemeContext);
+  const { flush } = useMyahInboxDraftAutosaveControllerContext();
   const [myahInboxFilters, setMyahInboxFilters] = useAtomState(
     myahInboxFiltersState,
   );
@@ -201,6 +252,10 @@ export const MyahInboxPage = () => {
         return;
       }
 
+      void flush({
+        workspaceId,
+        threadId: currentWorkspaceSelectedThreadId,
+      });
       setMyahInboxSelectedThreadId(null);
       setMyahInboxSelectionWorkspaceId(null);
       return;
@@ -225,6 +280,7 @@ export const MyahInboxPage = () => {
     currentWorkspaceSelectedThreadId,
     inbox.error,
     inbox.loading,
+    flush,
     inbox.threads,
     myahInboxSelectionWorkspaceId,
     retainedSelectedThread,
@@ -238,6 +294,12 @@ export const MyahInboxPage = () => {
       return;
     }
 
+    if (currentWorkspaceSelectedThreadId) {
+      void flush({
+        workspaceId,
+        threadId: currentWorkspaceSelectedThreadId,
+      });
+    }
     setMyahInboxSelectedThreadId(threadId);
     setMyahInboxSelectionWorkspaceId(workspaceId);
 
@@ -310,6 +372,13 @@ export const MyahInboxPage = () => {
     }
 
     setRetainedSelectedThread(null);
+    if (workspaceId && selectedThreadId) {
+      void flush({
+        workspaceId,
+        threadId: selectedThreadId,
+      });
+    }
+
     setMyahInboxSelectedThreadId(null);
     setMyahInboxSelectionWorkspaceId(null);
   };
