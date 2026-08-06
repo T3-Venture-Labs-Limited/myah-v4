@@ -645,14 +645,62 @@ export const MYAH_STANDARD_OBJECTS = {
       view6bfee1b9: {
         universalIdentifier: '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
         viewFields: {
-          name: {
-            universalIdentifier: '16a078ac-9f6f-4dbb-993e-ac1ce932eb98',
+          lifecycleStatus: {
+            universalIdentifier: '7449f871-a737-4a9c-a85d-6e788e8ccdf0',
+          },
+          name: { universalIdentifier: '16a078ac-9f6f-4dbb-993e-ac1ce932eb98' },
+          campaignBrief: {
+            universalIdentifier: 'eb3d3d5f-8255-4fa4-ad0c-2d617ab31d98',
+          },
+          communicationGuidelines: {
+            universalIdentifier: '01fbc8b7-fcf5-4222-b322-72c513b03e36',
+          },
+          replyRules: {
+            universalIdentifier: '029453d5-ed6e-4e4b-b976-e01c4f4ad6c2',
+          },
+          escalationBoundaries: {
+            universalIdentifier: '6294f8b5-7c9a-4d73-91a6-e40c01a0f940',
+          },
+          additionalNotes: {
+            universalIdentifier: 'c2593480-3ddc-42b9-b156-96e77a5fff71',
+          },
+          createdAt: {
+            universalIdentifier: 'e65a9bb9-a89f-4319-a6df-d7c449f0f28f',
+          },
+          updatedAt: {
+            universalIdentifier: 'b40cebc4-4788-4412-a3bd-8b25d56a1d39',
+          },
+          createdBy: {
+            universalIdentifier: 'cb532d72-0b7f-478d-8443-64a7cffc0453',
+          },
+          updatedBy: {
+            universalIdentifier: 'd15cf2d7-b548-43a4-a9fb-e90b6bd476e6',
+          },
+          owner: {
+            universalIdentifier: 'daec24c3-ee6f-4287-8608-e3520149dc4b',
           },
           objective: {
             universalIdentifier: 'f7f89fa5-b524-4e5f-abaa-3fae7cb791f3',
           },
-          owner: {
-            universalIdentifier: 'daec24c3-ee6f-4287-8608-e3520149dc4b',
+          targetPlatforms: {
+            universalIdentifier: '7d7d1ea0-04d5-40af-ae35-57efcd7ced87',
+          },
+          targetDemographics: {
+            universalIdentifier: 'b0c13fe4-566a-4932-933d-868c08546709',
+          },
+          icpGoal: {
+            universalIdentifier: 'ab510acd-7378-411a-b6be-f17ae8420f21',
+          },
+          budgetNotes: {
+            universalIdentifier: 'd871fd3b-51f1-46a1-b891-63a43b0e0c88',
+          },
+        },
+      },
+      view9c4f90c5: {
+        universalIdentifier: '9c4f90c5-2a03-436b-8130-93d50a4d0e3e',
+        viewFields: {
+          lifecycleStatus: {
+            universalIdentifier: 'e2b2e0e1-1b50-456d-9576-cd0fbcce7593',
           },
         },
       },

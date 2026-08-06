@@ -1,3 +1,4 @@
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { PageLayoutTabLayoutMode } from 'twenty-shared/types';
 
 import { STANDARD_PAGE_LAYOUTS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-page-layout.constant';
@@ -158,8 +159,102 @@ export const MYAH_CREATOR_PAGE_LAYOUT_CONFIG = {
   },
 } as const satisfies StandardPageLayoutConfig;
 
+export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
+  name: 'Campaign Record Page',
+  type: PageLayoutType.RECORD_PAGE,
+  universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
+  objectUniversalIdentifier: MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+  defaultTabUniversalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
+  tabs: {
+    overview: {
+      universalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+      title: 'Campaign information',
+      position: 10,
+      icon: 'IconHome',
+      layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+      widgets: {
+        fields: {
+          universalIdentifier: '6845e3c3-3a1a-42d8-afcd-71ff885c8f20',
+          title: 'Campaign fields',
+          type: WidgetType.FIELDS,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
+          fieldsViewUniversalIdentifier: '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
+        },
+      },
+    },
+    tasks: {
+      universalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
+      title: 'Tasks',
+      position: 20,
+      icon: 'IconCheckbox',
+      layoutMode: PageLayoutTabLayoutMode.CANVAS,
+      widgets: {
+        tasks: {
+          universalIdentifier: 'e81ab303-f402-45df-8257-d91172ecc435',
+          title: 'Tasks',
+          type: WidgetType.TASKS,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+        },
+      },
+    },
+    notes: {
+      universalIdentifier: 'cd78ad8c-883a-4ce1-9b74-526adadb751d',
+      title: 'Notes',
+      position: 30,
+      icon: 'IconNotes',
+      layoutMode: PageLayoutTabLayoutMode.CANVAS,
+      widgets: {
+        notes: {
+          universalIdentifier: '9a05fd06-cf91-47a2-bbee-06cb4292f44d',
+          title: 'Notes',
+          type: WidgetType.NOTES,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+        },
+      },
+    },
+    instructions: {
+      universalIdentifier: '0d213a1a-e001-496c-970e-e692968cf17c',
+      title: 'Agent',
+      position: 40,
+      icon: 'IconFileText',
+      layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+      widgets: {
+        fields: {
+          universalIdentifier: '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392',
+          title: 'Campaign agent',
+          type: WidgetType.FIELDS,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
+          fieldsViewUniversalIdentifier: 'eb4da94a-d3da-4354-bb39-7478ac12bd35',
+        },
+      },
+    },
+    operations: {
+      universalIdentifier: 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+      title: 'Operations',
+      position: 50,
+      icon: 'IconSettings',
+      layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+      widgets: {
+        fields: {
+          universalIdentifier: 'cdb1ad36-fcd3-4c6d-9b64-1df8d1c02a80',
+          title: 'Campaign operations',
+          type: WidgetType.FIELDS,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
+          fieldsViewUniversalIdentifier: '9c4f90c5-2a03-436b-8130-93d50a4d0e3e',
+        },
+      },
+    },
+  },
+} as const satisfies StandardPageLayoutConfig;
+
 export const ALL_STANDARD_PAGE_LAYOUTS = {
   ...STANDARD_PAGE_LAYOUTS,
   brandBrainPageRecordPage: MYAH_BRAND_BRAIN_PAGE_LAYOUT_CONFIG,
   creatorRecordPage: MYAH_CREATOR_PAGE_LAYOUT_CONFIG,
+  campaignRecordPage: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
 } as const;
