@@ -40,5 +40,8 @@ export type RecordIndexContextValue = {
   recordLimit?: number;
 };
 
-export const [RecordIndexContextProvider, useRecordIndexContextOrThrow] =
-  createRequiredContext<RecordIndexContextValue>('RecordIndexContext');
+export const [
+  RecordIndexContextProvider,
+  useRecordIndexContextOrThrow,
+  useOptionalRecordIndexContext,
+] = createRequiredContext<RecordIndexContextValue>('RecordIndexContext');
