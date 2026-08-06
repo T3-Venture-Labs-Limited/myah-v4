@@ -1361,6 +1361,7 @@ type WorkflowVersionConfiguration {
 type PageLayoutTab {
   id: UUID!
   applicationId: UUID!
+  universalIdentifier: UUID!
   title: String!
   position: Float!
   pageLayoutId: UUID!
