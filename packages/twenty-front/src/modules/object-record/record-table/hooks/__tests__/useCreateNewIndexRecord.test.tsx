@@ -2,6 +2,10 @@ import { act, renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
 
 import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
+import {
+  RecordIndexContextProvider,
+  type RecordIndexContextValue,
+} from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useCreateNewIndexRecord } from '@/object-record/record-table/hooks/useCreateNewIndexRecord';
 import { ViewOpenRecordIn } from '~/generated-metadata/graphql';
 
@@ -61,11 +65,6 @@ jest.mock('@/side-panel/hooks/useSidePanelMenu', () => ({
   useSidePanelMenu: () => ({ closeSidePanelMenu: mockCloseSidePanelMenu }),
 }));
 
-jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
-  useRecordIndexContextOrThrow: () => ({
-    onRecordCreated: mockOnRecordCreated,
-  }),
-}));
 jest.mock(
   '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateCallbackState',
   () => ({
@@ -106,6 +105,21 @@ const objectMetadataItem = {
   fields: [],
   nameSingular: 'creator',
 } as never;
+const recordIndexContextValue: RecordIndexContextValue = {
+  fieldDefinitionByFieldMetadataItemId: {},
+  fieldMetadataItemByFieldMetadataItemId: {},
+  indexIdentifierUrl: () => '',
+  labelIdentifierFieldMetadataItem: undefined,
+  objectMetadataItem,
+  objectNamePlural: 'creators',
+  objectNameSingular: 'creator',
+  objectPermissionsByObjectMetadataId: {},
+  onIndexRecordsLoaded: jest.fn(),
+  onRecordCreated: mockOnRecordCreated,
+  recordFieldByFieldMetadataItemId: {},
+  recordIndexId: 'creator-index-list-a',
+  viewBarInstanceId: 'creator-index-list-a',
+};
 type ScopedContextStoreWrapperProps = {
   children: ReactNode;
 };
@@ -116,7 +130,9 @@ const ScopedContextStoreWrapper = ({
   <ContextStoreComponentInstanceContext.Provider
     value={{ instanceId: 'creator-list-pane-list-a' }}
   >
-    {children}
+    <RecordIndexContextProvider value={recordIndexContextValue}>
+      {children}
+    </RecordIndexContextProvider>
   </ContextStoreComponentInstanceContext.Provider>
 );
 
@@ -172,5 +188,23 @@ describe('useCreateNewIndexRecord', () => {
       expect.objectContaining({ id: 'new-creator-id' }),
     );
     expect(mockNavigate).toHaveBeenCalled();
+  });
+
+  it('does not require record index context when creating from a headless command', async () => {
+    const { result } = renderHook(() =>
+      useCreateNewIndexRecord({
+        instanceId: 'workflow-index-list-a',
+        objectMetadataItem,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.createNewIndexRecord();
+    });
+
+    expect(mockCreateOneRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'new-creator-id' }),
+    );
+    expect(mockOnRecordCreated).not.toHaveBeenCalled();
   });
 });
