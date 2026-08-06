@@ -17,6 +17,7 @@ import { isInputObjectType, isObjectType } from 'graphql';
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
+import { RESOLVER_SCHEMA_SCOPE_KEY } from 'src/engine/api/graphql/graphql-config/constants/resolver-schema-scope-key.constant';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from 'src/engine/core-modules/managed-email/enums/managed-email-campaign-eligibility.enum';
@@ -68,6 +69,12 @@ const createResolver = () => {
 };
 
 describe('ManagedEmailResolver', () => {
+  it('registers on the metadata schema used by workspace settings', () => {
+    expect(
+      Reflect.getMetadata(RESOLVER_SCHEMA_SCOPE_KEY, ManagedEmailResolver),
+    ).toBe('metadata');
+  });
+
   it('emits the approved customer-safe GraphQL surface', async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [GraphQLSchemaBuilderModule],

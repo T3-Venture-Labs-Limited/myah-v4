@@ -20,6 +20,13 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomState', () => ({
 jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomState', () => ({
   useSetAtomState: jest.fn(),
 }));
+jest.mock(
+  '@/client-config/states/isManagedEmailEnabledState',
+  () => ({
+    isManagedEmailEnabledState: 'managed-email-enabled-atom',
+  }),
+  { virtual: true },
+);
 jest.mock('jotai', () => ({
   ...jest.requireActual('jotai'),
   useStore: jest.fn(),
@@ -31,6 +38,7 @@ const mockClientConfig = {
 };
 
 const setClientConfigApiStatus = jest.fn();
+const setIsManagedEmailEnabled = jest.fn();
 const clearSession = jest.fn();
 const store = { get: jest.fn() };
 
@@ -49,7 +57,11 @@ describe('useClientConfig', () => {
       { isLoading: false },
       setClientConfigApiStatus,
     ]);
-    (useSetAtomState as jest.Mock).mockReturnValue(jest.fn());
+    (useSetAtomState as jest.Mock).mockImplementation((atom) =>
+      atom === 'managed-email-enabled-atom'
+        ? setIsManagedEmailEnabled
+        : jest.fn(),
+    );
     (useAuth as jest.Mock).mockReturnValue({ clearSession });
     (useStore as jest.Mock).mockReturnValue(store);
     store.get.mockReturnValue(null);
@@ -131,6 +143,21 @@ describe('useClientConfig', () => {
 
     expect(ensureTokenRenewed).toHaveBeenCalledWith(store);
     expect(getClientConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores the managed email global gate', async () => {
+    (getClientConfig as jest.Mock).mockResolvedValue({
+      ...mockClientConfig,
+      isManagedEmailEnabled: true,
+    });
+
+    const { result } = renderHook(() => useClientConfig());
+
+    await act(async () => {
+      await result.current.fetchClientConfig();
+    });
+
+    expect(setIsManagedEmailEnabled).toHaveBeenCalledWith(true);
   });
 
   it('clears the session when renewing an expired client-config token fails', async () => {

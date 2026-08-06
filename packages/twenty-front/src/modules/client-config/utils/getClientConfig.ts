@@ -33,6 +33,7 @@ const clientConfigBooleanProperties = [
   'isGoogleCalendarEnabled',
   'isGoogleMessagingEnabled',
   'isImapSmtpCaldavEnabled',
+  'isManagedEmailEnabled',
   'isMicrosoftCalendarEnabled',
   'isMicrosoftMessagingEnabled',
   'isMultiWorkspaceEnabled',

@@ -127,199 +127,6 @@ export type LinksMetadata = {
   secondaryLinks?: Maybe<Array<LinkMetadata>>;
 };
 
-export type ManagedEmailActionResult = {
-  __typename?: 'ManagedEmailActionResult';
-  accepted: Scalars['Boolean']['output'];
-  operationId: Scalars['String']['output'];
-};
-
-export type ManagedEmailBundle = {
-  __typename?: 'ManagedEmailBundle';
-  bundleId: Scalars['String']['output'];
-  domain: Scalars['String']['output'];
-  exclusiveWorkspaceUse: Scalars['Boolean']['output'];
-  mailboxCount: Scalars['Int']['output'];
-  mailboxes: Array<ManagedEmailBundleMailbox>;
-  observedAt: Scalars['DateTime']['output'];
-  providerType: Scalars['String']['output'];
-};
-
-export type ManagedEmailBundleMailbox = {
-  __typename?: 'ManagedEmailBundleMailbox';
-  address: Scalars['String']['output'];
-  displayName: Scalars['String']['output'];
-};
-
-export type ManagedEmailCampaignCapInput = {
-  dailyCap?: InputMaybe<Scalars['Int']['input']>;
-  idempotencyKey: Scalars['String']['input'];
-  mailboxId: Scalars['String']['input'];
-};
-
-export type ManagedEmailDisclosures = {
-  __typename?: 'ManagedEmailDisclosures';
-  cancellation: Scalars['String']['output'];
-  managedServiceOwnership: Scalars['String']['output'];
-  prepaidBalance: Scalars['String']['output'];
-};
-
-export type ManagedEmailDomain = {
-  __typename?: 'ManagedEmailDomain';
-  cancelAtPeriodEnd: Scalars['Boolean']['output'];
-  dependentMailboxCount: Scalars['Int']['output'];
-  domain: Scalars['String']['output'];
-  id: Scalars['String']['output'];
-  infrastructureState: Scalars['String']['output'];
-  paidThrough?: Maybe<Scalars['DateTime']['output']>;
-  renewalEnabled: Scalars['Boolean']['output'];
-  safeFailureCode?: Maybe<Scalars['String']['output']>;
-};
-
-export type ManagedEmailDomainActionInput = {
-  domainId: Scalars['String']['input'];
-  idempotencyKey: Scalars['String']['input'];
-};
-
-export type ManagedEmailHealthDetails = {
-  __typename?: 'ManagedEmailHealthDetails';
-  adminDailyCap?: Maybe<Scalars['Int']['output']>;
-  campaignEligibility: Scalars['String']['output'];
-  lastEvaluatedAt?: Maybe<Scalars['DateTime']['output']>;
-  policySafeDailyCapacity: Scalars['Int']['output'];
-  safeFailureCode?: Maybe<Scalars['String']['output']>;
-};
-
-export type ManagedEmailHealthDetailsInput = {
-  resourceId: Scalars['String']['input'];
-  resourceType: Scalars['String']['input'];
-};
-
-export type ManagedEmailMailbox = {
-  __typename?: 'ManagedEmailMailbox';
-  address: Scalars['String']['output'];
-  adminDailyCap?: Maybe<Scalars['Int']['output']>;
-  campaignEligibility: Scalars['String']['output'];
-  domain: Scalars['String']['output'];
-  domainId: Scalars['String']['output'];
-  id: Scalars['String']['output'];
-  infrastructureState: Scalars['String']['output'];
-  lastHealthEvaluatedAt?: Maybe<Scalars['DateTime']['output']>;
-  personaDisplayName: Scalars['String']['output'];
-  personaRole?: Maybe<Scalars['String']['output']>;
-  policySafeDailyCapacity: Scalars['Int']['output'];
-  safeFailureCode?: Maybe<Scalars['String']['output']>;
-  servicePaidThrough?: Maybe<Scalars['DateTime']['output']>;
-  warmupPaidThrough?: Maybe<Scalars['DateTime']['output']>;
-  warmupState: Scalars['String']['output'];
-};
-
-export type ManagedEmailMailboxActionInput = {
-  idempotencyKey: Scalars['String']['input'];
-  mailboxId: Scalars['String']['input'];
-};
-
-export type ManagedEmailOperation = {
-  __typename?: 'ManagedEmailOperation';
-  acquisitionMode: Scalars['String']['output'];
-  amountCents: Scalars['String']['output'];
-  createdAt: Scalars['DateTime']['output'];
-  currency: Scalars['String']['output'];
-  id: Scalars['String']['output'];
-  paymentStatus?: Maybe<Scalars['String']['output']>;
-  safeFailureCode?: Maybe<Scalars['String']['output']>;
-  state: Scalars['String']['output'];
-  updatedAt: Scalars['DateTime']['output'];
-};
-
-export type ManagedEmailOperationInput = {
-  operationId: Scalars['String']['input'];
-};
-
-export type ManagedEmailOverview = {
-  __typename?: 'ManagedEmailOverview';
-  acquisitionAvailable: Scalars['Boolean']['output'];
-  actionRequiredCount: Scalars['Int']['output'];
-  domainCount: Scalars['Int']['output'];
-  mailboxCount: Scalars['Int']['output'];
-  readyCount: Scalars['Int']['output'];
-  status: Scalars['String']['output'];
-  warmingCount: Scalars['Int']['output'];
-};
-
-export type ManagedEmailPersonaInput = {
-  displayName: Scalars['String']['input'];
-  localPartPreference: Scalars['String']['input'];
-  roleTitle?: InputMaybe<Scalars['String']['input']>;
-  signature: Scalars['String']['input'];
-};
-
-export type ManagedEmailProposal = {
-  __typename?: 'ManagedEmailProposal';
-  disclosures: ManagedEmailDisclosures;
-  domains: Array<ManagedEmailProposalDomain>;
-  expiresAt: Scalars['DateTime']['output'];
-  id: Scalars['String']['output'];
-  mailboxCount: Scalars['Int']['output'];
-  policyVersion: Scalars['String']['output'];
-};
-
-export type ManagedEmailProposalDomain = {
-  __typename?: 'ManagedEmailProposalDomain';
-  domain: Scalars['String']['output'];
-  mailboxes: Array<ManagedEmailProposalMailbox>;
-};
-
-export type ManagedEmailProposalInput = {
-  mailboxCount: Scalars['Int']['input'];
-  personas: Array<ManagedEmailPersonaInput>;
-};
-
-export type ManagedEmailProposalMailbox = {
-  __typename?: 'ManagedEmailProposalMailbox';
-  address: Scalars['String']['output'];
-  displayName: Scalars['String']['output'];
-  roleTitle?: Maybe<Scalars['String']['output']>;
-};
-
-export type ManagedEmailPurchaseInput = {
-  idempotencyKey: Scalars['String']['input'];
-  quoteFingerprint: Scalars['String']['input'];
-  quoteId: Scalars['String']['input'];
-  quoteVersion: Scalars['String']['input'];
-};
-
-export type ManagedEmailQuote = {
-  __typename?: 'ManagedEmailQuote';
-  currency: Scalars['String']['output'];
-  disclosures: ManagedEmailDisclosures;
-  dueTodayCents: Scalars['Int']['output'];
-  expiresAt: Scalars['DateTime']['output'];
-  id: Scalars['String']['output'];
-  lines: Array<ManagedEmailQuoteLine>;
-  quoteFingerprint: Scalars['String']['output'];
-  quoteVersion: Scalars['String']['output'];
-};
-
-export type ManagedEmailQuoteInput = {
-  proposalId: Scalars['String']['input'];
-};
-
-export type ManagedEmailQuoteLine = {
-  __typename?: 'ManagedEmailQuoteLine';
-  amountCents: Scalars['Int']['output'];
-  billingFrequency: Scalars['String']['output'];
-  endingBefore: Scalars['DateTime']['output'];
-  productKey: Scalars['String']['output'];
-  quantity: Scalars['Int']['output'];
-  startingAt: Scalars['DateTime']['output'];
-  unitPriceCents: Scalars['Int']['output'];
-};
-
-export type ManagedEmailRetryPaymentInput = {
-  idempotencyKey: Scalars['String']['input'];
-  operationId: Scalars['String']['input'];
-};
-
 export enum MessageChannelVisibility {
   METADATA = 'METADATA',
   SHARE_EVERYTHING = 'SHARE_EVERYTHING',
@@ -329,11 +136,7 @@ export enum MessageChannelVisibility {
 export type Mutation = {
   __typename?: 'Mutation';
   activateWorkflowVersion: Scalars['Boolean']['output'];
-  cancelManagedEmailDomainRenewal: ManagedEmailActionResult;
-  cancelManagedEmailWarmup: ManagedEmailActionResult;
   computeStepOutputSchema: Scalars['JSON']['output'];
-  confirmManagedEmailOrdinaryPurchase: ManagedEmailActionResult;
-  confirmManagedEmailPrewarmedPurchase: ManagedEmailActionResult;
   createDraftFromWorkflowVersion: WorkflowVersionDto;
   createWorkflowVersionEdge: WorkflowVersionStepChanges;
   createWorkflowVersionStep: WorkflowVersionStepChanges;
@@ -345,14 +148,9 @@ export type Mutation = {
   duplicateWorkflow: WorkflowVersionDto;
   duplicateWorkflowVersionStep: WorkflowVersionStepChanges;
   generateMyahInboxReplyProposal: MyahInboxReplyProposal;
-  pauseManagedEmailWarmup: ManagedEmailActionResult;
-  resumeManagedEmailWarmup: ManagedEmailActionResult;
-  retryManagedEmailPayment: ManagedEmailActionResult;
   retryWorkflowRun: WorkflowRun;
   runWorkflowVersion: RunWorkflowVersion;
   saveMyahInboxDraft: MyahInboxDraftSaveResult;
-  setManagedEmailCampaignCap: ManagedEmailActionResult;
-  stopManagedEmailMailbox: ManagedEmailActionResult;
   stopWorkflowRun: WorkflowRun;
   submitFormStep: Scalars['Boolean']['output'];
   testHttpRequest: TestHttpRequest;
@@ -368,28 +166,8 @@ export type MutationActivateWorkflowVersionArgs = {
 };
 
 
-export type MutationCancelManagedEmailDomainRenewalArgs = {
-  input: ManagedEmailDomainActionInput;
-};
-
-
-export type MutationCancelManagedEmailWarmupArgs = {
-  input: ManagedEmailMailboxActionInput;
-};
-
-
 export type MutationComputeStepOutputSchemaArgs = {
   input: ComputeStepOutputSchemaInput;
-};
-
-
-export type MutationConfirmManagedEmailOrdinaryPurchaseArgs = {
-  input: ManagedEmailPurchaseInput;
-};
-
-
-export type MutationConfirmManagedEmailPrewarmedPurchaseArgs = {
-  input: ManagedEmailPurchaseInput;
 };
 
 
@@ -443,21 +221,6 @@ export type MutationGenerateMyahInboxReplyProposalArgs = {
 };
 
 
-export type MutationPauseManagedEmailWarmupArgs = {
-  input: ManagedEmailMailboxActionInput;
-};
-
-
-export type MutationResumeManagedEmailWarmupArgs = {
-  input: ManagedEmailMailboxActionInput;
-};
-
-
-export type MutationRetryManagedEmailPaymentArgs = {
-  input: ManagedEmailRetryPaymentInput;
-};
-
-
 export type MutationRetryWorkflowRunArgs = {
   workflowRunId: Scalars['UUID']['input'];
 };
@@ -470,16 +233,6 @@ export type MutationRunWorkflowVersionArgs = {
 
 export type MutationSaveMyahInboxDraftArgs = {
   input: SaveMyahInboxDraftInput;
-};
-
-
-export type MutationSetManagedEmailCampaignCapArgs = {
-  input: ManagedEmailCampaignCapInput;
-};
-
-
-export type MutationStopManagedEmailMailboxArgs = {
-  input: ManagedEmailMailboxActionInput;
 };
 
 
@@ -629,14 +382,6 @@ export type Query = {
   /** @deprecated Use getTimelineThreadsFromObjectRecord instead */
   getTimelineThreadsFromPersonId: TimelineThreadsWithTotal;
   isMaintenanceModeBannerDismissed: Scalars['Boolean']['output'];
-  managedEmailDomains: Array<ManagedEmailDomain>;
-  managedEmailHealthDetails?: Maybe<ManagedEmailHealthDetails>;
-  managedEmailMailboxes: Array<ManagedEmailMailbox>;
-  managedEmailOperation?: Maybe<ManagedEmailOperation>;
-  managedEmailOverview: ManagedEmailOverview;
-  managedEmailPrewarmedBundles: Array<ManagedEmailBundle>;
-  managedEmailProposal: ManagedEmailProposal;
-  managedEmailQuote: ManagedEmailQuote;
   myahInboxThreads: MyahInboxThreadConnection;
   search: SearchResultConnection;
   workflowStepConnectedAccountHandle?: Maybe<ConnectedAccountHandleDto>;
@@ -698,26 +443,6 @@ export type QueryGetTimelineThreadsFromPersonIdArgs = {
   page: Scalars['Int']['input'];
   pageSize: Scalars['Int']['input'];
   personId: Scalars['UUID']['input'];
-};
-
-
-export type QueryManagedEmailHealthDetailsArgs = {
-  input: ManagedEmailHealthDetailsInput;
-};
-
-
-export type QueryManagedEmailOperationArgs = {
-  input: ManagedEmailOperationInput;
-};
-
-
-export type QueryManagedEmailProposalArgs = {
-  input: ManagedEmailProposalInput;
-};
-
-
-export type QueryManagedEmailQuoteArgs = {
-  input: ManagedEmailQuoteInput;
 };
 
 

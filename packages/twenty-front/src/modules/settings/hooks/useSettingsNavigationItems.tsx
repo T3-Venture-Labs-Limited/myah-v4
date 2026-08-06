@@ -3,6 +3,7 @@ import { FeatureFlagKey, SettingsPath } from 'twenty-shared/types';
 import { useAuth } from '@/auth/hooks/useAuth';
 import { useIsMyahTeamUser } from '@/auth/hooks/useIsMyahTeamUser';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
+import { isManagedEmailEnabledState } from '@/client-config/states/isManagedEmailEnabledState';
 import { supportChatState } from '@/client-config/states/supportChatState';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 import { getDocumentationUrl } from '@/support/utils/getDocumentationUrl';
@@ -60,6 +61,7 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
   const { signOut } = useAuth();
   const supportChat = useAtomStateValue(supportChatState);
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
+  const isManagedEmailEnabled = useAtomStateValue(isManagedEmailEnabledState);
 
   const isMyahTeamUser = useIsMyahTeamUser();
   const isSupportChatConfigured =
@@ -179,7 +181,7 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           path: SettingsPath.WorkspaceEmail,
           Icon: IconMail,
           isHidden:
-            !isEmailGroupFeatureEnabled ||
+            (!isEmailGroupFeatureEnabled && !isManagedEmailEnabled) ||
             !permissionMap[PermissionFlagType.WORKSPACE],
         },
       ],

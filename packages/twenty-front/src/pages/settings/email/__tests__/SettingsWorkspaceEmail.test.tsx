@@ -1,5 +1,6 @@
 import { SettingsWorkspaceEmail } from '~/pages/settings/email/SettingsWorkspaceEmail';
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { render, screen } from '@testing-library/react';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
@@ -7,6 +8,7 @@ import { SOURCE_LOCALE } from 'twenty-shared/translations';
 import { messages } from '~/locales/generated/en';
 
 jest.mock('@/workspace/hooks/useIsFeatureEnabled');
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue');
 
 i18n.load({
   [SOURCE_LOCALE]: messages,
@@ -40,16 +42,24 @@ jest.mock(
     ),
   }),
 );
+jest.mock(
+  '@/settings/workspace/components/managed-email/ManagedEmailOverview',
+  () => ({
+    ManagedEmailOverview: () => <div>Managed email overview</div>,
+  }),
+);
 jest.mock('~/hooks/useNavigateSettings', () => ({
   useNavigateSettings: () => jest.fn(),
 }));
 
 const mockUseIsFeatureEnabled = jest.mocked(useIsFeatureEnabled);
+const mockUseAtomStateValue = jest.mocked(useAtomStateValue);
 
 describe('SettingsWorkspaceEmail', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseIsFeatureEnabled.mockReturnValue(true);
+    mockUseAtomStateValue.mockReturnValue(false);
   });
 
   it('does not render the Twenty Enterprise demo-mode upgrade card', () => {
@@ -64,5 +74,25 @@ describe('SettingsWorkspaceEmail', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText('Email group section')).toBeVisible();
     expect(screen.getByText('Unsubscribe topics')).toBeVisible();
+  });
+
+  it('renders managed email independently of the email-group feature', () => {
+    mockUseIsFeatureEnabled.mockReturnValue(false);
+    mockUseAtomStateValue.mockReturnValue(true);
+
+    renderWithI18n(<SettingsWorkspaceEmail />);
+
+    expect(screen.getByText('Managed email overview')).toBeVisible();
+    expect(screen.queryByText('Email group section')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unsubscribe topics')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when neither email capability is enabled', () => {
+    mockUseIsFeatureEnabled.mockReturnValue(false);
+    mockUseAtomStateValue.mockReturnValue(false);
+
+    renderWithI18n(<SettingsWorkspaceEmail />);
+
+    expect(screen.queryByRole('main')).not.toBeInTheDocument();
   });
 });
