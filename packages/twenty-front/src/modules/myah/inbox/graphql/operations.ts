@@ -9,6 +9,7 @@ export const GET_MYAH_INBOX_THREADS = gql`
     $states: [MyahInboxState!]
     $snoozeStatus: MyahInboxSnoozeStatus
     $search: String
+    $threadId: String
   ) {
     myahInboxThreads(
       first: $first
@@ -18,6 +19,7 @@ export const GET_MYAH_INBOX_THREADS = gql`
       states: $states
       snoozeStatus: $snoozeStatus
       search: $search
+      threadId: $threadId
     ) {
       edges {
         cursor

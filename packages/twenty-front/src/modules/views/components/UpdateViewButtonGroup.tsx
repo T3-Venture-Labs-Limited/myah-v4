@@ -8,7 +8,7 @@ import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { useOpenDropdown } from '@/ui/layout/dropdown/hooks/useOpenDropdown';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { UPDATE_VIEW_BUTTON_DROPDOWN_ID } from '@/views/constants/UpdateViewButtonDropdownId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useHasFiltersInQueryParams } from '@/views/hooks/internal/useHasFiltersInQueryParams';
 import { useAreViewFilterGroupsDifferentFromRecordFilterGroups } from '@/views/hooks/useAreViewFilterGroupsDifferentFromRecordFilterGroups';
 import { useAreViewFiltersDifferentFromRecordFilters } from '@/views/hooks/useAreViewFiltersDifferentFromRecordFilters';
@@ -17,7 +17,6 @@ import { useCanPersistViewChanges } from '@/views/hooks/useCanPersistViewChanges
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { useIsViewAnyFieldFilterDifferentFromCurrentAnyFieldFilter } from '@/views/hooks/useIsViewAnyFieldFilterDifferentFromCurrentAnyFieldFilter';
 import { useSaveCurrentViewFiltersAndSorts } from '@/views/hooks/useSaveCurrentViewFiltersAndSorts';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { viewPickerReferenceViewIdComponentState } from '@/views/view-picker/states/viewPickerReferenceViewIdComponentState';
 import { t } from '@lingui/core/macro';
@@ -35,6 +34,7 @@ const StyledContainer = styled.div`
 
 export const UpdateViewButtonGroup = () => {
   const { saveCurrentViewFilterAndSorts } = useSaveCurrentViewFiltersAndSorts();
+  const { updateViewDropdownId, viewPickerDropdownId } = useViewBarControlIds();
   const { canPersistChanges } = useCanPersistViewChanges();
 
   const { setViewPickerMode } = useViewPickerMode();
@@ -57,12 +57,12 @@ export const UpdateViewButtonGroup = () => {
     }
 
     openViewPickerDropdown({
-      dropdownComponentInstanceIdFromProps: VIEW_PICKER_DROPDOWN_ID,
+      dropdownComponentInstanceIdFromProps: viewPickerDropdownId,
     });
     setViewPickerReferenceViewId(contextStoreCurrentViewId);
     setViewPickerMode('create-from-current');
 
-    closeUpdateViewButtonDropdown(UPDATE_VIEW_BUTTON_DROPDOWN_ID);
+    closeUpdateViewButtonDropdown(updateViewDropdownId);
   };
 
   const handleCreateViewClick = () => {
@@ -113,7 +113,7 @@ export const UpdateViewButtonGroup = () => {
             disabled={!canPersistChanges}
           />
           <Dropdown
-            dropdownId={UPDATE_VIEW_BUTTON_DROPDOWN_ID}
+            dropdownId={updateViewDropdownId}
             clickableComponent={
               <IconButton
                 size="small"

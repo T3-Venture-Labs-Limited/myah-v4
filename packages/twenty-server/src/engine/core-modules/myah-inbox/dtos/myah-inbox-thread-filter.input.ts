@@ -40,6 +40,11 @@ export class MyahInboxThreadsInput {
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
+  threadId?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
   owner?: string;
 
   @Field(() => String, { nullable: true })

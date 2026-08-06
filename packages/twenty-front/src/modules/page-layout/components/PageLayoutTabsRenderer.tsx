@@ -4,7 +4,6 @@ import { PageLayoutLeftPanel } from '@/page-layout/components/PageLayoutLeftPane
 import { PageLayoutTabList } from '@/page-layout/components/PageLayoutTabList';
 import { PageLayoutTabListEffect } from '@/page-layout/components/PageLayoutTabListEffect';
 import { DEFAULT_RECORD_PAGE_LAYOUT_ID } from '@/page-layout/constants/DefaultRecordPageLayoutId';
-import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 import { PAGE_LAYOUT_LEFT_PANEL_CONTAINER_WIDTH } from '@/page-layout/constants/PageLayoutLeftPanelContainerWidth';
 import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageLayoutOrThrow';
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
@@ -149,9 +148,6 @@ export const PageLayoutTabsRenderer = ({
     pageLayoutType: currentPageLayout.type,
     isMobile,
     isInSidePanel,
-    forceAllTabsInTabList:
-      currentPageLayout.universalIdentifier ===
-      MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER,
   });
 
   const sortedActiveTabs = sortTabsByPosition(tabsToRenderInTabList);

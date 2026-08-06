@@ -1,5 +1,6 @@
 /* oxlint-disable react/jsx-props-no-spreading -- Tests reuse a typed baseline prop fixture. */
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type * as ReactType from 'react';
 import { useState } from 'react';
 
@@ -55,8 +56,23 @@ jest.mock('twenty-ui/input', () => ({
       {title}
     </button>
   ),
-  IconButton: ({ ariaLabel }: { ariaLabel: string }) => (
-    <button aria-label={ariaLabel} />
+  IconButton: ({
+    ariaLabel,
+    disabled,
+    onClick,
+  }: {
+    ariaLabel: string;
+    disabled?: boolean;
+    onClick?: () => void;
+  }) => (
+    <button
+      aria-label={ariaLabel}
+      data-testid={
+        ariaLabel === 'Refresh Inbox' ? 'refresh-inbox-icon-button' : undefined
+      }
+      disabled={disabled}
+      onClick={onClick}
+    />
   ),
 }));
 
@@ -220,11 +236,15 @@ const defaultProps = {
   selectedThreadId: 'thread-1',
   loading: false,
   loadingMore: false,
+  isRefreshing: false,
+  refreshStatus: 'idle' as const,
+  refreshError: null,
   error: undefined,
   hasNextPage: false,
   onSelectThread: jest.fn(),
   onFiltersChange: jest.fn(),
   onLoadMore: jest.fn(),
+  onRefresh: jest.fn(),
   onRetry: jest.fn(),
 };
 afterEach(() => {
@@ -312,7 +332,7 @@ describe('MyahInboxThreadList', () => {
     expect(onSelectThread).not.toHaveBeenCalled();
   });
 
-  it('keeps State and Campaign in a search-adjacent filter menu', () => {
+  it('keeps State and Campaign in a search-adjacent filter menu', async () => {
     const onFiltersChange = jest.fn();
 
     render(
@@ -348,10 +368,11 @@ describe('MyahInboxThreadList', () => {
       campaignId: 'campaign-1',
     });
 
-    fireEvent.change(screen.getByLabelText('Search conversations'), {
-      target: { value: 'Ada' },
-    });
-    expect(onFiltersChange).toHaveBeenCalledWith({ ...filters, search: 'Ada' });
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText('Search conversations'), '@');
+
+    expect(onFiltersChange).toHaveBeenCalledWith({ ...filters, search: '@' });
   });
 
   it('renders neutral empty-Inbox copy', () => {
@@ -514,6 +535,98 @@ describe('MyahInboxThreadList', () => {
     expect(loadMoreButton).toHaveFocus();
     expect(loadMoreButton).toBeEnabled();
     expect(loadMoreButton).toHaveTextContent('Load more conversations');
+  });
+
+  it('refreshes through an accessible control and keeps refresh blocking independent from pagination', () => {
+    const onRefresh = jest.fn();
+    const { rerender } = render(
+      <MyahInboxThreadList
+        {...defaultProps}
+        hasNextPage
+        onRefresh={onRefresh}
+      />,
+    );
+
+    const inboxSearchActions = screen.getByRole('group', {
+      name: 'Inbox search actions',
+    });
+    const refreshButton = within(inboxSearchActions).getByTestId(
+      'refresh-inbox-icon-button',
+    );
+    expect(
+      within(inboxSearchActions).getByRole('button', {
+        name: 'Filter conversations',
+      }),
+    ).toBeInTheDocument();
+    const loadMoreButton = screen.getByRole('button', {
+      name: 'Load more conversations',
+    });
+
+    expect(refreshButton).toBeEnabled();
+    expect(loadMoreButton).toBeEnabled();
+    fireEvent.click(refreshButton);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    rerender(<MyahInboxThreadList {...defaultProps} hasNextPage loading />);
+    expect(
+      screen.getByRole('button', { name: 'Refresh Inbox' }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Load more conversations' }),
+    ).not.toBeInTheDocument();
+
+    rerender(<MyahInboxThreadList {...defaultProps} hasNextPage loadingMore />);
+    expect(
+      screen.getByRole('button', { name: 'Refresh Inbox' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Loading more conversations' }),
+    ).toBeDisabled();
+
+    rerender(
+      <MyahInboxThreadList {...defaultProps} hasNextPage isRefreshing />,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Refresh Inbox' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Load more conversations' }),
+    ).toBeDisabled();
+  });
+
+  it('does not render textual refresh progress or completion feedback', () => {
+    const { rerender } = render(
+      <MyahInboxThreadList
+        {...defaultProps}
+        isRefreshing
+        refreshStatus="refreshing"
+      />,
+    );
+
+    expect(screen.queryByText('Refreshing Inbox')).not.toBeInTheDocument();
+
+    rerender(
+      <MyahInboxThreadList {...defaultProps} refreshStatus="succeeded" />,
+    );
+
+    expect(screen.queryByText('Inbox refreshed')).not.toBeInTheDocument();
+  });
+
+  it('keeps list rows visible when refresh fails', () => {
+    render(
+      <MyahInboxThreadList
+        {...defaultProps}
+        refreshStatus="failed"
+        refreshError="Could not refresh Inbox."
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /^Could not refresh Inbox\.$/,
+    );
+    expect(
+      screen.getByRole('option', { name: /First conversation/ }),
+    ).toBeVisible();
   });
 
   it('shows loading and retryable error states without presenting stale rows', () => {

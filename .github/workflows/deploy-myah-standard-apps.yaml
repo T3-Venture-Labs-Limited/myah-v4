@@ -68,23 +68,6 @@ jobs:
             --header "x-myah-apps-deployment-token: ${MYAH_STANDARD_APPS_DEPLOYMENT_TOKEN}" \
             "${MYAH_API_URL%/}/myah/platform/standard-apps/${APPLICATION_UNIVERSAL_IDENTIFIER}/promote"
 
-      - name: Publish Creator Ops
-        uses: ./.github/actions/deploy-twenty-app
-        with:
-          api-url: ${{ env.MYAH_API_URL }}
-          api-key: ${{ env.MYAH_APP_PUBLISHER_KEY }}
-          app-path: packages/twenty-apps/internal/myah-creator-ops
-          workspace-path: .
-          allow-existing-version: true
-
-      - name: Promote Creator Ops
-        env:
-          APPLICATION_UNIVERSAL_IDENTIFIER: 72f2fd16-880c-4c63-852f-dbf63f51c152
-        run: |
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "x-myah-apps-deployment-token: ${MYAH_STANDARD_APPS_DEPLOYMENT_TOKEN}" \
-            "${MYAH_API_URL%/}/myah/platform/standard-apps/${APPLICATION_UNIVERSAL_IDENTIFIER}/promote"
       - name: Publish Myah Instagram Messaging
         uses: ./.github/actions/deploy-twenty-app
         with:

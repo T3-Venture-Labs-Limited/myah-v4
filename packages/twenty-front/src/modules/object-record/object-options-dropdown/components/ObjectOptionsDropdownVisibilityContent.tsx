@@ -1,4 +1,3 @@
-import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
@@ -32,7 +31,8 @@ import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 export const ObjectOptionsDropdownVisibilityContent = () => {
   const { t } = useLingui();
-  const { resetContent } = useObjectOptionsDropdown();
+  const { dropdownId, isLayoutLocked, resetContent } =
+    useObjectOptionsDropdown();
   const { currentView } = useGetCurrentViewOnly();
   const { updateCurrentView } = useUpdateCurrentView();
   const { copyToClipboard } = useCopyToClipboard();
@@ -41,7 +41,7 @@ export const ObjectOptionsDropdownVisibilityContent = () => {
 
   const selectedItemId = useAtomComponentStateValue(
     selectedItemIdComponentState,
-    OBJECT_OPTIONS_DROPDOWN_ID,
+    dropdownId,
   );
 
   const selectableItemIdArray = [
@@ -78,8 +78,8 @@ export const ObjectOptionsDropdownVisibilityContent = () => {
       </DropdownMenuHeader>
       <DropdownMenuItemsContainer>
         <SelectableList
-          selectableListInstanceId={OBJECT_OPTIONS_DROPDOWN_ID}
-          focusId={OBJECT_OPTIONS_DROPDOWN_ID}
+          selectableListInstanceId={dropdownId}
+          focusId={dropdownId}
           selectableItemIdArray={selectableItemIdArray}
         >
           <SelectableListItem
@@ -132,22 +132,23 @@ export const ObjectOptionsDropdownVisibilityContent = () => {
               disabled={!canPersistChanges}
             />
           </SelectableListItem>
-          {currentVisibility === ViewVisibility.WORKSPACE && (
-            <>
-              <DropdownMenuSeparator />
-              <SelectableListItem
-                itemId="Copy view link"
-                onEnter={handleCopyLink}
-              >
-                <MenuItem
-                  focused={selectedItemId === 'Copy view link'}
-                  onClick={handleCopyLink}
-                  LeftIcon={IconCopy}
-                  text={t`Copy view link`}
-                />
-              </SelectableListItem>
-            </>
-          )}
+          {!isLayoutLocked &&
+            currentVisibility === ViewVisibility.WORKSPACE && (
+              <>
+                <DropdownMenuSeparator />
+                <SelectableListItem
+                  itemId="Copy view link"
+                  onEnter={handleCopyLink}
+                >
+                  <MenuItem
+                    focused={selectedItemId === 'Copy view link'}
+                    onClick={handleCopyLink}
+                    LeftIcon={IconCopy}
+                    text={t`Copy view link`}
+                  />
+                </SelectableListItem>
+              </>
+            )}
         </SelectableList>
       </DropdownMenuItemsContainer>
     </DropdownContent>

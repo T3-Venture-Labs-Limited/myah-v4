@@ -18,7 +18,8 @@ import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { useOpenCreateViewDropdown } from '@/views/hooks/useOpenCreateViewDropown';
 import { viewsFromObjectMetadataItemFamilySelector } from '@/views/states/selectors/viewsFromObjectMetadataItemFamilySelector';
 import { ViewPickerOptionDropdown } from '@/views/view-picker/components/ViewPickerOptionDropdown';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
+import { type ViewType } from '@/views/types/ViewType';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useViewPickerMode } from '@/views/view-picker/hooks/useViewPickerMode';
 import { viewPickerReferenceViewIdComponentState } from '@/views/view-picker/states/viewPickerReferenceViewIdComponentState';
 import { useLingui } from '@lingui/react/macro';
@@ -32,7 +33,15 @@ const StyledBoldDropdownMenuItemsContainerWrapper = styled.div`
   font-weight: ${themeCssVariables.font.weight.regular};
 `;
 
-export const ViewPickerListContent = () => {
+type ViewPickerListContentProps = {
+  forcedViewType?: ViewType;
+  onViewChange?: (viewId: string) => void;
+};
+
+export const ViewPickerListContent = ({
+  forcedViewType,
+  onViewChange,
+}: ViewPickerListContentProps) => {
   const { t } = useLingui();
 
   const { objectMetadataItem } = useContextStoreObjectMetadataItemOrThrow();
@@ -42,15 +51,19 @@ export const ViewPickerListContent = () => {
     { objectMetadataItemId: objectMetadataItem.id },
   );
 
-  const workspaceViews = viewsOnCurrentObject.filter(
+  const selectableViews = viewsOnCurrentObject.filter(
+    (view) => !forcedViewType || view.type === forcedViewType,
+  );
+
+  const workspaceViews = selectableViews.filter(
     (view) => view.visibility === ViewVisibility.WORKSPACE,
   );
 
-  const unlistedViews = viewsOnCurrentObject.filter(
+  const unlistedViews = selectableViews.filter(
     (view) => view.visibility === ViewVisibility.UNLISTED,
   );
 
-  const isLastView = viewsOnCurrentObject.length <= 1;
+  const isLastView = selectableViews.length <= 1;
 
   const shouldShowSectionLabels =
     workspaceViews.length > 0 && unlistedViews.length > 0;
@@ -64,13 +77,15 @@ export const ViewPickerListContent = () => {
   const { setViewPickerMode } = useViewPickerMode();
 
   const { performViewAPIUpdate } = usePerformViewAPIUpdate();
-  const { changeView } = useChangeView();
+  const { changeView } = useChangeView(onViewChange);
 
   const { closeDropdown } = useCloseDropdown();
+  const { viewPickerDropdownId } = useViewBarControlIds();
 
   const handleViewSelect = (viewId: string) => {
     changeView(viewId);
-    closeDropdown(VIEW_PICKER_DROPDOWN_ID);
+
+    closeDropdown(viewPickerDropdownId);
   };
 
   const { openCreateViewDropdown } = useOpenCreateViewDropdown();
@@ -152,7 +167,10 @@ export const ViewPickerListContent = () => {
                     key={view.id}
                     draggableId={view.id}
                     index={index}
-                    isDragDisabled={workspaceViews.length === 1}
+                    isDragDisabled={
+                      forcedViewType !== undefined ||
+                      workspaceViews.length === 1
+                    }
                     itemComponent={
                       <ViewPickerOptionDropdown
                         view={view}
@@ -160,6 +178,7 @@ export const ViewPickerListContent = () => {
                         isIndexView={isIndexView}
                         isLastView={isLastView}
                         onEdit={handleEditViewButtonClick}
+                        onViewChange={onViewChange}
                         isCurrentView={isCurrentView}
                       />
                     }
@@ -187,7 +206,9 @@ export const ViewPickerListContent = () => {
                     key={view.id}
                     draggableId={view.id}
                     index={index}
-                    isDragDisabled={unlistedViews.length === 1}
+                    isDragDisabled={
+                      forcedViewType !== undefined || unlistedViews.length === 1
+                    }
                     itemComponent={
                       <ViewPickerOptionDropdown
                         view={view}
@@ -195,6 +216,7 @@ export const ViewPickerListContent = () => {
                         isIndexView={isIndexView}
                         isLastView={isLastView}
                         onEdit={handleEditViewButtonClick}
+                        onViewChange={onViewChange}
                         isCurrentView={isCurrentView}
                       />
                     }

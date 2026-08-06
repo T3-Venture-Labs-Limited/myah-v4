@@ -6,7 +6,10 @@ import {
   useMyahInboxDraftAutosaveController,
   useMyahInboxDraftAutosaveControllerContext,
 } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
-import { useMyahInboxThreads } from '@/myah/inbox/hooks/useMyahInboxThreads';
+import {
+  type MyahInboxThread,
+  useMyahInboxThreads,
+} from '@/myah/inbox/hooks/useMyahInboxThreads';
 import {
   type MyahInboxFilters,
   myahInboxFiltersState,
@@ -139,6 +142,8 @@ const MyahInboxPageContent = ({
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('list');
   const [threadUpdateStatus, setThreadUpdateStatus] =
     useState<ThreadUpdateStatus | null>(null);
+  const [retainedSelectedThread, setRetainedSelectedThread] =
+    useState<MyahInboxThread | null>(null);
   // Track visited workspaces synchronously without a selection-triggering render.
   // oxlint-disable-next-line twenty/no-state-useref
   const initializedSelectionWorkspaceIdsRef = useRef(new Set<string>());
@@ -152,18 +157,53 @@ const MyahInboxPageContent = ({
           campaignId: null,
           campaignWorkspaceId: null,
         };
-  const inbox = useMyahInboxThreads(workspaceScopedFilters, workspaceId);
   const currentWorkspaceSelectedThreadId =
     myahInboxSelectionWorkspaceId === workspaceId
       ? myahInboxSelectedThreadId
       : null;
+  const refreshScopeKey = JSON.stringify([
+    workspaceId,
+    workspaceScopedFilters.owner,
+    workspaceScopedFilters.campaignId,
+    workspaceScopedFilters.campaignWorkspaceId,
+    workspaceScopedFilters.states.join(','),
+    workspaceScopedFilters.snoozeStatus,
+    workspaceScopedFilters.search,
+  ]);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const pendingRefreshSelectionIdRef = useRef<string | null>(null);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const selectedThreadIdRef = useRef<string | null>(
+    currentWorkspaceSelectedThreadId,
+  );
+  selectedThreadIdRef.current = currentWorkspaceSelectedThreadId;
+  // oxlint-disable-next-line twenty/no-state-useref
+  const refreshRequestIdRef = useRef(0);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const refreshInFlightRef = useRef<{
+    scopeKey: string;
+    requestId: number;
+  } | null>(null);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const refreshScopeKeyRef = useRef(refreshScopeKey);
+  refreshScopeKeyRef.current = refreshScopeKey;
+  const inbox = useMyahInboxThreads(workspaceScopedFilters, workspaceId);
   const selectedThread =
     inbox.threads.find(({ id }) => id === currentWorkspaceSelectedThreadId) ??
-    null;
+    (retainedSelectedThread?.id === currentWorkspaceSelectedThreadId
+      ? retainedSelectedThread
+      : null);
 
   useEffect(() => {
     setThreadUpdateStatus(null);
   }, [workspaceId]);
+
+  useEffect(() => {
+    refreshRequestIdRef.current += 1;
+    refreshInFlightRef.current = null;
+    pendingRefreshSelectionIdRef.current = null;
+    setRetainedSelectedThread(null);
+  }, [refreshScopeKey]);
 
   useEffect(() => {
     const cleanupGenerationRef = selectionCleanupGenerationRef;
@@ -195,26 +235,18 @@ const MyahInboxPageContent = ({
   }, [myahInboxFilters, setMyahInboxFilters, workspaceId]);
 
   useEffect(() => {
-    if (inbox.loading || !workspaceId) {
-      return;
-    }
-
-    if (inbox.threads.length === 0) {
-      if (currentWorkspaceSelectedThreadId) {
-        void flush({
-          workspaceId,
-          threadId: currentWorkspaceSelectedThreadId,
-        });
-      }
-
-      setMyahInboxSelectedThreadId(null);
-      setMyahInboxSelectionWorkspaceId(null);
+    if (inbox.loading || !workspaceId || inbox.error) {
       return;
     }
 
     if (currentWorkspaceSelectedThreadId) {
       if (
-        inbox.threads.some(({ id }) => id === currentWorkspaceSelectedThreadId)
+        inbox.threads.some(
+          ({ id }) => id === currentWorkspaceSelectedThreadId,
+        ) ||
+        retainedSelectedThread?.id === currentWorkspaceSelectedThreadId ||
+        pendingRefreshSelectionIdRef.current ===
+          currentWorkspaceSelectedThreadId
       ) {
         initializedSelectionWorkspaceIdsRef.current.add(workspaceId);
         return;
@@ -229,18 +261,29 @@ const MyahInboxPageContent = ({
       return;
     }
 
-    if (initializedSelectionWorkspaceIdsRef.current.has(workspaceId)) {
-      return;
+    if (
+      myahInboxSelectionWorkspaceId !== null &&
+      myahInboxSelectionWorkspaceId !== workspaceId
+    ) {
+      setMyahInboxSelectedThreadId(null);
+      setMyahInboxSelectionWorkspaceId(null);
     }
 
-    initializedSelectionWorkspaceIdsRef.current.add(workspaceId);
-    setMyahInboxSelectedThreadId(inbox.threads[0].id);
-    setMyahInboxSelectionWorkspaceId(workspaceId);
+    if (!initializedSelectionWorkspaceIdsRef.current.has(workspaceId)) {
+      initializedSelectionWorkspaceIdsRef.current.add(workspaceId);
+      if (inbox.threads.length > 0) {
+        setMyahInboxSelectedThreadId(inbox.threads[0].id);
+        setMyahInboxSelectionWorkspaceId(workspaceId);
+      }
+    }
   }, [
+    currentWorkspaceSelectedThreadId,
+    inbox.error,
     inbox.loading,
     flush,
     inbox.threads,
-    currentWorkspaceSelectedThreadId,
+    myahInboxSelectionWorkspaceId,
+    retainedSelectedThread,
     setMyahInboxSelectedThreadId,
     setMyahInboxSelectionWorkspaceId,
     workspaceId,
@@ -279,9 +322,70 @@ const MyahInboxPageContent = ({
     });
   };
 
+  const handleRefresh = async () => {
+    if (refreshInFlightRef.current?.scopeKey === refreshScopeKey) {
+      return;
+    }
+
+    const request = {
+      scopeKey: refreshScopeKey,
+      requestId: ++refreshRequestIdRef.current,
+    };
+    const selectedThreadId = currentWorkspaceSelectedThreadId;
+
+    refreshInFlightRef.current = request;
+
+    if (selectedThreadId) {
+      if (selectedThread?.id === selectedThreadId) {
+        setRetainedSelectedThread(selectedThread);
+      }
+      pendingRefreshSelectionIdRef.current = selectedThreadId;
+    }
+
+    const result = await inbox.refresh(selectedThreadId);
+    const isCurrentRequest =
+      refreshRequestIdRef.current === request.requestId &&
+      refreshScopeKeyRef.current === request.scopeKey &&
+      refreshInFlightRef.current === request;
+
+    if (!isCurrentRequest) {
+      return;
+    }
+
+    refreshInFlightRef.current = null;
+
+    if (pendingRefreshSelectionIdRef.current === selectedThreadId) {
+      pendingRefreshSelectionIdRef.current = null;
+    }
+
+    if (selectedThreadIdRef.current !== selectedThreadId) {
+      return;
+    }
+
+    if (result.status !== 'success') {
+      return;
+    }
+
+    if (result.selectedThread?.id === selectedThreadId) {
+      setRetainedSelectedThread(result.selectedThread);
+      return;
+    }
+
+    setRetainedSelectedThread(null);
+    if (workspaceId && selectedThreadId) {
+      void flush({
+        workspaceId,
+        threadId: selectedThreadId,
+      });
+    }
+
+    setMyahInboxSelectedThreadId(null);
+    setMyahInboxSelectionWorkspaceId(null);
+  };
+
   const handleThreadUpdated = (message: string) => {
     setThreadUpdateStatus({ message, workspaceId });
-    void inbox.refetch();
+    void handleRefresh();
   };
 
   const threadList = (
@@ -291,12 +395,16 @@ const MyahInboxPageContent = ({
       selectedThreadId={currentWorkspaceSelectedThreadId}
       loading={inbox.loading}
       loadingMore={inbox.loadingMore}
+      isRefreshing={inbox.isRefreshing}
+      refreshStatus={inbox.refreshStatus}
+      refreshError={inbox.refreshError?.message ?? null}
       error={inbox.error}
       hasNextPage={inbox.hasNextPage}
       onSelectThread={handleSelectThread}
       onFiltersChange={handleFiltersChange}
       onLoadMore={inbox.loadMore}
-      onRetry={() => void inbox.refetch()}
+      onRefresh={() => void handleRefresh()}
+      onRetry={() => void handleRefresh()}
     />
   );
   const threadPanel = (

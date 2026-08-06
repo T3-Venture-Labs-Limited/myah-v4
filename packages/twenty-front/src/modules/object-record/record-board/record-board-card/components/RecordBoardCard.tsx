@@ -131,10 +131,14 @@ export const RecordBoardCard = () => {
     });
   };
 
-  const handleCardClick = () => {
+  const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
     activateBoardCard({ rowIndex, columnIndex });
     unfocusBoardCard();
-    openRecordFromIndexView({ recordId });
+    openRecordFromIndexView({
+      activationElement: event.currentTarget,
+      recordId,
+      source: 'record-board-card',
+    });
   };
 
   const onMouseLeaveBoard = useDebouncedCallback(() => {
@@ -172,6 +176,8 @@ export const RecordBoardCard = () => {
               isPrimaryMultiDrag={isRecordIdPrimaryDragMultiple}
               isSecondaryDragged={isRecordIdSecondaryDragMultiple}
               isDragging={isDraggingThisCard}
+              data-record-board-card-id={recordId}
+              tabIndex={-1}
             >
               <RecordBoardCardHeader />
               <AnimatedEaseInOut

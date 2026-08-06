@@ -1,7 +1,7 @@
 import { ObjectFilterDropdownContentWrapper } from '@/object-record/object-filter-dropdown/components/ObjectFilterDropdownContentWrapper';
 import { ObjectFilterDropdownFilterInput } from '@/object-record/object-filter-dropdown/components/ObjectFilterDropdownFilterInput';
 import { ViewBarFilterDropdownFilterInputMenuHeader } from '@/views/components/ViewBarFilterDropdownFilterInputMenuHeader';
-import { ViewBarFilterDropdownIds } from '@/views/constants/ViewBarFilterDropdownIds';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 
 type ViewBarFilterDropdownFilterInputProps = {
   recordFilterId?: string;
@@ -10,11 +10,12 @@ type ViewBarFilterDropdownFilterInputProps = {
 export const ViewBarFilterDropdownFilterInput = ({
   recordFilterId,
 }: ViewBarFilterDropdownFilterInputProps) => {
+  const { filterDropdownId } = useViewBarControlIds();
   return (
     <ObjectFilterDropdownContentWrapper>
       <ViewBarFilterDropdownFilterInputMenuHeader />
       <ObjectFilterDropdownFilterInput
-        filterDropdownId={ViewBarFilterDropdownIds.MAIN}
+        filterDropdownId={filterDropdownId}
         recordFilterId={recordFilterId}
       />
     </ObjectFilterDropdownContentWrapper>

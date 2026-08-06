@@ -2,7 +2,7 @@ import { FOCUS_CLICK_OUTSIDE_LISTENER_ID } from '@/object-record/record-table/co
 import { useDragSelect } from '@/ui/utilities/drag-select/hooks/useDragSelect';
 import { useClickOutsideListener } from '@/ui/utilities/pointer-event/hooks/useClickOutsideListener';
 
-import { RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
+import { getRecordTableClickOutsideListenerId } from '@/object-record/record-table/constants/RecordTableClickOutsideListenerId';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useCloseCurrentTableCellInEditMode } from '@/object-record/record-table/hooks/internal/useCloseCurrentTableCellInEditMode';
 import { clickOutsideListenerIsActivatedComponentState } from '@/ui/utilities/pointer-event/states/clickOutsideListenerIsActivatedComponentState';
@@ -28,7 +28,7 @@ export const useCloseRecordTableCellNoGroup = () => {
     closeCurrentTableCellInEditMode();
     store.set(
       clickOutsideListenerIsActivatedComponentState.atomFamily({
-        instanceId: RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID,
+        instanceId: getRecordTableClickOutsideListenerId(recordTableId),
       }),
       true,
     );
@@ -36,6 +36,7 @@ export const useCloseRecordTableCellNoGroup = () => {
     closeCurrentTableCellInEditMode,
     setDragSelectionStartEnabled,
     toggleClickOutside,
+    recordTableId,
     store,
   ]);
 

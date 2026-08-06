@@ -11,7 +11,11 @@ type RecordTableContextValue = {
   objectMetadataItems: EnrichedObjectMetadataItem[];
   objectPermissions: ObjectPermission;
   visibleRecordFields: RecordField[];
-  onRecordIdentifierClick?: (rowIndex: number, recordId: string) => void;
+  onRecordIdentifierClick?: (
+    rowIndex: number,
+    recordId: string,
+    activationElement?: HTMLElement,
+  ) => void;
   triggerEvent: 'CLICK' | 'MOUSE_DOWN';
 };
 

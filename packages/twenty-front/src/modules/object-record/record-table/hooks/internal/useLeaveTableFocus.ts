@@ -1,4 +1,5 @@
 import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex';
+import { useRecordIndexFocusId } from '@/object-record/record-index/hooks/useRecordIndexFocusId';
 import { useResetTableRowSelection } from '@/object-record/record-table/hooks/internal/useResetTableRowSelection';
 import { useActiveRecordTableRow } from '@/object-record/record-table/hooks/useActiveRecordTableRow';
 import { useFocusedRecordTableRow } from '@/object-record/record-table/hooks/useFocusedRecordTableRow';
@@ -10,6 +11,7 @@ import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/com
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 
 export const useLeaveTableFocus = (recordTableId?: string) => {
+  const recordIndexFocusId = useRecordIndexFocusId();
   const recordTableIdFromContext = useAvailableComponentInstanceIdOrThrow(
     RecordTableComponentInstanceContext,
     recordTableId,
@@ -53,6 +55,6 @@ export const useLeaveTableFocus = (recordTableId?: string) => {
     setRecordTableHoverPosition(null);
     setRecordTableFocusPosition(null);
 
-    resetFocusStackToRecordIndex();
+    resetFocusStackToRecordIndex(recordIndexFocusId);
   };
 };

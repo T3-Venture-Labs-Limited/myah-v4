@@ -7,7 +7,7 @@ import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomC
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { type View } from '@/views/types/View';
-import { VIEW_PICKER_DROPDOWN_ID } from '@/views/view-picker/constants/ViewPickerDropdownId';
+import { useViewBarControlIds } from '@/views/contexts/ViewBarControlIdsContext';
 import { useUpdateViewFromCurrentState } from '@/views/view-picker/hooks/useUpdateViewFromCurrentState';
 import { viewPickerIsDirtyComponentState } from '@/views/view-picker/states/viewPickerIsDirtyComponentState';
 import { viewPickerIsPersistingComponentState } from '@/views/view-picker/states/viewPickerIsPersistingComponentState';
@@ -60,6 +60,7 @@ type ObjectOptionsDropdownMenuViewNameProps = {
 export const ObjectOptionsDropdownMenuViewName = ({
   currentView,
 }: ObjectOptionsDropdownMenuViewNameProps) => {
+  const { viewPickerDropdownId } = useViewBarControlIds();
   const { theme } = useContext(ThemeContext);
   const [viewPickerSelectedIcon, setViewPickerSelectedIcon] =
     useAtomComponentState(viewPickerSelectedIconComponentState);
@@ -88,7 +89,7 @@ export const ObjectOptionsDropdownMenuViewName = ({
 
       await updateViewFromCurrentState();
     },
-    focusId: VIEW_PICKER_DROPDOWN_ID,
+    focusId: viewPickerDropdownId,
     dependencies: [viewPickerIsPersisting, updateViewFromCurrentState],
   });
 
