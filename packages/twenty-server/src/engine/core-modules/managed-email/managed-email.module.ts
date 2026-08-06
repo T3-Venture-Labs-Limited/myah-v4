@@ -76,6 +76,8 @@ import {
   MANAGED_EMAIL_WARMUP_CLOCK,
   ManagedEmailWarmupService,
 } from './services/managed-email-warmup.service';
+import { ManagedEmailResolver } from './managed-email.resolver';
+import { ManagedEmailCustomerService } from './services/managed-email-customer.service';
 
 @Module({
   imports: [
@@ -161,6 +163,8 @@ import {
     },
     ManagedEmailProposalService,
     ManagedEmailQuoteService,
+    ManagedEmailCustomerService,
+    ManagedEmailResolver,
     ManagedEmailMailboxActivationService,
     ActivateManagedEmailMailboxJob,
     ManagedEmailMailboxActivationCronJob,

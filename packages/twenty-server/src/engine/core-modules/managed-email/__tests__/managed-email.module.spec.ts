@@ -39,6 +39,7 @@ import { EvaluateManagedEmailReadinessJob } from '../jobs/evaluate-managed-email
 import { ReconcileManagedEmailAcquisitionJob } from '../jobs/reconcile-managed-email-acquisition.job';
 import { ReconcileManagedEmailSubscriptionsJob } from '../jobs/reconcile-managed-email-subscriptions.job';
 import { ManagedEmailModule } from '../managed-email.module';
+import { ManagedEmailResolver } from '../managed-email.resolver';
 import { IcemailClient } from '../providers/icemail/icemail.client';
 import { WarmupInboxClient } from '../providers/warmup-inbox/warmup-inbox.client';
 import {
@@ -68,6 +69,7 @@ import {
   MANAGED_EMAIL_LIFECYCLE_CLOCK,
   ManagedEmailLifecycleService,
 } from '../services/managed-email-lifecycle.service';
+import { ManagedEmailCustomerService } from '../services/managed-email-customer.service';
 import { ManagedEmailReconciliationService } from '../services/managed-email-reconciliation.service';
 import { ManagedEmailReadinessService } from '../services/managed-email-readiness.service';
 import {
@@ -200,6 +202,8 @@ describe('ManagedEmailModule', () => {
     for (const service of [
       ManagedEmailProposalService,
       ManagedEmailQuoteService,
+      ManagedEmailCustomerService,
+      ManagedEmailResolver,
       ManagedEmailMailboxActivationService,
       ActivateManagedEmailMailboxJob,
       ManagedEmailMailboxActivationCronJob,
@@ -242,7 +246,7 @@ describe('ManagedEmailModule', () => {
         expect.arrayContaining([expect.objectContaining({ provide: token })]),
       );
     }
-    expect(providers).toHaveLength(repositoryTokens.length + 37);
+    expect(providers).toHaveLength(repositoryTokens.length + 39);
     expect(exports).toEqual([
       ...repositoryTokens,
       IcemailClient,
