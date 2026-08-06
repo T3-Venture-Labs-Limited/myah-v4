@@ -290,6 +290,62 @@ describe('Myah Inbox mutations (PostgreSQL)', () => {
       myahReplyDraftRevision: 5,
     });
   });
+  it('returns the first saved draft to a stale second authenticated workspace member', async () => {
+    const janeSave = await makeGraphqlAPIRequest({
+      query: saveDraftMutation,
+      variables: {
+        input: {
+          threadId,
+          expectedRevision: 2,
+          body: { markdown: 'Jane background save', blocknote: null },
+        },
+      },
+    });
+
+    const jonyStaleSave = await makeGraphqlAPIRequest(
+      {
+        query: saveDraftMutation,
+        variables: {
+          input: {
+            threadId,
+            expectedRevision: 2,
+            body: { markdown: 'Jony stale save', blocknote: null },
+          },
+        },
+      },
+      APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    );
+
+    expect(janeSave.body.errors).toBeUndefined();
+    expect(janeSave.body.data.saveMyahInboxDraft).toEqual({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'Jane background save', blocknote: null },
+    });
+    expect(jonyStaleSave.body.errors).toBeUndefined();
+    expect(jonyStaleSave.body.data.saveMyahInboxDraft).toEqual({
+      status: 'CONFLICT',
+      revision: 3,
+      body: { markdown: 'Jane background save', blocknote: null },
+    });
+
+    const [persisted] = (await global.testDataSource.query(
+      `SELECT "myahReplyDraftBodyMarkdown", "myahReplyDraftBodyBlocknote",
+              "myahReplyDraftRevision"
+         FROM "${schemaName}"."messageThread" WHERE "id" = $1`,
+      [threadId],
+    )) as Array<{
+      myahReplyDraftBodyMarkdown: string;
+      myahReplyDraftBodyBlocknote: string | null;
+      myahReplyDraftRevision: number;
+    }>;
+
+    expect(persisted).toEqual({
+      myahReplyDraftBodyMarkdown: 'Jane background save',
+      myahReplyDraftBodyBlocknote: null,
+      myahReplyDraftRevision: 3,
+    });
+  });
 
   it('serializes relation-only triage with a concurrent SNOOZED transition', async () => {
     const queryRunner = global.testDataSource.createQueryRunner();

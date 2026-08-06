@@ -94,7 +94,7 @@ describe('MyahInboxProposalPreview', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('lets the shared composer render proposal generation beside Save draft', () => {
+  it('renders Generate proposal as the only normal draft action', () => {
     render(
       <MyahInboxProposalPreview
         threadId="thread-1"
@@ -109,6 +109,9 @@ describe('MyahInboxProposalPreview', () => {
     expect(screen.getByLabelText('Draft actions')).toContainElement(
       screen.getByRole('button', { name: 'Generate proposal' }),
     );
+    expect(
+      screen.queryByRole('button', { name: 'Save draft' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows a retryable proposal error', async () => {

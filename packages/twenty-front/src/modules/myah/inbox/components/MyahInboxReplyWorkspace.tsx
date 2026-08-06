@@ -1,15 +1,20 @@
-import {
-  MyahInboxDraftEditor,
-  type MyahInboxAppliedProposal,
-  type MyahInboxRichText,
-} from '@/myah/inbox/components/MyahInboxDraftEditor';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
 import { MyahInboxProposalPreview } from '@/myah/inbox/components/MyahInboxProposalPreview';
+import { useMyahInboxDraftAutosaveControllerContext } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
+import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
+import {
+  type MyahInboxDraftAutosaveKey,
+  type MyahInboxRichText,
+} from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
 import { styled } from '@linaria/react';
-import { useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { useEffect, useMemo, useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledReplyWorkspace = styled.section`
@@ -52,10 +57,12 @@ export type MyahInboxReplyWorkspaceProps = {
 
 type MyahInboxReplyWorkspaceContentProps = {
   thread: MyahInboxThread;
+  workspaceId: string;
 };
 
 const MyahInboxReplyWorkspaceContent = ({
   thread,
+  workspaceId,
 }: MyahInboxReplyWorkspaceContentProps) => {
   const { record: draftRecord, loading: draftLoading } =
     useFindOneRecord<MyahInboxDraftRecord>({
@@ -68,37 +75,58 @@ const MyahInboxReplyWorkspaceContent = ({
       },
       skip: false,
     });
-  const [appliedProposal, setAppliedProposal] =
-    useState<MyahInboxAppliedProposal | null>(null);
+  const draftAutosaveController = useMyahInboxDraftAutosaveControllerContext();
+  const draftKey = useMemo<MyahInboxDraftAutosaveKey>(
+    () => ({ workspaceId, threadId: thread.id }),
+    [thread.id, workspaceId],
+  );
+  const draftEntry = useAtomValue(
+    myahInboxDraftAutosaveFamilyState.atomFamily(draftKey),
+  );
   const [isApplyingProposal, setIsApplyingProposal] = useState(false);
-  const [isDraftSaving, setIsDraftSaving] = useState(false);
-  const canEditDraft = true;
 
-  if (draftLoading) {
+  useEffect(() => {
+    if (!draftRecord) {
+      return;
+    }
+
+    draftAutosaveController.reconcile({
+      key: draftKey,
+      revision: draftRecord.myahReplyDraftRevision,
+      body: draftRecord.myahReplyDraftBody,
+    });
+  }, [draftAutosaveController, draftKey, draftRecord]);
+
+  if (draftLoading || !draftEntry) {
     return <StyledStatus role="status">Loading shared draft</StyledStatus>;
   }
+
+  const handleApplyProposal = (body: MyahInboxRichText) => {
+    setIsApplyingProposal(true);
+
+    void draftAutosaveController
+      .applyProposal({ key: draftKey, body })
+      .finally(() => setIsApplyingProposal(false));
+  };
 
   return (
     <MyahInboxProposalPreview
       threadId={thread.id}
-      disabled={!canEditDraft || isDraftSaving || isApplyingProposal}
-      onApply={(body) => {
-        setIsApplyingProposal(true);
-        setAppliedProposal((current) => ({
-          applicationId: (current?.applicationId ?? 0) + 1,
-          body,
-        }));
-      }}
+      disabled={isApplyingProposal || draftEntry.status === 'saving'}
+      onApply={handleApplyProposal}
       renderGenerateAction={(generateAction) => (
         <MyahInboxDraftEditor
-          threadId={thread.id}
-          initialBody={draftRecord?.myahReplyDraftBody ?? null}
-          initialRevision={draftRecord?.myahReplyDraftRevision ?? 0}
-          canEdit={canEditDraft}
-          appliedProposal={appliedProposal}
+          entry={draftEntry}
+          onDraftChange={(body) =>
+            draftAutosaveController.updateDraft({ key: draftKey, body })
+          }
+          onRetry={() => {
+            void draftAutosaveController.retry(draftKey);
+          }}
+          onReloadConflict={() =>
+            draftAutosaveController.reloadConflict(draftKey)
+          }
           proposalAction={generateAction}
-          onDraftSavingChange={setIsDraftSaving}
-          onProposalApplicationSettled={() => setIsApplyingProposal(false)}
         />
       )}
     />
@@ -109,6 +137,7 @@ export const MyahInboxReplyWorkspace = ({
   thread,
 }: MyahInboxReplyWorkspaceProps) => {
   const { objectMetadataItems } = useObjectMetadataItems();
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const isMessageThreadMetadataReady = objectMetadataItems.some(
     (item) => item.nameSingular === 'messageThread',
   );
@@ -123,8 +152,11 @@ export const MyahInboxReplyWorkspace = ({
         <StyledComposerTitle>Reply draft</StyledComposerTitle>
         <StyledStatus>Shared workspace draft · revision protected</StyledStatus>
       </StyledComposerHeader>
-      {isMessageThreadMetadataReady ? (
-        <MyahInboxReplyWorkspaceContent thread={thread} />
+      {isMessageThreadMetadataReady && currentWorkspace ? (
+        <MyahInboxReplyWorkspaceContent
+          thread={thread}
+          workspaceId={currentWorkspace.id}
+        />
       ) : (
         <StyledStatus role="status">Loading shared draft</StyledStatus>
       )}
