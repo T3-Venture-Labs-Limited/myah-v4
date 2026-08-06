@@ -3,6 +3,7 @@ import { useMutation } from '@apollo/client/react';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { t } from '@lingui/core/macro';
 import { useCallback } from 'react';
@@ -88,6 +89,7 @@ export const useApplyCreatorBulkRelationship = () => {
     REMOVE_CREATOR_LIST_MEMBER_INTENT,
   );
   const [addDirectCampaignCreators] = useMutation(ADD_DIRECT_CAMPAIGN_CREATORS);
+  const { updateOneRecord } = useUpdateOneRecord();
   const { objectMetadataItem: creatorObjectMetadataItem } =
     useObjectMetadataItem({
       objectNameSingular: 'creator',
@@ -208,24 +210,57 @@ export const useApplyCreatorBulkRelationship = () => {
     async ({
       target,
       creatorIdsToAdd,
+      campaignCreatorIdsToUpdate = [],
+      assignedManagedMailboxId,
     }: {
       target: CreatorBulkRelationshipTarget;
       creatorIdsToAdd: string[];
+      campaignCreatorIdsToUpdate?: string[];
+      assignedManagedMailboxId?: string | null;
     }) => {
-      if (creatorIdsToAdd.length === 0) return;
+      const hasCampaignUpdates =
+        target.kind === 'campaign' &&
+        assignedManagedMailboxId !== undefined &&
+        campaignCreatorIdsToUpdate.length > 0;
+
+      if (creatorIdsToAdd.length === 0 && !hasCampaignUpdates) {
+        return;
+      }
+
       try {
         if (target.kind === 'creator-list') {
-          await addCreatorListMembersIntent({
-            variables: {
-              input: { creatorListId: target.id, creatorIds: creatorIdsToAdd },
-            },
-          });
+          if (creatorIdsToAdd.length > 0) {
+            await addCreatorListMembersIntent({
+              variables: {
+                input: { creatorListId: target.id, creatorIds: creatorIdsToAdd },
+              },
+            });
+          }
         } else {
-          await addDirectCampaignCreators({
-            variables: {
-              input: { campaignId: target.id, creatorIds: creatorIdsToAdd },
-            },
-          });
+          if (hasCampaignUpdates) {
+            await Promise.all(
+              campaignCreatorIdsToUpdate.map((campaignCreatorId) =>
+                updateOneRecord({
+                  objectNameSingular: 'campaignCreator',
+                  idToUpdate: campaignCreatorId,
+                  updateOneRecordInput: { assignedManagedMailboxId },
+                }),
+              ),
+            );
+          }
+          if (creatorIdsToAdd.length > 0) {
+            await addDirectCampaignCreators({
+              variables: {
+                input: {
+                  campaignId: target.id,
+                  creatorIds: creatorIdsToAdd,
+                  ...(assignedManagedMailboxId !== undefined
+                    ? { assignedManagedMailboxId }
+                    : {}),
+                },
+              },
+            });
+          }
         }
       } catch {
         enqueueErrorSnackBar({
@@ -240,6 +275,7 @@ export const useApplyCreatorBulkRelationship = () => {
       addDirectCampaignCreators,
       enqueueErrorSnackBar,
       refetchCreatorRelationships,
+      updateOneRecord,
     ],
   );
 

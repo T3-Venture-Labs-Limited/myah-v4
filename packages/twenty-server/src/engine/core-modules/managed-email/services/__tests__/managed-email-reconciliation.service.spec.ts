@@ -10,10 +10,18 @@ import {
   ManagedEmailMailboxActivationCronJob,
 } from '../../crons/managed-email-mailbox-activation.cron.job';
 import {
+  MANAGED_EMAIL_PERIOD_BOUNDARY_CRON_PATTERN,
+  ManagedEmailPeriodBoundaryCronJob,
+} from '../../crons/managed-email-period-boundary.cron.job';
+import {
   MANAGED_EMAIL_READINESS_CRON_PATTERN,
   ManagedEmailReadinessCronJob,
 } from '../../crons/managed-email-readiness.cron.job';
 import { ManagedEmailReconciliationCronJob } from '../../crons/managed-email-reconciliation.cron.job';
+import {
+  MANAGED_EMAIL_SUBSCRIPTION_RECONCILIATION_CRON_PATTERN,
+  ManagedEmailSubscriptionReconciliationCronJob,
+} from '../../crons/managed-email-subscription-reconciliation.cron.job';
 import { ManagedEmailAcquisitionOperationEntity } from '../../entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from '../../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../../entities/managed-email-mailbox.entity';
@@ -458,7 +466,15 @@ describe('ManagedEmailReconciliationCronCommand', () => {
       ManagedEmailReadinessCronJob.name,
       {},
     );
-    expect(messageQueueService.add).toHaveBeenCalledTimes(3);
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      ManagedEmailSubscriptionReconciliationCronJob.name,
+      {},
+    );
+    expect(messageQueueService.add).toHaveBeenCalledWith(
+      ManagedEmailPeriodBoundaryCronJob.name,
+      {},
+    );
+    expect(messageQueueService.add).toHaveBeenCalledTimes(5);
     expect(messageQueueService.addCron).toHaveBeenCalledWith({
       data: undefined,
       jobName: ManagedEmailReconciliationCronJob.name,
@@ -480,6 +496,22 @@ describe('ManagedEmailReconciliationCronCommand', () => {
         repeat: { pattern: MANAGED_EMAIL_READINESS_CRON_PATTERN },
       },
     });
-    expect(messageQueueService.addCron).toHaveBeenCalledTimes(3);
+    expect(messageQueueService.addCron).toHaveBeenCalledWith({
+      data: undefined,
+      jobName: ManagedEmailSubscriptionReconciliationCronJob.name,
+      options: {
+        repeat: {
+          pattern: MANAGED_EMAIL_SUBSCRIPTION_RECONCILIATION_CRON_PATTERN,
+        },
+      },
+    });
+    expect(messageQueueService.addCron).toHaveBeenCalledWith({
+      data: undefined,
+      jobName: ManagedEmailPeriodBoundaryCronJob.name,
+      options: {
+        repeat: { pattern: MANAGED_EMAIL_PERIOD_BOUNDARY_CRON_PATTERN },
+      },
+    });
+    expect(messageQueueService.addCron).toHaveBeenCalledTimes(5);
   });
 });

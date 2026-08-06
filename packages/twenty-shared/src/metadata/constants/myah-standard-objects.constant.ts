@@ -523,6 +523,9 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: 'bb5ae5e6-2f0a-4d13-9f7e-4af0f7f95c5a',
       },
       stage: { universalIdentifier: '427aad82-7fe4-516d-99b3-8d00161534f6' },
+      assignedManagedMailboxId: {
+        universalIdentifier: 'c1abf590-4797-5bd8-a820-07f55ffce9c0',
+      },
       selectedContactMethod: {
         universalIdentifier: 'b002caa0-6fb6-54a3-8111-a6dadf09e4ca',
       },

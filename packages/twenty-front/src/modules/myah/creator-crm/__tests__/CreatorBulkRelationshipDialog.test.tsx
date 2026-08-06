@@ -6,6 +6,7 @@ const mockUseCreatorBulkRelationshipPreview = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
 const mockRemoveCreatorListMembers = jest.fn();
 const mockCloseModal = jest.fn();
+const mockUseQuery = jest.fn();
 
 jest.mock('@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview', () => ({
   useCreatorBulkRelationshipPreview: (...args: unknown[]) =>
@@ -17,6 +18,10 @@ jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
     applyCreatorBulkRelationship: mockApplyCreatorBulkRelationship,
     removeCreatorListMembers: mockRemoveCreatorListMembers,
   }),
+}));
+
+jest.mock('@apollo/client/react', () => ({
+  useQuery: (...args: unknown[]) => mockUseQuery(...args),
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
@@ -101,6 +106,7 @@ const readyPreview = {
 describe('CreatorBulkRelationshipDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseQuery.mockReturnValue({ data: undefined, loading: false });
   });
 
   it('does not dismiss or mutate when Enter is pressed while confirmation is disabled', () => {
@@ -255,11 +261,27 @@ describe('CreatorBulkRelationshipDialog', () => {
     );
   });
 
-  it('reports an all-existing selection without mutating', () => {
+  it('assigns a mailbox to campaign members that already exist', async () => {
     mockUseCreatorBulkRelationshipPreview.mockReturnValue({
       ...readyPreview,
       linkedCreatorIds: ['creator-a', 'creator-b'],
       unlinkedCreatorIds: [],
+      relationshipRecordIds: ['campaign-creator-a', 'campaign-creator-b'],
+    });
+    mockUseQuery.mockReturnValue({
+      loading: false,
+      data: {
+        managedEmailMailboxes: [
+          {
+            id: 'eligible-mailbox',
+            address: 'maya@creator-network.com',
+            personaDisplayName: 'Maya Chen',
+            campaignEligibility: 'ELIGIBLE',
+            warmupState: 'MAINTENANCE',
+            safeFailureCode: null,
+          },
+        ],
+      },
     });
 
     render(
@@ -269,13 +291,112 @@ describe('CreatorBulkRelationshipDialog', () => {
       />,
     );
 
-    expect(screen.getByText(/No changes will be made/)).toBeVisible();
-    expect(screen.getByText('Target').parentElement).toHaveTextContent(
-      'TargetSpring campaign',
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Maya Chen — maya@creator-network.com',
+      }),
     );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to campaign' }));
+    });
+
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledWith({
+      target: campaignAction.target,
+      creatorIdsToAdd: [],
+      campaignCreatorIdsToUpdate: ['campaign-creator-a', 'campaign-creator-b'],
+      assignedManagedMailboxId: 'eligible-mailbox',
+    });
+  });
+
+  it('can clear assignments from existing campaign members', async () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      ...readyPreview,
+      selectedCreatorIds: ['creator-a'],
+      linkedCreatorIds: ['creator-a'],
+      unlinkedCreatorIds: [],
+      relationshipRecordIds: ['campaign-creator-a'],
+    });
+
+    render(
+      <CreatorBulkRelationshipDialog
+        action={campaignAction}
+        selectedCreatorIds={['creator-a']}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Clear mailbox assignment' }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to campaign' }));
+    });
+
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledWith({
+      target: campaignAction.target,
+      creatorIdsToAdd: [],
+      campaignCreatorIdsToUpdate: ['campaign-creator-a'],
+      assignedManagedMailboxId: null,
+    });
+  });
+
+  it('requires an eligible managed mailbox and keeps blocked choices customer-safe', async () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
+    mockUseQuery.mockReturnValue({
+      loading: false,
+      data: {
+        managedEmailMailboxes: [
+          {
+            id: 'eligible-mailbox',
+            address: 'maya@creator-network.com',
+            personaDisplayName: 'Maya Chen',
+            campaignEligibility: 'ELIGIBLE',
+            warmupState: 'MAINTENANCE',
+            safeFailureCode: null,
+          },
+          {
+            id: 'warming-mailbox',
+            address: 'alex@creator-network.com',
+            personaDisplayName: 'Alex Smith',
+            campaignEligibility: 'NEW_THREADS_BLOCKED',
+            warmupState: 'WARMING',
+            safeFailureCode: 'INTERNAL_PROVIDER_DETAIL_MUST_NOT_RENDER',
+          },
+        ],
+      },
+    });
+
+    render(
+      <CreatorBulkRelationshipDialog
+        action={campaignAction}
+        selectedCreatorIds={['creator-a', 'creator-b']}
+      />,
+    );
+
     expect(
-      screen.getByRole('button', { name: /^Add to campaign/ }),
+      screen.getByRole('button', { name: 'Add to campaign' }),
     ).toBeDisabled();
-    expect(mockApplyCreatorBulkRelationship).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', {
+        name: 'Alex Smith — alex@creator-network.com: Warming — not ready for new threads',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByText('INTERNAL_PROVIDER_DETAIL_MUST_NOT_RENDER'),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Maya Chen — maya@creator-network.com',
+      }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add to campaign' }));
+    });
+
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenCalledWith({
+      target: campaignAction.target,
+      creatorIdsToAdd: ['creator-a', 'creator-b'],
+      assignedManagedMailboxId: 'eligible-mailbox',
+    });
   });
 });

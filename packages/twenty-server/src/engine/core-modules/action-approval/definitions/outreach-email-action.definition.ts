@@ -17,6 +17,7 @@ import {
   type OutreachEmailExpectedActionBinding,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
@@ -83,6 +84,7 @@ type CampaignCreatorRecord = ObjectRecord & {
   creatorId: string | null;
   campaignId: string | null;
   selectedContactMethod: string | null;
+  assignedManagedMailboxId: string | null;
 };
 
 type CreatorRecord = ObjectRecord & {
@@ -108,6 +110,7 @@ type OutreachEmailExpectedActionBindingWithWorkspace =
   OutreachEmailExpectedActionBinding & { workspaceId: string };
 
 export type CanonicalOutreachEmailGraph = {
+  managedMailboxId: string;
   outreachActionId: string;
   campaignCreatorId: string;
   creatorId: string;
@@ -179,6 +182,7 @@ export class OutreachEmailActionDefinition {
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
+    private readonly managedEmailCampaignEligibilityService: ManagedEmailCampaignEligibilityService,
   ) {}
 
   async propose({
@@ -238,6 +242,13 @@ export class OutreachEmailActionDefinition {
       binding.draftId,
       binding.initiatorUserWorkspaceId,
     );
+    await this.managedEmailCampaignEligibilityService.assertEligible({
+      workspaceId,
+      managedMailboxId: graph.managedMailboxId,
+      connectedAccountId: graph.connectedAccountId,
+      messageChannelId: graph.messageChannelId,
+      isFollowUp: graph.inReplyTo !== null,
+    });
     const evidenceObjectMetadataIds =
       await this.resolveEvidenceObjectMetadataIds(workspaceId);
     const expectedActionBinding = this.buildExpectedActionBinding({
@@ -443,6 +454,7 @@ export class OutreachEmailActionDefinition {
       ),
       sendingAccountFingerprint: computeActionContentDigest(
         JSON.stringify([
+          graph.managedMailboxId,
           graph.connectedAccountId,
           graph.messageChannelId,
           graph.senderEmail,
@@ -688,6 +700,8 @@ export class OutreachEmailActionDefinition {
     const inReplyTo = graph.action.inReplyTo?.trim() || null;
     const recipientLabel = graph.creator.name?.trim();
     const campaignLabel = graph.campaign.name?.trim();
+    const managedMailboxId =
+      graph.campaignCreator.assignedManagedMailboxId?.trim();
     const expectedContentDigest =
       isNonEmptyString(subject) && isNonEmptyString(body)
         ? computeActionContentDigest(JSON.stringify([subject, body]))
@@ -708,6 +722,7 @@ export class OutreachEmailActionDefinition {
       !isNonEmptyString(providerDraftExternalId) ||
       !isNonEmptyString(recipientLabel) ||
       !isNonEmptyString(campaignLabel) ||
+      !isNonEmptyString(managedMailboxId) ||
       graph.action.executionReceiptId !== null ||
       graph.action.sentHeaderMessageId !== null ||
       graph.action.providerMessageExternalId !== null ||
@@ -742,6 +757,7 @@ export class OutreachEmailActionDefinition {
       campaignCreatorId: graph.campaignCreator.id,
       creatorId: graph.creator.id,
       campaignId: graph.campaign.id,
+      managedMailboxId,
       subject,
       body,
       recipientEmail,

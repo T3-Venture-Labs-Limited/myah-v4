@@ -221,31 +221,32 @@ export class ManagedEmailWarmupService {
     );
     const imapReady = protocolsReady;
     const smtpReady = protocolsReady;
+    const evaluatedReadiness = this.readinessService.evaluate({
+      adminDailyCap: mailbox.adminDailyCap,
+      credentialReady,
+      dns,
+      hardBlacklisted: detail.health.detectedBlacklists > 0,
+      hardProviderBlock: providerBlocked,
+      imapReady,
+      inboxPlacementBasisPoints,
+      independentlyResolvedMx: dns.mx,
+      infrastructureActive,
+      paid: warmupPaid,
+      policyVersion: mailbox.readinessPolicyVersion,
+      smtpReady,
+      spamPlacementBasisPoints,
+      twentyConnectionReady,
+      warmupDays: detail.health.warmupDays ?? 0,
+      warmupHealthy: detail.status === 'running',
+    });
     const readiness: ManagedEmailReadinessResult = providerBlocked
       ? {
+          ...evaluatedReadiness,
           campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
-          policySafeDailyCapacity: 0,
           ready: false,
           safeReasonCode: 'WARMUP_PROVIDER_BLOCKED',
         }
-      : this.readinessService.evaluate({
-          adminDailyCap: mailbox.adminDailyCap,
-          credentialReady,
-          dns,
-          hardBlacklisted: detail.health.detectedBlacklists > 0,
-          hardProviderBlock: false,
-          imapReady,
-          inboxPlacementBasisPoints,
-          independentlyResolvedMx: dns.mx,
-          infrastructureActive,
-          paid: warmupPaid,
-          policyVersion: mailbox.readinessPolicyVersion,
-          smtpReady,
-          spamPlacementBasisPoints,
-          twentyConnectionReady,
-          warmupDays: detail.health.warmupDays ?? 0,
-          warmupHealthy: detail.status === 'running',
-        });
+      : evaluatedReadiness;
     const warmupState = providerBlocked
       ? ManagedEmailWarmupState.ACTION_REQUIRED
       : readiness.ready
@@ -263,7 +264,11 @@ export class ManagedEmailWarmupService {
       healthFacts,
       lastHealthEvaluatedAt: evaluatedAt,
       nextReconciliationAt,
-      policySafeDailyCapacity: readiness.policySafeDailyCapacity,
+      policySafeDailyCapacity:
+        evaluatedReadiness.safeReasonCode === 'POLICY_UNAVAILABLE' ||
+        evaluatedReadiness.safeReasonCode === 'INVALID_INPUT'
+          ? mailbox.policySafeDailyCapacity
+          : readiness.policySafeDailyCapacity,
       safeFailureCode: readiness.safeReasonCode,
       warmupEnrollmentId: enrollmentId,
       warmupProviderConfigurationKey: policy.providerConfigurationKey,
@@ -547,7 +552,7 @@ export class ManagedEmailWarmupService {
       nextReconciliationAt:
         input.nextReconciliationAt ??
         new Date(evaluatedAt.getTime() + DEFAULT_RECONCILIATION_DELAY_MS),
-      policySafeDailyCapacity: 0,
+      policySafeDailyCapacity: mailbox.policySafeDailyCapacity,
       safeFailureCode: input.safeFailureCode,
       ...(input.warmupEnrollmentId === undefined
         ? {}

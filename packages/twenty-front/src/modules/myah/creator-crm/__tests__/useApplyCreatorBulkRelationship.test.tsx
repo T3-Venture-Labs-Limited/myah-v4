@@ -8,6 +8,7 @@ const mockEvict = jest.fn();
 const mockRefetchQueries = jest.fn();
 const mockDestroyCreatorListMembers = jest.fn();
 const mockBatchCreateCreatorListMembers = jest.fn();
+const mockUpdateOneRecord = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockEnqueueWarningSnackBar = jest.fn();
 const mockUseMutation = jest.fn();
@@ -51,6 +52,12 @@ jest.mock('@/object-record/hooks/useDestroyManyRecords', () => ({
 jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
   useBatchCreateManyRecords: () => ({
     batchCreateManyRecords: mockBatchCreateCreatorListMembers,
+  }),
+}));
+
+jest.mock('@/object-record/hooks/useUpdateOneRecord', () => ({
+  useUpdateOneRecord: () => ({
+    updateOneRecord: mockUpdateOneRecord,
   }),
 }));
 
@@ -261,4 +268,88 @@ describe('useApplyCreatorBulkRelationship', () => {
       }
     },
   );
+
+  it('persists the selected managed mailbox on every new campaign creator', async () => {
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await act(async () => {
+      await result.current.applyCreatorBulkRelationship({
+        target: { kind: 'campaign', id: 'campaign-1', label: 'Campaign' },
+        creatorIdsToAdd: ['creator-1', 'creator-2'],
+        assignedManagedMailboxId: 'managed-mailbox-1',
+      });
+    });
+
+    expect(mockBatchCreateCreatorListMembers).toHaveBeenCalledWith({
+      recordsToCreate: [
+        {
+          name: '',
+          creatorId: 'creator-1',
+          campaignId: 'campaign-1',
+          assignedManagedMailboxId: 'managed-mailbox-1',
+        },
+        {
+          name: '',
+          creatorId: 'creator-2',
+          campaignId: 'campaign-1',
+          assignedManagedMailboxId: 'managed-mailbox-1',
+        },
+      ],
+    });
+  });
+
+  it('updates every existing campaign creator with the selected mailbox', async () => {
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await act(async () => {
+      await result.current.applyCreatorBulkRelationship({
+        target: { kind: 'campaign', id: 'campaign-1', label: 'Campaign' },
+        creatorIdsToAdd: [],
+        campaignCreatorIdsToUpdate: [
+          'campaign-creator-1',
+          'campaign-creator-2',
+        ],
+        assignedManagedMailboxId: 'managed-mailbox-1',
+      });
+    });
+
+    expect(mockUpdateOneRecord).toHaveBeenCalledTimes(2);
+    expect(mockUpdateOneRecord).toHaveBeenNthCalledWith(1, {
+      objectNameSingular: 'campaignCreator',
+      idToUpdate: 'campaign-creator-1',
+      updateOneRecordInput: {
+        assignedManagedMailboxId: 'managed-mailbox-1',
+      },
+    });
+    expect(mockUpdateOneRecord).toHaveBeenNthCalledWith(2, {
+      objectNameSingular: 'campaignCreator',
+      idToUpdate: 'campaign-creator-2',
+      updateOneRecordInput: {
+        assignedManagedMailboxId: 'managed-mailbox-1',
+      },
+    });
+    expect(mockBatchCreateCreatorListMembers).not.toHaveBeenCalled();
+    expect(mockRefetchQueries).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the mailbox assignment on existing campaign creators', async () => {
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await act(async () => {
+      await result.current.applyCreatorBulkRelationship({
+        target: { kind: 'campaign', id: 'campaign-1', label: 'Campaign' },
+        creatorIdsToAdd: [],
+        campaignCreatorIdsToUpdate: ['campaign-creator-1'],
+        assignedManagedMailboxId: null,
+      });
+    });
+
+    expect(mockUpdateOneRecord).toHaveBeenCalledWith({
+      objectNameSingular: 'campaignCreator',
+      idToUpdate: 'campaign-creator-1',
+      updateOneRecordInput: {
+        assignedManagedMailboxId: null,
+      },
+    });
+  });
 });

@@ -70,6 +70,7 @@ import {
   ManagedEmailLifecycleService,
 } from '../services/managed-email-lifecycle.service';
 import { ManagedEmailCustomerService } from '../services/managed-email-customer.service';
+import { ManagedEmailCampaignEligibilityService } from '../services/managed-email-campaign-eligibility.service';
 import { ManagedEmailReconciliationService } from '../services/managed-email-reconciliation.service';
 import { ManagedEmailReadinessService } from '../services/managed-email-readiness.service';
 import {
@@ -209,6 +210,7 @@ describe('ManagedEmailModule', () => {
       ManagedEmailMailboxActivationCronJob,
       ManagedEmailDnsResolverService,
       ManagedEmailReadinessService,
+      ManagedEmailCampaignEligibilityService,
       ManagedEmailWarmupService,
       EvaluateManagedEmailReadinessJob,
       ManagedEmailReadinessCronJob,
@@ -246,7 +248,7 @@ describe('ManagedEmailModule', () => {
         expect.arrayContaining([expect.objectContaining({ provide: token })]),
       );
     }
-    expect(providers).toHaveLength(repositoryTokens.length + 39);
+    expect(providers).toHaveLength(repositoryTokens.length + 41);
     expect(exports).toEqual([
       ...repositoryTokens,
       IcemailClient,
@@ -257,6 +259,7 @@ describe('ManagedEmailModule', () => {
       ManagedEmailReconciliationCronCommand,
       ManagedEmailReconciliationService,
       ManagedEmailSubscriptionService,
+      ManagedEmailCampaignEligibilityService,
     ]);
   });
 

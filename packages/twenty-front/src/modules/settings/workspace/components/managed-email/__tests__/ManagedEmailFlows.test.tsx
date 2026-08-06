@@ -324,7 +324,7 @@ describe('managed email acquisition flow components', () => {
     },
   );
 
-  it('lets the customer retry the server-emitted failed payment state', async () => {
+  it('confirms a failed-payment retry before invoking the callback', async () => {
     const user = userEvent.setup();
     const onRetryPayment = jest.fn();
 
@@ -336,6 +336,13 @@ describe('managed email acquisition flow components', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /^Retry payment/ }));
+    expect(onRetryPayment).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        'This retries the saved payment for this managed mailbox order.',
+      ),
+    ).toBeVisible();
+    await user.click(screen.getByTestId('confirmation-modal-confirm-button'));
     expect(onRetryPayment).toHaveBeenCalledTimes(1);
   });
 

@@ -3,6 +3,7 @@ import { type Repository } from 'typeorm';
 
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { OutreachEmailDraftService } from 'src/engine/core-modules/outreach-email/services/outreach-email-draft.service';
+import { type ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import { type ComposedEmail } from 'src/engine/core-modules/tool/tools/email-tool/types/composed-email.type';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { type MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
@@ -18,6 +19,7 @@ const CONNECTED_ACCOUNT_ID = '00000000-0000-4000-8000-000000000006';
 const MESSAGE_CHANNEL_ID = '00000000-0000-4000-8000-000000000007';
 const PARENT_MESSAGE_ID = '00000000-0000-4000-8000-000000000008';
 const MESSAGE_THREAD_ID = '00000000-0000-4000-8000-000000000009';
+const MANAGED_MAILBOX_ID = '00000000-0000-4000-8000-000000000010';
 const CREATOR_EMAIL = 'creator@example.com';
 const PARENT_HEADER_MESSAGE_ID = '<parent@example.com>';
 
@@ -27,6 +29,7 @@ const campaignCreator = {
   creatorId: CREATOR_ID,
   campaignId: CAMPAIGN_ID,
   selectedContactMethod: 'email',
+  assignedManagedMailboxId: MANAGED_MAILBOX_ID,
 };
 const creator = {
   id: CREATOR_ID,
@@ -105,6 +108,10 @@ describe('OutreachEmailDraftService', () => {
     createDraft,
     deleteDraft,
   } as unknown as MessagingMessageOutboundService;
+  const assertEligible = jest.fn();
+  const campaignEligibilityService = {
+    assertEligible,
+  } as unknown as ManagedEmailCampaignEligibilityService;
 
   let service: OutreachEmailDraftService;
 
@@ -125,6 +132,12 @@ describe('OutreachEmailDraftService', () => {
     associationRepository.find.mockResolvedValue([]);
     connectedAccountRepository.findOne.mockResolvedValue(connectedAccount);
     messageChannelRepository.find.mockResolvedValue([messageChannel]);
+    assertEligible.mockResolvedValue({
+      id: MANAGED_MAILBOX_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      effectiveDailyCap: 10,
+    });
     createDraft.mockResolvedValue({
       headerMessageId: '<provider-draft@example.com>',
       draftExternalId: 'provider-draft-id',
@@ -137,6 +150,7 @@ describe('OutreachEmailDraftService', () => {
       connectedAccountRepository as unknown as Repository<ConnectedAccountEntity>,
       messageChannelRepository as unknown as Repository<MessageChannelEntity>,
       messageOutboundService,
+      campaignEligibilityService,
     );
   });
 
@@ -180,7 +194,13 @@ describe('OutreachEmailDraftService', () => {
         { shouldBypassPermissionChecks: true },
       );
     }
-
+    expect(assertEligible).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      managedMailboxId: MANAGED_MAILBOX_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      isFollowUp: false,
+    });
     const composedEmail = buildComposedEmail();
     const result = await service.persistPreparedDraft({
       authority,
@@ -251,6 +271,26 @@ describe('OutreachEmailDraftService', () => {
     expect(result).not.toHaveProperty('connectedAccount');
     expect(result).not.toHaveProperty('connectionParameters');
     expect(result).not.toHaveProperty('accessToken');
+  });
+
+  it('rejects an unassigned or ineligible managed mailbox before provider draft creation', async () => {
+    campaignCreatorRepository.findOne.mockResolvedValueOnce({
+      ...campaignCreator,
+      assignedManagedMailboxId: null,
+    });
+
+    await expect(resolveAuthority()).rejects.toThrow(
+      'Campaign Creator does not have an assigned managed mailbox',
+    );
+
+    assertEligible.mockRejectedValueOnce(
+      new Error('Managed mailbox is not eligible for campaign sending'),
+    );
+
+    await expect(resolveAuthority()).rejects.toThrow(
+      'Managed mailbox is not eligible for campaign sending',
+    );
+    expect(createDraft).not.toHaveBeenCalled();
   });
 
   it('accepts EMAIL case-insensitively and rejects missing relations or another method', async () => {
@@ -395,6 +435,13 @@ describe('OutreachEmailDraftService', () => {
       inReplyTo: PARENT_HEADER_MESSAGE_ID,
       messageThreadId: MESSAGE_THREAD_ID,
       messageThreadExternalId: 'provider-parent-thread-id',
+    });
+    expect(assertEligible).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      managedMailboxId: MANAGED_MAILBOX_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      isFollowUp: true,
     });
     expect(messageRepository.find).toHaveBeenCalledWith({
       where: { headerMessageId: PARENT_HEADER_MESSAGE_ID },
