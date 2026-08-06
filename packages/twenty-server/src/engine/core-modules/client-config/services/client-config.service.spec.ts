@@ -111,6 +111,7 @@ describe('ClientConfigService', () => {
             CALENDAR_PROVIDER_GOOGLE_ENABLED: true,
             IS_CONFIG_VARIABLES_IN_DB_ENABLED: false,
             IS_IMAP_SMTP_CALDAV_ENABLED: false,
+            MANAGED_EMAIL_ENABLED: false,
             CALENDAR_BOOKING_PAGE_ID: 'team/twenty/talk-to-us',
             CLOUDFLARE_API_KEY: undefined,
             CLOUDFLARE_ZONE_ID: undefined,
@@ -192,11 +193,13 @@ describe('ClientConfigService', () => {
         isGoogleCalendarEnabled: true,
         isConfigVariablesInDbEnabled: false,
         isImapSmtpCaldavEnabled: false,
+        isManagedEmailEnabled: false,
         isEmailingDomainInDemoMode: false,
         allowRequestsToTwentyIcons: false,
         calendarBookingPageId: 'team/twenty/talk-to-us',
         isCloudflareIntegrationEnabled: false,
         isClickHouseConfigured: false,
+        isWorkspaceSchemaDDLLocked: undefined,
       });
     });
 

@@ -13,7 +13,9 @@ import {
 
 import { currentUserState } from '@/auth/states/currentUserState';
 import { billingState } from '@/client-config/states/billingState';
+import { isManagedEmailEnabledState } from '@/client-config/states/isManagedEmailEnabledState';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
+import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 import { SnackBarComponentInstanceContext } from '@/ui/feedback/snack-bar-manager/contexts/SnackBarComponentInstanceContext';
 import {
   jotaiStore,
@@ -84,6 +86,10 @@ jest.mock('@/settings/roles/hooks/usePermissionFlagMap', () => ({
   usePermissionFlagMap: jest.fn(),
 }));
 
+jest.mock('@/workspace/hooks/useIsFeatureEnabled');
+
+const mockUseIsFeatureEnabled = jest.mocked(useIsFeatureEnabled);
+
 jest.mock('@/domain-manager/hooks/useRedirectToWorkspaceDomain', () => ({
   useRedirectToWorkspaceDomain: jest.fn().mockImplementation(() => ({
     redirectToWorkspaceDomain: jest.fn(),
@@ -95,6 +101,8 @@ describe('useSettingsNavigationItems', () => {
     resetJotaiStore();
     jotaiStore.set(currentUserState.atom, mockCurrentUser);
     jotaiStore.set(billingState.atom, mockBilling);
+    jotaiStore.set(isManagedEmailEnabledState.atom, false);
+    mockUseIsFeatureEnabled.mockReturnValue(false);
   });
 
   it('should hide workspace settings when no permissions', () => {
@@ -140,6 +148,39 @@ describe('useSettingsNavigationItems', () => {
     );
 
     expect(workspaceSection?.items.some((item) => !item.isHidden)).toBe(true);
+  });
+
+  it('shows Workspace Email when managed email is enabled', () => {
+    (usePermissionFlagMap as jest.Mock).mockReturnValue(
+      allWorkspaceSettingsPermissions,
+    );
+    jotaiStore.set(isManagedEmailEnabledState.atom, true);
+
+    const { result } = renderHook(() => useSettingsNavigationItems(), {
+      wrapper: Wrapper,
+    });
+
+    const emailItem = result.current
+      .find((section) => section.label === 'Workspace')
+      ?.items.find((item) => item.path === SettingsPath.WorkspaceEmail);
+
+    expect(emailItem?.isHidden).toBe(false);
+  });
+
+  it('hides Workspace Email when both email capabilities are disabled', () => {
+    (usePermissionFlagMap as jest.Mock).mockReturnValue(
+      allWorkspaceSettingsPermissions,
+    );
+
+    const { result } = renderHook(() => useSettingsNavigationItems(), {
+      wrapper: Wrapper,
+    });
+
+    const emailItem = result.current
+      .find((section) => section.label === 'Workspace')
+      ?.items.find((item) => item.path === SettingsPath.WorkspaceEmail);
+
+    expect(emailItem?.isHidden).toBe(true);
   });
 
   it('should order the first five workspace settings items', () => {

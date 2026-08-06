@@ -53,6 +53,7 @@ const mockClientConfig = {
   isGoogleCalendarEnabled: false,
   isConfigVariablesInDbEnabled: false,
   isImapSmtpCaldavEnabled: false,
+  isManagedEmailEnabled: false,
   isEmailingDomainInDemoMode: false,
   isCloudflareIntegrationEnabled: false,
   isClickHouseConfigured: false,
