@@ -92,6 +92,15 @@ export class CampaignInfluencerService {
     return options;
   }
 
+  async assertGenericMembershipMutationAllowed(creatorListId: string | undefined, authContext: WorkspaceAuthContext) {
+    if (!creatorListId) throw new Error('Creator list identity is required');
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const options = this.permissionOptions(authContext);
+      const attachments = await this.repository(authContext, 'campaignCreatorList', options);
+      if (await attachments.exists({ where: { creatorListId } })) throw new Error('Use the creator-list membership intent for attached lists');
+    }, authContext);
+  }
+
   private async snapshotInTransaction(campaignId: string, authContext: WorkspaceAuthContext, manager?: WorkspaceEntityManager) {
     const options = this.permissionOptions(authContext);
     const [creators, lists] = await Promise.all([this.repository(authContext, 'campaignCreator', options), this.repository(authContext, 'campaignCreatorList', options)]);
