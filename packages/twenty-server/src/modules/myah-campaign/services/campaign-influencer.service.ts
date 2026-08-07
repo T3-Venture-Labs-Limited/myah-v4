@@ -215,11 +215,12 @@ export class CampaignInfluencerService {
         members.find({ where: { creatorId: input.creatorId } }, transactionManager),
       ]);
       if (!existingMembership) throw new Error('Creator list membership not found');
-      const attachedIds = new Set(attached.map((row) => row.creatorListId));
       const affected: string[] = [];
       for (const attachment of attached) {
         const row = await creators.findOne({ where: { campaignId: attachment.campaignId, creatorId: input.creatorId } }, transactionManager);
-        const hasOtherListSource = allMemberships.some((membership) => membership.creatorListId !== input.creatorListId && attachedIds.has(membership.creatorListId));
+        const campaignAttachments = await attachments.find({ where: { campaignId: attachment.campaignId } }, transactionManager);
+        const campaignListIds = new Set(campaignAttachments.map((item) => item.creatorListId));
+        const hasOtherListSource = allMemberships.some((membership) => membership.creatorListId !== input.creatorListId && campaignListIds.has(membership.creatorListId));
         if (row?.isDirectlyAdded !== true && !hasOtherListSource) affected.push(attachment.campaignId);
       }
       return { affectedCampaignIds: affected.sort(), requiresConfirmation: affected.length > 0, confirmationToken: this.membershipToken(input.creatorListId, input.creatorId, affected, `${existingMembership.id}:${attached.map((row) => row.id).sort().join(',')}`) };
