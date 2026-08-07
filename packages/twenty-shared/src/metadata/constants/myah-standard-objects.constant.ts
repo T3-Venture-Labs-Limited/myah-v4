@@ -562,7 +562,6 @@ export const MYAH_STANDARD_OBJECTS = {
             universalIdentifier: 'f4adf3a0-07bf-48f6-a5c9-20be6f1e2d93',
           },
         },
-        },
       },
     },
   },

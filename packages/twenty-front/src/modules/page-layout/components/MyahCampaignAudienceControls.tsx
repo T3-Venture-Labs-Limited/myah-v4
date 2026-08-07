@@ -1,5 +1,6 @@
 import { gql, useMutation, useQuery } from '@apollo/client';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { useState } from 'react';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
@@ -53,7 +54,7 @@ export const MyahCampaignAudienceControls = ({ campaignId }: { campaignId: strin
   });
   const attachedListIds = (data?.campaignInfluencerSnapshot?.campaignCreatorLists ?? [])
     .map((list: { creatorListId: string }) => list.creatorListId);
-  const { records: creatorLists } = useFindManyRecords<{ id: string; name?: string }>({
+  const { records: creatorLists } = useFindManyRecords<ObjectRecord & { name?: string }>({
     objectNameSingular: 'creatorList',
     filter: { id: { in: attachedListIds } },
     recordGqlFields: { id: true, name: true },

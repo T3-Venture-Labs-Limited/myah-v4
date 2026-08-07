@@ -400,6 +400,8 @@ export const buildMyahCampaignCreatorStandardFlatObjectMetadata = (
       description: 'A selected creator in a campaign workflow',
       icon: 'IconUserCheck',
       isSearchable: true,
+      isUICreatable: false,
+      isUIEditable: true,
       labelIdentifierFieldMetadataName: 'name',
     },
   });

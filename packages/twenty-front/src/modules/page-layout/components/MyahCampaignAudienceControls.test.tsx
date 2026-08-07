@@ -7,11 +7,15 @@ const mockUseMutation = jest.fn();
 const mockOpenModal = jest.fn();
 const mockCloseModal = jest.fn();
 const mockPicker = jest.fn();
+const mockUseFindManyRecords = jest.fn();
 
 jest.mock('@apollo/client', () => ({
   gql: (source: TemplateStringsArray) => source.join(''),
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
   useMutation: (...args: unknown[]) => mockUseMutation(...args),
+}));
+jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
+  useFindManyRecords: (...args: unknown[]) => mockUseFindManyRecords(...args),
 }));
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
   useModal: () => ({ openModal: mockOpenModal, closeModal: mockCloseModal }),
@@ -43,6 +47,7 @@ describe('MyahCampaignAudienceControls', () => {
       .mockReturnValueOnce([jest.fn().mockResolvedValue(undefined)])
       .mockReturnValueOnce([jest.fn().mockResolvedValue(undefined)])
       .mockReturnValueOnce([jest.fn().mockResolvedValue(undefined)]);
+    mockUseFindManyRecords.mockReturnValue({ records: [] });
   });
   it('uses the native picker record id as the attach intent input', async () => {
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
@@ -63,8 +68,10 @@ describe('MyahCampaignAudienceControls', () => {
       .mockReturnValueOnce({ data: { campaignCreatorListRemovalImpact: { affectedCreatorIds: ['creator-1'], requiresConfirmation: true, confirmationToken: 'token-1' } } });
     mockUseMutation.mockReset();
     mockUseMutation.mockReturnValueOnce([jest.fn()]).mockReturnValueOnce([jest.fn()]).mockReturnValueOnce([detach]);
+    mockUseFindManyRecords.mockReturnValue({ records: [{ id: 'list-1', name: 'VIP Creators' }] });
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Creator List list-1' }));
+    expect(screen.getByText('VIP Creators')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Creator List' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Confirm removal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Creator List removal' }));
     await waitFor(() => expect(detach).toHaveBeenCalledWith({ variables: { input: { campaignId: 'campaign-1', creatorListId: 'list-1', confirmedCreatorIds: ['creator-1'], confirmationToken: 'token-1' } } }));
