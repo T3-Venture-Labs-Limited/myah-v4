@@ -7,6 +7,7 @@ import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/com
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS, MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
+import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 
 const audienceObjects = new Set([
   MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
@@ -41,6 +42,12 @@ const audienceFieldPermissions = new Set(
     .map(({ universalIdentifier }) => universalIdentifier),
 );
 
+const campaignTabs = Object.values(MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs);
+const campaignWidgets = new Set(
+  campaignTabs.flatMap(({ widgets }) =>
+    Object.values(widgets).map(({ universalIdentifier }) => universalIdentifier),
+  ),
+);
 @RegisteredWorkspaceCommand('2.19.0', 1787000000000)
 @Command({
   name: 'upgrade:2-19:synchronize-myah-campaign-audience',
@@ -78,6 +85,13 @@ export class SynchronizeMyahCampaignAudienceCommand extends ActiveOrSuspendedWor
         viewField: audienceViewFields,
         objectPermission: audienceObjectPermissions,
         fieldPermission: audienceFieldPermissions,
+        pageLayout: new Set([
+          MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.universalIdentifier,
+        ]),
+        pageLayoutTab: new Set(
+          campaignTabs.map(({ universalIdentifier }) => universalIdentifier),
+        ),
+        pageLayoutWidget: campaignWidgets,
       },
       { synchronizeExistingSelectedMetadata: true },
     );

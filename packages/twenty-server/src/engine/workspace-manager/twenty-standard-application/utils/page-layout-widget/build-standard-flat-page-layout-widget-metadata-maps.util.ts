@@ -285,7 +285,7 @@ const buildFieldWidgetConfiguration = ({
   const fieldMetadataId = fieldName ? (fields[fieldName]?.id ?? null) : null;
 
   const view = viewUniversalIdentifier
-      Object.values(standardObjectMetadataRelatedEntityIds)
+    ? Object.values(standardObjectMetadataRelatedEntityIds)
         .flatMap((metadata) => Object.values(metadata.views))
         .find(
           (candidate) => candidate.universalIdentifier === viewUniversalIdentifier,

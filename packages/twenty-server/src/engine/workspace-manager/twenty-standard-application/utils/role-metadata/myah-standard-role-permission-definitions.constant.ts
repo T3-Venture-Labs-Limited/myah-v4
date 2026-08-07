@@ -60,6 +60,7 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
   ...[
     MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
     MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+    MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
     MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
     MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
     MYAH_STANDARD_OBJECTS.promotedAsset.universalIdentifier,

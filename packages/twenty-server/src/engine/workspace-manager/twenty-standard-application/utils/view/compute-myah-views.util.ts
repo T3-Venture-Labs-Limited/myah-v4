@@ -99,7 +99,7 @@ export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
     context: {
       viewName: 'campaignInfluencers',
       name: 'Campaign Influencers',
-      type: ViewType.TABLE,
+      type: ViewType.TABLE_WIDGET,
       key: null,
       position: 0,
       icon: 'IconUsers',
@@ -111,7 +111,7 @@ export const computeMyahViews = (args: Args): Record<string, FlatView> => ({
     context: {
       viewName: 'viewCampaignInformationCreatorLists',
       name: 'Campaign Creator Lists',
-      type: ViewType.TABLE,
+      type: ViewType.FIELDS_WIDGET,
       key: null,
       position: 4,
       icon: 'IconListDetails',
