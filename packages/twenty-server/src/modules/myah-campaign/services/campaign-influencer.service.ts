@@ -69,8 +69,17 @@ export class CampaignInfluencerService {
     }, authContext);
   }
 
-  private async authorizeTargets(authContext: WorkspaceAuthContext, campaignId: string, creatorIds: readonly string[], listIds: readonly string[], manager?: WorkspaceEntityManager) {
+  private assertCampaignUpdatePermission(options: PermissionOptions) {
+    if (options.shouldBypassPermissionChecks) return;
+    const context = getWorkspaceContext();
+    const objectId = context.objectIdByNameSingular.campaign;
+    const roleIds = 'unionOf' in options ? options.unionOf : options.intersectionOf;
+    const allowed = roleIds.map((roleId) => context.permissionsPerRoleId[roleId]?.[objectId]?.canUpdateObjectRecords === true);
+    if (('unionOf' in options ? !allowed.some(Boolean) : !allowed.every(Boolean))) throw new Error('Campaign update permission is required');
+  }
+  private async authorizeTargets(authContext: WorkspaceAuthContext, campaignId: string, creatorIds: readonly string[], listIds: readonly string[], manager?: WorkspaceEntityManager, requireUpdate = true) {
     const options = this.permissionOptions(authContext);
+    if (requireUpdate) this.assertCampaignUpdatePermission(options);
     const [campaigns, creators, lists] = await Promise.all([
       this.repository(authContext, 'campaign', options),
       this.repository(authContext, 'creator', options),
@@ -90,7 +99,7 @@ export class CampaignInfluencerService {
 
   async snapshot(campaignId: string, authContext: WorkspaceAuthContext) {
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      await this.authorizeTargets(authContext, campaignId, [], []);
+      await this.authorizeTargets(authContext, campaignId, [], [], undefined, false);
       return this.snapshotInTransaction(campaignId, authContext);
     }, authContext);
   }
@@ -132,7 +141,7 @@ export class CampaignInfluencerService {
   private confirmationToken(input: { campaignId: string; creatorListId: string; affectedCreatorIds: readonly string[] }) { return createHash('sha256').update(`${input.campaignId}:${input.creatorListId}:${[...input.affectedCreatorIds].sort().join(',')}`).digest('hex'); }
 
   private async calculateImpact(input: { campaignId: string; creatorListId: string }, authContext: WorkspaceAuthContext, manager?: WorkspaceEntityManager) {
-    const options = await this.authorizeTargets(authContext, input.campaignId, [], [input.creatorListId], manager);
+    const options = await this.authorizeTargets(authContext, input.campaignId, [], [input.creatorListId], manager, false);
     const [creators, attachments, members] = await Promise.all([
       this.repository(authContext, 'campaignCreator', options),
       this.repository(authContext, 'campaignCreatorList', options),
