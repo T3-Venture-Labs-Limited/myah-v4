@@ -217,11 +217,11 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
         influencers: {
           universalIdentifier: '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2',
           title: 'Influencers',
-          type: WidgetType.RECORD_TABLE,
-          objectUniversalIdentifier:
-            MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+          type: WidgetType.FIELD,
+          fieldUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators.universalIdentifier,
           viewUniversalIdentifier:
-            'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b',
+            MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers.universalIdentifier,
           gridPosition: GRID_POSITIONS.FULL_WIDTH,
           position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
         },

@@ -13,10 +13,12 @@ describe('MYAH Campaign page layout', () => {
       'Agent',
       'Operations',
     ]);
-    const influencers = MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.influencers.widgets.influencers;
-    expect(influencers.type).toBe(WidgetType.RECORD_TABLE);
-    expect(influencers.objectUniversalIdentifier).toBe(
-      MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+    expect(influencers.type).toBe(WidgetType.FIELD);
+    expect(influencers.fieldUniversalIdentifier).toBe(
+      MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators.universalIdentifier,
+    );
+    expect(influencers.viewUniversalIdentifier).toBe(
+      MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers.universalIdentifier,
     );
   });
 
