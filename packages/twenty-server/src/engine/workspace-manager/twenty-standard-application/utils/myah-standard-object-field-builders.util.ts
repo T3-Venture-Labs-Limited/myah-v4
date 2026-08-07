@@ -2452,7 +2452,8 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             fieldName: 'isDirectlyAdded',
             type: FieldMetadataType.BOOLEAN,
             label: 'Directly added',
-            description: 'Whether this Creator was added directly to the Campaign',
+            description:
+              'Whether this Creator was added directly to the Campaign',
             icon: 'IconUserPlus',
             isNullable: false,
             defaultValue: 'false',

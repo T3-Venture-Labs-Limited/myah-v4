@@ -96,7 +96,7 @@ export class CampaignCreatorListRemovalImpactDTO {
   @Field({ nullable: true })
   confirmationToken?: string;
 }
- 
+
 @InputType()
 export class CreatorListMembershipIntentInput {
   @Field(() => UUIDScalarType)
@@ -130,8 +130,7 @@ export class CreatorListMembershipRemovalImpactDTO {
   @Field({ nullable: true })
   confirmationToken?: string;
 }
- 
- 
+
 @ObjectType()
 export class CreatorListMemberDTO {
   @Field(() => UUIDScalarType)
@@ -141,7 +140,7 @@ export class CreatorListMemberDTO {
   @Field(() => UUIDScalarType)
   creatorId!: string;
 }
- 
+
 @InputType()
 export class CreatorListMembersIntentInput {
   @Field(() => UUIDScalarType)

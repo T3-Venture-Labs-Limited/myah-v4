@@ -7,7 +7,11 @@ import { CampaignLifecycleService } from 'src/modules/myah-campaign/services/cam
 
 @Module({
   imports: [TwentyORMModule],
-  providers: [CampaignLifecycleService, CampaignInfluencerService, CampaignInfluencerResolver],
+  providers: [
+    CampaignLifecycleService,
+    CampaignInfluencerService,
+    CampaignInfluencerResolver,
+  ],
   exports: [CampaignLifecycleService, CampaignInfluencerService],
 })
 export class MyahCampaignLifecycleModule {}

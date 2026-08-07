@@ -134,9 +134,13 @@ const buildRecordPageWidgetConfigurations = ({
   ) {
     const view = Object.values(
       standardObjectMetadataRelatedEntityIds[layoutObjectName].views,
-    ).find((candidate) => candidate.universalIdentifier === viewUniversalIdentifier);
+    ).find(
+      (candidate) => candidate.universalIdentifier === viewUniversalIdentifier,
+    );
     if (!view) {
-      throw new Error(`Record table view ${viewUniversalIdentifier} is not defined`);
+      throw new Error(
+        `Record table view ${viewUniversalIdentifier} is not defined`,
+      );
     }
     return {
       configuration: {
@@ -288,7 +292,8 @@ const buildFieldWidgetConfiguration = ({
     ? Object.values(standardObjectMetadataRelatedEntityIds)
         .flatMap((metadata) => Object.values(metadata.views))
         .find(
-          (candidate) => candidate.universalIdentifier === viewUniversalIdentifier,
+          (candidate) =>
+            candidate.universalIdentifier === viewUniversalIdentifier,
         )
     : undefined;
   return {
@@ -319,7 +324,6 @@ const computeRecordPageWidgets = ({
     ALL_STANDARD_PAGE_LAYOUTS,
   ).filter(([name]) => name !== 'myFirstDashboard')) {
     const layout = layoutConfig as StandardRecordPageLayoutConfig;
-    let layoutObjectMetadataId: string | null = null;
     let layoutObjectName: AllStandardObjectName | null = null;
     if (layout.objectUniversalIdentifier) {
       const objectName = findObjectNameByUniversalIdentifier(
@@ -327,8 +331,6 @@ const computeRecordPageWidgets = ({
       ) as AllStandardObjectName;
 
       layoutObjectName = objectName;
-      layoutObjectMetadataId =
-        standardObjectMetadataRelatedEntityIds[objectName]?.id ?? null;
     }
 
     for (const tabTitle of Object.keys(layout.tabs)) {
@@ -347,10 +349,10 @@ const computeRecordPageWidgets = ({
             ) as AllStandardObjectName)
           : layoutObjectName;
         const objectMetadataId = isRecordPageWidget
-          ? (widgetObjectName
-              ? (standardObjectMetadataRelatedEntityIds[widgetObjectName]?.id ??
-                null)
-              : null)
+          ? widgetObjectName
+            ? (standardObjectMetadataRelatedEntityIds[widgetObjectName]?.id ??
+              null)
+            : null
           : null;
 
         const objectMetadataUniversalIdentifier = isRecordPageWidget

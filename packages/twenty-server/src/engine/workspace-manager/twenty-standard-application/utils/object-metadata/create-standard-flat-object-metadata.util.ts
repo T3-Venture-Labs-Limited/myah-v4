@@ -875,8 +875,7 @@ export const STANDARD_FLAT_OBJECT_METADATA_BUILDERS_BY_OBJECT_NAME = {
   outreachStep: buildMyahOutreachStepStandardFlatObjectMetadata,
   promotedAsset: buildMyahPromotedAssetStandardFlatObjectMetadata,
   campaignCreator: buildMyahCampaignCreatorStandardFlatObjectMetadata,
-  campaignCreatorList:
-    buildMyahCampaignCreatorListStandardFlatObjectMetadata,
+  campaignCreatorList: buildMyahCampaignCreatorListStandardFlatObjectMetadata,
   campaign: buildMyahCampaignStandardFlatObjectMetadata,
   creatorListMember: buildMyahCreatorListMemberStandardFlatObjectMetadata,
   creatorList: buildMyahCreatorListStandardFlatObjectMetadata,
