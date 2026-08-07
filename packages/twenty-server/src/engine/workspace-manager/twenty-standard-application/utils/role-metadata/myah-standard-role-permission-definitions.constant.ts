@@ -75,11 +75,6 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
       objectMetadataUniversalIdentifier,
     }),
   ),
-  buildReadOnlyObjectPermissionDefinition({
-    roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
-    objectMetadataUniversalIdentifier:
-      MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
-  }),
 ] as const;
 
 const PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS = [
