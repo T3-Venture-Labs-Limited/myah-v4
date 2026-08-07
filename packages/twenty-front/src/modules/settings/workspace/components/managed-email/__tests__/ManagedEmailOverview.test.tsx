@@ -26,7 +26,7 @@ import { I18nProvider } from '@lingui/react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider as JotaiProvider, createStore } from 'jotai';
-import { type ReactNode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
 import { messages } from '~/locales/generated/en';
@@ -253,55 +253,71 @@ describe('ManagedEmailOverview', () => {
       }),
     );
 
-    renderOverview([
-      overviewMock,
-      {
-        request: {
-          query: CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE,
-          variables: {
-            input: {
-              idempotencyKey: 'original-confirmation-key',
-              quoteFingerprint: 'original-fingerprint',
-              quoteId: 'original-quote',
-              quoteVersion: 'original-version',
-            },
-          },
+    const confirmationResult = jest.fn(() => ({
+      data: {
+        confirmManagedEmailOrdinaryPurchase: {
+          accepted: true,
+          operationId: 'recovered-operation',
         },
-        result: {
-          data: {
-            confirmManagedEmailOrdinaryPurchase: {
-              accepted: true,
-              operationId: 'recovered-operation',
-            },
+      },
+    }));
+    const confirmationMock = {
+      request: {
+        query: CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE,
+        variables: {
+          input: {
+            idempotencyKey: 'original-confirmation-key',
+            quoteFingerprint: 'original-fingerprint',
+            quoteId: 'original-quote',
+            quoteVersion: 'original-version',
           },
         },
       },
-      {
-        request: {
-          query: GET_MANAGED_EMAIL_OPERATION,
-          variables: { input: { operationId: 'recovered-operation' } },
-        },
-        result: {
-          data: {
-            managedEmailOperation: {
-              acquisitionMode: 'NEW_MANAGED',
-              amountCents: '12345',
-              createdAt: '2026-08-06T12:00:00.000Z',
-              currency: 'USD',
-              id: 'recovered-operation',
-              paymentStatus: 'PENDING',
-              safeFailureCode: null,
-              state: 'PAYMENT_PENDING',
-              updatedAt: '2026-08-06T12:00:00.000Z',
-            },
+      result: confirmationResult,
+    };
+    const operationMock = {
+      request: {
+        query: GET_MANAGED_EMAIL_OPERATION,
+        variables: { input: { operationId: 'recovered-operation' } },
+      },
+      result: {
+        data: {
+          managedEmailOperation: {
+            acquisitionMode: 'NEW_MANAGED',
+            amountCents: '12345',
+            createdAt: '2026-08-06T12:00:00.000Z',
+            currency: 'USD',
+            id: 'recovered-operation',
+            paymentStatus: 'PENDING',
+            safeFailureCode: null,
+            state: 'PAYMENT_PENDING',
+            updatedAt: '2026-08-06T12:00:00.000Z',
           },
         },
       },
-    ]);
+    };
+
+    render(
+      <StrictMode>
+        <Wrapper
+          mocks={[
+            overviewMock,
+            overviewMock,
+            confirmationMock,
+            confirmationMock,
+            operationMock,
+            operationMock,
+          ]}
+        >
+          <ManagedEmailOverview />
+        </Wrapper>
+      </StrictMode>,
+    );
 
     expect(
       await screen.findByRole('heading', { name: 'Payment pending' }),
     ).toBeVisible();
+    expect(confirmationResult).toHaveBeenCalledTimes(1);
     expect(
       JSON.parse(
         window.localStorage.getItem(

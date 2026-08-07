@@ -36,7 +36,7 @@ import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { useLingui } from '@lingui/react/macro';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { Status } from 'twenty-ui/data-display';
 import { Button } from 'twenty-ui/input';
@@ -210,8 +210,10 @@ const ManagedEmailOverviewForWorkspace = ({
     useState<PersistedPurchaseIntent | null>(() =>
       readPersistedPurchaseIntent(workspaceId),
     );
-  const [shouldRecoverPurchaseIntent, setShouldRecoverPurchaseIntent] =
-    useState(purchaseIntent !== null);
+  // A ref is intentional here: the mutation guard must change synchronously
+  // before StrictMode invokes the same effect closure a second time.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const shouldRecoverPurchaseIntentRef = useRef(purchaseIntent !== null);
   const [purchaseRecoveryFailed, setPurchaseRecoveryFailed] = useState(false);
   const [operationId, setOperationId] = useState<string | null>(
     purchaseIntent?.operationId ?? null,
@@ -287,12 +289,12 @@ const ManagedEmailOverviewForWorkspace = ({
       canPurchase !== true ||
       operationId !== null ||
       purchaseIntent === null ||
-      !shouldRecoverPurchaseIntent
+      !shouldRecoverPurchaseIntentRef.current
     ) {
       return;
     }
 
-    setShouldRecoverPurchaseIntent(false);
+    shouldRecoverPurchaseIntentRef.current = false;
     const variables = {
       input: {
         idempotencyKey: purchaseIntent.idempotencyKey,
@@ -337,7 +339,6 @@ const ManagedEmailOverviewForWorkspace = ({
     enqueueErrorSnackBar,
     operationId,
     purchaseIntent,
-    shouldRecoverPurchaseIntent,
     t,
     workspaceId,
   ]);
