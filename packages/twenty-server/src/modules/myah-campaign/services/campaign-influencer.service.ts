@@ -157,7 +157,6 @@ export class CampaignInfluencerService {
 
   async addDirectCreators(input: { campaignId: string; creatorIds: readonly string[] }, authContext: WorkspaceAuthContext) { return this.addDirectCampaignCreators(input, authContext); }
 
-  private confirmationToken(input: { campaignId: string; creatorListId: string; affectedCreatorIds: readonly string[] }) { return createHash('sha256').update(`${input.campaignId}:${input.creatorListId}:${[...input.affectedCreatorIds].sort().join(',')}`).digest('hex'); }
 
   private async calculateImpact(input: { campaignId: string; creatorListId: string }, authContext: WorkspaceAuthContext, manager?: WorkspaceEntityManager) {
     const options = await this.authorizeTargets(authContext, input.campaignId, [], [input.creatorListId], manager, false);
@@ -234,6 +233,7 @@ export class CampaignInfluencerService {
     return this.executeTransaction(authContext, async (manager) => {
       const options = this.permissionOptions(authContext);
       const lists = await this.repository(authContext, 'creatorList', options);
+      const targets = await this.repository(authContext, 'creator', options);
       if (!(await lists.findOne({ where: { id: input.creatorListId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Creator list not found');
       if (!(await targets.findOne({ where: { id: input.creatorId } }, manager))) throw new Error('Creator not found');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
