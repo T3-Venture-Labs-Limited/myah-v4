@@ -216,7 +216,8 @@ export const CreatorBulkRelationshipDialog = ({
     preview.isPreviewUnavailable ||
     isApplying ||
     preview.selectedCreatorIds.length === 0 ||
-    actionableCount === 0;
+    actionableCount === 0 ||
+    (isRemoval && preview.relationshipRecordIds.length !== 1);
 
   const handleConfirm = async () => {
     if (isConfirmationDisabled) {
