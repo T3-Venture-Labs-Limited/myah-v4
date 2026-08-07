@@ -1,3 +1,4 @@
+import { gql, useMutation } from '@apollo/client';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
@@ -53,8 +54,20 @@ const getCreatorListIdsFromStoreFieldName = (storeFieldName: string) => {
     return [];
   }
 };
+const ADD_CREATOR_LIST_MEMBER_INTENT = gql`
+  mutation AddCreatorListMemberIntent($input: CreatorListMembershipIntentInput!) {
+    addCreatorListMemberIntent(input: $input) { id creatorListId creatorId }
+  }
+`;
+const REMOVE_CREATOR_LIST_MEMBER_INTENT = gql`
+  mutation RemoveCreatorListMemberIntent($input: RemoveCreatorListMemberIntentInput!) {
+    removeCreatorListMemberIntent(input: $input)
+  }
+`;
 
 export const useApplyCreatorBulkRelationship = () => {
+  const [addCreatorListMemberIntent] = useMutation(ADD_CREATOR_LIST_MEMBER_INTENT);
+  const [removeCreatorListMemberIntent] = useMutation(REMOVE_CREATOR_LIST_MEMBER_INTENT);
   const { batchCreateManyRecords: batchCreateCreatorListMembers } =
     useBatchCreateManyRecords({
       objectNameSingular: 'creatorListMember',
@@ -196,7 +209,13 @@ export const useApplyCreatorBulkRelationship = () => {
 
       try {
         if (target.kind === 'creator-list') {
-          await batchCreateCreatorListMembers({ recordsToCreate });
+          await Promise.all(
+            creatorIdsToAdd.map((creatorId) =>
+              addCreatorListMemberIntent({
+                variables: { input: { creatorListId: target.id, creatorId } },
+              }),
+            ),
+          );
         } else {
           await batchCreateCampaignCreators({ recordsToCreate });
         }
@@ -210,6 +229,7 @@ export const useApplyCreatorBulkRelationship = () => {
       await refetchCreatorRelationships(target.kind);
     },
     [
+      addCreatorListMemberIntent,
       batchCreateCampaignCreators,
       batchCreateCreatorListMembers,
       enqueueErrorSnackBar,

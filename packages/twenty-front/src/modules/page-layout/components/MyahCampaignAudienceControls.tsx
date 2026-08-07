@@ -82,6 +82,7 @@ export const MyahCampaignAudienceControls = ({ campaignId }: { campaignId: strin
     setRemovingListId(null); setConfirmed(false); await refresh();
   };
   return (
+      <>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <Button title="Attach Creator List" ariaLabel="Attach Creator List" onClick={() => { setPicker('list'); openModal('campaign-list-picker'); }} type="button" variant="secondary" />
         <Button title="Add Direct Creator" ariaLabel="Add Direct Creator" onClick={() => { setPicker('creator'); openModal('campaign-creator-picker'); }} type="button" variant="secondary" />
@@ -119,6 +120,6 @@ export const MyahCampaignAudienceControls = ({ campaignId }: { campaignId: strin
       )}
       {selectedListId && <Button title="Attach selected Creator List" ariaLabel="Attach selected Creator List" onClick={() => void submitList()} type="button" variant="primary" />}
       {selectedCreatorId && <Button title="Add selected Direct Creator" ariaLabel="Add selected Direct Creator" onClick={() => void submitCreator()} type="button" variant="primary" />}
-    </div>
+      </>
   );
 };
