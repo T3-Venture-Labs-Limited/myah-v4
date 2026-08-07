@@ -52,9 +52,9 @@ const getCreatorListIdsFromStoreFieldName = (storeFieldName: string) => {
     return [];
   }
 };
-const ADD_CREATOR_LIST_MEMBER_INTENT = gql`
-  mutation AddCreatorListMemberIntent($input: CreatorListMembershipIntentInput!) {
-    addCreatorListMemberIntent(input: $input) { id creatorListId creatorId }
+const ADD_CREATOR_LIST_MEMBERS_INTENT = gql`
+  mutation AddCreatorListMembersIntent($input: CreatorListMembershipIntentInput!) {
+    addCreatorListMembersIntent(input: $input) { id creatorListId creatorId }
   }
 `;
 const REMOVE_CREATOR_LIST_MEMBER_INTENT = gql`
@@ -69,7 +69,7 @@ const ADD_DIRECT_CAMPAIGN_CREATORS = gql`
 `;
 
 export const useApplyCreatorBulkRelationship = () => {
-  const [addCreatorListMemberIntent] = useMutation(ADD_CREATOR_LIST_MEMBER_INTENT);
+  const [addCreatorListMembersIntent] = useMutation(ADD_CREATOR_LIST_MEMBERS_INTENT);
   const [removeCreatorListMemberIntent] = useMutation(REMOVE_CREATOR_LIST_MEMBER_INTENT);
   const [addDirectCampaignCreators] = useMutation(ADD_DIRECT_CAMPAIGN_CREATORS);
   const { objectMetadataItem: creatorObjectMetadataItem } =
@@ -190,22 +190,16 @@ export const useApplyCreatorBulkRelationship = () => {
       creatorIdsToAdd: string[];
     }) => {
       if (creatorIdsToAdd.length === 0) return;
-      if (creatorIdsToAdd.length > 1) {
-        enqueueErrorSnackBar({ message: t`Select one creator at a time.` });
-        throw new Error('Only one creator relationship change is allowed');
-      }
       try {
         if (target.kind === 'creator-list') {
-          await Promise.all(
-            creatorIdsToAdd.map((creatorId) =>
-              addCreatorListMemberIntent({
-                variables: { input: { creatorListId: target.id, creatorId } },
-              }),
-            ),
-          );
+          await addCreatorListMembersIntent({
+            variables: {
+              input: { creatorListId: target.id, creatorIds: creatorIdsToAdd },
+            },
+          });
         } else {
           await addDirectCampaignCreators({
-            variables: { input: { campaignId: target.id, creatorIds: [creatorIdsToAdd[0]] } },
+            variables: { input: { campaignId: target.id, creatorIds: creatorIdsToAdd } },
           });
         }
       } catch {
@@ -215,7 +209,7 @@ export const useApplyCreatorBulkRelationship = () => {
       await refetchCreatorRelationships(target.kind);
     },
     [
-      addCreatorListMemberIntent,
+      addCreatorListMembersIntent,
       addDirectCampaignCreators,
       enqueueErrorSnackBar,
       refetchCreatorRelationships,
