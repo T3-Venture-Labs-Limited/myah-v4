@@ -519,6 +519,9 @@ export const MYAH_STANDARD_OBJECTS = {
       name: { universalIdentifier: '31b163a4-99d9-5015-bcee-dc8ae5229ee3' },
       creator: { universalIdentifier: '730b323f-fae3-57e2-8e2e-62963106850a' },
       campaign: { universalIdentifier: '27ecf86e-08a4-5084-91d7-d305ab3363e1' },
+      isDirectlyAdded: {
+        universalIdentifier: 'bb5ae5e6-2f0a-4d13-9f7e-4af0f7f95c5a',
+      },
       stage: { universalIdentifier: '427aad82-7fe4-516d-99b3-8d00161534f6' },
       selectedContactMethod: {
         universalIdentifier: 'b002caa0-6fb6-54a3-8111-a6dadf09e4ca',
@@ -542,6 +545,27 @@ export const MYAH_STANDARD_OBJECTS = {
     indexes: {
       creatorCampaignUniqueIndex: {
         universalIdentifier: '6a1b09a7-0f81-4eb6-a5d2-3ba7951fac0d',
+      },
+    },
+    views: {},
+  },
+  campaignCreatorList: {
+    universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b20',
+    fields: {
+      id: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b21' },
+      createdAt: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b22' },
+      updatedAt: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b23' },
+      deletedAt: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b24' },
+      position: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b25' },
+      createdBy: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b26' },
+      updatedBy: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b27' },
+      searchVector: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b28' },
+      campaign: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b29' },
+      creatorList: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2a' },
+    },
+    indexes: {
+      campaignCreatorListUniqueIndex: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2b',
       },
     },
     views: {},
@@ -607,6 +631,9 @@ export const MYAH_STANDARD_OBJECTS = {
       },
       campaignCreators: {
         universalIdentifier: '894c80f2-a478-5680-8c20-c7a86aa24fde',
+      },
+      campaignCreatorLists: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2c',
       },
       offers: { universalIdentifier: '1d33699f-76f3-5247-98b3-2de588543364' },
       outreachSequences: {
@@ -793,6 +820,9 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: '1a4485a2-1e44-51af-bfdc-666cdcf17223',
       },
       members: { universalIdentifier: 'ade71f2b-7f9d-5e4d-9d0b-3f20ce4d15df' },
+      campaignCreatorLists: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2d',
+      },
     },
     indexes: {},
     views: {
