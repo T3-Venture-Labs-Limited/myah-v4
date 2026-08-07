@@ -25,6 +25,11 @@ export class MyahCreatorListMemberCreateManyPreQueryHook extends MyahCreatorList
 @WorkspaceQueryHook('creatorListMember.deleteOne')
 export class MyahCreatorListMemberDeleteOnePreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(private readonly service: CampaignInfluencerService) {}
+  async execute(
+    authContext: WorkspaceAuthContext,
+    _objectName: string,
+    payload: MembershipMutationPayload,
+  ) {
     const creatorListId = (payload.filter?.creatorListId as { eq?: string } | undefined)?.eq;
     await this.service.assertGenericMembershipMutationAllowed(creatorListId, authContext);
     return payload;
