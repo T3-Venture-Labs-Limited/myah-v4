@@ -129,7 +129,7 @@ export class CampaignInfluencerService {
       const options = await this.authorizeTargets(authContext, input.campaignId, [], ids, undefined);
       this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
       const creatorLists = await this.repository(authContext, 'creatorList', options);
-      for (const creatorListId of ids) await creatorLists.findOne({ where: { id: creatorListId }, lock: { mode: 'pessimistic_write' } }, manager);
+      for (const creatorListId of ids) if (!(await creatorLists.findOne({ where: { id: creatorListId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Creator list not found');
       const campaigns = await this.repository(authContext, 'campaign', options);
       await campaigns.findOne({ where: { id: input.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
