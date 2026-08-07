@@ -6,7 +6,7 @@ import { SynchronizeMyahCampaignAudienceCommand } from 'src/database/commands/up
 import type { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import {
   MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS,
   MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS,
@@ -67,7 +67,9 @@ describe('SynchronizeMyahCampaignAudienceCommand', () => {
       MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
       MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
     ];
-    const campaignTabs = Object.values(MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs);
+    const campaignTabs = Object.values(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs,
+    );
 
     await command.runOnWorkspace(args);
 
@@ -137,7 +139,9 @@ describe('SynchronizeMyahCampaignAudienceCommand', () => {
       )
         .map(({ universalIdentifier }) => universalIdentifier)
         .sort(),
-      pageLayout: [MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.universalIdentifier].sort(),
+      pageLayout: [
+        MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.universalIdentifier,
+      ].sort(),
       pageLayoutTab: campaignTabs
         .map(({ universalIdentifier }) => universalIdentifier)
         .sort(),

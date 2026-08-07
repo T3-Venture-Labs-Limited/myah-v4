@@ -10,7 +10,7 @@ import {
   MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS,
   MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
-import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 
 const audienceObjects = new Set<string>([
   MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
@@ -64,7 +64,9 @@ const audienceFieldPermissions = new Set(
   ).map(({ universalIdentifier }) => universalIdentifier),
 );
 
-const campaignTabs = Object.values(MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs);
+const campaignTabs = Object.values(
+  MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs,
+);
 const campaignWidgets = new Set(
   campaignTabs.flatMap(({ widgets }) =>
     Object.values(widgets).map(
@@ -116,7 +118,7 @@ export class SynchronizeMyahCampaignAudienceCommand extends ActiveOrSuspendedWor
         objectPermission: audienceObjectPermissions,
         fieldPermission: audienceFieldPermissions,
         pageLayout: new Set([
-          MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.universalIdentifier,
+          MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.universalIdentifier,
         ]),
         pageLayoutTab: new Set(
           campaignTabs.map(({ universalIdentifier }) => universalIdentifier),

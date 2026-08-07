@@ -6,7 +6,6 @@ import { SynchronizeMyahCampaignPageLayoutCommand } from 'src/database/commands/
 import type { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 
 describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
   const args: RunOnWorkspaceArgs = {
@@ -43,22 +42,24 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
       } as unknown as WorkspaceCacheService,
     );
     const expectedChildSelection = {
-      pageLayoutTab: Object.values(MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs)
-        .map(({ universalIdentifier }) => universalIdentifier)
-        .sort(),
-      pageLayoutWidget: Object.values(MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs)
-        .flatMap(({ widgets }) =>
-          Object.values(widgets).map(
-            ({ universalIdentifier }) => universalIdentifier,
-          ),
-        )
-        .sort(),
+      pageLayoutTab: [
+        '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+        '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
+        'cd78ad8c-883a-4ce1-9b74-526adadb751d',
+        '0d213a1a-e001-496c-970e-e692968cf17c',
+        'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+      ].sort(),
+      pageLayoutWidget: [
+        '6845e3c3-3a1a-42d8-afcd-71ff885c8f20',
+        'e81ab303-f402-45df-8257-d91172ecc435',
+        '9a05fd06-cf91-47a2-bbee-06cb4292f44d',
+        '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392',
+        'cdb1ad36-fcd3-4c6d-9b64-1df8d1c02a80',
+      ].sort(),
       view: [
         '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
         'eb4da94a-d3da-4354-bb39-7478ac12bd35',
         '9c4f90c5-2a03-436b-8130-93d50a4d0e3e',
-        MYAH_STANDARD_OBJECTS.campaign.views.viewCampaignInformationCreatorLists
-          .universalIdentifier,
       ].sort(),
       viewField: [
         ...Object.values(
@@ -70,21 +71,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
         ...Object.values(
           MYAH_STANDARD_OBJECTS.campaign.views.view9c4f90c5.viewFields,
         ).map(({ universalIdentifier }) => universalIdentifier),
-        ...Object.values(
-          MYAH_STANDARD_OBJECTS.campaign.views
-            .viewCampaignInformationCreatorLists.viewFields,
-        ).map(({ universalIdentifier }) => universalIdentifier),
       ].sort(),
-      objectMetadata: [
-        MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
-        MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
-      ].sort(),
-      fieldMetadata: [
-        ...Object.values(MYAH_STANDARD_OBJECTS.campaignCreator.fields),
-        ...Object.values(MYAH_STANDARD_OBJECTS.campaignCreatorList.fields),
-      ]
-        .map(({ universalIdentifier }) => universalIdentifier)
-        .sort(),
     };
     const expectedMaterializationSelection = {
       pageLayout: ['ad261155-3c89-436d-8898-3e52d8b37632'].sort(),
@@ -126,12 +113,12 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
     expect({
       ...synchronizeCompleteLayoutCall[2],
       deletionSelection: Object.fromEntries(
-        Object.entries(synchronizeCompleteLayoutCall[2].deletionSelection).map(
-          ([type, universalIdentifiers]) => [
-            type,
-            [...(universalIdentifiers as Set<string>)].sort(),
-          ],
-        ),
+        Object.entries(
+          synchronizeCompleteLayoutCall[2].deletionSelection,
+        ).map(([type, universalIdentifiers]) => [
+          type,
+          [...(universalIdentifiers as Set<string>)].sort(),
+        ]),
       ),
     }).toEqual({
       synchronizeExistingSelectedMetadata: true,
