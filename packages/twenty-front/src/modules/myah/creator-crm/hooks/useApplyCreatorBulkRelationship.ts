@@ -3,7 +3,6 @@ import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useBatchCreateManyRecords } from '@/object-record/hooks/useBatchCreateManyRecords';
-import { useDestroyManyRecords } from '@/object-record/hooks/useDestroyManyRecords';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { t } from '@lingui/core/macro';
 import { useCallback } from 'react';
@@ -75,10 +74,6 @@ export const useApplyCreatorBulkRelationship = () => {
   const { batchCreateManyRecords: batchCreateCampaignCreators } =
     useBatchCreateManyRecords({
       objectNameSingular: 'campaignCreator',
-    });
-  const { destroyManyRecords: destroyCreatorListMembers } =
-    useDestroyManyRecords({
-      objectNameSingular: 'creatorListMember',
     });
   const { objectMetadataItem: creatorObjectMetadataItem } =
     useObjectMetadataItem({
@@ -303,7 +298,6 @@ export const useApplyCreatorBulkRelationship = () => {
       };
     },
     [
-      destroyCreatorListMembers,
       enqueueErrorSnackBar,
       enqueueWarningSnackBar,
       notifyCreatorListMembershipsChanged,
