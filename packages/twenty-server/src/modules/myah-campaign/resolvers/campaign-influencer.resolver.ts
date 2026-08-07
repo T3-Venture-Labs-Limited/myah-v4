@@ -12,9 +12,12 @@ import {
   CampaignCreatorListRemovalImpactInput,
   CampaignInfluencerCampaignInput,
   CampaignInfluencerSnapshotDTO,
+  CampaignCreatorListDTO,
+  CreatorListMembershipIntentInput,
+  CreatorListMembershipRemovalImpactDTO,
+  RemoveCreatorListMemberIntentInput,
   DetachCampaignCreatorListInput,
 } from 'src/modules/myah-campaign/dtos/campaign-influencer.dto';
-
 @MetadataResolver()
 @UsePipes(ResolverValidationPipe)
 @UseGuards(WorkspaceAuthGuard)
@@ -57,5 +60,19 @@ export class CampaignInfluencerResolver {
     @Args('input') input: DetachCampaignCreatorListInput,
   ): Promise<CampaignInfluencerSnapshotDTO> {
     return this.service.detachCampaignCreatorList(input, getWorkspaceAuthContext());
+  }
+  @Query(() => CreatorListMembershipRemovalImpactDTO)
+  async creatorListMembershipRemovalImpact(@Args('input') input: CreatorListMembershipIntentInput) {
+    return this.service.creatorListMembershipRemovalImpact(input, getWorkspaceAuthContext());
+  }
+
+  @Mutation(() => CampaignCreatorListDTO)
+  async addCreatorListMemberIntent(@Args('input') input: CreatorListMembershipIntentInput) {
+    return this.service.addCreatorListMemberIntent(input, getWorkspaceAuthContext());
+  }
+
+  @Mutation(() => Boolean)
+  async removeCreatorListMemberIntent(@Args('input') input: RemoveCreatorListMemberIntentInput) {
+    return this.service.removeCreatorListMemberIntent(input, getWorkspaceAuthContext());
   }
 }

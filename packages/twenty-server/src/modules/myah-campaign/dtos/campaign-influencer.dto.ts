@@ -94,3 +94,38 @@ export class CampaignCreatorListRemovalImpactDTO {
   @Field({ nullable: true })
   confirmationToken?: string;
 }
+ 
+@InputType()
+export class CreatorListMembershipIntentInput {
+  @Field(() => UUIDScalarType)
+  @IsUUID()
+  creatorListId!: string;
+
+  @Field(() => UUIDScalarType)
+  @IsUUID()
+  creatorId!: string;
+}
+
+@InputType()
+export class RemoveCreatorListMemberIntentInput extends CreatorListMembershipIntentInput {
+  @Field(() => [UUIDScalarType])
+  @IsArray()
+  @IsUUID('4', { each: true })
+  confirmedCampaignIds!: string[];
+
+  @Field({ nullable: true })
+  confirmationToken?: string;
+}
+
+@ObjectType()
+export class CreatorListMembershipRemovalImpactDTO {
+  @Field(() => [UUIDScalarType])
+  affectedCampaignIds!: string[];
+
+  @Field(() => Boolean)
+  requiresConfirmation!: boolean;
+
+  @Field({ nullable: true })
+  confirmationToken?: string;
+}
+ 
