@@ -252,6 +252,32 @@ export class CampaignInfluencerService {
       return membership;
     });
   }
+  async addCreatorListMembersIntent(input: { creatorListId: string; creatorIds: readonly string[] }, authContext: WorkspaceAuthContext) {
+    return this.executeTransaction(authContext, async (manager) => {
+      const creatorIds = [...new Set(input.creatorIds)].sort();
+      const options = this.permissionOptions(authContext);
+      const lists = await this.repository(authContext, 'creatorList', options);
+      const creators = await this.repository(authContext, 'creator', options);
+      if (!(await lists.findOne({ where: { id: input.creatorListId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Creator list not found');
+      for (const creatorId of creatorIds) if (!(await creators.findOne({ where: { id: creatorId } }, manager))) throw new Error('Creator not found');
+      const attachments = await this.repository(authContext, 'campaignCreatorList', options);
+      const campaigns = await this.repository(authContext, 'campaign', options);
+      const attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
+      for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
+      const members = await this.repository(authContext, 'creatorListMember', this.intentPermissionOptions());
+      const rows = [];
+      for (const creatorId of creatorIds) {
+        const existing = await members.findOne({ where: { creatorListId: input.creatorListId, creatorId } }, manager);
+        rows.push(existing ?? await members.save({ creatorListId: input.creatorListId, creatorId }, {}, manager));
+      }
+      const campaignCreators = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
+      for (const attachment of attached) for (const creatorId of creatorIds) {
+        const existing = await campaignCreators.findOne({ where: { campaignId: attachment.campaignId, creatorId } }, manager);
+        if (!existing) await campaignCreators.upsert({ campaignId: attachment.campaignId, creatorId, isDirectlyAdded: false }, { conflictPaths: ['campaignId', 'creatorId'], indexPredicate: '"deletedAt" IS NULL' }, manager);
+      }
+      return rows;
+    });
+  }
 
   async removeCreatorListMemberIntent(input: { creatorListId: string; creatorId: string; confirmedCampaignIds: readonly string[]; confirmationToken?: string }, authContext: WorkspaceAuthContext) {
     return this.executeTransaction(authContext, async (manager) => {

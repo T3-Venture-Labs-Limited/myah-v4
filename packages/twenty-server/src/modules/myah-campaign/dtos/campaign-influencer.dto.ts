@@ -139,3 +139,15 @@ export class CreatorListMemberDTO {
   @Field(() => UUIDScalarType)
   creatorId!: string;
 }
+ 
+@InputType()
+export class CreatorListMembersIntentInput {
+  @Field(() => UUIDScalarType)
+  @IsUUID()
+  creatorListId!: string;
+
+  @Field(() => [UUIDScalarType])
+  @IsArray()
+  @IsUUID('4', { each: true })
+  creatorIds!: string[];
+}
