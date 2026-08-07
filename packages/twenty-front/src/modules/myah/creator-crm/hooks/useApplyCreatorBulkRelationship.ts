@@ -2,7 +2,6 @@ import { gql, useMutation } from '@apollo/client';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { useBatchCreateManyRecords } from '@/object-record/hooks/useBatchCreateManyRecords';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { t } from '@lingui/core/macro';
 import { useCallback } from 'react';
@@ -63,18 +62,16 @@ const REMOVE_CREATOR_LIST_MEMBER_INTENT = gql`
     removeCreatorListMemberIntent(input: $input)
   }
 `;
+const ADD_DIRECT_CAMPAIGN_CREATORS = gql`
+  mutation AddDirectCampaignCreators($input: AddDirectCampaignCreatorsInput!) {
+    addDirectCampaignCreators(input: $input) { campaignCreators { id creatorId } }
+  }
+`;
 
 export const useApplyCreatorBulkRelationship = () => {
   const [addCreatorListMemberIntent] = useMutation(ADD_CREATOR_LIST_MEMBER_INTENT);
   const [removeCreatorListMemberIntent] = useMutation(REMOVE_CREATOR_LIST_MEMBER_INTENT);
-  const { batchCreateManyRecords: batchCreateCreatorListMembers } =
-    useBatchCreateManyRecords({
-      objectNameSingular: 'creatorListMember',
-    });
-  const { batchCreateManyRecords: batchCreateCampaignCreators } =
-    useBatchCreateManyRecords({
-      objectNameSingular: 'campaignCreator',
-    });
+  const [addDirectCampaignCreators] = useMutation(ADD_DIRECT_CAMPAIGN_CREATORS);
   const { objectMetadataItem: creatorObjectMetadataItem } =
     useObjectMetadataItem({
       objectNameSingular: 'creator',
@@ -192,16 +189,7 @@ export const useApplyCreatorBulkRelationship = () => {
       target: CreatorBulkRelationshipTarget;
       creatorIdsToAdd: string[];
     }) => {
-      if (creatorIdsToAdd.length === 0) {
-        return;
-      }
-
-      const recordsToCreate = creatorIdsToAdd.map((creatorId) =>
-        target.kind === 'creator-list'
-          ? { name: '', creatorId, creatorListId: target.id }
-          : { name: '', creatorId, campaignId: target.id },
-      );
-
+      if (creatorIdsToAdd.length === 0) return;
       try {
         if (target.kind === 'creator-list') {
           await Promise.all(
@@ -212,21 +200,19 @@ export const useApplyCreatorBulkRelationship = () => {
             ),
           );
         } else {
-          await batchCreateCampaignCreators({ recordsToCreate });
+          await addDirectCampaignCreators({
+            variables: { input: { campaignId: target.id, creatorIds: creatorIdsToAdd } },
+          });
         }
       } catch {
-        enqueueErrorSnackBar({
-          message: t`Failed to add creators to the selected relationship.`,
-        });
+        enqueueErrorSnackBar({ message: t`Failed to add creators to the selected relationship.` });
         throw new Error('Creator bulk relationship creation failed');
       }
-
       await refetchCreatorRelationships(target.kind);
     },
     [
       addCreatorListMemberIntent,
-      batchCreateCampaignCreators,
-      batchCreateCreatorListMembers,
+      addDirectCampaignCreators,
       enqueueErrorSnackBar,
       refetchCreatorRelationships,
     ],
@@ -298,6 +284,7 @@ export const useApplyCreatorBulkRelationship = () => {
       };
     },
     [
+      removeCreatorListMemberIntent,
       enqueueErrorSnackBar,
       enqueueWarningSnackBar,
       notifyCreatorListMembershipsChanged,
