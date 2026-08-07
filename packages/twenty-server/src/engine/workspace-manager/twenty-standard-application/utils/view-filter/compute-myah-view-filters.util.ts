@@ -8,7 +8,8 @@ import {
 type MyahViewFilterObjectName =
   | 'brandBrainUpdateProposal'
   | 'creator'
-  | 'campaignCreator';
+  | 'campaignCreator'
+  | 'campaignCreatorList';
 type Args = Omit<
   CreateStandardViewFilterArgs<MyahViewFilterObjectName>,
   'context'
@@ -69,6 +70,25 @@ export const computeMyahViewFilters = (
             objectName: 'campaignCreator',
             context: {
               viewName: 'campaignInfluencers',
+              viewFilterName: 'campaignCurrentRecord',
+              fieldName: 'campaign',
+              operand: ViewFilterOperand.IS,
+              value: JSON.stringify({
+                selectedRecordIds: [],
+                isCurrentRecordSelected: true,
+              }),
+            },
+          }),
+      }
+    : {}),
+  ...(args.objectName === 'campaignCreatorList'
+    ? {
+        campaignCreatorListsCampaignIsCurrentRecord:
+          createStandardViewFilterFlatMetadata({
+            ...args,
+            objectName: 'campaignCreatorList',
+            context: {
+              viewName: 'campaignCreatorLists',
               viewFilterName: 'campaignCurrentRecord',
               fieldName: 'campaign',
               operand: ViewFilterOperand.IS,

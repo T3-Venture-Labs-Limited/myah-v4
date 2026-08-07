@@ -16,6 +16,7 @@ const STANDARD_FLAT_VIEW_FILTER_METADATA_BUILDERS_BY_OBJECT_NAME = {
   brandBrainUpdateProposal: computeMyahViewFilters,
   creator: computeMyahViewFilters,
   campaignCreator: computeMyahViewFilters,
+  campaignCreatorList: computeMyahViewFilters,
 } as const satisfies {
   [P in AllStandardObjectName]?: StandardViewFilterBuilder<P>;
 };

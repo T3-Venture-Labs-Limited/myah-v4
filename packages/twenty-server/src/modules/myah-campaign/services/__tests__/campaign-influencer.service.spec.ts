@@ -1,5 +1,11 @@
+import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import {
+  type ORMWorkspaceContext,
+  withWorkspaceContext,
+} from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import {
   buildEffectiveCampaignCreators,
+  CampaignInfluencerService,
   getCampaignListSyncChanges,
   getSourceRemovalImpact,
 } from 'src/modules/myah-campaign/services/campaign-influencer.service';
@@ -74,5 +80,45 @@ describe('CampaignInfluencerService audience invariants', () => {
       requiresConfirmation: true,
     });
   });
+});
+describe('CampaignInfluencerService generic membership guard', () => {
+  const authContext = {
+    type: 'system',
+    workspace: { id: 'workspace-1' },
+  } as never;
+  const workspaceContext = {
+    authContext,
+    userWorkspaceRoleMap: {},
+    apiKeyRoleMap: {},
+  } as ORMWorkspaceContext;
 
+  it.each([
+    [false, 'allows generic membership writes for unattached lists'],
+    [true, 'rejects generic membership writes for attached lists'],
+  ])('%s', async (attached) => {
+    const attachments = { exists: jest.fn().mockResolvedValue(attached) };
+    const manager = {
+      executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
+        withWorkspaceContext(workspaceContext, callback),
+      ),
+      getRepository: jest.fn().mockResolvedValue(attachments),
+    } as unknown as GlobalWorkspaceOrmManager;
+    const service = new CampaignInfluencerService(manager);
+
+    const mutation = service.assertGenericMembershipMutationAllowed(
+      'list-1',
+      authContext,
+    );
+
+    if (attached) {
+      await expect(mutation).rejects.toThrow(
+        'Use the creator-list membership intent for attached lists',
+      );
+    } else {
+      await expect(mutation).resolves.toBeUndefined();
+    }
+    expect(attachments.exists).toHaveBeenCalledWith({
+      where: { creatorListId: 'list-1' },
+    });
+  });
 });

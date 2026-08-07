@@ -1,4 +1,4 @@
-
+import { type CSSProperties, useState } from 'react';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
@@ -60,7 +60,6 @@ const lifecycleActionsByStatus: Record<
   ],
   COMPLETED: [],
 };
-
 
 const hasContent = (value: string | null) => (value?.trim().length ?? 0) > 0;
 
@@ -162,7 +161,6 @@ const MyahCampaignOperationsData = ({
     limit: 1,
     skip: !campaignPermissions.canReadObjectRecords,
   });
-
 
   const retry = () => {
     void refetchCampaign();
@@ -348,7 +346,11 @@ const MyahCampaignOperationsData = ({
       </div>
 
       {campaignPermissions.canUpdateObjectRecords ? (
-        <MyahCampaignAudienceControls key={campaignId} campaignId={campaignId} onAudienceChanged={refetchAudience} />
+        <MyahCampaignAudienceControls
+          key={campaignId}
+          campaignId={campaignId}
+          onAudienceChanged={refetchAudience}
+        />
       ) : null}
       {blockers.map((blocker) => (
         <InlineBanner key={blocker} color="danger" message={blocker} />

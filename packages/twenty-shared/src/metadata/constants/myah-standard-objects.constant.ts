@@ -551,8 +551,12 @@ export const MYAH_STANDARD_OBJECTS = {
       campaignInfluencers: {
         universalIdentifier: 'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b',
         viewFields: {
-          creator: { universalIdentifier: 'd2fa2cd5-9df0-4e85-85b8-47f5ed2a2a71' },
-          stage: { universalIdentifier: '8d5e6b5f-125e-4f3f-9c73-2f52208b2897' },
+          creator: {
+            universalIdentifier: 'd2fa2cd5-9df0-4e85-85b8-47f5ed2a2a71',
+          },
+          stage: {
+            universalIdentifier: '8d5e6b5f-125e-4f3f-9c73-2f52208b2897',
+          },
           isDirectlyAdded: {
             universalIdentifier: 'e26a2ba0-7cd6-46b8-a4a5-d74716f98e3c',
           },
@@ -569,22 +573,50 @@ export const MYAH_STANDARD_OBJECTS = {
     universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b20',
     fields: {
       id: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b21' },
-      createdAt: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b22' },
-      updatedAt: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b23' },
-      deletedAt: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b24' },
+      createdAt: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b22',
+      },
+      updatedAt: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b23',
+      },
+      deletedAt: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b24',
+      },
       position: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b25' },
-      createdBy: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b26' },
-      updatedBy: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b27' },
-      searchVector: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b28' },
+      createdBy: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b26',
+      },
+      updatedBy: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b27',
+      },
+      searchVector: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b28',
+      },
       campaign: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b29' },
-      creatorList: { universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2a' },
+      creatorList: {
+        universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2a',
+      },
     },
     indexes: {
       campaignCreatorListUniqueIndex: {
         universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2b',
       },
     },
-    views: {},
+    views: {
+      campaignCreatorLists: {
+        universalIdentifier: 'b8f5e34d-2a1a-4cd3-8b8f-22c8f4c8f4a1',
+        viewFields: {
+          creatorList: {
+            universalIdentifier: 'b8f5e34d-2a1a-4cd3-8b8f-22c8f4c8f4a2',
+          },
+        },
+        viewFilters: {
+          campaignCurrentRecord: {
+            universalIdentifier: 'b8f5e34d-2a1a-4cd3-8b8f-22c8f4c8f4a3',
+          },
+        },
+      },
+    },
   },
   campaign: {
     universalIdentifier: '9a09d54a-d464-5692-ac74-70527fb00ddd',

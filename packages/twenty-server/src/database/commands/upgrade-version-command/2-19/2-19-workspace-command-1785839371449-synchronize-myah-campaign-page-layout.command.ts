@@ -15,7 +15,9 @@ const campaignPageLayoutTabs = Object.values(
 );
 const campaignPageLayoutWidgets = new Set(
   campaignPageLayoutTabs.flatMap(({ widgets }) =>
-    Object.values(widgets).map(({ universalIdentifier }) => universalIdentifier),
+    Object.values(widgets).map(
+      ({ universalIdentifier }) => universalIdentifier,
+    ),
   ),
 );
 const campaignViews = [
@@ -79,8 +81,8 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
 
     const campaignChildSelection = {
       pageLayoutTab: new Set(
-        campaignPageLayoutTabs.map(({ universalIdentifier }) =>
-          universalIdentifier,
+        campaignPageLayoutTabs.map(
+          ({ universalIdentifier }) => universalIdentifier,
         ),
       ),
       pageLayoutWidget: campaignPageLayoutWidgets,
@@ -88,8 +90,8 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
         campaignViews.map(({ universalIdentifier }) => universalIdentifier),
       ),
       viewField: campaignViewFieldUniversalIdentifiers,
-        objectMetadata: campaignInfluencerObjects,
-        fieldMetadata: campaignInfluencerFields,
+      objectMetadata: campaignInfluencerObjects,
+      fieldMetadata: campaignInfluencerFields,
     };
 
     await this.synchronizeSourceControlledMyahMetadataService.synchronizeWorkspace(
@@ -113,26 +115,9 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
       {
         synchronizeExistingSelectedMetadata: true,
         deletionSelection: {
-          pageLayoutWidget: new Set([
-            '368b8c66-435d-4e5b-94b8-4d3f08fc283b',
-          ]),
+          pageLayoutWidget: new Set(['368b8c66-435d-4e5b-94b8-4d3f08fc283b']),
         },
       },
     );
-    await args.dataSource.query(`
-      UPDATE "campaignCreator" AS cc
-      SET "isDirectlyAdded" = TRUE
-      WHERE "isDirectlyAdded" = FALSE
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "campaignCreatorList" AS ccl
-          INNER JOIN "creatorListMember" AS clm
-            ON clm."creatorListId" = ccl."creatorListId"
-           AND clm."creatorId" = cc."creatorId"
-          WHERE ccl."campaignId" = cc."campaignId"
-            AND ccl."deletedAt" IS NULL
-            AND clm."deletedAt" IS NULL
-        )
-    `);
   }
 }

@@ -1,4 +1,5 @@
-import { gql, useMutation } from '@apollo/client';
+import { gql } from '@apollo/client';
+import { useMutation } from '@apollo/client/react';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
@@ -54,23 +55,38 @@ const getCreatorListIdsFromStoreFieldName = (storeFieldName: string) => {
 };
 const ADD_CREATOR_LIST_MEMBERS_INTENT = gql`
   mutation AddCreatorListMembersIntent($input: CreatorListMembersIntentInput!) {
-    addCreatorListMembersIntent(input: $input) { id creatorListId creatorId }
+    addCreatorListMembersIntent(input: $input) {
+      id
+      creatorListId
+      creatorId
+    }
   }
 `;
 const REMOVE_CREATOR_LIST_MEMBER_INTENT = gql`
-  mutation RemoveCreatorListMemberIntent($input: RemoveCreatorListMemberIntentInput!) {
+  mutation RemoveCreatorListMemberIntent(
+    $input: RemoveCreatorListMemberIntentInput!
+  ) {
     removeCreatorListMemberIntent(input: $input)
   }
 `;
 const ADD_DIRECT_CAMPAIGN_CREATORS = gql`
   mutation AddDirectCampaignCreators($input: AddDirectCampaignCreatorsInput!) {
-    addDirectCampaignCreators(input: $input) { campaignCreators { id creatorId } }
+    addDirectCampaignCreators(input: $input) {
+      campaignCreators {
+        id
+        creatorId
+      }
+    }
   }
 `;
 
 export const useApplyCreatorBulkRelationship = () => {
-  const [addCreatorListMembersIntent] = useMutation(ADD_CREATOR_LIST_MEMBERS_INTENT);
-  const [removeCreatorListMemberIntent] = useMutation(REMOVE_CREATOR_LIST_MEMBER_INTENT);
+  const [addCreatorListMembersIntent] = useMutation(
+    ADD_CREATOR_LIST_MEMBERS_INTENT,
+  );
+  const [removeCreatorListMemberIntent] = useMutation(
+    REMOVE_CREATOR_LIST_MEMBER_INTENT,
+  );
   const [addDirectCampaignCreators] = useMutation(ADD_DIRECT_CAMPAIGN_CREATORS);
   const { objectMetadataItem: creatorObjectMetadataItem } =
     useObjectMetadataItem({
@@ -81,21 +97,28 @@ export const useApplyCreatorBulkRelationship = () => {
 
   const refetchCreatorRelationships = useCallback(
     async (targetKind: CreatorBulkRelationshipTarget['kind']) => {
-      const relationshipObjectNamePlural =
+      const relationshipObjectNames =
         targetKind === 'creator-list'
-          ? 'creatorListMembers'
-          : 'campaignCreators';
-      const relationshipFindManyQueryName =
+          ? ['creatorListMembers', 'campaignCreators']
+          : ['campaignCreators'];
+      const relationshipFindManyQueryNames =
         targetKind === 'creator-list'
-          ? 'FindManyCreatorListMembers'
-          : 'FindManyCampaignCreators';
+          ? ['FindManyCreatorListMembers', 'FindManyCampaignCreators']
+          : ['FindManyCampaignCreators'];
 
       try {
         await apolloCoreClient.refetchQueries({
-          include: ['FindManyCreators', relationshipFindManyQueryName],
+          include: [
+            'active',
+            'inactive',
+            'FindManyCreators',
+            ...relationshipFindManyQueryNames,
+          ],
           updateCache: (cache) => {
             cache.evict({ fieldName: 'creators' });
-            cache.evict({ fieldName: relationshipObjectNamePlural });
+            relationshipObjectNames.forEach((fieldName) => {
+              cache.evict({ fieldName });
+            });
           },
         });
 
@@ -199,11 +222,15 @@ export const useApplyCreatorBulkRelationship = () => {
           });
         } else {
           await addDirectCampaignCreators({
-            variables: { input: { campaignId: target.id, creatorIds: creatorIdsToAdd } },
+            variables: {
+              input: { campaignId: target.id, creatorIds: creatorIdsToAdd },
+            },
           });
         }
       } catch {
-        enqueueErrorSnackBar({ message: t`Failed to add creators to the selected relationship.` });
+        enqueueErrorSnackBar({
+          message: t`Failed to add creators to the selected relationship.`,
+        });
         throw new Error('Creator bulk relationship creation failed');
       }
       await refetchCreatorRelationships(target.kind);
@@ -248,7 +275,9 @@ export const useApplyCreatorBulkRelationship = () => {
           },
         },
       }).catch(() => {
-        enqueueErrorSnackBar({ message: t`Failed to remove creators from this list.` });
+        enqueueErrorSnackBar({
+          message: t`Failed to remove creators from this list.`,
+        });
         throw new Error('Creator List membership removal failed');
       });
       const removedCount = creatorIdsToRemove.length;

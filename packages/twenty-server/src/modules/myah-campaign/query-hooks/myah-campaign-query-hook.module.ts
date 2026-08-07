@@ -5,6 +5,12 @@ import { MyahCampaignCreateManyPreQueryHook } from 'src/modules/myah-campaign/qu
 import { MyahCampaignCreateOnePreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-create-one.pre-query.hook';
 import { MyahCampaignUpdateManyPreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-update-many.pre-query.hook';
 import { MyahCampaignUpdateOnePreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-update-one.pre-query.hook';
+import {
+  MyahCreatorListMemberCreateManyPreQueryHook,
+  MyahCreatorListMemberCreateOnePreQueryHook,
+  MyahCreatorListMemberDeleteManyPreQueryHook,
+  MyahCreatorListMemberDeleteOnePreQueryHook,
+} from 'src/modules/myah-campaign/query-hooks/myah-creator-list-member.pre-query.hooks';
 @Module({
   imports: [MyahCampaignLifecycleModule],
   providers: [
@@ -12,6 +18,10 @@ import { MyahCampaignUpdateOnePreQueryHook } from 'src/modules/myah-campaign/que
     MyahCampaignCreateManyPreQueryHook,
     MyahCampaignUpdateManyPreQueryHook,
     MyahCampaignUpdateOnePreQueryHook,
+    MyahCreatorListMemberCreateOnePreQueryHook,
+    MyahCreatorListMemberCreateManyPreQueryHook,
+    MyahCreatorListMemberDeleteOnePreQueryHook,
+    MyahCreatorListMemberDeleteManyPreQueryHook,
   ],
 })
 export class MyahCampaignQueryHookModule {}

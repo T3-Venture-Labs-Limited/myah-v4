@@ -908,6 +908,16 @@ const campaignInformationCreatorListsFields = [
     size: 220,
   },
 ] satisfies readonly Spec<'campaign', 'viewCampaignInformationCreatorLists'>[];
+const campaignCreatorListFields = [
+  {
+    viewName: 'campaignCreatorLists',
+    viewFieldName: 'creatorList',
+    fieldName: 'creatorList',
+    position: 0,
+    isVisible: true,
+    size: 220,
+  },
+] satisfies readonly Spec<'campaignCreatorList', 'campaignCreatorLists'>[];
 
 export const computeMyahViewFields = (
   args: Args,
@@ -919,6 +929,7 @@ export const computeMyahViewFields = (
   ...buildForObject(args, 'campaign', campaignOverviewFields),
   ...buildForObject(args, 'campaign', campaignInformationCreatorListsFields),
   ...buildForObject(args, 'campaignCreator', campaignInfluencerFields),
+  ...buildForObject(args, 'campaignCreatorList', campaignCreatorListFields),
   ...buildForObject(args, 'campaign', campaignInstructionsFields),
   ...buildForObject(args, 'creatorList', creatorListFields),
   ...buildForObject(args, 'creator', creatorRecordPageFields),
@@ -943,13 +954,22 @@ export const computeMyahBrandBrainUpdateProposalViewFields = (args: Args) =>
 export const computeMyahCampaignViewFields = (args: Args) =>
   Object.fromEntries(
     Object.entries(computeMyahViewFields(args)).filter(
-      ([key]) => key.startsWith('campaign') && !key.startsWith('campaignCreator'),
+      ([key]) =>
+        key.startsWith('campaign') && !key.startsWith('campaignCreator'),
     ),
   );
 export const computeMyahCampaignCreatorViewFields = (args: Args) =>
   Object.fromEntries(
+    Object.entries(computeMyahViewFields(args)).filter(
+      ([key]) =>
+        key.startsWith('campaignCreator') &&
+        !key.startsWith('campaignCreatorList'),
+    ),
+  );
+export const computeMyahCampaignCreatorListViewFields = (args: Args) =>
+  Object.fromEntries(
     Object.entries(computeMyahViewFields(args)).filter(([key]) =>
-      key.startsWith('campaignCreator'),
+      key.startsWith('campaignCreatorList'),
     ),
   );
 export const computeMyahCreatorListViewFields = (args: Args) =>

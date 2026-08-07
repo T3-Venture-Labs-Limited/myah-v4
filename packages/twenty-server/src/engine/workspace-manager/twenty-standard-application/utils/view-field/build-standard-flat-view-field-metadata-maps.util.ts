@@ -31,6 +31,7 @@ import { computeStandardWorkspaceMemberViewFields } from 'src/engine/workspace-m
 import {
   computeMyahBrandBrainPageViewFields,
   computeMyahBrandBrainUpdateProposalViewFields,
+  computeMyahCampaignCreatorListViewFields,
   computeMyahCampaignCreatorViewFields,
   computeMyahCampaignViewFields,
   computeMyahCreatorListViewFields,
@@ -73,6 +74,7 @@ const STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   workspaceMember: computeStandardWorkspaceMemberViewFields,
   brandBrainPage: computeMyahBrandBrainPageViewFields,
   brandBrainUpdateProposal: computeMyahBrandBrainUpdateProposalViewFields,
+  campaignCreatorList: computeMyahCampaignCreatorListViewFields,
   campaign: computeMyahCampaignViewFields,
   campaignCreator: computeMyahCampaignCreatorViewFields,
   creatorList: computeMyahCreatorListViewFields,
