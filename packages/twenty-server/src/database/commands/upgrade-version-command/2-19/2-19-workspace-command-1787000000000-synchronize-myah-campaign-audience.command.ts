@@ -5,6 +5,7 @@ import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS, MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
 
 const audienceObjects = new Set([
@@ -49,17 +50,36 @@ export class SynchronizeMyahCampaignAudienceCommand extends ActiveOrSuspendedWor
   constructor(
     workspaceIteratorService: WorkspaceIteratorService,
     private readonly synchronizer: SynchronizeSourceControlledMyahMetadataService,
-  ) { super(workspaceIteratorService); }
+    private readonly workspaceCacheService: WorkspaceCacheService,
+  ) {
+    super(workspaceIteratorService);
+  }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
     if (!args.dataSource) return;
-    await this.synchronizer.synchronizeWorkspace(args, {
-      objectMetadata: audienceObjects,
-      fieldMetadata: audienceFields,
-      index: audienceIndexes,
-      view: audienceViews,
-      objectPermission: audienceObjectPermissions,
-      fieldPermission: audienceFieldPermissions,
-    }, { synchronizeExistingSelectedMetadata: true });
+    const { flatObjectMetadataMaps } =
+      await this.workspaceCacheService.getOrRecompute(args.workspaceId, [
+        'flatObjectMetadataMaps',
+      ]);
+    if (
+      flatObjectMetadataMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+      ] === undefined
+    ) {
+      return;
+    }
+    await this.synchronizer.synchronizeWorkspace(
+      args,
+      {
+        objectMetadata: audienceObjects,
+        fieldMetadata: audienceFields,
+        index: audienceIndexes,
+        view: audienceViews,
+        viewField: audienceViewFields,
+        objectPermission: audienceObjectPermissions,
+        fieldPermission: audienceFieldPermissions,
+      },
+      { synchronizeExistingSelectedMetadata: true },
+    );
   }
 }

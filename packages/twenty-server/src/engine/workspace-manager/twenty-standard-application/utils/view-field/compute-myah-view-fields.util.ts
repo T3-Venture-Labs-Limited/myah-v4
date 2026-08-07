@@ -942,8 +942,8 @@ export const computeMyahBrandBrainUpdateProposalViewFields = (args: Args) =>
   );
 export const computeMyahCampaignViewFields = (args: Args) =>
   Object.fromEntries(
-    Object.entries(computeMyahViewFields(args)).filter(([key]) =>
-      key.startsWith('campaign'),
+    Object.entries(computeMyahViewFields(args)).filter(
+      ([key]) => key.startsWith('campaign') && !key.startsWith('campaignCreator'),
     ),
   );
 export const computeMyahCampaignCreatorViewFields = (args: Args) =>
