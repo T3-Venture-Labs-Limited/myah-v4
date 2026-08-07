@@ -60,7 +60,6 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
   ...[
     MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
     MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
-    MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
     MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
     MYAH_STANDARD_OBJECTS.promotedAsset.universalIdentifier,
     MYAH_STANDARD_OBJECTS.offer.universalIdentifier,
@@ -91,6 +90,11 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
     roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
     objectMetadataUniversalIdentifier:
       MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
+  }),
+  buildReadOnlyObjectPermissionDefinition({
+    roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+    objectMetadataUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
   }),
 ] as const;
 
