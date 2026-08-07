@@ -36,7 +36,7 @@ import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { useLingui } from '@lingui/react/macro';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { Status } from 'twenty-ui/data-display';
 import { Button } from 'twenty-ui/input';
@@ -210,8 +210,8 @@ const ManagedEmailOverviewForWorkspace = ({
     useState<PersistedPurchaseIntent | null>(() =>
       readPersistedPurchaseIntent(workspaceId),
     );
-  const shouldRecoverPurchaseIntent = useRef(purchaseIntent !== null);
-  const purchaseRecoveryAttempted = useRef(false);
+  const [shouldRecoverPurchaseIntent, setShouldRecoverPurchaseIntent] =
+    useState(purchaseIntent !== null);
   const [purchaseRecoveryFailed, setPurchaseRecoveryFailed] = useState(false);
   const [operationId, setOperationId] = useState<string | null>(
     purchaseIntent?.operationId ?? null,
@@ -287,13 +287,12 @@ const ManagedEmailOverviewForWorkspace = ({
       canPurchase !== true ||
       operationId !== null ||
       purchaseIntent === null ||
-      !shouldRecoverPurchaseIntent.current ||
-      purchaseRecoveryAttempted.current
+      !shouldRecoverPurchaseIntent
     ) {
       return;
     }
 
-    purchaseRecoveryAttempted.current = true;
+    setShouldRecoverPurchaseIntent(false);
     const variables = {
       input: {
         idempotencyKey: purchaseIntent.idempotencyKey,
@@ -338,6 +337,7 @@ const ManagedEmailOverviewForWorkspace = ({
     enqueueErrorSnackBar,
     operationId,
     purchaseIntent,
+    shouldRecoverPurchaseIntent,
     t,
     workspaceId,
   ]);

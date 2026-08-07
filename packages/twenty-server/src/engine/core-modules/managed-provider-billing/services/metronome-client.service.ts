@@ -239,10 +239,9 @@ export class MetronomeClientService {
     const client = this.getClient();
 
     try {
-      const response =
-        await client.v1.customers.retrieveBillingConfigurations({
-          customer_id: customerId,
-        });
+      const response = await client.v1.customers.retrieveBillingConfigurations({
+        customer_id: customerId,
+      });
       const configurations = response.data.filter(
         (configuration) =>
           configuration.archived_at === null &&

@@ -35,8 +35,6 @@ const APPROVED_SANDBOX_PROVIDER_ORIGINS: Record<
   },
 };
 
-const METRONOME_PRODUCTION_ORIGIN = 'https://api.metronome.com';
-
 const STRIPE_KEY_PREFIXES = {
   publishable: {
     PRODUCTION: ['pk_live_'],
