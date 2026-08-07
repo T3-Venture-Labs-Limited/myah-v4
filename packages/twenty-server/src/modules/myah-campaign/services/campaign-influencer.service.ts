@@ -77,6 +77,14 @@ export class CampaignInfluencerService {
     const allowed = roleIds.map((roleId) => context.permissionsPerRoleId[roleId]?.[objectId]?.canUpdateObjectRecords === true);
     if (('unionOf' in options ? !allowed.some(Boolean) : !allowed.every(Boolean))) throw new Error('Campaign update permission is required');
   }
+  private assertObjectUpdatePermission(options: PermissionOptions, objectName: string) {
+    if (options.shouldBypassPermissionChecks) return;
+    const context = getWorkspaceContext();
+    const objectId = context.objectIdByNameSingular[objectName];
+    const roleIds = 'unionOf' in options ? options.unionOf : options.intersectionOf;
+    const allowed = roleIds.map((roleId) => context.permissionsPerRoleId[roleId]?.[objectId]?.canUpdateObjectRecords === true);
+    if (('unionOf' in options ? !allowed.some(Boolean) : !allowed.every(Boolean))) throw new Error(`${objectName} mutation permission is required`);
+  }
   private async authorizeTargets(authContext: WorkspaceAuthContext, campaignId: string, creatorIds: readonly string[], listIds: readonly string[], manager?: WorkspaceEntityManager, requireUpdate = true) {
     const options = this.permissionOptions(authContext);
     if (requireUpdate) this.assertCampaignUpdatePermission(options);
@@ -189,34 +197,24 @@ export class CampaignInfluencerService {
     });
   }
 
-  async detachCreatorList(input: { campaignId: string; creatorListId: string; confirmedCreatorIds: readonly string[]; confirmationToken?: string }, authContext: WorkspaceAuthContext) {
-    return this.detachCampaignCreatorList(input, authContext);
-  }
-
-  async syncCreatorListMembership(input: { creatorListId: string; creatorId: string; removed?: boolean }, authContext: WorkspaceAuthContext): Promise<void> {
-    if (input.removed) throw new Error('Use removeCreatorListMemberIntent for membership removal');
-    await this.addCreatorListMemberIntent({ creatorListId: input.creatorListId, creatorId: input.creatorId }, authContext);
-  }
-
-  private membershipToken(creatorListId: string, creatorId: string, campaignIds: readonly string[]) {
-    return createHash('sha256').update(`${creatorListId}:${creatorId}:${[...campaignIds].sort().join(',')}`).digest('hex');
-  }
-
   async creatorListMembershipRemovalImpact(input: { creatorListId: string; creatorId: string }, authContext: WorkspaceAuthContext, manager?: WorkspaceEntityManager) {
     const run = async (transactionManager?: WorkspaceEntityManager) => {
       const options = this.permissionOptions(authContext);
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const creators = await this.repository(authContext, 'campaignCreator', options);
       const members = await this.repository(authContext, 'creatorListMember', options);
-      const [attached, existingMembership] = await Promise.all([
+      const [attached, existingMembership, allMemberships] = await Promise.all([
         attachments.find({ where: { creatorListId: input.creatorListId } }, transactionManager),
         members.findOne({ where: { creatorListId: input.creatorListId, creatorId: input.creatorId } }, transactionManager),
+        members.find({ where: { creatorId: input.creatorId } }, transactionManager),
       ]);
       if (!existingMembership) throw new Error('Creator list membership not found');
+      const attachedIds = new Set(attached.map((row) => row.creatorListId));
       const affected: string[] = [];
       for (const attachment of attached) {
         const row = await creators.findOne({ where: { campaignId: attachment.campaignId, creatorId: input.creatorId } }, transactionManager);
-        if (row?.isDirectlyAdded !== true) affected.push(attachment.campaignId);
+        const hasOtherListSource = allMemberships.some((membership) => membership.creatorListId !== input.creatorListId && attachedIds.has(membership.creatorListId));
+        if (row?.isDirectlyAdded !== true && !hasOtherListSource) affected.push(attachment.campaignId);
       }
       return { affectedCampaignIds: affected.sort(), requiresConfirmation: affected.length > 0, confirmationToken: this.membershipToken(input.creatorListId, input.creatorId, affected) };
     };
@@ -230,6 +228,7 @@ export class CampaignInfluencerService {
       const targets = await this.repository(authContext, 'creator', options);
       if (!(await lists.findOne({ where: { id: input.creatorListId } }, manager))) throw new Error('Creator list not found');
       if (!(await targets.findOne({ where: { id: input.creatorId } }, manager))) throw new Error('Creator not found');
+      this.assertObjectUpdatePermission(options, 'creatorListMember');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const campaigns = await this.repository(authContext, 'campaign', options);
       const creatorLists = await this.repository(authContext, 'creatorListMember', this.intentPermissionOptions());
@@ -244,13 +243,14 @@ export class CampaignInfluencerService {
 
   async removeCreatorListMemberIntent(input: { creatorListId: string; creatorId: string; confirmedCampaignIds: readonly string[]; confirmationToken?: string }, authContext: WorkspaceAuthContext) {
     return this.executeTransaction(authContext, async (manager) => {
-      const impact = await this.creatorListMembershipRemovalImpact(input, authContext, manager);
-      if (impact.requiresConfirmation && (impact.confirmationToken !== input.confirmationToken || new Set(input.confirmedCampaignIds).size !== impact.affectedCampaignIds.length || impact.affectedCampaignIds.some((id) => !input.confirmedCampaignIds.includes(id)))) throw new Error('Exact affected Campaign confirmation is required');
       const options = this.permissionOptions(authContext);
+      this.assertObjectUpdatePermission(options, 'creatorListMember');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const campaigns = await this.repository(authContext, 'campaign', options);
       const attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
+      const impact = await this.creatorListMembershipRemovalImpact(input, authContext, manager);
+      if (impact.requiresConfirmation && (impact.confirmationToken !== input.confirmationToken || new Set(input.confirmedCampaignIds).size !== impact.affectedCampaignIds.length || impact.affectedCampaignIds.some((id) => !input.confirmedCampaignIds.includes(id)))) throw new Error('Exact affected Campaign confirmation is required');
       const creatorLists = await this.repository(authContext, 'creatorListMember', this.intentPermissionOptions());
       const creatorRows = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
       await creatorLists.softDelete({ creatorListId: input.creatorListId, creatorId: input.creatorId }, manager);
