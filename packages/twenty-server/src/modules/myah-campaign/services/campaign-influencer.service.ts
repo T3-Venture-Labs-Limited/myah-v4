@@ -77,14 +77,6 @@ export class CampaignInfluencerService {
     const allowed = roleIds.map((roleId) => context.permissionsPerRoleId[roleId]?.[objectId]?.canUpdateObjectRecords === true);
     if (('unionOf' in options ? !allowed.some(Boolean) : !allowed.every(Boolean))) throw new Error('Campaign update permission is required');
   }
-  private assertObjectUpdatePermission(options: PermissionOptions, objectName: string) {
-    if (options.shouldBypassPermissionChecks) return;
-    const context = getWorkspaceContext();
-    const objectId = context.objectIdByNameSingular[objectName];
-    const roleIds = 'unionOf' in options ? options.unionOf : options.intersectionOf;
-    const allowed = roleIds.map((roleId) => context.permissionsPerRoleId[roleId]?.[objectId]?.canUpdateObjectRecords === true);
-    if (('unionOf' in options ? !allowed.some(Boolean) : !allowed.every(Boolean))) throw new Error(`${objectName} mutation permission is required`);
-  }
   private assertObjectPermission(options: PermissionOptions, objectName: string, action: 'canCreateObjectRecords' | 'canSoftDeleteObjectRecords') {
     if (options.shouldBypassPermissionChecks) return;
     const context = getWorkspaceContext();
