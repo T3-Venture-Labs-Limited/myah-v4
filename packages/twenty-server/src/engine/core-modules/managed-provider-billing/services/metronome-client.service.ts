@@ -747,6 +747,7 @@ export class MetronomeClientService {
     do {
       const response = await this.execute(() =>
         client.v1.contracts.rateCards.list({
+          body: {},
           ...(nextPage === undefined ? {} : { next_page: nextPage }),
         }),
       );

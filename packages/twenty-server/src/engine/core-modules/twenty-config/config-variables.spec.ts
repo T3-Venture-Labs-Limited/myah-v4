@@ -210,7 +210,7 @@ describe('managed email execution safety', () => {
       { strictGroups: true },
     );
 
-  it('rejects the shared Metronome origin when labeled as sandbox', () => {
+  it('allows the official Metronome origin for an explicitly identified sandbox account', () => {
     const errors = validateManagedEmail({
       MANAGED_EMAIL_EXECUTION_MODE: 'SANDBOX',
       NODE_ENV: 'development',
@@ -218,7 +218,7 @@ describe('managed email execution safety', () => {
       METRONOME_BASE_URL: 'https://api.metronome.com',
     });
 
-    expect(errors.map(({ property }) => property)).toContain(
+    expect(errors.map(({ property }) => property)).not.toContain(
       'METRONOME_BASE_URL',
     );
   });

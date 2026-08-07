@@ -2401,6 +2401,11 @@ describe('MetronomeClientService rate-card product resolution', () => {
       },
     });
     expect(list).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenNthCalledWith(1, { body: {} });
+    expect(list).toHaveBeenNthCalledWith(2, {
+      body: {},
+      next_page: 'page-2',
+    });
     expect(retrieveRateSchedule).toHaveBeenNthCalledWith(1, {
       rate_card_id: 'active-card',
       starting_at: at.toISOString(),

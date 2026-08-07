@@ -145,14 +145,7 @@ export const IsManagedEmailMetronomeEnvironmentSafe =
             return false;
           }
 
-          try {
-            return !(
-              baseUrlEnvironment === 'SANDBOX' &&
-              new URL(value).origin === METRONOME_PRODUCTION_ORIGIN
-            );
-          } catch {
-            return false;
-          }
+          return true;
         },
       },
     });
