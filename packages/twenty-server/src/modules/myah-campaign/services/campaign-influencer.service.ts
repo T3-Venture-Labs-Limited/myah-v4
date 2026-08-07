@@ -125,7 +125,7 @@ export class CampaignInfluencerService {
 
   async attachCampaignCreatorLists(input: { campaignId: string; creatorListIds: readonly string[] }, authContext: WorkspaceAuthContext) {
     return this.executeTransaction(authContext, async (manager) => {
-      const ids = [...new Set(input.creatorListIds)];
+      const ids = [...new Set(input.creatorListIds)].sort();
       const options = await this.authorizeTargets(authContext, input.campaignId, [], ids, undefined);
       this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
       const creatorLists = await this.repository(authContext, 'creatorList', options);
@@ -192,11 +192,13 @@ export class CampaignInfluencerService {
 
   async detachCampaignCreatorList(input: { campaignId: string; creatorListId: string; confirmedCreatorIds: readonly string[]; confirmationToken?: string }, authContext: WorkspaceAuthContext) {
     return this.executeTransaction(authContext, async (manager) => {
+      const options = this.permissionOptions(authContext);
+      this.assertCampaignUpdatePermission(options);
+      const lists = await this.repository(authContext, 'creatorList', options);
+      if (!(await lists.findOne({ where: { id: input.creatorListId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Creator list not found');
       const impact = await this.calculateImpact(input, authContext, manager);
       const confirmed = new Set(input.confirmedCreatorIds);
       if (impact.requiresConfirmation && (input.confirmationToken !== impact.confirmationToken || confirmed.size !== impact.affectedCreatorIds.length || impact.affectedCreatorIds.some((id) => !confirmed.has(id)))) throw new Error('Exact final-source Creator confirmation is required');
-      const options = this.permissionOptions(authContext);
-      this.assertCampaignUpdatePermission(options);
       const creators = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
       const attachments = await this.repository(authContext, 'campaignCreatorList', this.intentPermissionOptions());
       for (const creatorId of impact.affectedCreatorIds) await creators.softDelete({ campaignId: input.campaignId, creatorId }, manager);
@@ -292,7 +294,7 @@ export class CampaignInfluencerService {
       this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const lists = await this.repository(authContext, 'creatorList', options);
-      await lists.findOne({ where: { id: input.creatorListId }, lock: { mode: 'pessimistic_write' } }, manager);
+      if (!(await lists.findOne({ where: { id: input.creatorListId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Creator list not found');
       const campaigns = await this.repository(authContext, 'campaign', options);
       const attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
