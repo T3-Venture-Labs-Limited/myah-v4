@@ -1,4 +1,5 @@
 import { gql, useMutation, useQuery } from '@apollo/client';
+import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useState } from 'react';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
@@ -50,6 +51,17 @@ export const MyahCampaignAudienceControls = ({ campaignId }: { campaignId: strin
     variables: { input: { campaignId, creatorListId: removingListId } },
     skip: !removingListId,
   });
+  const attachedListIds = (data?.campaignInfluencerSnapshot?.campaignCreatorLists ?? [])
+    .map((list: { creatorListId: string }) => list.creatorListId);
+  const { records: creatorLists } = useFindManyRecords<{ id: string; name?: string }>({
+    objectNameSingular: 'creatorList',
+    filter: { id: { in: attachedListIds } },
+    recordGqlFields: { id: true, name: true },
+    skip: attachedListIds.length === 0,
+  });
+  const creatorListNames = new Map(
+    creatorLists.map((record) => [record.id, record.name ?? 'Creator List']),
+  );
   const attachedLists = data?.campaignInfluencerSnapshot?.campaignCreatorLists ?? [];
   const removalImpact = impact?.campaignCreatorListRemovalImpact;
   const refresh = async () => { await refetch(); };
@@ -75,8 +87,8 @@ export const MyahCampaignAudienceControls = ({ campaignId }: { campaignId: strin
       </div>
       {attachedLists.map((list: { id: string; creatorListId: string }) => (
         <div key={list.id} style={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <span>Creator List {list.creatorListId}</span>
-          <Button title={`Remove Creator List ${list.creatorListId}`} ariaLabel={`Remove Creator List ${list.creatorListId}`} onClick={() => setRemovingListId(list.creatorListId)} type="button" variant="secondary" />
+          <span>{creatorListNames.get(list.creatorListId) ?? 'Creator List'}</span>
+          <Button title="Remove Creator List" ariaLabel="Remove Creator List" onClick={() => setRemovingListId(list.creatorListId)} type="button" variant="secondary" />
         </div>
       ))}
       {picker && (
