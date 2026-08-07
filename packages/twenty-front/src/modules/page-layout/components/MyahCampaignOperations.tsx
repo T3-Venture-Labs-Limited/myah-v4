@@ -1,4 +1,3 @@
-import { gql, useMutation } from '@apollo/client';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
@@ -6,6 +5,7 @@ import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { MyahCampaignAudienceControls } from '@/page-layout/components/MyahCampaignAudienceControls';
 import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
 import { Status } from 'twenty-ui/data-display';
 import { InlineBanner, Loader } from 'twenty-ui/feedback';
@@ -62,21 +62,6 @@ const lifecycleActionsByStatus: Record<
 };
 
 
-const ATTACH_CAMPAIGN_CREATOR_LISTS = gql`
-  mutation AttachCampaignCreatorLists($input: AttachCampaignCreatorListsInput!) {
-    attachCampaignCreatorLists(input: $input) {
-      campaignCreators { id creatorId isDirectlyAdded }
-    }
-  }
-`;
-
-const ADD_DIRECT_CAMPAIGN_CREATORS = gql`
-  mutation AddDirectCampaignCreators($input: AddDirectCampaignCreatorsInput!) {
-    addDirectCampaignCreators(input: $input) {
-      campaignCreators { id creatorId isDirectlyAdded }
-    }
-  }
-`;
 const hasContent = (value: string | null) => (value?.trim().length ?? 0) > 0;
 
 const isCampaignLifecycleStatus = (
@@ -141,10 +126,6 @@ const MyahCampaignOperationsData = ({
   theme,
 }: MyahCampaignOperationsDataProps) => {
   const campaignPermissions = useObjectPermissionsForObject(campaignMetadataId);
-  const [creatorListIds, setCreatorListIds] = useState('');
-  const [creatorIds, setCreatorIds] = useState('');
-  const [attachLists] = useMutation(ATTACH_CAMPAIGN_CREATOR_LISTS);
-  const [addCreators] = useMutation(ADD_DIRECT_CAMPAIGN_CREATORS);
   const { updateOneRecord } = useUpdateOneRecord();
   const {
     record: campaign,
@@ -182,22 +163,6 @@ const MyahCampaignOperationsData = ({
     skip: !campaignPermissions.canReadObjectRecords,
   });
 
-  const splitIds = (value: string) =>
-    value.split(',').map((id) => id.trim()).filter(Boolean);
-  const attachCreatorLists = async () => {
-    await attachLists({
-      variables: {
-        input: { campaignId, creatorListIds: splitIds(creatorListIds) },
-      },
-    });
-    await refetchAudience();
-  };
-  const addDirectCreators = async () => {
-    await addCreators({
-      variables: { input: { campaignId, creatorIds: splitIds(creatorIds) } },
-    });
-    await refetchAudience();
-  };
 
   const retry = () => {
     void refetchCampaign();
@@ -383,40 +348,7 @@ const MyahCampaignOperationsData = ({
       </div>
 
       {campaignPermissions.canUpdateObjectRecords ? (
-        <div style={{ display: 'grid', gap: theme.spacing[2] }}>
-          <label>
-            Creator List IDs
-            <input
-              aria-label="Creator List IDs"
-              onChange={(event) => setCreatorListIds(event.target.value)}
-              placeholder="comma-separated UUIDs"
-              value={creatorListIds}
-            />
-          </label>
-          <Button
-            disabled={splitIds(creatorListIds).length === 0}
-            onClick={() => void attachCreatorLists()}
-            title="Attach Creator Lists"
-            type="button"
-            variant="secondary"
-          />
-          <label>
-            Direct Creator IDs
-            <input
-              aria-label="Direct Creator IDs"
-              onChange={(event) => setCreatorIds(event.target.value)}
-              placeholder="comma-separated UUIDs"
-              value={creatorIds}
-            />
-          </label>
-          <Button
-            disabled={splitIds(creatorIds).length === 0}
-            onClick={() => void addDirectCreators()}
-            title="Add Direct Creators"
-            type="button"
-            variant="secondary"
-          />
-        </div>
+        <MyahCampaignAudienceControls campaignId={campaignId} />
       ) : null}
       {blockers.map((blocker) => (
         <InlineBanner key={blocker} color="danger" message={blocker} />
