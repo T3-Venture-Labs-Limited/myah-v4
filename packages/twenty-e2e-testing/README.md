@@ -14,6 +14,18 @@ npx nx setup twenty-e2e-testing
 npx nx test twenty-e2e-testing
 ```
 
+### Start isolated authenticated browser UAT
+
+From the repository root, run the same command for fresh and repeat launches:
+
+```sh
+UAT_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/uat_disposable \
+UAT_REDIS_URL=redis://127.0.0.1:6379/5 \
+  npx nx start:isolated-uat twenty-e2e-testing
+```
+
+The launcher uses one host/port configuration for API and frontend URLs, resets and seeds the disposable database through the canonical server target, waits for application-level readiness, and cleans up only the processes recorded in `.tmp/isolated-uat.json`.
+
 ### Start the interactive UI mode
 
 ```

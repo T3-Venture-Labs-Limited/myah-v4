@@ -13,11 +13,26 @@
         ]
       }
     },
+    "start:isolated-uat": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": ".",
+        "command": "yarn tsx packages/twenty-e2e-testing/scripts/start-isolated-uat.ts"
+      }
+    },
+    "test:startup": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": ".",
+        "command": "yarn tsx --test packages/twenty-e2e-testing/scripts/start-isolated-uat.test.ts"
+      }
+    },
     "test": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "packages/twenty-e2e-testing",
         "commands": [
+          "yarn tsx --test scripts/start-isolated-uat.test.ts",
           "yarn playwright test"
         ]
       }
