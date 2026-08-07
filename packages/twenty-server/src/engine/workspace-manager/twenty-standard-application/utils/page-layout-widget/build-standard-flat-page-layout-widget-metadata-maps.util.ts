@@ -39,6 +39,7 @@ const RECORD_PAGE_LAYOUT_WIDGET_TYPES = [
   WidgetType.WORKFLOW,
   WidgetType.WORKFLOW_VERSION,
   WidgetType.WORKFLOW_RUN,
+  WidgetType.RECORD_TABLE,
 ];
 
 const WIDGET_TYPE_TO_CONFIGURATION_TYPE: Partial<
@@ -305,18 +306,28 @@ const computeRecordPageWidgets = ({
           widget.type,
         );
 
+        const widgetObjectName = widget.objectUniversalIdentifier
+          ? (findObjectNameByUniversalIdentifier(
+              widget.objectUniversalIdentifier,
+            ) as AllStandardObjectName)
+          : layoutObjectName;
         const objectMetadataId = isRecordPageWidget
-          ? layoutObjectMetadataId
+          ? (widgetObjectName
+              ? (standardObjectMetadataRelatedEntityIds[widgetObjectName]?.id ??
+                null)
+              : null)
           : null;
 
         const objectMetadataUniversalIdentifier = isRecordPageWidget
-          ? (layout.objectUniversalIdentifier ?? null)
+          ? (widget.objectUniversalIdentifier ??
+            layout.objectUniversalIdentifier ??
+            null)
           : null;
 
         const { configuration, universalConfiguration } =
           buildRecordPageWidgetConfigurations({
             widgetType: widget.type,
-            layoutObjectName,
+            layoutObjectName: widgetObjectName,
             standardObjectMetadataRelatedEntityIds,
             fieldUniversalIdentifier: widget.fieldUniversalIdentifier,
             fieldsViewUniversalIdentifier: widget.fieldsViewUniversalIdentifier,

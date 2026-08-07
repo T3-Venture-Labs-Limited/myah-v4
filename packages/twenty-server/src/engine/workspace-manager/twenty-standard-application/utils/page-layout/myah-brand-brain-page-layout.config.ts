@@ -181,6 +181,14 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
           position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
           fieldsViewUniversalIdentifier: '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
         },
+        creatorLists: {
+          universalIdentifier: 'a4f1aa45-0be4-4c75-bd2a-0f3a1d75d46c',
+          title: 'Creator Lists',
+          type: WidgetType.FIELDS,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: VERTICAL_LIST_LAYOUT_POSITIONS.SECOND,
+          fieldsViewUniversalIdentifier: '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
+        },
       },
     },
     tasks: {
@@ -194,6 +202,24 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
           universalIdentifier: 'e81ab303-f402-45df-8257-d91172ecc435',
           title: 'Tasks',
           type: WidgetType.TASKS,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+        },
+      },
+    },
+    influencers: {
+      universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+      title: 'Influencers',
+      position: 25,
+      icon: 'IconUsers',
+      layoutMode: PageLayoutTabLayoutMode.CANVAS,
+      widgets: {
+        influencers: {
+          universalIdentifier: '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2',
+          title: 'Influencers',
+          type: WidgetType.RECORD_TABLE,
+          objectUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
           gridPosition: GRID_POSITIONS.FULL_WIDTH,
           position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
         },

@@ -201,7 +201,7 @@ export class CampaignInfluencerService {
         where: { campaignId: input.campaignId },
       });
       const existingIds = new Set(existing.map((record) => record.creatorListId));
-      const records = input.creatorListIds
+      const records = [...new Set(input.creatorListIds)]
         .filter((creatorListId) => !existingIds.has(creatorListId))
         .map((creatorListId) => ({
           campaignId: input.campaignId,
@@ -234,7 +234,7 @@ export class CampaignInfluencerService {
       const existingByCreator = new Map(
         existing.map((record) => [record.creatorId, record]),
       );
-      const records = input.creatorIds.flatMap((creatorId) => {
+      const records = [...new Set(input.creatorIds)].flatMap((creatorId) => {
         const current = existingByCreator.get(creatorId);
         if (current) {
           return current.isDirectlyAdded
@@ -249,6 +249,82 @@ export class CampaignInfluencerService {
         await repository.save(records, transactionManager as never);
       }
       return this.snapshot(input.campaignId, authContext);
+    });
+  }
+
+  async syncCreatorListMembership(
+    input: {
+      creatorListId: string;
+      creatorId: string;
+      removed?: boolean;
+    },
+    authContext: WorkspaceAuthContext,
+  ): Promise<void> {
+    await this.executeTransaction(authContext, async (transactionManager) => {
+      const workspaceContext = getWorkspaceContext();
+      const permissionOptions = resolveRolePermissionConfig({
+        authContext,
+        workspaceContext,
+      });
+      const campaignLists = await this.globalWorkspaceOrmManager.getRepository(
+        'campaignCreatorList',
+        permissionOptions,
+      );
+      const campaignCreators = await this.globalWorkspaceOrmManager.getRepository(
+        'campaignCreator',
+        permissionOptions,
+      );
+      const attached = await campaignLists.find({
+        where: { creatorListId: input.creatorListId },
+      });
+      for (const attachment of attached) {
+        const existing = await campaignCreators.findOne({
+          where: {
+            campaignId: attachment.campaignId,
+            creatorId: input.creatorId,
+          },
+        });
+        if (input.removed) {
+          const otherAttachments = await campaignLists.find({
+            where: { campaignId: attachment.campaignId },
+          });
+          const otherListIds = otherAttachments
+            .map((record) => record.creatorListId)
+            .filter((id) => id !== input.creatorListId);
+          let hasOtherListSource = false;
+          if (otherListIds.length > 0) {
+            const memberships = await this.globalWorkspaceOrmManager.getRepository(
+              'creatorListMember',
+              permissionOptions,
+            );
+            const otherMembers = await memberships.find({
+              where: { creatorId: input.creatorId },
+            });
+            hasOtherListSource = otherMembers.some((member) =>
+              otherListIds.includes(member.creatorListId),
+            );
+          }
+          if (
+            existing &&
+            existing.isDirectlyAdded !== true &&
+            !hasOtherListSource
+          ) {
+            await campaignCreators.delete(
+              { campaignId: attachment.campaignId, creatorId: input.creatorId },
+              transactionManager as never,
+            );
+          }
+        } else if (!existing) {
+          await campaignCreators.save(
+            {
+              campaignId: attachment.campaignId,
+              creatorId: input.creatorId,
+              isDirectlyAdded: false,
+            },
+            transactionManager as never,
+          );
+        }
+      }
     });
   }
 
