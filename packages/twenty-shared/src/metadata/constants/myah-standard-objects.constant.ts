@@ -766,7 +766,7 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: '1f3b89db-d915-44fc-82bf-f7e1bd1fc630',
         viewFields: {
           campaignCreatorLists: {
-            universalIdentifier: '40b7c827-4699-5f99-bdb8-d8906dd948f5',
+            universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2c',
           },
         },
       },
