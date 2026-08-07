@@ -90,7 +90,7 @@ describe('CampaignInfluencerService generic membership guard', () => {
     authContext,
     userWorkspaceRoleMap: {},
     apiKeyRoleMap: {},
-  } as ORMWorkspaceContext;
+  } as unknown as ORMWorkspaceContext;
 
   it.each([
     [false, 'allows generic membership writes for unattached lists'],

@@ -2456,7 +2456,7 @@ export const buildMyahStandardFlatFieldMetadatas = ({
               'Whether this Creator was added directly to the Campaign',
             icon: 'IconUserPlus',
             isNullable: false,
-            defaultValue: 'false',
+            defaultValue: false,
           },
           standardObjectMetadataRelatedEntityIds:
             args.standardObjectMetadataRelatedEntityIds,

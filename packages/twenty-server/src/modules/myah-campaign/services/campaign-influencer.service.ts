@@ -109,6 +109,13 @@ type RecordRow = {
   creatorListId?: string;
   isDirectlyAdded?: boolean;
 };
+type CampaignCreatorRow = RecordRow & {
+  creatorId: string;
+  isDirectlyAdded: boolean;
+};
+type CampaignCreatorListRow = RecordRow & {
+  creatorListId: string;
+};
 type PermissionOptions = RolePermissionConfig;
 
 @Injectable()
@@ -169,17 +176,17 @@ export class CampaignInfluencerService {
   }
 
   private assertCampaignUpdatePermission(options: PermissionOptions) {
-    if (options.shouldBypassPermissionChecks) return;
+    if ('shouldBypassPermissionChecks' in options) return;
     const context = getWorkspaceContext();
     const objectId = context.objectIdByNameSingular.campaign;
-    const roleIds =
-      'unionOf' in options ? options.unionOf : options.intersectionOf;
+    const isUnion = 'unionOf' in options;
+    const roleIds = isUnion ? options.unionOf : options.intersectionOf;
     const allowed = roleIds.map(
       (roleId) =>
         context.permissionsPerRoleId[roleId]?.[objectId]
           ?.canUpdateObjectRecords === true,
     );
-    if ('unionOf' in options ? !allowed.some(Boolean) : !allowed.every(Boolean))
+    if (isUnion ? !allowed.some(Boolean) : !allowed.every(Boolean))
       throw new Error('Campaign update permission is required');
   }
   private assertObjectPermission(
@@ -187,16 +194,16 @@ export class CampaignInfluencerService {
     objectName: string,
     action: 'canUpdateObjectRecords' | 'canSoftDeleteObjectRecords',
   ) {
-    if (options.shouldBypassPermissionChecks) return;
+    if ('shouldBypassPermissionChecks' in options) return;
     const context = getWorkspaceContext();
     const objectId = context.objectIdByNameSingular[objectName];
-    const roleIds =
-      'unionOf' in options ? options.unionOf : options.intersectionOf;
+    const isUnion = 'unionOf' in options;
+    const roleIds = isUnion ? options.unionOf : options.intersectionOf;
     const allowed = roleIds.map(
       (roleId) =>
         context.permissionsPerRoleId[roleId]?.[objectId]?.[action] === true,
     );
-    if ('unionOf' in options ? !allowed.some(Boolean) : !allowed.every(Boolean))
+    if (isUnion ? !allowed.some(Boolean) : !allowed.every(Boolean))
       throw new Error(`${objectName} permission is required`);
   }
 
@@ -321,8 +328,16 @@ export class CampaignInfluencerService {
   ) {
     const options = this.permissionOptions(authContext);
     const [creators, lists] = await Promise.all([
-      this.repository(authContext, 'campaignCreator', options),
-      this.repository(authContext, 'campaignCreatorList', options),
+      this.repository<CampaignCreatorRow>(
+        authContext,
+        'campaignCreator',
+        options,
+      ),
+      this.repository<CampaignCreatorListRow>(
+        authContext,
+        'campaignCreatorList',
+        options,
+      ),
     ]);
     return {
       campaignCreators: await creators.find({ where: { campaignId } }, manager),
