@@ -72,9 +72,11 @@ export class CampaignInfluencerService {
   private async authorizeTargets(authContext: WorkspaceAuthContext, campaignId: string, creatorIds: readonly string[], listIds: readonly string[], manager?: WorkspaceEntityManager) {
     const options = this.permissionOptions(authContext);
     const [campaigns, creators, lists] = await Promise.all([
-      this.repository(authContext, 'campaign', options), this.repository(authContext, 'creator', options), this.repository(authContext, 'creatorList', options),
+      this.repository(authContext, 'campaign', options),
+      this.repository(authContext, 'creator', options),
+      this.repository(authContext, 'creatorList', options),
     ]);
-    if (!(await campaigns.findOne({ where: { id: campaignId } }, manager))) throw new Error('Campaign not found');
+    if (!(await campaigns.findOne({ where: { id: campaignId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Campaign not found');
     for (const id of creatorIds) if (!(await creators.findOne({ where: { id } }, manager))) throw new Error('Creator not found');
     for (const id of listIds) if (!(await lists.findOne({ where: { id } }, manager))) throw new Error('Creator list not found');
     return options;
