@@ -119,8 +119,20 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
         },
       },
     );
-    await args.dataSource.query(
-      'UPDATE "campaignCreator" SET "isDirectlyAdded" = TRUE WHERE "isDirectlyAdded" IS NULL',
-    );
+    await args.dataSource.query(`
+      UPDATE "campaignCreator" AS cc
+      SET "isDirectlyAdded" = TRUE
+      WHERE "isDirectlyAdded" = FALSE
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "campaignCreatorList" AS ccl
+          INNER JOIN "creatorListMember" AS clm
+            ON clm."creatorListId" = ccl."creatorListId"
+           AND clm."creatorId" = cc."creatorId"
+          WHERE ccl."campaignId" = cc."campaignId"
+            AND ccl."deletedAt" IS NULL
+            AND clm."deletedAt" IS NULL
+        )
+    `);
   }
 }
