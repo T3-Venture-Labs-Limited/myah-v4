@@ -16,8 +16,8 @@ jest.mock('@apollo/client', () => ({
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
   useModal: () => ({ openModal: mockOpenModal, closeModal: mockCloseModal }),
 }));
+jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
   ModalStatefulWrapper: ({ children, onClose }: { children: ReactNode; onClose?: () => void }) => (
-  ModalStatefulWrapper: ({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) => (
     <div role="dialog">{children}<button onClick={onClose}>Close picker</button></div>
   ),
 }));
