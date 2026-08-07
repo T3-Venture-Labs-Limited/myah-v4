@@ -268,10 +268,8 @@ export const CreatorBulkRelationshipDialog = ({
       let confirmedCampaignIds: string[] | undefined;
       let confirmationToken: string | undefined;
       if (isRemoval && preview.campaignImpact) {
-        const latestImpact = preview.refetchImpact
-          ? (await preview.refetchImpact()).data
-              ?.creatorListMembershipRemovalImpact
-          : undefined;
+        const latestImpact = (await preview.refetchImpact()).data
+          ?.creatorListMembershipRemovalImpact;
         if (
           !latestImpact ||
           latestImpact.confirmationToken !==

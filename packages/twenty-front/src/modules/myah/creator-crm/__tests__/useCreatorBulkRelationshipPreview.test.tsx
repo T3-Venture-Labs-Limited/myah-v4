@@ -8,14 +8,12 @@ jest.mock('@apollo/client/react', () => ({
     refetch: jest.fn(),
   }),
 }));
-import gql from 'graphql-tag';
 import { renderHook } from '@testing-library/react';
 
 import {
   buildCreatorBulkRelationshipPreview,
   useCreatorBulkRelationshipPreview,
 } from '@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview';
-import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
 
 const mockBatchCreateManyRecords = jest.fn();
 const mockDestroyManyRecords = jest.fn();
