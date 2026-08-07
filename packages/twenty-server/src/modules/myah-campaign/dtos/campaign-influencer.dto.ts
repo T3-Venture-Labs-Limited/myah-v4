@@ -1,5 +1,5 @@
 import { Field, InputType, ObjectType } from '@nestjs/graphql';
-import { ArrayMaxSize, IsArray, IsUUID } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsUUID } from 'class-validator';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 
 const MAX_IDS = 500;
@@ -15,6 +15,7 @@ export class CampaignInfluencerCampaignInput {
 export class AttachCampaignCreatorListsInput extends CampaignInfluencerCampaignInput {
   @Field(() => [UUIDScalarType])
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(MAX_IDS)
   @IsUUID('4', { each: true })
   creatorListIds!: string[];
@@ -23,6 +24,7 @@ export class AttachCampaignCreatorListsInput extends CampaignInfluencerCampaignI
 @InputType()
 export class AddDirectCampaignCreatorsInput extends CampaignInfluencerCampaignInput {
   @Field(() => [UUIDScalarType])
+  @ArrayMinSize(1)
   @IsArray()
   @ArrayMaxSize(MAX_IDS)
   @IsUUID('4', { each: true })
@@ -147,6 +149,8 @@ export class CreatorListMembersIntentInput {
   creatorListId!: string;
 
   @Field(() => [UUIDScalarType])
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_IDS)
   @IsArray()
   @IsUUID('4', { each: true })
   creatorIds!: string[];
