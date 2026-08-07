@@ -236,9 +236,9 @@ export class CampaignInfluencerService {
       const targets = await this.repository(authContext, 'creator', options);
       if (!(await lists.findOne({ where: { id: input.creatorListId } }, manager))) throw new Error('Creator list not found');
       if (!(await targets.findOne({ where: { id: input.creatorId } }, manager))) throw new Error('Creator not found');
-      this.assertObjectPermission(options, 'creatorListMember', 'canCreateObjectRecords');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const campaigns = await this.repository(authContext, 'campaign', options);
+      const creatorLists = await this.repository(authContext, 'creatorListMember', this.intentPermissionOptions());
       this.assertObjectPermission(options, 'creatorListMember', 'canUpdateObjectRecords');
       let attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
