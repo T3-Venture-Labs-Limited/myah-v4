@@ -36,6 +36,7 @@ import {
   computeMyahCreatorListViewFields,
   computeMyahCreatorViewFields,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-myah-view-fields.util';
+import { type CreateStandardViewFieldArgs } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/create-standard-view-field-flat-metadata.util';
 
 type StandardViewFieldBuilder<P extends AllStandardObjectName> = (
   args: Omit<CreateStandardViewFieldArgs<P>, 'context'>,

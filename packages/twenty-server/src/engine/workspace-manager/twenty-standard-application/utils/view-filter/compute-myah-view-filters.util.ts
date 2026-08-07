@@ -9,6 +9,10 @@ type MyahViewFilterObjectName =
   | 'brandBrainUpdateProposal'
   | 'creator'
   | 'campaignCreator';
+type Args = Omit<
+  CreateStandardViewFilterArgs<MyahViewFilterObjectName>,
+  'context'
+>;
 
 export const computeMyahViewFilters = (
   args: Args,
