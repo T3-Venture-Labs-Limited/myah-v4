@@ -22,6 +22,7 @@ const campaignViews = [
   MYAH_STANDARD_OBJECTS.campaign.views.view6bfee1b9,
   MYAH_STANDARD_OBJECTS.campaign.views.vieweb4da94a,
   MYAH_STANDARD_OBJECTS.campaign.views.view9c4f90c5,
+  MYAH_STANDARD_OBJECTS.campaign.views.viewCampaignInformationCreatorLists,
 ];
 const campaignViewFieldUniversalIdentifiers = new Set(
   campaignViews.flatMap(({ viewFields }) =>
@@ -31,6 +32,18 @@ const campaignViewFieldUniversalIdentifiers = new Set(
   ),
 );
 
+const campaignInfluencerObjects = new Set([
+  MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
+]);
+const campaignInfluencerFields = new Set([
+  ...Object.values(MYAH_STANDARD_OBJECTS.campaignCreator.fields).map(
+    ({ universalIdentifier }) => universalIdentifier,
+  ),
+  ...Object.values(MYAH_STANDARD_OBJECTS.campaignCreatorList.fields).map(
+    ({ universalIdentifier }) => universalIdentifier,
+  ),
+]);
 @RegisteredWorkspaceCommand('2.19.0', 1785839371449)
 @Command({
   name: 'upgrade:2-19:synchronize-myah-campaign-page-layout',
@@ -75,6 +88,8 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
         campaignViews.map(({ universalIdentifier }) => universalIdentifier),
       ),
       viewField: campaignViewFieldUniversalIdentifiers,
+        objectMetadata: campaignInfluencerObjects,
+        fieldMetadata: campaignInfluencerFields,
     };
 
     await this.synchronizeSourceControlledMyahMetadataService.synchronizeWorkspace(
@@ -103,6 +118,9 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
           ]),
         },
       },
+    );
+    await args.dataSource.query(
+      'UPDATE "campaignCreator" SET "isDirectlyAdded" = TRUE WHERE "isDirectlyAdded" IS NULL',
     );
   }
 }
