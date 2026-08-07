@@ -88,19 +88,20 @@ const RECORD_PAGE_FIELDS_VIEW_NAME_BY_OBJECT: Partial<
   brandBrainPage: 'brandBrainPageRecordPageFields',
   creator: 'creatorRecordPageFields',
 };
-
 const buildRecordPageWidgetConfigurations = ({
   widgetType,
   layoutObjectName,
   standardObjectMetadataRelatedEntityIds,
   fieldUniversalIdentifier,
   fieldsViewUniversalIdentifier,
+  viewUniversalIdentifier,
 }: {
   widgetType: WidgetType;
   layoutObjectName: AllStandardObjectName | null;
   standardObjectMetadataRelatedEntityIds: BuildStandardFlatPageLayoutWidgetMetadataMapsArgs['standardObjectMetadataRelatedEntityIds'];
   fieldUniversalIdentifier?: string;
   fieldsViewUniversalIdentifier?: string;
+  viewUniversalIdentifier?: string;
 }): {
   configuration: AllPageLayoutWidgetConfiguration;
   universalConfiguration: CreateStandardPageLayoutWidgetContext['universalConfiguration'];
@@ -123,6 +124,29 @@ const buildRecordPageWidgetConfigurations = ({
       standardObjectMetadataRelatedEntityIds,
       fieldUniversalIdentifier,
     });
+  }
+
+  if (
+    widgetType === WidgetType.RECORD_TABLE &&
+    isDefined(layoutObjectName) &&
+    isDefined(viewUniversalIdentifier)
+  ) {
+    const view = Object.values(
+      standardObjectMetadataRelatedEntityIds[layoutObjectName].views,
+    ).find((candidate) => candidate.universalIdentifier === viewUniversalIdentifier);
+    if (!view) {
+      throw new Error(`Record table view ${viewUniversalIdentifier} is not defined`);
+    }
+    return {
+      configuration: {
+        configurationType: WidgetConfigurationType.RECORD_TABLE,
+        viewId: view.id,
+      },
+      universalConfiguration: {
+        configurationType: WidgetConfigurationType.RECORD_TABLE,
+        viewId: viewUniversalIdentifier,
+      },
+    };
   }
 
   const configurationType = WIDGET_TYPE_TO_CONFIGURATION_TYPE[widgetType];
@@ -330,6 +354,7 @@ const computeRecordPageWidgets = ({
             layoutObjectName: widgetObjectName,
             standardObjectMetadataRelatedEntityIds,
             fieldUniversalIdentifier: widget.fieldUniversalIdentifier,
+            viewUniversalIdentifier: widget.viewUniversalIdentifier,
             fieldsViewUniversalIdentifier: widget.fieldsViewUniversalIdentifier,
           });
 

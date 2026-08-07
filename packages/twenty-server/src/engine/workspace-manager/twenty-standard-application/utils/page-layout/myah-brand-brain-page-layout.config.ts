@@ -187,7 +187,7 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
           type: WidgetType.FIELDS,
           gridPosition: GRID_POSITIONS.FULL_WIDTH,
           position: VERTICAL_LIST_LAYOUT_POSITIONS.SECOND,
-          fieldsViewUniversalIdentifier: '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
+          fieldsViewUniversalIdentifier: '1f3b89db-d915-44fc-82bf-f7e1bd1fc630',
         },
       },
     },
@@ -220,6 +220,8 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
           type: WidgetType.RECORD_TABLE,
           objectUniversalIdentifier:
             MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+          viewUniversalIdentifier:
+            'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b',
           gridPosition: GRID_POSITIONS.FULL_WIDTH,
           position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
         },

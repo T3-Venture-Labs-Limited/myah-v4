@@ -18,6 +18,7 @@ export type StandardPageLayoutWidgetConfig = {
   conditionalAvailabilityExpression?: string | null;
   fieldUniversalIdentifier?: string;
   fieldsViewUniversalIdentifier?: string;
+  viewUniversalIdentifier?: string;
   objectUniversalIdentifier?: string;
 };
 
@@ -49,6 +50,7 @@ export type StandardRecordPageWidgetConfig = {
   conditionalAvailabilityExpression?: string | null;
   fieldUniversalIdentifier?: string;
   fieldsViewUniversalIdentifier?: string;
+  viewUniversalIdentifier?: string;
   objectUniversalIdentifier?: string;
 };
 
