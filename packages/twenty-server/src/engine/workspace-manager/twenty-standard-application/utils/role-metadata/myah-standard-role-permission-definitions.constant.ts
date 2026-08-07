@@ -28,6 +28,25 @@ const buildObjectPermissionDefinition = ({
   canDestroyObjectRecords: false,
 });
 
+const buildReadOnlyObjectPermissionDefinition = ({
+  roleUniversalIdentifier,
+  objectMetadataUniversalIdentifier,
+}: {
+  roleUniversalIdentifier: string;
+  objectMetadataUniversalIdentifier: string;
+}) => ({
+  universalIdentifier: uuidv5(
+    `${roleUniversalIdentifier}:${objectMetadataUniversalIdentifier}`,
+    ROLE_UNIVERSAL_IDENTIFIER_NAMESPACE,
+  ),
+  roleUniversalIdentifier,
+  objectMetadataUniversalIdentifier,
+  canReadObjectRecords: true,
+  canUpdateObjectRecords: false,
+  canSoftDeleteObjectRecords: false,
+  canDestroyObjectRecords: false,
+});
+
 export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
   ...[
     MYAH_STANDARD_OBJECTS.brandBrainPage.universalIdentifier,
@@ -44,7 +63,6 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
     MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
     MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
     MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
-    MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
     MYAH_STANDARD_OBJECTS.promotedAsset.universalIdentifier,
     MYAH_STANDARD_OBJECTS.offer.universalIdentifier,
     MYAH_STANDARD_OBJECTS.outreachSequence.universalIdentifier,
@@ -57,6 +75,11 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
       objectMetadataUniversalIdentifier,
     }),
   ),
+  buildReadOnlyObjectPermissionDefinition({
+    roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+    objectMetadataUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
+  }),
 ] as const;
 
 const PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS = [
@@ -85,8 +108,8 @@ const PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS = [
   'd68083f5-0db1-5c77-ac35-640a2fdb1f3f',
 ] as const;
 
-export const MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS =
-  PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.map(
+export const MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS = [
+  ...PROTECTED_CREATOR_FIELD_UNIVERSAL_IDENTIFIERS.map(
     (fieldMetadataUniversalIdentifier) => ({
       universalIdentifier: uuidv5(
         `${MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER}:${MYAH_STANDARD_OBJECTS.creator.universalIdentifier}:${fieldMetadataUniversalIdentifier}`,
@@ -100,4 +123,18 @@ export const MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS =
       canReadFieldValue: false,
       canUpdateFieldValue: false,
     }),
-  );
+  ),
+  {
+    universalIdentifier: uuidv5(
+      `${MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER}:${MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier}:${MYAH_STANDARD_OBJECTS.campaignCreator.fields.isDirectlyAdded.universalIdentifier}`,
+      ROLE_UNIVERSAL_IDENTIFIER_NAMESPACE,
+    ),
+    roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+    objectMetadataUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+    fieldMetadataUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.campaignCreator.fields.isDirectlyAdded.universalIdentifier,
+    canReadFieldValue: false,
+    canUpdateFieldValue: false,
+  },
+] as const;
