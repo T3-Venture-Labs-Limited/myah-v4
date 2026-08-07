@@ -199,6 +199,10 @@ export class CampaignInfluencerService {
     });
   }
 
+  private membershipToken(creatorListId: string, creatorId: string, campaignIds: readonly string[], version = '') {
+    return createHash('sha256').update(`${creatorListId}:${creatorId}:${[...campaignIds].sort().join(',')}:${version}`).digest('hex');
+  }
+
   async creatorListMembershipRemovalImpact(input: { creatorListId: string; creatorId: string }, authContext: WorkspaceAuthContext, manager?: WorkspaceEntityManager) {
     const run = async (transactionManager?: WorkspaceEntityManager) => {
       const options = this.permissionOptions(authContext);
@@ -218,7 +222,7 @@ export class CampaignInfluencerService {
         const hasOtherListSource = allMemberships.some((membership) => membership.creatorListId !== input.creatorListId && attachedIds.has(membership.creatorListId));
         if (row?.isDirectlyAdded !== true && !hasOtherListSource) affected.push(attachment.campaignId);
       }
-      return { affectedCampaignIds: affected.sort(), requiresConfirmation: affected.length > 0, confirmationToken: this.membershipToken(input.creatorListId, input.creatorId, affected) };
+      return { affectedCampaignIds: affected.sort(), requiresConfirmation: affected.length > 0, confirmationToken: this.membershipToken(input.creatorListId, input.creatorId, affected, `${existingMembership.id}:${attached.map((row) => row.id).sort().join(',')}`) };
     };
     return manager ? run(manager) : this.globalWorkspaceOrmManager.executeInWorkspaceContext(run, authContext);
   }
@@ -237,7 +241,7 @@ export class CampaignInfluencerService {
       let attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
       attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
-      const membership = await creatorLists.save({ creatorListId: input.creatorListId, creatorId: input.creatorId }, {}, manager);
+      const membership = await creatorLists.findOne({ where: { creatorListId: input.creatorListId, creatorId: input.creatorId } }, manager) ?? await creatorLists.save({ creatorListId: input.creatorListId, creatorId: input.creatorId }, {}, manager);
       const creatorRows = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
       for (const attachment of attached) {
         const existing = await creatorRows.findOne({ where: { campaignId: attachment.campaignId, creatorId: input.creatorId } }, manager);
