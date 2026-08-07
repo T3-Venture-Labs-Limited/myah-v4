@@ -5,6 +5,7 @@ import {
   buildMyahBrandBrainPageStandardFlatObjectMetadata,
   buildMyahBrandBrainUpdateProposalStandardFlatObjectMetadata,
   buildMyahCampaignCreatorListStandardFlatObjectMetadata,
+  buildMyahCreatorListStandardFlatObjectMetadata,
   buildMyahCampaignCreatorStandardFlatObjectMetadata,
   buildMyahCampaignStandardFlatObjectMetadata,
   buildMyahCreatorListMemberStandardFlatObjectMetadata,
