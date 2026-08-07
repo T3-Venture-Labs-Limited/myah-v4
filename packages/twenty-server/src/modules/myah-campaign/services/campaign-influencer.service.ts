@@ -126,7 +126,7 @@ export class CampaignInfluencerService {
   async attachCampaignCreatorLists(input: { campaignId: string; creatorListIds: readonly string[] }, authContext: WorkspaceAuthContext) {
     return this.executeTransaction(authContext, async (manager) => {
       const ids = [...new Set(input.creatorListIds)];
-      const options = await this.authorizeTargets(authContext, input.campaignId, [], ids, manager);
+      const options = await this.authorizeTargets(authContext, input.campaignId, [], ids, undefined);
       this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
       const creatorLists = await this.repository(authContext, 'creatorList', options);
       for (const creatorListId of ids) await creatorLists.findOne({ where: { id: creatorListId }, lock: { mode: 'pessimistic_write' } }, manager);
@@ -245,7 +245,6 @@ export class CampaignInfluencerService {
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const campaigns = await this.repository(authContext, 'campaign', options);
       const creatorLists = await this.repository(authContext, 'creatorListMember', this.intentPermissionOptions());
-      this.assertObjectPermission(options, 'creatorListMember', 'canUpdateObjectRecords');
       let attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
       attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
@@ -269,8 +268,9 @@ export class CampaignInfluencerService {
       for (const creatorId of creatorIds) if (!(await creators.findOne({ where: { id: creatorId } }, manager))) throw new Error('Creator not found');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const campaigns = await this.repository(authContext, 'campaign', options);
-      const attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
+      let attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
+      attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       const members = await this.repository(authContext, 'creatorListMember', this.intentPermissionOptions());
       const rows = [];
       for (const creatorId of creatorIds) {
@@ -289,7 +289,6 @@ export class CampaignInfluencerService {
   async removeCreatorListMemberIntent(input: { creatorListId: string; creatorId: string; confirmedCampaignIds: readonly string[]; confirmationToken?: string }, authContext: WorkspaceAuthContext) {
     return this.executeTransaction(authContext, async (manager) => {
       const options = this.permissionOptions(authContext);
-      this.assertObjectPermission(options, 'creatorListMember', 'canSoftDeleteObjectRecords');
       this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const lists = await this.repository(authContext, 'creatorList', options);
