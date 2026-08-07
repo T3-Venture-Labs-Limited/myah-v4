@@ -4,14 +4,15 @@ import { type WorkspacePreQueryHookInstance } from 'src/engine/api/graphql/works
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { CampaignInfluencerService } from 'src/modules/myah-campaign/services/campaign-influencer.service';
 
-type MembershipMutationPayload = { input?: { creatorListId?: string; creatorId?: string }; filter?: { creatorListId?: { eq?: string }; creatorId?: { eq?: string } } };
+type MembershipMutationPayload = { data?: { creatorListId?: string; creatorId?: string } | Array<{ creatorListId?: string; creatorId?: string }>; id?: string; filter?: Record<string, unknown> };
 
 @Injectable()
 @WorkspaceQueryHook('creatorListMember.createOne')
 export class MyahCreatorListMemberCreateOnePreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(private readonly service: CampaignInfluencerService) {}
   async execute(authContext: WorkspaceAuthContext, _objectName: string, payload: MembershipMutationPayload) {
-    await this.service.assertGenericMembershipMutationAllowed(payload.input?.creatorListId, authContext);
+    const rows = Array.isArray(payload.data) ? payload.data : [payload.data];
+    for (const row of rows) await this.service.assertGenericMembershipMutationAllowed(row?.creatorListId, authContext);
     return payload;
   }
 }
@@ -24,8 +25,8 @@ export class MyahCreatorListMemberCreateManyPreQueryHook extends MyahCreatorList
 @WorkspaceQueryHook('creatorListMember.deleteOne')
 export class MyahCreatorListMemberDeleteOnePreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(private readonly service: CampaignInfluencerService) {}
-  async execute(authContext: WorkspaceAuthContext, _objectName: string, payload: MembershipMutationPayload) {
-    await this.service.assertGenericMembershipMutationAllowed(payload.filter?.creatorListId?.eq, authContext);
+    const creatorListId = (payload.filter?.creatorListId as { eq?: string } | undefined)?.eq;
+    await this.service.assertGenericMembershipMutationAllowed(creatorListId, authContext);
     return payload;
   }
 }

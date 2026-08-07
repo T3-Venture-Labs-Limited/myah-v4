@@ -178,7 +178,8 @@ export class CampaignInfluencerService {
       directCreatorIds: creatorRows.filter((r) => r.isDirectlyAdded).map((r) => r.creatorId!),
       listMembersByListId: byList,
     });
-    return { ...impact, confirmationToken: this.confirmationToken({ ...input, affectedCreatorIds: impact.affectedCreatorIds }) };
+    const attachmentVersion = attachmentRows.filter((row) => row.creatorListId === input.creatorListId).map((row) => row.id).join(',');
+    return { ...impact, confirmationToken: createHash('sha256').update(`${input.campaignId}:${input.creatorListId}:${attachmentVersion}:${impact.affectedCreatorIds.join(',')}`).digest('hex') };
   }
 
   async campaignCreatorListRemovalImpact(input: { campaignId: string; creatorListId: string }, authContext: WorkspaceAuthContext) {
@@ -233,8 +234,7 @@ export class CampaignInfluencerService {
     return this.executeTransaction(authContext, async (manager) => {
       const options = this.permissionOptions(authContext);
       const lists = await this.repository(authContext, 'creatorList', options);
-      const targets = await this.repository(authContext, 'creator', options);
-      if (!(await lists.findOne({ where: { id: input.creatorListId } }, manager))) throw new Error('Creator list not found');
+      if (!(await lists.findOne({ where: { id: input.creatorListId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Creator list not found');
       if (!(await targets.findOne({ where: { id: input.creatorId } }, manager))) throw new Error('Creator not found');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const campaigns = await this.repository(authContext, 'campaign', options);
