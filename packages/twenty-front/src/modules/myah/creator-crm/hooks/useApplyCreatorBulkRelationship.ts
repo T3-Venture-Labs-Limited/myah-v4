@@ -53,7 +53,7 @@ const getCreatorListIdsFromStoreFieldName = (storeFieldName: string) => {
   }
 };
 const ADD_CREATOR_LIST_MEMBERS_INTENT = gql`
-  mutation AddCreatorListMembersIntent($input: CreatorListMembershipIntentInput!) {
+  mutation AddCreatorListMembersIntent($input: CreatorListMembersIntentInput!) {
     addCreatorListMembersIntent(input: $input) { id creatorListId creatorId }
   }
 `;
