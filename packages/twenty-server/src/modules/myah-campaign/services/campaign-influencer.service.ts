@@ -127,6 +127,9 @@ export class CampaignInfluencerService {
     return this.executeTransaction(authContext, async (manager) => {
       const ids = [...new Set(input.creatorListIds)];
       const options = await this.authorizeTargets(authContext, input.campaignId, [], ids, manager);
+      this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
+      const creatorLists = await this.repository(authContext, 'creatorList', options);
+      for (const creatorListId of ids) await creatorLists.findOne({ where: { id: creatorListId }, lock: { mode: 'pessimistic_write' } }, manager);
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const writeAttachments = await this.repository(authContext, 'campaignCreatorList', this.intentPermissionOptions());
       const creators = await this.repository(authContext, 'campaignCreator', options);
@@ -232,6 +235,7 @@ export class CampaignInfluencerService {
   async addCreatorListMemberIntent(input: { creatorListId: string; creatorId: string }, authContext: WorkspaceAuthContext) {
     return this.executeTransaction(authContext, async (manager) => {
       const options = this.permissionOptions(authContext);
+      this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
       const lists = await this.repository(authContext, 'creatorList', options);
       const targets = await this.repository(authContext, 'creator', options);
       if (!(await lists.findOne({ where: { id: input.creatorListId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Creator list not found');
@@ -256,6 +260,7 @@ export class CampaignInfluencerService {
     return this.executeTransaction(authContext, async (manager) => {
       const creatorIds = [...new Set(input.creatorIds)].sort();
       const options = this.permissionOptions(authContext);
+      this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
       const lists = await this.repository(authContext, 'creatorList', options);
       const creators = await this.repository(authContext, 'creator', options);
       if (!(await lists.findOne({ where: { id: input.creatorListId }, lock: { mode: 'pessimistic_write' } }, manager))) throw new Error('Creator list not found');
@@ -283,6 +288,7 @@ export class CampaignInfluencerService {
     return this.executeTransaction(authContext, async (manager) => {
       const options = this.permissionOptions(authContext);
       this.assertObjectPermission(options, 'creatorListMember', 'canSoftDeleteObjectRecords');
+      this.assertObjectPermission(options, 'creatorList', 'canUpdateObjectRecords');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const campaigns = await this.repository(authContext, 'campaign', options);
       const attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
