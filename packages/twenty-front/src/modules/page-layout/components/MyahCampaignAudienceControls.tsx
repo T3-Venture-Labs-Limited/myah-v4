@@ -36,8 +36,13 @@ const DETACH = gql`
     detachCampaignCreatorList(input: $input) { campaignCreatorLists { id creatorListId } }
   }
 `;
-
-export const MyahCampaignAudienceControls = ({ campaignId }: { campaignId: string }) => {
+export const MyahCampaignAudienceControls = ({
+  campaignId,
+  onAudienceChanged,
+}: {
+  campaignId: string;
+  onAudienceChanged?: () => Promise<unknown>;
+}) => {
   const [picker, setPicker] = useState<'list' | 'creator' | null>(null);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(null);
@@ -65,7 +70,7 @@ export const MyahCampaignAudienceControls = ({ campaignId }: { campaignId: strin
   );
   const attachedLists = data?.campaignInfluencerSnapshot?.campaignCreatorLists ?? [];
   const removalImpact = impact?.campaignCreatorListRemovalImpact;
-  const refresh = async () => { await refetch(); };
+  const refresh = async () => { await refetch(); await onAudienceChanged?.(); };
   const submitList = async () => {
     if (!selectedListId) return;
     await attach({ variables: { input: { campaignId, creatorListIds: [selectedListId] } } });

@@ -348,7 +348,7 @@ const MyahCampaignOperationsData = ({
       </div>
 
       {campaignPermissions.canUpdateObjectRecords ? (
-        <MyahCampaignAudienceControls key={campaignId} campaignId={campaignId} />
+        <MyahCampaignAudienceControls key={campaignId} campaignId={campaignId} onAudienceChanged={refetchAudience} />
       ) : null}
       {blockers.map((blocker) => (
         <InlineBanner key={blocker} color="danger" message={blocker} />
