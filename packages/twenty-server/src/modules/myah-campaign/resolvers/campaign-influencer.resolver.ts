@@ -13,6 +13,7 @@ import {
   CampaignInfluencerCampaignInput,
   CampaignInfluencerSnapshotDTO,
   CampaignCreatorListDTO,
+  CreatorListMemberDTO,
   CreatorListMembershipIntentInput,
   CreatorListMembershipRemovalImpactDTO,
   RemoveCreatorListMemberIntentInput,
@@ -66,7 +67,7 @@ export class CampaignInfluencerResolver {
     return this.service.creatorListMembershipRemovalImpact(input, getWorkspaceAuthContext());
   }
 
-  @Mutation(() => CampaignCreatorListDTO)
+  @Mutation(() => CreatorListMemberDTO)
   async addCreatorListMemberIntent(@Args('input') input: CreatorListMembershipIntentInput) {
     return this.service.addCreatorListMemberIntent(input, getWorkspaceAuthContext());
   }

@@ -129,3 +129,13 @@ export class CreatorListMembershipRemovalImpactDTO {
   confirmationToken?: string;
 }
  
+ 
+@ObjectType()
+export class CreatorListMemberDTO {
+  @Field(() => UUIDScalarType)
+  id!: string;
+  @Field(() => UUIDScalarType)
+  creatorListId!: string;
+  @Field(() => UUIDScalarType)
+  creatorId!: string;
+}
