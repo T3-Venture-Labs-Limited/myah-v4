@@ -234,8 +234,9 @@ export class CampaignInfluencerService {
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
       const campaigns = await this.repository(authContext, 'campaign', options);
       const creatorLists = await this.repository(authContext, 'creatorListMember', this.intentPermissionOptions());
-      const attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
+      let attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
+      attached = (await attachments.find({ where: { creatorListId: input.creatorListId } }, manager)).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
       const membership = await creatorLists.save({ creatorListId: input.creatorListId, creatorId: input.creatorId }, {}, manager);
       const creatorRows = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
       for (const attachment of attached) {
