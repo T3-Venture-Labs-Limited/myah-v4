@@ -317,21 +317,57 @@ export class MetronomeClientService {
     stripeCollectionMethod: 'charge_automatically';
   }): Promise<void> {
     const client = this.getClient();
+    let writeError: unknown;
 
-    await this.execute(() =>
-      client.v1.customers.setBillingConfigurations({
-        data: [
-          {
-            billing_provider: input.billingProviderType,
-            configuration: {
-              stripe_collection_method: input.stripeCollectionMethod,
-              stripe_customer_id: input.stripeCustomerId,
+    try {
+      await client.v1.customers.setBillingConfigurations(
+        {
+          data: [
+            {
+              billing_provider: input.billingProviderType,
+              configuration: {
+                stripe_collection_method: input.stripeCollectionMethod,
+                stripe_customer_id: input.stripeCustomerId,
+              },
+              customer_id: input.customerId,
+              delivery_method_id: input.deliveryMethodId,
             },
-            customer_id: input.customerId,
-            delivery_method_id: input.deliveryMethodId,
-          },
-        ],
-      }),
+          ],
+        },
+        { maxRetries: 0 },
+      );
+    } catch (error) {
+      writeError = error;
+    }
+
+    let current: MetronomeBillingConfiguration | null;
+
+    try {
+      current = await this.getBillingConfiguration(input.customerId);
+    } catch (error) {
+      if (writeError !== undefined) {
+        throw this.toWriteException(writeError);
+      }
+
+      throw error;
+    }
+
+    if (
+      current?.billingProviderType === input.billingProviderType &&
+      current.deliveryMethod === 'direct_to_billing_provider' &&
+      current.deliveryMethodId === input.deliveryMethodId &&
+      current.stripeCustomerId === input.stripeCustomerId &&
+      current.stripeCollectionMethod === input.stripeCollectionMethod
+    ) {
+      return;
+    }
+
+    if (writeError !== undefined) {
+      throw this.toWriteException(writeError);
+    }
+
+    throw new MetronomeClientException(
+      MetronomeClientExceptionCode.REQUEST_FAILED,
     );
   }
 

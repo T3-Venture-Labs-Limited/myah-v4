@@ -20,7 +20,7 @@ import {
 
 type InstallationRepository = Pick<
   Repository<MyahWorkspaceInstallationEntity>,
-  'findOneBy' | 'update'
+  'findOneBy' | 'manager' | 'update'
 >;
 
 export type MetronomeManagedEmailContract = Readonly<{
@@ -50,37 +50,50 @@ export class MetronomeWorkspaceCustomerService {
         MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
       );
     }
-    const installation = await this.installationRepository.findOneBy({
-      workspaceId,
-    });
-    if (!installation?.metronomeCustomerId) {
-      throw new Error('Workspace Metronome customer is not configured');
-    }
     const expectedDeliveryMethodId = this.twentyConfigService.get(
       'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
     );
-    const existing = await this.metronomeClientService.getBillingConfiguration(
-      installation.metronomeCustomerId,
-    );
-    if (existing) {
-      if (
-        existing.billingProviderType !== 'stripe' ||
-        existing.deliveryMethod !== 'direct_to_billing_provider' ||
-        existing.deliveryMethodId !== expectedDeliveryMethodId ||
-        existing.id.trim() === '' ||
-        existing.stripeCustomerId !== stripeCustomerId ||
-        existing.stripeCollectionMethod !== 'charge_automatically'
-      ) {
-        throw new Error('Metronome billing configuration mismatch');
+
+    return this.installationRepository.manager.transaction(async (manager) => {
+      const installation = await manager.findOne(
+        MyahWorkspaceInstallationEntity,
+        {
+          lock: { mode: 'pessimistic_write' },
+          where: { workspaceId },
+        },
+      );
+
+      if (!installation?.metronomeCustomerId) {
+        throw new Error('Workspace Metronome customer is not configured');
       }
-      return existing;
-    }
-    return this.metronomeClientService.createBillingConfiguration({
-      customerId: installation.metronomeCustomerId,
-      billingProviderType: 'stripe',
-      deliveryMethodId: expectedDeliveryMethodId,
-      stripeCustomerId,
-      stripeCollectionMethod: 'charge_automatically',
+
+      const existing =
+        await this.metronomeClientService.getBillingConfiguration(
+          installation.metronomeCustomerId,
+        );
+
+      if (existing) {
+        if (
+          existing.billingProviderType !== 'stripe' ||
+          existing.deliveryMethod !== 'direct_to_billing_provider' ||
+          existing.deliveryMethodId !== expectedDeliveryMethodId ||
+          existing.id.trim() === '' ||
+          existing.stripeCustomerId !== stripeCustomerId ||
+          existing.stripeCollectionMethod !== 'charge_automatically'
+        ) {
+          throw new Error('Metronome billing configuration mismatch');
+        }
+
+        return existing;
+      }
+
+      return this.metronomeClientService.createBillingConfiguration({
+        customerId: installation.metronomeCustomerId,
+        billingProviderType: 'stripe',
+        deliveryMethodId: expectedDeliveryMethodId,
+        stripeCustomerId,
+        stripeCollectionMethod: 'charge_automatically',
+      });
     });
   }
 

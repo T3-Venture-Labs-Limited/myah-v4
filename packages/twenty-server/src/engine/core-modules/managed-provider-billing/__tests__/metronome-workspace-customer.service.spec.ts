@@ -52,9 +52,15 @@ describe('MetronomeWorkspaceCustomerService', () => {
     workspace?: Partial<WorkspaceEntity> | null;
   }) => {
     const installationRepository: jest.Mocked<
-      Pick<Repository<MyahWorkspaceInstallationEntity>, 'findOneBy' | 'update'>
+      Pick<
+        Repository<MyahWorkspaceInstallationEntity>,
+        'findOneBy' | 'manager' | 'update'
+      >
     > = {
       findOneBy: jest.fn(),
+      manager: {
+        transaction: jest.fn(),
+      } as unknown as Repository<MyahWorkspaceInstallationEntity>['manager'],
       update: jest.fn().mockResolvedValue({ affected: updateAffected }),
     };
     installations.forEach((installation) => {
@@ -824,12 +830,21 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
   const stripeCustomerId = 'cus_workspace';
 
   const createBillingConfigService = (existingConfiguration: unknown) => {
+    const lockedFindOne = jest.fn().mockResolvedValue({
+      workspaceId,
+      metronomeCustomerId: 'metronome-customer-id',
+      stripeCustomerId,
+    });
+    const transaction = jest.fn((callback) =>
+      callback({ findOne: lockedFindOne }),
+    );
     const installationRepository = {
       findOneBy: jest.fn().mockResolvedValue({
         workspaceId,
         metronomeCustomerId: 'metronome-customer-id',
         stripeCustomerId,
       }),
+      manager: { transaction },
       update: jest.fn(),
     };
     const metronomeClientService = {
@@ -860,12 +875,17 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
       ),
       installationRepository,
       metronomeClientService,
+      lockedFindOne,
     };
   };
 
   it('creates the exact Stripe charge-automatically configuration before contract mutation', async () => {
-    const { service, metronomeClientService } =
-      createBillingConfigService(null);
+    const {
+      installationRepository,
+      lockedFindOne,
+      service,
+      metronomeClientService,
+    } = createBillingConfigService(null);
 
     await expect(
       service.ensureStripeBillingConfiguration(workspaceId, stripeCustomerId),
@@ -880,6 +900,14 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
         stripeCustomerId,
         stripeCollectionMethod: 'charge_automatically',
       }),
+    );
+    expect(installationRepository.manager.transaction).toHaveBeenCalledTimes(1);
+    expect(lockedFindOne).toHaveBeenCalledWith(
+      MyahWorkspaceInstallationEntity,
+      {
+        lock: { mode: 'pessimistic_write' },
+        where: { workspaceId },
+      },
     );
   });
 

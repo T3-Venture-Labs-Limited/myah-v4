@@ -1343,14 +1343,101 @@ describe('MetronomeClientService', () => {
     );
   });
 
-  it('creates the exact current Stripe billing configuration', async () => {
-    const setBillingConfigurations = jest.fn().mockResolvedValue({
-      data: [{ id: 'billing-config-id' }],
-    });
+  it.each([
+    ['after a successful write', undefined],
+    ['after a response-lost write', { status: 500 }],
+  ])(
+    'creates and verifies the exact current Stripe billing configuration %s',
+    async (_, writeError) => {
+      const setBillingConfigurations =
+        writeError === undefined
+          ? jest.fn().mockResolvedValue({
+              data: [{ id: 'billing-config-id' }],
+            })
+          : jest.fn().mockRejectedValue(writeError);
+      const retrieveBillingConfigurations = jest.fn().mockResolvedValue({
+        data: [
+          {
+            archived_at: null,
+            billing_provider: 'stripe',
+            configuration: {
+              stripe_collection_method: 'charge_automatically',
+              stripe_customer_id: 'cus_123',
+            },
+            customer_id: 'customer-id',
+            delivery_method: 'direct_to_billing_provider',
+            delivery_method_configuration: {},
+            delivery_method_id: 'delivery-method-id',
+            id: 'billing-config-id',
+          },
+        ],
+      });
+      metronomeConstructor.mockImplementation(
+        () =>
+          ({
+            v1: {
+              customers: {
+                retrieveBillingConfigurations,
+                setBillingConfigurations,
+              },
+            },
+          }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      await expect(
+        service.createBillingConfiguration({
+          billingProviderType: 'stripe',
+          customerId: 'customer-id',
+          deliveryMethodId: 'delivery-method-id',
+          stripeCollectionMethod: 'charge_automatically',
+          stripeCustomerId: 'cus_123',
+        }),
+      ).resolves.toBeUndefined();
+      expect(setBillingConfigurations).toHaveBeenCalledWith(
+        {
+          data: [
+            {
+              billing_provider: 'stripe',
+              configuration: {
+                stripe_collection_method: 'charge_automatically',
+                stripe_customer_id: 'cus_123',
+              },
+              customer_id: 'customer-id',
+              delivery_method_id: 'delivery-method-id',
+            },
+          ],
+        },
+        { maxRetries: 0 },
+      );
+      expect(retrieveBillingConfigurations).toHaveBeenCalledWith({
+        customer_id: 'customer-id',
+      });
+    },
+  );
+
+  it('keeps an unresolved current billing-configuration write uncertain', async () => {
+    const setBillingConfigurations = jest
+      .fn()
+      .mockRejectedValue({ status: 500 });
+    const retrieveBillingConfigurations = jest
+      .fn()
+      .mockResolvedValue({ data: [] });
     metronomeConstructor.mockImplementation(
       () =>
         ({
-          v1: { customers: { setBillingConfigurations } },
+          v1: {
+            customers: {
+              retrieveBillingConfigurations,
+              setBillingConfigurations,
+            },
+          },
         }) as unknown as Metronome,
     );
     const service = new MetronomeClientService({
@@ -1369,20 +1456,10 @@ describe('MetronomeClientService', () => {
         stripeCollectionMethod: 'charge_automatically',
         stripeCustomerId: 'cus_123',
       }),
-    ).resolves.toBeUndefined();
-    expect(setBillingConfigurations).toHaveBeenCalledWith({
-      data: [
-        {
-          billing_provider: 'stripe',
-          configuration: {
-            stripe_collection_method: 'charge_automatically',
-            stripe_customer_id: 'cus_123',
-          },
-          customer_id: 'customer-id',
-          delivery_method_id: 'delivery-method-id',
-        },
-      ],
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
     });
+    expect(setBillingConfigurations).toHaveBeenCalledTimes(1);
   });
 
   it('retrieves and normalizes the exact current Stripe billing configuration', async () => {
