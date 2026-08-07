@@ -242,27 +242,40 @@ export const useApplyCreatorBulkRelationship = () => {
       creatorListId,
       creatorListMemberIdsToRemove,
       creatorIdsToRemove,
+      confirmedCampaignIds = [],
+      confirmationToken,
     }: {
       creatorListId: string;
       creatorListMemberIdsToRemove: string[];
       creatorIdsToRemove: string[];
+      confirmedCampaignIds?: string[];
+      confirmationToken?: string;
     }) => {
       if (creatorListMemberIdsToRemove.length === 0) {
         return { removedCount: 0, wasPartial: false };
       }
 
-      const destroyedCreatorListMembers = await destroyCreatorListMembers({
-        recordIdsToDestroy: creatorListMemberIdsToRemove,
-        skipOptimisticEffect: true,
-      }).catch(() => {
+      await Promise.all(
+        creatorIdsToRemove.map((creatorId) =>
+          removeCreatorListMemberIntent({
+            variables: {
+              input: {
+                creatorListId,
+                creatorId,
+                confirmedCampaignIds,
+                confirmationToken,
+              },
+            },
+          }),
+        ),
+      ).catch(() => {
         enqueueErrorSnackBar({
           message: t`Failed to remove creators from this list.`,
         });
         throw new Error('Creator List membership removal failed');
       });
-      const wasPartial =
-        destroyedCreatorListMembers.length !==
-        creatorListMemberIdsToRemove.length;
+      const removedCount = creatorIdsToRemove.length;
+      const wasPartial = false;
 
       removeCreatorListMembersFromCache({
         creatorListId,
@@ -285,7 +298,7 @@ export const useApplyCreatorBulkRelationship = () => {
       }
 
       return {
-        removedCount: destroyedCreatorListMembers.length,
+        removedCount,
         wasPartial,
       };
     },
