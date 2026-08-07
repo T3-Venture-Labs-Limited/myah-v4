@@ -134,7 +134,7 @@ export const MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS = [
       MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
     fieldMetadataUniversalIdentifier:
       MYAH_STANDARD_OBJECTS.campaignCreator.fields.isDirectlyAdded.universalIdentifier,
-    canReadFieldValue: false,
+    canReadFieldValue: true,
     canUpdateFieldValue: false,
   },
 ] as const;

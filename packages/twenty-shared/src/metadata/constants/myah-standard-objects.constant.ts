@@ -551,10 +551,10 @@ export const MYAH_STANDARD_OBJECTS = {
       campaignInfluencers: {
         universalIdentifier: 'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b',
         viewFields: {
-          creator: { universalIdentifier: '730b323f-fae3-57e2-8e2e-62963106850a' },
-          stage: { universalIdentifier: '427aad82-7fe4-516d-99b3-8d00161534f6' },
+          creator: { universalIdentifier: 'd2fa2cd5-9df0-4e85-85b8-47f5ed2a2a71' },
+          stage: { universalIdentifier: '8d5e6b5f-125e-4f3f-9c73-2f52208b2897' },
           isDirectlyAdded: {
-            universalIdentifier: 'bb5ae5e6-2f0a-4d13-9f7e-4af0f7f95c5a',
+            universalIdentifier: 'e26a2ba0-7cd6-46b8-a4a5-d74716f98e3c',
           },
         },
       },
@@ -766,7 +766,7 @@ export const MYAH_STANDARD_OBJECTS = {
         universalIdentifier: '1f3b89db-d915-44fc-82bf-f7e1bd1fc630',
         viewFields: {
           campaignCreatorLists: {
-            universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2c',
+            universalIdentifier: 'b2e85f41-2f5a-4c33-bb24-bc3a1f8ac7df',
           },
         },
       },
