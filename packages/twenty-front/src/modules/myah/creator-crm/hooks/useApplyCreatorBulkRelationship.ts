@@ -190,6 +190,10 @@ export const useApplyCreatorBulkRelationship = () => {
       creatorIdsToAdd: string[];
     }) => {
       if (creatorIdsToAdd.length === 0) return;
+      if (creatorIdsToAdd.length > 1) {
+        enqueueErrorSnackBar({ message: t`Select one creator at a time.` });
+        throw new Error('Only one creator relationship change is allowed');
+      }
       try {
         if (target.kind === 'creator-list') {
           await Promise.all(
@@ -201,7 +205,7 @@ export const useApplyCreatorBulkRelationship = () => {
           );
         } else {
           await addDirectCampaignCreators({
-            variables: { input: { campaignId: target.id, creatorIds: creatorIdsToAdd } },
+            variables: { input: { campaignId: target.id, creatorIds: [creatorIdsToAdd[0]] } },
           });
         }
       } catch {
@@ -235,24 +239,22 @@ export const useApplyCreatorBulkRelationship = () => {
       if (creatorListMemberIdsToRemove.length === 0) {
         return { removedCount: 0, wasPartial: false };
       }
+      if (creatorIdsToRemove.length > 1) {
+        enqueueErrorSnackBar({ message: t`Select one creator at a time.` });
+        throw new Error('Only one creator relationship change is allowed');
+      }
 
-      await Promise.all(
-        creatorIdsToRemove.map((creatorId) =>
-          removeCreatorListMemberIntent({
-            variables: {
-              input: {
-                creatorListId,
-                creatorId,
-                confirmedCampaignIds,
-                confirmationToken,
-              },
-            },
-          }),
-        ),
-      ).catch(() => {
-        enqueueErrorSnackBar({
-          message: t`Failed to remove creators from this list.`,
-        });
+      await removeCreatorListMemberIntent({
+        variables: {
+          input: {
+            creatorListId,
+            creatorId: creatorIdsToRemove[0],
+            confirmedCampaignIds,
+            confirmationToken,
+          },
+        },
+      }).catch(() => {
+        enqueueErrorSnackBar({ message: t`Failed to remove creators from this list.` });
         throw new Error('Creator List membership removal failed');
       });
       const removedCount = creatorIdsToRemove.length;
