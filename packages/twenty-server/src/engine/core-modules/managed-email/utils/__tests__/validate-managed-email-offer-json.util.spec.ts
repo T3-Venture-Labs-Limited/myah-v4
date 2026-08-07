@@ -106,6 +106,13 @@ describe('managed email offer snapshot transformers', () => {
     expect(restored.expiresAt.toISOString()).toBe('2026-08-06T12:15:00.000Z');
   });
 
+  it('preserves null snapshots for nullable offer columns', () => {
+    expect(managedEmailProposalSnapshotTransformer.to(null)).toBeNull();
+    expect(managedEmailProposalSnapshotTransformer.from(null)).toBeNull();
+    expect(managedEmailQuoteSnapshotTransformer.to(null)).toBeNull();
+    expect(managedEmailQuoteSnapshotTransformer.from(null)).toBeNull();
+  });
+
   it.each(requiredQuoteFields)('rejects a quote missing %s', (field) => {
     const invalid = { ...quote } as Record<string, unknown>;
 

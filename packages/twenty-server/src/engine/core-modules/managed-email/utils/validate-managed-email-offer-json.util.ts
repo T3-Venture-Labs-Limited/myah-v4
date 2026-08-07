@@ -150,7 +150,14 @@ export const validateManagedEmailQuoteSnapshot = (
   return value as ManagedEmailQuote;
 };
 
-const proposalSnapshotFromJson = (value: unknown): ManagedEmailProposal => {
+const proposalSnapshotToJson = (value: unknown): ManagedEmailProposal | null =>
+  value === null ? null : validateManagedEmailProposalSnapshot(value);
+
+const proposalSnapshotFromJson = (
+  value: unknown,
+): ManagedEmailProposal | null => {
+  if (value === null) return null;
+
   const snapshot = validateManagedEmailProposalSnapshot(value);
 
   return {
@@ -160,7 +167,12 @@ const proposalSnapshotFromJson = (value: unknown): ManagedEmailProposal => {
   };
 };
 
-const quoteSnapshotFromJson = (value: unknown): ManagedEmailQuote => {
+const quoteSnapshotToJson = (value: unknown): ManagedEmailQuote | null =>
+  value === null ? null : validateManagedEmailQuoteSnapshot(value);
+
+const quoteSnapshotFromJson = (value: unknown): ManagedEmailQuote | null => {
+  if (value === null) return null;
+
   const snapshot = validateManagedEmailQuoteSnapshot(value);
 
   return {
@@ -170,11 +182,11 @@ const quoteSnapshotFromJson = (value: unknown): ManagedEmailQuote => {
 };
 
 export const managedEmailProposalSnapshotTransformer: ValueTransformer = {
-  to: validateManagedEmailProposalSnapshot,
+  to: proposalSnapshotToJson,
   from: proposalSnapshotFromJson,
 };
 export const managedEmailQuoteSnapshotTransformer: ValueTransformer = {
-  to: validateManagedEmailQuoteSnapshot,
+  to: quoteSnapshotToJson,
   from: quoteSnapshotFromJson,
 };
 

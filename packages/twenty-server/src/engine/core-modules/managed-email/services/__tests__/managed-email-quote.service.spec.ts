@@ -6,6 +6,7 @@ import { ManagedEmailQuoteService } from 'src/engine/core-modules/managed-email/
 import { type ManagedEmailCatalog } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 import { type ManagedEmailProposal } from 'src/engine/core-modules/managed-email/types/managed-email-proposal.type';
 import { minimumCustomerPriceMinorUnits } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-catalog.util';
+import { managedEmailQuoteSnapshotTransformer } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-offer-json.util';
 
 const paymentProcessing = {
   currency: 'USD' as const,
@@ -198,6 +199,7 @@ describe('ManagedEmailQuoteService', () => {
     expect(quote.disclosures).toEqual(proposal.disclosures);
     expect(Object.isFrozen(quote)).toBe(true);
     expect(Object.isFrozen(quote.lines)).toBe(true);
+    expect(() => managedEmailQuoteSnapshotTransformer.to(quote)).not.toThrow();
   });
 
   it('preserves prewarmed inventory identity and exact provider costs', () => {
