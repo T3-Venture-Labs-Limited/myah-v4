@@ -123,6 +123,7 @@ const buildRecordPageWidgetConfigurations = ({
       objectName: layoutObjectName,
       standardObjectMetadataRelatedEntityIds,
       fieldUniversalIdentifier,
+      viewUniversalIdentifier,
     });
   }
 
@@ -254,15 +255,16 @@ const buildFieldsWidgetConfiguration = ({
     },
   };
 };
-
 const buildFieldWidgetConfiguration = ({
   objectName,
   standardObjectMetadataRelatedEntityIds,
   fieldUniversalIdentifier,
+  viewUniversalIdentifier,
 }: {
   objectName: AllStandardObjectName;
   standardObjectMetadataRelatedEntityIds: BuildStandardFlatPageLayoutWidgetMetadataMapsArgs['standardObjectMetadataRelatedEntityIds'];
   fieldUniversalIdentifier: string;
+  viewUniversalIdentifier?: string;
 }): {
   configuration: AllPageLayoutWidgetConfiguration;
   universalConfiguration: CreateStandardPageLayoutWidgetContext['universalConfiguration'];
@@ -282,16 +284,25 @@ const buildFieldWidgetConfiguration = ({
 
   const fieldMetadataId = fieldName ? (fields[fieldName]?.id ?? null) : null;
 
+  const view = viewUniversalIdentifier
+      Object.values(standardObjectMetadataRelatedEntityIds)
+        .flatMap((metadata) => Object.values(metadata.views))
+        .find(
+          (candidate) => candidate.universalIdentifier === viewUniversalIdentifier,
+        )
+    : undefined;
   return {
     configuration: {
       configurationType: WidgetConfigurationType.FIELD,
       fieldMetadataId: fieldMetadataId ?? fieldUniversalIdentifier,
-      fieldDisplayMode: FieldDisplayMode.CARD,
+      fieldDisplayMode: view ? FieldDisplayMode.TABLE : FieldDisplayMode.CARD,
+      ...(view ? { viewId: view.id } : {}),
     },
     universalConfiguration: {
       configurationType: WidgetConfigurationType.FIELD,
       fieldMetadataId: fieldUniversalIdentifier,
-      fieldDisplayMode: FieldDisplayMode.CARD,
+      fieldDisplayMode: view ? FieldDisplayMode.TABLE : FieldDisplayMode.CARD,
+      ...(view ? { viewId: viewUniversalIdentifier } : {}),
     },
   };
 };
