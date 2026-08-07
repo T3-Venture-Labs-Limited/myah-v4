@@ -12,10 +12,12 @@ import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/t
 const audienceObjects = new Set([
   MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
   MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
+  MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
 ]);
 const audienceFields = new Set([
   ...Object.values(MYAH_STANDARD_OBJECTS.campaignCreator.fields).map(({ universalIdentifier }) => universalIdentifier),
   ...Object.values(MYAH_STANDARD_OBJECTS.campaignCreatorList.fields).map(({ universalIdentifier }) => universalIdentifier),
+  ...Object.values(MYAH_STANDARD_OBJECTS.creatorListMember.fields).map(({ universalIdentifier }) => universalIdentifier),
 ]);
 const audienceIndexes = new Set([
   MYAH_STANDARD_OBJECTS.campaignCreator.indexes.creatorCampaignUniqueIndex.universalIdentifier,
