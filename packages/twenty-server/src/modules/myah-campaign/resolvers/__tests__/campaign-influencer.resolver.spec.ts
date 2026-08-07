@@ -7,10 +7,10 @@ describe('CampaignInfluencerResolver', () => {
   const authContext = { workspace: { id: 'workspace' } } as never;
   const service = {
     snapshot: jest.fn(),
-    attachCreatorLists: jest.fn(),
-    addDirectCreators: jest.fn(),
+    attachCampaignCreatorLists: jest.fn(),
+    addDirectCampaignCreators: jest.fn(),
     campaignCreatorListRemovalImpact: jest.fn(),
-    detachCreatorList: jest.fn(),
+    detachCampaignCreatorList: jest.fn(),
   };
 
   beforeEach(() => {
@@ -20,10 +20,10 @@ describe('CampaignInfluencerResolver', () => {
 
   it.each([
     ['campaignInfluencerSnapshot', 'snapshot'],
-    ['attachCampaignCreatorLists', 'attachCreatorLists'],
-    ['addDirectCampaignCreators', 'addDirectCreators'],
+    ['attachCampaignCreatorLists', 'attachCampaignCreatorLists'],
+    ['addDirectCampaignCreators', 'addDirectCampaignCreators'],
     ['campaignCreatorListRemovalImpact', 'campaignCreatorListRemovalImpact'],
-    ['detachCampaignCreatorList', 'detachCreatorList'],
+    ['detachCampaignCreatorList', 'detachCampaignCreatorList'],
   ])('delegates %s with server auth context', async (method, serviceMethod) => {
     const resolver = new CampaignInfluencerResolver(service as never);
     service[serviceMethod as keyof typeof service].mockResolvedValue({});

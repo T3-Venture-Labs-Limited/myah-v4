@@ -5,29 +5,14 @@ import { type WorkspacePostQueryHookInstance } from 'src/engine/api/graphql/work
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { CampaignInfluencerService } from 'src/modules/myah-campaign/services/campaign-influencer.service';
 
-type MembershipRecord = {
-  creatorListId: string;
-  creatorId: string;
-};
+type MembershipRecord = { id?: string; creatorListId: string; creatorId: string };
 
-@Injectable()
-@WorkspaceQueryHook({
-  key: 'creatorListMember.createOne',
-  type: WorkspaceQueryHookType.POST_HOOK,
-})
-export class MyahCreatorListMemberCreatePostQueryHook
-  implements WorkspacePostQueryHookInstance
-{
-  constructor(private readonly influencerService: CampaignInfluencerService) {}
-
-  async execute(
-    authContext: WorkspaceAuthContext,
-    _objectName: string,
-    payload: MembershipRecord[],
-  ): Promise<void> {
+abstract class MembershipHook implements WorkspacePostQueryHookInstance {
+  constructor(protected readonly influencerService: CampaignInfluencerService) {}
+  protected async propagate(authContext: WorkspaceAuthContext, payload: MembershipRecord[], removed = false) {
     for (const membership of payload) {
       await this.influencerService.syncCreatorListMembership(
-        membership,
+        removed ? { ...membership, removed: true } : membership,
         authContext,
       );
     }
@@ -35,25 +20,25 @@ export class MyahCreatorListMemberCreatePostQueryHook
 }
 
 @Injectable()
-@WorkspaceQueryHook({
-  key: 'creatorListMember.deleteOne',
-  type: WorkspaceQueryHookType.POST_HOOK,
-})
-export class MyahCreatorListMemberDeletePostQueryHook
-  implements WorkspacePostQueryHookInstance
-{
-  constructor(private readonly influencerService: CampaignInfluencerService) {}
+@WorkspaceQueryHook({ key: 'creatorListMember.createOne', type: WorkspaceQueryHookType.POST_HOOK })
+export class MyahCreatorListMemberCreatePostQueryHook extends MembershipHook {
+  async execute(authContext: WorkspaceAuthContext, _objectName: string, payload: MembershipRecord[]) { await this.propagate(authContext, payload); }
+}
 
-  async execute(
-    authContext: WorkspaceAuthContext,
-    _objectName: string,
-    payload: MembershipRecord[],
-  ): Promise<void> {
-    for (const membership of payload) {
-      await this.influencerService.syncCreatorListMembership(
-        { ...membership, removed: true },
-        authContext,
-      );
-    }
-  }
+@Injectable()
+@WorkspaceQueryHook({ key: 'creatorListMember.createMany', type: WorkspaceQueryHookType.POST_HOOK })
+export class MyahCreatorListMemberCreateManyPostQueryHook extends MembershipHook {
+  async execute(authContext: WorkspaceAuthContext, _objectName: string, payload: MembershipRecord[]) { await this.propagate(authContext, payload); }
+}
+
+@Injectable()
+@WorkspaceQueryHook({ key: 'creatorListMember.deleteOne', type: WorkspaceQueryHookType.POST_HOOK })
+export class MyahCreatorListMemberDeletePostQueryHook extends MembershipHook {
+  async execute(authContext: WorkspaceAuthContext, _objectName: string, payload: MembershipRecord[]) { await this.propagate(authContext, payload, true); }
+}
+
+@Injectable()
+@WorkspaceQueryHook({ key: 'creatorListMember.deleteMany', type: WorkspaceQueryHookType.POST_HOOK })
+export class MyahCreatorListMemberDeleteManyPostQueryHook extends MembershipHook {
+  async execute(authContext: WorkspaceAuthContext, _objectName: string, payload: MembershipRecord[]) { await this.propagate(authContext, payload, true); }
 }

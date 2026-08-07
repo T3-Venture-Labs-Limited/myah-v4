@@ -40,9 +40,11 @@ export class CampaignCreatorListRemovalImpactInput extends CampaignInfluencerCam
 export class DetachCampaignCreatorListInput extends CampaignCreatorListRemovalImpactInput {
   @Field(() => [UUIDScalarType])
   @IsArray()
-  @ArrayMaxSize(MAX_IDS)
   @IsUUID('4', { each: true })
   confirmedCreatorIds!: string[];
+
+  @Field({ nullable: true })
+  confirmationToken?: string;
 }
 
 @ObjectType()
@@ -88,4 +90,7 @@ export class CampaignCreatorListRemovalImpactDTO {
 
   @Field(() => [UUIDScalarType])
   affectedCreatorIds!: string[];
+
+  @Field({ nullable: true })
+  confirmationToken?: string;
 }

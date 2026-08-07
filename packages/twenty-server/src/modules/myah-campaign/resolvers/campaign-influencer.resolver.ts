@@ -32,14 +32,14 @@ export class CampaignInfluencerResolver {
   async attachCampaignCreatorLists(
     @Args('input') input: AttachCampaignCreatorListsInput,
   ): Promise<CampaignInfluencerSnapshotDTO> {
-    return this.service.attachCreatorLists(input, getWorkspaceAuthContext());
+    return this.service.attachCampaignCreatorLists(input, getWorkspaceAuthContext());
   }
 
   @Mutation(() => CampaignInfluencerSnapshotDTO)
   async addDirectCampaignCreators(
     @Args('input') input: AddDirectCampaignCreatorsInput,
   ): Promise<CampaignInfluencerSnapshotDTO> {
-    return this.service.addDirectCreators(input, getWorkspaceAuthContext());
+    return this.service.addDirectCampaignCreators(input, getWorkspaceAuthContext());
   }
 
   @Query(() => CampaignCreatorListRemovalImpactDTO)
@@ -56,6 +56,6 @@ export class CampaignInfluencerResolver {
   async detachCampaignCreatorList(
     @Args('input') input: DetachCampaignCreatorListInput,
   ): Promise<CampaignInfluencerSnapshotDTO> {
-    return this.service.detachCreatorList(input, getWorkspaceAuthContext());
+    return this.service.detachCampaignCreatorList(input, getWorkspaceAuthContext());
   }
 }
