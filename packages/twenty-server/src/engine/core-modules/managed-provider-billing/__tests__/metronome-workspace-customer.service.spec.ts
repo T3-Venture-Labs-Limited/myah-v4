@@ -841,7 +841,15 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
       }),
     };
     const workspaceRepository = { findOneBy: jest.fn() };
-    const config = { get: jest.fn().mockReturnValue(true) };
+    const config = {
+      get: jest.fn((key: string) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID') {
+          return 'delivery-method-id';
+        }
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    };
 
     return {
       service: new MetronomeWorkspaceCustomerService(
@@ -868,6 +876,7 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
       expect.objectContaining({
         customerId: 'metronome-customer-id',
         billingProviderType: 'stripe',
+        deliveryMethodId: 'delivery-method-id',
         stripeCustomerId,
         stripeCollectionMethod: 'charge_automatically',
       }),
@@ -878,6 +887,8 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
     const existing = {
       id: 'billing-config-id',
       billingProviderType: 'stripe',
+      deliveryMethod: 'direct_to_billing_provider',
+      deliveryMethodId: 'delivery-method-id',
       stripeCustomerId,
       stripeCollectionMethod: 'charge_automatically',
     };
@@ -895,6 +906,8 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
   it.each([
     ['Stripe Customer', { stripeCustomerId: 'cus_other' }],
     ['provider type', { billingProviderType: 'manual' }],
+    ['delivery method', { deliveryMethod: 'aws_sqs' }],
+    ['delivery method ID', { deliveryMethodId: 'other-delivery-method-id' }],
     ['collection method', { stripeCollectionMethod: 'send_invoice' }],
   ])(
     'rejects an existing billing configuration with mismatched %s',
@@ -902,6 +915,8 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
       const { service, metronomeClientService } = createBillingConfigService({
         id: 'billing-config-id',
         billingProviderType: 'stripe',
+        deliveryMethod: 'direct_to_billing_provider',
+        deliveryMethodId: 'delivery-method-id',
         stripeCustomerId,
         stripeCollectionMethod: 'charge_automatically',
         ...overrides,

@@ -56,17 +56,20 @@ export class MetronomeWorkspaceCustomerService {
     if (!installation?.metronomeCustomerId) {
       throw new Error('Workspace Metronome customer is not configured');
     }
+    const expectedDeliveryMethodId = this.twentyConfigService.get(
+      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+    );
     const existing = await this.metronomeClientService.getBillingConfiguration(
       installation.metronomeCustomerId,
     );
     if (existing) {
       if (
-        (existing as { billingProviderType?: string }).billingProviderType !==
-          'stripe' ||
-        (existing as { stripeCustomerId?: string }).stripeCustomerId !==
-          stripeCustomerId ||
-        (existing as { stripeCollectionMethod?: string })
-          .stripeCollectionMethod !== 'charge_automatically'
+        existing.billingProviderType !== 'stripe' ||
+        existing.deliveryMethod !== 'direct_to_billing_provider' ||
+        existing.deliveryMethodId !== expectedDeliveryMethodId ||
+        existing.id.trim() === '' ||
+        existing.stripeCustomerId !== stripeCustomerId ||
+        existing.stripeCollectionMethod !== 'charge_automatically'
       ) {
         throw new Error('Metronome billing configuration mismatch');
       }
@@ -75,6 +78,7 @@ export class MetronomeWorkspaceCustomerService {
     return this.metronomeClientService.createBillingConfiguration({
       customerId: installation.metronomeCustomerId,
       billingProviderType: 'stripe',
+      deliveryMethodId: expectedDeliveryMethodId,
       stripeCustomerId,
       stripeCollectionMethod: 'charge_automatically',
     });

@@ -54,6 +54,9 @@ export type MetronomeCurrentContract = {
 
 export type MetronomeBillingConfiguration = Readonly<{
   billingProviderType: 'stripe';
+  deliveryMethod: 'direct_to_billing_provider';
+  deliveryMethodId: string;
+  id: string;
   stripeCollectionMethod:
     | 'charge_automatically'
     | 'send_invoice'
@@ -236,17 +239,48 @@ export class MetronomeClientService {
     const client = this.getClient();
 
     try {
-      const response = await client.v1.customers.billingConfig.retrieve({
-        billing_provider_type: 'stripe',
-        customer_id: customerId,
-      });
-      const stripeCustomerId = response.data.billing_provider_customer_id;
-      const stripeCollectionMethod = response.data.stripe_collection_method;
+      const response =
+        await client.v1.customers.retrieveBillingConfigurations({
+          customer_id: customerId,
+        });
+      const configurations = response.data.filter(
+        (configuration) =>
+          configuration.archived_at === null &&
+          configuration.billing_provider === 'stripe',
+      );
+
+      if (configurations.length === 0) {
+        return null;
+      }
+
+      if (configurations.length !== 1) {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.REQUEST_FAILED,
+        );
+      }
+
+      const configuration = configurations[0];
+      const stripeCustomerId = configuration.configuration.stripe_customer_id;
+      const stripeCollectionMethod =
+        configuration.configuration.stripe_collection_method;
+      const supportedCollectionMethods = [
+        'charge_automatically',
+        'send_invoice',
+        'auto_charge_payment_intent',
+        'manually_charge_payment_intent',
+      ] as const;
 
       if (
+        configuration.customer_id !== customerId ||
+        configuration.id.trim() === '' ||
+        configuration.delivery_method !== 'direct_to_billing_provider' ||
+        configuration.delivery_method_id.trim() === '' ||
         typeof stripeCustomerId !== 'string' ||
         stripeCustomerId.trim() === '' ||
-        stripeCollectionMethod === undefined
+        typeof stripeCollectionMethod !== 'string' ||
+        !supportedCollectionMethods.includes(
+          stripeCollectionMethod as (typeof supportedCollectionMethods)[number],
+        )
       ) {
         throw new MetronomeClientException(
           MetronomeClientExceptionCode.REQUEST_FAILED,
@@ -255,14 +289,14 @@ export class MetronomeClientService {
 
       return {
         billingProviderType: 'stripe',
-        stripeCollectionMethod,
+        deliveryMethod: configuration.delivery_method,
+        deliveryMethodId: configuration.delivery_method_id,
+        id: configuration.id,
+        stripeCollectionMethod:
+          stripeCollectionMethod as MetronomeBillingConfiguration['stripeCollectionMethod'],
         stripeCustomerId,
       };
     } catch (error) {
-      if (this.getErrorStatus(error) === 404) {
-        return null;
-      }
-
       if (error instanceof MetronomeClientException) {
         throw error;
       }
@@ -278,17 +312,25 @@ export class MetronomeClientService {
   async createBillingConfiguration(input: {
     customerId: string;
     billingProviderType: 'stripe';
+    deliveryMethodId: string;
     stripeCustomerId: string;
     stripeCollectionMethod: 'charge_automatically';
   }): Promise<void> {
     const client = this.getClient();
 
     await this.execute(() =>
-      client.v1.customers.billingConfig.create({
-        customer_id: input.customerId,
-        billing_provider_customer_id: input.stripeCustomerId,
-        billing_provider_type: input.billingProviderType,
-        stripe_collection_method: input.stripeCollectionMethod,
+      client.v1.customers.setBillingConfigurations({
+        data: [
+          {
+            billing_provider: input.billingProviderType,
+            configuration: {
+              stripe_collection_method: input.stripeCollectionMethod,
+              stripe_customer_id: input.stripeCustomerId,
+            },
+            customer_id: input.customerId,
+            delivery_method_id: input.deliveryMethodId,
+          },
+        ],
       }),
     );
   }
