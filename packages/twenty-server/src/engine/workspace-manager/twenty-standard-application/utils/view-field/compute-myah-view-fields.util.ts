@@ -871,6 +871,44 @@ const qualifiedCreatorsWithEmailFields = [
   },
 ] satisfies readonly Spec<'creator', 'qualifiedCreatorsWithEmail'>[];
 
+const campaignInfluencerFields = [
+  {
+    viewName: 'campaignInfluencers',
+    viewFieldName: 'creator',
+    fieldName: 'creator',
+    position: 0,
+    isVisible: true,
+    size: 220,
+  },
+  {
+    viewName: 'campaignInfluencers',
+    viewFieldName: 'stage',
+    fieldName: 'stage',
+    position: 1,
+    isVisible: true,
+    size: 160,
+  },
+  {
+    viewName: 'campaignInfluencers',
+    viewFieldName: 'isDirectlyAdded',
+    fieldName: 'isDirectlyAdded',
+    position: 2,
+    isVisible: true,
+    size: 140,
+  },
+] satisfies readonly Spec<'campaignCreator', 'campaignInfluencers'>[];
+
+const campaignInformationCreatorListsFields = [
+  {
+    viewName: 'viewCampaignInformationCreatorLists',
+    viewFieldName: 'campaignCreatorLists',
+    fieldName: 'campaignCreatorLists',
+    position: 0,
+    isVisible: true,
+    size: 220,
+  },
+] satisfies readonly Spec<'campaign', 'viewCampaignInformationCreatorLists'>[];
+
 export const computeMyahViewFields = (
   args: Args,
 ): Record<string, FlatViewField> => ({
@@ -879,6 +917,8 @@ export const computeMyahViewFields = (
   ...buildForObject(args, 'brandBrainUpdateProposal', pendingProposalFields),
   ...buildForObject(args, 'campaign', campaignFields),
   ...buildForObject(args, 'campaign', campaignOverviewFields),
+  ...buildForObject(args, 'campaign', campaignInformationCreatorListsFields),
+  ...buildForObject(args, 'campaignCreator', campaignInfluencerFields),
   ...buildForObject(args, 'campaign', campaignInstructionsFields),
   ...buildForObject(args, 'creatorList', creatorListFields),
   ...buildForObject(args, 'creator', creatorRecordPageFields),
@@ -904,6 +944,12 @@ export const computeMyahCampaignViewFields = (args: Args) =>
   Object.fromEntries(
     Object.entries(computeMyahViewFields(args)).filter(([key]) =>
       key.startsWith('campaign'),
+    ),
+  );
+export const computeMyahCampaignCreatorViewFields = (args: Args) =>
+  Object.fromEntries(
+    Object.entries(computeMyahViewFields(args)).filter(([key]) =>
+      key.startsWith('campaignCreator'),
     ),
   );
 export const computeMyahCreatorListViewFields = (args: Args) =>

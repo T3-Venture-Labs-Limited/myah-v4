@@ -58,6 +58,9 @@ export class CampaignInfluencerService {
   private async repository<T extends RecordRow>(authContext: WorkspaceAuthContext, name: string, options: PermissionOptions) {
     return this.globalWorkspaceOrmManager.getRepository<T>(authContext.workspace.id, name, options);
   }
+  private intentPermissionOptions(): PermissionOptions {
+    return { shouldBypassPermissionChecks: true };
+  }
 
   private async executeTransaction<T>(authContext: WorkspaceAuthContext, callback: (manager: WorkspaceEntityManager) => Promise<T>) {
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
@@ -95,18 +98,19 @@ export class CampaignInfluencerService {
       const ids = [...new Set(input.creatorListIds)];
       const options = await this.authorizeTargets(authContext, input.campaignId, [], ids, manager);
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
+      const writeAttachments = await this.repository(authContext, 'campaignCreatorList', this.intentPermissionOptions());
       const creators = await this.repository(authContext, 'campaignCreator', options);
+      const writeCreators = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
       const members = await this.repository<RecordRow>(authContext, 'creatorListMember', options);
       const current = await attachments.find({ where: { campaignId: input.campaignId } }, manager);
-      await attachments.upsert(ids.map((creatorListId) => ({ campaignId: input.campaignId, creatorListId })), ['campaignId', 'creatorListId'], manager);
+      await writeAttachments.upsert(ids.map((creatorListId) => ({ campaignId: input.campaignId, creatorListId })), { conflictPaths: ['campaignId', 'creatorListId'], indexPredicate: '"deletedAt" IS NULL' }, manager);
       const all = [...new Set([...current.map((r) => r.creatorListId!), ...ids])];
       const memberRows = await members.find({ where: all.map((creatorListId) => ({ creatorListId })) }, manager);
       const byList = Object.fromEntries(all.map((id) => [id, memberRows.filter((m) => m.creatorListId === id).map((m) => m.creatorId!)]));
-      const existing = await creators.find({ where: { campaignId: input.campaignId } }, manager);
       const desired = new Set(all.flatMap((id) => byList[id] ?? []));
-      const stale = existing.filter((r) => r.isDirectlyAdded !== true && !desired.has(r.creatorId!));
-      if (stale.length) await creators.softDelete(stale.map((r) => ({ campaignId: input.campaignId, creatorId: r.creatorId })), manager);
-      if (desired.size) await creators.upsert([...desired].map((creatorId) => ({ campaignId: input.campaignId, creatorId, isDirectlyAdded: false })), ['campaignId', 'creatorId'], manager);
+      const existing = await creators.find({ where: { campaignId: input.campaignId } }, manager);
+      const missing = [...desired].filter((creatorId) => !existing.some((row) => row.creatorId === creatorId));
+      if (missing.length) await writeCreators.upsert(missing.map((creatorId) => ({ campaignId: input.campaignId, creatorId, isDirectlyAdded: false })), { conflictPaths: ['campaignId', 'creatorId'], indexPredicate: '"deletedAt" IS NULL' }, manager);
       return this.snapshotInTransaction(input.campaignId, authContext, manager);
     });
   }
@@ -114,14 +118,13 @@ export class CampaignInfluencerService {
   async addDirectCampaignCreators(input: { campaignId: string; creatorIds: readonly string[] }, authContext: WorkspaceAuthContext) {
     return this.executeTransaction(authContext, async (manager) => {
       const ids = [...new Set(input.creatorIds)];
-      const options = await this.authorizeTargets(authContext, input.campaignId, ids, [], manager);
-      const creators = await this.repository(authContext, 'campaignCreator', options);
-      await creators.upsert(ids.map((creatorId) => ({ campaignId: input.campaignId, creatorId, isDirectlyAdded: true })), ['campaignId', 'creatorId'], manager);
+      await this.authorizeTargets(authContext, input.campaignId, ids, [], manager);
+      const creators = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
+      await creators.upsert(ids.map((creatorId) => ({ campaignId: input.campaignId, creatorId, isDirectlyAdded: true })), { conflictPaths: ['campaignId', 'creatorId'], indexPredicate: '"deletedAt" IS NULL' }, manager);
       return this.snapshotInTransaction(input.campaignId, authContext, manager);
     });
   }
 
-  async attachCreatorLists(input: { campaignId: string; creatorListIds: readonly string[] }, authContext: WorkspaceAuthContext) { return this.attachCampaignCreatorLists(input, authContext); }
   async addDirectCreators(input: { campaignId: string; creatorIds: readonly string[] }, authContext: WorkspaceAuthContext) { return this.addDirectCampaignCreators(input, authContext); }
 
   private confirmationToken(input: { campaignId: string; creatorListId: string; affectedCreatorIds: readonly string[] }) { return createHash('sha256').update(`${input.campaignId}:${input.creatorListId}:${[...input.affectedCreatorIds].sort().join(',')}`).digest('hex'); }
@@ -157,10 +160,9 @@ export class CampaignInfluencerService {
       const impact = await this.calculateImpact(input, authContext, manager);
       const confirmed = new Set(input.confirmedCreatorIds);
       if (impact.requiresConfirmation && (input.confirmationToken !== impact.confirmationToken || confirmed.size !== impact.affectedCreatorIds.length || impact.affectedCreatorIds.some((id) => !confirmed.has(id)))) throw new Error('Exact final-source Creator confirmation is required');
-      const options = this.permissionOptions(authContext);
-      const creators = await this.repository(authContext, 'campaignCreator', options);
-      const attachments = await this.repository(authContext, 'campaignCreatorList', options);
-      if (impact.affectedCreatorIds.length) await creators.softDelete(impact.affectedCreatorIds.map((creatorId) => ({ campaignId: input.campaignId, creatorId })), manager);
+      const creators = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
+      const attachments = await this.repository(authContext, 'campaignCreatorList', this.intentPermissionOptions());
+      for (const creatorId of impact.affectedCreatorIds) await creators.softDelete({ campaignId: input.campaignId, creatorId }, manager);
       await attachments.softDelete({ campaignId: input.campaignId, creatorListId: input.creatorListId }, manager);
       return this.snapshotInTransaction(input.campaignId, authContext, manager);
     });
@@ -178,18 +180,12 @@ export class CampaignInfluencerService {
       if (!(await lists.findOne({ where: { id: input.creatorListId } }, manager))) throw new Error('Creator list not found');
       if (!(await creatorsTarget.findOne({ where: { id: input.creatorId } }, manager))) throw new Error('Creator not found');
       const attachments = await this.repository(authContext, 'campaignCreatorList', options);
-      const creators = await this.repository(authContext, 'campaignCreator', options);
+      const creators = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
       const attached = await attachments.find({ where: { creatorListId: input.creatorListId } }, manager);
       for (const attachment of attached) {
         if (!input.removed) {
-          await creators.upsert({ campaignId: attachment.campaignId, creatorId: input.creatorId, isDirectlyAdded: false }, ['campaignId', 'creatorId'], manager);
-          continue;
+          await creators.upsert({ campaignId: attachment.campaignId, creatorId: input.creatorId, isDirectlyAdded: false }, { conflictPaths: ['campaignId', 'creatorId'], indexPredicate: '"deletedAt" IS NULL' }, manager);
         }
-        const other = await attachments.find({ where: { campaignId: attachment.campaignId } }, manager);
-        const listIds = other.map((r) => r.creatorListId!).filter((id) => id !== input.creatorListId);
-        const members = await this.repository(authContext, 'creatorListMember', options);
-        const hasOther = (await members.find({ where: listIds.map((creatorListId) => ({ creatorListId, creatorId: input.creatorId })) }, manager)).length > 0;
-        if (!hasOther) await creators.softDelete({ campaignId: attachment.campaignId, creatorId: input.creatorId }, manager);
       }
     });
   }

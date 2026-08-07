@@ -31,11 +31,11 @@ import { computeStandardWorkspaceMemberViewFields } from 'src/engine/workspace-m
 import {
   computeMyahBrandBrainPageViewFields,
   computeMyahBrandBrainUpdateProposalViewFields,
+  computeMyahCampaignCreatorViewFields,
   computeMyahCampaignViewFields,
   computeMyahCreatorListViewFields,
   computeMyahCreatorViewFields,
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/compute-myah-view-fields.util';
-import { type CreateStandardViewFieldArgs } from 'src/engine/workspace-manager/twenty-standard-application/utils/view-field/create-standard-view-field-flat-metadata.util';
 
 type StandardViewFieldBuilder<P extends AllStandardObjectName> = (
   args: Omit<CreateStandardViewFieldArgs<P>, 'context'>,
@@ -73,6 +73,7 @@ const STANDARD_FLAT_VIEW_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   brandBrainPage: computeMyahBrandBrainPageViewFields,
   brandBrainUpdateProposal: computeMyahBrandBrainUpdateProposalViewFields,
   campaign: computeMyahCampaignViewFields,
+  campaignCreator: computeMyahCampaignCreatorViewFields,
   creatorList: computeMyahCreatorListViewFields,
   creator: computeMyahCreatorViewFields,
 } as const satisfies {
