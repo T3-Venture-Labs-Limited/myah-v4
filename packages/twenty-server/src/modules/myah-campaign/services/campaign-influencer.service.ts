@@ -246,6 +246,10 @@ export class CampaignInfluencerService {
       for (const attachment of attached) await campaigns.findOne({ where: { id: attachment.campaignId }, lock: { mode: 'pessimistic_write' } }, manager);
       const membership = await creatorLists.save({ creatorListId: input.creatorListId, creatorId: input.creatorId }, {}, manager);
       const creatorRows = await this.repository(authContext, 'campaignCreator', this.intentPermissionOptions());
+      for (const attachment of attached) {
+        const existing = await creatorRows.findOne({ where: { campaignId: attachment.campaignId, creatorId: input.creatorId } }, manager);
+        if (!existing) await creatorRows.upsert({ campaignId: attachment.campaignId, creatorId: input.creatorId, isDirectlyAdded: false }, { conflictPaths: ['campaignId', 'creatorId'], indexPredicate: '"deletedAt" IS NULL' }, manager);
+      }
       return membership;
     });
   }
