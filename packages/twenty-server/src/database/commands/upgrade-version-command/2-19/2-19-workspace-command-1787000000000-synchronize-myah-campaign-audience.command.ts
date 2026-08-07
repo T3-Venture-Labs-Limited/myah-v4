@@ -48,6 +48,9 @@ const campaignWidgets = new Set(
     Object.values(widgets).map(({ universalIdentifier }) => universalIdentifier),
   ),
 );
+const audienceViewFilters = new Set([
+  'f4adf3a0-07bf-48f6-a5c9-20be6f1e2d93',
+]);
 @RegisteredWorkspaceCommand('2.19.0', 1787000000000)
 @Command({
   name: 'upgrade:2-19:synchronize-myah-campaign-audience',
@@ -82,6 +85,7 @@ export class SynchronizeMyahCampaignAudienceCommand extends ActiveOrSuspendedWor
         fieldMetadata: audienceFields,
         index: audienceIndexes,
         view: audienceViews,
+        viewFilter: audienceViewFilters,
         viewField: audienceViewFields,
         objectPermission: audienceObjectPermissions,
         fieldPermission: audienceFieldPermissions,

@@ -557,6 +557,12 @@ export const MYAH_STANDARD_OBJECTS = {
             universalIdentifier: 'e26a2ba0-7cd6-46b8-a4a5-d74716f98e3c',
           },
         },
+        viewFilters: {
+          campaignCurrentRecord: {
+            universalIdentifier: 'f4adf3a0-07bf-48f6-a5c9-20be6f1e2d93',
+          },
+        },
+        },
       },
     },
   },

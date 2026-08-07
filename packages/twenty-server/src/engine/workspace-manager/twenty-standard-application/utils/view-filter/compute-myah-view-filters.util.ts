@@ -5,11 +5,10 @@ import {
   type CreateStandardViewFilterArgs,
 } from './create-standard-view-filter-flat-metadata.util';
 
-type MyahViewFilterObjectName = 'brandBrainUpdateProposal' | 'creator';
-type Args = Omit<
-  CreateStandardViewFilterArgs<MyahViewFilterObjectName>,
-  'context'
->;
+type MyahViewFilterObjectName =
+  | 'brandBrainUpdateProposal'
+  | 'creator'
+  | 'campaignCreator';
 
 export const computeMyahViewFilters = (
   args: Args,
@@ -54,6 +53,25 @@ export const computeMyahViewFilters = (
               fieldName: 'email',
               operand: ViewFilterOperand.IS_NOT_EMPTY,
               value: JSON.stringify([]),
+            },
+          }),
+      }
+    : {}),
+  ...(args.objectName === 'campaignCreator'
+    ? {
+        campaignInfluencersCampaignIsCurrentRecord:
+          createStandardViewFilterFlatMetadata({
+            ...args,
+            objectName: 'campaignCreator',
+            context: {
+              viewName: 'campaignInfluencers',
+              viewFilterName: 'campaignCurrentRecord',
+              fieldName: 'campaign',
+              operand: ViewFilterOperand.IS,
+              value: JSON.stringify({
+                selectedRecordIds: [],
+                isCurrentRecordSelected: true,
+              }),
             },
           }),
       }
