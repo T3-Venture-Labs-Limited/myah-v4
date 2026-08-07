@@ -34,11 +34,10 @@ export const getCampaignListSyncChanges = ({ attachedListIds, existingCreators, 
 export type SourceRemovalImpact = { affectedCreatorIds: string[]; requiresConfirmation: boolean };
 export const getSourceRemovalImpact = ({ removedListId, directCreatorIds, listMembersByListId }: { removedListId: string; directCreatorIds: readonly string[]; listMembersByListId: Readonly<Record<string, readonly string[]>> }): SourceRemovalImpact => {
   const direct = new Set(directCreatorIds);
-  const affectedCreatorIds = [...new Set(listMembersByListId[removedListId] ?? [])].filter((creatorId) => !direct.has(creatorId) && !Object.entries(listMembersByListId).some(([id, members]) => id !== removedListId && members.includes(creatorId))).sort();
   return { affectedCreatorIds, requiresConfirmation: affectedCreatorIds.length > 0 };
 };
 
-type RecordRow = { id?: string; campaignId: string; creatorId?: string; creatorListId?: string; isDirectlyAdded?: boolean };
+type RecordRow = { id: string; campaignId: string; creatorId?: string; creatorListId?: string; isDirectlyAdded?: boolean };
 type PermissionOptions = RolePermissionConfig;
 
 @Injectable()
