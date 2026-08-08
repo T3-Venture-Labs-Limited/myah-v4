@@ -55,6 +55,7 @@ export type ActivateWorkspaceInput = {
 };
 
 export type AddDirectCampaignCreatorsInput = {
+  assignedManagedMailboxId?: InputMaybe<Scalars['UUID']['input']>;
   campaignId: Scalars['UUID']['input'];
   creatorIds: Array<Scalars['UUID']['input']>;
 };
