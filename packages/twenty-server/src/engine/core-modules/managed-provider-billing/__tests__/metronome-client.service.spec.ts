@@ -2583,6 +2583,86 @@ describe('MetronomeClientService rate-card product resolution', () => {
     });
   });
 
+  it('rejects a repeated rate-card pagination cursor', async () => {
+    const { list } = configureSdk({
+      rateCardPages: [
+        { data: [activeCard], next_page: 'repeated-page' },
+        { data: [], next_page: 'repeated-page' },
+      ],
+      schedulePages: [],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).rejects.toThrow('Metronome rate-card pagination cursor repeated');
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects rate-card pagination beyond its page limit', async () => {
+    const { list } = configureSdk({
+      rateCardPages: Array.from({ length: 101 }, (_, index) => ({
+        data: index === 0 ? [activeCard] : [],
+        next_page: `rate-card-page-${index + 1}`,
+      })),
+      schedulePages: [],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).rejects.toThrow('Metronome rate-card pagination exceeded its limit');
+    expect(list).toHaveBeenCalledTimes(100);
+  });
+
+  it('rejects a repeated rate-schedule pagination cursor', async () => {
+    const { retrieveRateSchedule } = configureSdk({
+      rateCardPages: [{ data: [activeCard], next_page: null }],
+      schedulePages: [
+        { data: [mailboxRate], next_page: 'repeated-schedule-page' },
+        { data: [], next_page: 'repeated-schedule-page' },
+      ],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).rejects.toThrow('Metronome rate-schedule pagination cursor repeated');
+    expect(retrieveRateSchedule).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects rate-schedule pagination beyond its page limit', async () => {
+    const { retrieveRateSchedule } = configureSdk({
+      rateCardPages: [{ data: [activeCard], next_page: null }],
+      schedulePages: Array.from({ length: 101 }, (_, index) => ({
+        data: index === 0 ? [mailboxRate] : [],
+        next_page: `rate-schedule-page-${index + 1}`,
+      })),
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).rejects.toThrow('Metronome rate-schedule pagination exceeded its limit');
+    expect(retrieveRateSchedule).toHaveBeenCalledTimes(100);
+  });
+
   it('proves exact active flat-rate line prices and billing frequencies', async () => {
     const { retrieveRateSchedule } = configureSdk({
       rateCardPages: [],

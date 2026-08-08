@@ -232,7 +232,10 @@ export const useApplyCreatorBulkRelationship = () => {
           if (creatorIdsToAdd.length > 0) {
             await addCreatorListMembersIntent({
               variables: {
-                input: { creatorListId: target.id, creatorIds: creatorIdsToAdd },
+                input: {
+                  creatorListId: target.id,
+                  creatorIds: creatorIdsToAdd,
+                },
               },
             });
           }

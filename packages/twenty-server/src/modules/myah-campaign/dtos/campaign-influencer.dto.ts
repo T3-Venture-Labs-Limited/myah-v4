@@ -1,5 +1,11 @@
 import { Field, InputType, ObjectType } from '@nestjs/graphql';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsUUID } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsOptional,
+  IsUUID,
+} from 'class-validator';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 
 const MAX_IDS = 500;
@@ -29,6 +35,11 @@ export class AddDirectCampaignCreatorsInput extends CampaignInfluencerCampaignIn
   @ArrayMaxSize(MAX_IDS)
   @IsUUID('4', { each: true })
   creatorIds!: string[];
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  @IsOptional()
+  @IsUUID()
+  assignedManagedMailboxId?: string | null;
 }
 
 @InputType()

@@ -244,6 +244,43 @@ describe('ManagedEmailProposalService', () => {
     ]);
   });
 
+  it('fails closed when prewarmed inventory pagination exceeds its bound', async () => {
+    const { icemailClient, service } = createService();
+    let pageCount = 0;
+
+    icemailClient.listPrewarmedBundles.mockImplementation(async () => {
+      pageCount += 1;
+
+      return pageCount <= 101
+        ? {
+            items: [
+              {
+                domain: 'creator-partners.co',
+                domainPriceCents: 1000,
+                inventoryId: `inventory-${pageCount}`,
+                mailboxCount: 1,
+                mailboxPriceCents: 250,
+                mailboxes: [
+                  {
+                    address: `maya-${pageCount}@creator-partners.co`,
+                    firstName: 'Maya',
+                    lastName: 'Chen',
+                    master: false,
+                    provider: 'GOOGLE',
+                  },
+                ],
+              },
+            ],
+          }
+        : { items: [] };
+    });
+
+    await expect(service.listPrewarmedBundles()).rejects.toThrow(
+      'Managed email prewarmed inventory pagination exceeded its limit',
+    );
+    expect(icemailClient.listPrewarmedBundles).toHaveBeenCalledTimes(100);
+  });
+
   it('rejects malformed counts, persona mismatches, and duplicate normalized addresses', async () => {
     const { service } = createService();
 

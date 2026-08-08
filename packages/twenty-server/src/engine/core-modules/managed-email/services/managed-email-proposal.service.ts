@@ -35,6 +35,7 @@ const MAX_NAME_LENGTH = 128;
 const MAX_ROLE_LENGTH = 128;
 const MAX_SIGNATURE_LENGTH = 4096;
 const MAX_LOCAL_PART_LENGTH = 64;
+const MAX_PREWARMED_INVENTORY_PAGES = 100;
 
 const DISCLOSURES = Object.freeze({
   cancellation:
@@ -110,20 +111,22 @@ export class ManagedEmailProposalService {
     observedAt: Date;
   }> {
     const bundles: IcemailPrewarmedBundle[] = [];
-    let page = 1;
-    for (;;) {
+
+    for (let page = 1; page <= MAX_PREWARMED_INVENTORY_PAGES; page += 1) {
       const result = await this.icemailClient.listPrewarmedBundles(page);
+
       if (result.items.length === 0) {
-        break;
+        return { bundles, observedAt: this.now() };
       }
       for (const bundle of result.items) {
         this.validatePrewarmedBundle(bundle);
         bundles.push(bundle);
       }
-      page += 1;
     }
 
-    return { bundles, observedAt: this.now() };
+    throw new Error(
+      'Managed email prewarmed inventory pagination exceeded its limit',
+    );
   }
 
   async createProposal(

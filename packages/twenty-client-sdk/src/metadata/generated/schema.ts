@@ -2978,10 +2978,16 @@ export interface Query {
     enterprisePortalSession?: Scalars['String']
     enterpriseCheckoutSession?: Scalars['String']
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTO
-    campaignInfluencerSnapshot: CampaignInfluencerSnapshotDTO
-    campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDTO
-    creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
-    myConnectedAccounts: ConnectedAccountPublicDTO[]
+    managedEmailOverview: ManagedEmailOverview
+    managedEmailDomains: ManagedEmailDomain[]
+    managedEmailMailboxes: ManagedEmailMailbox[]
+    managedEmailPrewarmedBundles: ManagedEmailBundle[]
+    managedEmailProposal: ManagedEmailProposal
+    managedEmailQuote: ManagedEmailQuote
+    managedEmailPrewarmedProposal: ManagedEmailProposal
+    managedEmailOperation?: ManagedEmailOperation
+    managedEmailHealthDetails?: ManagedEmailHealthDetails
+    getConnectedImapSmtpCaldavAccount: ConnectedImapSmtpCaldavAccount
     applicationConnectionProviders: ApplicationConnectionProvider[]
     checkUserExists: CheckUserExist
     checkWorkspaceInviteHashIsValid: WorkspaceInviteHashValid
@@ -3027,11 +3033,15 @@ export interface Query {
     getInviteSuggestions: InviteSuggestion[]
     findWorkspaceInvitations: WorkspaceInvitation[]
     getApprovedAccessDomains: ApprovedAccessDomain[]
+    myConnectedAccounts: ConnectedAccountPublicDTO[]
     currentWorkspace: Workspace
     getPublicWorkspaceDataByDomain: PublicWorkspaceData
     getPublicWorkspaceDataById: PublicWorkspaceDataSummary
     getViewFilterGroups: ViewFilterGroup[]
     getViewFilterGroup?: ViewFilterGroup
+    campaignInfluencerSnapshot: CampaignInfluencerSnapshotDTO
+    campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDTO
+    creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
     getPageLayoutTabs: PageLayoutTab[]
     getPageLayoutTab: PageLayoutTab
     getPageLayouts: PageLayout[]
@@ -3050,16 +3060,6 @@ export interface Query {
     findOneAgent: Agent
     getRoles: Role[]
     getSSOIdentityProviders: FindAvailableSSOIDP[]
-    getConnectedImapSmtpCaldavAccount: ConnectedImapSmtpCaldavAccount
-    managedEmailOverview: ManagedEmailOverview
-    managedEmailDomains: ManagedEmailDomain[]
-    managedEmailMailboxes: ManagedEmailMailbox[]
-    managedEmailPrewarmedBundles: ManagedEmailBundle[]
-    managedEmailProposal: ManagedEmailProposal
-    managedEmailQuote: ManagedEmailQuote
-    managedEmailPrewarmedProposal: ManagedEmailProposal
-    managedEmailOperation?: ManagedEmailOperation
-    managedEmailHealthDetails?: ManagedEmailHealthDetails
     getPageLayoutWidgets: PageLayoutWidget[]
     getPageLayoutWidget: PageLayoutWidget
     commandMenuItems: CommandMenuItem[]
@@ -3126,13 +3126,17 @@ export interface Mutation {
     uploadWorkspaceMemberProfilePicture: FileWithSignedUrl
     uploadFilesFieldFile: FileWithSignedUrl
     uploadFilesFieldFileByUniversalIdentifier: FileWithSignedUrl
-    attachCampaignCreatorLists: CampaignInfluencerSnapshotDTO
-    addDirectCampaignCreators: CampaignInfluencerSnapshotDTO
-    detachCampaignCreatorList: CampaignInfluencerSnapshotDTO
-    addCreatorListMemberIntent: CreatorListMemberDTO
-    addCreatorListMembersIntent: CreatorListMemberDTO[]
-    removeCreatorListMemberIntent: Scalars['Boolean']
-    deleteConnectedAccount: ConnectedAccountPublicDTO
+    prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup
+    completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus
+    confirmManagedEmailPrewarmedPurchase: ManagedEmailActionResult
+    confirmManagedEmailOrdinaryPurchase: ManagedEmailActionResult
+    setManagedEmailCampaignCap: ManagedEmailActionResult
+    cancelManagedEmailWarmup: ManagedEmailActionResult
+    pauseManagedEmailWarmup: ManagedEmailActionResult
+    resumeManagedEmailWarmup: ManagedEmailActionResult
+    stopManagedEmailMailbox: ManagedEmailActionResult
+    cancelManagedEmailDomainRenewal: ManagedEmailActionResult
+    saveImapSmtpCaldavAccount: ImapSmtpCaldavConnectionSuccess
     updateOneApplicationVariable: Scalars['Boolean']
     getAuthorizationUrlForSSO: GetAuthorizationUrlForSSO
     getLoginTokenFromCredentials: LoginToken
@@ -3231,6 +3235,7 @@ export interface Mutation {
     createApprovedAccessDomain: ApprovedAccessDomain
     deleteApprovedAccessDomain: Scalars['Boolean']
     validateApprovedAccessDomain: ApprovedAccessDomain
+    deleteConnectedAccount: ConnectedAccountPublicDTO
     activateWorkspace: Workspace
     updateWorkspace: Workspace
     deleteCurrentWorkspace: Workspace
@@ -3239,6 +3244,12 @@ export interface Mutation {
     updateViewFilterGroup: ViewFilterGroup
     deleteViewFilterGroup: Scalars['Boolean']
     destroyViewFilterGroup: Scalars['Boolean']
+    attachCampaignCreatorLists: CampaignInfluencerSnapshotDTO
+    addDirectCampaignCreators: CampaignInfluencerSnapshotDTO
+    detachCampaignCreatorList: CampaignInfluencerSnapshotDTO
+    addCreatorListMemberIntent: CreatorListMemberDTO
+    addCreatorListMembersIntent: CreatorListMemberDTO[]
+    removeCreatorListMemberIntent: Scalars['Boolean']
     createPageLayoutTab: PageLayoutTab
     updatePageLayoutTab: PageLayoutTab
     destroyPageLayoutTab: Scalars['Boolean']
@@ -3278,17 +3289,6 @@ export interface Mutation {
     createSAMLIdentityProvider: SetupSso
     deleteSSOIdentityProvider: DeleteSso
     editSSOIdentityProvider: EditSso
-    saveImapSmtpCaldavAccount: ImapSmtpCaldavConnectionSuccess
-    prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup
-    completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus
-    confirmManagedEmailPrewarmedPurchase: ManagedEmailActionResult
-    confirmManagedEmailOrdinaryPurchase: ManagedEmailActionResult
-    setManagedEmailCampaignCap: ManagedEmailActionResult
-    cancelManagedEmailWarmup: ManagedEmailActionResult
-    pauseManagedEmailWarmup: ManagedEmailActionResult
-    resumeManagedEmailWarmup: ManagedEmailActionResult
-    stopManagedEmailMailbox: ManagedEmailActionResult
-    cancelManagedEmailDomainRenewal: ManagedEmailActionResult
     createPageLayoutWidget: PageLayoutWidget
     updatePageLayoutWidget: PageLayoutWidget
     destroyPageLayoutWidget: Scalars['Boolean']
@@ -6511,10 +6511,16 @@ export interface QueryGenqlSelection{
     enterprisePortalSession?: { __args: {returnUrlPath?: (Scalars['String'] | null)} } | boolean | number
     enterpriseCheckoutSession?: { __args: {billingInterval?: (Scalars['String'] | null)} } | boolean | number
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTOGenqlSelection
-    campaignInfluencerSnapshot?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: CampaignInfluencerCampaignInput} })
-    campaignCreatorListRemovalImpact?: (CampaignCreatorListRemovalImpactDTOGenqlSelection & { __args: {input: CampaignCreatorListRemovalImpactInput} })
-    creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
-    myConnectedAccounts?: ConnectedAccountPublicDTOGenqlSelection
+    managedEmailOverview?: ManagedEmailOverviewGenqlSelection
+    managedEmailDomains?: ManagedEmailDomainGenqlSelection
+    managedEmailMailboxes?: ManagedEmailMailboxGenqlSelection
+    managedEmailPrewarmedBundles?: ManagedEmailBundleGenqlSelection
+    managedEmailProposal?: (ManagedEmailProposalGenqlSelection & { __args: {input: ManagedEmailProposalInput} })
+    managedEmailQuote?: (ManagedEmailQuoteGenqlSelection & { __args: {input: ManagedEmailQuoteInput} })
+    managedEmailPrewarmedProposal?: (ManagedEmailProposalGenqlSelection & { __args: {input: ManagedEmailPrewarmedProposalInput} })
+    managedEmailOperation?: (ManagedEmailOperationGenqlSelection & { __args: {input: ManagedEmailOperationInput} })
+    managedEmailHealthDetails?: (ManagedEmailHealthDetailsGenqlSelection & { __args: {input: ManagedEmailHealthDetailsInput} })
+    getConnectedImapSmtpCaldavAccount?: (ConnectedImapSmtpCaldavAccountGenqlSelection & { __args: {id: Scalars['UUID']} })
     applicationConnectionProviders?: (ApplicationConnectionProviderGenqlSelection & { __args: {applicationId: Scalars['UUID']} })
     checkUserExists?: (CheckUserExistGenqlSelection & { __args: {email: Scalars['String'], captchaToken?: (Scalars['String'] | null)} })
     checkWorkspaceInviteHashIsValid?: (WorkspaceInviteHashValidGenqlSelection & { __args: {inviteHash: Scalars['String']} })
@@ -6578,11 +6584,15 @@ export interface QueryGenqlSelection{
     getInviteSuggestions?: InviteSuggestionGenqlSelection
     findWorkspaceInvitations?: WorkspaceInvitationGenqlSelection
     getApprovedAccessDomains?: ApprovedAccessDomainGenqlSelection
+    myConnectedAccounts?: ConnectedAccountPublicDTOGenqlSelection
     currentWorkspace?: WorkspaceGenqlSelection
     getPublicWorkspaceDataByDomain?: (PublicWorkspaceDataGenqlSelection & { __args?: {origin?: (Scalars['String'] | null)} })
     getPublicWorkspaceDataById?: (PublicWorkspaceDataSummaryGenqlSelection & { __args: {id: Scalars['UUID']} })
     getViewFilterGroups?: (ViewFilterGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
     getViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String']} })
+    campaignInfluencerSnapshot?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: CampaignInfluencerCampaignInput} })
+    campaignCreatorListRemovalImpact?: (CampaignCreatorListRemovalImpactDTOGenqlSelection & { __args: {input: CampaignCreatorListRemovalImpactInput} })
+    creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     getPageLayoutTabs?: (PageLayoutTabGenqlSelection & { __args: {pageLayoutId: Scalars['String']} })
     getPageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String']} })
     getPageLayouts?: (PageLayoutGenqlSelection & { __args?: {objectMetadataId?: (Scalars['String'] | null), pageLayoutType?: (PageLayoutType | null)} })
@@ -6601,16 +6611,6 @@ export interface QueryGenqlSelection{
     findOneAgent?: (AgentGenqlSelection & { __args: {input: AgentIdInput} })
     getRoles?: RoleGenqlSelection
     getSSOIdentityProviders?: FindAvailableSSOIDPGenqlSelection
-    getConnectedImapSmtpCaldavAccount?: (ConnectedImapSmtpCaldavAccountGenqlSelection & { __args: {id: Scalars['UUID']} })
-    managedEmailOverview?: ManagedEmailOverviewGenqlSelection
-    managedEmailDomains?: ManagedEmailDomainGenqlSelection
-    managedEmailMailboxes?: ManagedEmailMailboxGenqlSelection
-    managedEmailPrewarmedBundles?: ManagedEmailBundleGenqlSelection
-    managedEmailProposal?: (ManagedEmailProposalGenqlSelection & { __args: {input: ManagedEmailProposalInput} })
-    managedEmailQuote?: (ManagedEmailQuoteGenqlSelection & { __args: {input: ManagedEmailQuoteInput} })
-    managedEmailPrewarmedProposal?: (ManagedEmailProposalGenqlSelection & { __args: {input: ManagedEmailPrewarmedProposalInput} })
-    managedEmailOperation?: (ManagedEmailOperationGenqlSelection & { __args: {input: ManagedEmailOperationInput} })
-    managedEmailHealthDetails?: (ManagedEmailHealthDetailsGenqlSelection & { __args: {input: ManagedEmailHealthDetailsInput} })
     getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
     getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
     commandMenuItems?: CommandMenuItemGenqlSelection
@@ -6650,24 +6650,6 @@ export interface QueryGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface CampaignInfluencerCampaignInput {campaignId: Scalars['UUID']}
-
-export interface CampaignCreatorListRemovalImpactInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
-
-export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID']}
-
-export interface ListAppConnectionsInput {providerName?: (Scalars['String'] | null),userWorkspaceId?: (Scalars['String'] | null),visibility?: (Scalars['String'] | null)}
-
-export interface GetApiKeyInput {id: Scalars['UUID']}
-
-export interface LogicFunctionIdInput {
-/** The id of the function. */
-id: Scalars['ID']}
-
-export interface AgentIdInput {
-/** The id of the agent. */
-id: Scalars['UUID']}
-
 export interface ManagedEmailProposalInput {mailboxCount: Scalars['Int'],personas: ManagedEmailPersonaInput[]}
 
 export interface ManagedEmailPersonaInput {displayName: Scalars['String'],localPartPreference: Scalars['String'],roleTitle?: (Scalars['String'] | null),signature: Scalars['String']}
@@ -6679,6 +6661,24 @@ export interface ManagedEmailPrewarmedProposalInput {bundleId: Scalars['String']
 export interface ManagedEmailOperationInput {operationId: Scalars['String']}
 
 export interface ManagedEmailHealthDetailsInput {resourceType: Scalars['String'],resourceId: Scalars['String']}
+
+export interface ListAppConnectionsInput {providerName?: (Scalars['String'] | null),userWorkspaceId?: (Scalars['String'] | null),visibility?: (Scalars['String'] | null)}
+
+export interface GetApiKeyInput {id: Scalars['UUID']}
+
+export interface CampaignInfluencerCampaignInput {campaignId: Scalars['UUID']}
+
+export interface CampaignCreatorListRemovalImpactInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
+
+export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID']}
+
+export interface LogicFunctionIdInput {
+/** The id of the function. */
+id: Scalars['ID']}
+
+export interface AgentIdInput {
+/** The id of the agent. */
+id: Scalars['UUID']}
 
 export interface PreviewMessageCampaignAudienceInput {listId: Scalars['String'],unsubscribeTopicId?: (Scalars['String'] | null)}
 
@@ -6720,13 +6720,17 @@ export interface MutationGenqlSelection{
     uploadWorkspaceMemberProfilePicture?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload']} })
     uploadFilesFieldFile?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataId: Scalars['String']} })
     uploadFilesFieldFileByUniversalIdentifier?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataUniversalIdentifier: Scalars['String']} })
-    attachCampaignCreatorLists?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AttachCampaignCreatorListsInput} })
-    addDirectCampaignCreators?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AddDirectCampaignCreatorsInput} })
-    detachCampaignCreatorList?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: DetachCampaignCreatorListInput} })
-    addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
-    addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
-    removeCreatorListMemberIntent?: { __args: {input: RemoveCreatorListMemberIntentInput} }
-    deleteConnectedAccount?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {id: Scalars['UUID']} })
+    prepareManagedEmailPaymentMethod?: ManagedEmailPaymentSetupGenqlSelection
+    completeManagedEmailPaymentMethod?: (ManagedEmailPaymentMethodStatusGenqlSelection & { __args: {input: ManagedEmailCompletePaymentMethodInput} })
+    confirmManagedEmailPrewarmedPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
+    confirmManagedEmailOrdinaryPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
+    setManagedEmailCampaignCap?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailCampaignCapInput} })
+    cancelManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
+    pauseManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
+    resumeManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
+    stopManagedEmailMailbox?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
+    cancelManagedEmailDomainRenewal?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailDomainActionInput} })
+    saveImapSmtpCaldavAccount?: (ImapSmtpCaldavConnectionSuccessGenqlSelection & { __args: {handle: Scalars['String'], connectionParameters: EmailAccountConnectionParameters, id?: (Scalars['UUID'] | null)} })
     updateOneApplicationVariable?: { __args: {key: Scalars['String'], value: Scalars['String'], applicationId: Scalars['UUID']} }
     getAuthorizationUrlForSSO?: (GetAuthorizationUrlForSSOGenqlSelection & { __args: {input: GetAuthorizationUrlForSSOInput} })
     getLoginTokenFromCredentials?: (LoginTokenGenqlSelection & { __args: {email: Scalars['String'], password: Scalars['String'], captchaToken?: (Scalars['String'] | null), locale?: (Scalars['String'] | null), verifyEmailRedirectPath?: (Scalars['String'] | null), origin: Scalars['String']} })
@@ -6825,6 +6829,7 @@ export interface MutationGenqlSelection{
     createApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: CreateApprovedAccessDomainInput} })
     deleteApprovedAccessDomain?: { __args: {input: DeleteApprovedAccessDomainInput} }
     validateApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: ValidateApprovedAccessDomainInput} })
+    deleteConnectedAccount?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {id: Scalars['UUID']} })
     activateWorkspace?: (WorkspaceGenqlSelection & { __args: {data: ActivateWorkspaceInput} })
     updateWorkspace?: (WorkspaceGenqlSelection & { __args: {data: UpdateWorkspaceInput} })
     deleteCurrentWorkspace?: WorkspaceGenqlSelection
@@ -6833,6 +6838,12 @@ export interface MutationGenqlSelection{
     updateViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String'], input: UpdateViewFilterGroupInput} })
     deleteViewFilterGroup?: { __args: {id: Scalars['String']} }
     destroyViewFilterGroup?: { __args: {id: Scalars['String']} }
+    attachCampaignCreatorLists?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AttachCampaignCreatorListsInput} })
+    addDirectCampaignCreators?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AddDirectCampaignCreatorsInput} })
+    detachCampaignCreatorList?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: DetachCampaignCreatorListInput} })
+    addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
+    addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
+    removeCreatorListMemberIntent?: { __args: {input: RemoveCreatorListMemberIntentInput} }
     createPageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {input: CreatePageLayoutTabInput} })
     updatePageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutTabInput} })
     destroyPageLayoutTab?: { __args: {id: Scalars['String']} }
@@ -6872,17 +6883,6 @@ export interface MutationGenqlSelection{
     createSAMLIdentityProvider?: (SetupSsoGenqlSelection & { __args: {input: SetupSAMLSsoInput} })
     deleteSSOIdentityProvider?: (DeleteSsoGenqlSelection & { __args: {input: DeleteSsoInput} })
     editSSOIdentityProvider?: (EditSsoGenqlSelection & { __args: {input: EditSsoInput} })
-    saveImapSmtpCaldavAccount?: (ImapSmtpCaldavConnectionSuccessGenqlSelection & { __args: {handle: Scalars['String'], connectionParameters: EmailAccountConnectionParameters, id?: (Scalars['UUID'] | null)} })
-    prepareManagedEmailPaymentMethod?: ManagedEmailPaymentSetupGenqlSelection
-    completeManagedEmailPaymentMethod?: (ManagedEmailPaymentMethodStatusGenqlSelection & { __args: {input: ManagedEmailCompletePaymentMethodInput} })
-    confirmManagedEmailPrewarmedPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
-    confirmManagedEmailOrdinaryPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
-    setManagedEmailCampaignCap?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailCampaignCapInput} })
-    cancelManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
-    pauseManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
-    resumeManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
-    stopManagedEmailMailbox?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
-    cancelManagedEmailDomainRenewal?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailDomainActionInput} })
     createPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {input: CreatePageLayoutWidgetInput} })
     updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
     destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
@@ -6970,15 +6970,19 @@ update: UpdateNavigationMenuItemInput}
 
 export interface UpdateNavigationMenuItemInput {folderId?: (Scalars['UUID'] | null),position?: (Scalars['Float'] | null),name?: (Scalars['String'] | null),link?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),color?: (Scalars['String'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
 
-export interface AttachCampaignCreatorListsInput {campaignId: Scalars['UUID'],creatorListIds: Scalars['UUID'][]}
+export interface ManagedEmailCompletePaymentMethodInput {setupIntentId: Scalars['String']}
 
-export interface AddDirectCampaignCreatorsInput {campaignId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+export interface ManagedEmailPurchaseInput {idempotencyKey: Scalars['String'],quoteId: Scalars['String'],quoteVersion: Scalars['String'],quoteFingerprint: Scalars['String']}
 
-export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+export interface ManagedEmailCampaignCapInput {dailyCap?: (Scalars['Int'] | null),idempotencyKey: Scalars['String'],mailboxId: Scalars['String']}
 
-export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+export interface ManagedEmailMailboxActionInput {idempotencyKey: Scalars['String'],mailboxId: Scalars['String']}
 
-export interface RemoveCreatorListMemberIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID'],confirmedCampaignIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+export interface ManagedEmailDomainActionInput {domainId: Scalars['String'],idempotencyKey: Scalars['String']}
+
+export interface EmailAccountConnectionParameters {IMAP?: (ConnectionParametersInput | null),SMTP?: (ConnectionParametersInput | null),CALDAV?: (ConnectionParametersInput | null)}
+
+export interface ConnectionParametersInput {host: Scalars['String'],port: Scalars['Float'],username?: (Scalars['String'] | null),password?: (Scalars['String'] | null),connectionSecurity?: (EmailConnectionSecurity | null)}
 
 export interface GetAuthorizationUrlForSSOInput {identityProviderId: Scalars['UUID'],workspaceInviteHash?: (Scalars['String'] | null)}
 
@@ -7200,6 +7204,16 @@ export interface CreateViewFilterGroupInput {id?: (Scalars['UUID'] | null),paren
 
 export interface UpdateViewFilterGroupInput {id?: (Scalars['UUID'] | null),parentViewFilterGroupId?: (Scalars['UUID'] | null),logicalOperator?: (ViewFilterGroupLogicalOperator | null),positionInViewFilterGroup?: (Scalars['Float'] | null),viewId?: (Scalars['UUID'] | null)}
 
+export interface AttachCampaignCreatorListsInput {campaignId: Scalars['UUID'],creatorListIds: Scalars['UUID'][]}
+
+export interface AddDirectCampaignCreatorsInput {campaignId: Scalars['UUID'],creatorIds: Scalars['UUID'][],assignedManagedMailboxId?: (Scalars['UUID'] | null)}
+
+export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+
+export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+
+export interface RemoveCreatorListMemberIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID'],confirmedCampaignIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+
 export interface CreatePageLayoutTabInput {title: Scalars['String'],position?: (Scalars['Float'] | null),pageLayoutId: Scalars['UUID'],layoutMode?: (PageLayoutTabLayoutMode | null)}
 
 export interface UpdatePageLayoutTabInput {title?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),icon?: (Scalars['String'] | null),layoutMode?: (PageLayoutTabLayoutMode | null)}
@@ -7277,20 +7291,6 @@ export interface SetupSAMLSsoInput {name: Scalars['String'],issuer: Scalars['Str
 export interface DeleteSsoInput {identityProviderId: Scalars['UUID']}
 
 export interface EditSsoInput {id: Scalars['UUID'],status: SSOIdentityProviderStatus}
-
-export interface EmailAccountConnectionParameters {IMAP?: (ConnectionParametersInput | null),SMTP?: (ConnectionParametersInput | null),CALDAV?: (ConnectionParametersInput | null)}
-
-export interface ConnectionParametersInput {host: Scalars['String'],port: Scalars['Float'],username?: (Scalars['String'] | null),password?: (Scalars['String'] | null),connectionSecurity?: (EmailConnectionSecurity | null)}
-
-export interface ManagedEmailCompletePaymentMethodInput {setupIntentId: Scalars['String']}
-
-export interface ManagedEmailPurchaseInput {idempotencyKey: Scalars['String'],quoteId: Scalars['String'],quoteVersion: Scalars['String'],quoteFingerprint: Scalars['String']}
-
-export interface ManagedEmailCampaignCapInput {dailyCap?: (Scalars['Int'] | null),idempotencyKey: Scalars['String'],mailboxId: Scalars['String']}
-
-export interface ManagedEmailMailboxActionInput {idempotencyKey: Scalars['String'],mailboxId: Scalars['String']}
-
-export interface ManagedEmailDomainActionInput {domainId: Scalars['String'],idempotencyKey: Scalars['String']}
 
 export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
 

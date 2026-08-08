@@ -6,8 +6,9 @@ import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApp
 const mockModify = jest.fn();
 const mockEvict = jest.fn();
 const mockRefetchQueries = jest.fn();
-const mockDestroyCreatorListMembers = jest.fn();
-const mockBatchCreateCreatorListMembers = jest.fn();
+const mockAddCreatorListMembersIntent = jest.fn();
+const mockRemoveCreatorListMemberIntent = jest.fn();
+const mockAddDirectCampaignCreators = jest.fn();
 const mockUpdateOneRecord = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockEnqueueWarningSnackBar = jest.fn();
@@ -43,18 +44,6 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
   }),
 }));
 
-jest.mock('@/object-record/hooks/useDestroyManyRecords', () => ({
-  useDestroyManyRecords: () => ({
-    destroyManyRecords: mockDestroyCreatorListMembers,
-  }),
-}));
-
-jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
-  useBatchCreateManyRecords: () => ({
-    batchCreateManyRecords: mockBatchCreateCreatorListMembers,
-  }),
-}));
-
 jest.mock('@/object-record/hooks/useUpdateOneRecord', () => ({
   useUpdateOneRecord: () => ({
     updateOneRecord: mockUpdateOneRecord,
@@ -75,10 +64,13 @@ describe('useApplyCreatorBulkRelationship', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseMutation.mockReturnValue([
-      jest.fn().mockResolvedValue({ data: {} }),
-    ]);
-    mockDestroyCreatorListMembers.mockResolvedValue(['membership-1']);
+    mockAddCreatorListMembersIntent.mockResolvedValue({ data: {} });
+    mockRemoveCreatorListMemberIntent.mockResolvedValue({ data: {} });
+    mockAddDirectCampaignCreators.mockResolvedValue({ data: {} });
+    mockUseMutation
+      .mockReturnValueOnce([mockAddCreatorListMembersIntent])
+      .mockReturnValueOnce([mockRemoveCreatorListMemberIntent])
+      .mockReturnValueOnce([mockAddDirectCampaignCreators]);
   });
 
   it('refreshes live List results and resets the contextual Creator table after removal', async () => {
@@ -280,21 +272,14 @@ describe('useApplyCreatorBulkRelationship', () => {
       });
     });
 
-    expect(mockBatchCreateCreatorListMembers).toHaveBeenCalledWith({
-      recordsToCreate: [
-        {
-          name: '',
-          creatorId: 'creator-1',
+    expect(mockAddDirectCampaignCreators).toHaveBeenCalledWith({
+      variables: {
+        input: {
           campaignId: 'campaign-1',
+          creatorIds: ['creator-1', 'creator-2'],
           assignedManagedMailboxId: 'managed-mailbox-1',
         },
-        {
-          name: '',
-          creatorId: 'creator-2',
-          campaignId: 'campaign-1',
-          assignedManagedMailboxId: 'managed-mailbox-1',
-        },
-      ],
+      },
     });
   });
 
@@ -328,7 +313,7 @@ describe('useApplyCreatorBulkRelationship', () => {
         assignedManagedMailboxId: 'managed-mailbox-1',
       },
     });
-    expect(mockBatchCreateCreatorListMembers).not.toHaveBeenCalled();
+    expect(mockAddDirectCampaignCreators).not.toHaveBeenCalled();
     expect(mockRefetchQueries).toHaveBeenCalledTimes(1);
   });
 

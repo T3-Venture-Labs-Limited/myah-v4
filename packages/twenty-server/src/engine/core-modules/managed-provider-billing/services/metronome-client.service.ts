@@ -23,6 +23,7 @@ import {
 } from '../types/metronome-subscription.type';
 
 const BALANCE_PAGE_LIMIT = 25;
+const METRONOME_MAX_LIST_PAGES = 100;
 
 type MetronomeBalanceResponse = ContractListBalancesResponse;
 export type MetronomeCustomerInput = {
@@ -819,9 +820,10 @@ export class MetronomeClientService {
         endingBefore?: string | null;
       }>;
     }> = [];
+    const seenPageCursors = new Set<string>();
     let nextPage: string | undefined;
 
-    do {
+    for (let page = 1; page <= METRONOME_MAX_LIST_PAGES; page += 1) {
       const response = await this.execute(() =>
         client.v1.contracts.rateCards.list({
           body: {},
@@ -830,8 +832,21 @@ export class MetronomeClientService {
       );
 
       cards.push(...(response.data as typeof cards));
-      nextPage = response.next_page ?? undefined;
-    } while (nextPage !== undefined);
+      const responseNextPage = response.next_page ?? undefined;
+
+      if (responseNextPage === undefined) {
+        nextPage = undefined;
+        break;
+      }
+      if (seenPageCursors.has(responseNextPage)) {
+        throw new Error('Metronome rate-card pagination cursor repeated');
+      }
+      seenPageCursors.add(responseNextPage);
+      nextPage = responseNextPage;
+    }
+    if (nextPage !== undefined) {
+      throw new Error('Metronome rate-card pagination exceeded its limit');
+    }
 
     const active = cards.filter((card) =>
       (card.aliases ?? []).some((entry) =>
@@ -938,9 +953,10 @@ export class MetronomeClientService {
   ): Promise<MetronomeRateCardRate[]> {
     const client = this.getClient();
     const rates: MetronomeRateCardRate[] = [];
+    const seenPageCursors = new Set<string>();
     let nextPage: string | undefined;
 
-    do {
+    for (let page = 1; page <= METRONOME_MAX_LIST_PAGES; page += 1) {
       const response = await this.execute(() =>
         client.v1.contracts.rateCards.retrieveRateSchedule({
           rate_card_id: rateCardId,
@@ -950,10 +966,19 @@ export class MetronomeClientService {
       );
 
       rates.push(...response.data);
-      nextPage = response.next_page ?? undefined;
-    } while (nextPage !== undefined);
+      const responseNextPage = response.next_page ?? undefined;
 
-    return rates;
+      if (responseNextPage === undefined) {
+        return rates;
+      }
+      if (seenPageCursors.has(responseNextPage)) {
+        throw new Error('Metronome rate-schedule pagination cursor repeated');
+      }
+      seenPageCursors.add(responseNextPage);
+      nextPage = responseNextPage;
+    }
+
+    throw new Error('Metronome rate-schedule pagination exceeded its limit');
   }
 
   private isActiveAt(

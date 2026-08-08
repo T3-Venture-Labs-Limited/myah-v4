@@ -108,6 +108,7 @@ type RecordRow = {
   creatorId?: string;
   creatorListId?: string;
   isDirectlyAdded?: boolean;
+  assignedManagedMailboxId?: string | null;
 };
 type CampaignCreatorRow = RecordRow & {
   creatorId: string;
@@ -117,6 +118,11 @@ type CampaignCreatorListRow = RecordRow & {
   creatorListId: string;
 };
 type PermissionOptions = RolePermissionConfig;
+type AddDirectCampaignCreatorsServiceInput = {
+  campaignId: string;
+  creatorIds: readonly string[];
+  assignedManagedMailboxId?: string | null;
+};
 
 @Injectable()
 export class CampaignInfluencerService {
@@ -491,7 +497,7 @@ export class CampaignInfluencerService {
   }
 
   async addDirectCampaignCreators(
-    input: { campaignId: string; creatorIds: readonly string[] },
+    input: AddDirectCampaignCreatorsServiceInput,
     authContext: WorkspaceAuthContext,
   ) {
     return this.executeTransaction(authContext, async (manager) => {
@@ -513,6 +519,11 @@ export class CampaignInfluencerService {
           campaignId: input.campaignId,
           creatorId,
           isDirectlyAdded: true,
+          ...(input.assignedManagedMailboxId !== undefined
+            ? {
+                assignedManagedMailboxId: input.assignedManagedMailboxId,
+              }
+            : {}),
         })),
         {
           conflictPaths: ['campaignId', 'creatorId'],
@@ -525,7 +536,7 @@ export class CampaignInfluencerService {
   }
 
   async addDirectCreators(
-    input: { campaignId: string; creatorIds: readonly string[] },
+    input: AddDirectCampaignCreatorsServiceInput,
     authContext: WorkspaceAuthContext,
   ) {
     return this.addDirectCampaignCreators(input, authContext);

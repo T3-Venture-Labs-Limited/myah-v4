@@ -3312,10 +3312,16 @@ type Query {
   enterprisePortalSession(returnUrlPath: String): String
   enterpriseCheckoutSession(billingInterval: String): String
   enterpriseSubscriptionStatus: EnterpriseSubscriptionStatusDTO
-  campaignInfluencerSnapshot(input: CampaignInfluencerCampaignInput!): CampaignInfluencerSnapshotDTO!
-  campaignCreatorListRemovalImpact(input: CampaignCreatorListRemovalImpactInput!): CampaignCreatorListRemovalImpactDTO!
-  creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
-  myConnectedAccounts: [ConnectedAccountPublicDTO!]!
+  managedEmailOverview: ManagedEmailOverview!
+  managedEmailDomains: [ManagedEmailDomain!]!
+  managedEmailMailboxes: [ManagedEmailMailbox!]!
+  managedEmailPrewarmedBundles: [ManagedEmailBundle!]!
+  managedEmailProposal(input: ManagedEmailProposalInput!): ManagedEmailProposal!
+  managedEmailQuote(input: ManagedEmailQuoteInput!): ManagedEmailQuote!
+  managedEmailPrewarmedProposal(input: ManagedEmailPrewarmedProposalInput!): ManagedEmailProposal!
+  managedEmailOperation(input: ManagedEmailOperationInput!): ManagedEmailOperation
+  managedEmailHealthDetails(input: ManagedEmailHealthDetailsInput!): ManagedEmailHealthDetails
+  getConnectedImapSmtpCaldavAccount(id: UUID!): ConnectedImapSmtpCaldavAccount!
   applicationConnectionProviders(applicationId: UUID!): [ApplicationConnectionProvider!]!
   checkUserExists(email: String!, captchaToken: String): CheckUserExist!
   checkWorkspaceInviteHashIsValid(inviteHash: String!): WorkspaceInviteHashValid!
@@ -3388,11 +3394,15 @@ type Query {
   getInviteSuggestions: [InviteSuggestion!]!
   findWorkspaceInvitations: [WorkspaceInvitation!]!
   getApprovedAccessDomains: [ApprovedAccessDomain!]!
+  myConnectedAccounts: [ConnectedAccountPublicDTO!]!
   currentWorkspace: Workspace!
   getPublicWorkspaceDataByDomain(origin: String): PublicWorkspaceData!
   getPublicWorkspaceDataById(id: UUID!): PublicWorkspaceDataSummary!
   getViewFilterGroups(viewId: String): [ViewFilterGroup!]!
   getViewFilterGroup(id: String!): ViewFilterGroup
+  campaignInfluencerSnapshot(input: CampaignInfluencerCampaignInput!): CampaignInfluencerSnapshotDTO!
+  campaignCreatorListRemovalImpact(input: CampaignCreatorListRemovalImpactInput!): CampaignCreatorListRemovalImpactDTO!
+  creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
   getPageLayoutTabs(pageLayoutId: String!): [PageLayoutTab!]!
   getPageLayoutTab(id: String!): PageLayoutTab!
   getPageLayouts(objectMetadataId: String, pageLayoutType: PageLayoutType): [PageLayout!]!
@@ -3411,16 +3421,6 @@ type Query {
   findOneAgent(input: AgentIdInput!): Agent!
   getRoles: [Role!]!
   getSSOIdentityProviders: [FindAvailableSSOIDP!]!
-  getConnectedImapSmtpCaldavAccount(id: UUID!): ConnectedImapSmtpCaldavAccount!
-  managedEmailOverview: ManagedEmailOverview!
-  managedEmailDomains: [ManagedEmailDomain!]!
-  managedEmailMailboxes: [ManagedEmailMailbox!]!
-  managedEmailPrewarmedBundles: [ManagedEmailBundle!]!
-  managedEmailProposal(input: ManagedEmailProposalInput!): ManagedEmailProposal!
-  managedEmailQuote(input: ManagedEmailQuoteInput!): ManagedEmailQuote!
-  managedEmailPrewarmedProposal(input: ManagedEmailPrewarmedProposalInput!): ManagedEmailProposal!
-  managedEmailOperation(input: ManagedEmailOperationInput!): ManagedEmailOperation
-  managedEmailHealthDetails(input: ManagedEmailHealthDetailsInput!): ManagedEmailHealthDetails
   getPageLayoutWidgets(pageLayoutTabId: String!): [PageLayoutWidget!]!
   getPageLayoutWidget(id: String!): PageLayoutWidget!
   commandMenuItems: [CommandMenuItem!]!
@@ -3458,40 +3458,6 @@ type Query {
   findManyPublicDomains: [PublicDomain!]!
 }
 
-input CampaignInfluencerCampaignInput {
-  campaignId: UUID!
-}
-
-input CampaignCreatorListRemovalImpactInput {
-  campaignId: UUID!
-  creatorListId: UUID!
-}
-
-input CreatorListMembershipIntentInput {
-  creatorListId: UUID!
-  creatorId: UUID!
-}
-
-input ListAppConnectionsInput {
-  providerName: String
-  userWorkspaceId: String
-  visibility: String
-}
-
-input GetApiKeyInput {
-  id: UUID!
-}
-
-input LogicFunctionIdInput {
-  """The id of the function."""
-  id: ID!
-}
-
-input AgentIdInput {
-  """The id of the agent."""
-  id: UUID!
-}
-
 input ManagedEmailProposalInput {
   mailboxCount: Int!
   personas: [ManagedEmailPersonaInput!]!
@@ -3519,6 +3485,40 @@ input ManagedEmailOperationInput {
 input ManagedEmailHealthDetailsInput {
   resourceType: String!
   resourceId: String!
+}
+
+input ListAppConnectionsInput {
+  providerName: String
+  userWorkspaceId: String
+  visibility: String
+}
+
+input GetApiKeyInput {
+  id: UUID!
+}
+
+input CampaignInfluencerCampaignInput {
+  campaignId: UUID!
+}
+
+input CampaignCreatorListRemovalImpactInput {
+  campaignId: UUID!
+  creatorListId: UUID!
+}
+
+input CreatorListMembershipIntentInput {
+  creatorListId: UUID!
+  creatorId: UUID!
+}
+
+input LogicFunctionIdInput {
+  """The id of the function."""
+  id: ID!
+}
+
+input AgentIdInput {
+  """The id of the agent."""
+  id: UUID!
 }
 
 input PreviewMessageCampaignAudienceInput {
@@ -3610,13 +3610,17 @@ type Mutation {
   uploadWorkspaceMemberProfilePicture(file: Upload!): FileWithSignedUrl!
   uploadFilesFieldFile(file: Upload!, fieldMetadataId: String!): FileWithSignedUrl!
   uploadFilesFieldFileByUniversalIdentifier(file: Upload!, fieldMetadataUniversalIdentifier: String!): FileWithSignedUrl!
-  attachCampaignCreatorLists(input: AttachCampaignCreatorListsInput!): CampaignInfluencerSnapshotDTO!
-  addDirectCampaignCreators(input: AddDirectCampaignCreatorsInput!): CampaignInfluencerSnapshotDTO!
-  detachCampaignCreatorList(input: DetachCampaignCreatorListInput!): CampaignInfluencerSnapshotDTO!
-  addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
-  addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
-  removeCreatorListMemberIntent(input: RemoveCreatorListMemberIntentInput!): Boolean!
-  deleteConnectedAccount(id: UUID!): ConnectedAccountPublicDTO!
+  prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup!
+  completeManagedEmailPaymentMethod(input: ManagedEmailCompletePaymentMethodInput!): ManagedEmailPaymentMethodStatus!
+  confirmManagedEmailPrewarmedPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
+  confirmManagedEmailOrdinaryPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
+  setManagedEmailCampaignCap(input: ManagedEmailCampaignCapInput!): ManagedEmailActionResult!
+  cancelManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
+  pauseManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
+  resumeManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
+  stopManagedEmailMailbox(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
+  cancelManagedEmailDomainRenewal(input: ManagedEmailDomainActionInput!): ManagedEmailActionResult!
+  saveImapSmtpCaldavAccount(handle: String!, connectionParameters: EmailAccountConnectionParameters!, id: UUID): ImapSmtpCaldavConnectionSuccess!
   updateOneApplicationVariable(key: String!, value: String!, applicationId: UUID!): Boolean!
   getAuthorizationUrlForSSO(input: GetAuthorizationUrlForSSOInput!): GetAuthorizationUrlForSSO!
   getLoginTokenFromCredentials(email: String!, password: String!, captchaToken: String, locale: String, verifyEmailRedirectPath: String, origin: String!): LoginToken!
@@ -3715,6 +3719,7 @@ type Mutation {
   createApprovedAccessDomain(input: CreateApprovedAccessDomainInput!): ApprovedAccessDomain!
   deleteApprovedAccessDomain(input: DeleteApprovedAccessDomainInput!): Boolean!
   validateApprovedAccessDomain(input: ValidateApprovedAccessDomainInput!): ApprovedAccessDomain!
+  deleteConnectedAccount(id: UUID!): ConnectedAccountPublicDTO!
   activateWorkspace(data: ActivateWorkspaceInput!): Workspace!
   updateWorkspace(data: UpdateWorkspaceInput!): Workspace!
   deleteCurrentWorkspace: Workspace!
@@ -3723,6 +3728,12 @@ type Mutation {
   updateViewFilterGroup(id: String!, input: UpdateViewFilterGroupInput!): ViewFilterGroup!
   deleteViewFilterGroup(id: String!): Boolean!
   destroyViewFilterGroup(id: String!): Boolean!
+  attachCampaignCreatorLists(input: AttachCampaignCreatorListsInput!): CampaignInfluencerSnapshotDTO!
+  addDirectCampaignCreators(input: AddDirectCampaignCreatorsInput!): CampaignInfluencerSnapshotDTO!
+  detachCampaignCreatorList(input: DetachCampaignCreatorListInput!): CampaignInfluencerSnapshotDTO!
+  addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
+  addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
+  removeCreatorListMemberIntent(input: RemoveCreatorListMemberIntentInput!): Boolean!
   createPageLayoutTab(input: CreatePageLayoutTabInput!): PageLayoutTab!
   updatePageLayoutTab(id: String!, input: UpdatePageLayoutTabInput!): PageLayoutTab!
   destroyPageLayoutTab(id: String!): Boolean!
@@ -3761,17 +3772,6 @@ type Mutation {
   createSAMLIdentityProvider(input: SetupSAMLSsoInput!): SetupSso!
   deleteSSOIdentityProvider(input: DeleteSsoInput!): DeleteSso!
   editSSOIdentityProvider(input: EditSsoInput!): EditSso!
-  saveImapSmtpCaldavAccount(handle: String!, connectionParameters: EmailAccountConnectionParameters!, id: UUID): ImapSmtpCaldavConnectionSuccess!
-  prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup!
-  completeManagedEmailPaymentMethod(input: ManagedEmailCompletePaymentMethodInput!): ManagedEmailPaymentMethodStatus!
-  confirmManagedEmailPrewarmedPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
-  confirmManagedEmailOrdinaryPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
-  setManagedEmailCampaignCap(input: ManagedEmailCampaignCapInput!): ManagedEmailActionResult!
-  cancelManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
-  pauseManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
-  resumeManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
-  stopManagedEmailMailbox(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
-  cancelManagedEmailDomainRenewal(input: ManagedEmailDomainActionInput!): ManagedEmailActionResult!
   createPageLayoutWidget(input: CreatePageLayoutWidgetInput!): PageLayoutWidget!
   updatePageLayoutWidget(id: String!, input: UpdatePageLayoutWidgetInput!): PageLayoutWidget!
   destroyPageLayoutWidget(id: String!): Boolean!
@@ -3923,33 +3923,45 @@ enum FileFolder {
 """The `Upload` scalar type represents a file upload."""
 scalar Upload
 
-input AttachCampaignCreatorListsInput {
-  campaignId: UUID!
-  creatorListIds: [UUID!]!
+input ManagedEmailCompletePaymentMethodInput {
+  setupIntentId: String!
 }
 
-input AddDirectCampaignCreatorsInput {
-  campaignId: UUID!
-  creatorIds: [UUID!]!
+input ManagedEmailPurchaseInput {
+  idempotencyKey: String!
+  quoteId: String!
+  quoteVersion: String!
+  quoteFingerprint: String!
 }
 
-input DetachCampaignCreatorListInput {
-  campaignId: UUID!
-  creatorListId: UUID!
-  confirmedCreatorIds: [UUID!]!
-  confirmationToken: String
+input ManagedEmailCampaignCapInput {
+  dailyCap: Int
+  idempotencyKey: String!
+  mailboxId: String!
 }
 
-input CreatorListMembersIntentInput {
-  creatorListId: UUID!
-  creatorIds: [UUID!]!
+input ManagedEmailMailboxActionInput {
+  idempotencyKey: String!
+  mailboxId: String!
 }
 
-input RemoveCreatorListMemberIntentInput {
-  creatorListId: UUID!
-  creatorId: UUID!
-  confirmedCampaignIds: [UUID!]!
-  confirmationToken: String
+input ManagedEmailDomainActionInput {
+  domainId: String!
+  idempotencyKey: String!
+}
+
+input EmailAccountConnectionParameters {
+  IMAP: ConnectionParametersInput
+  SMTP: ConnectionParametersInput
+  CALDAV: ConnectionParametersInput
+}
+
+input ConnectionParametersInput {
+  host: String!
+  port: Float!
+  username: String
+  password: String
+  connectionSecurity: EmailConnectionSecurity
 }
 
 input GetAuthorizationUrlForSSOInput {
@@ -4522,6 +4534,36 @@ input UpdateViewFilterGroupInput {
   viewId: UUID
 }
 
+input AttachCampaignCreatorListsInput {
+  campaignId: UUID!
+  creatorListIds: [UUID!]!
+}
+
+input AddDirectCampaignCreatorsInput {
+  campaignId: UUID!
+  creatorIds: [UUID!]!
+  assignedManagedMailboxId: UUID
+}
+
+input DetachCampaignCreatorListInput {
+  campaignId: UUID!
+  creatorListId: UUID!
+  confirmedCreatorIds: [UUID!]!
+  confirmationToken: String
+}
+
+input CreatorListMembersIntentInput {
+  creatorListId: UUID!
+  creatorIds: [UUID!]!
+}
+
+input RemoveCreatorListMemberIntentInput {
+  creatorListId: UUID!
+  creatorId: UUID!
+  confirmedCampaignIds: [UUID!]!
+  confirmationToken: String
+}
+
 input CreatePageLayoutTabInput {
   title: String!
   position: Float
@@ -4797,47 +4839,6 @@ input DeleteSsoInput {
 input EditSsoInput {
   id: UUID!
   status: SSOIdentityProviderStatus!
-}
-
-input EmailAccountConnectionParameters {
-  IMAP: ConnectionParametersInput
-  SMTP: ConnectionParametersInput
-  CALDAV: ConnectionParametersInput
-}
-
-input ConnectionParametersInput {
-  host: String!
-  port: Float!
-  username: String
-  password: String
-  connectionSecurity: EmailConnectionSecurity
-}
-
-input ManagedEmailCompletePaymentMethodInput {
-  setupIntentId: String!
-}
-
-input ManagedEmailPurchaseInput {
-  idempotencyKey: String!
-  quoteId: String!
-  quoteVersion: String!
-  quoteFingerprint: String!
-}
-
-input ManagedEmailCampaignCapInput {
-  dailyCap: Int
-  idempotencyKey: String!
-  mailboxId: String!
-}
-
-input ManagedEmailMailboxActionInput {
-  idempotencyKey: String!
-  mailboxId: String!
-}
-
-input ManagedEmailDomainActionInput {
-  domainId: String!
-  idempotencyKey: String!
 }
 
 input CreatePageLayoutWidgetInput {
