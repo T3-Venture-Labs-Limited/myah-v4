@@ -1425,6 +1425,42 @@ type EnterpriseSubscriptionStatusDTO {
   isCancellationScheduled: Boolean!
 }
 
+type CampaignCreatorDTO {
+  id: UUID!
+  campaignId: UUID!
+  creatorId: UUID!
+  isDirectlyAdded: Boolean!
+}
+
+type CampaignCreatorListDTO {
+  id: UUID!
+  campaignId: UUID!
+  creatorListId: UUID!
+}
+
+type CampaignInfluencerSnapshotDTO {
+  campaignCreators: [CampaignCreatorDTO!]!
+  campaignCreatorLists: [CampaignCreatorListDTO!]!
+}
+
+type CampaignCreatorListRemovalImpactDTO {
+  requiresConfirmation: Boolean!
+  affectedCreatorIds: [UUID!]!
+  confirmationToken: String
+}
+
+type CreatorListMembershipRemovalImpactDTO {
+  affectedCampaignIds: [UUID!]!
+  requiresConfirmation: Boolean!
+  confirmationToken: String
+}
+
+type CreatorListMemberDTO {
+  id: UUID!
+  creatorListId: UUID!
+  creatorId: UUID!
+}
+
 type ApprovedAccessDomain {
   id: UUID!
   domain: String!
@@ -3135,6 +3171,9 @@ type Query {
   enterprisePortalSession(returnUrlPath: String): String
   enterpriseCheckoutSession(billingInterval: String): String
   enterpriseSubscriptionStatus: EnterpriseSubscriptionStatusDTO
+  campaignInfluencerSnapshot(input: CampaignInfluencerCampaignInput!): CampaignInfluencerSnapshotDTO!
+  campaignCreatorListRemovalImpact(input: CampaignCreatorListRemovalImpactInput!): CampaignCreatorListRemovalImpactDTO!
+  creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
   myConnectedAccounts: [ConnectedAccountPublicDTO!]!
   applicationConnectionProviders(applicationId: UUID!): [ApplicationConnectionProvider!]!
   checkUserExists(email: String!, captchaToken: String): CheckUserExist!
@@ -3269,6 +3308,20 @@ type Query {
   findManyPublicDomains: [PublicDomain!]!
 }
 
+input CampaignInfluencerCampaignInput {
+  campaignId: UUID!
+}
+
+input CampaignCreatorListRemovalImpactInput {
+  campaignId: UUID!
+  creatorListId: UUID!
+}
+
+input CreatorListMembershipIntentInput {
+  creatorListId: UUID!
+  creatorId: UUID!
+}
+
 input ListAppConnectionsInput {
   providerName: String
   userWorkspaceId: String
@@ -3378,6 +3431,12 @@ type Mutation {
   uploadWorkspaceMemberProfilePicture(file: Upload!): FileWithSignedUrl!
   uploadFilesFieldFile(file: Upload!, fieldMetadataId: String!): FileWithSignedUrl!
   uploadFilesFieldFileByUniversalIdentifier(file: Upload!, fieldMetadataUniversalIdentifier: String!): FileWithSignedUrl!
+  attachCampaignCreatorLists(input: AttachCampaignCreatorListsInput!): CampaignInfluencerSnapshotDTO!
+  addDirectCampaignCreators(input: AddDirectCampaignCreatorsInput!): CampaignInfluencerSnapshotDTO!
+  detachCampaignCreatorList(input: DetachCampaignCreatorListInput!): CampaignInfluencerSnapshotDTO!
+  addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
+  addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
+  removeCreatorListMemberIntent(input: RemoveCreatorListMemberIntentInput!): Boolean!
   deleteConnectedAccount(id: UUID!): ConnectedAccountPublicDTO!
   updateOneApplicationVariable(key: String!, value: String!, applicationId: UUID!): Boolean!
   getAuthorizationUrlForSSO(input: GetAuthorizationUrlForSSOInput!): GetAuthorizationUrlForSSO!
@@ -3674,6 +3733,35 @@ enum FileFolder {
 
 """The `Upload` scalar type represents a file upload."""
 scalar Upload
+
+input AttachCampaignCreatorListsInput {
+  campaignId: UUID!
+  creatorListIds: [UUID!]!
+}
+
+input AddDirectCampaignCreatorsInput {
+  campaignId: UUID!
+  creatorIds: [UUID!]!
+}
+
+input DetachCampaignCreatorListInput {
+  campaignId: UUID!
+  creatorListId: UUID!
+  confirmedCreatorIds: [UUID!]!
+  confirmationToken: String
+}
+
+input CreatorListMembersIntentInput {
+  creatorListId: UUID!
+  creatorIds: [UUID!]!
+}
+
+input RemoveCreatorListMemberIntentInput {
+  creatorListId: UUID!
+  creatorId: UUID!
+  confirmedCampaignIds: [UUID!]!
+  confirmationToken: String
+}
 
 input GetAuthorizationUrlForSSOInput {
   identityProviderId: UUID!

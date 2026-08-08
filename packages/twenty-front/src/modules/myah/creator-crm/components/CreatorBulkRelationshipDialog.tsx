@@ -81,6 +81,11 @@ type CreatorBulkRelationshipDialogPreview = {
   willChangeCount: number;
   unchangedCount: number;
   state: 'loading' | 'unavailable' | 'ready';
+  campaignImpact?: {
+    campaignIds: string[];
+    campaigns: Array<{ id: string; label: string }>;
+    confirmationToken?: string;
+  };
 };
 
 type CreatorBulkRelationshipDialogContentProps = {
@@ -107,6 +112,16 @@ const getPreviewCountLabel = (
     : state === 'unavailable'
       ? t`Unavailable`
       : getCreatorCountLabel(count);
+
+const getCampaignImpactFingerprint = (
+  campaignImpact: CreatorBulkRelationshipDialogPreview['campaignImpact'],
+) =>
+  campaignImpact
+    ? JSON.stringify([
+        campaignImpact.confirmationToken,
+        [...campaignImpact.campaignIds].sort(),
+      ])
+    : null;
 
 export const CreatorBulkRelationshipDialogContent = ({
   action,
@@ -156,6 +171,18 @@ export const CreatorBulkRelationshipDialogContent = ({
             {getPreviewCountLabel(preview.state, preview.willChangeCount)}
           </StyledReviewValue>
         </StyledReviewRow>
+        {isRemoval &&
+          preview.campaignImpact &&
+          preview.campaignImpact.campaigns.length > 0 && (
+            <StyledReviewRow>
+              <StyledReviewLabel>{t`Affected campaigns`}</StyledReviewLabel>
+              <StyledReviewValue>
+                {preview.campaignImpact.campaigns
+                  .map(({ label }) => label)
+                  .join(', ')}
+              </StyledReviewValue>
+            </StyledReviewRow>
+          )}
         <StyledReviewRow>
           <StyledReviewLabel>{unchangedLabel}</StyledReviewLabel>
           <StyledReviewValue>
@@ -198,10 +225,20 @@ export const CreatorBulkRelationshipDialog = ({
   onSuccess?: () => void;
   onClose?: () => void;
 }) => {
+  const [
+    rejectedCampaignImpactFingerprint,
+    setRejectedCampaignImpactFingerprint,
+  ] = useState<string | null>(null);
   const preview = useCreatorBulkRelationshipPreview({
     target: action.target,
     selectedCreatorIds,
   });
+  const campaignImpactFingerprint = getCampaignImpactFingerprint(
+    preview.campaignImpact,
+  );
+  const isRejectedCampaignImpact =
+    rejectedCampaignImpactFingerprint !== null &&
+    rejectedCampaignImpactFingerprint === campaignImpactFingerprint;
   const { applyCreatorBulkRelationship, removeCreatorListMembers } =
     useApplyCreatorBulkRelationship();
   const { closeModal } = useModal();
@@ -215,8 +252,10 @@ export const CreatorBulkRelationshipDialog = ({
     preview.loading ||
     preview.isPreviewUnavailable ||
     isApplying ||
+    isRejectedCampaignImpact ||
     preview.selectedCreatorIds.length === 0 ||
-    actionableCount === 0;
+    actionableCount === 0 ||
+    (isRemoval && preview.relationshipRecordIds.length !== 1);
 
   const handleConfirm = async () => {
     if (isConfirmationDisabled) {
@@ -226,11 +265,40 @@ export const CreatorBulkRelationshipDialog = ({
     setIsApplying(true);
 
     try {
+      let confirmedCampaignIds: string[] | undefined;
+      let confirmationToken: string | undefined;
+      if (isRemoval && preview.campaignImpact) {
+        const latestImpact = (await preview.refetchImpact()).data
+          ?.creatorListMembershipRemovalImpact;
+        if (
+          !latestImpact ||
+          latestImpact.confirmationToken !==
+            preview.campaignImpact.confirmationToken ||
+          latestImpact.affectedCampaignIds.length !==
+            preview.campaignImpact.campaignIds.length ||
+          latestImpact.affectedCampaignIds.some(
+            (id: string) => !preview.campaignImpact?.campaignIds.includes(id),
+          )
+        ) {
+          setRejectedCampaignImpactFingerprint(campaignImpactFingerprint);
+          await preview.refetch();
+          return;
+        }
+        confirmedCampaignIds = preview.campaignImpact.campaignIds;
+        confirmationToken = preview.campaignImpact.confirmationToken;
+      }
+
       if (action.operation === 'remove') {
         await removeCreatorListMembers({
           creatorListId: action.target.id,
           creatorListMemberIdsToRemove: preview.relationshipRecordIds,
           creatorIdsToRemove: preview.linkedCreatorIds,
+          ...(preview.campaignImpact
+            ? {
+                confirmedCampaignIds,
+                confirmationToken,
+              }
+            : {}),
         });
       } else {
         await applyCreatorBulkRelationship({
@@ -286,6 +354,7 @@ export const CreatorBulkRelationshipDialog = ({
             : preview.isPreviewUnavailable
               ? 'unavailable'
               : 'ready',
+          campaignImpact: preview.campaignImpact,
         }}
         isApplying={isApplying}
         isConfirmationDisabled={isConfirmationDisabled}

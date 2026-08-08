@@ -2,7 +2,7 @@ import {
   type FieldMetadataType,
   type ObjectsPermissions,
 } from 'twenty-shared/types';
-import { EntityManager } from 'typeorm';
+import { EntityManager, type QueryRunner } from 'typeorm';
 import { EntityPersistExecutor } from 'typeorm/persistence/EntityPersistExecutor';
 import { PlainObjectToDatabaseEntityTransformer } from 'typeorm/query-builder/transformer/PlainObjectToDatabaseEntityTransformer';
 
@@ -440,6 +440,32 @@ describe('WorkspaceEntityManager', () => {
       expect(() => entityManager.query('SELECT * FROM test')).toThrow(
         'Method not allowed.',
       );
+    });
+  });
+
+  describe('Transaction query builders', () => {
+    it('inherits the active query runner when no runner is passed', async () => {
+      const activeQueryRunner = {} as QueryRunner;
+      const transactionManager = new WorkspaceEntityManager(
+        entityManager.connection,
+        activeQueryRunner,
+      );
+
+      await withWorkspaceContext(mockWorkspaceContext, () => {
+        transactionManager.createQueryBuilder('test-entity', 'test');
+        transactionManager.createQueryBuilder();
+      });
+
+      expect(
+        entityManager.connection.createQueryBuilder,
+      ).toHaveBeenNthCalledWith(1, 'test-entity', 'test', activeQueryRunner, {
+        calledByWorkspaceEntityManager: true,
+      });
+      expect(
+        entityManager.connection.createQueryBuilder,
+      ).toHaveBeenNthCalledWith(2, activeQueryRunner, {
+        calledByWorkspaceEntityManager: true,
+      });
     });
   });
 

@@ -10,6 +10,7 @@ const mockDestroyCreatorListMembers = jest.fn();
 const mockBatchCreateCreatorListMembers = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockEnqueueWarningSnackBar = jest.fn();
+const mockUseMutation = jest.fn();
 const mockCreatorObjectMetadataItem = {
   id: 'creator-object-metadata-id',
   nameSingular: 'creator',
@@ -21,6 +22,10 @@ jest.mock(
     dispatchObjectRecordOperationBrowserEvent: jest.fn(),
   }),
 );
+
+jest.mock('@apollo/client/react', () => ({
+  useMutation: (...args: unknown[]) => mockUseMutation(...args),
+}));
 
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
   useApolloCoreClient: () => ({
@@ -63,6 +68,9 @@ describe('useApplyCreatorBulkRelationship', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseMutation.mockReturnValue([
+      jest.fn().mockResolvedValue({ data: {} }),
+    ]);
     mockDestroyCreatorListMembers.mockResolvedValue(['membership-1']);
   });
 
@@ -89,13 +97,21 @@ describe('useApplyCreatorBulkRelationship', () => {
     });
 
     expect(mockRefetchQueries).toHaveBeenCalledWith({
-      include: ['FindManyCreators', 'FindManyCreatorListMembers'],
+      include: [
+        'active',
+        'inactive',
+        'FindManyCreators',
+        'FindManyCreatorListMembers',
+        'FindManyCampaignCreators',
+      ],
       updateCache: expect.any(Function),
     });
     expect(executionOrder).toEqual(['modify', 'refetch', 'dispatch']);
     const updateCache = mockRefetchQueries.mock.calls[0][0].updateCache;
     updateCache({ evict: mockEvict });
     expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creators' });
+    expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creatorListMembers' });
+    expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'campaignCreators' });
     expect(mockDispatchObjectRecordOperationBrowserEvent).toHaveBeenCalledWith({
       objectMetadataItem: mockCreatorObjectMetadataItem,
       operation: {
@@ -196,8 +212,11 @@ describe('useApplyCreatorBulkRelationship', () => {
   it.each([
     {
       target: { kind: 'creator-list' as const, id: 'list-1', label: 'List' },
-      relationshipObjectNamePlural: 'creatorListMembers',
-      relationshipFindManyQueryName: 'FindManyCreatorListMembers',
+      relationshipObjectNamesPlural: ['creatorListMembers', 'campaignCreators'],
+      relationshipFindManyQueryNames: [
+        'FindManyCreatorListMembers',
+        'FindManyCampaignCreators',
+      ],
     },
     {
       target: {
@@ -205,15 +224,15 @@ describe('useApplyCreatorBulkRelationship', () => {
         id: 'campaign-1',
         label: 'Campaign',
       },
-      relationshipObjectNamePlural: 'campaignCreators',
-      relationshipFindManyQueryName: 'FindManyCampaignCreators',
+      relationshipObjectNamesPlural: ['campaignCreators'],
+      relationshipFindManyQueryNames: ['FindManyCampaignCreators'],
     },
   ])(
-    'invalidates $relationshipObjectNamePlural after adding creators',
+    'invalidates $relationshipObjectNamesPlural after adding creators',
     async ({
       target,
-      relationshipObjectNamePlural,
-      relationshipFindManyQueryName,
+      relationshipObjectNamesPlural,
+      relationshipFindManyQueryNames,
     }) => {
       const { result } = renderHook(() => useApplyCreatorBulkRelationship());
 
@@ -225,16 +244,21 @@ describe('useApplyCreatorBulkRelationship', () => {
       });
 
       expect(mockRefetchQueries).toHaveBeenCalledWith({
-        include: ['FindManyCreators', relationshipFindManyQueryName],
+        include: [
+          'active',
+          'inactive',
+          'FindManyCreators',
+          ...relationshipFindManyQueryNames,
+        ],
         updateCache: expect.any(Function),
       });
       const updateCache = mockRefetchQueries.mock.calls[0][0].updateCache;
       updateCache({ evict: mockEvict });
 
       expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creators' });
-      expect(mockEvict).toHaveBeenCalledWith({
-        fieldName: relationshipObjectNamePlural,
-      });
+      for (const fieldName of relationshipObjectNamesPlural) {
+        expect(mockEvict).toHaveBeenCalledWith({ fieldName });
+      }
     },
   );
 });

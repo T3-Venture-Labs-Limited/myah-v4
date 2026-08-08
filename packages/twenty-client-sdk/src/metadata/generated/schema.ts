@@ -1083,6 +1083,48 @@ export interface EnterpriseSubscriptionStatusDTO {
     __typename: 'EnterpriseSubscriptionStatusDTO'
 }
 
+export interface CampaignCreatorDTO {
+    id: Scalars['UUID']
+    campaignId: Scalars['UUID']
+    creatorId: Scalars['UUID']
+    isDirectlyAdded: Scalars['Boolean']
+    __typename: 'CampaignCreatorDTO'
+}
+
+export interface CampaignCreatorListDTO {
+    id: Scalars['UUID']
+    campaignId: Scalars['UUID']
+    creatorListId: Scalars['UUID']
+    __typename: 'CampaignCreatorListDTO'
+}
+
+export interface CampaignInfluencerSnapshotDTO {
+    campaignCreators: CampaignCreatorDTO[]
+    campaignCreatorLists: CampaignCreatorListDTO[]
+    __typename: 'CampaignInfluencerSnapshotDTO'
+}
+
+export interface CampaignCreatorListRemovalImpactDTO {
+    requiresConfirmation: Scalars['Boolean']
+    affectedCreatorIds: Scalars['UUID'][]
+    confirmationToken?: Scalars['String']
+    __typename: 'CampaignCreatorListRemovalImpactDTO'
+}
+
+export interface CreatorListMembershipRemovalImpactDTO {
+    affectedCampaignIds: Scalars['UUID'][]
+    requiresConfirmation: Scalars['Boolean']
+    confirmationToken?: Scalars['String']
+    __typename: 'CreatorListMembershipRemovalImpactDTO'
+}
+
+export interface CreatorListMemberDTO {
+    id: Scalars['UUID']
+    creatorListId: Scalars['UUID']
+    creatorId: Scalars['UUID']
+    __typename: 'CreatorListMemberDTO'
+}
+
 export interface ApprovedAccessDomain {
     id: Scalars['UUID']
     domain: Scalars['String']
@@ -2779,6 +2821,9 @@ export interface Query {
     enterprisePortalSession?: Scalars['String']
     enterpriseCheckoutSession?: Scalars['String']
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTO
+    campaignInfluencerSnapshot: CampaignInfluencerSnapshotDTO
+    campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDTO
+    creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
     myConnectedAccounts: ConnectedAccountPublicDTO[]
     applicationConnectionProviders: ApplicationConnectionProvider[]
     checkUserExists: CheckUserExist
@@ -2915,6 +2960,12 @@ export interface Mutation {
     uploadWorkspaceMemberProfilePicture: FileWithSignedUrl
     uploadFilesFieldFile: FileWithSignedUrl
     uploadFilesFieldFileByUniversalIdentifier: FileWithSignedUrl
+    attachCampaignCreatorLists: CampaignInfluencerSnapshotDTO
+    addDirectCampaignCreators: CampaignInfluencerSnapshotDTO
+    detachCampaignCreatorList: CampaignInfluencerSnapshotDTO
+    addCreatorListMemberIntent: CreatorListMemberDTO
+    addCreatorListMembersIntent: CreatorListMemberDTO[]
+    removeCreatorListMemberIntent: Scalars['Boolean']
     deleteConnectedAccount: ConnectedAccountPublicDTO
     updateOneApplicationVariable: Scalars['Boolean']
     getAuthorizationUrlForSSO: GetAuthorizationUrlForSSO
@@ -4255,6 +4306,54 @@ export interface EnterpriseSubscriptionStatusDTOGenqlSelection{
     cancelAt?: boolean | number
     currentPeriodEnd?: boolean | number
     isCancellationScheduled?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignCreatorDTOGenqlSelection{
+    id?: boolean | number
+    campaignId?: boolean | number
+    creatorId?: boolean | number
+    isDirectlyAdded?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignCreatorListDTOGenqlSelection{
+    id?: boolean | number
+    campaignId?: boolean | number
+    creatorListId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignInfluencerSnapshotDTOGenqlSelection{
+    campaignCreators?: CampaignCreatorDTOGenqlSelection
+    campaignCreatorLists?: CampaignCreatorListDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignCreatorListRemovalImpactDTOGenqlSelection{
+    requiresConfirmation?: boolean | number
+    affectedCreatorIds?: boolean | number
+    confirmationToken?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CreatorListMembershipRemovalImpactDTOGenqlSelection{
+    affectedCampaignIds?: boolean | number
+    requiresConfirmation?: boolean | number
+    confirmationToken?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CreatorListMemberDTOGenqlSelection{
+    id?: boolean | number
+    creatorListId?: boolean | number
+    creatorId?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6063,6 +6162,9 @@ export interface QueryGenqlSelection{
     enterprisePortalSession?: { __args: {returnUrlPath?: (Scalars['String'] | null)} } | boolean | number
     enterpriseCheckoutSession?: { __args: {billingInterval?: (Scalars['String'] | null)} } | boolean | number
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTOGenqlSelection
+    campaignInfluencerSnapshot?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: CampaignInfluencerCampaignInput} })
+    campaignCreatorListRemovalImpact?: (CampaignCreatorListRemovalImpactDTOGenqlSelection & { __args: {input: CampaignCreatorListRemovalImpactInput} })
+    creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     myConnectedAccounts?: ConnectedAccountPublicDTOGenqlSelection
     applicationConnectionProviders?: (ApplicationConnectionProviderGenqlSelection & { __args: {applicationId: Scalars['UUID']} })
     checkUserExists?: (CheckUserExistGenqlSelection & { __args: {email: Scalars['String'], captchaToken?: (Scalars['String'] | null)} })
@@ -6190,6 +6292,12 @@ export interface QueryGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface CampaignInfluencerCampaignInput {campaignId: Scalars['UUID']}
+
+export interface CampaignCreatorListRemovalImpactInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
+
+export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID']}
+
 export interface ListAppConnectionsInput {providerName?: (Scalars['String'] | null),userWorkspaceId?: (Scalars['String'] | null),visibility?: (Scalars['String'] | null)}
 
 export interface GetApiKeyInput {id: Scalars['UUID']}
@@ -6242,6 +6350,12 @@ export interface MutationGenqlSelection{
     uploadWorkspaceMemberProfilePicture?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload']} })
     uploadFilesFieldFile?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataId: Scalars['String']} })
     uploadFilesFieldFileByUniversalIdentifier?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataUniversalIdentifier: Scalars['String']} })
+    attachCampaignCreatorLists?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AttachCampaignCreatorListsInput} })
+    addDirectCampaignCreators?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AddDirectCampaignCreatorsInput} })
+    detachCampaignCreatorList?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: DetachCampaignCreatorListInput} })
+    addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
+    addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
+    removeCreatorListMemberIntent?: { __args: {input: RemoveCreatorListMemberIntentInput} }
     deleteConnectedAccount?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {id: Scalars['UUID']} })
     updateOneApplicationVariable?: { __args: {key: Scalars['String'], value: Scalars['String'], applicationId: Scalars['UUID']} }
     getAuthorizationUrlForSSO?: (GetAuthorizationUrlForSSOGenqlSelection & { __args: {input: GetAuthorizationUrlForSSOInput} })
@@ -6475,6 +6589,16 @@ id: Scalars['UUID'],
 update: UpdateNavigationMenuItemInput}
 
 export interface UpdateNavigationMenuItemInput {folderId?: (Scalars['UUID'] | null),position?: (Scalars['Float'] | null),name?: (Scalars['String'] | null),link?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),color?: (Scalars['String'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
+
+export interface AttachCampaignCreatorListsInput {campaignId: Scalars['UUID'],creatorListIds: Scalars['UUID'][]}
+
+export interface AddDirectCampaignCreatorsInput {campaignId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+
+export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+
+export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+
+export interface RemoveCreatorListMemberIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID'],confirmedCampaignIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
 
 export interface GetAuthorizationUrlForSSOInput {identityProviderId: Scalars['UUID'],workspaceInviteHash?: (Scalars['String'] | null)}
 
@@ -7472,6 +7596,54 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isEnterpriseSubscriptionStatusDTO = (obj?: { __typename?: any } | null): obj is EnterpriseSubscriptionStatusDTO => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isEnterpriseSubscriptionStatusDTO"')
       return EnterpriseSubscriptionStatusDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignCreatorDTO_possibleTypes: string[] = ['CampaignCreatorDTO']
+    export const isCampaignCreatorDTO = (obj?: { __typename?: any } | null): obj is CampaignCreatorDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorDTO"')
+      return CampaignCreatorDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignCreatorListDTO_possibleTypes: string[] = ['CampaignCreatorListDTO']
+    export const isCampaignCreatorListDTO = (obj?: { __typename?: any } | null): obj is CampaignCreatorListDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorListDTO"')
+      return CampaignCreatorListDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignInfluencerSnapshotDTO_possibleTypes: string[] = ['CampaignInfluencerSnapshotDTO']
+    export const isCampaignInfluencerSnapshotDTO = (obj?: { __typename?: any } | null): obj is CampaignInfluencerSnapshotDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignInfluencerSnapshotDTO"')
+      return CampaignInfluencerSnapshotDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignCreatorListRemovalImpactDTO_possibleTypes: string[] = ['CampaignCreatorListRemovalImpactDTO']
+    export const isCampaignCreatorListRemovalImpactDTO = (obj?: { __typename?: any } | null): obj is CampaignCreatorListRemovalImpactDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorListRemovalImpactDTO"')
+      return CampaignCreatorListRemovalImpactDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CreatorListMembershipRemovalImpactDTO_possibleTypes: string[] = ['CreatorListMembershipRemovalImpactDTO']
+    export const isCreatorListMembershipRemovalImpactDTO = (obj?: { __typename?: any } | null): obj is CreatorListMembershipRemovalImpactDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCreatorListMembershipRemovalImpactDTO"')
+      return CreatorListMembershipRemovalImpactDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CreatorListMemberDTO_possibleTypes: string[] = ['CreatorListMemberDTO']
+    export const isCreatorListMemberDTO = (obj?: { __typename?: any } | null): obj is CreatorListMemberDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCreatorListMemberDTO"')
+      return CreatorListMemberDTO_possibleTypes.includes(obj.__typename)
     }
     
 
