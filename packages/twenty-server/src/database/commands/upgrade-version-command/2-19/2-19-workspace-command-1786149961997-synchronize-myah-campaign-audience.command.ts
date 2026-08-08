@@ -6,6 +6,7 @@ import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/c
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import {
   MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS,
   MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS,
@@ -79,7 +80,7 @@ const audienceViewFilters = new Set([
   MYAH_STANDARD_OBJECTS.campaignCreatorList.views.campaignCreatorLists
     .viewFilters.campaignCurrentRecord.universalIdentifier,
 ]);
-@RegisteredWorkspaceCommand('2.19.0', 1786148982625)
+@RegisteredWorkspaceCommand('2.19.0', 1786149961997)
 @Command({
   name: 'upgrade:2-19:synchronize-myah-campaign-audience',
   description: 'Synchronize Campaign Creator audience source metadata',
@@ -128,15 +129,17 @@ export class SynchronizeMyahCampaignAudienceCommand extends ActiveOrSuspendedWor
       { synchronizeExistingSelectedMetadata: true },
     );
 
+    const schemaName = getWorkspaceSchemaName(args.workspaceId);
+
     await args.dataSource.query(
       `
-      UPDATE "campaignCreator" AS "campaignCreator"
+      UPDATE "${schemaName}"."campaignCreator" AS "campaignCreator"
       SET "isDirectlyAdded" = TRUE
       WHERE "campaignCreator"."isDirectlyAdded" = FALSE
         AND NOT EXISTS (
           SELECT 1
-          FROM "campaignCreatorList" AS "campaignCreatorList"
-          INNER JOIN "creatorListMember" AS "creatorListMember"
+          FROM "${schemaName}"."campaignCreatorList" AS "campaignCreatorList"
+          INNER JOIN "${schemaName}"."creatorListMember" AS "creatorListMember"
             ON "creatorListMember"."creatorListId" =
               "campaignCreatorList"."creatorListId"
             AND "creatorListMember"."creatorId" =

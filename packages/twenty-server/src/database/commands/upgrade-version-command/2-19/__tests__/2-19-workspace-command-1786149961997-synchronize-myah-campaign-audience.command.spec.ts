@@ -2,10 +2,11 @@ import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
-import { SynchronizeMyahCampaignAudienceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786148982625-synchronize-myah-campaign-audience.command';
+import { SynchronizeMyahCampaignAudienceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786149961997-synchronize-myah-campaign-audience.command';
 import type { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import {
   MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS,
@@ -52,7 +53,7 @@ describe('SynchronizeMyahCampaignAudienceCommand', () => {
       getRegisteredWorkspaceCommandMetadata(
         SynchronizeMyahCampaignAudienceCommand,
       ),
-    ).toMatchObject({ version: '2.19.0', timestamp: 1786148982625 });
+    ).toMatchObject({ version: '2.19.0', timestamp: 1786149961997 });
   });
 
   it('synchronizes the complete canonical audience contract for existing workspaces', async () => {
@@ -171,6 +172,7 @@ describe('SynchronizeMyahCampaignAudienceCommand', () => {
   it('backfills legacy direct Campaign Creator provenance after metadata synchronization', async () => {
     const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
     const { dataSource, query } = buildBackfillDataSource();
+    const schemaName = getWorkspaceSchemaName(args.workspaceId);
     const command = new SynchronizeMyahCampaignAudienceCommand(
       {} as WorkspaceIteratorService,
       {
@@ -197,10 +199,18 @@ describe('SynchronizeMyahCampaignAudienceCommand', () => {
     );
     expect(query).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE "campaignCreator" AS "campaignCreator"'),
+      expect.stringContaining(
+        `UPDATE "${schemaName}"."campaignCreator" AS "campaignCreator"`,
+      ),
       undefined,
       undefined,
       { shouldBypassPermissionChecks: true },
+    );
+    expect(query.mock.calls[0][0]).toContain(
+      `FROM "${schemaName}"."campaignCreatorList" AS "campaignCreatorList"`,
+    );
+    expect(query.mock.calls[0][0]).toContain(
+      `INNER JOIN "${schemaName}"."creatorListMember" AS "creatorListMember"`,
     );
     expect(query.mock.calls[0][0]).toContain('NOT EXISTS');
   });
