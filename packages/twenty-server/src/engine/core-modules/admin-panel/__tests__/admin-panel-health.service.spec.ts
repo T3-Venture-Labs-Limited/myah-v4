@@ -44,7 +44,7 @@ describe('AdminPanelHealthService', () => {
     } as any;
     twentyConfigService = { get: jest.fn() } as any;
 
-    (Queue as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+    (Queue as unknown as jest.Mock).mockImplementation(() => ({
       getMetrics: jest.fn(),
       getWorkers: jest.fn(),
       close: jest.fn(),
