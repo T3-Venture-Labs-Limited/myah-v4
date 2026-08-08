@@ -4,8 +4,10 @@ export const createRequiredContext = <TContext>(debugName: string) => {
   const Context = React.createContext<TContext | undefined>(undefined);
   Context.displayName = `${debugName}Provider`;
 
+  const useContextOrUndefined = () => useContext(Context);
+
   const useRequiredContextOrThrow = (): TContext => {
-    const context = useContext(Context);
+    const context = useContextOrUndefined();
 
     if (context === undefined) {
       throw new Error(
@@ -16,5 +18,9 @@ export const createRequiredContext = <TContext>(debugName: string) => {
     return context;
   };
 
-  return [Context.Provider, useRequiredContextOrThrow] as const;
+  return [
+    Context.Provider,
+    useRequiredContextOrThrow,
+    useContextOrUndefined,
+  ] as const;
 };
