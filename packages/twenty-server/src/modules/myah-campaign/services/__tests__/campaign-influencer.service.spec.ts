@@ -122,3 +122,85 @@ describe('CampaignInfluencerService generic membership guard', () => {
     });
   });
 });
+
+describe('CampaignInfluencerService membership transaction safety', () => {
+  const authContext = {
+    type: 'system',
+    workspace: { id: 'workspace-1' },
+  } as never;
+  const workspaceContext = {
+    authContext,
+    userWorkspaceRoleMap: {},
+    apiKeyRoleMap: {},
+  } as unknown as ORMWorkspaceContext;
+
+  it('upserts and reloads a new membership on the transaction manager', async () => {
+    const transactionManager = { id: 'transaction-manager' };
+    const membership = {
+      id: 'membership-1',
+      creatorListId: 'list-1',
+      creatorId: 'creator-1',
+    };
+    const members = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(membership),
+      save: jest.fn(),
+      upsert: jest.fn().mockResolvedValue(undefined),
+    };
+    const repositories = {
+      campaign: {},
+      campaignCreatorList: {
+        find: jest.fn().mockResolvedValue([]),
+      },
+      creator: {
+        findOne: jest.fn().mockResolvedValue({ id: 'creator-1' }),
+      },
+      creatorList: {
+        findOne: jest.fn().mockResolvedValue({ id: 'list-1' }),
+      },
+      creatorListMember: members,
+    };
+    const manager = {
+      executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
+        withWorkspaceContext(workspaceContext, callback),
+      ),
+      getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+        transaction: jest.fn(async (callback: (manager: unknown) => unknown) =>
+          callback(transactionManager),
+        ),
+      }),
+      getRepository: jest.fn(
+        async (_workspaceId: string, name: keyof typeof repositories) =>
+          repositories[name],
+      ),
+    } as unknown as GlobalWorkspaceOrmManager;
+    const service = new CampaignInfluencerService(manager);
+
+    await expect(
+      service.addCreatorListMemberIntent(
+        { creatorListId: 'list-1', creatorId: 'creator-1' },
+        authContext,
+      ),
+    ).resolves.toEqual(membership);
+    expect(members.upsert).toHaveBeenCalledWith(
+      { creatorListId: 'list-1', creatorId: 'creator-1' },
+      {
+        conflictPaths: ['creatorListId', 'creatorId'],
+        indexPredicate: '"deletedAt" IS NULL',
+      },
+      transactionManager,
+    );
+    expect(members.save).not.toHaveBeenCalled();
+    expect(members.findOne).toHaveBeenLastCalledWith(
+      {
+        where: {
+          creatorListId: 'list-1',
+          creatorId: 'creator-1',
+        },
+      },
+      transactionManager,
+    );
+  });
+});

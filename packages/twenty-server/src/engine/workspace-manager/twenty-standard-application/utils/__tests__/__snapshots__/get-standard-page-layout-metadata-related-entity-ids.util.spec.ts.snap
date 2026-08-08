@@ -265,6 +265,19 @@ exports[`getStandardPageLayoutMetadataRelatedEntityIds should return standard pa
       },
     },
   },
+  "creatorListRecordPage": {
+    "id": "00000000-0000-0000-0000-000000000191",
+    "tabs": {
+      "home": {
+        "id": "00000000-0000-0000-0000-000000000192",
+        "widgets": {
+          "fields": {
+            "id": "00000000-0000-0000-0000-000000000193",
+          },
+        },
+      },
+    },
+  },
   "creatorRecordPage": {
     "id": "00000000-0000-0000-0000-000000000166",
     "tabs": {

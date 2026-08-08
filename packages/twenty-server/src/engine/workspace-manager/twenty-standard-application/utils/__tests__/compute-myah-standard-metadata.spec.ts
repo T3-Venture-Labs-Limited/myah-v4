@@ -456,6 +456,31 @@ describe('Myah standard metadata contract', () => {
     );
   });
 
+  it('configures Creator List details without an unsafe generic membership widget', () => {
+    const creatorListPage =
+      result.allFlatEntityMaps.flatPageLayoutMaps.byUniversalIdentifier[
+        'c8952254-5bf9-43a5-baab-98666f9b444d'
+      ];
+    const fieldsWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        'cdf8d521-10c0-4cad-a9e8-b7767deea176'
+      ];
+    const unsafeMembersWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        'f49afbc5-7f5d-45e1-be06-7418cc449e6d'
+      ];
+
+    expect(creatorListPage).toMatchObject({
+      objectMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+      type: 'RECORD_PAGE',
+    });
+    expect(fieldsWidget?.universalConfiguration).toMatchObject({
+      configurationType: WidgetConfigurationType.FIELDS,
+    });
+    expect(unsafeMembersWidget).toBeUndefined();
+  });
+
   it('materializes the Campaign information, native tabs, and operations contract', () => {
     const fields = Object.values(
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,

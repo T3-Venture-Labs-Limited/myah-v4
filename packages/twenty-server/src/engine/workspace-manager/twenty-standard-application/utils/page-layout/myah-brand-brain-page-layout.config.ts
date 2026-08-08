@@ -159,6 +159,33 @@ export const MYAH_CREATOR_PAGE_LAYOUT_CONFIG = {
   },
 } as const satisfies StandardPageLayoutConfig;
 
+export const MYAH_CREATOR_LIST_PAGE_LAYOUT_CONFIG = {
+  name: 'Creator List Record Page',
+  type: PageLayoutType.RECORD_PAGE,
+  universalIdentifier: 'c8952254-5bf9-43a5-baab-98666f9b444d',
+  objectUniversalIdentifier:
+    MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+  defaultTabUniversalIdentifier: '5dbb537f-2d8b-49ec-91bb-f74b0ab072d2',
+  tabs: {
+    home: {
+      universalIdentifier: '5dbb537f-2d8b-49ec-91bb-f74b0ab072d2',
+      title: 'Home',
+      position: 10,
+      icon: 'IconHome',
+      layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+      widgets: {
+        fields: {
+          universalIdentifier: 'cdf8d521-10c0-4cad-a9e8-b7767deea176',
+          title: 'Creator List details',
+          type: WidgetType.FIELDS,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
+        },
+      },
+    },
+  },
+} as const satisfies StandardPageLayoutConfig;
+
 export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
   name: 'Campaign Record Page',
   type: PageLayoutType.RECORD_PAGE,
@@ -306,4 +333,5 @@ export const ALL_STANDARD_PAGE_LAYOUTS = {
   brandBrainPageRecordPage: MYAH_BRAND_BRAIN_PAGE_LAYOUT_CONFIG,
   creatorRecordPage: MYAH_CREATOR_PAGE_LAYOUT_CONFIG,
   campaignRecordPage: MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
+  creatorListRecordPage: MYAH_CREATOR_LIST_PAGE_LAYOUT_CONFIG,
 } as const;

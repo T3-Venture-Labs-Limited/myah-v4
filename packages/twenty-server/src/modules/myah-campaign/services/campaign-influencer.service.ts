@@ -812,8 +812,28 @@ export class CampaignInfluencerService {
           manager,
         )
       ).sort((a, b) => a.campaignId!.localeCompare(b.campaignId!));
-      const membership =
-        (await creatorLists.findOne(
+      let membership = await creatorLists.findOne(
+        {
+          where: {
+            creatorListId: input.creatorListId,
+            creatorId: input.creatorId,
+          },
+        },
+        manager,
+      );
+      if (!membership) {
+        await creatorLists.upsert(
+          {
+            creatorListId: input.creatorListId,
+            creatorId: input.creatorId,
+          },
+          {
+            conflictPaths: ['creatorListId', 'creatorId'],
+            indexPredicate: '"deletedAt" IS NULL',
+          },
+          manager,
+        );
+        membership = await creatorLists.findOne(
           {
             where: {
               creatorListId: input.creatorListId,
@@ -821,12 +841,10 @@ export class CampaignInfluencerService {
             },
           },
           manager,
-        )) ??
-        (await creatorLists.save(
-          { creatorListId: input.creatorListId, creatorId: input.creatorId },
-          {},
-          manager,
-        ));
+        );
+        if (!membership)
+          throw new Error('Creator list membership creation failed');
+      }
       const creatorRows = await this.repository(
         authContext,
         'campaignCreator',
@@ -919,18 +937,27 @@ export class CampaignInfluencerService {
       );
       const rows = [];
       for (const creatorId of creatorIds) {
-        const existing = await members.findOne(
+        let membership = await members.findOne(
           { where: { creatorListId: input.creatorListId, creatorId } },
           manager,
         );
-        rows.push(
-          existing ??
-            (await members.save(
-              { creatorListId: input.creatorListId, creatorId },
-              {},
-              manager,
-            )),
-        );
+        if (!membership) {
+          await members.upsert(
+            { creatorListId: input.creatorListId, creatorId },
+            {
+              conflictPaths: ['creatorListId', 'creatorId'],
+              indexPredicate: '"deletedAt" IS NULL',
+            },
+            manager,
+          );
+          membership = await members.findOne(
+            { where: { creatorListId: input.creatorListId, creatorId } },
+            manager,
+          );
+          if (!membership)
+            throw new Error('Creator list membership creation failed');
+        }
+        rows.push(membership);
       }
       const campaignCreators = await this.repository(
         authContext,
