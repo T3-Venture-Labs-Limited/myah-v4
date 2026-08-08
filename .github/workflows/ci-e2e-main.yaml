@@ -53,7 +53,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
-          - 5432:5432
+          - 5432/tcp
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -71,6 +71,13 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: lts/*
+
+      - name: Configure isolated PostgreSQL endpoint
+        env:
+          PG_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: |
+          echo "PG_DATABASE_PORT=$PG_DATABASE_PORT" >> "$GITHUB_ENV"
+          echo "PG_DATABASE_URL=postgres://postgres:postgres@localhost:$PG_DATABASE_PORT/default" >> "$GITHUB_ENV"
 
       - name: Reserve isolated application ports
         run: |
@@ -205,8 +212,8 @@ jobs:
         run: |
           cp packages/twenty-front/.env.example packages/twenty-front/.env
           npx nx reset:env:e2e-testing-server twenty-server
-          printf '\nNODE_PORT=%s\nSERVER_URL=%s\nFRONTEND_URL=%s\nIS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS=false\n' \
-            "$NODE_PORT" "$SERVER_URL" "$FRONTEND_URL" \
+          printf '\nPG_DATABASE_URL=%s\nNODE_PORT=%s\nSERVER_URL=%s\nFRONTEND_URL=%s\nIS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS=false\n' \
+            "$PG_DATABASE_URL" "$NODE_PORT" "$SERVER_URL" "$FRONTEND_URL" \
             >> packages/twenty-server/.env
 
       - name: Build frontend
@@ -231,8 +238,8 @@ jobs:
 
       - name: Create and setup database
         run: |
-          PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d postgres -c 'CREATE DATABASE "default";'
-          PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d postgres -c 'CREATE DATABASE "test";'
+          PGPASSWORD=postgres psql -h localhost -p "$PG_DATABASE_PORT" -U postgres -d postgres -c 'CREATE DATABASE "default";'
+          PGPASSWORD=postgres psql -h localhost -p "$PG_DATABASE_PORT" -U postgres -d postgres -c 'CREATE DATABASE "test";'
           npx nx run twenty-server:database:reset
 
       - name: Verify isolated application port reservations
