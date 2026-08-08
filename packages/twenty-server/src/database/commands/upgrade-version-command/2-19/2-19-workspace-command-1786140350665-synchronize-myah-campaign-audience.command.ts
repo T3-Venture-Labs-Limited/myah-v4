@@ -128,7 +128,8 @@ export class SynchronizeMyahCampaignAudienceCommand extends ActiveOrSuspendedWor
       { synchronizeExistingSelectedMetadata: true },
     );
 
-    await args.dataSource.query(`
+    await args.dataSource.query(
+      `
       UPDATE "campaignCreator" AS "campaignCreator"
       SET "isDirectlyAdded" = TRUE
       WHERE "campaignCreator"."isDirectlyAdded" = FALSE
@@ -145,6 +146,10 @@ export class SynchronizeMyahCampaignAudienceCommand extends ActiveOrSuspendedWor
             AND "campaignCreatorList"."deletedAt" IS NULL
             AND "creatorListMember"."deletedAt" IS NULL
         )
-    `);
+    `,
+      undefined,
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
   }
 }

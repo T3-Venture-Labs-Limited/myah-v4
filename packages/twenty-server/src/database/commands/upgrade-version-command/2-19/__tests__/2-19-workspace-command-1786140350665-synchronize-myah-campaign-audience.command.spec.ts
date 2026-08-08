@@ -13,7 +13,18 @@ import {
 } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
 
 const buildBackfillDataSource = () => {
-  const query = jest.fn().mockResolvedValue(undefined);
+  const query = jest.fn(
+    async (
+      _sql: string,
+      _parameters: unknown,
+      _queryRunner: unknown,
+      options?: { shouldBypassPermissionChecks?: boolean },
+    ) => {
+      if (!options?.shouldBypassPermissionChecks) {
+        throw new Error('Workspace raw SQL requires an explicit bypass');
+      }
+    },
+  );
   const dataSource = { query };
 
   return { dataSource, query };
@@ -185,8 +196,11 @@ describe('SynchronizeMyahCampaignAudienceCommand', () => {
       query.mock.invocationCallOrder[0],
     );
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0][0]).toContain(
-      'UPDATE "campaignCreator" AS "campaignCreator"',
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE "campaignCreator" AS "campaignCreator"'),
+      undefined,
+      undefined,
+      { shouldBypassPermissionChecks: true },
     );
     expect(query.mock.calls[0][0]).toContain('NOT EXISTS');
   });

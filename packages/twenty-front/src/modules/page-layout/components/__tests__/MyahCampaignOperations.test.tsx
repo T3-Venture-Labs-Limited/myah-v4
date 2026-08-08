@@ -2,6 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { MyahCampaignOperations } from '@/page-layout/components/MyahCampaignOperations';
 
+jest.mock('@/page-layout/components/MyahCampaignAudienceControls', () => ({
+  MyahCampaignAudienceControls: ({ campaignId }: { campaignId: string }) => (
+    <div>{`Campaign audience controls:${campaignId}`}</div>
+  ),
+}));
+
 const updateOneRecord = jest.fn();
 const refetchCampaign = jest.fn();
 const refetchAudience = jest.fn();
