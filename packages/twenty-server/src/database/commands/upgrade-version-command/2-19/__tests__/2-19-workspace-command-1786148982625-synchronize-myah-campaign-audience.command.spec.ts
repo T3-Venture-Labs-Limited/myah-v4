@@ -2,7 +2,7 @@ import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
-import { SynchronizeMyahCampaignAudienceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786140350665-synchronize-myah-campaign-audience.command';
+import { SynchronizeMyahCampaignAudienceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786148982625-synchronize-myah-campaign-audience.command';
 import type { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
@@ -52,7 +52,7 @@ describe('SynchronizeMyahCampaignAudienceCommand', () => {
       getRegisteredWorkspaceCommandMetadata(
         SynchronizeMyahCampaignAudienceCommand,
       ),
-    ).toMatchObject({ version: '2.19.0', timestamp: 1786140350665 });
+    ).toMatchObject({ version: '2.19.0', timestamp: 1786148982625 });
   });
 
   it('synchronizes the complete canonical audience contract for existing workspaces', async () => {

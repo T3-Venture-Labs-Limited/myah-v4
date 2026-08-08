@@ -79,7 +79,7 @@ const audienceViewFilters = new Set([
   MYAH_STANDARD_OBJECTS.campaignCreatorList.views.campaignCreatorLists
     .viewFilters.campaignCurrentRecord.universalIdentifier,
 ]);
-@RegisteredWorkspaceCommand('2.19.0', 1786140350665)
+@RegisteredWorkspaceCommand('2.19.0', 1786148982625)
 @Command({
   name: 'upgrade:2-19:synchronize-myah-campaign-audience',
   description: 'Synchronize Campaign Creator audience source metadata',
