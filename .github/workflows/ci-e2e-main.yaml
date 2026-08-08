@@ -62,7 +62,7 @@ jobs:
       redis:
         image: redis
         ports:
-          - 6379:6379
+          - 6379/tcp
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -72,12 +72,15 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Configure isolated PostgreSQL endpoint
+      - name: Configure isolated service endpoints
         env:
           PG_DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
+          REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
         run: |
           echo "PG_DATABASE_PORT=$PG_DATABASE_PORT" >> "$GITHUB_ENV"
           echo "PG_DATABASE_URL=postgres://postgres:postgres@localhost:$PG_DATABASE_PORT/default" >> "$GITHUB_ENV"
+          echo "REDIS_PORT=$REDIS_PORT" >> "$GITHUB_ENV"
+          echo "REDIS_URL=redis://localhost:$REDIS_PORT" >> "$GITHUB_ENV"
 
       - name: Reserve isolated application ports
         run: |
@@ -212,8 +215,8 @@ jobs:
         run: |
           cp packages/twenty-front/.env.example packages/twenty-front/.env
           npx nx reset:env:e2e-testing-server twenty-server
-          printf '\nPG_DATABASE_URL=%s\nNODE_PORT=%s\nSERVER_URL=%s\nFRONTEND_URL=%s\nIS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS=false\n' \
-            "$PG_DATABASE_URL" "$NODE_PORT" "$SERVER_URL" "$FRONTEND_URL" \
+          printf '\nPG_DATABASE_URL=%s\nREDIS_URL=%s\nNODE_PORT=%s\nSERVER_URL=%s\nFRONTEND_URL=%s\nIS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS=false\n' \
+            "$PG_DATABASE_URL" "$REDIS_URL" "$NODE_PORT" "$SERVER_URL" "$FRONTEND_URL" \
             >> packages/twenty-server/.env
 
       - name: Build frontend
