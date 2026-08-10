@@ -23,6 +23,7 @@ import {
   ManagedEmailPaymentSetupDTO,
   ManagedEmailProposalDTO,
   ManagedEmailQuoteDTO,
+  ManagedEmailSubscriptionDTO,
 } from './managed-email.dto';
 import { ManagedEmailAcquisitionMode } from './enums/managed-email-acquisition-mode.enum';
 import {
@@ -71,6 +72,14 @@ export class ManagedEmailResolver {
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<ManagedEmailMailboxDTO[]> {
     return this.managedEmailCustomerService.mailboxes(workspace.id);
+  }
+  @Query(() => [ManagedEmailSubscriptionDTO])
+  async managedEmailSubscriptions(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<ManagedEmailSubscriptionDTO[]> {
+    return this.managedEmailCustomerService.subscriptions({
+      workspaceId: workspace.id,
+    });
   }
 
   @Query(() => [ManagedEmailBundleDTO])

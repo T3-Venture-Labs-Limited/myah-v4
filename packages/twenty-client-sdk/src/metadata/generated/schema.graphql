@@ -2520,6 +2520,22 @@ type ManagedEmailPaymentMethodStatus {
   ready: Boolean!
 }
 
+type ManagedEmailSubscription {
+  action: String
+  billingInterval: String!
+  currency: String!
+  paidThrough: DateTime
+  productKey: String!
+  quantity: Int!
+  recurringAmountCents: Int!
+  resourceIds: [String!]!
+  resourceLabels: [String!]!
+  resourceType: String!
+  service: String!
+  status: String!
+  unitPriceCents: Int!
+}
+
 type ManagedEmailOperation {
   acquisitionMode: String!
   amountCents: String!
@@ -3315,6 +3331,7 @@ type Query {
   managedEmailOverview: ManagedEmailOverview!
   managedEmailDomains: [ManagedEmailDomain!]!
   managedEmailMailboxes: [ManagedEmailMailbox!]!
+  managedEmailSubscriptions: [ManagedEmailSubscription!]!
   managedEmailPrewarmedBundles: [ManagedEmailBundle!]!
   managedEmailProposal(input: ManagedEmailProposalInput!): ManagedEmailProposal!
   managedEmailQuote(input: ManagedEmailQuoteInput!): ManagedEmailQuote!

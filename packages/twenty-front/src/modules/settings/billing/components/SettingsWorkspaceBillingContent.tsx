@@ -101,6 +101,31 @@ export type WorkspaceBillingViewModel =
   | { state: 'loading' }
   | { state: 'unavailable'; reason: 'notConnected' | 'loadFailed' }
   | WorkspaceBillingReadyViewModel;
+export type WorkspaceManagedEmailSubscription = {
+  action: 'CANCEL_RENEWAL' | 'STOP_SERVICE' | null;
+  billingInterval: 'ANNUAL' | 'MONTHLY';
+  currency: 'USD';
+  paidThrough: string | null;
+  productKey:
+    | 'managed_sending_domain_year'
+    | 'managed_mailbox_month'
+    | 'managed_warmup_month';
+  quantity: number;
+  recurringAmountCents: number;
+  resourceIds: string[];
+  resourceLabels: string[];
+  resourceType: 'DOMAIN' | 'MAILBOX';
+  service: 'MANAGED_EMAIL';
+  status: 'ACTIVE' | 'CANCELS_AT_PERIOD_END' | 'ACTION_REQUIRED';
+  unitPriceCents: number;
+};
+export type WorkspaceManagedEmailSubscriptionsViewModel =
+  | { state: 'loading' }
+  | { state: 'unavailable' }
+  | {
+      state: 'ready';
+      subscriptions: WorkspaceManagedEmailSubscription[];
+    };
 
 const StyledSummary = styled.div`
   display: grid;
@@ -256,6 +281,43 @@ const StyledResponsiveMetadata = styled.span`
     display: block;
   }
 `;
+const StyledSubscriptionTableRow = styled(TableRow)`
+  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
+    grid-template-columns:
+      minmax(120px, 1.5fr) minmax(44px, 0.4fr) minmax(88px, 0.8fr)
+      minmax(120px, 1fr) !important;
+  }
+`;
+const StyledSubscriptionOptionalHeader = styled(TableHeader)`
+  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
+    display: none;
+  }
+`;
+const StyledSubscriptionOptionalCell = styled(TableCell)`
+  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
+    display: none;
+  }
+`;
+const StyledSubscriptionPrimaryCell = styled(TableCell)`
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+  height: auto;
+`;
+const StyledSubscriptionResourceLabels = styled.span`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+`;
+const StyledSubscriptionStatusCell = styled(TableCell)`
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  height: auto;
+`;
 const getUsageStatus = (status: WorkspaceBillingUsageStatus) => {
   switch (status) {
     case 'settled':
@@ -298,6 +360,42 @@ const formatSignedUsdCents = (amountCents: number) =>
   amountCents > 0
     ? `+${formatUsdCents(amountCents)}`
     : formatUsdCents(amountCents);
+const getManagedEmailProductLabel = (
+  productKey: WorkspaceManagedEmailSubscription['productKey'],
+) => {
+  switch (productKey) {
+    case 'managed_sending_domain_year':
+      return t`Sending domain`;
+    case 'managed_mailbox_month':
+      return t`Mailbox`;
+    case 'managed_warmup_month':
+      return t`Warmup`;
+  }
+};
+
+const getManagedEmailIntervalLabel = (
+  interval: WorkspaceManagedEmailSubscription['billingInterval'],
+) => {
+  switch (interval) {
+    case 'ANNUAL':
+      return t`Annual`;
+    case 'MONTHLY':
+      return t`Monthly`;
+  }
+};
+
+const getManagedEmailStatusLabel = (
+  status: WorkspaceManagedEmailSubscription['status'],
+) => {
+  switch (status) {
+    case 'ACTIVE':
+      return t`Active`;
+    case 'CANCELS_AT_PERIOD_END':
+      return t`Cancels at period end`;
+    case 'ACTION_REQUIRED':
+      return t`Action required`;
+  }
+};
 
 const formatUsdInput = (amountCents: number) =>
   `${Math.floor(amountCents / 100)}.${String(amountCents % 100).padStart(2, '0')}`;
@@ -335,6 +433,8 @@ const usageColumns =
   'minmax(132px, 0.9fr) minmax(180px, 1.5fr) minmax(140px, 1fr) minmax(110px, 0.8fr) minmax(96px, 0.7fr)';
 const billingHistoryColumns =
   'minmax(120px, 0.9fr) minmax(170px, 1.4fr) minmax(110px, 1fr) minmax(150px, 1.2fr) minmax(90px, 0.7fr)';
+const managedEmailSubscriptionColumns =
+  'minmax(180px, 1.5fr) minmax(72px, 0.5fr) minmax(100px, 0.8fr) minmax(110px, 0.8fr) minmax(90px, 0.7fr) minmax(120px, 0.9fr) minmax(140px, 1fr)';
 
 const renderUnknownSummary = () => (
   <StyledSummary>
@@ -371,6 +471,9 @@ const renderUnavailable = (reason: 'notConnected' | 'loadFailed') => (
           : t`Billing information is temporarily unavailable.`
       }
     />
+    <StyledEmptyCopy>
+      {t`AI usage and balance are tracked separately from managed email.`}
+    </StyledEmptyCopy>
     <Section>
       <H2Title title={t`Balance`} description={t`Workspace billing summary`} />
       {renderUnknownSummary()}
@@ -398,6 +501,103 @@ const renderUnavailable = (reason: 'notConnected' | 'loadFailed') => (
     </Section>
   </>
 );
+const renderManagedEmailSubscriptions = (
+  viewModel: WorkspaceManagedEmailSubscriptionsViewModel | undefined,
+  onManageManagedEmail: (() => void) | undefined,
+) => {
+  if (viewModel === undefined) {
+    return null;
+  }
+
+  return (
+    <Section>
+      <H2Title
+        title={t`Managed email subscriptions`}
+        description={t`Domains, mailboxes, and warmup renewals`}
+      />
+      <StyledEmptyCopy>
+        {t`Managed email subscriptions renew separately and do not use your AI balance.`}
+      </StyledEmptyCopy>
+      {viewModel.state === 'loading' ? (
+        <SettingsSectionSkeletonLoader rowCount={4} />
+      ) : viewModel.state === 'unavailable' ? (
+        <InlineBanner
+          color="blue"
+          message={t`Managed email subscription information is temporarily unavailable.`}
+        />
+      ) : viewModel.subscriptions.length === 0 ? (
+        <StyledBillingEmptyState>
+          <strong>{t`No managed email subscriptions yet`}</strong>
+          <StyledEmptyCopy>
+            {t`Domain, mailbox, and warmup renewals will appear here after purchase.`}
+          </StyledEmptyCopy>
+        </StyledBillingEmptyState>
+      ) : (
+        <Table role="table" aria-label={t`Managed email subscriptions`}>
+          <StyledSubscriptionTableRow
+            role="row"
+            gridTemplateColumns={managedEmailSubscriptionColumns}
+          >
+            <TableHeader role="columnheader">{t`Service`}</TableHeader>
+            <TableHeader role="columnheader">{t`Quantity`}</TableHeader>
+            <StyledSubscriptionOptionalHeader role="columnheader">
+              {t`Unit price`}
+            </StyledSubscriptionOptionalHeader>
+            <TableHeader role="columnheader">{t`Recurring`}</TableHeader>
+            <StyledSubscriptionOptionalHeader role="columnheader">
+              {t`Interval`}
+            </StyledSubscriptionOptionalHeader>
+            <StyledSubscriptionOptionalHeader role="columnheader">
+              {t`Paid through`}
+            </StyledSubscriptionOptionalHeader>
+            <TableHeader role="columnheader">{t`Status`}</TableHeader>
+          </StyledSubscriptionTableRow>
+          {viewModel.subscriptions.map((subscription) => (
+            <StyledSubscriptionTableRow
+              key={`${subscription.productKey}:${subscription.resourceIds.join(':')}`}
+              role="row"
+              gridTemplateColumns={managedEmailSubscriptionColumns}
+            >
+              <StyledSubscriptionPrimaryCell role="cell">
+                {getManagedEmailProductLabel(subscription.productKey)}
+                <StyledSubscriptionResourceLabels>
+                  {subscription.resourceLabels.join(', ')}
+                </StyledSubscriptionResourceLabels>
+              </StyledSubscriptionPrimaryCell>
+              <TableCell role="cell">{subscription.quantity}</TableCell>
+              <StyledSubscriptionOptionalCell role="cell">
+                {formatUsdCents(subscription.unitPriceCents)}
+              </StyledSubscriptionOptionalCell>
+              <TableCell role="cell" align="right">
+                {formatUsdCents(subscription.recurringAmountCents)}
+              </TableCell>
+              <StyledSubscriptionOptionalCell role="cell">
+                {getManagedEmailIntervalLabel(subscription.billingInterval)}
+              </StyledSubscriptionOptionalCell>
+              <StyledSubscriptionOptionalCell role="cell">
+                {subscription.paidThrough === null
+                  ? EM_DASH
+                  : new Date(subscription.paidThrough).toLocaleDateString()}
+              </StyledSubscriptionOptionalCell>
+              <StyledSubscriptionStatusCell role="cell">
+                {getManagedEmailStatusLabel(subscription.status)}
+                {subscription.action !== null &&
+                  onManageManagedEmail !== undefined && (
+                    <Button
+                      ariaLabel={t`Manage`}
+                      title={t`Manage`}
+                      variant="secondary"
+                      onClick={onManageManagedEmail}
+                    />
+                  )}
+              </StyledSubscriptionStatusCell>
+            </StyledSubscriptionTableRow>
+          ))}
+        </Table>
+      )}
+    </Section>
+  );
+};
 
 const WorkspacePaymentSettings = ({
   paymentSettings,
@@ -601,6 +801,8 @@ const WorkspacePaymentSettings = ({
 
 export type SettingsWorkspaceBillingContentProps = {
   viewModel: WorkspaceBillingViewModel;
+  managedEmailSubscriptions?: WorkspaceManagedEmailSubscriptionsViewModel;
+  onManageManagedEmail?: () => void;
   onManagePaymentMethod?: () => void;
   onSaveAutomaticTopUp?: (
     settings: WorkspaceBillingAutomaticTopUpSettings,
@@ -608,6 +810,8 @@ export type SettingsWorkspaceBillingContentProps = {
 };
 
 export const SettingsWorkspaceBillingContent = ({
+  managedEmailSubscriptions,
+  onManageManagedEmail,
   viewModel,
   onManagePaymentMethod,
   onSaveAutomaticTopUp,
@@ -617,16 +821,26 @@ export const SettingsWorkspaceBillingContent = ({
     activeTabIdComponentState,
     WORKSPACE_BILLING_TAB_LIST_ID,
   );
+  const managedEmailSubscriptionsSection = renderManagedEmailSubscriptions(
+    managedEmailSubscriptions,
+    onManageManagedEmail,
+  );
   if (viewModel.state === 'loading')
     return (
       <>
+        {managedEmailSubscriptionsSection}
         <SettingsSectionSkeletonLoader rowCount={3} />
         <SettingsSectionSkeletonLoader rowCount={4} />
         <SettingsSectionSkeletonLoader rowCount={4} />
       </>
     );
   if (viewModel.state === 'unavailable')
-    return renderUnavailable(viewModel.reason);
+    return (
+      <>
+        {managedEmailSubscriptionsSection}
+        {renderUnavailable(viewModel.reason)}
+      </>
+    );
   const displayedTabId =
     activeTabId === WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY
       ? WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY
@@ -655,11 +869,15 @@ export const SettingsWorkspaceBillingContent = ({
   };
   return (
     <>
+      {managedEmailSubscriptionsSection}
       <Section>
         <H2Title
           title={t`Balance`}
           description={t`Workspace billing summary`}
         />
+        <StyledEmptyCopy>
+          {t`AI usage and balance are tracked separately from managed email.`}
+        </StyledEmptyCopy>
         {viewModel.balanceStatus === 'low' && (
           <StyledLowBalanceWarning>
             <Status color="orange" text={t`Low balance`} weight="medium" />

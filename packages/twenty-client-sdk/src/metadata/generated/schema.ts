@@ -2224,6 +2224,23 @@ export interface ManagedEmailPaymentMethodStatus {
     __typename: 'ManagedEmailPaymentMethodStatus'
 }
 
+export interface ManagedEmailSubscription {
+    action?: Scalars['String']
+    billingInterval: Scalars['String']
+    currency: Scalars['String']
+    paidThrough?: Scalars['DateTime']
+    productKey: Scalars['String']
+    quantity: Scalars['Int']
+    recurringAmountCents: Scalars['Int']
+    resourceIds: Scalars['String'][]
+    resourceLabels: Scalars['String'][]
+    resourceType: Scalars['String']
+    service: Scalars['String']
+    status: Scalars['String']
+    unitPriceCents: Scalars['Int']
+    __typename: 'ManagedEmailSubscription'
+}
+
 export interface ManagedEmailOperation {
     acquisitionMode: Scalars['String']
     amountCents: Scalars['String']
@@ -2981,6 +2998,7 @@ export interface Query {
     managedEmailOverview: ManagedEmailOverview
     managedEmailDomains: ManagedEmailDomain[]
     managedEmailMailboxes: ManagedEmailMailbox[]
+    managedEmailSubscriptions: ManagedEmailSubscription[]
     managedEmailPrewarmedBundles: ManagedEmailBundle[]
     managedEmailProposal: ManagedEmailProposal
     managedEmailQuote: ManagedEmailQuote
@@ -5717,6 +5735,24 @@ export interface ManagedEmailPaymentMethodStatusGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface ManagedEmailSubscriptionGenqlSelection{
+    action?: boolean | number
+    billingInterval?: boolean | number
+    currency?: boolean | number
+    paidThrough?: boolean | number
+    productKey?: boolean | number
+    quantity?: boolean | number
+    recurringAmountCents?: boolean | number
+    resourceIds?: boolean | number
+    resourceLabels?: boolean | number
+    resourceType?: boolean | number
+    service?: boolean | number
+    status?: boolean | number
+    unitPriceCents?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface ManagedEmailOperationGenqlSelection{
     acquisitionMode?: boolean | number
     amountCents?: boolean | number
@@ -6514,6 +6550,7 @@ export interface QueryGenqlSelection{
     managedEmailOverview?: ManagedEmailOverviewGenqlSelection
     managedEmailDomains?: ManagedEmailDomainGenqlSelection
     managedEmailMailboxes?: ManagedEmailMailboxGenqlSelection
+    managedEmailSubscriptions?: ManagedEmailSubscriptionGenqlSelection
     managedEmailPrewarmedBundles?: ManagedEmailBundleGenqlSelection
     managedEmailProposal?: (ManagedEmailProposalGenqlSelection & { __args: {input: ManagedEmailProposalInput} })
     managedEmailQuote?: (ManagedEmailQuoteGenqlSelection & { __args: {input: ManagedEmailQuoteInput} })
@@ -9042,6 +9079,14 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isManagedEmailPaymentMethodStatus = (obj?: { __typename?: any } | null): obj is ManagedEmailPaymentMethodStatus => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailPaymentMethodStatus"')
       return ManagedEmailPaymentMethodStatus_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailSubscription_possibleTypes: string[] = ['ManagedEmailSubscription']
+    export const isManagedEmailSubscription = (obj?: { __typename?: any } | null): obj is ManagedEmailSubscription => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailSubscription"')
+      return ManagedEmailSubscription_possibleTypes.includes(obj.__typename)
     }
     
 
