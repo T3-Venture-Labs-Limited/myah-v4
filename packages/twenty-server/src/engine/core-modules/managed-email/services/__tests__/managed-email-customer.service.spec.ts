@@ -105,6 +105,18 @@ const createHarness = () => {
   const readinessService = {
     assertApprovedPurchasePolicy: jest.fn(),
   };
+  const domainRepository = {
+    find: jest.fn(),
+    findOneBy: jest.fn(),
+  };
+  const mailboxRepository = {
+    find: jest.fn(),
+    findOneBy: jest.fn(),
+  };
+  const operationRepository = {
+    find: jest.fn(),
+    findOneBy: jest.fn(),
+  };
   const config = {
     get: jest.fn(
       (key: string) =>
@@ -118,9 +130,9 @@ const createHarness = () => {
     ),
   };
   const service = new ManagedEmailCustomerService(
-    { find: jest.fn(), findOneBy: jest.fn() } as never,
-    { find: jest.fn(), findOneBy: jest.fn() } as never,
-    { findOneBy: jest.fn() } as never,
+    domainRepository as never,
+    mailboxRepository as never,
+    operationRepository as never,
     {} as never,
     acquisitionService as never,
     proposalService as never,
@@ -137,10 +149,87 @@ const createHarness = () => {
     readinessService,
     proposalService,
     config,
+    domainRepository,
+    mailboxRepository,
+    operationRepository,
+  };
+};
+
+const createMailboxSubscriptionProjectionFixture = ({
+  correlatedSubscriptionLines,
+  mailboxOverrides = {},
+  operationOverrides = {},
+}: {
+  correlatedSubscriptionLines?: ReadonlyArray<Record<string, unknown>>;
+  mailboxOverrides?: Record<string, unknown>;
+  operationOverrides?: Record<string, unknown>;
+} = {}) => {
+  const paidThrough = new Date('2026-09-06T12:00:00.000Z');
+  const expectedLine = {
+    billingFrequency: 'MONTHLY',
+    currency: 'USD',
+    productKey: 'managed_mailbox_month',
+    metronomeProductId: 'product-mailbox',
+    quantity: 1,
+    unitPriceCents: 650,
+    totalCents: 650,
+    periodEnd: paidThrough.toISOString(),
+    periodStart: now.toISOString(),
+  };
+  const correlatedLine = {
+    subscriptionId: 'subscription-mailbox',
+    productId: 'product-mailbox',
+    quantity: 1,
+    unitPrice: 650,
+    total: 650,
+    startingAt: now.toISOString(),
+    endingBefore: paidThrough.toISOString(),
+    isProrated: false,
+  };
+
+  return {
+    correlatedLine,
+    expectedLine,
+    mailbox: {
+      id: 'mailbox-1',
+      workspaceId,
+      acquisitionOperationId: 'operation-1',
+      normalizedAddress: 'maya@creator-partners.test',
+      infrastructurePaidThrough: paidThrough,
+      infrastructureCancelAtPeriodEnd: false,
+      metronomeMailboxSubscriptionId: 'subscription-mailbox',
+      infrastructureState: 'ACTIVE',
+      pendingLifecycleAction: null,
+      safeFailureCode: null,
+      ...mailboxOverrides,
+    },
+    operation: {
+      id: 'operation-1',
+      workspaceId,
+      paymentStatus: 'PAID',
+      pendingRenewalProjection: null,
+      safeFailureCode: null,
+      state: 'PROVIDER_SUCCEEDED',
+      expectedLineItems: [expectedLine],
+      correlatedSubscriptionLines: correlatedSubscriptionLines ?? [
+        correlatedLine,
+      ],
+      ...operationOverrides,
+    },
+    paidThrough,
   };
 };
 
 describe('ManagedEmailCustomerService customer checkout contracts', () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(now);
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   it('lists prewarmed bundles with actor-scoped opaque handles and no provider inventory IDs', async () => {
     const { service, proposalService, offerService } = createHarness();
 
@@ -325,5 +414,553 @@ describe('ManagedEmailCustomerService customer checkout contracts', () => {
     ).rejects.toThrow('Managed email readiness policy is unavailable');
     expect(offerService.reserveQuoteForPurchase).not.toHaveBeenCalled();
     expect(acquisitionService.admit).not.toHaveBeenCalled();
+  });
+  it('projects exact recurring lines and withholds unavailable domain cancellation', async () => {
+    const {
+      service,
+      domainRepository,
+      mailboxRepository,
+      operationRepository,
+    } = createHarness();
+    const monthlyPaidThrough = new Date('2026-09-06T12:00:00.000Z');
+    const annualPaidThrough = new Date('2027-08-06T12:00:00.000Z');
+
+    operationRepository.find.mockResolvedValue([
+      {
+        id: 'operation-1',
+        workspaceId,
+        paymentStatus: 'PAID',
+        pendingRenewalProjection: null,
+        safeFailureCode: null,
+        state: 'PROVIDER_SUCCEEDED',
+        expectedLineItems: [
+          {
+            billingFrequency: 'ANNUAL',
+            currency: 'USD',
+            productKey: 'managed_sending_domain_year',
+            metronomeProductId: 'product-domain',
+            quantity: 1,
+            unitPriceCents: 1_500,
+            totalCents: 1_500,
+            periodEnd: annualPaidThrough.toISOString(),
+            periodStart: now.toISOString(),
+          },
+          {
+            billingFrequency: 'MONTHLY',
+            currency: 'USD',
+            productKey: 'managed_mailbox_month',
+            metronomeProductId: 'product-mailbox',
+            quantity: 2,
+            unitPriceCents: 650,
+            totalCents: 1_300,
+            periodEnd: monthlyPaidThrough.toISOString(),
+            periodStart: now.toISOString(),
+          },
+          {
+            billingFrequency: 'MONTHLY',
+            currency: 'USD',
+            productKey: 'managed_warmup_month',
+            metronomeProductId: 'product-warmup',
+            quantity: 2,
+            unitPriceCents: 1_000,
+            totalCents: 2_000,
+            periodEnd: monthlyPaidThrough.toISOString(),
+            periodStart: now.toISOString(),
+          },
+        ],
+        correlatedSubscriptionLines: [
+          {
+            subscriptionId: 'subscription-domain',
+            productId: 'product-domain',
+            quantity: 1,
+            unitPrice: 1_500,
+            total: 1_500,
+            isProrated: false,
+            startingAt: now.toISOString(),
+            endingBefore: annualPaidThrough.toISOString(),
+          },
+          {
+            subscriptionId: 'subscription-mailbox',
+            productId: 'product-mailbox',
+            quantity: 2,
+            unitPrice: 650,
+            total: 1_300,
+            isProrated: false,
+            startingAt: now.toISOString(),
+            endingBefore: monthlyPaidThrough.toISOString(),
+          },
+          {
+            subscriptionId: 'subscription-warmup',
+            productId: 'product-warmup',
+            quantity: 2,
+            unitPrice: 1_000,
+            total: 2_000,
+            isProrated: false,
+            startingAt: now.toISOString(),
+            endingBefore: monthlyPaidThrough.toISOString(),
+          },
+        ],
+      },
+    ]);
+    domainRepository.find.mockResolvedValue([
+      {
+        id: 'domain-1',
+        workspaceId,
+        acquisitionOperationId: 'operation-1',
+        normalizedDomain: 'creator-partners.test',
+        paidThrough: annualPaidThrough,
+        cancelAtPeriodEnd: false,
+        metronomeSubscriptionId: 'subscription-domain',
+        infrastructureState: 'ACTIVE',
+        pendingLifecycleAction: null,
+        safeFailureCode: null,
+      },
+    ]);
+    mailboxRepository.find.mockResolvedValue([
+      {
+        id: 'mailbox-1',
+        workspaceId,
+        acquisitionOperationId: 'operation-1',
+        managedEmailDomainId: 'domain-1',
+        normalizedAddress: 'maya@creator-partners.test',
+        infrastructurePaidThrough: monthlyPaidThrough,
+        infrastructureCancelAtPeriodEnd: false,
+        metronomeMailboxSubscriptionId: 'subscription-mailbox',
+        infrastructureState: 'ACTIVE',
+        pendingLifecycleAction: null,
+        safeFailureCode: null,
+        warmupPaidThrough: monthlyPaidThrough,
+        warmupCancelAtPeriodEnd: false,
+        metronomeWarmupSubscriptionId: 'subscription-warmup',
+        warmupState: 'MAINTENANCE',
+      },
+      {
+        id: 'mailbox-2',
+        workspaceId,
+        acquisitionOperationId: 'operation-1',
+        managedEmailDomainId: 'domain-1',
+        normalizedAddress: 'lin@creator-partners.test',
+        infrastructurePaidThrough: monthlyPaidThrough,
+        infrastructureCancelAtPeriodEnd: false,
+        metronomeMailboxSubscriptionId: 'subscription-mailbox',
+        infrastructureState: 'ACTIVE',
+        pendingLifecycleAction: null,
+        safeFailureCode: null,
+        warmupPaidThrough: monthlyPaidThrough,
+        warmupCancelAtPeriodEnd: false,
+        metronomeWarmupSubscriptionId: 'subscription-warmup',
+        warmupState: 'MAINTENANCE',
+      },
+    ]);
+
+    await expect(service.subscriptions({ workspaceId })).resolves.toEqual([
+      {
+        service: 'MANAGED_EMAIL',
+        productKey: 'managed_sending_domain_year',
+        resourceType: 'DOMAIN',
+        resourceIds: ['domain-1'],
+        resourceLabels: ['creator-partners.test'],
+        quantity: 1,
+        currency: 'USD',
+        unitPriceCents: 1_500,
+        recurringAmountCents: 1_500,
+        billingInterval: 'ANNUAL',
+        paidThrough: annualPaidThrough,
+        status: 'ACTIVE',
+        action: null,
+      },
+      {
+        service: 'MANAGED_EMAIL',
+        productKey: 'managed_mailbox_month',
+        resourceType: 'MAILBOX',
+        resourceIds: ['mailbox-1', 'mailbox-2'],
+        resourceLabels: [
+          'maya@creator-partners.test',
+          'lin@creator-partners.test',
+        ],
+        quantity: 2,
+        currency: 'USD',
+        unitPriceCents: 650,
+        recurringAmountCents: 1_300,
+        billingInterval: 'MONTHLY',
+        paidThrough: monthlyPaidThrough,
+        status: 'ACTIVE',
+        action: 'STOP_SERVICE',
+      },
+      {
+        service: 'MANAGED_EMAIL',
+        productKey: 'managed_warmup_month',
+        resourceType: 'MAILBOX',
+        resourceIds: ['mailbox-1', 'mailbox-2'],
+        resourceLabels: [
+          'maya@creator-partners.test',
+          'lin@creator-partners.test',
+        ],
+        quantity: 2,
+        currency: 'USD',
+        unitPriceCents: 1_000,
+        recurringAmountCents: 2_000,
+        billingInterval: 'MONTHLY',
+        paidThrough: monthlyPaidThrough,
+        status: 'ACTIVE',
+        action: 'CANCEL_RENEWAL',
+      },
+    ]);
+    expect(operationRepository.find).toHaveBeenCalledWith(workspaceId);
+    expect(domainRepository.find).toHaveBeenCalledWith(workspaceId);
+    expect(mailboxRepository.find).toHaveBeenCalledWith(workspaceId);
+  });
+  it('fails closed when subscription resources do not match the paid line', async () => {
+    const {
+      service,
+      domainRepository,
+      mailboxRepository,
+      operationRepository,
+    } = createHarness();
+    const paidThrough = new Date('2026-09-06T12:00:00.000Z');
+
+    operationRepository.find.mockResolvedValue([
+      {
+        id: 'operation-1',
+        workspaceId,
+        paymentStatus: 'PAID',
+        pendingRenewalProjection: null,
+        safeFailureCode: null,
+        state: 'PROVIDER_SUCCEEDED',
+        expectedLineItems: [
+          {
+            billingFrequency: 'MONTHLY',
+            currency: 'USD',
+            productKey: 'managed_mailbox_month',
+            metronomeProductId: 'product-mailbox',
+            quantity: 2,
+            unitPriceCents: 650,
+            totalCents: 1_300,
+            periodEnd: paidThrough.toISOString(),
+            periodStart: now.toISOString(),
+          },
+        ],
+        correlatedSubscriptionLines: [
+          {
+            subscriptionId: 'subscription-mailbox',
+            productId: 'product-mailbox',
+            quantity: 2,
+            unitPrice: 650,
+            total: 1_300,
+            isProrated: false,
+            startingAt: now.toISOString(),
+            endingBefore: paidThrough.toISOString(),
+          },
+        ],
+      },
+    ]);
+    domainRepository.find.mockResolvedValue([]);
+    mailboxRepository.find.mockResolvedValue([
+      {
+        id: 'mailbox-1',
+        workspaceId,
+        acquisitionOperationId: 'operation-1',
+        normalizedAddress: 'maya@creator-partners.test',
+        infrastructurePaidThrough: paidThrough,
+        infrastructureCancelAtPeriodEnd: false,
+        metronomeMailboxSubscriptionId: 'subscription-mailbox',
+        infrastructureState: 'ACTIVE',
+        pendingLifecycleAction: null,
+        safeFailureCode: null,
+      },
+      {
+        id: 'foreign-mailbox',
+        workspaceId: '423e4567-e89b-42d3-a456-426614174099',
+        acquisitionOperationId: 'operation-1',
+        normalizedAddress: 'foreign@creator-partners.test',
+        infrastructurePaidThrough: paidThrough,
+        infrastructureCancelAtPeriodEnd: false,
+        metronomeMailboxSubscriptionId: 'subscription-mailbox',
+        infrastructureState: 'ACTIVE',
+        pendingLifecycleAction: null,
+        safeFailureCode: null,
+      },
+    ]);
+
+    await expect(service.subscriptions({ workspaceId })).resolves.toEqual([
+      {
+        action: null,
+        billingInterval: 'MONTHLY',
+        currency: 'USD',
+        paidThrough: null,
+        productKey: 'managed_mailbox_month',
+        quantity: 2,
+        recurringAmountCents: 1_300,
+        resourceIds: ['mailbox-1'],
+        resourceLabels: ['maya@creator-partners.test'],
+        resourceType: 'MAILBOX',
+        service: 'MANAGED_EMAIL',
+        status: 'ACTION_REQUIRED',
+        unitPriceCents: 650,
+      },
+    ]);
+  });
+  it('uses the durable resource paid-through boundary after a paid renewal', async () => {
+    const {
+      service,
+      domainRepository,
+      mailboxRepository,
+      operationRepository,
+    } = createHarness();
+    const renewedPaidThrough = new Date('2026-10-06T12:00:00.000Z');
+    const fixture = createMailboxSubscriptionProjectionFixture({
+      mailboxOverrides: { infrastructurePaidThrough: renewedPaidThrough },
+    });
+
+    operationRepository.find.mockResolvedValue([fixture.operation]);
+    domainRepository.find.mockResolvedValue([]);
+    mailboxRepository.find.mockResolvedValue([fixture.mailbox]);
+
+    await expect(service.subscriptions({ workspaceId })).resolves.toMatchObject(
+      [
+        {
+          action: 'STOP_SERVICE',
+          paidThrough: renewedPaidThrough,
+          status: 'ACTIVE',
+        },
+      ],
+    );
+  });
+
+  it('fails closed for failed, inactive, and expired subscription lifecycles', async () => {
+    const scenarios = [
+      createMailboxSubscriptionProjectionFixture({
+        mailboxOverrides: {
+          infrastructureState: 'PAYMENT_REQUIRED',
+          safeFailureCode: 'PAYMENT_FAILED',
+        },
+        operationOverrides: { paymentStatus: 'PAYMENT_FAILED' },
+      }),
+      createMailboxSubscriptionProjectionFixture({
+        mailboxOverrides: {
+          infrastructureCancelAtPeriodEnd: true,
+          infrastructureState: 'INACTIVE',
+          pendingLifecycleAction: 'STOP_MAILBOX_AT_PERIOD_END',
+        },
+      }),
+      createMailboxSubscriptionProjectionFixture({
+        mailboxOverrides: { infrastructurePaidThrough: now },
+      }),
+    ];
+
+    for (const fixture of scenarios) {
+      const {
+        service,
+        domainRepository,
+        mailboxRepository,
+        operationRepository,
+      } = createHarness();
+
+      operationRepository.find.mockResolvedValue([fixture.operation]);
+      domainRepository.find.mockResolvedValue([]);
+      mailboxRepository.find.mockResolvedValue([fixture.mailbox]);
+
+      await expect(
+        service.subscriptions({ workspaceId }),
+      ).resolves.toMatchObject([
+        { action: null, paidThrough: null, status: 'ACTION_REQUIRED' },
+      ]);
+    }
+  });
+
+  it('fails closed for duplicate, prorated, and extra correlated lines', async () => {
+    const baseline = createMailboxSubscriptionProjectionFixture();
+    const variants = [
+      [baseline.correlatedLine, { ...baseline.correlatedLine }],
+      [{ ...baseline.correlatedLine, isProrated: true }],
+      [
+        baseline.correlatedLine,
+        {
+          ...baseline.correlatedLine,
+          productId: 'unexpected-product',
+          subscriptionId: 'unexpected-subscription',
+        },
+      ],
+    ];
+
+    for (const correlatedSubscriptionLines of variants) {
+      const {
+        service,
+        domainRepository,
+        mailboxRepository,
+        operationRepository,
+      } = createHarness();
+      const fixture = createMailboxSubscriptionProjectionFixture({
+        correlatedSubscriptionLines,
+      });
+
+      operationRepository.find.mockResolvedValue([fixture.operation]);
+      domainRepository.find.mockResolvedValue([]);
+      mailboxRepository.find.mockResolvedValue([fixture.mailbox]);
+
+      await expect(
+        service.subscriptions({ workspaceId }),
+      ).resolves.toMatchObject([
+        { action: null, paidThrough: null, status: 'ACTION_REQUIRED' },
+      ]);
+    }
+  });
+
+  it('fails every row closed when an equal-size line set replaces one product', async () => {
+    const {
+      service,
+      domainRepository,
+      mailboxRepository,
+      operationRepository,
+    } = createHarness();
+    const fixture = createMailboxSubscriptionProjectionFixture();
+    const warmupExpectedLine = {
+      ...fixture.expectedLine,
+      metronomeProductId: 'product-warmup',
+      productKey: 'managed_warmup_month',
+    };
+    const unexpectedLine = {
+      ...fixture.correlatedLine,
+      productId: 'unexpected-product',
+      subscriptionId: 'unexpected-subscription',
+    };
+
+    operationRepository.find.mockResolvedValue([
+      {
+        ...fixture.operation,
+        correlatedSubscriptionLines: [fixture.correlatedLine, unexpectedLine],
+        expectedLineItems: [fixture.expectedLine, warmupExpectedLine],
+      },
+    ]);
+    domainRepository.find.mockResolvedValue([]);
+    mailboxRepository.find.mockResolvedValue([fixture.mailbox]);
+
+    const result = await service.subscriptions({ workspaceId });
+
+    expect(
+      result.map(({ action, paidThrough, status }) => ({
+        action,
+        paidThrough,
+        status,
+      })),
+    ).toEqual([
+      { action: null, paidThrough: null, status: 'ACTION_REQUIRED' },
+      { action: null, paidThrough: null, status: 'ACTION_REQUIRED' },
+    ]);
+  });
+
+  it('preserves warmup cancellation during the combined mailbox stop flow', async () => {
+    const {
+      service,
+      domainRepository,
+      mailboxRepository,
+      operationRepository,
+    } = createHarness();
+    const fixture = createMailboxSubscriptionProjectionFixture();
+    const expectedLine = {
+      ...fixture.expectedLine,
+      metronomeProductId: 'product-warmup',
+      productKey: 'managed_warmup_month',
+      unitPriceCents: 1_000,
+      totalCents: 1_000,
+    };
+    const correlatedLine = {
+      ...fixture.correlatedLine,
+      productId: 'product-warmup',
+      subscriptionId: 'subscription-warmup',
+      unitPrice: 1_000,
+      total: 1_000,
+    };
+
+    operationRepository.find.mockResolvedValue([
+      {
+        ...fixture.operation,
+        correlatedSubscriptionLines: [correlatedLine],
+        expectedLineItems: [expectedLine],
+      },
+    ]);
+    domainRepository.find.mockResolvedValue([]);
+    mailboxRepository.find.mockResolvedValue([
+      {
+        ...fixture.mailbox,
+        infrastructureCancelAtPeriodEnd: true,
+        pendingLifecycleAction: 'STOP_MAILBOX_AT_PERIOD_END',
+        warmupCancelAtPeriodEnd: true,
+        warmupPaidThrough: fixture.paidThrough,
+        warmupState: 'MAINTENANCE',
+        metronomeWarmupSubscriptionId: 'subscription-warmup',
+      },
+    ]);
+
+    await expect(service.subscriptions({ workspaceId })).resolves.toMatchObject(
+      [
+        {
+          action: null,
+          paidThrough: fixture.paidThrough,
+          status: 'CANCELS_AT_PERIOD_END',
+        },
+      ],
+    );
+  });
+
+  it('keeps paid mailbox and warmup subscriptions active during normal warmup', async () => {
+    const {
+      service,
+      domainRepository,
+      mailboxRepository,
+      operationRepository,
+    } = createHarness();
+    const fixture = createMailboxSubscriptionProjectionFixture();
+    const warmupExpectedLine = {
+      ...fixture.expectedLine,
+      metronomeProductId: 'product-warmup',
+      productKey: 'managed_warmup_month',
+      unitPriceCents: 1_000,
+      totalCents: 1_000,
+    };
+    const warmupCorrelatedLine = {
+      ...fixture.correlatedLine,
+      productId: 'product-warmup',
+      subscriptionId: 'subscription-warmup',
+      unitPrice: 1_000,
+      total: 1_000,
+    };
+
+    operationRepository.find.mockResolvedValue([
+      {
+        ...fixture.operation,
+        correlatedSubscriptionLines: [
+          fixture.correlatedLine,
+          warmupCorrelatedLine,
+        ],
+        expectedLineItems: [fixture.expectedLine, warmupExpectedLine],
+      },
+    ]);
+    domainRepository.find.mockResolvedValue([]);
+    mailboxRepository.find.mockResolvedValue([
+      {
+        ...fixture.mailbox,
+        metronomeWarmupSubscriptionId: 'subscription-warmup',
+        safeFailureCode: 'WARMUP_INCOMPLETE',
+        warmupCancelAtPeriodEnd: false,
+        warmupPaidThrough: fixture.paidThrough,
+        warmupState: 'WARMING',
+      },
+    ]);
+
+    await expect(service.subscriptions({ workspaceId })).resolves.toMatchObject(
+      [
+        {
+          action: 'STOP_SERVICE',
+          paidThrough: fixture.paidThrough,
+          status: 'ACTIVE',
+        },
+        {
+          action: 'CANCEL_RENEWAL',
+          paidThrough: fixture.paidThrough,
+          status: 'ACTIVE',
+        },
+      ],
+    );
   });
 });

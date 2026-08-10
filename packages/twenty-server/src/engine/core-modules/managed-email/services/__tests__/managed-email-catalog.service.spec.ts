@@ -39,7 +39,7 @@ const paymentProcessing = {
   verifiedAt: '2026-08-03',
 };
 
-const mailboxProviderCostMinorUnits = 400;
+const mailboxProviderCostMinorUnits = 250;
 const mailboxCustomerPriceMinorUnits = 650;
 
 const catalog = {

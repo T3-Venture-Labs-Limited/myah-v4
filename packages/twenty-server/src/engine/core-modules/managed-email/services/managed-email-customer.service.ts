@@ -13,8 +13,10 @@ import {
   ManagedEmailOverviewDTO,
   ManagedEmailProposalDTO,
   ManagedEmailQuoteDTO,
+  ManagedEmailSubscriptionDTO,
 } from 'src/engine/core-modules/managed-email/managed-email.dto';
 import { ManagedEmailProposalInput } from 'src/engine/core-modules/managed-email/managed-email.input';
+import { MANAGED_EMAIL_PRODUCT_KEYS } from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
 import { ManagedEmailAcquisitionOperationEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-domain.entity';
 import { ManagedEmailCatalogService } from 'src/engine/core-modules/managed-email/services/managed-email-catalog.service';
@@ -23,6 +25,9 @@ import { ManagedEmailReadinessService } from 'src/engine/core-modules/managed-em
 import { ManagedEmailMailboxEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-mailbox.entity';
 import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from 'src/engine/core-modules/managed-email/enums/managed-email-campaign-eligibility.enum';
+import { ManagedEmailInfrastructureState } from 'src/engine/core-modules/managed-email/enums/managed-email-infrastructure-state.enum';
+import { ManagedEmailLifecycleAction } from 'src/engine/core-modules/managed-email/enums/managed-email-lifecycle-action.enum';
+import { ManagedEmailWarmupState } from 'src/engine/core-modules/managed-email/enums/managed-email-warmup-state.enum';
 import { ManagedEmailAcquisitionService } from 'src/engine/core-modules/managed-email/services/managed-email-acquisition.service';
 import { ManagedEmailLifecycleService } from 'src/engine/core-modules/managed-email/services/managed-email-lifecycle.service';
 import { ManagedEmailProposalService } from 'src/engine/core-modules/managed-email/services/managed-email-proposal.service';
@@ -48,6 +53,15 @@ type CampaignCapInput = MailboxActionInput &
   Readonly<{
     dailyCap: number | null;
   }>;
+
+type ManagedEmailSubscriptionResource = {
+  cancelAtPeriodEnd: boolean;
+  id: string;
+  label: string;
+  lifecycleIsHealthy: boolean;
+  paidThrough: Date | null;
+  subscriptionId: string | null;
+};
 
 @Injectable()
 export class ManagedEmailCustomerService {
@@ -157,6 +171,238 @@ export class ManagedEmailCustomerService {
         warmupState: mailbox.warmupState,
       };
     });
+  }
+  async subscriptions({
+    workspaceId,
+  }: {
+    workspaceId: string;
+  }): Promise<ManagedEmailSubscriptionDTO[]> {
+    const [operations, domains, mailboxes] = await Promise.all([
+      this.operationRepository.find(workspaceId),
+      this.domainRepository.find(workspaceId),
+      this.mailboxRepository.find(workspaceId),
+    ]);
+    const now = new Date();
+
+    return operations
+      .filter(
+        (operation) =>
+          operation.workspaceId === workspaceId &&
+          operation.correlatedSubscriptionLines !== null,
+      )
+      .flatMap((operation) => {
+        const correlatedLines = operation.correlatedSubscriptionLines ?? [];
+        const operationIsHealthy =
+          operation.paymentStatus === 'PAID' &&
+          operation.state === 'PROVIDER_SUCCEEDED' &&
+          operation.safeFailureCode === null &&
+          operation.pendingRenewalProjection === null;
+        const lineSetIsExact =
+          correlatedLines.length === operation.expectedLineItems.length &&
+          operation.expectedLineItems.every(
+            (expectedLine) =>
+              correlatedLines.filter(
+                ({ productId }) =>
+                  productId === expectedLine.metronomeProductId,
+              ).length === 1,
+          ) &&
+          correlatedLines.every((correlatedLine) =>
+            operation.expectedLineItems.some(
+              ({ metronomeProductId }) =>
+                metronomeProductId === correlatedLine.productId,
+            ),
+          );
+
+        return operation.expectedLineItems.map((expectedLine) => {
+          const matchingLines = correlatedLines.filter(
+            ({ productId }) => productId === expectedLine.metronomeProductId,
+          );
+          const correlatedLine =
+            matchingLines.length === 1 ? matchingLines[0] : null;
+          let resources: ManagedEmailSubscriptionResource[];
+          let action: 'CANCEL_RENEWAL' | 'STOP_SERVICE';
+          let actionIsAvailable = true;
+          let resourceType: 'DOMAIN' | 'MAILBOX';
+
+          switch (expectedLine.productKey) {
+            case MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR: {
+              const operationDomains = domains.filter(
+                (domain) =>
+                  domain.workspaceId === workspaceId &&
+                  domain.acquisitionOperationId === operation.id,
+              );
+
+              resources = operationDomains.map((domain) => {
+                const hasCancellationIntent =
+                  domain.pendingLifecycleAction ===
+                    ManagedEmailLifecycleAction.DISABLE_DOMAIN_SUBSCRIPTION_PENDING ||
+                  domain.pendingLifecycleAction ===
+                    ManagedEmailLifecycleAction.DISABLE_DOMAIN_RENEWAL;
+
+                return {
+                  cancelAtPeriodEnd: domain.cancelAtPeriodEnd,
+                  id: domain.id,
+                  label: domain.normalizedDomain,
+                  lifecycleIsHealthy:
+                    domain.infrastructureState ===
+                      ManagedEmailInfrastructureState.ACTIVE &&
+                    domain.safeFailureCode === null &&
+                    (domain.cancelAtPeriodEnd
+                      ? hasCancellationIntent
+                      : !hasCancellationIntent),
+                  paidThrough: domain.paidThrough,
+                  subscriptionId: domain.metronomeSubscriptionId,
+                };
+              });
+              action = 'CANCEL_RENEWAL';
+              actionIsAvailable = operationDomains.every((domain) =>
+                mailboxes
+                  .filter(
+                    (mailbox) =>
+                      mailbox.workspaceId === workspaceId &&
+                      mailbox.managedEmailDomainId === domain.id,
+                  )
+                  .every((mailbox) => mailbox.infrastructureCancelAtPeriodEnd),
+              );
+              resourceType = 'DOMAIN';
+              break;
+            }
+            case MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH:
+              resources = mailboxes
+                .filter(
+                  (mailbox) =>
+                    mailbox.workspaceId === workspaceId &&
+                    mailbox.acquisitionOperationId === operation.id,
+                )
+                .map((mailbox) => {
+                  const hasCancellationIntent =
+                    mailbox.pendingLifecycleAction ===
+                      ManagedEmailLifecycleAction.STOP_MAILBOX_SUBSCRIPTION_PENDING ||
+                    mailbox.pendingLifecycleAction ===
+                      ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END;
+
+                  return {
+                    cancelAtPeriodEnd: mailbox.infrastructureCancelAtPeriodEnd,
+                    id: mailbox.id,
+                    label: mailbox.normalizedAddress,
+                    lifecycleIsHealthy:
+                      mailbox.infrastructureState ===
+                        ManagedEmailInfrastructureState.ACTIVE &&
+                      (mailbox.infrastructureCancelAtPeriodEnd
+                        ? hasCancellationIntent
+                        : !hasCancellationIntent),
+                    paidThrough: mailbox.infrastructurePaidThrough,
+                    subscriptionId: mailbox.metronomeMailboxSubscriptionId,
+                  };
+                });
+              action = 'STOP_SERVICE';
+              resourceType = 'MAILBOX';
+              break;
+            case MANAGED_EMAIL_PRODUCT_KEYS.WARMUP_MONTH:
+              resources = mailboxes
+                .filter(
+                  (mailbox) =>
+                    mailbox.workspaceId === workspaceId &&
+                    mailbox.acquisitionOperationId === operation.id,
+                )
+                .map((mailbox) => {
+                  const hasCancellationIntent =
+                    mailbox.pendingLifecycleAction ===
+                      ManagedEmailLifecycleAction.CANCEL_WARMUP_SUBSCRIPTION_PENDING ||
+                    mailbox.pendingLifecycleAction ===
+                      ManagedEmailLifecycleAction.CANCEL_WARMUP_AT_PERIOD_END ||
+                    mailbox.pendingLifecycleAction ===
+                      ManagedEmailLifecycleAction.STOP_MAILBOX_SUBSCRIPTION_PENDING ||
+                    mailbox.pendingLifecycleAction ===
+                      ManagedEmailLifecycleAction.STOP_MAILBOX_AT_PERIOD_END;
+                  const warmupIsActive =
+                    mailbox.warmupState === ManagedEmailWarmupState.WARMING ||
+                    mailbox.warmupState ===
+                      ManagedEmailWarmupState.MAINTENANCE ||
+                    mailbox.warmupState === ManagedEmailWarmupState.PAUSED ||
+                    (mailbox.warmupCancelAtPeriodEnd &&
+                      mailbox.warmupState ===
+                        ManagedEmailWarmupState.CANCEL_AT_PERIOD_END);
+
+                  return {
+                    cancelAtPeriodEnd: mailbox.warmupCancelAtPeriodEnd,
+                    id: mailbox.id,
+                    label: mailbox.normalizedAddress,
+                    lifecycleIsHealthy:
+                      warmupIsActive &&
+                      (mailbox.warmupCancelAtPeriodEnd
+                        ? hasCancellationIntent
+                        : !hasCancellationIntent),
+                    paidThrough: mailbox.warmupPaidThrough,
+                    subscriptionId: mailbox.metronomeWarmupSubscriptionId,
+                  };
+                });
+              action = 'CANCEL_RENEWAL';
+              resourceType = 'MAILBOX';
+              break;
+          }
+
+          resources.sort((left, right) => left.id.localeCompare(right.id));
+
+          const correlationMatches =
+            lineSetIsExact &&
+            correlatedLine !== null &&
+            !correlatedLine.isProrated &&
+            correlatedLine.startingAt === expectedLine.periodStart &&
+            correlatedLine.endingBefore === expectedLine.periodEnd &&
+            correlatedLine.quantity === expectedLine.quantity &&
+            correlatedLine.unitPrice === expectedLine.unitPriceCents &&
+            correlatedLine.total === expectedLine.totalCents;
+          const paidThrough = resources[0]?.paidThrough ?? null;
+          const paidThroughTime = paidThrough?.getTime() ?? Number.NaN;
+          const initialPaidThroughTime =
+            correlatedLine === null
+              ? Number.NaN
+              : new Date(correlatedLine.endingBefore).getTime();
+          const resourceCorrelationMatches =
+            correlatedLine !== null &&
+            resources.length === expectedLine.quantity &&
+            Number.isFinite(paidThroughTime) &&
+            paidThroughTime > now.getTime() &&
+            paidThroughTime >= initialPaidThroughTime &&
+            resources.every(
+              (resource) =>
+                resource.subscriptionId === correlatedLine.subscriptionId &&
+                resource.paidThrough?.getTime() === paidThroughTime &&
+                resource.lifecycleIsHealthy,
+            );
+          const cancellationCount = resources.filter(
+            ({ cancelAtPeriodEnd }) => cancelAtPeriodEnd,
+          ).length;
+          const cancellationStateMatches =
+            cancellationCount === 0 || cancellationCount === resources.length;
+          const status =
+            !operationIsHealthy ||
+            !correlationMatches ||
+            !resourceCorrelationMatches ||
+            !cancellationStateMatches
+              ? 'ACTION_REQUIRED'
+              : cancellationCount === resources.length
+                ? 'CANCELS_AT_PERIOD_END'
+                : 'ACTIVE';
+
+          return {
+            action: status === 'ACTIVE' && actionIsAvailable ? action : null,
+            billingInterval: expectedLine.billingFrequency,
+            currency: expectedLine.currency,
+            paidThrough: status === 'ACTION_REQUIRED' ? null : paidThrough,
+            productKey: expectedLine.productKey,
+            quantity: expectedLine.quantity,
+            recurringAmountCents: expectedLine.totalCents,
+            resourceIds: resources.map(({ id }) => id),
+            resourceLabels: resources.map(({ label }) => label),
+            resourceType,
+            service: 'MANAGED_EMAIL',
+            status,
+            unitPriceCents: expectedLine.unitPriceCents,
+          };
+        });
+      });
   }
 
   async prewarmedBundles({

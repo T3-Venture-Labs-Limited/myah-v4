@@ -264,6 +264,48 @@ export class ManagedEmailPaymentMethodStatusDTO {
   ready: boolean;
 }
 
+@ObjectType('ManagedEmailSubscription')
+export class ManagedEmailSubscriptionDTO {
+  @Field(() => String, { nullable: true })
+  action: string | null;
+
+  @Field(() => String)
+  billingInterval: string;
+
+  @Field(() => String)
+  currency: string;
+
+  @Field(() => Date, { nullable: true })
+  paidThrough: Date | null;
+
+  @Field(() => String)
+  productKey: string;
+
+  @Field(() => Int)
+  quantity: number;
+
+  @Field(() => Int)
+  recurringAmountCents: number;
+
+  @Field(() => [String])
+  resourceIds: string[];
+
+  @Field(() => [String])
+  resourceLabels: string[];
+
+  @Field(() => String)
+  resourceType: string;
+
+  @Field(() => String)
+  service: string;
+
+  @Field(() => String)
+  status: string;
+
+  @Field(() => Int)
+  unitPriceCents: number;
+}
+
 @ObjectType('ManagedEmailOperation')
 export class ManagedEmailOperationDTO {
   @Field(() => String)

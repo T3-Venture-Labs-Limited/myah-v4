@@ -59,6 +59,12 @@ const createResolver = () => {
     resumeWarmup: jest.fn().mockResolvedValue({ accepted: true }),
     setCampaignCap: jest.fn().mockResolvedValue({ accepted: true }),
     stopMailbox: jest.fn().mockResolvedValue({ accepted: true }),
+    subscriptions: jest.fn().mockResolvedValue([
+      {
+        productKey: 'managed_mailbox_month',
+        quantity: 2,
+      },
+    ]),
   };
 
   return {
@@ -95,6 +101,7 @@ describe('ManagedEmailResolver', () => {
         'managedEmailOverview',
         'managedEmailDomains',
         'managedEmailMailboxes',
+        'managedEmailSubscriptions',
         'managedEmailPrewarmedBundles',
         'managedEmailProposal',
         'managedEmailQuote',
@@ -162,6 +169,7 @@ describe('ManagedEmailResolver', () => {
       'ManagedEmailProposal',
       'ManagedEmailQuote',
       'ManagedEmailOperation',
+      'ManagedEmailSubscription',
       'ManagedEmailHealthDetails',
       'ManagedEmailActionResult',
       'ManagedEmailPaymentSetup',
@@ -199,6 +207,22 @@ describe('ManagedEmailResolver', () => {
     }
 
     await moduleRef.close();
+  });
+
+  it('loads recurring subscriptions for the authenticated workspace', async () => {
+    const { resolver, customerService } = createResolver();
+
+    await expect(
+      resolver.managedEmailSubscriptions(workspace as never),
+    ).resolves.toEqual([
+      {
+        productKey: 'managed_mailbox_month',
+        quantity: 2,
+      },
+    ]);
+    expect(customerService.subscriptions).toHaveBeenCalledWith({
+      workspaceId: workspace.id,
+    });
   });
 
   it('requires workspace auth, billing permission, and input validation', async () => {

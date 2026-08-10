@@ -42,6 +42,25 @@ export const GET_MANAGED_EMAIL_OVERVIEW = gql`
     }
   }
 `;
+export const GET_MANAGED_EMAIL_SUBSCRIPTIONS = gql`
+  query GetManagedEmailSubscriptions {
+    managedEmailSubscriptions {
+      action
+      billingInterval
+      currency
+      paidThrough
+      productKey
+      quantity
+      recurringAmountCents
+      resourceIds
+      resourceLabels
+      resourceType
+      service
+      status
+      unitPriceCents
+    }
+  }
+`;
 
 export const GET_MANAGED_EMAIL_PREWARMED_BUNDLES = gql`
   query GetManagedEmailPrewarmedBundles {
