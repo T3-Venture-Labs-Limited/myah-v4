@@ -1,6 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
-import { Queue } from 'bullmq';
 import { type Redis } from 'ioredis';
 
 import { AdminPanelHealthService } from 'src/engine/core-modules/admin-panel/admin-panel-health.service';
@@ -18,8 +17,15 @@ import { WorkerHealthIndicator } from 'src/engine/core-modules/admin-panel/indic
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { RedisClientService } from 'src/engine/core-modules/redis-client/redis-client.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+const mockQueue = {
+  getMetrics: jest.fn(),
+  getWorkers: jest.fn(),
+  close: jest.fn(),
+};
 
-jest.mock('bullmq');
+jest.mock('bullmq', () => ({
+  Queue: jest.fn(() => mockQueue),
+}));
 
 describe('AdminPanelHealthService', () => {
   let service: AdminPanelHealthService;
@@ -30,9 +36,10 @@ describe('AdminPanelHealthService', () => {
   let appHealth: jest.Mocked<AppHealthIndicator>;
   let redisClient: jest.Mocked<RedisClientService>;
   let twentyConfigService: jest.Mocked<TwentyConfigService>;
-  let loggerSpy: jest.SpyInstance;
+  let loggerSpy: jest.SpyInstance | undefined;
 
   beforeEach(async () => {
+    loggerSpy = undefined;
     databaseHealth = { isHealthy: jest.fn() } as any;
     redisHealth = { isHealthy: jest.fn() } as any;
     workerHealth = { isHealthy: jest.fn(), getQueueDetails: jest.fn() } as any;
@@ -43,12 +50,6 @@ describe('AdminPanelHealthService', () => {
       getQueueClient: jest.fn().mockReturnValue({} as Redis),
     } as any;
     twentyConfigService = { get: jest.fn() } as any;
-
-    (Queue as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
-      getMetrics: jest.fn(),
-      getWorkers: jest.fn(),
-      close: jest.fn(),
-    }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -81,7 +82,7 @@ describe('AdminPanelHealthService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-    loggerSpy.mockRestore();
+    loggerSpy?.mockRestore();
   });
 
   it('should be defined', () => {
@@ -364,17 +365,10 @@ describe('AdminPanelHealthService', () => {
   });
 
   describe('getQueueMetrics', () => {
-    const mockQueue = {
-      getMetrics: jest.fn(),
-      getWorkers: jest.fn(),
-      close: jest.fn(),
-    };
-
     beforeEach(() => {
       jest.clearAllMocks();
       redisClient.getClient.mockReturnValue({} as Redis);
       redisClient.getQueueClient.mockReturnValue({} as Redis);
-      (Queue as unknown as jest.Mock).mockImplementation(() => mockQueue);
     });
 
     it('should return metrics data for a queue with correct data transformation', async () => {
