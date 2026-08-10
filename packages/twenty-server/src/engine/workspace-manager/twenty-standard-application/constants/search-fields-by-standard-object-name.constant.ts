@@ -11,6 +11,7 @@ export const SEARCH_FIELDS_BY_STANDARD_OBJECT_NAME = {
   brandBrainUpdateProposal: [],
   campaign: [{ name: 'name', type: FieldMetadataType.TEXT }],
   campaignCreator: [],
+  campaignCreatorList: [],
   creator: [
     { name: 'name', type: FieldMetadataType.TEXT },
     { name: 'email', type: FieldMetadataType.TEXT },

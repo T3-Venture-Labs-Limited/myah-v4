@@ -44,7 +44,7 @@ test.describe.serial('Create Kanban View', () => {
     await page.getByRole('button', { name: 'Table', exact: true }).click();
     await page.getByText('Kanban').click();
     await page
-      .locator('[aria-controls="view-picker-kanban-field-options"]')
+      .getByRole('button', { name: 'Legacy status', exact: true })
       .click();
     await page
       .getByRole('option', { name: industryFieldName, exact: true })

@@ -32,11 +32,11 @@ const computeStandardViewObjectIds = <O extends AllStandardObjectName>({
   objectName,
 }: {
   objectName: O;
-}): StandardObjectViewIds<O> | undefined => {
+}): StandardObjectViewIds<O> => {
   const objectDefinition = STANDARD_OBJECTS[objectName];
 
   if (!('views' in objectDefinition)) {
-    return undefined;
+    return {} as StandardObjectViewIds<O>;
   }
 
   const viewDefinitions = objectDefinition.views as Record<

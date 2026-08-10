@@ -7,6 +7,8 @@ import { computeStandardAttachmentViews } from 'src/engine/workspace-manager/twe
 import {
   computeMyahBrandBrainPageViews,
   computeMyahBrandBrainUpdateProposalViews,
+  computeMyahCampaignCreatorListViews,
+  computeMyahCampaignCreatorViews,
   computeMyahCampaignViews,
   computeMyahCreatorListViews,
   computeMyahCreatorViews,
@@ -72,6 +74,8 @@ const STANDARD_FLAT_VIEW_METADATA_BUILDERS_BY_OBJECT_NAME = {
   workspaceMember: computeStandardWorkspaceMemberViews,
   brandBrainPage: computeMyahBrandBrainPageViews,
   brandBrainUpdateProposal: computeMyahBrandBrainUpdateProposalViews,
+  campaignCreatorList: computeMyahCampaignCreatorListViews,
+  campaignCreator: computeMyahCampaignCreatorViews,
   campaign: computeMyahCampaignViews,
   creatorList: computeMyahCreatorListViews,
   creator: computeMyahCreatorViews,

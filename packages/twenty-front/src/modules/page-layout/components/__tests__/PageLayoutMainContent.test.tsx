@@ -24,6 +24,12 @@ jest.mock('@/page-layout/components/MyahCampaignOperations', () => ({
   ),
 }));
 
+jest.mock('@/page-layout/components/MyahCreatorListMembers', () => ({
+  MyahCreatorListMembers: ({ creatorListId }: { creatorListId: string }) => (
+    <div>{`Creator List members integration:${creatorListId}`}</div>
+  ),
+}));
+
 jest.mock('@/page-layout/contexts/PageLayoutContentContext', () => ({
   PageLayoutContentProvider: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
@@ -72,6 +78,28 @@ describe('PageLayoutMainContent', () => {
     expect(screen.getByText('Native page layout content')).toBeVisible();
     expect(
       screen.getByText('Campaign operations integration:campaign-1'),
+    ).toBeVisible();
+  });
+
+  it('mounts Creator List membership controls on the Creator List Home tab', () => {
+    currentPageLayout = {
+      type: 'RECORD_PAGE',
+      universalIdentifier: 'c8952254-5bf9-43a5-baab-98666f9b444d',
+    };
+    activeTab = {
+      layout: 'VERTICAL_LIST',
+      title: 'Home',
+      universalIdentifier: '5dbb537f-2d8b-49ec-91bb-f74b0ab072d2',
+    };
+    targetRecordIdentifier = {
+      id: 'creator-list-1',
+      targetObjectNameSingular: 'creatorList',
+    };
+
+    render(<PageLayoutMainContent tabId="creator-list-home-tab-id" />);
+
+    expect(
+      screen.getByText('Creator List members integration:creator-list-1'),
     ).toBeVisible();
   });
 

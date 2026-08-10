@@ -1,5 +1,14 @@
 import { renderHook } from '@testing-library/react';
 
+jest.mock('@apollo/client/react', () => ({
+  useQuery: () => ({
+    data: undefined,
+    loading: false,
+    error: undefined,
+    refetch: jest.fn(),
+  }),
+}));
+
 import { useCreatorBulkRelationshipPreview } from '@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview';
 
 const mockUseFindManyRecords = jest.fn();

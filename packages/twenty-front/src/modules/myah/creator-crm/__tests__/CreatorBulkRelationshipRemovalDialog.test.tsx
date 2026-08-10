@@ -180,4 +180,116 @@ describe('CreatorBulkRelationshipDialog removal', () => {
       'creator-bulk-relationship-remove-creator-list-list-a',
     );
   });
+
+  it('reviews exact Campaign impact and forwards confirmation after a fresh check', async () => {
+    const refetchImpact = jest.fn().mockResolvedValue({
+      data: {
+        creatorListMembershipRemovalImpact: {
+          affectedCampaignIds: ['campaign-a'],
+          confirmationToken: 'token-a',
+        },
+      },
+    });
+    const refetch = jest.fn().mockResolvedValue(undefined);
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      ...readyPreview,
+      refetchImpact,
+      refetch,
+      campaignImpact: {
+        campaignIds: ['campaign-a'],
+        campaigns: [{ id: 'campaign-a', label: 'Spring campaign' }],
+        confirmationToken: 'token-a',
+      },
+    });
+
+    render(
+      <CreatorBulkRelationshipDialog
+        action={removeFromListAction}
+        selectedCreatorIds={['creator-a']}
+      />,
+    );
+
+    expect(screen.getByText('Spring campaign')).toBeVisible();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from list' }));
+    });
+
+    expect(mockRemoveCreatorListMembers).toHaveBeenCalledWith({
+      creatorIdsToRemove: ['creator-a'],
+      creatorListId: 'list-a',
+      creatorListMemberIdsToRemove: ['membership-a'],
+      confirmedCampaignIds: ['campaign-a'],
+      confirmationToken: 'token-a',
+    });
+  });
+  it('allows confirmation after rendering refreshed Campaign impact', async () => {
+    const refetchImpact = jest.fn().mockResolvedValue({
+      data: {
+        creatorListMembershipRemovalImpact: {
+          affectedCampaignIds: ['campaign-b'],
+          confirmationToken: 'token-b',
+        },
+      },
+    });
+    const refetch = jest.fn().mockResolvedValue(undefined);
+    let currentPreview = {
+      ...readyPreview,
+      refetchImpact,
+      refetch,
+      campaignImpact: {
+        campaignIds: ['campaign-a'],
+        campaigns: [{ id: 'campaign-a', label: 'Spring campaign' }],
+        confirmationToken: 'token-a',
+      },
+    };
+    mockUseCreatorBulkRelationshipPreview.mockImplementation(
+      () => currentPreview,
+    );
+    const dialog = (
+      <CreatorBulkRelationshipDialog
+        action={removeFromListAction}
+        selectedCreatorIds={['creator-a']}
+      />
+    );
+    const { rerender } = render(dialog);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from list' }));
+    });
+
+    expect(mockRemoveCreatorListMembers).not.toHaveBeenCalled();
+    expect(refetch).toHaveBeenCalledTimes(1);
+
+    currentPreview = {
+      ...currentPreview,
+      campaignImpact: {
+        campaignIds: ['campaign-b'],
+        campaigns: [{ id: 'campaign-b', label: 'Autumn campaign' }],
+        confirmationToken: 'token-b',
+      },
+    };
+    rerender(
+      <CreatorBulkRelationshipDialog
+        action={removeFromListAction}
+        selectedCreatorIds={['creator-a']}
+      />,
+    );
+
+    expect(screen.getByText('Autumn campaign')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Remove from list' }),
+    ).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from list' }));
+    });
+
+    expect(mockRemoveCreatorListMembers).toHaveBeenCalledWith({
+      creatorIdsToRemove: ['creator-a'],
+      creatorListId: 'list-a',
+      creatorListMemberIdsToRemove: ['membership-a'],
+      confirmedCampaignIds: ['campaign-b'],
+      confirmationToken: 'token-b',
+    });
+  });
 });

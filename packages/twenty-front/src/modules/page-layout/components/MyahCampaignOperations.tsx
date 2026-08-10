@@ -1,11 +1,11 @@
 import { type CSSProperties, useState } from 'react';
-
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { MyahCampaignAudienceControls } from '@/page-layout/components/MyahCampaignAudienceControls';
 import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
 import { Status } from 'twenty-ui/data-display';
 import { InlineBanner, Loader } from 'twenty-ui/feedback';
@@ -345,6 +345,13 @@ const MyahCampaignOperationsData = ({
         })}
       </div>
 
+      {campaignPermissions.canUpdateObjectRecords ? (
+        <MyahCampaignAudienceControls
+          key={campaignId}
+          campaignId={campaignId}
+          onAudienceChanged={refetchAudience}
+        />
+      ) : null}
       {blockers.map((blocker) => (
         <InlineBanner key={blocker} color="danger" message={blocker} />
       ))}

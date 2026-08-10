@@ -14,6 +14,7 @@ import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channe
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { IMAPAPIsModule } from 'src/modules/connected-account/imap-api/imap-apis.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
+import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-campaign-lifecycle.module';
 
 @Global()
 @Module({
@@ -28,6 +29,7 @@ import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty
     ImapSmtpCaldavModule,
     IMAPAPIsModule,
     ConnectedAccountMetadataModule,
+    MyahCampaignLifecycleModule,
     ConnectedAccountTokenEncryptionModule,
     PermissionsModule,
   ],

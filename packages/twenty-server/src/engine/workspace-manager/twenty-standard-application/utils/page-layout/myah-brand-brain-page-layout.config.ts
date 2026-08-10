@@ -159,6 +159,33 @@ export const MYAH_CREATOR_PAGE_LAYOUT_CONFIG = {
   },
 } as const satisfies StandardPageLayoutConfig;
 
+export const MYAH_CREATOR_LIST_PAGE_LAYOUT_CONFIG = {
+  name: 'Creator List Record Page',
+  type: PageLayoutType.RECORD_PAGE,
+  universalIdentifier: 'c8952254-5bf9-43a5-baab-98666f9b444d',
+  objectUniversalIdentifier:
+    MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+  defaultTabUniversalIdentifier: '5dbb537f-2d8b-49ec-91bb-f74b0ab072d2',
+  tabs: {
+    home: {
+      universalIdentifier: '5dbb537f-2d8b-49ec-91bb-f74b0ab072d2',
+      title: 'Home',
+      position: 10,
+      icon: 'IconHome',
+      layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+      widgets: {
+        fields: {
+          universalIdentifier: 'cdf8d521-10c0-4cad-a9e8-b7767deea176',
+          title: 'Creator List details',
+          type: WidgetType.FIELDS,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: VERTICAL_LIST_LAYOUT_POSITIONS.FIRST,
+        },
+      },
+    },
+  },
+} as const satisfies StandardPageLayoutConfig;
+
 export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
   name: 'Campaign Record Page',
   type: PageLayoutType.RECORD_PAGE,
@@ -252,9 +279,59 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
   },
 } as const satisfies StandardPageLayoutConfig;
 
+export const MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG = {
+  ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
+  tabs: {
+    overview: {
+      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.overview,
+      widgets: {
+        ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.overview.widgets,
+        creatorLists: {
+          universalIdentifier: 'a4f1aa45-0be4-4c75-bd2a-0f3a1d75d46c',
+          title: 'Creator Lists',
+          type: WidgetType.FIELD,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: VERTICAL_LIST_LAYOUT_POSITIONS.SECOND,
+          fieldUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreatorLists
+              .universalIdentifier,
+          viewUniversalIdentifier: 'b8f5e34d-2a1a-4cd3-8b8f-22c8f4c8f4a1',
+        },
+      },
+    },
+    tasks: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.tasks,
+    influencers: {
+      universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+      title: 'Influencers',
+      position: 25,
+      icon: 'IconUsers',
+      layoutMode: PageLayoutTabLayoutMode.CANVAS,
+      widgets: {
+        influencers: {
+          universalIdentifier: '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2',
+          title: 'Influencers',
+          type: WidgetType.FIELD,
+          fieldUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators
+              .universalIdentifier,
+          viewUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+              .universalIdentifier,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+        },
+      },
+    },
+    notes: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.notes,
+    instructions: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.instructions,
+    operations: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.operations,
+  },
+} as const satisfies StandardPageLayoutConfig;
+
 export const ALL_STANDARD_PAGE_LAYOUTS = {
   ...STANDARD_PAGE_LAYOUTS,
   brandBrainPageRecordPage: MYAH_BRAND_BRAIN_PAGE_LAYOUT_CONFIG,
   creatorRecordPage: MYAH_CREATOR_PAGE_LAYOUT_CONFIG,
-  campaignRecordPage: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
+  campaignRecordPage: MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
+  creatorListRecordPage: MYAH_CREATOR_LIST_PAGE_LAYOUT_CONFIG,
 } as const;
