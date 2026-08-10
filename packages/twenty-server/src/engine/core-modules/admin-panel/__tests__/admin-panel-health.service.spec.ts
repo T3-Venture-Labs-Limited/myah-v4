@@ -51,7 +51,6 @@ describe('AdminPanelHealthService', () => {
     } as any;
     twentyConfigService = { get: jest.fn() } as any;
 
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminPanelHealthService,
