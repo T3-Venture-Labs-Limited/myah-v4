@@ -1145,6 +1145,24 @@ describe('Myah standard metadata contract', () => {
       ).toHaveLength(1);
     }
   });
+  it('pins one managed mailbox identity to each Campaign Creator', () => {
+    const field =
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaignCreator.fields.assignedManagedMailboxId
+          .universalIdentifier
+      ];
+
+    expect(field).toMatchObject({
+      name: 'assignedManagedMailboxId',
+      universalIdentifier: 'c1abf590-4797-5bd8-a820-07f55ffce9c0',
+      objectMetadataUniversalIdentifier:
+        MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+      type: FieldMetadataType.TEXT,
+      isNullable: true,
+      isUIEditable: true,
+    });
+  });
+
   it('enforces one active membership for each Creator List and Campaign relationship', () => {
     const expectedIndexes = [
       {

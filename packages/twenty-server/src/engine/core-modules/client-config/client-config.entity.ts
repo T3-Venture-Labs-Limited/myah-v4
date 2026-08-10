@@ -328,6 +328,9 @@ export class ClientConfig {
   isImapSmtpCaldavEnabled: boolean;
 
   @Field(() => Boolean)
+  isManagedEmailEnabled: boolean;
+
+  @Field(() => Boolean)
   isEmailingDomainInDemoMode: boolean;
 
   @Field(() => Boolean)

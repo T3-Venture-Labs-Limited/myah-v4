@@ -28,6 +28,11 @@ import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/works
     where: '"metronomeCustomerId" IS NOT NULL',
   },
 )
+@Index(
+  'IDX_MYAH_WORKSPACE_INSTALLATION_STRIPE_CUSTOMER_ID_UNIQUE',
+  ['stripeCustomerId'],
+  { unique: true, where: '"stripeCustomerId" IS NOT NULL' },
+)
 export class MyahWorkspaceInstallationEntity extends WorkspaceRelatedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -36,6 +41,8 @@ export class MyahWorkspaceInstallationEntity extends WorkspaceRelatedEntity {
   customerAccountId: string;
   @Column({ nullable: true, type: 'uuid' })
   metronomeCustomerId: string | null;
+  @Column({ nullable: true, type: 'varchar' })
+  stripeCustomerId: string | null;
 
   @ManyToOne(
     () => CustomerAccountEntity,

@@ -12,6 +12,7 @@ import { emailSchema } from 'twenty-shared/utils';
 import { IsNull, type Repository } from 'typeorm';
 
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import {
   type OutreachPreparationAuthority,
   type PreparedOutreachEmailDraft,
@@ -37,6 +38,7 @@ type CampaignCreatorRecord = ObjectRecord & {
   creatorId: string | null;
   campaignId: string | null;
   selectedContactMethod: string | null;
+  assignedManagedMailboxId: string | null;
 };
 
 type CreatorRecord = ObjectRecord & {
@@ -91,6 +93,7 @@ export class OutreachEmailDraftService {
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly messageOutboundService: MessagingMessageOutboundService,
+    private readonly managedEmailCampaignEligibilityService: ManagedEmailCampaignEligibilityService,
   ) {}
 
   async resolvePreparationAuthority(
@@ -261,6 +264,14 @@ export class OutreachEmailDraftService {
           );
         }
 
+        if (
+          !isNonEmptyString(campaignCreator.assignedManagedMailboxId?.trim())
+        ) {
+          throw new Error(
+            'Campaign Creator does not have an assigned managed mailbox',
+          );
+        }
+
         const [creator, campaign] = await Promise.all([
           creatorRepository.findOne({
             where: { id: campaignCreator.creatorId },
@@ -327,6 +338,14 @@ export class OutreachEmailDraftService {
           messageChannelId: messageChannel.id,
           messageRepository,
           associationRepository,
+        });
+
+        await this.managedEmailCampaignEligibilityService.assertEligible({
+          workspaceId: input.workspaceId,
+          managedMailboxId: campaignCreator.assignedManagedMailboxId.trim(),
+          connectedAccountId: connectedAccount.id,
+          messageChannelId: messageChannel.id,
+          isFollowUp: threadContext.inReplyTo !== null,
         });
         const recipientLabel = isNonEmptyString(creator.name?.trim())
           ? creator.name.trim()

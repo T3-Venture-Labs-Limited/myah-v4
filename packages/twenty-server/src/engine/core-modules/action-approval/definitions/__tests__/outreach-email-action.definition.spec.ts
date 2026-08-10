@@ -18,6 +18,7 @@ const messageChannelId = '00000000-0000-4000-8000-000000000009';
 const parentMessageId = '00000000-0000-4000-8000-000000000010';
 const messageThreadId = '00000000-0000-4000-8000-000000000011';
 const otherWorkspaceId = '00000000-0000-4000-8000-000000000012';
+const managedMailboxId = '00000000-0000-4000-8000-000000000013';
 
 const metadataIds = {
   outreachAction: '00000000-0000-4000-8000-000000000101',
@@ -66,6 +67,7 @@ type FixtureState = {
     creatorId: string;
     campaignId: string;
     selectedContactMethod: string;
+    assignedManagedMailboxId: string;
   };
   creator: { id: string; name: string; email: string };
   campaign: { id: string; name: string };
@@ -132,6 +134,7 @@ const createFixtureState = (reply = false) => {
       creatorId,
       campaignId,
       selectedContactMethod: 'EMAIL',
+      assignedManagedMailboxId: managedMailboxId,
     },
     creator: {
       id: creatorId,
@@ -247,6 +250,12 @@ const buildDefinition = ({
   const messageChannelRepository = {
     find: jest.fn(async () => [{ ...state.messageChannel }]),
   };
+  const assertEligible = jest.fn().mockResolvedValue({
+    id: managedMailboxId,
+    connectedAccountId,
+    messageChannelId,
+    effectiveDailyCap: 10,
+  });
   const Definition = OutreachEmailActionDefinition as unknown as new (
     ...args: unknown[]
   ) => OutreachEmailActionDefinition;
@@ -258,6 +267,7 @@ const buildDefinition = ({
     objectMetadataRepository,
     connectedAccountRepository,
     messageChannelRepository,
+    assertEligible,
     definition: new Definition(
       workspaceRepository,
       globalWorkspaceOrmManager,
@@ -266,6 +276,7 @@ const buildDefinition = ({
       workspaceCacheService,
       connectedAccountRepository,
       messageChannelRepository,
+      { assertEligible },
     ),
   };
 };
@@ -329,6 +340,7 @@ describe('OutreachEmailActionDefinition', () => {
         ),
         sendingAccountFingerprint: computeActionContentDigest(
           JSON.stringify([
+            managedMailboxId,
             connectedAccountId,
             messageChannelId,
             'sender@example.com',
@@ -364,6 +376,7 @@ describe('OutreachEmailActionDefinition', () => {
         ],
       },
       canonicalGraph: {
+        managedMailboxId,
         outreachActionId,
         subject: 'Partnership opportunity',
         body: 'Would you like to collaborate?',
@@ -500,6 +513,38 @@ describe('OutreachEmailActionDefinition', () => {
         binding: proposal.expectedActionBinding,
       }),
     ).rejects.toThrow('Outreach email source graph is unavailable');
+  });
+
+  it('rechecks the approved managed mailbox immediately before execution', async () => {
+    const { definition, assertEligible } = buildDefinition();
+    const proposal = await propose(definition);
+
+    expect(assertEligible).not.toHaveBeenCalled();
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).resolves.toBeDefined();
+    expect(assertEligible).toHaveBeenCalledWith({
+      workspaceId,
+      managedMailboxId,
+      connectedAccountId,
+      messageChannelId,
+      isFollowUp: false,
+    });
+
+    assertEligible.mockRejectedValueOnce(
+      new Error('Managed mailbox is not eligible for campaign sending'),
+    );
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).rejects.toThrow('Managed mailbox is not eligible for campaign sending');
   });
 
   it.each<[string, (state: FixtureState) => void]>([

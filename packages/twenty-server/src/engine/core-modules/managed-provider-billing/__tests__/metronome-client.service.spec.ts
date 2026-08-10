@@ -8,6 +8,11 @@ import {
   MetronomeClientExceptionCode,
 } from '../metronome-client.exception';
 import { MetronomeClientService } from '../services/metronome-client.service';
+import {
+  type MetronomeAddSubscriptionInput,
+  type MetronomeEndSubscriptionInput,
+  type MetronomeQuantityUpdateInput,
+} from '../types/metronome-subscription.type';
 
 jest.mock('@metronome/sdk', () => ({
   Metronome: jest.fn(),
@@ -21,6 +26,8 @@ describe('MetronomeClientService', () => {
       get: jest.fn((key: keyof ConfigVariables) => {
         switch (key) {
           case 'METRONOME_ENABLED':
+            return false;
+          case 'MANAGED_EMAIL_ENABLED':
             return false;
           case 'METRONOME_API_KEY':
           case 'METRONOME_RATE_CARD_ALIAS':
@@ -44,6 +51,32 @@ describe('MetronomeClientService', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('constructs the SDK with the configured Metronome environment root', async () => {
+    const list = jest.fn().mockResolvedValue({ data: [] });
+    metronomeConstructor.mockImplementation(
+      () => ({ v1: { customers: { list } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService(
+      {
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return false;
+          if (key === 'MANAGED_EMAIL_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService,
+      'https://metronome.example',
+    );
+
+    await expect(
+      service.findCustomerByIngestAlias('myah-workspace:workspace-id'),
+    ).resolves.toEqual([]);
+    expect(metronomeConstructor).toHaveBeenCalledWith({
+      baseURL: 'https://metronome.example',
+      bearerToken: 'metronome-api-key',
+    });
   });
 
   it.each([
@@ -70,6 +103,11 @@ describe('MetronomeClientService', () => {
         }),
     ],
     [
+      'setStripeBillingConfiguration',
+      (service: MetronomeClientService) =>
+        service.setStripeBillingConfiguration('customer-id', 'cus_123'),
+    ],
+    [
       'createCustomerCredit',
       (service: MetronomeClientService) =>
         service.createCustomerCredit({
@@ -85,9 +123,59 @@ describe('MetronomeClientService', () => {
         }),
     ],
     [
+      'addSubscription',
+      (service: MetronomeClientService) =>
+        service.addSubscription({
+          billingFrequency: 'MONTHLY',
+          contractId: 'contract-id',
+          customerId: 'customer-id',
+          productId: 'product-id',
+          quantity: 1,
+          startingAt: '2026-08-01T00:00:00.000Z',
+          uniquenessKey: 'add-subscription-1',
+          proration: {
+            invoiceBehavior: 'BILL_IMMEDIATELY',
+            isProrated: true,
+          },
+        }),
+    ],
+    [
+      'scheduleSubscriptionQuantity',
+      (service: MetronomeClientService) =>
+        service.scheduleSubscriptionQuantity({
+          contractId: 'contract-id',
+          customerId: 'customer-id',
+          effectiveAt: '2026-09-01T00:00:00.000Z',
+          quantity: 2,
+          subscriptionId: 'subscription-id',
+          uniquenessKey: 'quantity-2',
+        }),
+    ],
+    [
+      'endSubscription',
+      (service: MetronomeClientService) =>
+        service.endSubscription({
+          contractId: 'contract-id',
+          customerId: 'customer-id',
+          endingBefore: '2026-10-01T00:00:00.000Z',
+          subscriptionId: 'subscription-id',
+          uniquenessKey: 'end-subscription-1',
+        }),
+    ],
+    [
       'findCurrentContracts',
       (service: MetronomeClientService) =>
         service.findCurrentContracts('customer-id'),
+    ],
+    [
+      'listInvoicesFirstPage',
+      (service: MetronomeClientService) =>
+        service.listInvoicesFirstPage({
+          contractId: 'contract-id',
+          customerId: 'customer-id',
+          endingBefore: '2026-09-01T00:00:00.000Z',
+          startingOn: '2026-08-01T00:00:00.000Z',
+        }),
     ],
     [
       'previewUsage',
@@ -181,6 +269,7 @@ describe('MetronomeClientService', () => {
       },
     ]);
     expect(metronomeConstructor).toHaveBeenCalledWith({
+      baseURL: 'https://api.metronome.com',
       bearerToken: 'metronome-api-key',
     });
     expect(listCustomers).toHaveBeenCalledWith({
@@ -368,6 +457,7 @@ describe('MetronomeClientService', () => {
 
     await expect(service.findCurrentContracts('customer-id')).resolves.toEqual([
       {
+        activeBillingProviderConfiguration: null,
         id: 'contract-id',
         rateCardId: 'rate-card-id',
         startingAt: '2026-07-16T12:00:00.000Z',
@@ -424,6 +514,7 @@ describe('MetronomeClientService', () => {
           startingAt: '2026-07-01T00:00:00.000Z',
         },
       ],
+      fiatCreditType: null,
       id: 'rate-card-id',
     });
     expect(retrieveRateCard).toHaveBeenCalledWith({ id: 'rate-card-id' });
@@ -1217,4 +1308,1505 @@ describe('MetronomeClientService', () => {
       code: MetronomeClientExceptionCode.REQUEST_FAILED,
     });
   });
+
+  it('sets the exact Stripe customer billing configuration through v1', async () => {
+    const createBillingConfig = jest.fn().mockResolvedValue(undefined);
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: {
+              billingConfig: { create: createBillingConfig },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.setStripeBillingConfiguration('customer-id', 'cus_123'),
+    ).resolves.toBeUndefined();
+    expect(createBillingConfig).toHaveBeenCalledWith(
+      {
+        billing_provider_customer_id: 'cus_123',
+        billing_provider_type: 'stripe',
+        customer_id: 'customer-id',
+        stripe_collection_method: 'charge_automatically',
+      },
+      { maxRetries: 0 },
+    );
+  });
+
+  it.each([
+    ['after a successful write', undefined],
+    ['after a response-lost write', { status: 500 }],
+  ])(
+    'creates and verifies the exact current Stripe billing configuration %s',
+    async (_, writeError) => {
+      const setBillingConfigurations =
+        writeError === undefined
+          ? jest.fn().mockResolvedValue({
+              data: [{ id: 'billing-config-id' }],
+            })
+          : jest.fn().mockRejectedValue(writeError);
+      const retrieveBillingConfigurations = jest.fn().mockResolvedValue({
+        data: [
+          {
+            archived_at: null,
+            billing_provider: 'stripe',
+            configuration: {
+              stripe_collection_method: 'charge_automatically',
+              stripe_customer_id: 'cus_123',
+            },
+            customer_id: 'customer-id',
+            delivery_method: 'direct_to_billing_provider',
+            delivery_method_configuration: {},
+            delivery_method_id: 'delivery-method-id',
+            id: 'billing-config-id',
+          },
+        ],
+      });
+      metronomeConstructor.mockImplementation(
+        () =>
+          ({
+            v1: {
+              customers: {
+                retrieveBillingConfigurations,
+                setBillingConfigurations,
+              },
+            },
+          }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      await expect(
+        service.createBillingConfiguration({
+          billingProviderType: 'stripe',
+          customerId: 'customer-id',
+          deliveryMethodId: 'delivery-method-id',
+          stripeCollectionMethod: 'charge_automatically',
+          stripeCustomerId: 'cus_123',
+        }),
+      ).resolves.toBeUndefined();
+      expect(setBillingConfigurations).toHaveBeenCalledWith(
+        {
+          data: [
+            {
+              billing_provider: 'stripe',
+              configuration: {
+                stripe_collection_method: 'charge_automatically',
+                stripe_customer_id: 'cus_123',
+              },
+              customer_id: 'customer-id',
+              delivery_method_id: 'delivery-method-id',
+            },
+          ],
+        },
+        { maxRetries: 0 },
+      );
+      expect(retrieveBillingConfigurations).toHaveBeenCalledWith({
+        customer_id: 'customer-id',
+      });
+    },
+  );
+
+  it('keeps an unresolved current billing-configuration write uncertain', async () => {
+    const setBillingConfigurations = jest
+      .fn()
+      .mockRejectedValue({ status: 500 });
+    const retrieveBillingConfigurations = jest
+      .fn()
+      .mockResolvedValue({ data: [] });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: {
+              retrieveBillingConfigurations,
+              setBillingConfigurations,
+            },
+          },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.createBillingConfiguration({
+        billingProviderType: 'stripe',
+        customerId: 'customer-id',
+        deliveryMethodId: 'delivery-method-id',
+        stripeCollectionMethod: 'charge_automatically',
+        stripeCustomerId: 'cus_123',
+      }),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    });
+    expect(setBillingConfigurations).toHaveBeenCalledTimes(1);
+  });
+
+  it('retrieves and normalizes the exact current Stripe billing configuration', async () => {
+    const retrieveBillingConfigurations = jest.fn().mockResolvedValue({
+      data: [
+        {
+          archived_at: null,
+          billing_provider: 'stripe',
+          configuration: {
+            stripe_collection_method: 'charge_automatically',
+            stripe_customer_id: 'cus_123',
+          },
+          customer_id: 'customer-id',
+          delivery_method: 'direct_to_billing_provider',
+          delivery_method_configuration: {},
+          delivery_method_id: 'delivery-method-id',
+          id: 'billing-config-id',
+        },
+      ],
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: { retrieveBillingConfigurations },
+          },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.getBillingConfiguration('customer-id'),
+    ).resolves.toEqual({
+      billingProviderType: 'stripe',
+      deliveryMethod: 'direct_to_billing_provider',
+      deliveryMethodId: 'delivery-method-id',
+      id: 'billing-config-id',
+      stripeCollectionMethod: 'charge_automatically',
+      stripeCustomerId: 'cus_123',
+    });
+    expect(retrieveBillingConfigurations).toHaveBeenCalledWith({
+      customer_id: 'customer-id',
+    });
+  });
+
+  it('returns no billing configuration when no current configuration exists', async () => {
+    const retrieveBillingConfigurations = jest
+      .fn()
+      .mockResolvedValue({ data: [] });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: { retrieveBillingConfigurations },
+          },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.getBillingConfiguration('customer-id'),
+    ).resolves.toBeNull();
+  });
+
+  it('fails closed when multiple active Stripe configurations exist', async () => {
+    const configuration = {
+      archived_at: null,
+      billing_provider: 'stripe',
+      configuration: {
+        stripe_collection_method: 'charge_automatically',
+        stripe_customer_id: 'cus_123',
+      },
+      customer_id: 'customer-id',
+      delivery_method: 'direct_to_billing_provider',
+      delivery_method_configuration: {},
+      delivery_method_id: 'delivery-method-id',
+      id: 'billing-config-id',
+    };
+    const retrieveBillingConfigurations = jest.fn().mockResolvedValue({
+      data: [configuration, { ...configuration, id: 'other-config-id' }],
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            customers: { retrieveBillingConfigurations },
+          },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.getBillingConfiguration('customer-id'),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.REQUEST_FAILED,
+    });
+  });
+
+  it('creates a managed-email contract with Stripe direct delivery without a configuration ID', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-16T12:37:42.123Z'));
+    const createContract = jest.fn().mockResolvedValue({
+      data: { id: 'contract-id' },
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: { contracts: { create: createContract } },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await service.createContract({
+      billingProviderConfiguration: {
+        billingProvider: 'stripe',
+        deliveryMethod: 'direct_to_billing_provider',
+      },
+      customerId: 'customer-id',
+      rateCardAlias: 'managed-email',
+      uniquenessKey: 'myah-managed-email-workspace-contract:workspace-id',
+    });
+
+    expect(createContract).toHaveBeenCalledWith(
+      {
+        billing_provider_configuration: {
+          billing_provider: 'stripe',
+          delivery_method: 'direct_to_billing_provider',
+        },
+        customer_id: 'customer-id',
+        rate_card_alias: 'managed-email',
+        starting_at: '2026-07-16T12:00:00.000Z',
+        uniqueness_key: 'myah-managed-email-workspace-contract:workspace-id',
+      },
+      { maxRetries: 0 },
+    );
+  });
+
+  it('projects only the active billing-provider schedule entry', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-16T12:00:00.000Z'));
+    const listContracts = jest.fn().mockResolvedValue({
+      data: [
+        {
+          billing_provider_configuration_schedule: [
+            {
+              billing_provider_configuration: {
+                id: 'expired-config',
+                billing_provider: 'stripe',
+                delivery_method: 'direct_to_billing_provider',
+                delivery_method_id: 'expired-delivery',
+              },
+              effective_at: '2026-06-01T00:00:00.000Z',
+              effective_until: '2026-07-01T00:00:00.000Z',
+            },
+            {
+              billing_provider_configuration: {
+                id: 'active-config',
+                billing_provider: 'stripe',
+                delivery_method: 'direct_to_billing_provider',
+                delivery_method_id: 'delivery-method-id',
+              },
+              effective_at: '2026-07-01T00:00:00.000Z',
+              effective_until: '2026-08-01T00:00:00.000Z',
+            },
+            {
+              billing_provider_configuration: {
+                id: 'future-config',
+                billing_provider: 'stripe',
+                delivery_method: 'direct_to_billing_provider',
+                delivery_method_id: 'future-delivery',
+              },
+              effective_at: '2026-08-01T00:00:00.000Z',
+            },
+          ],
+          id: 'contract-id',
+          rate_card_id: 'rate-card-id',
+          starting_at: '2026-07-01T00:00:00.000Z',
+          uniqueness_key: 'managed-email-key',
+        },
+      ],
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v2: { contracts: { list: listContracts } },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(service.findCurrentContracts('customer-id')).resolves.toEqual([
+      {
+        activeBillingProviderConfiguration: {
+          billingProvider: 'stripe',
+          deliveryMethod: 'direct_to_billing_provider',
+          deliveryMethodId: 'delivery-method-id',
+          id: 'active-config',
+        },
+        id: 'contract-id',
+        rateCardId: 'rate-card-id',
+        startingAt: '2026-07-01T00:00:00.000Z',
+        uniquenessKey: 'managed-email-key',
+      },
+    ]);
+  });
+
+  it('projects the rate-card fiat credit type for persisted USD proof', async () => {
+    const retrieveRateCard = jest.fn().mockResolvedValue({
+      data: {
+        aliases: [],
+        fiat_credit_type: { id: 'usd-credit-type', name: 'USD' },
+        id: 'rate-card-id',
+      },
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            contracts: {
+              rateCards: { retrieve: retrieveRateCard },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(service.getRateCard('rate-card-id')).resolves.toEqual({
+      aliases: [],
+      fiatCreditType: { id: 'usd-credit-type', name: 'USD' },
+      id: 'rate-card-id',
+    });
+  });
+
+  it('adds an advance quantity-only subscription and returns Myah-owned receipt IDs', async () => {
+    const edit = jest.fn().mockResolvedValue({
+      data: {
+        edit: {
+          add_subscriptions: [{ id: 'subscription-id' }],
+          id: 'edit-id',
+        },
+      },
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+    const input: MetronomeAddSubscriptionInput = {
+      billingFrequency: 'MONTHLY',
+      contractId: 'contract-id',
+      customerId: 'customer-id',
+      endingBefore: '2027-08-01T00:00:00.000Z',
+      productId: 'product-id',
+      quantity: 3,
+      startingAt: '2026-08-01T00:00:00.000Z',
+      uniquenessKey: 'add-subscription-1',
+      proration: {
+        invoiceBehavior: 'BILL_IMMEDIATELY',
+        isProrated: true,
+        rounding: { decimalPlaces: 0, roundingMethod: 'HALF_UP' },
+      },
+    };
+
+    await expect(service.addSubscription(input)).resolves.toEqual({
+      metronomeEditId: 'edit-id',
+      subscriptionId: 'subscription-id',
+    });
+    expect(edit).toHaveBeenCalledWith(
+      {
+        add_subscriptions: [
+          {
+            collection_schedule: 'ADVANCE',
+            ending_before: '2027-08-01T00:00:00.000Z',
+            initial_quantity: 3,
+            proration: {
+              invoice_behavior: 'BILL_IMMEDIATELY',
+              is_prorated: true,
+              rounding: {
+                decimal_places: 0,
+                rounding_method: 'HALF_UP',
+              },
+            },
+            quantity_management_mode: 'QUANTITY_ONLY',
+            starting_at: '2026-08-01T00:00:00.000Z',
+            subscription_rate: {
+              billing_frequency: 'MONTHLY',
+              product_id: 'product-id',
+            },
+          },
+        ],
+        contract_id: 'contract-id',
+        customer_id: 'customer-id',
+        uniqueness_key: 'add-subscription-1',
+      },
+      { maxRetries: 0 },
+    );
+  });
+
+  it('recovers one exact added subscription from contract edit history', async () => {
+    const getEditHistory = jest.fn().mockResolvedValue({
+      data: [
+        {
+          add_subscriptions: [
+            {
+              billing_periods: {},
+              collection_schedule: 'ADVANCE',
+              ending_before: '2027-08-01T00:00:00.000Z',
+              id: 'subscription-id',
+              proration: {
+                invoice_behavior: 'BILL_IMMEDIATELY',
+                is_prorated: true,
+                rounding: {
+                  decimal_places: 0,
+                  rounding_method: 'HALF_UP',
+                },
+              },
+              quantity_management_mode: 'QUANTITY_ONLY',
+              quantity_schedule: [
+                {
+                  quantity: 3,
+                  starting_at: '2026-08-01T00:00:00.000Z',
+                },
+              ],
+              starting_at: '2026-08-01T00:00:00.000Z',
+              subscription_rate: {
+                billing_frequency: 'MONTHLY',
+                product: { id: 'product-id', name: 'Mailbox' },
+              },
+            },
+          ],
+          id: 'edit-id',
+          uniqueness_key: 'add-subscription-1',
+        },
+      ],
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { getEditHistory } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+    const input: MetronomeAddSubscriptionInput = {
+      billingFrequency: 'MONTHLY',
+      contractId: 'contract-id',
+      customerId: 'customer-id',
+      endingBefore: '2027-08-01T00:00:00.000Z',
+      productId: 'product-id',
+      quantity: 3,
+      startingAt: '2026-08-01T00:00:00.000Z',
+      uniquenessKey: 'add-subscription-1',
+      proration: {
+        invoiceBehavior: 'BILL_IMMEDIATELY',
+        isProrated: true,
+        rounding: { decimalPlaces: 0, roundingMethod: 'HALF_UP' },
+      },
+    };
+
+    await expect(service.recoverAddedSubscription(input)).resolves.toEqual({
+      metronomeEditId: 'edit-id',
+      subscriptionId: 'subscription-id',
+    });
+    expect(getEditHistory).toHaveBeenCalledWith({
+      contract_id: 'contract-id',
+      customer_id: 'customer-id',
+    });
+  });
+
+  it('fails closed when a recovered subscription does not exactly match', async () => {
+    const getEditHistory = jest.fn().mockResolvedValue({
+      data: [
+        {
+          add_subscriptions: [
+            {
+              collection_schedule: 'ADVANCE',
+              id: 'subscription-id',
+              proration: {
+                invoice_behavior: 'BILL_IMMEDIATELY',
+                is_prorated: false,
+              },
+              quantity_management_mode: 'QUANTITY_ONLY',
+              quantity_schedule: [
+                {
+                  quantity: 1,
+                  starting_at: '2026-08-01T00:00:00.000Z',
+                },
+              ],
+              starting_at: '2026-08-01T00:00:00.000Z',
+              subscription_rate: {
+                billing_frequency: 'MONTHLY',
+                product: { id: 'different-product', name: 'Wrong' },
+              },
+            },
+          ],
+          id: 'edit-id',
+          uniqueness_key: 'add-subscription-1',
+        },
+      ],
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { getEditHistory } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.recoverAddedSubscription({
+        billingFrequency: 'MONTHLY',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        productId: 'product-id',
+        quantity: 1,
+        startingAt: '2026-08-01T00:00:00.000Z',
+        uniquenessKey: 'add-subscription-1',
+        proration: {
+          invoiceBehavior: 'BILL_IMMEDIATELY',
+          isProrated: false,
+        },
+      }),
+    ).rejects.toThrow('Metronome subscription recovery mismatch');
+  });
+
+  it('schedules an exact subscription quantity boundary and returns edit identity', async () => {
+    const edit = jest.fn().mockResolvedValue({
+      data: {
+        edit: {
+          id: 'edit-id',
+          update_subscriptions: [{ id: 'subscription-id' }],
+        },
+      },
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+    const input: MetronomeQuantityUpdateInput = {
+      contractId: 'contract-id',
+      customerId: 'customer-id',
+      effectiveAt: '2026-09-01T00:00:00.000Z',
+      prorationRounding: {
+        decimalPlaces: 0,
+        roundingMethod: 'HALF_UP',
+      },
+      quantity: 2,
+      subscriptionId: 'subscription-id',
+      uniquenessKey: 'quantity-2',
+    };
+
+    await expect(service.scheduleSubscriptionQuantity(input)).resolves.toEqual({
+      metronomeEditId: 'edit-id',
+      subscriptionId: 'subscription-id',
+    });
+    expect(edit).toHaveBeenCalledWith(
+      {
+        contract_id: 'contract-id',
+        customer_id: 'customer-id',
+        uniqueness_key: 'quantity-2',
+        update_subscriptions: [
+          {
+            proration_rounding: {
+              decimal_places: 0,
+              rounding_method: 'HALF_UP',
+            },
+            quantity_updates: [
+              {
+                quantity: 2,
+                starting_at: '2026-09-01T00:00:00.000Z',
+              },
+            ],
+            subscription_id: 'subscription-id',
+          },
+        ],
+      },
+      { maxRetries: 0 },
+    );
+  });
+
+  it('ends a subscription at the exact boundary and returns edit identity', async () => {
+    const edit = jest.fn().mockResolvedValue({
+      data: {
+        edit: {
+          id: 'edit-id',
+          update_subscriptions: [{ id: 'subscription-id' }],
+        },
+      },
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+    const input: MetronomeEndSubscriptionInput = {
+      contractId: 'contract-id',
+      customerId: 'customer-id',
+      endingBefore: '2026-10-01T00:00:00.000Z',
+      subscriptionId: 'subscription-id',
+      uniquenessKey: 'end-subscription-1',
+    };
+
+    await expect(service.endSubscription(input)).resolves.toEqual({
+      metronomeEditId: 'edit-id',
+      subscriptionId: 'subscription-id',
+    });
+    expect(edit).toHaveBeenCalledWith(
+      {
+        contract_id: 'contract-id',
+        customer_id: 'customer-id',
+        uniqueness_key: 'end-subscription-1',
+        update_subscriptions: [
+          {
+            ending_before: '2026-10-01T00:00:00.000Z',
+            subscription_id: 'subscription-id',
+          },
+        ],
+      },
+      { maxRetries: 0 },
+    );
+  });
+
+  it.each([
+    ['add quantity', -1],
+    ['schedule quantity', -1],
+    ['schedule fractional quantity', 1.5],
+  ])(
+    'rejects unsafe %s before constructing the SDK',
+    async (kind, quantity) => {
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      const operation =
+        kind === 'add quantity'
+          ? service.addSubscription({
+              billingFrequency: 'MONTHLY',
+              contractId: 'contract-id',
+              customerId: 'customer-id',
+              productId: 'product-id',
+              quantity,
+              startingAt: '2026-08-01T00:00:00.000Z',
+              uniquenessKey: 'add-key',
+              proration: {
+                invoiceBehavior: 'BILL_IMMEDIATELY',
+                isProrated: true,
+              },
+            })
+          : service.scheduleSubscriptionQuantity({
+              contractId: 'contract-id',
+              customerId: 'customer-id',
+              effectiveAt: '2026-09-01T00:00:00.000Z',
+              quantity,
+              subscriptionId: 'subscription-id',
+              uniquenessKey: 'quantity-key',
+            });
+
+      await expect(operation).rejects.toThrow(
+        /Metronome subscription quantity must be a safe (positive|nonnegative) integer/,
+      );
+      expect(metronomeConstructor).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      'addSubscription',
+      { status: 500 },
+      MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    ],
+    ['addSubscription', { status: 409 }, MetronomeClientExceptionCode.CONFLICT],
+    [
+      'endSubscription',
+      { status: 429 },
+      MetronomeClientExceptionCode.RATE_LIMITED,
+    ],
+    [
+      'endSubscription',
+      { status: 400 },
+      MetronomeClientExceptionCode.REQUEST_FAILED,
+    ],
+  ])(
+    'classifies %s edit failures without retrying',
+    async (method, error, code) => {
+      const edit = jest.fn().mockRejectedValue(error);
+      metronomeConstructor.mockImplementation(
+        () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      const operation =
+        method === 'addSubscription'
+          ? service.addSubscription({
+              billingFrequency: 'MONTHLY',
+              contractId: 'contract-id',
+              customerId: 'customer-id',
+              productId: 'product-id',
+              quantity: 1,
+              startingAt: '2026-08-01T00:00:00.000Z',
+              uniquenessKey: 'add-key',
+              proration: {
+                invoiceBehavior: 'BILL_IMMEDIATELY',
+                isProrated: true,
+              },
+            })
+          : service.endSubscription({
+              contractId: 'contract-id',
+              customerId: 'customer-id',
+              endingBefore: '2026-10-01T00:00:00.000Z',
+              subscriptionId: 'subscription-id',
+              uniquenessKey: 'end-key',
+            });
+
+      await expect(operation).rejects.toMatchObject({ code });
+      expect(edit).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('fails uncertain when the added subscription receipt is missing or ambiguous', async () => {
+    const edit = jest.fn().mockResolvedValue({
+      data: {
+        edit: {
+          add_subscriptions: [{ id: 'first' }, { id: 'second' }],
+          id: 'edit-id',
+        },
+      },
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.addSubscription({
+        billingFrequency: 'MONTHLY',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        productId: 'product-id',
+        quantity: 1,
+        startingAt: '2026-08-01T00:00:00.000Z',
+        uniquenessKey: 'add-key',
+        proration: {
+          invoiceBehavior: 'BILL_IMMEDIATELY',
+          isProrated: true,
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    });
+  });
+
+  it('projects only the bounded first invoice page and reports another page', async () => {
+    const getNextPage = jest.fn();
+    const hasNextPage = jest.fn().mockReturnValue(true);
+    const listInvoices = jest.fn().mockResolvedValue({
+      data: [
+        {
+          credit_type: { id: 'usd-credit-type-id', name: 'USD' },
+          contract_id: 'contract-id',
+          customer_id: 'customer-id',
+          end_timestamp: '2026-09-01T00:00:00.000Z',
+          external_invoice: {
+            billing_provider_type: 'stripe',
+            external_payment_id: 'pi_123',
+            external_status: 'PAID',
+            invoice_id: 'in_123',
+            invoiced_total: 3_000,
+          },
+          id: 'invoice-id',
+          line_items: [
+            {
+              credit_type: { id: 'usd', name: 'USD' },
+              ending_before: '2026-09-01T00:00:00.000Z',
+              is_prorated: false,
+              name: 'Mailbox',
+              product_id: 'product-id',
+              quantity: 3,
+              starting_at: '2026-08-01T00:00:00.000Z',
+              subscription_id: 'subscription-id',
+              total: 3_000,
+              type: 'subscription',
+              unit_price: 1_000,
+            },
+          ],
+          start_timestamp: '2026-08-01T00:00:00.000Z',
+          status: 'FINALIZED',
+          total: 3_000,
+          type: 'USAGE',
+        },
+      ],
+      getNextPage,
+      hasNextPage,
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: { customers: { invoices: { list: listInvoices } } },
+        }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.listInvoicesFirstPage({
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        endingBefore: '2026-09-01T00:00:00.000Z',
+        startingOn: '2026-08-01T00:00:00.000Z',
+      }),
+    ).resolves.toEqual({
+      hasNextPage: true,
+      invoices: [
+        {
+          contractId: 'contract-id',
+          creditType: { id: 'usd-credit-type-id', name: 'USD' },
+          customerId: 'customer-id',
+          endingBefore: '2026-09-01T00:00:00.000Z',
+          externalInvoice: {
+            billingProvider: 'stripe',
+            externalPaymentId: 'pi_123',
+            externalStatus: 'PAID',
+            invoiceId: 'in_123',
+            invoicedTotal: 3_000,
+          },
+          id: 'invoice-id',
+          lines: [
+            {
+              endingBefore: '2026-09-01T00:00:00.000Z',
+              hasAppliedCommitOrCredit: false,
+              isProrated: false,
+              productId: 'product-id',
+              quantity: 3,
+              startingAt: '2026-08-01T00:00:00.000Z',
+              subscriptionId: 'subscription-id',
+              total: 3_000,
+              type: 'subscription',
+              unitPrice: 1_000,
+            },
+          ],
+          startingAt: '2026-08-01T00:00:00.000Z',
+          status: 'FINALIZED',
+          total: 3_000,
+        },
+      ],
+    });
+    expect(listInvoices).toHaveBeenCalledWith({
+      contract_id: 'contract-id',
+      customer_id: 'customer-id',
+      ending_before: '2026-09-01T00:00:00.000Z',
+      starting_on: '2026-08-01T00:00:00.000Z',
+    });
+    expect(hasNextPage).toHaveBeenCalledTimes(1);
+    expect(getNextPage).not.toHaveBeenCalled();
+  });
+
+  it('rejects a zero initial quantity before constructing the SDK', async () => {
+    const service = new MetronomeClientService({
+      get: jest.fn(),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.addSubscription({
+        billingFrequency: 'MONTHLY',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        productId: 'product-id',
+        quantity: 0,
+        startingAt: '2026-08-01T00:00:00.000Z',
+        uniquenessKey: 'add-key',
+        proration: {
+          invoiceBehavior: 'BILL_IMMEDIATELY',
+          isProrated: true,
+        },
+      }),
+    ).rejects.toThrow('safe positive integer');
+    expect(metronomeConstructor).not.toHaveBeenCalled();
+  });
+
+  it.each(['add', 'quantity', 'end'])(
+    'rejects a non-ISO %s subscription boundary before constructing the SDK',
+    async (operation) => {
+      const service = new MetronomeClientService({
+        get: jest.fn(),
+      } as unknown as TwentyConfigService);
+      const result =
+        operation === 'add'
+          ? service.addSubscription({
+              billingFrequency: 'MONTHLY',
+              contractId: 'contract-id',
+              customerId: 'customer-id',
+              productId: 'product-id',
+              quantity: 1,
+              startingAt: 'August 1, 2026',
+              uniquenessKey: 'add-key',
+              proration: {
+                invoiceBehavior: 'BILL_IMMEDIATELY',
+                isProrated: true,
+              },
+            })
+          : operation === 'quantity'
+            ? service.scheduleSubscriptionQuantity({
+                contractId: 'contract-id',
+                customerId: 'customer-id',
+                effectiveAt: 'August 1, 2026',
+                quantity: 1,
+                subscriptionId: 'subscription-id',
+                uniquenessKey: 'quantity-key',
+              })
+            : service.endSubscription({
+                contractId: 'contract-id',
+                customerId: 'customer-id',
+                endingBefore: 'August 1, 2026',
+                subscriptionId: 'subscription-id',
+                uniquenessKey: 'end-key',
+              });
+
+      await expect(result).rejects.toThrow('must be an ISO instant');
+      expect(metronomeConstructor).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['conflict', { status: 409 }, MetronomeClientExceptionCode.CONFLICT],
+    ['rate limit', { status: 429 }, MetronomeClientExceptionCode.RATE_LIMITED],
+    [
+      'known client failure',
+      { status: 400 },
+      MetronomeClientExceptionCode.REQUEST_FAILED,
+    ],
+    [
+      'server failure',
+      { status: 500 },
+      MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    ],
+    [
+      'timeout after write',
+      new Error('socket timeout'),
+      MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    ],
+  ])(
+    'classifies Stripe billing-configuration %s without retrying',
+    async (_, providerError, expectedCode) => {
+      const createBillingConfig = jest.fn().mockRejectedValue(providerError);
+      metronomeConstructor.mockImplementation(
+        () =>
+          ({
+            v1: {
+              customers: {
+                billingConfig: { create: createBillingConfig },
+              },
+            },
+          }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      await expect(
+        service.setStripeBillingConfiguration('customer-id', 'cus_123'),
+      ).rejects.toMatchObject({ code: expectedCode });
+      expect(createBillingConfig).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    ['missing-status failure', new Error('connection reset')],
+    ['server failure', { status: 500 }],
+  ])(
+    'classifies managed-email contract %s as an uncertain create outcome',
+    async (_, providerError) => {
+      const createContract = jest.fn().mockRejectedValue(providerError);
+      metronomeConstructor.mockImplementation(
+        () =>
+          ({
+            v1: { contracts: { create: createContract } },
+          }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      await expect(
+        service.createContract({
+          billingProviderConfiguration: {
+            billingProvider: 'stripe',
+            deliveryMethod: 'direct_to_billing_provider',
+          },
+          customerId: 'customer-id',
+          rateCardAlias: 'managed-email',
+          uniquenessKey: 'managed-email-key',
+        }),
+      ).rejects.toMatchObject({
+        code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+      });
+      expect(createContract).toHaveBeenCalledTimes(1);
+    },
+  );
+});
+
+describe('MetronomeClientService rate-card product resolution', () => {
+  const metronomeConstructor = jest.mocked(Metronome);
+  const at = new Date('2026-08-06T12:00:00.000Z');
+  const makeConfig = () =>
+    ({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'redacted-in-test';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    }) as unknown as TwentyConfigService;
+
+  const configureSdk = ({
+    rateCardPages,
+    schedulePages,
+  }: {
+    rateCardPages: Array<{
+      data: unknown[];
+      next_page?: string | null;
+    }>;
+    schedulePages: Array<{
+      data: unknown[];
+      next_page?: string | null;
+    }>;
+  }) => {
+    const list = jest
+      .fn()
+      .mockImplementation(async () => rateCardPages.shift() ?? { data: [] });
+    const retrieveRateSchedule = jest
+      .fn()
+      .mockImplementation(
+        async () => schedulePages.shift() ?? { data: [], next_page: null },
+      );
+
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({
+          v1: {
+            contracts: {
+              rateCards: { list, retrieveRateSchedule },
+            },
+          },
+        }) as unknown as Metronome,
+    );
+
+    return { list, retrieveRateSchedule };
+  };
+
+  const activeCard = {
+    id: 'active-card',
+    aliases: [
+      {
+        name: 'sandbox-managed-email',
+        starting_at: '2026-08-01T00:00:00.000Z',
+        ending_before: null,
+      },
+    ],
+  };
+  const domainRate = {
+    billing_frequency: 'ANNUAL',
+    ending_before: '2027-08-06T12:00:00.000Z',
+    entitled: true,
+    product_custom_fields: {},
+    product_id: 'domain-product',
+    product_name: 'Managed sending domain',
+    product_tags: ['myah-managed-sending-domain-year'],
+    rate: { rate_type: 'FLAT', price: 1000 },
+    starting_at: '2026-08-01T00:00:00.000Z',
+  };
+  const mailboxRate = {
+    billing_frequency: 'MONTHLY',
+    ending_before: '2026-09-06T12:00:00.000Z',
+    entitled: true,
+    product_custom_fields: {},
+    product_id: 'mailbox-product',
+    product_name: 'Managed mailbox',
+    product_tags: ['myah-managed-mailbox-month'],
+    rate: { rate_type: 'FLAT', price: 500 },
+    starting_at: '2026-08-01T00:00:00.000Z',
+  };
+
+  it('paginates rate cards and schedules, then maps exact active product tags', async () => {
+    const { list, retrieveRateSchedule } = configureSdk({
+      rateCardPages: [
+        {
+          data: [
+            {
+              id: 'inactive-card',
+              aliases: [
+                {
+                  name: 'sandbox-managed-email',
+                  starting_at: '2026-01-01T00:00:00.000Z',
+                  ending_before: '2026-08-01T00:00:00.000Z',
+                },
+              ],
+            },
+          ],
+          next_page: 'page-2',
+        },
+        { data: [activeCard], next_page: null },
+      ],
+      schedulePages: [
+        { data: [domainRate], next_page: 'schedule-page-2' },
+        { data: [mailboxRate], next_page: null },
+      ],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: [
+          'myah-managed-sending-domain-year',
+          'myah-managed-mailbox-month',
+        ],
+      }),
+    ).resolves.toEqual({
+      rateCardId: 'active-card',
+      productIdsByTag: {
+        'myah-managed-sending-domain-year': 'domain-product',
+        'myah-managed-mailbox-month': 'mailbox-product',
+      },
+    });
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenNthCalledWith(1, { body: {} });
+    expect(list).toHaveBeenNthCalledWith(2, {
+      body: {},
+      next_page: 'page-2',
+    });
+    expect(retrieveRateSchedule).toHaveBeenNthCalledWith(1, {
+      rate_card_id: 'active-card',
+      starting_at: at.toISOString(),
+    });
+    expect(retrieveRateSchedule).toHaveBeenNthCalledWith(2, {
+      next_page: 'schedule-page-2',
+      rate_card_id: 'active-card',
+      starting_at: at.toISOString(),
+    });
+  });
+
+  it('rejects a repeated rate-card pagination cursor', async () => {
+    const { list } = configureSdk({
+      rateCardPages: [
+        { data: [activeCard], next_page: 'repeated-page' },
+        { data: [], next_page: 'repeated-page' },
+      ],
+      schedulePages: [],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).rejects.toThrow('Metronome rate-card pagination cursor repeated');
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects rate-card pagination beyond its page limit', async () => {
+    const { list } = configureSdk({
+      rateCardPages: Array.from({ length: 101 }, (_, index) => ({
+        data: index === 0 ? [activeCard] : [],
+        next_page: `rate-card-page-${index + 1}`,
+      })),
+      schedulePages: [],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).rejects.toThrow('Metronome rate-card pagination exceeded its limit');
+    expect(list).toHaveBeenCalledTimes(100);
+  });
+
+  it('rejects a repeated rate-schedule pagination cursor', async () => {
+    const { retrieveRateSchedule } = configureSdk({
+      rateCardPages: [{ data: [activeCard], next_page: null }],
+      schedulePages: [
+        { data: [mailboxRate], next_page: 'repeated-schedule-page' },
+        { data: [], next_page: 'repeated-schedule-page' },
+      ],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).rejects.toThrow('Metronome rate-schedule pagination cursor repeated');
+    expect(retrieveRateSchedule).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects rate-schedule pagination beyond its page limit', async () => {
+    const { retrieveRateSchedule } = configureSdk({
+      rateCardPages: [{ data: [activeCard], next_page: null }],
+      schedulePages: Array.from({ length: 101 }, (_, index) => ({
+        data: index === 0 ? [mailboxRate] : [],
+        next_page: `rate-schedule-page-${index + 1}`,
+      })),
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).rejects.toThrow('Metronome rate-schedule pagination exceeded its limit');
+    expect(retrieveRateSchedule).toHaveBeenCalledTimes(100);
+  });
+
+  it('proves exact active flat-rate line prices and billing frequencies', async () => {
+    const { retrieveRateSchedule } = configureSdk({
+      rateCardPages: [],
+      schedulePages: [{ data: [domainRate, mailboxRate], next_page: null }],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.assertRateCardLineItems({
+        lines: [
+          {
+            billingFrequency: 'ANNUAL',
+            productId: 'domain-product',
+            startingAt: at.toISOString(),
+            unitPriceCents: 1000,
+          },
+          {
+            billingFrequency: 'MONTHLY',
+            productId: 'mailbox-product',
+            startingAt: at.toISOString(),
+            unitPriceCents: 500,
+          },
+        ],
+        rateCardId: 'active-card',
+      }),
+    ).resolves.toBeUndefined();
+    expect(retrieveRateSchedule).toHaveBeenCalledWith({
+      rate_card_id: 'active-card',
+      starting_at: at.toISOString(),
+    });
+  });
+
+  it.each([
+    {
+      name: 'missing product',
+      rates: [domainRate],
+      line: {
+        billingFrequency: 'MONTHLY' as const,
+        productId: 'missing-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 500,
+      },
+    },
+    {
+      name: 'wrong billing frequency',
+      rates: [mailboxRate],
+      line: {
+        billingFrequency: 'ANNUAL' as const,
+        productId: 'mailbox-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 500,
+      },
+    },
+    {
+      name: 'wrong unit price',
+      rates: [mailboxRate],
+      line: {
+        billingFrequency: 'MONTHLY' as const,
+        productId: 'mailbox-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 501,
+      },
+    },
+    {
+      name: 'unsupported rate type',
+      rates: [
+        {
+          ...mailboxRate,
+          rate: { is_prorated: true, quantity: 1, rate_type: 'SUBSCRIPTION' },
+        },
+      ],
+      line: {
+        billingFrequency: 'MONTHLY' as const,
+        productId: 'mailbox-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 500,
+      },
+    },
+    {
+      name: 'duplicate matching rate',
+      rates: [mailboxRate, { ...mailboxRate }],
+      line: {
+        billingFrequency: 'MONTHLY' as const,
+        productId: 'mailbox-product',
+        startingAt: at.toISOString(),
+        unitPriceCents: 500,
+      },
+    },
+  ])('rejects $name before a subscription edit', async ({ line, rates }) => {
+    configureSdk({
+      rateCardPages: [],
+      schedulePages: [{ data: rates, next_page: null }],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.assertRateCardLineItems({
+        lines: [line],
+        rateCardId: 'active-card',
+      }),
+    ).rejects.toThrow(/rate card line/i);
+  });
+
+  it.each([
+    {
+      name: 'missing alias',
+      cards: [{ id: 'card', aliases: [] }],
+      rates: [mailboxRate],
+      expected: /rate card/i,
+    },
+    {
+      name: 'duplicate active aliases',
+      cards: [activeCard, { ...activeCard, id: 'other-active-card' }],
+      rates: [mailboxRate],
+      expected: /exactly one/i,
+    },
+    {
+      name: 'missing product tag',
+      cards: [activeCard],
+      rates: [],
+      expected: /product|tag/i,
+    },
+    {
+      name: 'duplicate product tag',
+      cards: [activeCard],
+      rates: [mailboxRate, { ...mailboxRate, product_id: 'other-product' }],
+      expected: /exactly one/i,
+    },
+  ])(
+    'rejects $name before returning a partial catalog',
+    async ({ cards, expected, rates }) => {
+      configureSdk({
+        rateCardPages: [{ data: cards, next_page: null }],
+        schedulePages: [{ data: rates, next_page: null }],
+      });
+      const service = new MetronomeClientService(makeConfig());
+
+      await expect(
+        service.resolveRateCardProducts({
+          alias: 'sandbox-managed-email',
+          at,
+          productTags: ['myah-managed-mailbox-month'],
+        }),
+      ).rejects.toThrow(expected);
+    },
+  );
 });

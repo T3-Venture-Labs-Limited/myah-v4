@@ -6,8 +6,10 @@ import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApp
 const mockModify = jest.fn();
 const mockEvict = jest.fn();
 const mockRefetchQueries = jest.fn();
-const mockDestroyCreatorListMembers = jest.fn();
-const mockBatchCreateCreatorListMembers = jest.fn();
+const mockAddCreatorListMembersIntent = jest.fn();
+const mockRemoveCreatorListMemberIntent = jest.fn();
+const mockAddDirectCampaignCreators = jest.fn();
+const mockUpdateOneRecord = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockEnqueueWarningSnackBar = jest.fn();
 const mockUseMutation = jest.fn();
@@ -42,15 +44,9 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
   }),
 }));
 
-jest.mock('@/object-record/hooks/useDestroyManyRecords', () => ({
-  useDestroyManyRecords: () => ({
-    destroyManyRecords: mockDestroyCreatorListMembers,
-  }),
-}));
-
-jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
-  useBatchCreateManyRecords: () => ({
-    batchCreateManyRecords: mockBatchCreateCreatorListMembers,
+jest.mock('@/object-record/hooks/useUpdateOneRecord', () => ({
+  useUpdateOneRecord: () => ({
+    updateOneRecord: mockUpdateOneRecord,
   }),
 }));
 
@@ -68,10 +64,13 @@ describe('useApplyCreatorBulkRelationship', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseMutation.mockReturnValue([
-      jest.fn().mockResolvedValue({ data: {} }),
-    ]);
-    mockDestroyCreatorListMembers.mockResolvedValue(['membership-1']);
+    mockAddCreatorListMembersIntent.mockResolvedValue({ data: {} });
+    mockRemoveCreatorListMemberIntent.mockResolvedValue({ data: {} });
+    mockAddDirectCampaignCreators.mockResolvedValue({ data: {} });
+    mockUseMutation
+      .mockReturnValueOnce([mockAddCreatorListMembersIntent])
+      .mockReturnValueOnce([mockRemoveCreatorListMemberIntent])
+      .mockReturnValueOnce([mockAddDirectCampaignCreators]);
   });
 
   it('refreshes live List results and resets the contextual Creator table after removal', async () => {
@@ -261,4 +260,81 @@ describe('useApplyCreatorBulkRelationship', () => {
       }
     },
   );
+
+  it('persists the selected managed mailbox on every new campaign creator', async () => {
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await act(async () => {
+      await result.current.applyCreatorBulkRelationship({
+        target: { kind: 'campaign', id: 'campaign-1', label: 'Campaign' },
+        creatorIdsToAdd: ['creator-1', 'creator-2'],
+        assignedManagedMailboxId: 'managed-mailbox-1',
+      });
+    });
+
+    expect(mockAddDirectCampaignCreators).toHaveBeenCalledWith({
+      variables: {
+        input: {
+          campaignId: 'campaign-1',
+          creatorIds: ['creator-1', 'creator-2'],
+          assignedManagedMailboxId: 'managed-mailbox-1',
+        },
+      },
+    });
+  });
+
+  it('updates every existing campaign creator with the selected mailbox', async () => {
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await act(async () => {
+      await result.current.applyCreatorBulkRelationship({
+        target: { kind: 'campaign', id: 'campaign-1', label: 'Campaign' },
+        creatorIdsToAdd: [],
+        campaignCreatorIdsToUpdate: [
+          'campaign-creator-1',
+          'campaign-creator-2',
+        ],
+        assignedManagedMailboxId: 'managed-mailbox-1',
+      });
+    });
+
+    expect(mockUpdateOneRecord).toHaveBeenCalledTimes(2);
+    expect(mockUpdateOneRecord).toHaveBeenNthCalledWith(1, {
+      objectNameSingular: 'campaignCreator',
+      idToUpdate: 'campaign-creator-1',
+      updateOneRecordInput: {
+        assignedManagedMailboxId: 'managed-mailbox-1',
+      },
+    });
+    expect(mockUpdateOneRecord).toHaveBeenNthCalledWith(2, {
+      objectNameSingular: 'campaignCreator',
+      idToUpdate: 'campaign-creator-2',
+      updateOneRecordInput: {
+        assignedManagedMailboxId: 'managed-mailbox-1',
+      },
+    });
+    expect(mockAddDirectCampaignCreators).not.toHaveBeenCalled();
+    expect(mockRefetchQueries).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the mailbox assignment on existing campaign creators', async () => {
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await act(async () => {
+      await result.current.applyCreatorBulkRelationship({
+        target: { kind: 'campaign', id: 'campaign-1', label: 'Campaign' },
+        creatorIdsToAdd: [],
+        campaignCreatorIdsToUpdate: ['campaign-creator-1'],
+        assignedManagedMailboxId: null,
+      });
+    });
+
+    expect(mockUpdateOneRecord).toHaveBeenCalledWith({
+      objectNameSingular: 'campaignCreator',
+      idToUpdate: 'campaign-creator-1',
+      updateOneRecordInput: {
+        assignedManagedMailboxId: null,
+      },
+    });
+  });
 });

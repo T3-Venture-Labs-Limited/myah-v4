@@ -6,6 +6,7 @@ const mockUseCreatorBulkRelationshipPreview = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
 const mockRemoveCreatorListMembers = jest.fn();
 const mockCloseModal = jest.fn();
+const mockUseQuery = jest.fn();
 
 jest.mock('@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview', () => ({
   useCreatorBulkRelationshipPreview: (...args: unknown[]) =>
@@ -17,6 +18,9 @@ jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
     applyCreatorBulkRelationship: mockApplyCreatorBulkRelationship,
     removeCreatorListMembers: mockRemoveCreatorListMembers,
   }),
+}));
+jest.mock('@apollo/client/react', () => ({
+  useQuery: (...args: unknown[]) => mockUseQuery(...args),
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
@@ -85,6 +89,7 @@ describe('CreatorBulkRelationshipDialog removal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
+    mockUseQuery.mockReturnValue({ data: undefined, loading: false });
     mockRemoveCreatorListMembers.mockResolvedValue({
       removedCount: 1,
       wasPartial: false,

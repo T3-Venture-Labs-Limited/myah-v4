@@ -5,6 +5,7 @@ import { ImapSmtpCaldavModule } from 'src/engine/core-modules/imap-smtp-caldav-c
 import { WorkspaceMailboxConnectionResolver } from 'src/engine/core-modules/myah/resolvers/workspace-mailbox-connection.resolver';
 import { WorkspaceMailboxConnectionService } from 'src/engine/core-modules/myah/services/workspace-mailbox-connection.service';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { ManagedEmailModule } from 'src/engine/core-modules/managed-email/managed-email.module';
 import { MyahTeamAuthorizationService } from 'src/engine/core-modules/myah/services/myah-team-authorization.service';
 import { ManagedProviderBillingModule } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.module';
 import { ConnectedAccountMetadataModule } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.module';
@@ -32,6 +33,7 @@ import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-camp
     MyahCampaignLifecycleModule,
     ConnectedAccountTokenEncryptionModule,
     PermissionsModule,
+    ManagedEmailModule,
   ],
   providers: [
     MyahTeamAuthorizationService,
@@ -42,6 +44,7 @@ import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-camp
     MyahTeamAuthorizationService,
     ManagedProviderBillingModule,
     WorkspaceMailboxConnectionService,
+    ManagedEmailModule,
   ],
 })
 export class MyahModule {}

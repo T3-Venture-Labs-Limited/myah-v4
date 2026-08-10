@@ -2498,6 +2498,23 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        assignedManagedMailboxId: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'assignedManagedMailboxId',
+            type: FieldMetadataType.TEXT,
+            label: 'Managed mailbox',
+            description: 'Managed mailbox assigned for campaign outreach',
+            icon: 'IconMail',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         nextActionAt: createMyahStandardFieldFlatMetadata({
           objectName: 'campaignCreator',
           workspaceId: args.workspaceId,

@@ -203,4 +203,65 @@ describe('CampaignInfluencerService membership transaction safety', () => {
       transactionManager,
     );
   });
+
+  it('persists a managed mailbox on transactional direct additions', async () => {
+    const transactionManager = { id: 'transaction-manager' };
+    const campaignCreators = {
+      find: jest.fn().mockResolvedValue([]),
+      upsert: jest.fn().mockResolvedValue(undefined),
+    };
+    const repositories = {
+      campaign: {
+        findOne: jest.fn().mockResolvedValue({ id: 'campaign-1' }),
+      },
+      campaignCreator: campaignCreators,
+      campaignCreatorList: {
+        find: jest.fn().mockResolvedValue([]),
+      },
+      creator: {
+        findOne: jest.fn().mockResolvedValue({ id: 'creator-1' }),
+      },
+      creatorList: {},
+    };
+    const manager = {
+      executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
+        withWorkspaceContext(workspaceContext, callback),
+      ),
+      getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+        transaction: jest.fn(async (callback: (manager: unknown) => unknown) =>
+          callback(transactionManager),
+        ),
+      }),
+      getRepository: jest.fn(
+        async (_workspaceId: string, name: keyof typeof repositories) =>
+          repositories[name],
+      ),
+    } as unknown as GlobalWorkspaceOrmManager;
+    const service = new CampaignInfluencerService(manager);
+
+    await service.addDirectCampaignCreators(
+      {
+        campaignId: 'campaign-1',
+        creatorIds: ['creator-1'],
+        assignedManagedMailboxId: 'mailbox-1',
+      },
+      authContext,
+    );
+
+    expect(campaignCreators.upsert).toHaveBeenCalledWith(
+      [
+        {
+          campaignId: 'campaign-1',
+          creatorId: 'creator-1',
+          isDirectlyAdded: true,
+          assignedManagedMailboxId: 'mailbox-1',
+        },
+      ],
+      {
+        conflictPaths: ['campaignId', 'creatorId'],
+        indexPredicate: '"deletedAt" IS NULL',
+      },
+      transactionManager,
+    );
+  });
 });

@@ -7,6 +7,7 @@ import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.ent
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
 import {
+  MANAGED_EMAIL_METRONOME_WORKSPACE_CONTRACT_UNIQUENESS_KEY_PREFIX,
   METRONOME_WORKSPACE_ALIAS_PREFIX,
   METRONOME_WORKSPACE_CONTRACT_UNIQUENESS_KEY_PREFIX,
 } from '../constants/metronome-workspace-alias-prefix.constant';
@@ -19,8 +20,13 @@ import {
 
 type InstallationRepository = Pick<
   Repository<MyahWorkspaceInstallationEntity>,
-  'findOneBy' | 'update'
+  'findOneBy' | 'manager' | 'update'
 >;
+
+export type MetronomeManagedEmailContract = Readonly<{
+  contractId: string;
+  rateCardId: string;
+}>;
 
 @Injectable()
 export class MetronomeWorkspaceCustomerService {
@@ -34,6 +40,62 @@ export class MetronomeWorkspaceCustomerService {
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
     private readonly twentyConfigService: TwentyConfigService,
   ) {}
+
+  async ensureStripeBillingConfiguration(
+    workspaceId: string,
+    stripeCustomerId: string,
+  ): Promise<unknown> {
+    if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
+      );
+    }
+    const expectedDeliveryMethodId = this.twentyConfigService.get(
+      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+    );
+
+    return this.installationRepository.manager.transaction(async (manager) => {
+      const installation = await manager.findOne(
+        MyahWorkspaceInstallationEntity,
+        {
+          lock: { mode: 'pessimistic_write' },
+          where: { workspaceId },
+        },
+      );
+
+      if (!installation?.metronomeCustomerId) {
+        throw new Error('Workspace Metronome customer is not configured');
+      }
+
+      const existing =
+        await this.metronomeClientService.getBillingConfiguration(
+          installation.metronomeCustomerId,
+        );
+
+      if (existing) {
+        if (
+          existing.billingProviderType !== 'stripe' ||
+          existing.deliveryMethod !== 'direct_to_billing_provider' ||
+          existing.deliveryMethodId !== expectedDeliveryMethodId ||
+          existing.id.trim() === '' ||
+          existing.stripeCustomerId !== stripeCustomerId ||
+          existing.stripeCollectionMethod !== 'charge_automatically'
+        ) {
+          throw new Error('Metronome billing configuration mismatch');
+        }
+
+        return existing;
+      }
+
+      return this.metronomeClientService.createBillingConfiguration({
+        customerId: installation.metronomeCustomerId,
+        billingProviderType: 'stripe',
+        deliveryMethodId: expectedDeliveryMethodId,
+        stripeCustomerId,
+        stripeCollectionMethod: 'charge_automatically',
+      });
+    });
+  }
 
   async ensureWorkspaceCustomer(workspaceId: string): Promise<string> {
     if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
@@ -111,6 +173,122 @@ export class MetronomeWorkspaceCustomerService {
         uniquenessKey,
       });
     }
+  }
+
+  async ensureWorkspaceManagedEmailContract(
+    workspaceId: string,
+  ): Promise<MetronomeManagedEmailContract> {
+    if (!this.twentyConfigService.get('MANAGED_EMAIL_ENABLED')) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
+      );
+    }
+
+    const customerId = await this.ensureWorkspaceCustomer(workspaceId);
+    const rateCardAlias = this.twentyConfigService.get(
+      'MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS',
+    );
+    const uniquenessKey = `${MANAGED_EMAIL_METRONOME_WORKSPACE_CONTRACT_UNIQUENESS_KEY_PREFIX}${workspaceId}`;
+    let createdContractId: string | undefined;
+    let recoveryCause: unknown = new Error(
+      'Metronome managed-email contract requires verification',
+    );
+
+    try {
+      const contract = await this.metronomeClientService.createContract({
+        billingProviderConfiguration: {
+          billingProvider: 'stripe',
+          deliveryMethod: 'direct_to_billing_provider',
+        },
+        customerId,
+        rateCardAlias,
+        uniquenessKey,
+      });
+      createdContractId = contract.id;
+    } catch (error) {
+      if (!this.isManagedEmailContractRecoverableCreateError(error)) {
+        throw error;
+      }
+      recoveryCause = error;
+    }
+
+    return this.recoverManagedEmailContract({
+      createdContractId,
+      customerId,
+      error: recoveryCause,
+      rateCardAlias,
+      uniquenessKey,
+    });
+  }
+
+  private async recoverManagedEmailContract({
+    createdContractId,
+    customerId,
+    error,
+    rateCardAlias,
+    uniquenessKey,
+  }: {
+    createdContractId: string | undefined;
+    customerId: string;
+    error: unknown;
+    rateCardAlias: string;
+    uniquenessKey: string;
+  }): Promise<MetronomeManagedEmailContract> {
+    const matchingContracts = (
+      await this.metronomeClientService.findCurrentContracts(customerId)
+    ).filter((contract) => contract.uniquenessKey === uniquenessKey);
+
+    if (
+      matchingContracts.length !== 1 ||
+      (createdContractId !== undefined &&
+        matchingContracts[0].id !== createdContractId)
+    ) {
+      throw this.createManagedEmailContractReconciliationError(error);
+    }
+
+    const contract = matchingContracts[0];
+    const configuration = contract.activeBillingProviderConfiguration;
+    const expectedDeliveryMethodId = this.twentyConfigService.get(
+      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+    );
+
+    if (
+      contract.rateCardId === null ||
+      configuration === null ||
+      configuration.id.trim() === '' ||
+      configuration.billingProvider !== 'stripe' ||
+      configuration.deliveryMethod !== 'direct_to_billing_provider' ||
+      configuration.deliveryMethodId !== expectedDeliveryMethodId
+    ) {
+      throw this.createManagedEmailContractReconciliationError(error);
+    }
+
+    const rateCard = await this.metronomeClientService.getRateCard(
+      contract.rateCardId,
+    );
+
+    if (
+      rateCard.id !== contract.rateCardId ||
+      rateCard.fiatCreditType === null ||
+      rateCard.fiatCreditType.id.trim() === '' ||
+      rateCard.fiatCreditType.name !== 'USD' ||
+      rateCard.aliases.some(
+        (alias) =>
+          alias.name === rateCardAlias &&
+          this.isAliasActiveAt(alias, contract.startingAt),
+      ) === false
+    ) {
+      throw this.createManagedEmailContractReconciliationError(error);
+    }
+
+    return { contractId: contract.id, rateCardId: contract.rateCardId };
+  }
+
+  private createManagedEmailContractReconciliationError(cause: unknown): Error {
+    return this.createReconciliationError(
+      'Metronome managed-email contract recovery requires reconciliation',
+      cause,
+    );
   }
 
   private async recoverWorkspaceContract({
@@ -199,6 +377,16 @@ export class MetronomeWorkspaceCustomerService {
     return (
       error instanceof MetronomeClientException &&
       error.code === MetronomeClientExceptionCode.CONFLICT
+    );
+  }
+
+  private isManagedEmailContractRecoverableCreateError(
+    error: unknown,
+  ): error is MetronomeClientException {
+    return (
+      error instanceof MetronomeClientException &&
+      (error.code === MetronomeClientExceptionCode.CONFLICT ||
+        error.code === MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN)
     );
   }
   private async createWorkspaceCustomer(

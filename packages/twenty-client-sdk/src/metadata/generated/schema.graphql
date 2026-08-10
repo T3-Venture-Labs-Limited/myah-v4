@@ -1816,30 +1816,6 @@ type ActionExecutionReceipt {
   evidenceLinks: [ActionApprovalEvidenceLink!]!
 }
 
-type VerificationRecord {
-  type: String!
-  key: String!
-  value: String!
-  priority: Float
-}
-
-type EmailingDomain {
-  id: UUID!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  domain: String!
-  status: EmailingDomainStatus!
-  verificationRecords: [VerificationRecord!]
-  verifiedAt: DateTime
-}
-
-enum EmailingDomainStatus {
-  PENDING
-  VERIFIED
-  FAILED
-  TEMPORARY_FAILURE
-}
-
 type PublicConnectionParametersOutput {
   host: String!
   port: Float!
@@ -1879,158 +1855,6 @@ type ConnectedAccountPublicDTO {
   connectionParameters: PublicImapSmtpCaldavConnectionParameters
 }
 
-type MessageChannel {
-  id: UUID!
-  visibility: MessageChannelVisibility!
-  handle: String!
-  type: MessageChannelType!
-  isContactAutoCreationEnabled: Boolean!
-  contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy!
-  messageFolderImportPolicy: MessageFolderImportPolicy!
-  excludeNonProfessionalEmails: Boolean!
-  excludeGroupEmails: Boolean!
-  pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction!
-  isSyncEnabled: Boolean!
-  syncedAt: DateTime
-  syncStatus: MessageChannelSyncStatus!
-  syncStage: MessageChannelSyncStage!
-  syncStageStartedAt: DateTime
-  throttleFailureCount: Float!
-  throttleRetryAfter: DateTime
-  connectedAccountId: UUID!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  connectedAccount: ConnectedAccountPublicDTO
-}
-
-enum MessageChannelVisibility {
-  METADATA
-  SUBJECT
-  SHARE_EVERYTHING
-}
-
-enum MessageChannelType {
-  EMAIL
-  SMS
-  EMAIL_GROUP
-}
-
-enum MessageChannelContactAutoCreationPolicy {
-  SENT_AND_RECEIVED
-  SENT
-  NONE
-}
-
-enum MessageFolderImportPolicy {
-  ALL_FOLDERS
-  SELECTED_FOLDERS
-}
-
-enum MessageChannelPendingGroupEmailsAction {
-  GROUP_EMAILS_DELETION
-  GROUP_EMAILS_IMPORT
-  NONE
-}
-
-enum MessageChannelSyncStatus {
-  NOT_SYNCED
-  ONGOING
-  ACTIVE
-  FAILED_INSUFFICIENT_PERMISSIONS
-  FAILED_UNKNOWN
-}
-
-enum MessageChannelSyncStage {
-  PENDING_CONFIGURATION
-  MESSAGE_LIST_FETCH_PENDING
-  MESSAGE_LIST_FETCH_SCHEDULED
-  MESSAGE_LIST_FETCH_ONGOING
-  MESSAGES_IMPORT_PENDING
-  MESSAGES_IMPORT_SCHEDULED
-  MESSAGES_IMPORT_ONGOING
-  FAILED
-}
-
-type CreateEmailGroupChannelOutput {
-  messageChannel: MessageChannel!
-  forwardingAddress: String!
-}
-
-type CampaignAudiencePreviewDTO {
-  totalMembers: Int!
-  withoutEmail: Int!
-  duplicateEmails: Int!
-  globallyUnsubscribed: Int!
-  topicUnsubscribed: Int!
-  sendable: Int!
-}
-
-type SendEmailViaDomainOutput {
-  messageId: String!
-}
-
-type CampaignSkippedRecipientsDTO {
-  noEmail: Int!
-  deduped: Int!
-  overCap: Int!
-}
-
-type SendMessageCampaignOutputDTO {
-  campaignId: String!
-  queuedCount: Int!
-  skipped: CampaignSkippedRecipientsDTO!
-}
-
-type UnsubscribeTopic {
-  id: UUID!
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  name: String
-  description: String
-  visibility: UnsubscribeTopicVisibility!
-}
-
-enum UnsubscribeTopicVisibility {
-  PUBLIC
-  PRIVATE
-}
-
-type FeatureFlag {
-  key: FeatureFlagKey!
-  value: Boolean!
-}
-
-enum FeatureFlagKey {
-  IS_UNIQUE_INDEXES_ENABLED
-  IS_JSON_FILTER_ENABLED
-  IS_MARKETPLACE_SETTING_TAB_VISIBLE
-  IS_EMAIL_GROUP_ENABLED
-  IS_JUNCTION_RELATIONS_ENABLED
-  IS_REST_METADATA_API_NEW_FORMAT_DIRECT
-  IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED
-  IS_SETTINGS_DISCOVERY_HERO_ENABLED
-  IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED
-}
-
-type WorkspaceUrls {
-  customUrl: String
-  subdomainUrl: String!
-}
-
-type ApplicationRegistrationVariableDTO {
-  id: UUID!
-  key: String!
-  value: String
-  description: String!
-  isSecret: Boolean!
-  isRequired: Boolean!
-  isFilled: Boolean!
-  type: String!
-  options: JSON
-  createdAt: DateTime!
-  updatedAt: DateTime!
-}
-
 type VersionDistributionEntry {
   version: String!
   count: Int!
@@ -2040,185 +1864,6 @@ type ApplicationRegistrationStats {
   activeInstalls: Int!
   mostInstalledVersion: String
   versionDistribution: [VersionDistributionEntry!]!
-}
-
-type BillingTrialPeriod {
-  duration: Float!
-  isCreditCardRequired: Boolean!
-}
-
-type SSOIdentityProvider {
-  id: UUID!
-  name: String!
-  type: IdentityProviderType!
-  status: SSOIdentityProviderStatus!
-  issuer: String!
-}
-
-enum IdentityProviderType {
-  OIDC
-  SAML
-}
-
-enum SSOIdentityProviderStatus {
-  Active
-  Inactive
-  Error
-}
-
-type AuthProviders {
-  sso: [SSOIdentityProvider!]!
-  google: Boolean!
-  magicLink: Boolean!
-  password: Boolean!
-  microsoft: Boolean!
-}
-
-type AuthBypassProviders {
-  google: Boolean!
-  password: Boolean!
-  microsoft: Boolean!
-}
-
-type PublicWorkspaceData {
-  id: UUID!
-  authProviders: AuthProviders!
-  authBypassProviders: AuthBypassProviders
-  logo: String
-  displayName: String
-  workspaceUrls: WorkspaceUrls!
-}
-
-type PublicWorkspaceDataSummary {
-  id: UUID!
-  logo: String
-  displayName: String
-}
-
-type NativeModelCapabilities {
-  webSearch: Boolean
-  twitterSearch: Boolean
-}
-
-type ClientAiModelConfig {
-  modelId: String!
-  label: String!
-  modelFamily: ModelFamily
-  modelFamilyLabel: String
-  sdkPackage: String
-  inputCostPerMillionTokens: Float
-  outputCostPerMillionTokens: Float
-  nativeCapabilities: NativeModelCapabilities
-  isDeprecated: Boolean
-  isRecommended: Boolean
-  providerName: String
-  providerLabel: String
-  contextWindowTokens: Float
-  maxOutputTokens: Float
-  dataResidency: String
-}
-
-enum ModelFamily {
-  GPT
-  CLAUDE
-  GEMINI
-  MISTRAL
-  DEEPSEEK
-  GROK
-}
-
-type Billing {
-  isBillingEnabled: Boolean!
-  billingUrl: String
-  stripePublishableKey: String
-  trialPeriods: [BillingTrialPeriod!]!
-}
-
-type Support {
-  supportDriver: SupportDriver!
-  supportFrontChatId: String
-}
-
-enum SupportDriver {
-  NONE
-  FRONT
-}
-
-type Sentry {
-  environment: String
-  release: String
-  dsn: String
-}
-
-type Captcha {
-  provider: CaptchaDriverType
-  siteKey: String
-}
-
-enum CaptchaDriverType {
-  GOOGLE_RECAPTCHA
-  TURNSTILE
-}
-
-type ApiConfig {
-  mutationMaximumAffectedRecords: Float!
-}
-
-type PublicFeatureFlagMetadata {
-  label: String!
-  description: String!
-  imagePath: String
-}
-
-type PublicFeatureFlag {
-  key: FeatureFlagKey!
-  metadata: PublicFeatureFlagMetadata!
-}
-
-type ClientConfigMaintenanceMode {
-  startAt: DateTime!
-  endAt: DateTime!
-  link: String
-}
-
-type ClientConfig {
-  appVersion: String
-  authProviders: AuthProviders!
-  billing: Billing!
-  aiModels: [ClientAiModelConfig!]!
-  signInPrefilled: Boolean!
-  isMultiWorkspaceEnabled: Boolean!
-  isEmailVerificationRequired: Boolean!
-  defaultSubdomain: String
-  frontDomain: String!
-  publicFunctionDomain: String
-  analyticsEnabled: Boolean!
-  support: Support!
-  isAttachmentPreviewEnabled: Boolean!
-  sentry: Sentry!
-  captcha: Captcha!
-  api: ApiConfig!
-  canManageFeatureFlags: Boolean!
-  publicFeatureFlags: [PublicFeatureFlag!]!
-  isMicrosoftMessagingEnabled: Boolean!
-  isMicrosoftCalendarEnabled: Boolean!
-  isGoogleMessagingEnabled: Boolean!
-  isGoogleCalendarEnabled: Boolean!
-  isConfigVariablesInDbEnabled: Boolean!
-  isImapSmtpCaldavEnabled: Boolean!
-  isEmailingDomainInDemoMode: Boolean!
-  allowRequestsToTwentyIcons: Boolean!
-  calendarBookingPageId: String
-  isCloudflareIntegrationEnabled: Boolean!
-  isClickHouseConfigured: Boolean!
-  isWorkspaceSchemaDDLLocked: Boolean!
-  maintenance: ClientConfigMaintenanceMode
-}
-
-type UsageBreakdownItem {
-  key: String!
-  label: String
-  creditsUsed: Float!
 }
 
 type CreateApplicationRegistration {
@@ -2236,6 +1881,20 @@ type PublicApplicationRegistration {
 
 type RotateClientSecret {
   clientSecret: String!
+}
+
+type ApplicationRegistrationVariableDTO {
+  id: UUID!
+  key: String!
+  value: String
+  description: String!
+  isSecret: Boolean!
+  isRequired: Boolean!
+  isFilled: Boolean!
+  type: String!
+  options: JSON
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type Relation {
@@ -2389,6 +2048,17 @@ type EditSso {
   status: SSOIdentityProviderStatus!
 }
 
+enum IdentityProviderType {
+  OIDC
+  SAML
+}
+
+enum SSOIdentityProviderStatus {
+  Active
+  Inactive
+  Error
+}
+
 type WorkspaceNameAndId {
   displayName: String
   id: UUID!
@@ -2409,6 +2079,11 @@ type SetupSso {
   issuer: String!
   name: String!
   status: SSOIdentityProviderStatus!
+}
+
+type WorkspaceUrls {
+  customUrl: String
+  subdomainUrl: String!
 }
 
 type SSOConnection {
@@ -2538,6 +2213,60 @@ type DomainValidRecords {
   isCustomDomainEnabled: Boolean
 }
 
+type FeatureFlag {
+  key: FeatureFlagKey!
+  value: Boolean!
+}
+
+enum FeatureFlagKey {
+  IS_UNIQUE_INDEXES_ENABLED
+  IS_JSON_FILTER_ENABLED
+  IS_MARKETPLACE_SETTING_TAB_VISIBLE
+  IS_EMAIL_GROUP_ENABLED
+  IS_JUNCTION_RELATIONS_ENABLED
+  IS_REST_METADATA_API_NEW_FORMAT_DIRECT
+  IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED
+  IS_SETTINGS_DISCOVERY_HERO_ENABLED
+  IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED
+}
+
+type SSOIdentityProvider {
+  id: UUID!
+  name: String!
+  type: IdentityProviderType!
+  status: SSOIdentityProviderStatus!
+  issuer: String!
+}
+
+type AuthProviders {
+  sso: [SSOIdentityProvider!]!
+  google: Boolean!
+  magicLink: Boolean!
+  password: Boolean!
+  microsoft: Boolean!
+}
+
+type AuthBypassProviders {
+  google: Boolean!
+  password: Boolean!
+  microsoft: Boolean!
+}
+
+type PublicWorkspaceData {
+  id: UUID!
+  authProviders: AuthProviders!
+  authBypassProviders: AuthBypassProviders
+  logo: String
+  displayName: String
+  workspaceUrls: WorkspaceUrls!
+}
+
+type PublicWorkspaceDataSummary {
+  id: UUID!
+  logo: String
+  displayName: String
+}
+
 type UpsertRowLevelPermissionPredicatesResult {
   predicates: [RowLevelPermissionPredicate!]!
   predicateGroups: [RowLevelPermissionPredicateGroup!]!
@@ -2650,6 +2379,444 @@ type WorkspaceInviteHashValid {
   isValid: Boolean!
 }
 
+type ImapSmtpCaldavPublicConnectionParams {
+  host: String!
+  port: Float!
+  username: String
+  connectionSecurity: EmailConnectionSecurity
+}
+
+type ImapSmtpCaldavPublicConnectionParameters {
+  IMAP: ImapSmtpCaldavPublicConnectionParams
+  SMTP: ImapSmtpCaldavPublicConnectionParams
+  CALDAV: ImapSmtpCaldavPublicConnectionParams
+}
+
+type ConnectedImapSmtpCaldavAccount {
+  id: UUID!
+  handle: String!
+  provider: String!
+  userWorkspaceId: UUID!
+  connectionParameters: ImapSmtpCaldavPublicConnectionParameters
+}
+
+type ImapSmtpCaldavConnectionSuccess {
+  success: Boolean!
+  connectedAccountId: String!
+}
+
+type ManagedEmailOverview {
+  acquisitionAvailable: Boolean!
+  actionRequiredCount: Int!
+  domainCount: Int!
+  mailboxCount: Int!
+  readyCount: Int!
+  status: String!
+  warmingCount: Int!
+}
+
+type ManagedEmailDomain {
+  cancelAtPeriodEnd: Boolean!
+  dependentMailboxCount: Int!
+  domain: String!
+  id: String!
+  infrastructureState: String!
+  paidThrough: DateTime
+  renewalEnabled: Boolean!
+  safeFailureCode: String
+}
+
+type ManagedEmailMailbox {
+  address: String!
+  adminDailyCap: Int
+  campaignEligibility: String!
+  domain: String!
+  domainId: String!
+  id: String!
+  infrastructureCancelAtPeriodEnd: Boolean!
+  infrastructureState: String!
+  lastHealthEvaluatedAt: DateTime
+  personaDisplayName: String!
+  personaRole: String
+  policySafeDailyCapacity: Int!
+  safeFailureCode: String
+  servicePaidThrough: DateTime
+  warmupCancelAtPeriodEnd: Boolean!
+  warmupState: String!
+  warmupPaidThrough: DateTime
+}
+
+type ManagedEmailBundleMailbox {
+  address: String!
+  displayName: String!
+}
+
+type ManagedEmailBundle {
+  bundleId: String!
+  domain: String!
+  exclusiveWorkspaceUse: Boolean!
+  mailboxes: [ManagedEmailBundleMailbox!]!
+  mailboxCount: Int!
+  observedAt: DateTime!
+  providerType: String!
+}
+
+type ManagedEmailDisclosures {
+  cancellation: String!
+  managedServiceOwnership: String!
+  prepaidBalance: String!
+}
+
+type ManagedEmailProposalMailbox {
+  address: String!
+  displayName: String!
+  roleTitle: String
+}
+
+type ManagedEmailProposalDomain {
+  domain: String!
+  mailboxes: [ManagedEmailProposalMailbox!]!
+}
+
+type ManagedEmailProposal {
+  disclosures: ManagedEmailDisclosures!
+  domains: [ManagedEmailProposalDomain!]!
+  expiresAt: DateTime!
+  id: String!
+  mailboxCount: Int!
+  policyVersion: String!
+}
+
+type ManagedEmailQuoteLine {
+  amountCents: Int!
+  billingFrequency: String!
+  endingBefore: DateTime!
+  productKey: String!
+  quantity: Int!
+  startingAt: DateTime!
+  unitPriceCents: Int!
+}
+
+type ManagedEmailQuote {
+  currency: String!
+  disclosures: ManagedEmailDisclosures!
+  dueTodayCents: Int!
+  expiresAt: DateTime!
+  id: String!
+  lines: [ManagedEmailQuoteLine!]!
+  quoteFingerprint: String!
+  quoteVersion: String!
+  isSandbox: Boolean!
+}
+
+type ManagedEmailPaymentSetup {
+  clientSecret: String!
+  publishableKey: String!
+  setupIntentId: String!
+  ready: Boolean!
+}
+
+type ManagedEmailPaymentMethodStatus {
+  ready: Boolean!
+}
+
+type ManagedEmailOperation {
+  acquisitionMode: String!
+  amountCents: String!
+  createdAt: DateTime!
+  currency: String!
+  id: String!
+  paymentStatus: String
+  safeFailureCode: String
+  state: String!
+  updatedAt: DateTime!
+}
+
+type ManagedEmailHealthDetails {
+  adminDailyCap: Int
+  campaignEligibility: String!
+  lastEvaluatedAt: DateTime
+  policySafeDailyCapacity: Int!
+  safeFailureCode: String
+}
+
+type ManagedEmailActionResult {
+  accepted: Boolean!
+  operationId: String!
+}
+
+type VerificationRecord {
+  type: String!
+  key: String!
+  value: String!
+  priority: Float
+}
+
+type EmailingDomain {
+  id: UUID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  domain: String!
+  status: EmailingDomainStatus!
+  verificationRecords: [VerificationRecord!]
+  verifiedAt: DateTime
+}
+
+enum EmailingDomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  TEMPORARY_FAILURE
+}
+
+type MessageChannel {
+  id: UUID!
+  visibility: MessageChannelVisibility!
+  handle: String!
+  type: MessageChannelType!
+  isContactAutoCreationEnabled: Boolean!
+  contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy!
+  messageFolderImportPolicy: MessageFolderImportPolicy!
+  excludeNonProfessionalEmails: Boolean!
+  excludeGroupEmails: Boolean!
+  pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction!
+  isSyncEnabled: Boolean!
+  syncedAt: DateTime
+  syncStatus: MessageChannelSyncStatus!
+  syncStage: MessageChannelSyncStage!
+  syncStageStartedAt: DateTime
+  throttleFailureCount: Float!
+  throttleRetryAfter: DateTime
+  connectedAccountId: UUID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  connectedAccount: ConnectedAccountPublicDTO
+}
+
+enum MessageChannelVisibility {
+  METADATA
+  SUBJECT
+  SHARE_EVERYTHING
+}
+
+enum MessageChannelType {
+  EMAIL
+  SMS
+  EMAIL_GROUP
+}
+
+enum MessageChannelContactAutoCreationPolicy {
+  SENT_AND_RECEIVED
+  SENT
+  NONE
+}
+
+enum MessageFolderImportPolicy {
+  ALL_FOLDERS
+  SELECTED_FOLDERS
+}
+
+enum MessageChannelPendingGroupEmailsAction {
+  GROUP_EMAILS_DELETION
+  GROUP_EMAILS_IMPORT
+  NONE
+}
+
+enum MessageChannelSyncStatus {
+  NOT_SYNCED
+  ONGOING
+  ACTIVE
+  FAILED_INSUFFICIENT_PERMISSIONS
+  FAILED_UNKNOWN
+}
+
+enum MessageChannelSyncStage {
+  PENDING_CONFIGURATION
+  MESSAGE_LIST_FETCH_PENDING
+  MESSAGE_LIST_FETCH_SCHEDULED
+  MESSAGE_LIST_FETCH_ONGOING
+  MESSAGES_IMPORT_PENDING
+  MESSAGES_IMPORT_SCHEDULED
+  MESSAGES_IMPORT_ONGOING
+  FAILED
+}
+
+type CreateEmailGroupChannelOutput {
+  messageChannel: MessageChannel!
+  forwardingAddress: String!
+}
+
+type CampaignAudiencePreviewDTO {
+  totalMembers: Int!
+  withoutEmail: Int!
+  duplicateEmails: Int!
+  globallyUnsubscribed: Int!
+  topicUnsubscribed: Int!
+  sendable: Int!
+}
+
+type SendEmailViaDomainOutput {
+  messageId: String!
+}
+
+type CampaignSkippedRecipientsDTO {
+  noEmail: Int!
+  deduped: Int!
+  overCap: Int!
+}
+
+type SendMessageCampaignOutputDTO {
+  campaignId: String!
+  queuedCount: Int!
+  skipped: CampaignSkippedRecipientsDTO!
+}
+
+type UnsubscribeTopic {
+  id: UUID!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  name: String
+  description: String
+  visibility: UnsubscribeTopicVisibility!
+}
+
+enum UnsubscribeTopicVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+type BillingTrialPeriod {
+  duration: Float!
+  isCreditCardRequired: Boolean!
+}
+
+type NativeModelCapabilities {
+  webSearch: Boolean
+  twitterSearch: Boolean
+}
+
+type ClientAiModelConfig {
+  modelId: String!
+  label: String!
+  modelFamily: ModelFamily
+  modelFamilyLabel: String
+  sdkPackage: String
+  inputCostPerMillionTokens: Float
+  outputCostPerMillionTokens: Float
+  nativeCapabilities: NativeModelCapabilities
+  isDeprecated: Boolean
+  isRecommended: Boolean
+  providerName: String
+  providerLabel: String
+  contextWindowTokens: Float
+  maxOutputTokens: Float
+  dataResidency: String
+}
+
+enum ModelFamily {
+  GPT
+  CLAUDE
+  GEMINI
+  MISTRAL
+  DEEPSEEK
+  GROK
+}
+
+type Billing {
+  isBillingEnabled: Boolean!
+  billingUrl: String
+  stripePublishableKey: String
+  trialPeriods: [BillingTrialPeriod!]!
+}
+
+type Support {
+  supportDriver: SupportDriver!
+  supportFrontChatId: String
+}
+
+enum SupportDriver {
+  NONE
+  FRONT
+}
+
+type Sentry {
+  environment: String
+  release: String
+  dsn: String
+}
+
+type Captcha {
+  provider: CaptchaDriverType
+  siteKey: String
+}
+
+enum CaptchaDriverType {
+  GOOGLE_RECAPTCHA
+  TURNSTILE
+}
+
+type ApiConfig {
+  mutationMaximumAffectedRecords: Float!
+}
+
+type PublicFeatureFlagMetadata {
+  label: String!
+  description: String!
+  imagePath: String
+}
+
+type PublicFeatureFlag {
+  key: FeatureFlagKey!
+  metadata: PublicFeatureFlagMetadata!
+}
+
+type ClientConfigMaintenanceMode {
+  startAt: DateTime!
+  endAt: DateTime!
+  link: String
+}
+
+type ClientConfig {
+  appVersion: String
+  authProviders: AuthProviders!
+  billing: Billing!
+  aiModels: [ClientAiModelConfig!]!
+  signInPrefilled: Boolean!
+  isMultiWorkspaceEnabled: Boolean!
+  isEmailVerificationRequired: Boolean!
+  defaultSubdomain: String
+  frontDomain: String!
+  publicFunctionDomain: String
+  analyticsEnabled: Boolean!
+  support: Support!
+  isAttachmentPreviewEnabled: Boolean!
+  sentry: Sentry!
+  captcha: Captcha!
+  api: ApiConfig!
+  canManageFeatureFlags: Boolean!
+  publicFeatureFlags: [PublicFeatureFlag!]!
+  isMicrosoftMessagingEnabled: Boolean!
+  isMicrosoftCalendarEnabled: Boolean!
+  isGoogleMessagingEnabled: Boolean!
+  isGoogleCalendarEnabled: Boolean!
+  isConfigVariablesInDbEnabled: Boolean!
+  isImapSmtpCaldavEnabled: Boolean!
+  isManagedEmailEnabled: Boolean!
+  isEmailingDomainInDemoMode: Boolean!
+  allowRequestsToTwentyIcons: Boolean!
+  calendarBookingPageId: String
+  isCloudflareIntegrationEnabled: Boolean!
+  isClickHouseConfigured: Boolean!
+  isWorkspaceSchemaDDLLocked: Boolean!
+  maintenance: ClientConfigMaintenanceMode
+}
+
+type UsageBreakdownItem {
+  key: String!
+  label: String
+  creditsUsed: Float!
+}
+
 type Impersonate {
   loginToken: AuthToken!
   workspace: WorkspaceUrlsAndId!
@@ -2717,32 +2884,6 @@ type PlaceDetailsResult {
   city: String
   country: String
   location: Location
-}
-
-type ImapSmtpCaldavPublicConnectionParams {
-  host: String!
-  port: Float!
-  username: String
-  connectionSecurity: EmailConnectionSecurity
-}
-
-type ImapSmtpCaldavPublicConnectionParameters {
-  IMAP: ImapSmtpCaldavPublicConnectionParams
-  SMTP: ImapSmtpCaldavPublicConnectionParams
-  CALDAV: ImapSmtpCaldavPublicConnectionParams
-}
-
-type ConnectedImapSmtpCaldavAccount {
-  id: UUID!
-  handle: String!
-  provider: String!
-  userWorkspaceId: UUID!
-  connectionParameters: ImapSmtpCaldavPublicConnectionParameters
-}
-
-type ImapSmtpCaldavConnectionSuccess {
-  success: Boolean!
-  connectedAccountId: String!
 }
 
 type AgentMessagePart {
@@ -3171,10 +3312,16 @@ type Query {
   enterprisePortalSession(returnUrlPath: String): String
   enterpriseCheckoutSession(billingInterval: String): String
   enterpriseSubscriptionStatus: EnterpriseSubscriptionStatusDTO
-  campaignInfluencerSnapshot(input: CampaignInfluencerCampaignInput!): CampaignInfluencerSnapshotDTO!
-  campaignCreatorListRemovalImpact(input: CampaignCreatorListRemovalImpactInput!): CampaignCreatorListRemovalImpactDTO!
-  creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
-  myConnectedAccounts: [ConnectedAccountPublicDTO!]!
+  managedEmailOverview: ManagedEmailOverview!
+  managedEmailDomains: [ManagedEmailDomain!]!
+  managedEmailMailboxes: [ManagedEmailMailbox!]!
+  managedEmailPrewarmedBundles: [ManagedEmailBundle!]!
+  managedEmailProposal(input: ManagedEmailProposalInput!): ManagedEmailProposal!
+  managedEmailQuote(input: ManagedEmailQuoteInput!): ManagedEmailQuote!
+  managedEmailPrewarmedProposal(input: ManagedEmailPrewarmedProposalInput!): ManagedEmailProposal!
+  managedEmailOperation(input: ManagedEmailOperationInput!): ManagedEmailOperation
+  managedEmailHealthDetails(input: ManagedEmailHealthDetailsInput!): ManagedEmailHealthDetails
+  getConnectedImapSmtpCaldavAccount(id: UUID!): ConnectedImapSmtpCaldavAccount!
   applicationConnectionProviders(applicationId: UUID!): [ApplicationConnectionProvider!]!
   checkUserExists(email: String!, captchaToken: String): CheckUserExist!
   checkWorkspaceInviteHashIsValid(inviteHash: String!): WorkspaceInviteHashValid!
@@ -3247,11 +3394,15 @@ type Query {
   getInviteSuggestions: [InviteSuggestion!]!
   findWorkspaceInvitations: [WorkspaceInvitation!]!
   getApprovedAccessDomains: [ApprovedAccessDomain!]!
+  myConnectedAccounts: [ConnectedAccountPublicDTO!]!
   currentWorkspace: Workspace!
   getPublicWorkspaceDataByDomain(origin: String): PublicWorkspaceData!
   getPublicWorkspaceDataById(id: UUID!): PublicWorkspaceDataSummary!
   getViewFilterGroups(viewId: String): [ViewFilterGroup!]!
   getViewFilterGroup(id: String!): ViewFilterGroup
+  campaignInfluencerSnapshot(input: CampaignInfluencerCampaignInput!): CampaignInfluencerSnapshotDTO!
+  campaignCreatorListRemovalImpact(input: CampaignCreatorListRemovalImpactInput!): CampaignCreatorListRemovalImpactDTO!
+  creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
   getPageLayoutTabs(pageLayoutId: String!): [PageLayoutTab!]!
   getPageLayoutTab(id: String!): PageLayoutTab!
   getPageLayouts(objectMetadataId: String, pageLayoutType: PageLayoutType): [PageLayout!]!
@@ -3270,7 +3421,6 @@ type Query {
   findOneAgent(input: AgentIdInput!): Agent!
   getRoles: [Role!]!
   getSSOIdentityProviders: [FindAvailableSSOIDP!]!
-  getConnectedImapSmtpCaldavAccount(id: UUID!): ConnectedImapSmtpCaldavAccount!
   getPageLayoutWidgets(pageLayoutTabId: String!): [PageLayoutWidget!]!
   getPageLayoutWidget(id: String!): PageLayoutWidget!
   commandMenuItems: [CommandMenuItem!]!
@@ -3308,6 +3458,45 @@ type Query {
   findManyPublicDomains: [PublicDomain!]!
 }
 
+input ManagedEmailProposalInput {
+  mailboxCount: Int!
+  personas: [ManagedEmailPersonaInput!]!
+}
+
+input ManagedEmailPersonaInput {
+  displayName: String!
+  localPartPreference: String!
+  roleTitle: String
+  signature: String!
+}
+
+input ManagedEmailQuoteInput {
+  proposalId: String!
+}
+
+input ManagedEmailPrewarmedProposalInput {
+  bundleId: String!
+}
+
+input ManagedEmailOperationInput {
+  operationId: String!
+}
+
+input ManagedEmailHealthDetailsInput {
+  resourceType: String!
+  resourceId: String!
+}
+
+input ListAppConnectionsInput {
+  providerName: String
+  userWorkspaceId: String
+  visibility: String
+}
+
+input GetApiKeyInput {
+  id: UUID!
+}
+
 input CampaignInfluencerCampaignInput {
   campaignId: UUID!
 }
@@ -3320,16 +3509,6 @@ input CampaignCreatorListRemovalImpactInput {
 input CreatorListMembershipIntentInput {
   creatorListId: UUID!
   creatorId: UUID!
-}
-
-input ListAppConnectionsInput {
-  providerName: String
-  userWorkspaceId: String
-  visibility: String
-}
-
-input GetApiKeyInput {
-  id: UUID!
 }
 
 input LogicFunctionIdInput {
@@ -3431,13 +3610,17 @@ type Mutation {
   uploadWorkspaceMemberProfilePicture(file: Upload!): FileWithSignedUrl!
   uploadFilesFieldFile(file: Upload!, fieldMetadataId: String!): FileWithSignedUrl!
   uploadFilesFieldFileByUniversalIdentifier(file: Upload!, fieldMetadataUniversalIdentifier: String!): FileWithSignedUrl!
-  attachCampaignCreatorLists(input: AttachCampaignCreatorListsInput!): CampaignInfluencerSnapshotDTO!
-  addDirectCampaignCreators(input: AddDirectCampaignCreatorsInput!): CampaignInfluencerSnapshotDTO!
-  detachCampaignCreatorList(input: DetachCampaignCreatorListInput!): CampaignInfluencerSnapshotDTO!
-  addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
-  addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
-  removeCreatorListMemberIntent(input: RemoveCreatorListMemberIntentInput!): Boolean!
-  deleteConnectedAccount(id: UUID!): ConnectedAccountPublicDTO!
+  prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup!
+  completeManagedEmailPaymentMethod(input: ManagedEmailCompletePaymentMethodInput!): ManagedEmailPaymentMethodStatus!
+  confirmManagedEmailPrewarmedPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
+  confirmManagedEmailOrdinaryPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
+  setManagedEmailCampaignCap(input: ManagedEmailCampaignCapInput!): ManagedEmailActionResult!
+  cancelManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
+  pauseManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
+  resumeManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
+  stopManagedEmailMailbox(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
+  cancelManagedEmailDomainRenewal(input: ManagedEmailDomainActionInput!): ManagedEmailActionResult!
+  saveImapSmtpCaldavAccount(handle: String!, connectionParameters: EmailAccountConnectionParameters!, id: UUID): ImapSmtpCaldavConnectionSuccess!
   updateOneApplicationVariable(key: String!, value: String!, applicationId: UUID!): Boolean!
   getAuthorizationUrlForSSO(input: GetAuthorizationUrlForSSOInput!): GetAuthorizationUrlForSSO!
   getLoginTokenFromCredentials(email: String!, password: String!, captchaToken: String, locale: String, verifyEmailRedirectPath: String, origin: String!): LoginToken!
@@ -3536,6 +3719,7 @@ type Mutation {
   createApprovedAccessDomain(input: CreateApprovedAccessDomainInput!): ApprovedAccessDomain!
   deleteApprovedAccessDomain(input: DeleteApprovedAccessDomainInput!): Boolean!
   validateApprovedAccessDomain(input: ValidateApprovedAccessDomainInput!): ApprovedAccessDomain!
+  deleteConnectedAccount(id: UUID!): ConnectedAccountPublicDTO!
   activateWorkspace(data: ActivateWorkspaceInput!): Workspace!
   updateWorkspace(data: UpdateWorkspaceInput!): Workspace!
   deleteCurrentWorkspace: Workspace!
@@ -3544,6 +3728,12 @@ type Mutation {
   updateViewFilterGroup(id: String!, input: UpdateViewFilterGroupInput!): ViewFilterGroup!
   deleteViewFilterGroup(id: String!): Boolean!
   destroyViewFilterGroup(id: String!): Boolean!
+  attachCampaignCreatorLists(input: AttachCampaignCreatorListsInput!): CampaignInfluencerSnapshotDTO!
+  addDirectCampaignCreators(input: AddDirectCampaignCreatorsInput!): CampaignInfluencerSnapshotDTO!
+  detachCampaignCreatorList(input: DetachCampaignCreatorListInput!): CampaignInfluencerSnapshotDTO!
+  addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
+  addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
+  removeCreatorListMemberIntent(input: RemoveCreatorListMemberIntentInput!): Boolean!
   createPageLayoutTab(input: CreatePageLayoutTabInput!): PageLayoutTab!
   updatePageLayoutTab(id: String!, input: UpdatePageLayoutTabInput!): PageLayoutTab!
   destroyPageLayoutTab(id: String!): Boolean!
@@ -3582,7 +3772,6 @@ type Mutation {
   createSAMLIdentityProvider(input: SetupSAMLSsoInput!): SetupSso!
   deleteSSOIdentityProvider(input: DeleteSsoInput!): DeleteSso!
   editSSOIdentityProvider(input: EditSsoInput!): EditSso!
-  saveImapSmtpCaldavAccount(handle: String!, connectionParameters: EmailAccountConnectionParameters!, id: UUID): ImapSmtpCaldavConnectionSuccess!
   createPageLayoutWidget(input: CreatePageLayoutWidgetInput!): PageLayoutWidget!
   updatePageLayoutWidget(id: String!, input: UpdatePageLayoutWidgetInput!): PageLayoutWidget!
   destroyPageLayoutWidget(id: String!): Boolean!
@@ -3734,33 +3923,45 @@ enum FileFolder {
 """The `Upload` scalar type represents a file upload."""
 scalar Upload
 
-input AttachCampaignCreatorListsInput {
-  campaignId: UUID!
-  creatorListIds: [UUID!]!
+input ManagedEmailCompletePaymentMethodInput {
+  setupIntentId: String!
 }
 
-input AddDirectCampaignCreatorsInput {
-  campaignId: UUID!
-  creatorIds: [UUID!]!
+input ManagedEmailPurchaseInput {
+  idempotencyKey: String!
+  quoteId: String!
+  quoteVersion: String!
+  quoteFingerprint: String!
 }
 
-input DetachCampaignCreatorListInput {
-  campaignId: UUID!
-  creatorListId: UUID!
-  confirmedCreatorIds: [UUID!]!
-  confirmationToken: String
+input ManagedEmailCampaignCapInput {
+  dailyCap: Int
+  idempotencyKey: String!
+  mailboxId: String!
 }
 
-input CreatorListMembersIntentInput {
-  creatorListId: UUID!
-  creatorIds: [UUID!]!
+input ManagedEmailMailboxActionInput {
+  idempotencyKey: String!
+  mailboxId: String!
 }
 
-input RemoveCreatorListMemberIntentInput {
-  creatorListId: UUID!
-  creatorId: UUID!
-  confirmedCampaignIds: [UUID!]!
-  confirmationToken: String
+input ManagedEmailDomainActionInput {
+  domainId: String!
+  idempotencyKey: String!
+}
+
+input EmailAccountConnectionParameters {
+  IMAP: ConnectionParametersInput
+  SMTP: ConnectionParametersInput
+  CALDAV: ConnectionParametersInput
+}
+
+input ConnectionParametersInput {
+  host: String!
+  port: Float!
+  username: String
+  password: String
+  connectionSecurity: EmailConnectionSecurity
 }
 
 input GetAuthorizationUrlForSSOInput {
@@ -4333,6 +4534,36 @@ input UpdateViewFilterGroupInput {
   viewId: UUID
 }
 
+input AttachCampaignCreatorListsInput {
+  campaignId: UUID!
+  creatorListIds: [UUID!]!
+}
+
+input AddDirectCampaignCreatorsInput {
+  campaignId: UUID!
+  creatorIds: [UUID!]!
+  assignedManagedMailboxId: UUID
+}
+
+input DetachCampaignCreatorListInput {
+  campaignId: UUID!
+  creatorListId: UUID!
+  confirmedCreatorIds: [UUID!]!
+  confirmationToken: String
+}
+
+input CreatorListMembersIntentInput {
+  creatorListId: UUID!
+  creatorIds: [UUID!]!
+}
+
+input RemoveCreatorListMemberIntentInput {
+  creatorListId: UUID!
+  creatorId: UUID!
+  confirmedCampaignIds: [UUID!]!
+  confirmationToken: String
+}
+
 input CreatePageLayoutTabInput {
   title: String!
   position: Float
@@ -4608,20 +4839,6 @@ input DeleteSsoInput {
 input EditSsoInput {
   id: UUID!
   status: SSOIdentityProviderStatus!
-}
-
-input EmailAccountConnectionParameters {
-  IMAP: ConnectionParametersInput
-  SMTP: ConnectionParametersInput
-  CALDAV: ConnectionParametersInput
-}
-
-input ConnectionParametersInput {
-  host: String!
-  port: Float!
-  username: String
-  password: String
-  connectionSecurity: EmailConnectionSecurity
 }
 
 input CreatePageLayoutWidgetInput {

@@ -1470,27 +1470,6 @@ export interface ActionExecutionReceipt {
     __typename: 'ActionExecutionReceipt'
 }
 
-export interface VerificationRecord {
-    type: Scalars['String']
-    key: Scalars['String']
-    value: Scalars['String']
-    priority?: Scalars['Float']
-    __typename: 'VerificationRecord'
-}
-
-export interface EmailingDomain {
-    id: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    domain: Scalars['String']
-    status: EmailingDomainStatus
-    verificationRecords?: VerificationRecord[]
-    verifiedAt?: Scalars['DateTime']
-    __typename: 'EmailingDomain'
-}
-
-export type EmailingDomainStatus = 'PENDING' | 'VERIFIED' | 'FAILED' | 'TEMPORARY_FAILURE'
-
 export interface PublicConnectionParametersOutput {
     host: Scalars['String']
     port: Scalars['Float']
@@ -1529,121 +1508,6 @@ export interface ConnectedAccountPublicDTO {
     __typename: 'ConnectedAccountPublicDTO'
 }
 
-export interface MessageChannel {
-    id: Scalars['UUID']
-    visibility: MessageChannelVisibility
-    handle: Scalars['String']
-    type: MessageChannelType
-    isContactAutoCreationEnabled: Scalars['Boolean']
-    contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy
-    messageFolderImportPolicy: MessageFolderImportPolicy
-    excludeNonProfessionalEmails: Scalars['Boolean']
-    excludeGroupEmails: Scalars['Boolean']
-    pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction
-    isSyncEnabled: Scalars['Boolean']
-    syncedAt?: Scalars['DateTime']
-    syncStatus: MessageChannelSyncStatus
-    syncStage: MessageChannelSyncStage
-    syncStageStartedAt?: Scalars['DateTime']
-    throttleFailureCount: Scalars['Float']
-    throttleRetryAfter?: Scalars['DateTime']
-    connectedAccountId: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    connectedAccount?: ConnectedAccountPublicDTO
-    __typename: 'MessageChannel'
-}
-
-export type MessageChannelVisibility = 'METADATA' | 'SUBJECT' | 'SHARE_EVERYTHING'
-
-export type MessageChannelType = 'EMAIL' | 'SMS' | 'EMAIL_GROUP'
-
-export type MessageChannelContactAutoCreationPolicy = 'SENT_AND_RECEIVED' | 'SENT' | 'NONE'
-
-export type MessageFolderImportPolicy = 'ALL_FOLDERS' | 'SELECTED_FOLDERS'
-
-export type MessageChannelPendingGroupEmailsAction = 'GROUP_EMAILS_DELETION' | 'GROUP_EMAILS_IMPORT' | 'NONE'
-
-export type MessageChannelSyncStatus = 'NOT_SYNCED' | 'ONGOING' | 'ACTIVE' | 'FAILED_INSUFFICIENT_PERMISSIONS' | 'FAILED_UNKNOWN'
-
-export type MessageChannelSyncStage = 'PENDING_CONFIGURATION' | 'MESSAGE_LIST_FETCH_PENDING' | 'MESSAGE_LIST_FETCH_SCHEDULED' | 'MESSAGE_LIST_FETCH_ONGOING' | 'MESSAGES_IMPORT_PENDING' | 'MESSAGES_IMPORT_SCHEDULED' | 'MESSAGES_IMPORT_ONGOING' | 'FAILED'
-
-export interface CreateEmailGroupChannelOutput {
-    messageChannel: MessageChannel
-    forwardingAddress: Scalars['String']
-    __typename: 'CreateEmailGroupChannelOutput'
-}
-
-export interface CampaignAudiencePreviewDTO {
-    totalMembers: Scalars['Int']
-    withoutEmail: Scalars['Int']
-    duplicateEmails: Scalars['Int']
-    globallyUnsubscribed: Scalars['Int']
-    topicUnsubscribed: Scalars['Int']
-    sendable: Scalars['Int']
-    __typename: 'CampaignAudiencePreviewDTO'
-}
-
-export interface SendEmailViaDomainOutput {
-    messageId: Scalars['String']
-    __typename: 'SendEmailViaDomainOutput'
-}
-
-export interface CampaignSkippedRecipientsDTO {
-    noEmail: Scalars['Int']
-    deduped: Scalars['Int']
-    overCap: Scalars['Int']
-    __typename: 'CampaignSkippedRecipientsDTO'
-}
-
-export interface SendMessageCampaignOutputDTO {
-    campaignId: Scalars['String']
-    queuedCount: Scalars['Int']
-    skipped: CampaignSkippedRecipientsDTO
-    __typename: 'SendMessageCampaignOutputDTO'
-}
-
-export interface UnsubscribeTopic {
-    id: Scalars['UUID']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    name?: Scalars['String']
-    description?: Scalars['String']
-    visibility: UnsubscribeTopicVisibility
-    __typename: 'UnsubscribeTopic'
-}
-
-export type UnsubscribeTopicVisibility = 'PUBLIC' | 'PRIVATE'
-
-export interface FeatureFlag {
-    key: FeatureFlagKey
-    value: Scalars['Boolean']
-    __typename: 'FeatureFlag'
-}
-
-export type FeatureFlagKey = 'IS_UNIQUE_INDEXES_ENABLED' | 'IS_JSON_FILTER_ENABLED' | 'IS_MARKETPLACE_SETTING_TAB_VISIBLE' | 'IS_EMAIL_GROUP_ENABLED' | 'IS_JUNCTION_RELATIONS_ENABLED' | 'IS_REST_METADATA_API_NEW_FORMAT_DIRECT' | 'IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED' | 'IS_SETTINGS_DISCOVERY_HERO_ENABLED' | 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED'
-
-export interface WorkspaceUrls {
-    customUrl?: Scalars['String']
-    subdomainUrl: Scalars['String']
-    __typename: 'WorkspaceUrls'
-}
-
-export interface ApplicationRegistrationVariableDTO {
-    id: Scalars['UUID']
-    key: Scalars['String']
-    value?: Scalars['String']
-    description: Scalars['String']
-    isSecret: Scalars['Boolean']
-    isRequired: Scalars['Boolean']
-    isFilled: Scalars['Boolean']
-    type: Scalars['String']
-    options?: Scalars['JSON']
-    createdAt: Scalars['DateTime']
-    updatedAt: Scalars['DateTime']
-    __typename: 'ApplicationRegistrationVariableDTO'
-}
-
 export interface VersionDistributionEntry {
     version: Scalars['String']
     count: Scalars['Int']
@@ -1655,183 +1519,6 @@ export interface ApplicationRegistrationStats {
     mostInstalledVersion?: Scalars['String']
     versionDistribution: VersionDistributionEntry[]
     __typename: 'ApplicationRegistrationStats'
-}
-
-export interface BillingTrialPeriod {
-    duration: Scalars['Float']
-    isCreditCardRequired: Scalars['Boolean']
-    __typename: 'BillingTrialPeriod'
-}
-
-export interface SSOIdentityProvider {
-    id: Scalars['UUID']
-    name: Scalars['String']
-    type: IdentityProviderType
-    status: SSOIdentityProviderStatus
-    issuer: Scalars['String']
-    __typename: 'SSOIdentityProvider'
-}
-
-export type IdentityProviderType = 'OIDC' | 'SAML'
-
-export type SSOIdentityProviderStatus = 'Active' | 'Inactive' | 'Error'
-
-export interface AuthProviders {
-    sso: SSOIdentityProvider[]
-    google: Scalars['Boolean']
-    magicLink: Scalars['Boolean']
-    password: Scalars['Boolean']
-    microsoft: Scalars['Boolean']
-    __typename: 'AuthProviders'
-}
-
-export interface AuthBypassProviders {
-    google: Scalars['Boolean']
-    password: Scalars['Boolean']
-    microsoft: Scalars['Boolean']
-    __typename: 'AuthBypassProviders'
-}
-
-export interface PublicWorkspaceData {
-    id: Scalars['UUID']
-    authProviders: AuthProviders
-    authBypassProviders?: AuthBypassProviders
-    logo?: Scalars['String']
-    displayName?: Scalars['String']
-    workspaceUrls: WorkspaceUrls
-    __typename: 'PublicWorkspaceData'
-}
-
-export interface PublicWorkspaceDataSummary {
-    id: Scalars['UUID']
-    logo?: Scalars['String']
-    displayName?: Scalars['String']
-    __typename: 'PublicWorkspaceDataSummary'
-}
-
-export interface NativeModelCapabilities {
-    webSearch?: Scalars['Boolean']
-    twitterSearch?: Scalars['Boolean']
-    __typename: 'NativeModelCapabilities'
-}
-
-export interface ClientAiModelConfig {
-    modelId: Scalars['String']
-    label: Scalars['String']
-    modelFamily?: ModelFamily
-    modelFamilyLabel?: Scalars['String']
-    sdkPackage?: Scalars['String']
-    inputCostPerMillionTokens?: Scalars['Float']
-    outputCostPerMillionTokens?: Scalars['Float']
-    nativeCapabilities?: NativeModelCapabilities
-    isDeprecated?: Scalars['Boolean']
-    isRecommended?: Scalars['Boolean']
-    providerName?: Scalars['String']
-    providerLabel?: Scalars['String']
-    contextWindowTokens?: Scalars['Float']
-    maxOutputTokens?: Scalars['Float']
-    dataResidency?: Scalars['String']
-    __typename: 'ClientAiModelConfig'
-}
-
-export type ModelFamily = 'GPT' | 'CLAUDE' | 'GEMINI' | 'MISTRAL' | 'DEEPSEEK' | 'GROK'
-
-export interface Billing {
-    isBillingEnabled: Scalars['Boolean']
-    billingUrl?: Scalars['String']
-    stripePublishableKey?: Scalars['String']
-    trialPeriods: BillingTrialPeriod[]
-    __typename: 'Billing'
-}
-
-export interface Support {
-    supportDriver: SupportDriver
-    supportFrontChatId?: Scalars['String']
-    __typename: 'Support'
-}
-
-export type SupportDriver = 'NONE' | 'FRONT'
-
-export interface Sentry {
-    environment?: Scalars['String']
-    release?: Scalars['String']
-    dsn?: Scalars['String']
-    __typename: 'Sentry'
-}
-
-export interface Captcha {
-    provider?: CaptchaDriverType
-    siteKey?: Scalars['String']
-    __typename: 'Captcha'
-}
-
-export type CaptchaDriverType = 'GOOGLE_RECAPTCHA' | 'TURNSTILE'
-
-export interface ApiConfig {
-    mutationMaximumAffectedRecords: Scalars['Float']
-    __typename: 'ApiConfig'
-}
-
-export interface PublicFeatureFlagMetadata {
-    label: Scalars['String']
-    description: Scalars['String']
-    imagePath?: Scalars['String']
-    __typename: 'PublicFeatureFlagMetadata'
-}
-
-export interface PublicFeatureFlag {
-    key: FeatureFlagKey
-    metadata: PublicFeatureFlagMetadata
-    __typename: 'PublicFeatureFlag'
-}
-
-export interface ClientConfigMaintenanceMode {
-    startAt: Scalars['DateTime']
-    endAt: Scalars['DateTime']
-    link?: Scalars['String']
-    __typename: 'ClientConfigMaintenanceMode'
-}
-
-export interface ClientConfig {
-    appVersion?: Scalars['String']
-    authProviders: AuthProviders
-    billing: Billing
-    aiModels: ClientAiModelConfig[]
-    signInPrefilled: Scalars['Boolean']
-    isMultiWorkspaceEnabled: Scalars['Boolean']
-    isEmailVerificationRequired: Scalars['Boolean']
-    defaultSubdomain?: Scalars['String']
-    frontDomain: Scalars['String']
-    publicFunctionDomain?: Scalars['String']
-    analyticsEnabled: Scalars['Boolean']
-    support: Support
-    isAttachmentPreviewEnabled: Scalars['Boolean']
-    sentry: Sentry
-    captcha: Captcha
-    api: ApiConfig
-    canManageFeatureFlags: Scalars['Boolean']
-    publicFeatureFlags: PublicFeatureFlag[]
-    isMicrosoftMessagingEnabled: Scalars['Boolean']
-    isMicrosoftCalendarEnabled: Scalars['Boolean']
-    isGoogleMessagingEnabled: Scalars['Boolean']
-    isGoogleCalendarEnabled: Scalars['Boolean']
-    isConfigVariablesInDbEnabled: Scalars['Boolean']
-    isImapSmtpCaldavEnabled: Scalars['Boolean']
-    isEmailingDomainInDemoMode: Scalars['Boolean']
-    allowRequestsToTwentyIcons: Scalars['Boolean']
-    calendarBookingPageId?: Scalars['String']
-    isCloudflareIntegrationEnabled: Scalars['Boolean']
-    isClickHouseConfigured: Scalars['Boolean']
-    isWorkspaceSchemaDDLLocked: Scalars['Boolean']
-    maintenance?: ClientConfigMaintenanceMode
-    __typename: 'ClientConfig'
-}
-
-export interface UsageBreakdownItem {
-    key: Scalars['String']
-    label?: Scalars['String']
-    creditsUsed: Scalars['Float']
-    __typename: 'UsageBreakdownItem'
 }
 
 export interface CreateApplicationRegistration {
@@ -1852,6 +1539,21 @@ export interface PublicApplicationRegistration {
 export interface RotateClientSecret {
     clientSecret: Scalars['String']
     __typename: 'RotateClientSecret'
+}
+
+export interface ApplicationRegistrationVariableDTO {
+    id: Scalars['UUID']
+    key: Scalars['String']
+    value?: Scalars['String']
+    description: Scalars['String']
+    isSecret: Scalars['Boolean']
+    isRequired: Scalars['Boolean']
+    isFilled: Scalars['Boolean']
+    type: Scalars['String']
+    options?: Scalars['JSON']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    __typename: 'ApplicationRegistrationVariableDTO'
 }
 
 export interface Relation {
@@ -2009,6 +1711,10 @@ export interface EditSso {
     __typename: 'EditSso'
 }
 
+export type IdentityProviderType = 'OIDC' | 'SAML'
+
+export type SSOIdentityProviderStatus = 'Active' | 'Inactive' | 'Error'
+
 export interface WorkspaceNameAndId {
     displayName?: Scalars['String']
     id: Scalars['UUID']
@@ -2032,6 +1738,12 @@ export interface SetupSso {
     name: Scalars['String']
     status: SSOIdentityProviderStatus
     __typename: 'SetupSso'
+}
+
+export interface WorkspaceUrls {
+    customUrl?: Scalars['String']
+    subdomainUrl: Scalars['String']
+    __typename: 'WorkspaceUrls'
 }
 
 export interface SSOConnection {
@@ -2169,6 +1881,56 @@ export interface DomainValidRecords {
     __typename: 'DomainValidRecords'
 }
 
+export interface FeatureFlag {
+    key: FeatureFlagKey
+    value: Scalars['Boolean']
+    __typename: 'FeatureFlag'
+}
+
+export type FeatureFlagKey = 'IS_UNIQUE_INDEXES_ENABLED' | 'IS_JSON_FILTER_ENABLED' | 'IS_MARKETPLACE_SETTING_TAB_VISIBLE' | 'IS_EMAIL_GROUP_ENABLED' | 'IS_JUNCTION_RELATIONS_ENABLED' | 'IS_REST_METADATA_API_NEW_FORMAT_DIRECT' | 'IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED' | 'IS_SETTINGS_DISCOVERY_HERO_ENABLED' | 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED'
+
+export interface SSOIdentityProvider {
+    id: Scalars['UUID']
+    name: Scalars['String']
+    type: IdentityProviderType
+    status: SSOIdentityProviderStatus
+    issuer: Scalars['String']
+    __typename: 'SSOIdentityProvider'
+}
+
+export interface AuthProviders {
+    sso: SSOIdentityProvider[]
+    google: Scalars['Boolean']
+    magicLink: Scalars['Boolean']
+    password: Scalars['Boolean']
+    microsoft: Scalars['Boolean']
+    __typename: 'AuthProviders'
+}
+
+export interface AuthBypassProviders {
+    google: Scalars['Boolean']
+    password: Scalars['Boolean']
+    microsoft: Scalars['Boolean']
+    __typename: 'AuthBypassProviders'
+}
+
+export interface PublicWorkspaceData {
+    id: Scalars['UUID']
+    authProviders: AuthProviders
+    authBypassProviders?: AuthBypassProviders
+    logo?: Scalars['String']
+    displayName?: Scalars['String']
+    workspaceUrls: WorkspaceUrls
+    __typename: 'PublicWorkspaceData'
+}
+
+export interface PublicWorkspaceDataSummary {
+    id: Scalars['UUID']
+    logo?: Scalars['String']
+    displayName?: Scalars['String']
+    __typename: 'PublicWorkspaceDataSummary'
+}
+
 export interface UpsertRowLevelPermissionPredicatesResult {
     predicates: RowLevelPermissionPredicate[]
     predicateGroups: RowLevelPermissionPredicateGroup[]
@@ -2304,6 +2066,431 @@ export interface WorkspaceInviteHashValid {
     __typename: 'WorkspaceInviteHashValid'
 }
 
+export interface ImapSmtpCaldavPublicConnectionParams {
+    host: Scalars['String']
+    port: Scalars['Float']
+    username?: Scalars['String']
+    connectionSecurity?: EmailConnectionSecurity
+    __typename: 'ImapSmtpCaldavPublicConnectionParams'
+}
+
+export interface ImapSmtpCaldavPublicConnectionParameters {
+    IMAP?: ImapSmtpCaldavPublicConnectionParams
+    SMTP?: ImapSmtpCaldavPublicConnectionParams
+    CALDAV?: ImapSmtpCaldavPublicConnectionParams
+    __typename: 'ImapSmtpCaldavPublicConnectionParameters'
+}
+
+export interface ConnectedImapSmtpCaldavAccount {
+    id: Scalars['UUID']
+    handle: Scalars['String']
+    provider: Scalars['String']
+    userWorkspaceId: Scalars['UUID']
+    connectionParameters?: ImapSmtpCaldavPublicConnectionParameters
+    __typename: 'ConnectedImapSmtpCaldavAccount'
+}
+
+export interface ImapSmtpCaldavConnectionSuccess {
+    success: Scalars['Boolean']
+    connectedAccountId: Scalars['String']
+    __typename: 'ImapSmtpCaldavConnectionSuccess'
+}
+
+export interface ManagedEmailOverview {
+    acquisitionAvailable: Scalars['Boolean']
+    actionRequiredCount: Scalars['Int']
+    domainCount: Scalars['Int']
+    mailboxCount: Scalars['Int']
+    readyCount: Scalars['Int']
+    status: Scalars['String']
+    warmingCount: Scalars['Int']
+    __typename: 'ManagedEmailOverview'
+}
+
+export interface ManagedEmailDomain {
+    cancelAtPeriodEnd: Scalars['Boolean']
+    dependentMailboxCount: Scalars['Int']
+    domain: Scalars['String']
+    id: Scalars['String']
+    infrastructureState: Scalars['String']
+    paidThrough?: Scalars['DateTime']
+    renewalEnabled: Scalars['Boolean']
+    safeFailureCode?: Scalars['String']
+    __typename: 'ManagedEmailDomain'
+}
+
+export interface ManagedEmailMailbox {
+    address: Scalars['String']
+    adminDailyCap?: Scalars['Int']
+    campaignEligibility: Scalars['String']
+    domain: Scalars['String']
+    domainId: Scalars['String']
+    id: Scalars['String']
+    infrastructureCancelAtPeriodEnd: Scalars['Boolean']
+    infrastructureState: Scalars['String']
+    lastHealthEvaluatedAt?: Scalars['DateTime']
+    personaDisplayName: Scalars['String']
+    personaRole?: Scalars['String']
+    policySafeDailyCapacity: Scalars['Int']
+    safeFailureCode?: Scalars['String']
+    servicePaidThrough?: Scalars['DateTime']
+    warmupCancelAtPeriodEnd: Scalars['Boolean']
+    warmupState: Scalars['String']
+    warmupPaidThrough?: Scalars['DateTime']
+    __typename: 'ManagedEmailMailbox'
+}
+
+export interface ManagedEmailBundleMailbox {
+    address: Scalars['String']
+    displayName: Scalars['String']
+    __typename: 'ManagedEmailBundleMailbox'
+}
+
+export interface ManagedEmailBundle {
+    bundleId: Scalars['String']
+    domain: Scalars['String']
+    exclusiveWorkspaceUse: Scalars['Boolean']
+    mailboxes: ManagedEmailBundleMailbox[]
+    mailboxCount: Scalars['Int']
+    observedAt: Scalars['DateTime']
+    providerType: Scalars['String']
+    __typename: 'ManagedEmailBundle'
+}
+
+export interface ManagedEmailDisclosures {
+    cancellation: Scalars['String']
+    managedServiceOwnership: Scalars['String']
+    prepaidBalance: Scalars['String']
+    __typename: 'ManagedEmailDisclosures'
+}
+
+export interface ManagedEmailProposalMailbox {
+    address: Scalars['String']
+    displayName: Scalars['String']
+    roleTitle?: Scalars['String']
+    __typename: 'ManagedEmailProposalMailbox'
+}
+
+export interface ManagedEmailProposalDomain {
+    domain: Scalars['String']
+    mailboxes: ManagedEmailProposalMailbox[]
+    __typename: 'ManagedEmailProposalDomain'
+}
+
+export interface ManagedEmailProposal {
+    disclosures: ManagedEmailDisclosures
+    domains: ManagedEmailProposalDomain[]
+    expiresAt: Scalars['DateTime']
+    id: Scalars['String']
+    mailboxCount: Scalars['Int']
+    policyVersion: Scalars['String']
+    __typename: 'ManagedEmailProposal'
+}
+
+export interface ManagedEmailQuoteLine {
+    amountCents: Scalars['Int']
+    billingFrequency: Scalars['String']
+    endingBefore: Scalars['DateTime']
+    productKey: Scalars['String']
+    quantity: Scalars['Int']
+    startingAt: Scalars['DateTime']
+    unitPriceCents: Scalars['Int']
+    __typename: 'ManagedEmailQuoteLine'
+}
+
+export interface ManagedEmailQuote {
+    currency: Scalars['String']
+    disclosures: ManagedEmailDisclosures
+    dueTodayCents: Scalars['Int']
+    expiresAt: Scalars['DateTime']
+    id: Scalars['String']
+    lines: ManagedEmailQuoteLine[]
+    quoteFingerprint: Scalars['String']
+    quoteVersion: Scalars['String']
+    isSandbox: Scalars['Boolean']
+    __typename: 'ManagedEmailQuote'
+}
+
+export interface ManagedEmailPaymentSetup {
+    clientSecret: Scalars['String']
+    publishableKey: Scalars['String']
+    setupIntentId: Scalars['String']
+    ready: Scalars['Boolean']
+    __typename: 'ManagedEmailPaymentSetup'
+}
+
+export interface ManagedEmailPaymentMethodStatus {
+    ready: Scalars['Boolean']
+    __typename: 'ManagedEmailPaymentMethodStatus'
+}
+
+export interface ManagedEmailOperation {
+    acquisitionMode: Scalars['String']
+    amountCents: Scalars['String']
+    createdAt: Scalars['DateTime']
+    currency: Scalars['String']
+    id: Scalars['String']
+    paymentStatus?: Scalars['String']
+    safeFailureCode?: Scalars['String']
+    state: Scalars['String']
+    updatedAt: Scalars['DateTime']
+    __typename: 'ManagedEmailOperation'
+}
+
+export interface ManagedEmailHealthDetails {
+    adminDailyCap?: Scalars['Int']
+    campaignEligibility: Scalars['String']
+    lastEvaluatedAt?: Scalars['DateTime']
+    policySafeDailyCapacity: Scalars['Int']
+    safeFailureCode?: Scalars['String']
+    __typename: 'ManagedEmailHealthDetails'
+}
+
+export interface ManagedEmailActionResult {
+    accepted: Scalars['Boolean']
+    operationId: Scalars['String']
+    __typename: 'ManagedEmailActionResult'
+}
+
+export interface VerificationRecord {
+    type: Scalars['String']
+    key: Scalars['String']
+    value: Scalars['String']
+    priority?: Scalars['Float']
+    __typename: 'VerificationRecord'
+}
+
+export interface EmailingDomain {
+    id: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    domain: Scalars['String']
+    status: EmailingDomainStatus
+    verificationRecords?: VerificationRecord[]
+    verifiedAt?: Scalars['DateTime']
+    __typename: 'EmailingDomain'
+}
+
+export type EmailingDomainStatus = 'PENDING' | 'VERIFIED' | 'FAILED' | 'TEMPORARY_FAILURE'
+
+export interface MessageChannel {
+    id: Scalars['UUID']
+    visibility: MessageChannelVisibility
+    handle: Scalars['String']
+    type: MessageChannelType
+    isContactAutoCreationEnabled: Scalars['Boolean']
+    contactAutoCreationPolicy: MessageChannelContactAutoCreationPolicy
+    messageFolderImportPolicy: MessageFolderImportPolicy
+    excludeNonProfessionalEmails: Scalars['Boolean']
+    excludeGroupEmails: Scalars['Boolean']
+    pendingGroupEmailsAction: MessageChannelPendingGroupEmailsAction
+    isSyncEnabled: Scalars['Boolean']
+    syncedAt?: Scalars['DateTime']
+    syncStatus: MessageChannelSyncStatus
+    syncStage: MessageChannelSyncStage
+    syncStageStartedAt?: Scalars['DateTime']
+    throttleFailureCount: Scalars['Float']
+    throttleRetryAfter?: Scalars['DateTime']
+    connectedAccountId: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    connectedAccount?: ConnectedAccountPublicDTO
+    __typename: 'MessageChannel'
+}
+
+export type MessageChannelVisibility = 'METADATA' | 'SUBJECT' | 'SHARE_EVERYTHING'
+
+export type MessageChannelType = 'EMAIL' | 'SMS' | 'EMAIL_GROUP'
+
+export type MessageChannelContactAutoCreationPolicy = 'SENT_AND_RECEIVED' | 'SENT' | 'NONE'
+
+export type MessageFolderImportPolicy = 'ALL_FOLDERS' | 'SELECTED_FOLDERS'
+
+export type MessageChannelPendingGroupEmailsAction = 'GROUP_EMAILS_DELETION' | 'GROUP_EMAILS_IMPORT' | 'NONE'
+
+export type MessageChannelSyncStatus = 'NOT_SYNCED' | 'ONGOING' | 'ACTIVE' | 'FAILED_INSUFFICIENT_PERMISSIONS' | 'FAILED_UNKNOWN'
+
+export type MessageChannelSyncStage = 'PENDING_CONFIGURATION' | 'MESSAGE_LIST_FETCH_PENDING' | 'MESSAGE_LIST_FETCH_SCHEDULED' | 'MESSAGE_LIST_FETCH_ONGOING' | 'MESSAGES_IMPORT_PENDING' | 'MESSAGES_IMPORT_SCHEDULED' | 'MESSAGES_IMPORT_ONGOING' | 'FAILED'
+
+export interface CreateEmailGroupChannelOutput {
+    messageChannel: MessageChannel
+    forwardingAddress: Scalars['String']
+    __typename: 'CreateEmailGroupChannelOutput'
+}
+
+export interface CampaignAudiencePreviewDTO {
+    totalMembers: Scalars['Int']
+    withoutEmail: Scalars['Int']
+    duplicateEmails: Scalars['Int']
+    globallyUnsubscribed: Scalars['Int']
+    topicUnsubscribed: Scalars['Int']
+    sendable: Scalars['Int']
+    __typename: 'CampaignAudiencePreviewDTO'
+}
+
+export interface SendEmailViaDomainOutput {
+    messageId: Scalars['String']
+    __typename: 'SendEmailViaDomainOutput'
+}
+
+export interface CampaignSkippedRecipientsDTO {
+    noEmail: Scalars['Int']
+    deduped: Scalars['Int']
+    overCap: Scalars['Int']
+    __typename: 'CampaignSkippedRecipientsDTO'
+}
+
+export interface SendMessageCampaignOutputDTO {
+    campaignId: Scalars['String']
+    queuedCount: Scalars['Int']
+    skipped: CampaignSkippedRecipientsDTO
+    __typename: 'SendMessageCampaignOutputDTO'
+}
+
+export interface UnsubscribeTopic {
+    id: Scalars['UUID']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    name?: Scalars['String']
+    description?: Scalars['String']
+    visibility: UnsubscribeTopicVisibility
+    __typename: 'UnsubscribeTopic'
+}
+
+export type UnsubscribeTopicVisibility = 'PUBLIC' | 'PRIVATE'
+
+export interface BillingTrialPeriod {
+    duration: Scalars['Float']
+    isCreditCardRequired: Scalars['Boolean']
+    __typename: 'BillingTrialPeriod'
+}
+
+export interface NativeModelCapabilities {
+    webSearch?: Scalars['Boolean']
+    twitterSearch?: Scalars['Boolean']
+    __typename: 'NativeModelCapabilities'
+}
+
+export interface ClientAiModelConfig {
+    modelId: Scalars['String']
+    label: Scalars['String']
+    modelFamily?: ModelFamily
+    modelFamilyLabel?: Scalars['String']
+    sdkPackage?: Scalars['String']
+    inputCostPerMillionTokens?: Scalars['Float']
+    outputCostPerMillionTokens?: Scalars['Float']
+    nativeCapabilities?: NativeModelCapabilities
+    isDeprecated?: Scalars['Boolean']
+    isRecommended?: Scalars['Boolean']
+    providerName?: Scalars['String']
+    providerLabel?: Scalars['String']
+    contextWindowTokens?: Scalars['Float']
+    maxOutputTokens?: Scalars['Float']
+    dataResidency?: Scalars['String']
+    __typename: 'ClientAiModelConfig'
+}
+
+export type ModelFamily = 'GPT' | 'CLAUDE' | 'GEMINI' | 'MISTRAL' | 'DEEPSEEK' | 'GROK'
+
+export interface Billing {
+    isBillingEnabled: Scalars['Boolean']
+    billingUrl?: Scalars['String']
+    stripePublishableKey?: Scalars['String']
+    trialPeriods: BillingTrialPeriod[]
+    __typename: 'Billing'
+}
+
+export interface Support {
+    supportDriver: SupportDriver
+    supportFrontChatId?: Scalars['String']
+    __typename: 'Support'
+}
+
+export type SupportDriver = 'NONE' | 'FRONT'
+
+export interface Sentry {
+    environment?: Scalars['String']
+    release?: Scalars['String']
+    dsn?: Scalars['String']
+    __typename: 'Sentry'
+}
+
+export interface Captcha {
+    provider?: CaptchaDriverType
+    siteKey?: Scalars['String']
+    __typename: 'Captcha'
+}
+
+export type CaptchaDriverType = 'GOOGLE_RECAPTCHA' | 'TURNSTILE'
+
+export interface ApiConfig {
+    mutationMaximumAffectedRecords: Scalars['Float']
+    __typename: 'ApiConfig'
+}
+
+export interface PublicFeatureFlagMetadata {
+    label: Scalars['String']
+    description: Scalars['String']
+    imagePath?: Scalars['String']
+    __typename: 'PublicFeatureFlagMetadata'
+}
+
+export interface PublicFeatureFlag {
+    key: FeatureFlagKey
+    metadata: PublicFeatureFlagMetadata
+    __typename: 'PublicFeatureFlag'
+}
+
+export interface ClientConfigMaintenanceMode {
+    startAt: Scalars['DateTime']
+    endAt: Scalars['DateTime']
+    link?: Scalars['String']
+    __typename: 'ClientConfigMaintenanceMode'
+}
+
+export interface ClientConfig {
+    appVersion?: Scalars['String']
+    authProviders: AuthProviders
+    billing: Billing
+    aiModels: ClientAiModelConfig[]
+    signInPrefilled: Scalars['Boolean']
+    isMultiWorkspaceEnabled: Scalars['Boolean']
+    isEmailVerificationRequired: Scalars['Boolean']
+    defaultSubdomain?: Scalars['String']
+    frontDomain: Scalars['String']
+    publicFunctionDomain?: Scalars['String']
+    analyticsEnabled: Scalars['Boolean']
+    support: Support
+    isAttachmentPreviewEnabled: Scalars['Boolean']
+    sentry: Sentry
+    captcha: Captcha
+    api: ApiConfig
+    canManageFeatureFlags: Scalars['Boolean']
+    publicFeatureFlags: PublicFeatureFlag[]
+    isMicrosoftMessagingEnabled: Scalars['Boolean']
+    isMicrosoftCalendarEnabled: Scalars['Boolean']
+    isGoogleMessagingEnabled: Scalars['Boolean']
+    isGoogleCalendarEnabled: Scalars['Boolean']
+    isConfigVariablesInDbEnabled: Scalars['Boolean']
+    isImapSmtpCaldavEnabled: Scalars['Boolean']
+    isManagedEmailEnabled: Scalars['Boolean']
+    isEmailingDomainInDemoMode: Scalars['Boolean']
+    allowRequestsToTwentyIcons: Scalars['Boolean']
+    calendarBookingPageId?: Scalars['String']
+    isCloudflareIntegrationEnabled: Scalars['Boolean']
+    isClickHouseConfigured: Scalars['Boolean']
+    isWorkspaceSchemaDDLLocked: Scalars['Boolean']
+    maintenance?: ClientConfigMaintenanceMode
+    __typename: 'ClientConfig'
+}
+
+export interface UsageBreakdownItem {
+    key: Scalars['String']
+    label?: Scalars['String']
+    creditsUsed: Scalars['Float']
+    __typename: 'UsageBreakdownItem'
+}
+
 export interface Impersonate {
     loginToken: AuthToken
     workspace: WorkspaceUrlsAndId
@@ -2382,36 +2569,6 @@ export interface PlaceDetailsResult {
     country?: Scalars['String']
     location?: Location
     __typename: 'PlaceDetailsResult'
-}
-
-export interface ImapSmtpCaldavPublicConnectionParams {
-    host: Scalars['String']
-    port: Scalars['Float']
-    username?: Scalars['String']
-    connectionSecurity?: EmailConnectionSecurity
-    __typename: 'ImapSmtpCaldavPublicConnectionParams'
-}
-
-export interface ImapSmtpCaldavPublicConnectionParameters {
-    IMAP?: ImapSmtpCaldavPublicConnectionParams
-    SMTP?: ImapSmtpCaldavPublicConnectionParams
-    CALDAV?: ImapSmtpCaldavPublicConnectionParams
-    __typename: 'ImapSmtpCaldavPublicConnectionParameters'
-}
-
-export interface ConnectedImapSmtpCaldavAccount {
-    id: Scalars['UUID']
-    handle: Scalars['String']
-    provider: Scalars['String']
-    userWorkspaceId: Scalars['UUID']
-    connectionParameters?: ImapSmtpCaldavPublicConnectionParameters
-    __typename: 'ConnectedImapSmtpCaldavAccount'
-}
-
-export interface ImapSmtpCaldavConnectionSuccess {
-    success: Scalars['Boolean']
-    connectedAccountId: Scalars['String']
-    __typename: 'ImapSmtpCaldavConnectionSuccess'
 }
 
 export interface AgentMessagePart {
@@ -2821,10 +2978,16 @@ export interface Query {
     enterprisePortalSession?: Scalars['String']
     enterpriseCheckoutSession?: Scalars['String']
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTO
-    campaignInfluencerSnapshot: CampaignInfluencerSnapshotDTO
-    campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDTO
-    creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
-    myConnectedAccounts: ConnectedAccountPublicDTO[]
+    managedEmailOverview: ManagedEmailOverview
+    managedEmailDomains: ManagedEmailDomain[]
+    managedEmailMailboxes: ManagedEmailMailbox[]
+    managedEmailPrewarmedBundles: ManagedEmailBundle[]
+    managedEmailProposal: ManagedEmailProposal
+    managedEmailQuote: ManagedEmailQuote
+    managedEmailPrewarmedProposal: ManagedEmailProposal
+    managedEmailOperation?: ManagedEmailOperation
+    managedEmailHealthDetails?: ManagedEmailHealthDetails
+    getConnectedImapSmtpCaldavAccount: ConnectedImapSmtpCaldavAccount
     applicationConnectionProviders: ApplicationConnectionProvider[]
     checkUserExists: CheckUserExist
     checkWorkspaceInviteHashIsValid: WorkspaceInviteHashValid
@@ -2870,11 +3033,15 @@ export interface Query {
     getInviteSuggestions: InviteSuggestion[]
     findWorkspaceInvitations: WorkspaceInvitation[]
     getApprovedAccessDomains: ApprovedAccessDomain[]
+    myConnectedAccounts: ConnectedAccountPublicDTO[]
     currentWorkspace: Workspace
     getPublicWorkspaceDataByDomain: PublicWorkspaceData
     getPublicWorkspaceDataById: PublicWorkspaceDataSummary
     getViewFilterGroups: ViewFilterGroup[]
     getViewFilterGroup?: ViewFilterGroup
+    campaignInfluencerSnapshot: CampaignInfluencerSnapshotDTO
+    campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDTO
+    creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
     getPageLayoutTabs: PageLayoutTab[]
     getPageLayoutTab: PageLayoutTab
     getPageLayouts: PageLayout[]
@@ -2893,7 +3060,6 @@ export interface Query {
     findOneAgent: Agent
     getRoles: Role[]
     getSSOIdentityProviders: FindAvailableSSOIDP[]
-    getConnectedImapSmtpCaldavAccount: ConnectedImapSmtpCaldavAccount
     getPageLayoutWidgets: PageLayoutWidget[]
     getPageLayoutWidget: PageLayoutWidget
     commandMenuItems: CommandMenuItem[]
@@ -2960,13 +3126,17 @@ export interface Mutation {
     uploadWorkspaceMemberProfilePicture: FileWithSignedUrl
     uploadFilesFieldFile: FileWithSignedUrl
     uploadFilesFieldFileByUniversalIdentifier: FileWithSignedUrl
-    attachCampaignCreatorLists: CampaignInfluencerSnapshotDTO
-    addDirectCampaignCreators: CampaignInfluencerSnapshotDTO
-    detachCampaignCreatorList: CampaignInfluencerSnapshotDTO
-    addCreatorListMemberIntent: CreatorListMemberDTO
-    addCreatorListMembersIntent: CreatorListMemberDTO[]
-    removeCreatorListMemberIntent: Scalars['Boolean']
-    deleteConnectedAccount: ConnectedAccountPublicDTO
+    prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup
+    completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus
+    confirmManagedEmailPrewarmedPurchase: ManagedEmailActionResult
+    confirmManagedEmailOrdinaryPurchase: ManagedEmailActionResult
+    setManagedEmailCampaignCap: ManagedEmailActionResult
+    cancelManagedEmailWarmup: ManagedEmailActionResult
+    pauseManagedEmailWarmup: ManagedEmailActionResult
+    resumeManagedEmailWarmup: ManagedEmailActionResult
+    stopManagedEmailMailbox: ManagedEmailActionResult
+    cancelManagedEmailDomainRenewal: ManagedEmailActionResult
+    saveImapSmtpCaldavAccount: ImapSmtpCaldavConnectionSuccess
     updateOneApplicationVariable: Scalars['Boolean']
     getAuthorizationUrlForSSO: GetAuthorizationUrlForSSO
     getLoginTokenFromCredentials: LoginToken
@@ -3065,6 +3235,7 @@ export interface Mutation {
     createApprovedAccessDomain: ApprovedAccessDomain
     deleteApprovedAccessDomain: Scalars['Boolean']
     validateApprovedAccessDomain: ApprovedAccessDomain
+    deleteConnectedAccount: ConnectedAccountPublicDTO
     activateWorkspace: Workspace
     updateWorkspace: Workspace
     deleteCurrentWorkspace: Workspace
@@ -3073,6 +3244,12 @@ export interface Mutation {
     updateViewFilterGroup: ViewFilterGroup
     deleteViewFilterGroup: Scalars['Boolean']
     destroyViewFilterGroup: Scalars['Boolean']
+    attachCampaignCreatorLists: CampaignInfluencerSnapshotDTO
+    addDirectCampaignCreators: CampaignInfluencerSnapshotDTO
+    detachCampaignCreatorList: CampaignInfluencerSnapshotDTO
+    addCreatorListMemberIntent: CreatorListMemberDTO
+    addCreatorListMembersIntent: CreatorListMemberDTO[]
+    removeCreatorListMemberIntent: Scalars['Boolean']
     createPageLayoutTab: PageLayoutTab
     updatePageLayoutTab: PageLayoutTab
     destroyPageLayoutTab: Scalars['Boolean']
@@ -3112,7 +3289,6 @@ export interface Mutation {
     createSAMLIdentityProvider: SetupSso
     deleteSSOIdentityProvider: DeleteSso
     editSSOIdentityProvider: EditSso
-    saveImapSmtpCaldavAccount: ImapSmtpCaldavConnectionSuccess
     createPageLayoutWidget: PageLayoutWidget
     updatePageLayoutWidget: PageLayoutWidget
     destroyPageLayoutWidget: Scalars['Boolean']
@@ -4712,27 +4888,6 @@ export interface ActionExecutionReceiptGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface VerificationRecordGenqlSelection{
-    type?: boolean | number
-    key?: boolean | number
-    value?: boolean | number
-    priority?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface EmailingDomainGenqlSelection{
-    id?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    domain?: boolean | number
-    status?: boolean | number
-    verificationRecords?: VerificationRecordGenqlSelection
-    verifiedAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface PublicConnectionParametersOutputGenqlSelection{
     host?: boolean | number
     port?: boolean | number
@@ -4772,113 +4927,6 @@ export interface ConnectedAccountPublicDTOGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface MessageChannelGenqlSelection{
-    id?: boolean | number
-    visibility?: boolean | number
-    handle?: boolean | number
-    type?: boolean | number
-    isContactAutoCreationEnabled?: boolean | number
-    contactAutoCreationPolicy?: boolean | number
-    messageFolderImportPolicy?: boolean | number
-    excludeNonProfessionalEmails?: boolean | number
-    excludeGroupEmails?: boolean | number
-    pendingGroupEmailsAction?: boolean | number
-    isSyncEnabled?: boolean | number
-    syncedAt?: boolean | number
-    syncStatus?: boolean | number
-    syncStage?: boolean | number
-    syncStageStartedAt?: boolean | number
-    throttleFailureCount?: boolean | number
-    throttleRetryAfter?: boolean | number
-    connectedAccountId?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    connectedAccount?: ConnectedAccountPublicDTOGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CreateEmailGroupChannelOutputGenqlSelection{
-    messageChannel?: MessageChannelGenqlSelection
-    forwardingAddress?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignAudiencePreviewDTOGenqlSelection{
-    totalMembers?: boolean | number
-    withoutEmail?: boolean | number
-    duplicateEmails?: boolean | number
-    globallyUnsubscribed?: boolean | number
-    topicUnsubscribed?: boolean | number
-    sendable?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SendEmailViaDomainOutputGenqlSelection{
-    messageId?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CampaignSkippedRecipientsDTOGenqlSelection{
-    noEmail?: boolean | number
-    deduped?: boolean | number
-    overCap?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SendMessageCampaignOutputDTOGenqlSelection{
-    campaignId?: boolean | number
-    queuedCount?: boolean | number
-    skipped?: CampaignSkippedRecipientsDTOGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface UnsubscribeTopicGenqlSelection{
-    id?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    name?: boolean | number
-    description?: boolean | number
-    visibility?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface FeatureFlagGenqlSelection{
-    key?: boolean | number
-    value?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface WorkspaceUrlsGenqlSelection{
-    customUrl?: boolean | number
-    subdomainUrl?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ApplicationRegistrationVariableDTOGenqlSelection{
-    id?: boolean | number
-    key?: boolean | number
-    value?: boolean | number
-    description?: boolean | number
-    isSecret?: boolean | number
-    isRequired?: boolean | number
-    isFilled?: boolean | number
-    type?: boolean | number
-    options?: boolean | number
-    createdAt?: boolean | number
-    updatedAt?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
 export interface VersionDistributionEntryGenqlSelection{
     version?: boolean | number
     count?: boolean | number
@@ -4890,191 +4938,6 @@ export interface ApplicationRegistrationStatsGenqlSelection{
     activeInstalls?: boolean | number
     mostInstalledVersion?: boolean | number
     versionDistribution?: VersionDistributionEntryGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingTrialPeriodGenqlSelection{
-    duration?: boolean | number
-    isCreditCardRequired?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SSOIdentityProviderGenqlSelection{
-    id?: boolean | number
-    name?: boolean | number
-    type?: boolean | number
-    status?: boolean | number
-    issuer?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface AuthProvidersGenqlSelection{
-    sso?: SSOIdentityProviderGenqlSelection
-    google?: boolean | number
-    magicLink?: boolean | number
-    password?: boolean | number
-    microsoft?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface AuthBypassProvidersGenqlSelection{
-    google?: boolean | number
-    password?: boolean | number
-    microsoft?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface PublicWorkspaceDataGenqlSelection{
-    id?: boolean | number
-    authProviders?: AuthProvidersGenqlSelection
-    authBypassProviders?: AuthBypassProvidersGenqlSelection
-    logo?: boolean | number
-    displayName?: boolean | number
-    workspaceUrls?: WorkspaceUrlsGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface PublicWorkspaceDataSummaryGenqlSelection{
-    id?: boolean | number
-    logo?: boolean | number
-    displayName?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface NativeModelCapabilitiesGenqlSelection{
-    webSearch?: boolean | number
-    twitterSearch?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ClientAiModelConfigGenqlSelection{
-    modelId?: boolean | number
-    label?: boolean | number
-    modelFamily?: boolean | number
-    modelFamilyLabel?: boolean | number
-    sdkPackage?: boolean | number
-    inputCostPerMillionTokens?: boolean | number
-    outputCostPerMillionTokens?: boolean | number
-    nativeCapabilities?: NativeModelCapabilitiesGenqlSelection
-    isDeprecated?: boolean | number
-    isRecommended?: boolean | number
-    providerName?: boolean | number
-    providerLabel?: boolean | number
-    contextWindowTokens?: boolean | number
-    maxOutputTokens?: boolean | number
-    dataResidency?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface BillingGenqlSelection{
-    isBillingEnabled?: boolean | number
-    billingUrl?: boolean | number
-    stripePublishableKey?: boolean | number
-    trialPeriods?: BillingTrialPeriodGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SupportGenqlSelection{
-    supportDriver?: boolean | number
-    supportFrontChatId?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface SentryGenqlSelection{
-    environment?: boolean | number
-    release?: boolean | number
-    dsn?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CaptchaGenqlSelection{
-    provider?: boolean | number
-    siteKey?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ApiConfigGenqlSelection{
-    mutationMaximumAffectedRecords?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface PublicFeatureFlagMetadataGenqlSelection{
-    label?: boolean | number
-    description?: boolean | number
-    imagePath?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface PublicFeatureFlagGenqlSelection{
-    key?: boolean | number
-    metadata?: PublicFeatureFlagMetadataGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ClientConfigMaintenanceModeGenqlSelection{
-    startAt?: boolean | number
-    endAt?: boolean | number
-    link?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ClientConfigGenqlSelection{
-    appVersion?: boolean | number
-    authProviders?: AuthProvidersGenqlSelection
-    billing?: BillingGenqlSelection
-    aiModels?: ClientAiModelConfigGenqlSelection
-    signInPrefilled?: boolean | number
-    isMultiWorkspaceEnabled?: boolean | number
-    isEmailVerificationRequired?: boolean | number
-    defaultSubdomain?: boolean | number
-    frontDomain?: boolean | number
-    publicFunctionDomain?: boolean | number
-    analyticsEnabled?: boolean | number
-    support?: SupportGenqlSelection
-    isAttachmentPreviewEnabled?: boolean | number
-    sentry?: SentryGenqlSelection
-    captcha?: CaptchaGenqlSelection
-    api?: ApiConfigGenqlSelection
-    canManageFeatureFlags?: boolean | number
-    publicFeatureFlags?: PublicFeatureFlagGenqlSelection
-    isMicrosoftMessagingEnabled?: boolean | number
-    isMicrosoftCalendarEnabled?: boolean | number
-    isGoogleMessagingEnabled?: boolean | number
-    isGoogleCalendarEnabled?: boolean | number
-    isConfigVariablesInDbEnabled?: boolean | number
-    isImapSmtpCaldavEnabled?: boolean | number
-    isEmailingDomainInDemoMode?: boolean | number
-    allowRequestsToTwentyIcons?: boolean | number
-    calendarBookingPageId?: boolean | number
-    isCloudflareIntegrationEnabled?: boolean | number
-    isClickHouseConfigured?: boolean | number
-    isWorkspaceSchemaDDLLocked?: boolean | number
-    maintenance?: ClientConfigMaintenanceModeGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface UsageBreakdownItemGenqlSelection{
-    key?: boolean | number
-    label?: boolean | number
-    creditsUsed?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -5098,6 +4961,22 @@ export interface PublicApplicationRegistrationGenqlSelection{
 
 export interface RotateClientSecretGenqlSelection{
     clientSecret?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ApplicationRegistrationVariableDTOGenqlSelection{
+    id?: boolean | number
+    key?: boolean | number
+    value?: boolean | number
+    description?: boolean | number
+    isSecret?: boolean | number
+    isRequired?: boolean | number
+    isFilled?: boolean | number
+    type?: boolean | number
+    options?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -5299,6 +5178,13 @@ export interface SetupSsoGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface WorkspaceUrlsGenqlSelection{
+    customUrl?: boolean | number
+    subdomainUrl?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface SSOConnectionGenqlSelection{
     type?: boolean | number
     id?: boolean | number
@@ -5440,6 +5326,60 @@ export interface DomainValidRecordsGenqlSelection{
     domain?: boolean | number
     records?: DomainRecordGenqlSelection
     isCustomDomainEnabled?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface FeatureFlagGenqlSelection{
+    key?: boolean | number
+    value?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SSOIdentityProviderGenqlSelection{
+    id?: boolean | number
+    name?: boolean | number
+    type?: boolean | number
+    status?: boolean | number
+    issuer?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface AuthProvidersGenqlSelection{
+    sso?: SSOIdentityProviderGenqlSelection
+    google?: boolean | number
+    magicLink?: boolean | number
+    password?: boolean | number
+    microsoft?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface AuthBypassProvidersGenqlSelection{
+    google?: boolean | number
+    password?: boolean | number
+    microsoft?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface PublicWorkspaceDataGenqlSelection{
+    id?: boolean | number
+    authProviders?: AuthProvidersGenqlSelection
+    authBypassProviders?: AuthBypassProvidersGenqlSelection
+    logo?: boolean | number
+    displayName?: boolean | number
+    workspaceUrls?: WorkspaceUrlsGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface PublicWorkspaceDataSummaryGenqlSelection{
+    id?: boolean | number
+    logo?: boolean | number
+    displayName?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -5602,6 +5542,449 @@ export interface WorkspaceInviteHashValidGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface ImapSmtpCaldavPublicConnectionParamsGenqlSelection{
+    host?: boolean | number
+    port?: boolean | number
+    username?: boolean | number
+    connectionSecurity?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ImapSmtpCaldavPublicConnectionParametersGenqlSelection{
+    IMAP?: ImapSmtpCaldavPublicConnectionParamsGenqlSelection
+    SMTP?: ImapSmtpCaldavPublicConnectionParamsGenqlSelection
+    CALDAV?: ImapSmtpCaldavPublicConnectionParamsGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ConnectedImapSmtpCaldavAccountGenqlSelection{
+    id?: boolean | number
+    handle?: boolean | number
+    provider?: boolean | number
+    userWorkspaceId?: boolean | number
+    connectionParameters?: ImapSmtpCaldavPublicConnectionParametersGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ImapSmtpCaldavConnectionSuccessGenqlSelection{
+    success?: boolean | number
+    connectedAccountId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailOverviewGenqlSelection{
+    acquisitionAvailable?: boolean | number
+    actionRequiredCount?: boolean | number
+    domainCount?: boolean | number
+    mailboxCount?: boolean | number
+    readyCount?: boolean | number
+    status?: boolean | number
+    warmingCount?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailDomainGenqlSelection{
+    cancelAtPeriodEnd?: boolean | number
+    dependentMailboxCount?: boolean | number
+    domain?: boolean | number
+    id?: boolean | number
+    infrastructureState?: boolean | number
+    paidThrough?: boolean | number
+    renewalEnabled?: boolean | number
+    safeFailureCode?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailMailboxGenqlSelection{
+    address?: boolean | number
+    adminDailyCap?: boolean | number
+    campaignEligibility?: boolean | number
+    domain?: boolean | number
+    domainId?: boolean | number
+    id?: boolean | number
+    infrastructureCancelAtPeriodEnd?: boolean | number
+    infrastructureState?: boolean | number
+    lastHealthEvaluatedAt?: boolean | number
+    personaDisplayName?: boolean | number
+    personaRole?: boolean | number
+    policySafeDailyCapacity?: boolean | number
+    safeFailureCode?: boolean | number
+    servicePaidThrough?: boolean | number
+    warmupCancelAtPeriodEnd?: boolean | number
+    warmupState?: boolean | number
+    warmupPaidThrough?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailBundleMailboxGenqlSelection{
+    address?: boolean | number
+    displayName?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailBundleGenqlSelection{
+    bundleId?: boolean | number
+    domain?: boolean | number
+    exclusiveWorkspaceUse?: boolean | number
+    mailboxes?: ManagedEmailBundleMailboxGenqlSelection
+    mailboxCount?: boolean | number
+    observedAt?: boolean | number
+    providerType?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailDisclosuresGenqlSelection{
+    cancellation?: boolean | number
+    managedServiceOwnership?: boolean | number
+    prepaidBalance?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailProposalMailboxGenqlSelection{
+    address?: boolean | number
+    displayName?: boolean | number
+    roleTitle?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailProposalDomainGenqlSelection{
+    domain?: boolean | number
+    mailboxes?: ManagedEmailProposalMailboxGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailProposalGenqlSelection{
+    disclosures?: ManagedEmailDisclosuresGenqlSelection
+    domains?: ManagedEmailProposalDomainGenqlSelection
+    expiresAt?: boolean | number
+    id?: boolean | number
+    mailboxCount?: boolean | number
+    policyVersion?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailQuoteLineGenqlSelection{
+    amountCents?: boolean | number
+    billingFrequency?: boolean | number
+    endingBefore?: boolean | number
+    productKey?: boolean | number
+    quantity?: boolean | number
+    startingAt?: boolean | number
+    unitPriceCents?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailQuoteGenqlSelection{
+    currency?: boolean | number
+    disclosures?: ManagedEmailDisclosuresGenqlSelection
+    dueTodayCents?: boolean | number
+    expiresAt?: boolean | number
+    id?: boolean | number
+    lines?: ManagedEmailQuoteLineGenqlSelection
+    quoteFingerprint?: boolean | number
+    quoteVersion?: boolean | number
+    isSandbox?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailPaymentSetupGenqlSelection{
+    clientSecret?: boolean | number
+    publishableKey?: boolean | number
+    setupIntentId?: boolean | number
+    ready?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailPaymentMethodStatusGenqlSelection{
+    ready?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailOperationGenqlSelection{
+    acquisitionMode?: boolean | number
+    amountCents?: boolean | number
+    createdAt?: boolean | number
+    currency?: boolean | number
+    id?: boolean | number
+    paymentStatus?: boolean | number
+    safeFailureCode?: boolean | number
+    state?: boolean | number
+    updatedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailHealthDetailsGenqlSelection{
+    adminDailyCap?: boolean | number
+    campaignEligibility?: boolean | number
+    lastEvaluatedAt?: boolean | number
+    policySafeDailyCapacity?: boolean | number
+    safeFailureCode?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedEmailActionResultGenqlSelection{
+    accepted?: boolean | number
+    operationId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface VerificationRecordGenqlSelection{
+    type?: boolean | number
+    key?: boolean | number
+    value?: boolean | number
+    priority?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface EmailingDomainGenqlSelection{
+    id?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    domain?: boolean | number
+    status?: boolean | number
+    verificationRecords?: VerificationRecordGenqlSelection
+    verifiedAt?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MessageChannelGenqlSelection{
+    id?: boolean | number
+    visibility?: boolean | number
+    handle?: boolean | number
+    type?: boolean | number
+    isContactAutoCreationEnabled?: boolean | number
+    contactAutoCreationPolicy?: boolean | number
+    messageFolderImportPolicy?: boolean | number
+    excludeNonProfessionalEmails?: boolean | number
+    excludeGroupEmails?: boolean | number
+    pendingGroupEmailsAction?: boolean | number
+    isSyncEnabled?: boolean | number
+    syncedAt?: boolean | number
+    syncStatus?: boolean | number
+    syncStage?: boolean | number
+    syncStageStartedAt?: boolean | number
+    throttleFailureCount?: boolean | number
+    throttleRetryAfter?: boolean | number
+    connectedAccountId?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    connectedAccount?: ConnectedAccountPublicDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CreateEmailGroupChannelOutputGenqlSelection{
+    messageChannel?: MessageChannelGenqlSelection
+    forwardingAddress?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignAudiencePreviewDTOGenqlSelection{
+    totalMembers?: boolean | number
+    withoutEmail?: boolean | number
+    duplicateEmails?: boolean | number
+    globallyUnsubscribed?: boolean | number
+    topicUnsubscribed?: boolean | number
+    sendable?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SendEmailViaDomainOutputGenqlSelection{
+    messageId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CampaignSkippedRecipientsDTOGenqlSelection{
+    noEmail?: boolean | number
+    deduped?: boolean | number
+    overCap?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SendMessageCampaignOutputDTOGenqlSelection{
+    campaignId?: boolean | number
+    queuedCount?: boolean | number
+    skipped?: CampaignSkippedRecipientsDTOGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface UnsubscribeTopicGenqlSelection{
+    id?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    name?: boolean | number
+    description?: boolean | number
+    visibility?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingTrialPeriodGenqlSelection{
+    duration?: boolean | number
+    isCreditCardRequired?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface NativeModelCapabilitiesGenqlSelection{
+    webSearch?: boolean | number
+    twitterSearch?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ClientAiModelConfigGenqlSelection{
+    modelId?: boolean | number
+    label?: boolean | number
+    modelFamily?: boolean | number
+    modelFamilyLabel?: boolean | number
+    sdkPackage?: boolean | number
+    inputCostPerMillionTokens?: boolean | number
+    outputCostPerMillionTokens?: boolean | number
+    nativeCapabilities?: NativeModelCapabilitiesGenqlSelection
+    isDeprecated?: boolean | number
+    isRecommended?: boolean | number
+    providerName?: boolean | number
+    providerLabel?: boolean | number
+    contextWindowTokens?: boolean | number
+    maxOutputTokens?: boolean | number
+    dataResidency?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface BillingGenqlSelection{
+    isBillingEnabled?: boolean | number
+    billingUrl?: boolean | number
+    stripePublishableKey?: boolean | number
+    trialPeriods?: BillingTrialPeriodGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SupportGenqlSelection{
+    supportDriver?: boolean | number
+    supportFrontChatId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface SentryGenqlSelection{
+    environment?: boolean | number
+    release?: boolean | number
+    dsn?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CaptchaGenqlSelection{
+    provider?: boolean | number
+    siteKey?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ApiConfigGenqlSelection{
+    mutationMaximumAffectedRecords?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface PublicFeatureFlagMetadataGenqlSelection{
+    label?: boolean | number
+    description?: boolean | number
+    imagePath?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface PublicFeatureFlagGenqlSelection{
+    key?: boolean | number
+    metadata?: PublicFeatureFlagMetadataGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ClientConfigMaintenanceModeGenqlSelection{
+    startAt?: boolean | number
+    endAt?: boolean | number
+    link?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ClientConfigGenqlSelection{
+    appVersion?: boolean | number
+    authProviders?: AuthProvidersGenqlSelection
+    billing?: BillingGenqlSelection
+    aiModels?: ClientAiModelConfigGenqlSelection
+    signInPrefilled?: boolean | number
+    isMultiWorkspaceEnabled?: boolean | number
+    isEmailVerificationRequired?: boolean | number
+    defaultSubdomain?: boolean | number
+    frontDomain?: boolean | number
+    publicFunctionDomain?: boolean | number
+    analyticsEnabled?: boolean | number
+    support?: SupportGenqlSelection
+    isAttachmentPreviewEnabled?: boolean | number
+    sentry?: SentryGenqlSelection
+    captcha?: CaptchaGenqlSelection
+    api?: ApiConfigGenqlSelection
+    canManageFeatureFlags?: boolean | number
+    publicFeatureFlags?: PublicFeatureFlagGenqlSelection
+    isMicrosoftMessagingEnabled?: boolean | number
+    isMicrosoftCalendarEnabled?: boolean | number
+    isGoogleMessagingEnabled?: boolean | number
+    isGoogleCalendarEnabled?: boolean | number
+    isConfigVariablesInDbEnabled?: boolean | number
+    isImapSmtpCaldavEnabled?: boolean | number
+    isManagedEmailEnabled?: boolean | number
+    isEmailingDomainInDemoMode?: boolean | number
+    allowRequestsToTwentyIcons?: boolean | number
+    calendarBookingPageId?: boolean | number
+    isCloudflareIntegrationEnabled?: boolean | number
+    isClickHouseConfigured?: boolean | number
+    isWorkspaceSchemaDDLLocked?: boolean | number
+    maintenance?: ClientConfigMaintenanceModeGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface UsageBreakdownItemGenqlSelection{
+    key?: boolean | number
+    label?: boolean | number
+    creditsUsed?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface ImpersonateGenqlSelection{
     loginToken?: AuthTokenGenqlSelection
     workspace?: WorkspaceUrlsAndIdGenqlSelection
@@ -5689,40 +6072,6 @@ export interface PlaceDetailsResultGenqlSelection{
     city?: boolean | number
     country?: boolean | number
     location?: LocationGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ImapSmtpCaldavPublicConnectionParamsGenqlSelection{
-    host?: boolean | number
-    port?: boolean | number
-    username?: boolean | number
-    connectionSecurity?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ImapSmtpCaldavPublicConnectionParametersGenqlSelection{
-    IMAP?: ImapSmtpCaldavPublicConnectionParamsGenqlSelection
-    SMTP?: ImapSmtpCaldavPublicConnectionParamsGenqlSelection
-    CALDAV?: ImapSmtpCaldavPublicConnectionParamsGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ConnectedImapSmtpCaldavAccountGenqlSelection{
-    id?: boolean | number
-    handle?: boolean | number
-    provider?: boolean | number
-    userWorkspaceId?: boolean | number
-    connectionParameters?: ImapSmtpCaldavPublicConnectionParametersGenqlSelection
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface ImapSmtpCaldavConnectionSuccessGenqlSelection{
-    success?: boolean | number
-    connectedAccountId?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6162,10 +6511,16 @@ export interface QueryGenqlSelection{
     enterprisePortalSession?: { __args: {returnUrlPath?: (Scalars['String'] | null)} } | boolean | number
     enterpriseCheckoutSession?: { __args: {billingInterval?: (Scalars['String'] | null)} } | boolean | number
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTOGenqlSelection
-    campaignInfluencerSnapshot?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: CampaignInfluencerCampaignInput} })
-    campaignCreatorListRemovalImpact?: (CampaignCreatorListRemovalImpactDTOGenqlSelection & { __args: {input: CampaignCreatorListRemovalImpactInput} })
-    creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
-    myConnectedAccounts?: ConnectedAccountPublicDTOGenqlSelection
+    managedEmailOverview?: ManagedEmailOverviewGenqlSelection
+    managedEmailDomains?: ManagedEmailDomainGenqlSelection
+    managedEmailMailboxes?: ManagedEmailMailboxGenqlSelection
+    managedEmailPrewarmedBundles?: ManagedEmailBundleGenqlSelection
+    managedEmailProposal?: (ManagedEmailProposalGenqlSelection & { __args: {input: ManagedEmailProposalInput} })
+    managedEmailQuote?: (ManagedEmailQuoteGenqlSelection & { __args: {input: ManagedEmailQuoteInput} })
+    managedEmailPrewarmedProposal?: (ManagedEmailProposalGenqlSelection & { __args: {input: ManagedEmailPrewarmedProposalInput} })
+    managedEmailOperation?: (ManagedEmailOperationGenqlSelection & { __args: {input: ManagedEmailOperationInput} })
+    managedEmailHealthDetails?: (ManagedEmailHealthDetailsGenqlSelection & { __args: {input: ManagedEmailHealthDetailsInput} })
+    getConnectedImapSmtpCaldavAccount?: (ConnectedImapSmtpCaldavAccountGenqlSelection & { __args: {id: Scalars['UUID']} })
     applicationConnectionProviders?: (ApplicationConnectionProviderGenqlSelection & { __args: {applicationId: Scalars['UUID']} })
     checkUserExists?: (CheckUserExistGenqlSelection & { __args: {email: Scalars['String'], captchaToken?: (Scalars['String'] | null)} })
     checkWorkspaceInviteHashIsValid?: (WorkspaceInviteHashValidGenqlSelection & { __args: {inviteHash: Scalars['String']} })
@@ -6229,11 +6584,15 @@ export interface QueryGenqlSelection{
     getInviteSuggestions?: InviteSuggestionGenqlSelection
     findWorkspaceInvitations?: WorkspaceInvitationGenqlSelection
     getApprovedAccessDomains?: ApprovedAccessDomainGenqlSelection
+    myConnectedAccounts?: ConnectedAccountPublicDTOGenqlSelection
     currentWorkspace?: WorkspaceGenqlSelection
     getPublicWorkspaceDataByDomain?: (PublicWorkspaceDataGenqlSelection & { __args?: {origin?: (Scalars['String'] | null)} })
     getPublicWorkspaceDataById?: (PublicWorkspaceDataSummaryGenqlSelection & { __args: {id: Scalars['UUID']} })
     getViewFilterGroups?: (ViewFilterGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
     getViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String']} })
+    campaignInfluencerSnapshot?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: CampaignInfluencerCampaignInput} })
+    campaignCreatorListRemovalImpact?: (CampaignCreatorListRemovalImpactDTOGenqlSelection & { __args: {input: CampaignCreatorListRemovalImpactInput} })
+    creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     getPageLayoutTabs?: (PageLayoutTabGenqlSelection & { __args: {pageLayoutId: Scalars['String']} })
     getPageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String']} })
     getPageLayouts?: (PageLayoutGenqlSelection & { __args?: {objectMetadataId?: (Scalars['String'] | null), pageLayoutType?: (PageLayoutType | null)} })
@@ -6252,7 +6611,6 @@ export interface QueryGenqlSelection{
     findOneAgent?: (AgentGenqlSelection & { __args: {input: AgentIdInput} })
     getRoles?: RoleGenqlSelection
     getSSOIdentityProviders?: FindAvailableSSOIDPGenqlSelection
-    getConnectedImapSmtpCaldavAccount?: (ConnectedImapSmtpCaldavAccountGenqlSelection & { __args: {id: Scalars['UUID']} })
     getPageLayoutWidgets?: (PageLayoutWidgetGenqlSelection & { __args: {pageLayoutTabId: Scalars['String']} })
     getPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String']} })
     commandMenuItems?: CommandMenuItemGenqlSelection
@@ -6292,15 +6650,27 @@ export interface QueryGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface ManagedEmailProposalInput {mailboxCount: Scalars['Int'],personas: ManagedEmailPersonaInput[]}
+
+export interface ManagedEmailPersonaInput {displayName: Scalars['String'],localPartPreference: Scalars['String'],roleTitle?: (Scalars['String'] | null),signature: Scalars['String']}
+
+export interface ManagedEmailQuoteInput {proposalId: Scalars['String']}
+
+export interface ManagedEmailPrewarmedProposalInput {bundleId: Scalars['String']}
+
+export interface ManagedEmailOperationInput {operationId: Scalars['String']}
+
+export interface ManagedEmailHealthDetailsInput {resourceType: Scalars['String'],resourceId: Scalars['String']}
+
+export interface ListAppConnectionsInput {providerName?: (Scalars['String'] | null),userWorkspaceId?: (Scalars['String'] | null),visibility?: (Scalars['String'] | null)}
+
+export interface GetApiKeyInput {id: Scalars['UUID']}
+
 export interface CampaignInfluencerCampaignInput {campaignId: Scalars['UUID']}
 
 export interface CampaignCreatorListRemovalImpactInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
 
 export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID']}
-
-export interface ListAppConnectionsInput {providerName?: (Scalars['String'] | null),userWorkspaceId?: (Scalars['String'] | null),visibility?: (Scalars['String'] | null)}
-
-export interface GetApiKeyInput {id: Scalars['UUID']}
 
 export interface LogicFunctionIdInput {
 /** The id of the function. */
@@ -6350,13 +6720,17 @@ export interface MutationGenqlSelection{
     uploadWorkspaceMemberProfilePicture?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload']} })
     uploadFilesFieldFile?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataId: Scalars['String']} })
     uploadFilesFieldFileByUniversalIdentifier?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataUniversalIdentifier: Scalars['String']} })
-    attachCampaignCreatorLists?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AttachCampaignCreatorListsInput} })
-    addDirectCampaignCreators?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AddDirectCampaignCreatorsInput} })
-    detachCampaignCreatorList?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: DetachCampaignCreatorListInput} })
-    addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
-    addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
-    removeCreatorListMemberIntent?: { __args: {input: RemoveCreatorListMemberIntentInput} }
-    deleteConnectedAccount?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {id: Scalars['UUID']} })
+    prepareManagedEmailPaymentMethod?: ManagedEmailPaymentSetupGenqlSelection
+    completeManagedEmailPaymentMethod?: (ManagedEmailPaymentMethodStatusGenqlSelection & { __args: {input: ManagedEmailCompletePaymentMethodInput} })
+    confirmManagedEmailPrewarmedPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
+    confirmManagedEmailOrdinaryPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
+    setManagedEmailCampaignCap?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailCampaignCapInput} })
+    cancelManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
+    pauseManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
+    resumeManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
+    stopManagedEmailMailbox?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
+    cancelManagedEmailDomainRenewal?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailDomainActionInput} })
+    saveImapSmtpCaldavAccount?: (ImapSmtpCaldavConnectionSuccessGenqlSelection & { __args: {handle: Scalars['String'], connectionParameters: EmailAccountConnectionParameters, id?: (Scalars['UUID'] | null)} })
     updateOneApplicationVariable?: { __args: {key: Scalars['String'], value: Scalars['String'], applicationId: Scalars['UUID']} }
     getAuthorizationUrlForSSO?: (GetAuthorizationUrlForSSOGenqlSelection & { __args: {input: GetAuthorizationUrlForSSOInput} })
     getLoginTokenFromCredentials?: (LoginTokenGenqlSelection & { __args: {email: Scalars['String'], password: Scalars['String'], captchaToken?: (Scalars['String'] | null), locale?: (Scalars['String'] | null), verifyEmailRedirectPath?: (Scalars['String'] | null), origin: Scalars['String']} })
@@ -6455,6 +6829,7 @@ export interface MutationGenqlSelection{
     createApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: CreateApprovedAccessDomainInput} })
     deleteApprovedAccessDomain?: { __args: {input: DeleteApprovedAccessDomainInput} }
     validateApprovedAccessDomain?: (ApprovedAccessDomainGenqlSelection & { __args: {input: ValidateApprovedAccessDomainInput} })
+    deleteConnectedAccount?: (ConnectedAccountPublicDTOGenqlSelection & { __args: {id: Scalars['UUID']} })
     activateWorkspace?: (WorkspaceGenqlSelection & { __args: {data: ActivateWorkspaceInput} })
     updateWorkspace?: (WorkspaceGenqlSelection & { __args: {data: UpdateWorkspaceInput} })
     deleteCurrentWorkspace?: WorkspaceGenqlSelection
@@ -6463,6 +6838,12 @@ export interface MutationGenqlSelection{
     updateViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String'], input: UpdateViewFilterGroupInput} })
     deleteViewFilterGroup?: { __args: {id: Scalars['String']} }
     destroyViewFilterGroup?: { __args: {id: Scalars['String']} }
+    attachCampaignCreatorLists?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AttachCampaignCreatorListsInput} })
+    addDirectCampaignCreators?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AddDirectCampaignCreatorsInput} })
+    detachCampaignCreatorList?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: DetachCampaignCreatorListInput} })
+    addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
+    addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
+    removeCreatorListMemberIntent?: { __args: {input: RemoveCreatorListMemberIntentInput} }
     createPageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {input: CreatePageLayoutTabInput} })
     updatePageLayoutTab?: (PageLayoutTabGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutTabInput} })
     destroyPageLayoutTab?: { __args: {id: Scalars['String']} }
@@ -6502,7 +6883,6 @@ export interface MutationGenqlSelection{
     createSAMLIdentityProvider?: (SetupSsoGenqlSelection & { __args: {input: SetupSAMLSsoInput} })
     deleteSSOIdentityProvider?: (DeleteSsoGenqlSelection & { __args: {input: DeleteSsoInput} })
     editSSOIdentityProvider?: (EditSsoGenqlSelection & { __args: {input: EditSsoInput} })
-    saveImapSmtpCaldavAccount?: (ImapSmtpCaldavConnectionSuccessGenqlSelection & { __args: {handle: Scalars['String'], connectionParameters: EmailAccountConnectionParameters, id?: (Scalars['UUID'] | null)} })
     createPageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {input: CreatePageLayoutWidgetInput} })
     updatePageLayoutWidget?: (PageLayoutWidgetGenqlSelection & { __args: {id: Scalars['String'], input: UpdatePageLayoutWidgetInput} })
     destroyPageLayoutWidget?: { __args: {id: Scalars['String']} }
@@ -6590,15 +6970,19 @@ update: UpdateNavigationMenuItemInput}
 
 export interface UpdateNavigationMenuItemInput {folderId?: (Scalars['UUID'] | null),position?: (Scalars['Float'] | null),name?: (Scalars['String'] | null),link?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),color?: (Scalars['String'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
 
-export interface AttachCampaignCreatorListsInput {campaignId: Scalars['UUID'],creatorListIds: Scalars['UUID'][]}
+export interface ManagedEmailCompletePaymentMethodInput {setupIntentId: Scalars['String']}
 
-export interface AddDirectCampaignCreatorsInput {campaignId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+export interface ManagedEmailPurchaseInput {idempotencyKey: Scalars['String'],quoteId: Scalars['String'],quoteVersion: Scalars['String'],quoteFingerprint: Scalars['String']}
 
-export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+export interface ManagedEmailCampaignCapInput {dailyCap?: (Scalars['Int'] | null),idempotencyKey: Scalars['String'],mailboxId: Scalars['String']}
 
-export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+export interface ManagedEmailMailboxActionInput {idempotencyKey: Scalars['String'],mailboxId: Scalars['String']}
 
-export interface RemoveCreatorListMemberIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID'],confirmedCampaignIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+export interface ManagedEmailDomainActionInput {domainId: Scalars['String'],idempotencyKey: Scalars['String']}
+
+export interface EmailAccountConnectionParameters {IMAP?: (ConnectionParametersInput | null),SMTP?: (ConnectionParametersInput | null),CALDAV?: (ConnectionParametersInput | null)}
+
+export interface ConnectionParametersInput {host: Scalars['String'],port: Scalars['Float'],username?: (Scalars['String'] | null),password?: (Scalars['String'] | null),connectionSecurity?: (EmailConnectionSecurity | null)}
 
 export interface GetAuthorizationUrlForSSOInput {identityProviderId: Scalars['UUID'],workspaceInviteHash?: (Scalars['String'] | null)}
 
@@ -6820,6 +7204,16 @@ export interface CreateViewFilterGroupInput {id?: (Scalars['UUID'] | null),paren
 
 export interface UpdateViewFilterGroupInput {id?: (Scalars['UUID'] | null),parentViewFilterGroupId?: (Scalars['UUID'] | null),logicalOperator?: (ViewFilterGroupLogicalOperator | null),positionInViewFilterGroup?: (Scalars['Float'] | null),viewId?: (Scalars['UUID'] | null)}
 
+export interface AttachCampaignCreatorListsInput {campaignId: Scalars['UUID'],creatorListIds: Scalars['UUID'][]}
+
+export interface AddDirectCampaignCreatorsInput {campaignId: Scalars['UUID'],creatorIds: Scalars['UUID'][],assignedManagedMailboxId?: (Scalars['UUID'] | null)}
+
+export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+
+export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+
+export interface RemoveCreatorListMemberIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID'],confirmedCampaignIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+
 export interface CreatePageLayoutTabInput {title: Scalars['String'],position?: (Scalars['Float'] | null),pageLayoutId: Scalars['UUID'],layoutMode?: (PageLayoutTabLayoutMode | null)}
 
 export interface UpdatePageLayoutTabInput {title?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),icon?: (Scalars['String'] | null),layoutMode?: (PageLayoutTabLayoutMode | null)}
@@ -6897,10 +7291,6 @@ export interface SetupSAMLSsoInput {name: Scalars['String'],issuer: Scalars['Str
 export interface DeleteSsoInput {identityProviderId: Scalars['UUID']}
 
 export interface EditSsoInput {id: Scalars['UUID'],status: SSOIdentityProviderStatus}
-
-export interface EmailAccountConnectionParameters {IMAP?: (ConnectionParametersInput | null),SMTP?: (ConnectionParametersInput | null),CALDAV?: (ConnectionParametersInput | null)}
-
-export interface ConnectionParametersInput {host: Scalars['String'],port: Scalars['Float'],username?: (Scalars['String'] | null),password?: (Scalars['String'] | null),connectionSecurity?: (EmailConnectionSecurity | null)}
 
 export interface CreatePageLayoutWidgetInput {pageLayoutTabId: Scalars['UUID'],title: Scalars['String'],type: WidgetType,objectMetadataId?: (Scalars['UUID'] | null),gridPosition: GridPositionInput,position?: (Scalars['JSON'] | null),configuration: Scalars['JSON']}
 
@@ -7944,22 +8334,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
-    const VerificationRecord_possibleTypes: string[] = ['VerificationRecord']
-    export const isVerificationRecord = (obj?: { __typename?: any } | null): obj is VerificationRecord => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isVerificationRecord"')
-      return VerificationRecord_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const EmailingDomain_possibleTypes: string[] = ['EmailingDomain']
-    export const isEmailingDomain = (obj?: { __typename?: any } | null): obj is EmailingDomain => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isEmailingDomain"')
-      return EmailingDomain_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
     const PublicConnectionParametersOutput_possibleTypes: string[] = ['PublicConnectionParametersOutput']
     export const isPublicConnectionParametersOutput = (obj?: { __typename?: any } | null): obj is PublicConnectionParametersOutput => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isPublicConnectionParametersOutput"')
@@ -7984,86 +8358,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
-    const MessageChannel_possibleTypes: string[] = ['MessageChannel']
-    export const isMessageChannel = (obj?: { __typename?: any } | null): obj is MessageChannel => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isMessageChannel"')
-      return MessageChannel_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CreateEmailGroupChannelOutput_possibleTypes: string[] = ['CreateEmailGroupChannelOutput']
-    export const isCreateEmailGroupChannelOutput = (obj?: { __typename?: any } | null): obj is CreateEmailGroupChannelOutput => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCreateEmailGroupChannelOutput"')
-      return CreateEmailGroupChannelOutput_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CampaignAudiencePreviewDTO_possibleTypes: string[] = ['CampaignAudiencePreviewDTO']
-    export const isCampaignAudiencePreviewDTO = (obj?: { __typename?: any } | null): obj is CampaignAudiencePreviewDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignAudiencePreviewDTO"')
-      return CampaignAudiencePreviewDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SendEmailViaDomainOutput_possibleTypes: string[] = ['SendEmailViaDomainOutput']
-    export const isSendEmailViaDomainOutput = (obj?: { __typename?: any } | null): obj is SendEmailViaDomainOutput => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSendEmailViaDomainOutput"')
-      return SendEmailViaDomainOutput_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CampaignSkippedRecipientsDTO_possibleTypes: string[] = ['CampaignSkippedRecipientsDTO']
-    export const isCampaignSkippedRecipientsDTO = (obj?: { __typename?: any } | null): obj is CampaignSkippedRecipientsDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSkippedRecipientsDTO"')
-      return CampaignSkippedRecipientsDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SendMessageCampaignOutputDTO_possibleTypes: string[] = ['SendMessageCampaignOutputDTO']
-    export const isSendMessageCampaignOutputDTO = (obj?: { __typename?: any } | null): obj is SendMessageCampaignOutputDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSendMessageCampaignOutputDTO"')
-      return SendMessageCampaignOutputDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const UnsubscribeTopic_possibleTypes: string[] = ['UnsubscribeTopic']
-    export const isUnsubscribeTopic = (obj?: { __typename?: any } | null): obj is UnsubscribeTopic => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isUnsubscribeTopic"')
-      return UnsubscribeTopic_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const FeatureFlag_possibleTypes: string[] = ['FeatureFlag']
-    export const isFeatureFlag = (obj?: { __typename?: any } | null): obj is FeatureFlag => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isFeatureFlag"')
-      return FeatureFlag_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const WorkspaceUrls_possibleTypes: string[] = ['WorkspaceUrls']
-    export const isWorkspaceUrls = (obj?: { __typename?: any } | null): obj is WorkspaceUrls => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceUrls"')
-      return WorkspaceUrls_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ApplicationRegistrationVariableDTO_possibleTypes: string[] = ['ApplicationRegistrationVariableDTO']
-    export const isApplicationRegistrationVariableDTO = (obj?: { __typename?: any } | null): obj is ApplicationRegistrationVariableDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationVariableDTO"')
-      return ApplicationRegistrationVariableDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
     const VersionDistributionEntry_possibleTypes: string[] = ['VersionDistributionEntry']
     export const isVersionDistributionEntry = (obj?: { __typename?: any } | null): obj is VersionDistributionEntry => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isVersionDistributionEntry"')
@@ -8076,150 +8370,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isApplicationRegistrationStats = (obj?: { __typename?: any } | null): obj is ApplicationRegistrationStats => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationStats"')
       return ApplicationRegistrationStats_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const BillingTrialPeriod_possibleTypes: string[] = ['BillingTrialPeriod']
-    export const isBillingTrialPeriod = (obj?: { __typename?: any } | null): obj is BillingTrialPeriod => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingTrialPeriod"')
-      return BillingTrialPeriod_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const SSOIdentityProvider_possibleTypes: string[] = ['SSOIdentityProvider']
-    export const isSSOIdentityProvider = (obj?: { __typename?: any } | null): obj is SSOIdentityProvider => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSSOIdentityProvider"')
-      return SSOIdentityProvider_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AuthProviders_possibleTypes: string[] = ['AuthProviders']
-    export const isAuthProviders = (obj?: { __typename?: any } | null): obj is AuthProviders => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthProviders"')
-      return AuthProviders_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const AuthBypassProviders_possibleTypes: string[] = ['AuthBypassProviders']
-    export const isAuthBypassProviders = (obj?: { __typename?: any } | null): obj is AuthBypassProviders => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthBypassProviders"')
-      return AuthBypassProviders_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicWorkspaceData_possibleTypes: string[] = ['PublicWorkspaceData']
-    export const isPublicWorkspaceData = (obj?: { __typename?: any } | null): obj is PublicWorkspaceData => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicWorkspaceData"')
-      return PublicWorkspaceData_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicWorkspaceDataSummary_possibleTypes: string[] = ['PublicWorkspaceDataSummary']
-    export const isPublicWorkspaceDataSummary = (obj?: { __typename?: any } | null): obj is PublicWorkspaceDataSummary => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicWorkspaceDataSummary"')
-      return PublicWorkspaceDataSummary_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const NativeModelCapabilities_possibleTypes: string[] = ['NativeModelCapabilities']
-    export const isNativeModelCapabilities = (obj?: { __typename?: any } | null): obj is NativeModelCapabilities => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isNativeModelCapabilities"')
-      return NativeModelCapabilities_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ClientAiModelConfig_possibleTypes: string[] = ['ClientAiModelConfig']
-    export const isClientAiModelConfig = (obj?: { __typename?: any } | null): obj is ClientAiModelConfig => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isClientAiModelConfig"')
-      return ClientAiModelConfig_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Billing_possibleTypes: string[] = ['Billing']
-    export const isBilling = (obj?: { __typename?: any } | null): obj is Billing => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBilling"')
-      return Billing_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Support_possibleTypes: string[] = ['Support']
-    export const isSupport = (obj?: { __typename?: any } | null): obj is Support => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSupport"')
-      return Support_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Sentry_possibleTypes: string[] = ['Sentry']
-    export const isSentry = (obj?: { __typename?: any } | null): obj is Sentry => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isSentry"')
-      return Sentry_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const Captcha_possibleTypes: string[] = ['Captcha']
-    export const isCaptcha = (obj?: { __typename?: any } | null): obj is Captcha => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCaptcha"')
-      return Captcha_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ApiConfig_possibleTypes: string[] = ['ApiConfig']
-    export const isApiConfig = (obj?: { __typename?: any } | null): obj is ApiConfig => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isApiConfig"')
-      return ApiConfig_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicFeatureFlagMetadata_possibleTypes: string[] = ['PublicFeatureFlagMetadata']
-    export const isPublicFeatureFlagMetadata = (obj?: { __typename?: any } | null): obj is PublicFeatureFlagMetadata => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicFeatureFlagMetadata"')
-      return PublicFeatureFlagMetadata_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const PublicFeatureFlag_possibleTypes: string[] = ['PublicFeatureFlag']
-    export const isPublicFeatureFlag = (obj?: { __typename?: any } | null): obj is PublicFeatureFlag => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicFeatureFlag"')
-      return PublicFeatureFlag_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ClientConfigMaintenanceMode_possibleTypes: string[] = ['ClientConfigMaintenanceMode']
-    export const isClientConfigMaintenanceMode = (obj?: { __typename?: any } | null): obj is ClientConfigMaintenanceMode => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isClientConfigMaintenanceMode"')
-      return ClientConfigMaintenanceMode_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ClientConfig_possibleTypes: string[] = ['ClientConfig']
-    export const isClientConfig = (obj?: { __typename?: any } | null): obj is ClientConfig => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isClientConfig"')
-      return ClientConfig_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const UsageBreakdownItem_possibleTypes: string[] = ['UsageBreakdownItem']
-    export const isUsageBreakdownItem = (obj?: { __typename?: any } | null): obj is UsageBreakdownItem => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageBreakdownItem"')
-      return UsageBreakdownItem_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -8244,6 +8394,14 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isRotateClientSecret = (obj?: { __typename?: any } | null): obj is RotateClientSecret => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isRotateClientSecret"')
       return RotateClientSecret_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ApplicationRegistrationVariableDTO_possibleTypes: string[] = ['ApplicationRegistrationVariableDTO']
+    export const isApplicationRegistrationVariableDTO = (obj?: { __typename?: any } | null): obj is ApplicationRegistrationVariableDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isApplicationRegistrationVariableDTO"')
+      return ApplicationRegistrationVariableDTO_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -8416,6 +8574,14 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
+    const WorkspaceUrls_possibleTypes: string[] = ['WorkspaceUrls']
+    export const isWorkspaceUrls = (obj?: { __typename?: any } | null): obj is WorkspaceUrls => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isWorkspaceUrls"')
+      return WorkspaceUrls_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
     const SSOConnection_possibleTypes: string[] = ['SSOConnection']
     export const isSSOConnection = (obj?: { __typename?: any } | null): obj is SSOConnection => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isSSOConnection"')
@@ -8508,6 +8674,54 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isDomainValidRecords = (obj?: { __typename?: any } | null): obj is DomainValidRecords => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isDomainValidRecords"')
       return DomainValidRecords_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const FeatureFlag_possibleTypes: string[] = ['FeatureFlag']
+    export const isFeatureFlag = (obj?: { __typename?: any } | null): obj is FeatureFlag => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isFeatureFlag"')
+      return FeatureFlag_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const SSOIdentityProvider_possibleTypes: string[] = ['SSOIdentityProvider']
+    export const isSSOIdentityProvider = (obj?: { __typename?: any } | null): obj is SSOIdentityProvider => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSSOIdentityProvider"')
+      return SSOIdentityProvider_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const AuthProviders_possibleTypes: string[] = ['AuthProviders']
+    export const isAuthProviders = (obj?: { __typename?: any } | null): obj is AuthProviders => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthProviders"')
+      return AuthProviders_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const AuthBypassProviders_possibleTypes: string[] = ['AuthBypassProviders']
+    export const isAuthBypassProviders = (obj?: { __typename?: any } | null): obj is AuthBypassProviders => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isAuthBypassProviders"')
+      return AuthBypassProviders_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const PublicWorkspaceData_possibleTypes: string[] = ['PublicWorkspaceData']
+    export const isPublicWorkspaceData = (obj?: { __typename?: any } | null): obj is PublicWorkspaceData => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicWorkspaceData"')
+      return PublicWorkspaceData_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const PublicWorkspaceDataSummary_possibleTypes: string[] = ['PublicWorkspaceDataSummary']
+    export const isPublicWorkspaceDataSummary = (obj?: { __typename?: any } | null): obj is PublicWorkspaceDataSummary => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicWorkspaceDataSummary"')
+      return PublicWorkspaceDataSummary_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -8696,6 +8910,342 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
+    const ImapSmtpCaldavPublicConnectionParams_possibleTypes: string[] = ['ImapSmtpCaldavPublicConnectionParams']
+    export const isImapSmtpCaldavPublicConnectionParams = (obj?: { __typename?: any } | null): obj is ImapSmtpCaldavPublicConnectionParams => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavPublicConnectionParams"')
+      return ImapSmtpCaldavPublicConnectionParams_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ImapSmtpCaldavPublicConnectionParameters_possibleTypes: string[] = ['ImapSmtpCaldavPublicConnectionParameters']
+    export const isImapSmtpCaldavPublicConnectionParameters = (obj?: { __typename?: any } | null): obj is ImapSmtpCaldavPublicConnectionParameters => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavPublicConnectionParameters"')
+      return ImapSmtpCaldavPublicConnectionParameters_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ConnectedImapSmtpCaldavAccount_possibleTypes: string[] = ['ConnectedImapSmtpCaldavAccount']
+    export const isConnectedImapSmtpCaldavAccount = (obj?: { __typename?: any } | null): obj is ConnectedImapSmtpCaldavAccount => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isConnectedImapSmtpCaldavAccount"')
+      return ConnectedImapSmtpCaldavAccount_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ImapSmtpCaldavConnectionSuccess_possibleTypes: string[] = ['ImapSmtpCaldavConnectionSuccess']
+    export const isImapSmtpCaldavConnectionSuccess = (obj?: { __typename?: any } | null): obj is ImapSmtpCaldavConnectionSuccess => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavConnectionSuccess"')
+      return ImapSmtpCaldavConnectionSuccess_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailOverview_possibleTypes: string[] = ['ManagedEmailOverview']
+    export const isManagedEmailOverview = (obj?: { __typename?: any } | null): obj is ManagedEmailOverview => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailOverview"')
+      return ManagedEmailOverview_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailDomain_possibleTypes: string[] = ['ManagedEmailDomain']
+    export const isManagedEmailDomain = (obj?: { __typename?: any } | null): obj is ManagedEmailDomain => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailDomain"')
+      return ManagedEmailDomain_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailMailbox_possibleTypes: string[] = ['ManagedEmailMailbox']
+    export const isManagedEmailMailbox = (obj?: { __typename?: any } | null): obj is ManagedEmailMailbox => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailMailbox"')
+      return ManagedEmailMailbox_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailBundleMailbox_possibleTypes: string[] = ['ManagedEmailBundleMailbox']
+    export const isManagedEmailBundleMailbox = (obj?: { __typename?: any } | null): obj is ManagedEmailBundleMailbox => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailBundleMailbox"')
+      return ManagedEmailBundleMailbox_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailBundle_possibleTypes: string[] = ['ManagedEmailBundle']
+    export const isManagedEmailBundle = (obj?: { __typename?: any } | null): obj is ManagedEmailBundle => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailBundle"')
+      return ManagedEmailBundle_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailDisclosures_possibleTypes: string[] = ['ManagedEmailDisclosures']
+    export const isManagedEmailDisclosures = (obj?: { __typename?: any } | null): obj is ManagedEmailDisclosures => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailDisclosures"')
+      return ManagedEmailDisclosures_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailProposalMailbox_possibleTypes: string[] = ['ManagedEmailProposalMailbox']
+    export const isManagedEmailProposalMailbox = (obj?: { __typename?: any } | null): obj is ManagedEmailProposalMailbox => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailProposalMailbox"')
+      return ManagedEmailProposalMailbox_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailProposalDomain_possibleTypes: string[] = ['ManagedEmailProposalDomain']
+    export const isManagedEmailProposalDomain = (obj?: { __typename?: any } | null): obj is ManagedEmailProposalDomain => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailProposalDomain"')
+      return ManagedEmailProposalDomain_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailProposal_possibleTypes: string[] = ['ManagedEmailProposal']
+    export const isManagedEmailProposal = (obj?: { __typename?: any } | null): obj is ManagedEmailProposal => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailProposal"')
+      return ManagedEmailProposal_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailQuoteLine_possibleTypes: string[] = ['ManagedEmailQuoteLine']
+    export const isManagedEmailQuoteLine = (obj?: { __typename?: any } | null): obj is ManagedEmailQuoteLine => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailQuoteLine"')
+      return ManagedEmailQuoteLine_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailQuote_possibleTypes: string[] = ['ManagedEmailQuote']
+    export const isManagedEmailQuote = (obj?: { __typename?: any } | null): obj is ManagedEmailQuote => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailQuote"')
+      return ManagedEmailQuote_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailPaymentSetup_possibleTypes: string[] = ['ManagedEmailPaymentSetup']
+    export const isManagedEmailPaymentSetup = (obj?: { __typename?: any } | null): obj is ManagedEmailPaymentSetup => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailPaymentSetup"')
+      return ManagedEmailPaymentSetup_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailPaymentMethodStatus_possibleTypes: string[] = ['ManagedEmailPaymentMethodStatus']
+    export const isManagedEmailPaymentMethodStatus = (obj?: { __typename?: any } | null): obj is ManagedEmailPaymentMethodStatus => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailPaymentMethodStatus"')
+      return ManagedEmailPaymentMethodStatus_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailOperation_possibleTypes: string[] = ['ManagedEmailOperation']
+    export const isManagedEmailOperation = (obj?: { __typename?: any } | null): obj is ManagedEmailOperation => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailOperation"')
+      return ManagedEmailOperation_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailHealthDetails_possibleTypes: string[] = ['ManagedEmailHealthDetails']
+    export const isManagedEmailHealthDetails = (obj?: { __typename?: any } | null): obj is ManagedEmailHealthDetails => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailHealthDetails"')
+      return ManagedEmailHealthDetails_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedEmailActionResult_possibleTypes: string[] = ['ManagedEmailActionResult']
+    export const isManagedEmailActionResult = (obj?: { __typename?: any } | null): obj is ManagedEmailActionResult => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedEmailActionResult"')
+      return ManagedEmailActionResult_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const VerificationRecord_possibleTypes: string[] = ['VerificationRecord']
+    export const isVerificationRecord = (obj?: { __typename?: any } | null): obj is VerificationRecord => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isVerificationRecord"')
+      return VerificationRecord_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const EmailingDomain_possibleTypes: string[] = ['EmailingDomain']
+    export const isEmailingDomain = (obj?: { __typename?: any } | null): obj is EmailingDomain => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isEmailingDomain"')
+      return EmailingDomain_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const MessageChannel_possibleTypes: string[] = ['MessageChannel']
+    export const isMessageChannel = (obj?: { __typename?: any } | null): obj is MessageChannel => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMessageChannel"')
+      return MessageChannel_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CreateEmailGroupChannelOutput_possibleTypes: string[] = ['CreateEmailGroupChannelOutput']
+    export const isCreateEmailGroupChannelOutput = (obj?: { __typename?: any } | null): obj is CreateEmailGroupChannelOutput => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCreateEmailGroupChannelOutput"')
+      return CreateEmailGroupChannelOutput_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignAudiencePreviewDTO_possibleTypes: string[] = ['CampaignAudiencePreviewDTO']
+    export const isCampaignAudiencePreviewDTO = (obj?: { __typename?: any } | null): obj is CampaignAudiencePreviewDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignAudiencePreviewDTO"')
+      return CampaignAudiencePreviewDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const SendEmailViaDomainOutput_possibleTypes: string[] = ['SendEmailViaDomainOutput']
+    export const isSendEmailViaDomainOutput = (obj?: { __typename?: any } | null): obj is SendEmailViaDomainOutput => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSendEmailViaDomainOutput"')
+      return SendEmailViaDomainOutput_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CampaignSkippedRecipientsDTO_possibleTypes: string[] = ['CampaignSkippedRecipientsDTO']
+    export const isCampaignSkippedRecipientsDTO = (obj?: { __typename?: any } | null): obj is CampaignSkippedRecipientsDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignSkippedRecipientsDTO"')
+      return CampaignSkippedRecipientsDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const SendMessageCampaignOutputDTO_possibleTypes: string[] = ['SendMessageCampaignOutputDTO']
+    export const isSendMessageCampaignOutputDTO = (obj?: { __typename?: any } | null): obj is SendMessageCampaignOutputDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSendMessageCampaignOutputDTO"')
+      return SendMessageCampaignOutputDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const UnsubscribeTopic_possibleTypes: string[] = ['UnsubscribeTopic']
+    export const isUnsubscribeTopic = (obj?: { __typename?: any } | null): obj is UnsubscribeTopic => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isUnsubscribeTopic"')
+      return UnsubscribeTopic_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const BillingTrialPeriod_possibleTypes: string[] = ['BillingTrialPeriod']
+    export const isBillingTrialPeriod = (obj?: { __typename?: any } | null): obj is BillingTrialPeriod => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingTrialPeriod"')
+      return BillingTrialPeriod_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const NativeModelCapabilities_possibleTypes: string[] = ['NativeModelCapabilities']
+    export const isNativeModelCapabilities = (obj?: { __typename?: any } | null): obj is NativeModelCapabilities => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isNativeModelCapabilities"')
+      return NativeModelCapabilities_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ClientAiModelConfig_possibleTypes: string[] = ['ClientAiModelConfig']
+    export const isClientAiModelConfig = (obj?: { __typename?: any } | null): obj is ClientAiModelConfig => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isClientAiModelConfig"')
+      return ClientAiModelConfig_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const Billing_possibleTypes: string[] = ['Billing']
+    export const isBilling = (obj?: { __typename?: any } | null): obj is Billing => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBilling"')
+      return Billing_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const Support_possibleTypes: string[] = ['Support']
+    export const isSupport = (obj?: { __typename?: any } | null): obj is Support => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSupport"')
+      return Support_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const Sentry_possibleTypes: string[] = ['Sentry']
+    export const isSentry = (obj?: { __typename?: any } | null): obj is Sentry => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isSentry"')
+      return Sentry_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const Captcha_possibleTypes: string[] = ['Captcha']
+    export const isCaptcha = (obj?: { __typename?: any } | null): obj is Captcha => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCaptcha"')
+      return Captcha_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ApiConfig_possibleTypes: string[] = ['ApiConfig']
+    export const isApiConfig = (obj?: { __typename?: any } | null): obj is ApiConfig => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isApiConfig"')
+      return ApiConfig_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const PublicFeatureFlagMetadata_possibleTypes: string[] = ['PublicFeatureFlagMetadata']
+    export const isPublicFeatureFlagMetadata = (obj?: { __typename?: any } | null): obj is PublicFeatureFlagMetadata => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicFeatureFlagMetadata"')
+      return PublicFeatureFlagMetadata_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const PublicFeatureFlag_possibleTypes: string[] = ['PublicFeatureFlag']
+    export const isPublicFeatureFlag = (obj?: { __typename?: any } | null): obj is PublicFeatureFlag => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isPublicFeatureFlag"')
+      return PublicFeatureFlag_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ClientConfigMaintenanceMode_possibleTypes: string[] = ['ClientConfigMaintenanceMode']
+    export const isClientConfigMaintenanceMode = (obj?: { __typename?: any } | null): obj is ClientConfigMaintenanceMode => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isClientConfigMaintenanceMode"')
+      return ClientConfigMaintenanceMode_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ClientConfig_possibleTypes: string[] = ['ClientConfig']
+    export const isClientConfig = (obj?: { __typename?: any } | null): obj is ClientConfig => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isClientConfig"')
+      return ClientConfig_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const UsageBreakdownItem_possibleTypes: string[] = ['UsageBreakdownItem']
+    export const isUsageBreakdownItem = (obj?: { __typename?: any } | null): obj is UsageBreakdownItem => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isUsageBreakdownItem"')
+      return UsageBreakdownItem_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
     const Impersonate_possibleTypes: string[] = ['Impersonate']
     export const isImpersonate = (obj?: { __typename?: any } | null): obj is Impersonate => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isImpersonate"')
@@ -8780,38 +9330,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isPlaceDetailsResult = (obj?: { __typename?: any } | null): obj is PlaceDetailsResult => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isPlaceDetailsResult"')
       return PlaceDetailsResult_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ImapSmtpCaldavPublicConnectionParams_possibleTypes: string[] = ['ImapSmtpCaldavPublicConnectionParams']
-    export const isImapSmtpCaldavPublicConnectionParams = (obj?: { __typename?: any } | null): obj is ImapSmtpCaldavPublicConnectionParams => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavPublicConnectionParams"')
-      return ImapSmtpCaldavPublicConnectionParams_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ImapSmtpCaldavPublicConnectionParameters_possibleTypes: string[] = ['ImapSmtpCaldavPublicConnectionParameters']
-    export const isImapSmtpCaldavPublicConnectionParameters = (obj?: { __typename?: any } | null): obj is ImapSmtpCaldavPublicConnectionParameters => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavPublicConnectionParameters"')
-      return ImapSmtpCaldavPublicConnectionParameters_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ConnectedImapSmtpCaldavAccount_possibleTypes: string[] = ['ConnectedImapSmtpCaldavAccount']
-    export const isConnectedImapSmtpCaldavAccount = (obj?: { __typename?: any } | null): obj is ConnectedImapSmtpCaldavAccount => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isConnectedImapSmtpCaldavAccount"')
-      return ConnectedImapSmtpCaldavAccount_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const ImapSmtpCaldavConnectionSuccess_possibleTypes: string[] = ['ImapSmtpCaldavConnectionSuccess']
-    export const isImapSmtpCaldavConnectionSuccess = (obj?: { __typename?: any } | null): obj is ImapSmtpCaldavConnectionSuccess => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isImapSmtpCaldavConnectionSuccess"')
-      return ImapSmtpCaldavConnectionSuccess_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -9628,17 +10146,52 @@ export const enumLogicFunctionExecutionStatus = {
    ERROR: 'ERROR' as const
 }
 
+export const enumEmailConnectionSecurity = {
+   NONE: 'NONE' as const,
+   STARTTLS: 'STARTTLS' as const,
+   SSL_TLS: 'SSL_TLS' as const
+}
+
+export const enumRelationType = {
+   ONE_TO_MANY: 'ONE_TO_MANY' as const,
+   MANY_TO_ONE: 'MANY_TO_ONE' as const
+}
+
+export const enumIdentityProviderType = {
+   OIDC: 'OIDC' as const,
+   SAML: 'SAML' as const
+}
+
+export const enumSsoIdentityProviderStatus = {
+   Active: 'Active' as const,
+   Inactive: 'Inactive' as const,
+   Error: 'Error' as const
+}
+
+export const enumBillingEntitlementKey = {
+   SSO: 'SSO' as const,
+   CUSTOM_DOMAIN: 'CUSTOM_DOMAIN' as const,
+   RLS: 'RLS' as const,
+   AUDIT_LOGS: 'AUDIT_LOGS' as const
+}
+
+export const enumFeatureFlagKey = {
+   IS_UNIQUE_INDEXES_ENABLED: 'IS_UNIQUE_INDEXES_ENABLED' as const,
+   IS_JSON_FILTER_ENABLED: 'IS_JSON_FILTER_ENABLED' as const,
+   IS_MARKETPLACE_SETTING_TAB_VISIBLE: 'IS_MARKETPLACE_SETTING_TAB_VISIBLE' as const,
+   IS_EMAIL_GROUP_ENABLED: 'IS_EMAIL_GROUP_ENABLED' as const,
+   IS_JUNCTION_RELATIONS_ENABLED: 'IS_JUNCTION_RELATIONS_ENABLED' as const,
+   IS_REST_METADATA_API_NEW_FORMAT_DIRECT: 'IS_REST_METADATA_API_NEW_FORMAT_DIRECT' as const,
+   IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED: 'IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED' as const,
+   IS_SETTINGS_DISCOVERY_HERO_ENABLED: 'IS_SETTINGS_DISCOVERY_HERO_ENABLED' as const,
+   IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED: 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED' as const
+}
+
 export const enumEmailingDomainStatus = {
    PENDING: 'PENDING' as const,
    VERIFIED: 'VERIFIED' as const,
    FAILED: 'FAILED' as const,
    TEMPORARY_FAILURE: 'TEMPORARY_FAILURE' as const
-}
-
-export const enumEmailConnectionSecurity = {
-   NONE: 'NONE' as const,
-   STARTTLS: 'STARTTLS' as const,
-   SSL_TLS: 'SSL_TLS' as const
 }
 
 export const enumMessageChannelVisibility = {
@@ -9694,29 +10247,6 @@ export const enumUnsubscribeTopicVisibility = {
    PRIVATE: 'PRIVATE' as const
 }
 
-export const enumFeatureFlagKey = {
-   IS_UNIQUE_INDEXES_ENABLED: 'IS_UNIQUE_INDEXES_ENABLED' as const,
-   IS_JSON_FILTER_ENABLED: 'IS_JSON_FILTER_ENABLED' as const,
-   IS_MARKETPLACE_SETTING_TAB_VISIBLE: 'IS_MARKETPLACE_SETTING_TAB_VISIBLE' as const,
-   IS_EMAIL_GROUP_ENABLED: 'IS_EMAIL_GROUP_ENABLED' as const,
-   IS_JUNCTION_RELATIONS_ENABLED: 'IS_JUNCTION_RELATIONS_ENABLED' as const,
-   IS_REST_METADATA_API_NEW_FORMAT_DIRECT: 'IS_REST_METADATA_API_NEW_FORMAT_DIRECT' as const,
-   IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED: 'IS_LOGIC_FUNCTION_PREBUILT_MODE_ENABLED' as const,
-   IS_SETTINGS_DISCOVERY_HERO_ENABLED: 'IS_SETTINGS_DISCOVERY_HERO_ENABLED' as const,
-   IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED: 'IS_MESSAGING_CALENDAR_WEBHOOK_ENABLED' as const
-}
-
-export const enumIdentityProviderType = {
-   OIDC: 'OIDC' as const,
-   SAML: 'SAML' as const
-}
-
-export const enumSsoIdentityProviderStatus = {
-   Active: 'Active' as const,
-   Inactive: 'Inactive' as const,
-   Error: 'Error' as const
-}
-
 export const enumModelFamily = {
    GPT: 'GPT' as const,
    CLAUDE: 'CLAUDE' as const,
@@ -9734,18 +10264,6 @@ export const enumSupportDriver = {
 export const enumCaptchaDriverType = {
    GOOGLE_RECAPTCHA: 'GOOGLE_RECAPTCHA' as const,
    TURNSTILE: 'TURNSTILE' as const
-}
-
-export const enumRelationType = {
-   ONE_TO_MANY: 'ONE_TO_MANY' as const,
-   MANY_TO_ONE: 'MANY_TO_ONE' as const
-}
-
-export const enumBillingEntitlementKey = {
-   SSO: 'SSO' as const,
-   CUSTOM_DOMAIN: 'CUSTOM_DOMAIN' as const,
-   RLS: 'RLS' as const,
-   AUDIT_LOGS: 'AUDIT_LOGS' as const
 }
 
 export const enumCalendarChannelSyncStatus = {
