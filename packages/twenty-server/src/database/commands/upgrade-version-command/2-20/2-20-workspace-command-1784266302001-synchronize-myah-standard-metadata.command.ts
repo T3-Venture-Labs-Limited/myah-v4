@@ -1,3 +1,4 @@
+import { isNonEmptyString } from '@sniptt/guards';
 import { Command } from 'nest-commander';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { In, type DataSource } from 'typeorm';
@@ -10,6 +11,7 @@ import { buildFromToAllUniversalFlatEntityMaps } from 'src/engine/core-modules/a
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
@@ -106,6 +108,43 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     super(workspaceIteratorService);
   }
 
+  private async workspaceSchemaExists(workspaceId: string): Promise<boolean> {
+    const workspace = await this.coreDataSource
+      .getRepository(WorkspaceEntity)
+      .findOne({
+        select: ['databaseSchema'],
+        where: { id: workspaceId },
+      });
+
+    if (!isNonEmptyString(workspace?.databaseSchema)) {
+      this.logger.log(
+        `Skipping Myah standard metadata synchronization for workspace ${workspaceId}: no database schema is configured`,
+      );
+
+      return false;
+    }
+
+    const queryRunner = this.coreDataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+
+      const schemaExists = await queryRunner.hasSchema(
+        workspace.databaseSchema,
+      );
+
+      if (!schemaExists) {
+        this.logger.log(
+          `Skipping Myah standard metadata synchronization for workspace ${workspaceId}: schema ${workspace.databaseSchema} does not exist`,
+        );
+      }
+
+      return schemaExists;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   override runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
     return this.synchronizeWorkspace(args);
   }
@@ -114,6 +153,10 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     { workspaceId, options }: RunOnWorkspaceArgs,
     syncOptions: SynchronizeMyahStandardMetadataOptions = {},
   ): Promise<void> {
+    if (!(await this.workspaceSchemaExists(workspaceId))) {
+      return;
+    }
+
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow({
         workspaceId,

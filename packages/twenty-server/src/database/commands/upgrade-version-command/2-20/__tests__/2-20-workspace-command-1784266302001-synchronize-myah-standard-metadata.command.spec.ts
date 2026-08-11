@@ -51,6 +51,10 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
   let flush: jest.Mock;
   let findByUniversalIdentifier: jest.Mock;
   let createQueryRunner: jest.Mock;
+  let connectQueryRunner: jest.Mock;
+  let findWorkspace: jest.Mock;
+  let hasSchema: jest.Mock;
+  let releaseQueryRunner: jest.Mock;
   let incrementMetadataVersion: jest.Mock;
 
   beforeEach(() => {
@@ -62,12 +66,19 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     });
     findByUniversalIdentifier = jest.fn().mockResolvedValue(null);
     incrementMetadataVersion = jest.fn().mockResolvedValue(undefined);
+    findWorkspace = jest
+      .fn()
+      .mockResolvedValue({ databaseSchema: 'workspace_test' });
+    connectQueryRunner = jest.fn();
+    hasSchema = jest.fn().mockResolvedValue(true);
+    releaseQueryRunner = jest.fn();
     createQueryRunner = jest.fn().mockReturnValue({
-      connect: jest.fn(),
+      connect: connectQueryRunner,
+      hasSchema,
       startTransaction: jest.fn(),
       commitTransaction: jest.fn(),
       rollbackTransaction: jest.fn(),
-      release: jest.fn(),
+      release: releaseQueryRunner,
       manager: { update },
     });
     validateBuildAndRunWorkspaceMigrationFromTo = jest.fn().mockResolvedValue({
@@ -78,6 +89,9 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       {} as WorkspaceIteratorService,
       {
         createQueryRunner,
+        getRepository: jest.fn().mockReturnValue({
+          findOne: findWorkspace,
+        }),
       } as unknown as DataSource,
       {
         findWorkspaceTwentyStandardAndCustomApplicationOrThrow: jest
@@ -135,6 +149,26 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       OBSOLETE_TEST_FIELD_UNIVERSAL_IDENTIFIER
     ] = obsoleteField;
   };
+
+  it('skips active workspaces without a physical database schema', async () => {
+    hasSchema.mockResolvedValue(false);
+
+    await runOnWorkspace();
+
+    expect(hasSchema).toHaveBeenCalledWith('workspace_test');
+    expect(releaseQueryRunner).toHaveBeenCalled();
+    expect(getOrRecompute).not.toHaveBeenCalled();
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
+  });
+
+  it('releases the schema query runner when connection fails', async () => {
+    connectQueryRunner.mockRejectedValue(new Error('connection failed'));
+
+    await expect(runOnWorkspace()).rejects.toThrow('connection failed');
+
+    expect(releaseQueryRunner).toHaveBeenCalled();
+    expect(getOrRecompute).not.toHaveBeenCalled();
+  });
 
   it('builds the migration plan without mutating in dry-run mode', async () => {
     await runOnWorkspace(true);
@@ -811,7 +845,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     await runOnWorkspace();
 
     expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
-    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
   });
 
   it('preserves unlisted obsolete fields during ordinary synchronization', async () => {
@@ -925,7 +959,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     await runOnWorkspace();
 
-    expect(createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(createQueryRunner).toHaveBeenCalledTimes(2);
     expect(update).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -946,7 +980,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     await runOnWorkspace(true);
 
-    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
     expect(update).not.toHaveBeenCalled();
 
     jest.clearAllMocks();
@@ -966,7 +1000,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       },
     );
 
-    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
     expect(update).not.toHaveBeenCalled();
     expect(flush).not.toHaveBeenCalled();
     expect(incrementMetadataVersion).not.toHaveBeenCalled();
@@ -1014,7 +1048,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     );
 
     expect(update).not.toHaveBeenCalled();
-    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
   });
 
   it('throws when Myah metadata migration validation fails', async () => {
