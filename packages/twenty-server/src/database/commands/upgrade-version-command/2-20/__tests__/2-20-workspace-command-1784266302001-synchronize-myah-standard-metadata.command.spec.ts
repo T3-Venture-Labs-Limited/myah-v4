@@ -211,6 +211,72 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     ).toBeDefined();
   });
 
+  it('includes every desired field owner and relation target object in the migration slice', async () => {
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const desiredObjects =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier;
+    const desiredFields = Object.values(
+      migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+        .byUniversalIdentifier,
+    ) as Array<{
+      name: string;
+      objectMetadataUniversalIdentifier: string;
+      relationTargetObjectMetadataUniversalIdentifier?: string | null;
+    }>;
+
+    for (const field of desiredFields) {
+      expect(desiredObjects[field.objectMetadataUniversalIdentifier]).toBeDefined();
+
+      if (isDefined(field.relationTargetObjectMetadataUniversalIdentifier)) {
+        expect(
+          desiredObjects[field.relationTargetObjectMetadataUniversalIdentifier],
+        ).toBeDefined();
+      }
+    }
+  });
+
+  it('preserves current metadata for non-Myah objects included only for graph closure', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-07-15T00:00:00.000Z',
+      });
+    const companyUniversalIdentifier =
+      STANDARD_OBJECTS.company.universalIdentifier;
+    const currentCompany =
+      allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+        companyUniversalIdentifier
+      ];
+
+    if (!isDefined(currentCompany)) {
+      throw new Error('Company object fixture is required');
+    }
+
+    currentCompany.labelSingular = 'Account';
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const desiredCompany =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier[companyUniversalIdentifier];
+
+    expect(desiredCompany.labelSingular).toBe('Account');
+  });
+
   it('provides isolated retained standard objects as migration dependencies', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({

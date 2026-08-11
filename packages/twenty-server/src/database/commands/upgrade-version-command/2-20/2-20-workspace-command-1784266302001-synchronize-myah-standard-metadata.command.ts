@@ -314,6 +314,28 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         );
       }
     }
+    const objectUniversalIdentifiersToSynchronize = new Set(
+      objectUniversalIdentifiers,
+    );
+
+    for (const field of standardFields) {
+      if (!fieldUniversalIdentifiers.has(field.universalIdentifier)) {
+        continue;
+      }
+
+      if (isDefined(field.objectMetadataUniversalIdentifier)) {
+        objectUniversalIdentifiersToSynchronize.add(
+          field.objectMetadataUniversalIdentifier,
+        );
+      }
+
+      if (isDefined(field.relationTargetObjectMetadataUniversalIdentifier)) {
+        objectUniversalIdentifiersToSynchronize.add(
+          field.relationTargetObjectMetadataUniversalIdentifier,
+        );
+      }
+    }
+
     const viewFilterUniversalIdentifiers = toUniversalIdentifiers(
       getUniversalMetadataEntities(
         standardAllFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
@@ -368,7 +390,10 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         });
     };
 
-    selectMetadata('objectMetadata', objectUniversalIdentifiers);
+    selectMetadata(
+      'objectMetadata',
+      objectUniversalIdentifiersToSynchronize,
+    );
     selectMetadata('fieldMetadata', fieldUniversalIdentifiers);
     selectMetadata('index', indexUniversalIdentifiers);
     selectMetadata('view', viewUniversalIdentifiers);
@@ -453,6 +478,23 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         'navigationMenuItem',
         navigationMenuItemUniversalIdentifiers,
       );
+      for (const universalIdentifier of objectUniversalIdentifiersToSynchronize) {
+        if (objectUniversalIdentifiers.has(universalIdentifier)) {
+          continue;
+        }
+
+        const currentObject =
+          fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+            universalIdentifier
+          ];
+
+        if (isDefined(currentObject)) {
+          toAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+            universalIdentifier
+          ] = { ...currentObject };
+        }
+      }
+
       pruneDanglingForeignKeyAggregatorsInAllFlatEntityMapsThroughMutation({
         allFlatEntityMapsToMutate: toAllFlatEntityMaps,
       });
