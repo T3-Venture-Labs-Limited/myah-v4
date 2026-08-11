@@ -7,6 +7,7 @@ import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-wo
 import { SecretEncryptionRotationModule } from 'src/database/commands/secret-encryption-rotation/secret-encryption-rotation.module';
 import { GenerateInstanceCommandCommand } from 'src/database/commands/generate-instance-command.command';
 import { InstallPreInstalledAppsCommand } from 'src/database/commands/install-pre-installed-apps.command';
+import { ManagedEmailAttachPilotWorkspaceCommand } from 'src/database/commands/managed-email-attach-pilot-workspace.command';
 import { InstanceCommandGenerationService } from 'src/database/commands/instance-command-generation.service';
 import { ListOrphanedWorkspaceEntitiesCommand } from 'src/database/commands/list-and-delete-orphaned-workspace-entities.command';
 import { ConfirmationQuestion } from 'src/database/commands/questions/confirmation.question';
@@ -24,15 +25,20 @@ import { ApplicationUpgradeModule } from 'src/engine/core-modules/application/ap
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { PreInstalledAppsModule } from 'src/engine/core-modules/application/pre-installed-apps/pre-installed-apps.module';
 import { BillingReminderModule } from 'src/engine/core-modules/billing/reminders/billing-reminder.module';
+import { CustomerAccountModule } from 'src/engine/core-modules/customer-account/customer-account.module';
 import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
 import { EnterpriseModule } from 'src/engine/core-modules/enterprise/enterprise.module';
 import { EventLogCleanupModule } from 'src/engine/core-modules/event-logs/cleanup/event-log-cleanup.module';
+import { EventLogEmitterModule } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
 import { ManagedEmailModule } from 'src/engine/core-modules/managed-email/managed-email.module';
+import { MyahModule } from 'src/engine/core-modules/myah/myah.module';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public-domain.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { UpgradeStatusCommand } from 'src/engine/core-modules/upgrade/commands/upgrade-status.command';
 import { UpgradeModule } from 'src/engine/core-modules/upgrade/upgrade.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -58,7 +64,12 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
 @Module({
   imports: [
     UpgradeVersionCommandModule,
-    TypeOrmModule.forFeature([WorkspaceEntity, RoleEntity]),
+    TypeOrmModule.forFeature([
+      WorkspaceEntity,
+      RoleEntity,
+      UserEntity,
+      UserWorkspaceEntity,
+    ]),
     WorkspaceExportModule,
     // Cron command dependencies
     MessagingImportManagerModule,
@@ -77,6 +88,9 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     ApiKeyModule,
     ActionApprovalModule,
     ManagedEmailModule,
+    CustomerAccountModule,
+    MyahModule,
+    EventLogEmitterModule,
     FeatureFlagModule,
     WorkspaceCleanerModule,
     WorkspaceMigrationModule,
@@ -112,6 +126,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     UpgradeStatusCommand,
     RebuildApplicationDefaultDepsCommand,
     InstallPreInstalledAppsCommand,
+    ManagedEmailAttachPilotWorkspaceCommand,
     provideWorkspaceScopedRepository(RoleEntity),
   ],
 })
