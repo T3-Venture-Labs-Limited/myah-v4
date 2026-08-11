@@ -3,6 +3,9 @@ import { type QueryRunner } from 'typeorm';
 import { DropMetadataStandardOverridesColumnFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1784266302000-drop-metadata-standard-overrides-column';
 import { DROP_METADATA_STANDARD_OVERRIDES_COLUMN_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-20/drop-metadata-standard-overrides-column-upgrade-command-name.constant';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
+import { getWasRemovedInUpgradePropertyMetadata } from 'src/engine/core-modules/upgrade/decorators/was-removed-in-upgrade.decorator';
+import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
+import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 
 describe('DropMetadataStandardOverridesColumnFastInstanceCommand', () => {
   let command: DropMetadataStandardOverridesColumnFastInstanceCommand;
@@ -33,6 +36,17 @@ describe('DropMetadataStandardOverridesColumnFastInstanceCommand', () => {
       expect(
         `${metadata?.version}_${DropMetadataStandardOverridesColumnFastInstanceCommand.name}_${metadata?.timestamp}`,
       ).toBe(DROP_METADATA_STANDARD_OVERRIDES_COLUMN_UPGRADE_COMMAND_NAME);
+    });
+
+    it('marks both entity properties as removed by this command', () => {
+      for (const entity of [ObjectMetadataEntity, FieldMetadataEntity]) {
+        expect(getWasRemovedInUpgradePropertyMetadata(entity)).toMatchObject({
+          standardOverrides: {
+            upgradeCommandName:
+              DROP_METADATA_STANDARD_OVERRIDES_COLUMN_UPGRADE_COMMAND_NAME,
+          },
+        });
+      }
     });
   });
 

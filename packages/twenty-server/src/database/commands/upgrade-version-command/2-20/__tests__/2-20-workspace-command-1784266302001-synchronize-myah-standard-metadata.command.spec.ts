@@ -51,6 +51,10 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
   let flush: jest.Mock;
   let findByUniversalIdentifier: jest.Mock;
   let createQueryRunner: jest.Mock;
+  let connectQueryRunner: jest.Mock;
+  let findWorkspace: jest.Mock;
+  let hasSchema: jest.Mock;
+  let releaseQueryRunner: jest.Mock;
   let incrementMetadataVersion: jest.Mock;
 
   beforeEach(() => {
@@ -62,12 +66,19 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     });
     findByUniversalIdentifier = jest.fn().mockResolvedValue(null);
     incrementMetadataVersion = jest.fn().mockResolvedValue(undefined);
+    findWorkspace = jest
+      .fn()
+      .mockResolvedValue({ databaseSchema: 'workspace_test' });
+    connectQueryRunner = jest.fn();
+    hasSchema = jest.fn().mockResolvedValue(true);
+    releaseQueryRunner = jest.fn();
     createQueryRunner = jest.fn().mockReturnValue({
-      connect: jest.fn(),
+      connect: connectQueryRunner,
+      hasSchema,
       startTransaction: jest.fn(),
       commitTransaction: jest.fn(),
       rollbackTransaction: jest.fn(),
-      release: jest.fn(),
+      release: releaseQueryRunner,
       manager: { update },
     });
     validateBuildAndRunWorkspaceMigrationFromTo = jest.fn().mockResolvedValue({
@@ -78,6 +89,9 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       {} as WorkspaceIteratorService,
       {
         createQueryRunner,
+        getRepository: jest.fn().mockReturnValue({
+          findOne: findWorkspace,
+        }),
       } as unknown as DataSource,
       {
         findWorkspaceTwentyStandardAndCustomApplicationOrThrow: jest
@@ -136,6 +150,26 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     ] = obsoleteField;
   };
 
+  it('skips active workspaces without a physical database schema', async () => {
+    hasSchema.mockResolvedValue(false);
+
+    await runOnWorkspace();
+
+    expect(hasSchema).toHaveBeenCalledWith('workspace_test');
+    expect(releaseQueryRunner).toHaveBeenCalled();
+    expect(getOrRecompute).not.toHaveBeenCalled();
+    expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
+  });
+
+  it('releases the schema query runner when connection fails', async () => {
+    connectQueryRunner.mockRejectedValue(new Error('connection failed'));
+
+    await expect(runOnWorkspace()).rejects.toThrow('connection failed');
+
+    expect(releaseQueryRunner).toHaveBeenCalled();
+    expect(getOrRecompute).not.toHaveBeenCalled();
+  });
+
   it('builds the migration plan without mutating in dry-run mode', async () => {
     await runOnWorkspace(true);
 
@@ -187,6 +221,21 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     ).not.toHaveLength(0);
   });
   it('includes Task and Note target extensions in the desired migration slice', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-07-15T00:00:00.000Z',
+      });
+
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+
     await runOnWorkspace();
 
     const migrationInput =
@@ -209,6 +258,158 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         noteTargetFields.targetBrandBrainPage.universalIdentifier
       ],
     ).toBeDefined();
+  });
+
+  it('includes every desired field owner and relation target object in the migration slice', async () => {
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const desiredObjects =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier;
+    const desiredFields = Object.values(
+      migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+        .byUniversalIdentifier,
+    ) as Array<{
+      name: string;
+      objectMetadataUniversalIdentifier: string;
+      relationTargetObjectMetadataUniversalIdentifier?: string | null;
+    }>;
+
+    for (const field of desiredFields) {
+      expect(desiredObjects[field.objectMetadataUniversalIdentifier]).toBeDefined();
+
+      if (isDefined(field.relationTargetObjectMetadataUniversalIdentifier)) {
+        expect(
+          desiredObjects[field.relationTargetObjectMetadataUniversalIdentifier],
+        ).toBeDefined();
+      }
+    }
+  });
+
+  it('omits relations to absent non-Myah objects from the migration slice', async () => {
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const desiredObjects =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier;
+    const desiredFieldsByUniversalIdentifier =
+      migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+        .byUniversalIdentifier;
+    const desiredFields = Object.values(
+      desiredFieldsByUniversalIdentifier,
+    ) as Array<{
+      objectMetadataUniversalIdentifier: string;
+      relationTargetObjectMetadataUniversalIdentifier?: string | null;
+    }>;
+    const desiredViewFields = Object.values(
+      migrationInput.fromToAllFlatEntityMaps.flatViewFieldMaps.to
+        .byUniversalIdentifier,
+    ) as Array<{
+      fieldMetadataUniversalIdentifier?: string | null;
+    }>;
+    const absentObjectUniversalIdentifiers = [
+      STANDARD_OBJECTS.company.universalIdentifier,
+      STANDARD_OBJECTS.opportunity.universalIdentifier,
+      STANDARD_OBJECTS.person.universalIdentifier,
+    ];
+
+    for (const universalIdentifier of absentObjectUniversalIdentifiers) {
+      expect(desiredObjects[universalIdentifier]).toBeUndefined();
+      expect(
+        desiredFields.some(
+          (field) =>
+            field.objectMetadataUniversalIdentifier === universalIdentifier ||
+            field.relationTargetObjectMetadataUniversalIdentifier ===
+              universalIdentifier,
+        ),
+      ).toBe(false);
+    }
+
+    const myahObjectUniversalIdentifiers = new Set<string>(
+      Object.values(MYAH_STANDARD_OBJECTS).map(
+        ({ universalIdentifier }) => universalIdentifier,
+      ),
+    );
+
+    for (const field of desiredFields) {
+      expect(
+        myahObjectUniversalIdentifiers.has(
+          field.objectMetadataUniversalIdentifier,
+        ),
+      ).toBe(true);
+
+      if (isDefined(field.relationTargetObjectMetadataUniversalIdentifier)) {
+        expect(
+          myahObjectUniversalIdentifiers.has(
+            field.relationTargetObjectMetadataUniversalIdentifier,
+          ),
+        ).toBe(true);
+      }
+    }
+
+    for (const viewField of desiredViewFields) {
+      if (isDefined(viewField.fieldMetadataUniversalIdentifier)) {
+        expect(
+          desiredFieldsByUniversalIdentifier[
+            viewField.fieldMetadataUniversalIdentifier
+          ],
+        ).toBeDefined();
+      }
+    }
+
+    expect(
+      desiredFieldsByUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier
+      ],
+    ).toBeDefined();
+    expect(
+      desiredFieldsByUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators
+          .universalIdentifier
+      ],
+    ).toBeDefined();
+  });
+
+  it('preserves current metadata for non-Myah objects included only for graph closure', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-07-15T00:00:00.000Z',
+      });
+    const companyUniversalIdentifier =
+      STANDARD_OBJECTS.company.universalIdentifier;
+    const currentCompany =
+      allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+        companyUniversalIdentifier
+      ];
+
+    if (!isDefined(currentCompany)) {
+      throw new Error('Company object fixture is required');
+    }
+
+    currentCompany.labelSingular = 'Account';
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const desiredCompany =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier[companyUniversalIdentifier];
+
+    expect(desiredCompany.labelSingular).toBe('Account');
   });
 
   it('provides isolated retained standard objects as migration dependencies', async () => {
@@ -644,7 +845,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     await runOnWorkspace();
 
     expect(validateBuildAndRunWorkspaceMigrationFromTo).not.toHaveBeenCalled();
-    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
   });
 
   it('preserves unlisted obsolete fields during ordinary synchronization', async () => {
@@ -758,7 +959,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     await runOnWorkspace();
 
-    expect(createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(createQueryRunner).toHaveBeenCalledTimes(2);
     expect(update).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -779,7 +980,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     await runOnWorkspace(true);
 
-    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
     expect(update).not.toHaveBeenCalled();
 
     jest.clearAllMocks();
@@ -799,7 +1000,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       },
     );
 
-    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
     expect(update).not.toHaveBeenCalled();
     expect(flush).not.toHaveBeenCalled();
     expect(incrementMetadataVersion).not.toHaveBeenCalled();
@@ -847,7 +1048,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     );
 
     expect(update).not.toHaveBeenCalled();
-    expect(createQueryRunner).not.toHaveBeenCalled();
+    expect(createQueryRunner).toHaveBeenCalledTimes(1);
   });
 
   it('throws when Myah metadata migration validation fails', async () => {

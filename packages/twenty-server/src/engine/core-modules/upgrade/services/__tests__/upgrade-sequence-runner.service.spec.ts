@@ -170,4 +170,134 @@ describe('UpgradeSequenceRunnerService', () => {
       workspaceCommand.name,
     ]);
   });
+  it('simulates across an instance barrier without executing instance commands', async () => {
+    const firstWorkspaceCommand = {
+      command: {},
+      name: '2.19.0_FirstWorkspaceCommand_1784113000000',
+      timestamp: 1784113000000,
+      version: VERSION,
+    };
+    const secondWorkspaceCommand = {
+      command: {},
+      name: '2.19.0_SecondWorkspaceCommand_1784113000001',
+      timestamp: 1784113000001,
+      version: VERSION,
+    };
+    const nextVersionFastInstanceCommand = {
+      command: {},
+      name: '2.20.0_NextVersionFastInstanceCommand_1784113000002',
+      timestamp: 1784113000002,
+      version: '2.20.0',
+    };
+    const nextVersionSlowInstanceCommand = {
+      command: {},
+      name: '2.20.0_NextVersionSlowInstanceCommand_1784113000003',
+      timestamp: 1784113000003,
+      version: '2.20.0',
+    };
+    const sequenceReader = new UpgradeSequenceReaderService({
+      getBundleForVersion: (version: string) => {
+        if (version === VERSION) {
+          return {
+            fastInstanceCommands: [],
+            slowInstanceCommands: [],
+            workspaceCommands: [firstWorkspaceCommand, secondWorkspaceCommand],
+          };
+        }
+
+        if (version === '2.20.0') {
+          return {
+            fastInstanceCommands: [nextVersionFastInstanceCommand],
+            slowInstanceCommands: [nextVersionSlowInstanceCommand],
+            workspaceCommands: [],
+          };
+        }
+
+        return {
+          fastInstanceCommands: [],
+          slowInstanceCommands: [],
+          workspaceCommands: [],
+        };
+      },
+    } as unknown as UpgradeCommandRegistryService);
+    const sequence = sequenceReader.getUpgradeSequence();
+    const runFastInstanceCommand = jest.fn();
+    const runSlowInstanceCommand = jest.fn();
+    const runWorkspaceCommands = jest.fn().mockResolvedValue(undefined);
+    const workspaceCursors = new Map([
+      [
+        WORKSPACE_ID,
+        {
+          createdAt: new Date(),
+          errorMessage: null,
+          executedByVersion: VERSION,
+          isInitial: false,
+          name: firstWorkspaceCommand.name,
+          status: 'completed' as const,
+          workspaceId: WORKSPACE_ID,
+        },
+      ],
+    ]);
+    const iterate = jest.fn(async ({ callback }) => {
+      await callback({
+        index: 0,
+        total: 1,
+        workspaceId: WORKSPACE_ID,
+      });
+
+      return {
+        fail: [],
+        success: [{ workspaceId: WORKSPACE_ID }],
+      } satisfies WorkspaceIteratorReport;
+    });
+
+    const runner = new UpgradeSequenceRunnerService(
+      {
+        getLastAttemptedCommandNameOrThrow: jest.fn().mockResolvedValue({
+          name: firstWorkspaceCommand.name,
+          status: 'completed',
+        }),
+        getWorkspaceLastAttemptedCommandNameOrThrow: jest
+          .fn()
+          .mockResolvedValue(workspaceCursors),
+      } as unknown as UpgradeMigrationService,
+      {
+        runFastInstanceCommand,
+        runSlowInstanceCommand,
+      } as unknown as InstanceCommandRunnerService,
+      {
+        runWorkspaceCommands,
+      } as unknown as WorkspaceCommandRunnerService,
+      sequenceReader,
+      {
+        refresh: jest.fn().mockResolvedValue(undefined),
+      } as unknown as UpgradeAwareEntityMetadataAdapter,
+      {
+        iterate,
+      } as never,
+      {
+        getActiveOrSuspendedWorkspaceIds: jest
+          .fn()
+          .mockResolvedValue([WORKSPACE_ID]),
+      } as unknown as WorkspaceVersionService,
+    );
+
+    await expect(
+      runner.run({ options: { dryRun: true }, sequence }),
+    ).resolves.toEqual({
+      totalFailures: 0,
+      totalSuccesses: 1,
+    });
+
+    expect(runWorkspaceCommands).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: { dryRun: true } satisfies ParsedUpgradeCommandOptions,
+        workspaceCommands: [
+          expect.objectContaining({ name: secondWorkspaceCommand.name }),
+        ],
+      }),
+    );
+    expect(runFastInstanceCommand).not.toHaveBeenCalled();
+    expect(runSlowInstanceCommand).not.toHaveBeenCalled();
+  });
 });

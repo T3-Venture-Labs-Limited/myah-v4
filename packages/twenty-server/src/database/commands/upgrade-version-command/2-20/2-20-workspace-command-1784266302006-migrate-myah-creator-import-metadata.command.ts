@@ -27,6 +27,14 @@ export class MigrateMyahCreatorImportMetadataCommand extends ActiveOrSuspendedWo
   }
 
   override async runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
+    if (
+      !(await this.synchronizeMyahStandardMetadataCommand.workspaceSchemaExists(
+        args.workspaceId,
+      ))
+    ) {
+      return;
+    }
+
     if (!isDefined(args.dataSource)) {
       throw new Error('Workspace data source is required');
     }
