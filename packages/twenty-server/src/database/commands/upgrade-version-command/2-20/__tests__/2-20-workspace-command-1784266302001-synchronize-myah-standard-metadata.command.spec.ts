@@ -295,7 +295,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       ).toBe(false);
     }
 
-    const myahObjectUniversalIdentifiers = new Set(
+    const myahObjectUniversalIdentifiers = new Set<string>(
       Object.values(MYAH_STANDARD_OBJECTS).map(
         ({ universalIdentifier }) => universalIdentifier,
       ),
