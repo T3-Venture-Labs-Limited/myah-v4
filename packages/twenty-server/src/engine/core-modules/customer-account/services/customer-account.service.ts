@@ -14,6 +14,11 @@ export class CustomerAccountWorkspaceConflictError extends Error {
   }
 }
 
+export type CustomerAccountWorkspaceAttachmentOutcome = {
+  created: boolean;
+  installation: MyahWorkspaceInstallationEntity;
+};
+
 const isUniqueConstraintViolation = (
   error: unknown,
 ): error is { code: string } =>
@@ -55,16 +60,19 @@ export class CustomerAccountService {
   }: {
     customerAccountId: string;
     workspaceId: string;
-  }): Promise<MyahWorkspaceInstallationEntity> {
+  }): Promise<CustomerAccountWorkspaceAttachmentOutcome> {
     const existingInstallation =
       await this.getWorkspaceInstallation(workspaceId);
 
     if (existingInstallation) {
-      return this.assertCustomerAccountOwnership({
-        customerAccountId,
-        installation: existingInstallation,
-        workspaceId,
-      });
+      return {
+        created: false,
+        installation: this.assertCustomerAccountOwnership({
+          customerAccountId,
+          installation: existingInstallation,
+          workspaceId,
+        }),
+      };
     }
 
     const installation = this.myahWorkspaceInstallationRepository.create({
@@ -73,7 +81,11 @@ export class CustomerAccountService {
     });
 
     try {
-      return await this.myahWorkspaceInstallationRepository.save(installation);
+      return {
+        created: true,
+        installation:
+          await this.myahWorkspaceInstallationRepository.save(installation),
+      };
     } catch (error) {
       if (!isUniqueConstraintViolation(error)) {
         throw error;
@@ -86,11 +98,14 @@ export class CustomerAccountService {
         throw error;
       }
 
-      return this.assertCustomerAccountOwnership({
-        customerAccountId,
-        installation: concurrentInstallation,
-        workspaceId,
-      });
+      return {
+        created: false,
+        installation: this.assertCustomerAccountOwnership({
+          customerAccountId,
+          installation: concurrentInstallation,
+          workspaceId,
+        }),
+      };
     }
   }
 

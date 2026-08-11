@@ -31,6 +31,10 @@ import {
   type ImpersonationTrackEvent,
 } from 'src/engine/core-modules/event-logs/emit/events/workspace-event/impersonation/impersonation';
 import {
+  type MANAGED_EMAIL_PILOT_WORKSPACE_ATTACHED_EVENT,
+  type ManagedEmailPilotWorkspaceAttachedTrackEvent,
+} from 'src/engine/core-modules/event-logs/emit/events/workspace-event/managed-email/managed-email-pilot-workspace-attached';
+import {
   type MANAGED_EMAIL_PERSONAS_PROPOSED_EVENT,
   type ManagedEmailPersonasProposedTrackEvent,
 } from 'src/engine/core-modules/event-logs/emit/events/workspace-event/managed-email/managed-email-personas-proposed';
@@ -69,6 +73,7 @@ export type TrackEventName =
   | typeof WORKSPACE_CREATED_EVENT
   | typeof PAYMENT_RECEIVED_EVENT
   | typeof SERVER_ADMIN_ACCESS_CHANGED_EVENT
+  | typeof MANAGED_EMAIL_PILOT_WORKSPACE_ATTACHED_EVENT
   | typeof MANAGED_EMAIL_PERSONAS_PROPOSED_EVENT;
 
 export interface TrackEvents {
@@ -85,6 +90,7 @@ export interface TrackEvents {
   [WORKSPACE_CREATED_EVENT]: WorkspaceCreatedTrackEvent;
   [PAYMENT_RECEIVED_EVENT]: PaymentReceivedTrackEvent;
   [SERVER_ADMIN_ACCESS_CHANGED_EVENT]: ServerAdminAccessChangedTrackEvent;
+  [MANAGED_EMAIL_PILOT_WORKSPACE_ATTACHED_EVENT]: ManagedEmailPilotWorkspaceAttachedTrackEvent;
   [MANAGED_EMAIL_PERSONAS_PROPOSED_EVENT]: ManagedEmailPersonasProposedTrackEvent;
 }
 
