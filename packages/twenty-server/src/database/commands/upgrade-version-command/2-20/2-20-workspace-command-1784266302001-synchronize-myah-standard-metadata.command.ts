@@ -108,7 +108,7 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     super(workspaceIteratorService);
   }
 
-  private async workspaceSchemaExists(workspaceId: string): Promise<boolean> {
+  async workspaceSchemaExists(workspaceId: string): Promise<boolean> {
     const workspace = await this.coreDataSource
       .getRepository(WorkspaceEntity)
       .findOne({

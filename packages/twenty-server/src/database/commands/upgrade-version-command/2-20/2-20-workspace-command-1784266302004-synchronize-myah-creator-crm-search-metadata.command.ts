@@ -5,6 +5,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
+import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
@@ -29,6 +30,7 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
     private readonly applicationService: ApplicationService,
     private readonly workspaceMigrationValidateBuildAndRunService: WorkspaceMigrationValidateBuildAndRunService,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly synchronizeMyahStandardMetadataCommand: SynchronizeMyahStandardMetadataCommand,
   ) {
     super(workspaceIteratorService);
   }
@@ -37,6 +39,14 @@ export class SynchronizeMyahCreatorCrmSearchMetadataCommand extends ActiveOrSusp
     workspaceId,
     options,
   }: RunOnWorkspaceArgs): Promise<void> {
+    if (
+      !(await this.synchronizeMyahStandardMetadataCommand.workspaceSchemaExists(
+        workspaceId,
+      ))
+    ) {
+      return;
+    }
+
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
         { workspaceId },
