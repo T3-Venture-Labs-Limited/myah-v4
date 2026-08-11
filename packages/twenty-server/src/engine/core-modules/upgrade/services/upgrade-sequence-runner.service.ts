@@ -121,7 +121,7 @@ export class UpgradeSequenceRunnerService {
 
         const previousStep = cursor > 0 ? sequence[cursor - 1] : undefined;
 
-        if (previousStep?.kind === 'workspace') {
+        if (previousStep?.kind === 'workspace' && !options.dryRun) {
           this.enforceWorkspacesCompletedPreviousWorkspaceSegment({
             sequence,
             previousWorkspaceStep: previousStep,
@@ -129,15 +129,30 @@ export class UpgradeSequenceRunnerService {
           });
         }
 
-        await this.runInstanceStep({
-          instanceStep: step,
-          skipDataMigration:
-            step.kind === 'slow-instance' &&
-            allActiveOrSuspendedWorkspaceIds.length === 0 &&
-            !step.command.runDataMigrationWithoutWorkspaces,
-        });
+        if (options.dryRun) {
+          this.logger.log(
+            formatUpgradeLog({
+              humanMessage: `(dry run) Would run ${step.kind} step "${step.name}"`,
+              event: 'instance.dry-run',
+              logFields: {
+                kind: step.kind,
+                name: step.name,
+                version: step.version,
+                dryRun: true,
+              },
+            }),
+          );
+        } else {
+          await this.runInstanceStep({
+            instanceStep: step,
+            skipDataMigration:
+              step.kind === 'slow-instance' &&
+              allActiveOrSuspendedWorkspaceIds.length === 0 &&
+              !step.command.runDataMigrationWithoutWorkspaces,
+          });
 
-        await this.upgradeAwareEntityMetadataAdapter.refresh();
+          await this.upgradeAwareEntityMetadataAdapter.refresh();
+        }
 
         cursor++;
         continue;
