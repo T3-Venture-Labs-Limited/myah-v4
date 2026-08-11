@@ -275,33 +275,33 @@ jobs:
           echo "$OUTPUT" | grep -q "0 behind, 0 failed" \
             || { echo "FAIL: Some workspaces are behind or failed"; exit 1; }
 
-      - name: Smoke / Query companies
+      - name: Smoke / Query creators
         run: |
           HTTP_CODE=$(curl -s -o /tmp/response.json -w '%{http_code}' http://localhost:3000/graphql \
             -H "Authorization: Bearer ${API_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{"query":"{ companies { edges { node { id name } } } }"}' || true)
+            -d '{"query":"{ creators { edges { node { id name } } } }"}' || true)
           echo "HTTP status: ${HTTP_CODE}"
           jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json
           if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
             echo "FAIL: API returned HTTP ${HTTP_CODE}"; exit 1
           fi
-          jq -e '.data.companies.edges | length > 0' /tmp/response.json \
-            || { echo "FAIL: expected companies with edges"; exit 1; }
+          jq -e '.data.creators.edges != null' /tmp/response.json \
+            || { echo "FAIL: expected creator edges to be non-null"; exit 1; }
 
-      - name: Smoke / Query people
+      - name: Smoke / Query campaigns
         run: |
           HTTP_CODE=$(curl -s -o /tmp/response.json -w '%{http_code}' http://localhost:3000/graphql \
             -H "Authorization: Bearer ${API_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{"query":"{ people { edges { node { id } } } }"}' || true)
+            -d '{"query":"{ campaigns { edges { node { id } } } }"}' || true)
           echo "HTTP status: ${HTTP_CODE}"
           jq . /tmp/response.json 2>/dev/null || cat /tmp/response.json
           if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
             echo "FAIL: API returned HTTP ${HTTP_CODE}"; exit 1
           fi
-          jq -e '.data.people.edges != null' /tmp/response.json \
-            || { echo "FAIL: expected people edges to be non-null"; exit 1; }
+          jq -e '.data.campaigns.edges != null' /tmp/response.json \
+            || { echo "FAIL: expected campaign edges to be non-null"; exit 1; }
 
       - name: Smoke / Query metadata objects
         run: |
