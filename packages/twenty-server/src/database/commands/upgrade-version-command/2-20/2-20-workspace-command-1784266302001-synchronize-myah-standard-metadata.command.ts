@@ -159,32 +159,66 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     twentyStandardApplicationId: twentyStandardFlatApplication.id, removeReplacedTwentyCrmMetadata: shouldMigrateLegacyMyahApplication,  });
 
     const objectUniversalIdentifiers =
-          syncOptions.targetObjectUniversalIdentifiers ??
-          new Set<string>(
-            Object.values(MYAH_STANDARD_OBJECTS).map(
-              ({ universalIdentifier }) => universalIdentifier,
-            ),
-          );
+      syncOptions.targetObjectUniversalIdentifiers ??
+      new Set<string>(
+        Object.values(MYAH_STANDARD_OBJECTS).map(
+          ({ universalIdentifier }) => universalIdentifier,
+        ),
+      );
+    const currentObjectUniversalIdentifiers = new Set(
+      Object.keys(
+        fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
+      ),
+    );
     const standardFields = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     );
-    const fieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardFields.filter((field) =>
-        syncOptions.targetObjectUniversalIdentifiers === undefined
-          ? objectUniversalIdentifiers.has(
-              field.objectMetadataUniversalIdentifier ?? '',
-            ) ||
+    const isObjectAvailable = (universalIdentifier: string): boolean =>
+      objectUniversalIdentifiers.has(universalIdentifier) ||
+      currentObjectUniversalIdentifiers.has(universalIdentifier);
+    const hasAvailableFieldEndpoints = (
+      field: (typeof standardFields)[number],
+    ): boolean => {
+      const objectUniversalIdentifier =
+        field.objectMetadataUniversalIdentifier ?? '';
+      const relationTargetObjectUniversalIdentifier =
+        field.relationTargetObjectMetadataUniversalIdentifier;
+
+      return (
+        isObjectAvailable(objectUniversalIdentifier) &&
+        (!isDefined(relationTargetObjectUniversalIdentifier) ||
+          isObjectAvailable(relationTargetObjectUniversalIdentifier))
+      );
+    };
+    const shouldIncludeField = (
+      field: (typeof standardFields)[number],
+    ): boolean => {
+      const objectUniversalIdentifier =
+        field.objectMetadataUniversalIdentifier ?? '';
+      const relationTargetObjectUniversalIdentifier =
+        field.relationTargetObjectMetadataUniversalIdentifier;
+
+      if (syncOptions.targetObjectUniversalIdentifiers !== undefined) {
+        return (
+          objectUniversalIdentifiers.has(objectUniversalIdentifier) &&
+          (!isDefined(relationTargetObjectUniversalIdentifier) ||
             objectUniversalIdentifiers.has(
-              field.relationTargetObjectMetadataUniversalIdentifier ?? '',
-            )
-          : objectUniversalIdentifiers.has(
-                field.objectMetadataUniversalIdentifier ?? '',
-              ) &&
-              (field.relationTargetObjectMetadataUniversalIdentifier == null ||
-                objectUniversalIdentifiers.has(
-                  field.relationTargetObjectMetadataUniversalIdentifier,
-                )),
-      ),
+              relationTargetObjectUniversalIdentifier,
+            ))
+        );
+      }
+
+      const hasMyahEndpoint =
+        objectUniversalIdentifiers.has(objectUniversalIdentifier) ||
+        (isDefined(relationTargetObjectUniversalIdentifier) &&
+          objectUniversalIdentifiers.has(
+            relationTargetObjectUniversalIdentifier,
+          ));
+
+      return hasMyahEndpoint && hasAvailableFieldEndpoints(field);
+    };
+    const fieldUniversalIdentifiers = toUniversalIdentifiers(
+      standardFields.filter(shouldIncludeField),
     );
     const standardIndexes = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatIndexMaps.byUniversalIdentifier,
@@ -296,22 +330,41 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       const fieldMetadataUniversalIdentifier =
         viewField.fieldMetadataUniversalIdentifier;
 
+      const field = isDefined(fieldMetadataUniversalIdentifier)
+        ? standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+            fieldMetadataUniversalIdentifier
+          ]
+        : undefined;
+
       if (
         viewUniversalIdentifiers.has(viewField.viewUniversalIdentifier ?? '') &&
-        isDefined(fieldMetadataUniversalIdentifier)
+        isDefined(field) &&
+        (syncOptions.targetObjectUniversalIdentifiers !== undefined ||
+          hasAvailableFieldEndpoints(field))
       ) {
-        fieldUniversalIdentifiers.add(fieldMetadataUniversalIdentifier);
+        fieldUniversalIdentifiers.add(field.universalIdentifier);
       }
     }
 
     for (const field of standardFields) {
       if (
-        fieldUniversalIdentifiers.has(field.universalIdentifier) &&
-        isDefined(field.relationTargetFieldMetadataUniversalIdentifier)
+        !fieldUniversalIdentifiers.has(field.universalIdentifier) ||
+        !isDefined(field.relationTargetFieldMetadataUniversalIdentifier)
       ) {
-        fieldUniversalIdentifiers.add(
-          field.relationTargetFieldMetadataUniversalIdentifier,
-        );
+        continue;
+      }
+
+      const relationTargetField =
+        standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+          field.relationTargetFieldMetadataUniversalIdentifier
+        ];
+
+      if (
+        isDefined(relationTargetField) &&
+        (syncOptions.targetObjectUniversalIdentifiers !== undefined ||
+          hasAvailableFieldEndpoints(relationTargetField))
+      ) {
+        fieldUniversalIdentifiers.add(relationTargetField.universalIdentifier);
       }
     }
     const objectUniversalIdentifiersToSynchronize = new Set(
@@ -346,10 +399,16 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       ),
     );
     const viewFieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardViewFields.filter((viewField) =>
-        viewUniversalIdentifiers.has(
-          viewField.viewUniversalIdentifier ?? '',
-        ),
+      standardViewFields.filter(
+        (viewField) =>
+          viewUniversalIdentifiers.has(
+            viewField.viewUniversalIdentifier ?? '',
+          ) &&
+          (syncOptions.targetObjectUniversalIdentifiers !== undefined ||
+            (isDefined(viewField.fieldMetadataUniversalIdentifier) &&
+              fieldUniversalIdentifiers.has(
+                viewField.fieldMetadataUniversalIdentifier,
+              ))),
       ),
     );
     const navigationMenuItemUniversalIdentifiers = toUniversalIdentifiers(

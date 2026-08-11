@@ -187,6 +187,21 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     ).not.toHaveLength(0);
   });
   it('includes Task and Note target extensions in the desired migration slice', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-07-15T00:00:00.000Z',
+      });
+
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+
     await runOnWorkspace();
 
     const migrationInput =
@@ -237,6 +252,92 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         ).toBeDefined();
       }
     }
+  });
+
+  it('omits relations to absent non-Myah objects from the migration slice', async () => {
+    await runOnWorkspace();
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const desiredObjects =
+      migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
+        .byUniversalIdentifier;
+    const desiredFieldsByUniversalIdentifier =
+      migrationInput.fromToAllFlatEntityMaps.flatFieldMetadataMaps.to
+        .byUniversalIdentifier;
+    const desiredFields = Object.values(
+      desiredFieldsByUniversalIdentifier,
+    ) as Array<{
+      objectMetadataUniversalIdentifier: string;
+      relationTargetObjectMetadataUniversalIdentifier?: string | null;
+    }>;
+    const desiredViewFields = Object.values(
+      migrationInput.fromToAllFlatEntityMaps.flatViewFieldMaps.to
+        .byUniversalIdentifier,
+    ) as Array<{
+      fieldMetadataUniversalIdentifier?: string | null;
+    }>;
+    const absentObjectUniversalIdentifiers = [
+      STANDARD_OBJECTS.company.universalIdentifier,
+      STANDARD_OBJECTS.opportunity.universalIdentifier,
+      STANDARD_OBJECTS.person.universalIdentifier,
+    ];
+
+    for (const universalIdentifier of absentObjectUniversalIdentifiers) {
+      expect(desiredObjects[universalIdentifier]).toBeUndefined();
+      expect(
+        desiredFields.some(
+          (field) =>
+            field.objectMetadataUniversalIdentifier === universalIdentifier ||
+            field.relationTargetObjectMetadataUniversalIdentifier ===
+              universalIdentifier,
+        ),
+      ).toBe(false);
+    }
+
+    const myahObjectUniversalIdentifiers = new Set(
+      Object.values(MYAH_STANDARD_OBJECTS).map(
+        ({ universalIdentifier }) => universalIdentifier,
+      ),
+    );
+
+    for (const field of desiredFields) {
+      expect(
+        myahObjectUniversalIdentifiers.has(
+          field.objectMetadataUniversalIdentifier,
+        ),
+      ).toBe(true);
+
+      if (isDefined(field.relationTargetObjectMetadataUniversalIdentifier)) {
+        expect(
+          myahObjectUniversalIdentifiers.has(
+            field.relationTargetObjectMetadataUniversalIdentifier,
+          ),
+        ).toBe(true);
+      }
+    }
+
+    for (const viewField of desiredViewFields) {
+      if (isDefined(viewField.fieldMetadataUniversalIdentifier)) {
+        expect(
+          desiredFieldsByUniversalIdentifier[
+            viewField.fieldMetadataUniversalIdentifier
+          ],
+        ).toBeDefined();
+      }
+    }
+
+    expect(
+      desiredFieldsByUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.creator.fields.email.universalIdentifier
+      ],
+    ).toBeDefined();
+    expect(
+      desiredFieldsByUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators
+          .universalIdentifier
+      ],
+    ).toBeDefined();
   });
 
   it('preserves current metadata for non-Myah objects included only for graph closure', async () => {
