@@ -24,11 +24,10 @@ describe('WorkflowUpdateOnePreQueryHook', () => {
 
   it('rejects manual Workflow status updates', async () => {
     await expect(
-      hook.execute(
-        authContext,
-        'workflow',
-        { id: 'workflow-a', data: { statuses: ['ACTIVE'] } } as never,
-      ),
+      hook.execute(authContext, 'workflow', {
+        id: 'workflow-a',
+        data: { statuses: ['ACTIVE'] },
+      } as never),
     ).rejects.toMatchObject({
       message: 'Statuses cannot be set manually.',
     });
@@ -36,14 +35,10 @@ describe('WorkflowUpdateOnePreQueryHook', () => {
 
   it('rejects an Outreach association in global update input', async () => {
     await expect(
-      hook.execute(
-        authContext,
-        'workflow',
-        {
-          id: 'workflow-a',
-          data: { outreachCampaignId: null },
-        } as never,
-      ),
+      hook.execute(authContext, 'workflow', {
+        id: 'workflow-a',
+        data: { outreachCampaignId: null },
+      } as never),
     ).rejects.toMatchObject({
       message: 'Outreach association is managed by Campaign Outreach',
     });

@@ -1,5 +1,4 @@
 import { CampaignOutreachWorkflowResolver } from 'src/modules/myah-outreach/resolvers/campaign-outreach-workflow.resolver';
-import { CampaignOutreachWorkflowService } from 'src/modules/myah-outreach/services/campaign-outreach-workflow.service';
 
 describe('CampaignOutreachWorkflowResolver', () => {
   const workspace = { id: 'workspace-a' };

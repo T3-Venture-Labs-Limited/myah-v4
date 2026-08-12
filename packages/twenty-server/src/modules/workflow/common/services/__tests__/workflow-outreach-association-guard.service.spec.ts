@@ -9,11 +9,11 @@ describe('WorkflowOutreachAssociationGuardService', () => {
     { outreachCampaignId: null },
     { outreachCampaign: null },
   ])('rejects global Workflow mutation input %o', async (data) => {
-    await expect(service.assertNoOutreachAssociation(data)).rejects.toMatchObject(
-      {
-        message: 'Outreach association is managed by Campaign Outreach',
-      },
-    );
+    await expect(
+      service.assertNoOutreachAssociation(data),
+    ).rejects.toMatchObject({
+      message: 'Outreach association is managed by Campaign Outreach',
+    });
   });
 
   it('allows a General Automation mutation without an Outreach association', async () => {
