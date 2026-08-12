@@ -193,7 +193,7 @@ describe('ManagedEmailSubscriptionService', () => {
         aliases: [],
         fiatCreditType: {
           id: '123e4567-e89b-42d3-a456-426614174060',
-          name: 'USD',
+          name: 'USD (cents)',
         },
         id: quote.metronomeRateCardId,
       }),
@@ -459,7 +459,7 @@ describe('ManagedEmailSubscriptionService', () => {
     ).toHaveBeenCalledTimes(1);
   });
 
-  it('projects only one exact paid Stripe invoice onto the operation', async () => {
+  it('projects one exact paid Stripe invoice containing every subscription line', async () => {
     const {
       managedProviderStripeService,
       metronomeClient,
@@ -478,23 +478,10 @@ describe('ManagedEmailSubscriptionService', () => {
       workspaceId,
     });
 
-    const exactInvoice = {
-      contractId: '123e4567-e89b-42d3-a456-426614174051',
-      creditType: {
-        id: '123e4567-e89b-42d3-a456-426614174060',
-        name: 'USD',
-      },
-      customerId: '123e4567-e89b-42d3-a456-426614174050',
-      endingBefore: annualEnd,
-      externalInvoice: {
-        billingProvider: 'stripe',
-        externalPaymentId: 'pi_exact',
-        externalStatus: 'PAID',
-        invoiceId: 'in_exact',
-        invoicedTotal: quote.dueTodayCents,
-      },
-      id: 'metronome-invoice-exact',
-      lines: quote.lines.map((line, index) => ({
+    const makeLine = (index: number) => {
+      const line = quote.lines[index];
+
+      return {
         endingBefore: line.endingBefore,
         hasAppliedCommitOrCredit: false,
         isProrated: false,
@@ -505,79 +492,90 @@ describe('ManagedEmailSubscriptionService', () => {
         total: line.amountCents,
         type: 'subscription',
         unitPrice: line.unitPriceCents,
-      })),
-      startingAt: periodStart,
-      status: 'FINALIZED',
-      total: quote.dueTodayCents,
+      };
     };
+    const makeInvoice = ({
+      id,
+      lineIndexes,
+      paymentId,
+      stripeInvoiceId,
+    }: {
+      id: string;
+      lineIndexes: number[];
+      paymentId: string;
+      stripeInvoiceId: string;
+    }) => {
+      const lines = lineIndexes.map(makeLine);
+      const total = lines.reduce((sum, line) => sum + line.total, 0);
+
+      return {
+        contractId: '123e4567-e89b-42d3-a456-426614174051',
+        creditType: {
+          id: '123e4567-e89b-42d3-a456-426614174060',
+          name: 'USD (cents)',
+        },
+        customerId: '123e4567-e89b-42d3-a456-426614174050',
+        endingBefore: periodStart,
+        externalInvoice: {
+          billingProvider: 'stripe',
+          externalPaymentId: paymentId,
+          externalStatus: 'PAID',
+          invoiceId: stripeInvoiceId,
+          invoicedTotal: total,
+        },
+        id,
+        lines,
+        startingAt: periodStart,
+        status: 'FINALIZED',
+        total,
+      };
+    };
+    const consolidatedInvoice = makeInvoice({
+      id: 'metronome-invoice-consolidated',
+      lineIndexes: [0, 1, 2],
+      paymentId: 'pi_consolidated',
+      stripeInvoiceId: 'in_consolidated',
+    });
+
     metronomeClient.listInvoicesFirstPage
       .mockResolvedValueOnce({
         hasNextPage: false,
-        invoices: [
-          {
-            ...exactInvoice,
-            id: 'unrelated-paid-invoice',
-            lines: exactInvoice.lines.map((line, index) =>
-              index === 0
-                ? {
-                    ...line,
-                    productId: '123e4567-e89b-42d3-a456-426614174099',
-                  }
-                : line,
-            ),
-          },
-        ],
+        invoices: [],
       })
       .mockResolvedValueOnce({
         hasNextPage: false,
-        invoices: [exactInvoice],
+        invoices: [consolidatedInvoice],
       });
 
     await expect(
       service.reconcilePayment({ operationId, workspaceId }),
     ).resolves.toMatchObject({ state: 'PAYMENT_PENDING' });
-    expect(persisted.get(operationId)?.externalInvoiceId).toBeNull();
+    expect(persisted.get(operationId)?.paymentReceipts).toBeNull();
 
     await expect(
       service.reconcilePayment({ operationId, workspaceId }),
     ).resolves.toMatchObject({
-      externalInvoiceId: 'in_exact',
-      externalPaymentId: 'pi_exact',
-      metronomeInvoiceId: 'metronome-invoice-exact',
+      paymentReceipts: [
+        {
+          externalInvoiceId: 'in_consolidated',
+          externalPaymentId: 'pi_consolidated',
+          metronomeInvoiceId: 'metronome-invoice-consolidated',
+        },
+      ],
       paymentStatus: 'PAID',
       state: 'PAYMENT_PAID',
     });
-    expect(persisted.get(operationId)?.correlatedSubscriptionLines).toEqual(
-      exactInvoice.lines.map(
-        ({
-          endingBefore,
-          isProrated,
-          productId,
-          quantity,
-          startingAt,
-          subscriptionId,
-          total,
-          unitPrice,
-        }) => ({
-          endingBefore,
-          isProrated,
-          productId,
-          quantity,
-          startingAt,
-          subscriptionId,
-          total,
-          unitPrice,
-        }),
-      ),
-    );
     expect(
       managedProviderStripeService.assertPaidExternalInvoice,
     ).toHaveBeenCalledWith({
       currency: 'USD',
-      expectedAmountCents: quote.dueTodayCents,
-      expectedPaymentIntentId: 'pi_exact',
-      metronomeInvoiceId: 'metronome-invoice-exact',
-      stripeInvoiceId: 'in_exact',
+      expectedAmountCents: quote.lines.reduce(
+        (sum, line) => sum + line.amountCents,
+        0,
+      ),
+      expectedPaymentIntentId: 'pi_consolidated',
+      metronomeInvoiceId: 'metronome-invoice-consolidated',
+      stripeInvoiceId: 'in_consolidated',
       workspaceId,
     });
   });

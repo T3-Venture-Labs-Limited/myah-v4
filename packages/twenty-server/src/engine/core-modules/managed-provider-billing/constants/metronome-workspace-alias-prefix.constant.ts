@@ -5,3 +5,5 @@ export const METRONOME_WORKSPACE_CONTRACT_UNIQUENESS_KEY_PREFIX =
 
 export const MANAGED_EMAIL_METRONOME_WORKSPACE_CONTRACT_UNIQUENESS_KEY_PREFIX =
   'myah-managed-email-workspace-contract:';
+
+export const METRONOME_USD_CREDIT_TYPE_NAME = 'USD (cents)';

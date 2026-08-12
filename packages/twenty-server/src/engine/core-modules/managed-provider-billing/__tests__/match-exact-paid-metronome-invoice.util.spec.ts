@@ -1,4 +1,7 @@
-import { matchExactPaidMetronomeInvoice } from '../utils/match-exact-paid-metronome-invoice.util';
+import {
+  matchExactPaidMetronomeInvoice,
+  matchExactPaidMetronomeInvoices,
+} from '../utils/match-exact-paid-metronome-invoice.util';
 import {
   type ExpectedMetronomeSubscriptionLine,
   type ExpectedPaidMetronomeInvoice,
@@ -26,14 +29,14 @@ const expected: ExpectedPaidMetronomeInvoice = {
   usdRateCardProof: {
     contractId: 'contract-id',
     fiatCreditTypeId: 'usd-credit-type-id',
-    fiatCreditTypeName: 'USD',
+    fiatCreditTypeName: 'USD (cents)',
     rateCardId: 'rate-card-id',
   },
 };
 
 const exactInvoice = {
   contractId: 'contract-id',
-  creditType: { id: 'usd-credit-type-id', name: 'USD' },
+  creditType: { id: 'usd-credit-type-id', name: 'USD (cents)' },
   customerId: 'customer-id',
   endingBefore: '2026-09-01T00:00:00.000Z',
   externalInvoice: {
@@ -109,18 +112,6 @@ describe('matchExactPaidMetronomeInvoice', () => {
       'contract',
       (page: MetronomeInvoicePage) => {
         page.invoices[0].contractId = 'other-contract';
-      },
-    ],
-    [
-      'period start',
-      (page: MetronomeInvoicePage) => {
-        page.invoices[0].startingAt = '2026-08-02T00:00:00.000Z';
-      },
-    ],
-    [
-      'period end',
-      (page: MetronomeInvoicePage) => {
-        page.invoices[0].endingBefore = '2026-09-02T00:00:00.000Z';
       },
     ],
     [
@@ -324,5 +315,88 @@ describe('matchExactPaidMetronomeInvoice', () => {
     mutate(page);
 
     expect(matchExactPaidMetronomeInvoice(page, makeExpected())).toBeNull();
+  });
+});
+
+describe('matchExactPaidMetronomeInvoices', () => {
+  it('matches cadence-separated scheduled invoices by their exact line periods', () => {
+    const monthlyExpected = makeExpected();
+    const annualLine: ExpectedMetronomeSubscriptionLine = {
+      ...expectedLine,
+      endingBefore: '2027-08-01T00:00:00.000Z',
+      productId: 'annual-product-id',
+      subscriptionId: 'annual-subscription-id',
+      total: 1_429,
+      unitPrice: 1_429,
+    };
+    const annualExpected: ExpectedPaidMetronomeInvoice = {
+      ...makeExpected(),
+      endingBefore: annualLine.endingBefore,
+      lines: [annualLine],
+      total: annualLine.total,
+    };
+    const monthlyInvoice = structuredClone(exactInvoice);
+
+    monthlyInvoice.startingAt = expectedLine.startingAt;
+    monthlyInvoice.endingBefore = expectedLine.startingAt;
+
+    const annualInvoice = {
+      ...structuredClone(exactInvoice),
+      endingBefore: expectedLine.startingAt,
+      externalInvoice: {
+        billingProvider: 'stripe',
+        externalPaymentId: 'pi_annual',
+        externalStatus: 'PAID',
+        invoiceId: 'in_annual',
+        invoicedTotal: annualLine.total,
+      },
+      id: 'annual-invoice-id',
+      lines: [
+        {
+          ...annualLine,
+          hasAppliedCommitOrCredit: false,
+          type: 'subscription',
+        },
+      ],
+      startingAt: expectedLine.startingAt,
+      total: annualLine.total,
+    };
+    const page: MetronomeInvoicePage = {
+      hasNextPage: false,
+      invoices: [annualInvoice, monthlyInvoice],
+    };
+
+    expect(
+      matchExactPaidMetronomeInvoices(page, [annualExpected, monthlyExpected]),
+    ).toEqual([
+      {
+        externalInvoiceId: 'in_annual',
+        externalPaymentId: 'pi_annual',
+        invoiceId: 'annual-invoice-id',
+      },
+      {
+        externalInvoiceId: 'in_123',
+        externalPaymentId: 'pi_123',
+        invoiceId: 'invoice-id',
+      },
+    ]);
+  });
+
+  it('fails closed when one cadence invoice is missing', () => {
+    expect(
+      matchExactPaidMetronomeInvoices(makePage(), [
+        makeExpected(),
+        {
+          ...makeExpected(),
+          lines: [
+            {
+              ...expectedLine,
+              productId: 'missing-product-id',
+              subscriptionId: 'missing-subscription-id',
+            },
+          ],
+        },
+      ]),
+    ).toBeNull();
   });
 });

@@ -1,3 +1,4 @@
+import { METRONOME_USD_CREDIT_TYPE_NAME } from '../constants/metronome-workspace-alias-prefix.constant';
 import {
   type ExpectedMetronomeSubscriptionLine,
   type ExpectedPaidMetronomeInvoice,
@@ -117,17 +118,9 @@ const isExactInvoice = (
   expected: ExpectedPaidMetronomeInvoice,
   externalStatus: 'PAID' | 'PAYMENT_FAILED',
 ): boolean => {
-  const expectedStart = toInstant(expected.startingAt);
-  const expectedEnd = toInstant(expected.endingBefore);
-  const invoiceStart = toInstant(invoice.startingAt);
-  const invoiceEnd = toInstant(invoice.endingBefore);
   const externalInvoice = invoice.externalInvoice;
 
   return (
-    expectedStart !== null &&
-    expectedEnd !== null &&
-    invoiceStart === expectedStart &&
-    invoiceEnd === expectedEnd &&
     invoice.customerId === expected.customerId &&
     invoice.contractId === expected.contractId &&
     invoice.creditType.id === expected.usdRateCardProof.fiatCreditTypeId &&
@@ -161,7 +154,8 @@ export const matchExactMetronomeInvoice = (
     expected.usdRateCardProof.contractId !== expected.contractId ||
     expected.usdRateCardProof.rateCardId.trim() === '' ||
     expected.usdRateCardProof.fiatCreditTypeId.trim() === '' ||
-    expected.usdRateCardProof.fiatCreditTypeName !== 'USD'
+    expected.usdRateCardProof.fiatCreditTypeName !==
+      METRONOME_USD_CREDIT_TYPE_NAME
   ) {
     return null;
   }
@@ -198,4 +192,24 @@ export const matchExactPaidMetronomeInvoice = (
     externalPaymentId,
     invoiceId: invoice.id,
   };
+};
+
+export const matchExactPaidMetronomeInvoices = (
+  page: MetronomeInvoicePage,
+  expectedInvoices: readonly ExpectedPaidMetronomeInvoice[],
+): readonly PaidMetronomeInvoiceReceipt[] | null => {
+  if (expectedInvoices.length === 0) return null;
+
+  const receipts: PaidMetronomeInvoiceReceipt[] = [];
+  const invoiceIds = new Set<string>();
+
+  for (const expected of expectedInvoices) {
+    const receipt = matchExactPaidMetronomeInvoice(page, expected);
+
+    if (receipt === null || invoiceIds.has(receipt.invoiceId)) return null;
+    invoiceIds.add(receipt.invoiceId);
+    receipts.push(receipt);
+  }
+
+  return receipts;
 };

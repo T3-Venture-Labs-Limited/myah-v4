@@ -60,7 +60,7 @@ const invoiceLine = ({
 
 const monthlyInvoice = (externalStatus: string) => ({
   contractId,
-  creditType: { id: 'usd-credit-type', name: 'USD' },
+  creditType: { id: 'usd-credit-type', name: 'USD (cents)' },
   customerId,
   endingBefore: nextMonthlyBoundary.toISOString(),
   externalInvoice: {
@@ -97,7 +97,7 @@ const monthlyInvoice = (externalStatus: string) => ({
 
 const annualInvoice = () => ({
   contractId,
-  creditType: { id: 'usd-credit-type', name: 'USD' },
+  creditType: { id: 'usd-credit-type', name: 'USD (cents)' },
   customerId,
   endingBefore: nextAnnualBoundary.toISOString(),
   externalInvoice: {
@@ -125,6 +125,7 @@ const annualInvoice = () => ({
 
 const expectedLineItems = [
   {
+    billingFrequency: 'ANNUAL' as const,
     currency: 'USD' as const,
     metronomeProductId: 'product-domain-year',
     periodEnd: annualBoundary.toISOString(),
@@ -137,6 +138,7 @@ const expectedLineItems = [
   },
   {
     currency: 'USD' as const,
+    billingFrequency: 'MONTHLY' as const,
     metronomeProductId: 'product-mailbox-month',
     periodEnd: monthlyBoundary.toISOString(),
     periodStart: acquisitionStart.toISOString(),
@@ -148,6 +150,7 @@ const expectedLineItems = [
   },
   {
     currency: 'USD' as const,
+    billingFrequency: 'MONTHLY' as const,
     metronomeProductId: 'product-warmup-month',
     periodEnd: monthlyBoundary.toISOString(),
     periodStart: acquisitionStart.toISOString(),
@@ -161,6 +164,7 @@ const expectedLineItems = [
 
 const makeOperation = () =>
   ({
+    currency: 'USD',
     expectedLineItems,
     id: operationId,
     metronomeContractId: contractId,
@@ -173,6 +177,8 @@ const makeOperation = () =>
     ],
     nextSubscriptionReconciliationAt: monthlyBoundary,
     pendingRenewalProjection: null,
+    paymentStatus: 'PAID',
+    state: 'PROVIDER_SUCCEEDED',
     workspaceId,
   }) as unknown as ManagedEmailAcquisitionOperationEntity;
 
@@ -293,7 +299,7 @@ const createHarness = (options: HarnessOptions = {}) => {
   const metronomeClient = {
     getRateCard: jest.fn().mockResolvedValue({
       aliases: [],
-      fiatCreditType: { id: 'usd-credit-type', name: 'USD' },
+      fiatCreditType: { id: 'usd-credit-type', name: 'USD (cents)' },
       id: rateCardId,
     }),
     listInvoicesFirstPage: jest.fn().mockResolvedValue({
@@ -303,6 +309,14 @@ const createHarness = (options: HarnessOptions = {}) => {
     scheduleSubscriptionQuantity: jest.fn().mockResolvedValue({
       metronomeEditId: 'edit-1',
       subscriptionId: warmupSubscriptionId,
+    }),
+  };
+  const managedProviderStripeService = {
+    assertPaidExternalInvoice: jest.fn().mockResolvedValue({
+      customerId: 'cus_managed_email_test',
+      invoiceId: 'in_exact',
+      metronomeInvoiceId: 'metronome-invoice-exact',
+      paymentIntentId: 'pi_exact',
     }),
   };
   const warmupInboxClient = {
@@ -352,6 +366,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     operationRepository as never,
     dataSource as never,
     metronomeClient as never,
+    managedProviderStripeService as never,
     warmupInboxClient as never,
     icemailClient as never,
     permissionsService as never,
@@ -367,6 +382,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     mailboxRepository,
     mailboxes,
 
+    managedProviderStripeService,
     metronomeClient,
     operationRepository,
     operations,
@@ -568,6 +584,86 @@ describe('ManagedEmailLifecycleService', () => {
     expect(test.domains[0].paidThrough).toEqual(nextAnnualBoundary);
   });
 
+  it('projects one exact paid invoice containing every due renewal line', async () => {
+    const test = createHarness({
+      domain: { paidThrough: monthlyBoundary },
+    });
+    const annual = annualInvoice();
+    const monthly = monthlyInvoice('PAID');
+    const mixedAnnualBoundary = new Date('2027-09-01T00:00:00.000Z');
+    const consolidated = {
+      ...annual,
+      endingBefore: mixedAnnualBoundary.toISOString(),
+      externalInvoice: {
+        billingProvider: 'stripe',
+        externalPaymentId: 'pi_managed_email_consolidated',
+        externalStatus: 'PAID',
+        invoiceId: 'in_managed_email_consolidated',
+        invoicedTotal: 5500,
+      },
+      id: 'metronome-invoice-consolidated',
+      lines: [...annual.lines, ...monthly.lines],
+      startingAt: monthlyBoundary.toISOString(),
+      total: 5500,
+    };
+
+    consolidated.lines[0].startingAt = monthlyBoundary.toISOString();
+    consolidated.lines[0].endingBefore = mixedAnnualBoundary.toISOString();
+    test.metronomeClient.listInvoicesFirstPage.mockResolvedValueOnce({
+      hasNextPage: false,
+      invoices: [consolidated],
+    });
+
+    await test.service.reconcileSubscriptions({ operationId, workspaceId });
+
+    expect(test.domains[0].paidThrough).toEqual(mixedAnnualBoundary);
+    expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
+      nextMonthlyBoundary,
+    );
+    expect(test.mailboxes[0].warmupPaidThrough).toEqual(nextMonthlyBoundary);
+    expect(test.operations[0].paymentReceipts).toEqual([
+      {
+        externalInvoiceId: 'in_managed_email_consolidated',
+        externalPaymentId: 'pi_managed_email_consolidated',
+        metronomeInvoiceId: 'metronome-invoice-consolidated',
+      },
+    ]);
+    expect(
+      test.managedProviderStripeService.assertPaidExternalInvoice,
+    ).toHaveBeenCalledWith({
+      currency: 'USD',
+      expectedAmountCents: 5500,
+      expectedPaymentIntentId: 'pi_managed_email_consolidated',
+      metronomeInvoiceId: 'metronome-invoice-consolidated',
+      stripeInvoiceId: 'in_managed_email_consolidated',
+      workspaceId,
+    });
+  });
+
+  it('does not project a paid invoice when Stripe proof fails', async () => {
+    const test = createHarness();
+
+    test.metronomeClient.listInvoicesFirstPage.mockResolvedValueOnce({
+      hasNextPage: false,
+      invoices: [monthlyInvoice('PAID')],
+    });
+    test.managedProviderStripeService.assertPaidExternalInvoice.mockRejectedValueOnce(
+      new Error('Stripe invoice payment proof is invalid'),
+    );
+
+    await expect(
+      test.service.reconcileSubscriptions({ operationId, workspaceId }),
+    ).rejects.toThrow('Stripe invoice payment proof is invalid');
+    expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
+      monthlyBoundary,
+    );
+    expect(test.mailboxes[0].warmupPaidThrough).toEqual(monthlyBoundary);
+    expect(
+      test.managedProviderStripeService.assertPaidExternalInvoice,
+    ).toHaveBeenCalledTimes(1);
+    expect(test.operations[0].pendingRenewalProjection).toBeNull();
+  });
+
   it.each(['OPEN', 'FINALIZED'])(
     'does not extend entitlement for an externally %s invoice',
     async (externalStatus) => {
@@ -585,6 +681,30 @@ describe('ManagedEmailLifecycleService', () => {
       expect(test.mailboxes[0].warmupPaidThrough).toEqual(monthlyBoundary);
     },
   );
+  it('keeps a paid replacement healthy when a matching failed invoice is historical', async () => {
+    const test = createHarness();
+    const failedInvoice = monthlyInvoice('PAYMENT_FAILED');
+
+    failedInvoice.id = 'historical-failed-invoice';
+    test.metronomeClient.listInvoicesFirstPage.mockResolvedValueOnce({
+      hasNextPage: false,
+      invoices: [failedInvoice, monthlyInvoice('PAID')],
+    });
+
+    await test.service.reconcileSubscriptions({ operationId, workspaceId });
+
+    expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
+      nextMonthlyBoundary,
+    );
+    expect(test.mailboxes[0].warmupPaidThrough).toEqual(nextMonthlyBoundary);
+    expect(test.mailboxes[0].infrastructureState).toBe(
+      ManagedEmailInfrastructureState.ACTIVE,
+    );
+    expect(test.mailboxes[0].warmupState).toBe(
+      ManagedEmailWarmupState.MAINTENANCE,
+    );
+    expect(test.mailboxes[0].safeFailureCode).toBeNull();
+  });
 
   it('does not extend a paid invoice whose exact customer correlation differs', async () => {
     const test = createHarness();

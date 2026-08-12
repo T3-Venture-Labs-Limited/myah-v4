@@ -137,8 +137,18 @@ const createOperation = (
       total: line.amountCents,
       unitPrice: line.unitPriceCents,
     })),
-    externalInvoiceId: 'stripe-invoice-1',
-    externalPaymentId: 'stripe-payment-1',
+    paymentReceipts: [
+      {
+        externalInvoiceId: 'stripe-invoice-annual',
+        externalPaymentId: 'stripe-payment-annual',
+        metronomeInvoiceId: 'metronome-invoice-annual',
+      },
+      {
+        externalInvoiceId: 'stripe-invoice-monthly',
+        externalPaymentId: 'stripe-payment-monthly',
+        metronomeInvoiceId: 'metronome-invoice-monthly',
+      },
+    ],
     expectedLineItems: quote.lines.map((line) => ({
       currency: 'USD',
       metronomeProductId: line.metronomeProductId,
@@ -154,7 +164,6 @@ const createOperation = (
     idempotencyKey: 'purchase-1',
     metronomeContractId: '123e4567-e89b-42d3-a456-426614174030',
     metronomeCustomerId: '123e4567-e89b-42d3-a456-426614174031',
-    metronomeInvoiceId: 'metronome-invoice-1',
     metronomeSubscriptionIds: [
       '123e4567-e89b-42d3-a456-426614174021',
       '123e4567-e89b-42d3-a456-426614174022',
@@ -464,9 +473,7 @@ describe('ManagedEmailAcquisitionService', () => {
   it('does not call the provider before exact payment is paid', async () => {
     const harness = createHarness({
       operation: createOperation({
-        externalInvoiceId: null,
-        externalPaymentId: null,
-        metronomeInvoiceId: null,
+        paymentReceipts: null,
         paymentStatus: null,
         state: 'PAYMENT_PENDING',
       }),

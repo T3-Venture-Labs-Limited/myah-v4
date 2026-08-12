@@ -1017,9 +1017,8 @@ export class ManagedEmailAcquisitionService {
   ): void {
     if (
       operation.paymentStatus !== 'PAID' ||
-      operation.externalInvoiceId === null ||
-      operation.externalPaymentId === null ||
-      operation.metronomeInvoiceId === null ||
+      operation.paymentReceipts === null ||
+      operation.paymentReceipts.length === 0 ||
       operation.metronomeCustomerId === null ||
       operation.metronomeContractId === null ||
       operation.metronomeSubscriptionIds === null ||
@@ -1038,11 +1037,9 @@ export class ManagedEmailAcquisitionService {
   ): string {
     return hash({
       acquisitionMode: operation.acquisitionMode,
-      externalInvoiceId: operation.externalInvoiceId,
-      externalPaymentId: operation.externalPaymentId,
       metronomeContractId: operation.metronomeContractId,
       metronomeCustomerId: operation.metronomeCustomerId,
-      metronomeInvoiceId: operation.metronomeInvoiceId,
+      paymentReceipts: operation.paymentReceipts,
       metronomeSubscriptionIds: operation.metronomeSubscriptionIds,
       quoteHash: operation.quoteHash,
       resourceSnapshot: operation.resourceSnapshot,

@@ -2,6 +2,7 @@ import { MANAGED_EMAIL_PRODUCT_DEFINITIONS } from 'src/engine/core-modules/manag
 import {
   managedEmailCorrelatedSubscriptionLinesTransformer,
   managedEmailExpectedLineItemsTransformer,
+  managedEmailPaymentReceiptsTransformer,
   managedEmailNullableProviderReceiptTransformer,
   managedEmailProviderReceiptTransformer,
   managedEmailResourceSnapshotTransformer,
@@ -12,6 +13,7 @@ import {
 import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
+  type ManagedEmailPaymentReceipt,
   type ManagedEmailResourceSnapshot,
   type ManagedEmailProviderReceipt,
   type ManagedEmailRenewalProjection,
@@ -134,11 +136,13 @@ const correlatedLine = (
 describe('managed email persistence JSON validation', () => {
   it('validates nullable renewal projections and rejects duplicate targets', () => {
     const projection: DeepMutable<ManagedEmailRenewalProjection> = {
-      receipt: {
-        externalInvoiceId: 'invoice-1',
-        externalPaymentId: 'payment-1',
-        metronomeInvoiceId: 'invoice-2',
-      },
+      receipts: [
+        {
+          externalInvoiceId: 'invoice-1',
+          externalPaymentId: 'payment-1',
+          metronomeInvoiceId: 'invoice-2',
+        },
+      ],
       resources: [
         {
           kind: 'domain',
@@ -159,6 +163,29 @@ describe('managed email persistence JSON validation', () => {
     ).toBeNull();
     expect(() =>
       managedEmailNullableRenewalProjectionTransformer.to(duplicateProjection),
+    ).toThrow('Unsafe managed email persistence JSON');
+  });
+  it('validates distinct payment receipt tuples and rejects reused IDs', () => {
+    const receipts: DeepMutable<ManagedEmailPaymentReceipt>[] = [
+      {
+        externalInvoiceId: 'external-invoice-1',
+        externalPaymentId: 'payment-1',
+        metronomeInvoiceId: 'metronome-invoice-1',
+      },
+      {
+        externalInvoiceId: 'external-invoice-2',
+        externalPaymentId: 'payment-2',
+        metronomeInvoiceId: 'metronome-invoice-2',
+      },
+    ];
+    const duplicateReceipts = structuredClone(receipts);
+
+    expect(managedEmailPaymentReceiptsTransformer.to(receipts)).toBe(receipts);
+
+    duplicateReceipts[1].externalPaymentId =
+      duplicateReceipts[0].externalPaymentId;
+    expect(() =>
+      managedEmailPaymentReceiptsTransformer.to(duplicateReceipts),
     ).toThrow('Unsafe managed email persistence JSON');
   });
   it('accepts and deeply freezes bounded closed persistence shapes', () => {

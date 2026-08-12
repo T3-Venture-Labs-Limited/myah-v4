@@ -398,11 +398,7 @@ describe('managed email persistence entities', () => {
         'metronomeRateCardId',
       ),
     ).toMatchObject({ type: 'uuid', update: false });
-    for (const propertyName of [
-      'metronomeCustomerId',
-      'metronomeContractId',
-      'metronomeInvoiceId',
-    ]) {
+    for (const propertyName of ['metronomeCustomerId', 'metronomeContractId']) {
       expect(
         columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName),
       ).toMatchObject({ nullable: true, type: 'uuid' });
@@ -415,19 +411,12 @@ describe('managed email persistence entities', () => {
         columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName),
       ).toMatchObject({ array: true, nullable: true, type: 'uuid' });
     }
-    for (const propertyName of ['externalInvoiceId', 'externalPaymentId']) {
-      expect(
-        columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName),
-      ).toMatchObject({ nullable: true, type: 'text' });
-    }
     for (const propertyName of [
       'metronomeCustomerId',
       'metronomeContractId',
       'metronomeEditIds',
       'metronomeSubscriptionIds',
-      'metronomeInvoiceId',
-      'externalInvoiceId',
-      'externalPaymentId',
+      'paymentReceipts',
       'paymentStatus',
       'correlatedSubscriptionLines',
       'providerIntentHash',
@@ -450,6 +439,7 @@ describe('managed email persistence entities', () => {
       'correlatedSubscriptionLines',
       'providerReceipt',
       'pendingRenewalProjection',
+      'paymentReceipts',
     ]) {
       expect(
         columnOptions(ManagedEmailAcquisitionOperationEntity, propertyName)
@@ -459,6 +449,16 @@ describe('managed email persistence entities', () => {
         to: expect.any(Function),
       });
     }
+    expect(
+      columnOptions(ManagedEmailAcquisitionOperationEntity, 'paymentReceipts'),
+    ).toMatchObject({ nullable: true, type: 'jsonb' });
+    expect(propertyNames).not.toEqual(
+      expect.arrayContaining([
+        'metronomeInvoiceId',
+        'externalInvoiceId',
+        'externalPaymentId',
+      ]),
+    );
     expect(
       columnOptions(ManagedEmailAcquisitionOperationEntity, 'state'),
     ).toMatchObject({

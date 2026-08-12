@@ -18,6 +18,7 @@ import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-
 import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
+  type ManagedEmailPaymentReceipt,
   type ManagedEmailResourceSnapshot,
   type ManagedEmailProviderReceipt,
   type ManagedEmailRenewalProjection,
@@ -25,6 +26,7 @@ import {
 import {
   managedEmailCorrelatedSubscriptionLinesTransformer,
   managedEmailExpectedLineItemsTransformer,
+  managedEmailPaymentReceiptsTransformer,
   managedEmailNullableProviderReceiptTransformer,
   managedEmailNullableRenewalProjectionTransformer,
   managedEmailResourceSnapshotTransformer,
@@ -137,14 +139,12 @@ export class ManagedEmailAcquisitionOperationEntity {
   @Column({ array: true, nullable: true, type: 'uuid' })
   metronomeSubscriptionIds: string[] | null;
 
-  @Column({ nullable: true, type: 'uuid' })
-  metronomeInvoiceId: string | null;
-
-  @Column({ nullable: true, type: 'text' })
-  externalInvoiceId: string | null;
-
-  @Column({ nullable: true, type: 'text' })
-  externalPaymentId: string | null;
+  @Column({
+    nullable: true,
+    transformer: managedEmailPaymentReceiptsTransformer,
+    type: 'jsonb',
+  })
+  paymentReceipts: readonly ManagedEmailPaymentReceipt[] | null;
 
   @Column({ nullable: true, type: 'text' })
   paymentStatus: string | null;
