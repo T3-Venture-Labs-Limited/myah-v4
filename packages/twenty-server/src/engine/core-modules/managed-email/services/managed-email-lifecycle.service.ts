@@ -25,10 +25,13 @@ import {
   type ManagedEmailExpectedLineItem,
   type ManagedEmailRenewalProjection,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
+import { METRONOME_USD_CREDIT_TYPE_NAME } from 'src/engine/core-modules/managed-provider-billing/constants/metronome-workspace-alias-prefix.constant';
 import { MetronomeClientService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-client.service';
+import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
 import {
   type ExpectedMetronomeSubscriptionLine,
   type ExpectedPaidMetronomeInvoice,
+  type PaidMetronomeInvoiceReceipt,
 } from 'src/engine/core-modules/managed-provider-billing/types/metronome-subscription.type';
 import {
   matchExactMetronomeInvoice,
@@ -101,6 +104,7 @@ type RenewalResource =
     };
 
 type RenewalGroup = {
+  billingFrequency: 'ANNUAL' | 'MONTHLY';
   endingBefore: Date;
   line: ExpectedMetronomeSubscriptionLine;
   resources: RenewalResource[];
@@ -118,6 +122,7 @@ export class ManagedEmailLifecycleService {
     private readonly acquisitionOperationRepository: WorkspaceScopedRepository<ManagedEmailAcquisitionOperationEntity>,
     private readonly dataSource: DataSource,
     private readonly metronomeClientService: MetronomeClientService,
+    private readonly managedProviderStripeService: ManagedProviderStripeService,
     private readonly warmupInboxClient: WarmupInboxClient,
     private readonly icemailClient: IcemailClient,
     private readonly permissionsService: PermissionsService,
@@ -143,7 +148,7 @@ export class ManagedEmailLifecycleService {
       throw new Error('Managed email acquisition operation was not found');
     }
 
-    await this.withSubscriptionLocks(
+    const stripeProofError = await this.withSubscriptionLocks(
       workspaceId,
       operation.metronomeSubscriptionIds ?? [],
       async () => {
@@ -154,14 +159,19 @@ export class ManagedEmailLifecycleService {
         if (lockedOperation === null) {
           throw new Error('Managed email acquisition operation was not found');
         }
-        await this.reconcileSubscriptionsUnderLock(lockedOperation);
+
+        return this.reconcileSubscriptionsUnderLock(lockedOperation);
       },
     );
+
+    if (stripeProofError !== null) {
+      throw stripeProofError;
+    }
   }
 
   private async reconcileSubscriptionsUnderLock(
     operation: ManagedEmailAcquisitionOperationEntity,
-  ): Promise<void> {
+  ): Promise<unknown | null> {
     const { workspaceId } = operation;
     if (operation.pendingRenewalProjection !== null) {
       await this.completePendingRenewalProjection(
@@ -193,7 +203,7 @@ export class ManagedEmailLifecycleService {
         mailboxes,
         now,
       );
-      return;
+      return null;
     }
     if (
       operation.metronomeCustomerId === null ||
@@ -202,6 +212,8 @@ export class ManagedEmailLifecycleService {
     ) {
       throw new Error('Managed email billing identity is incomplete');
     }
+    const metronomeContractId = operation.metronomeContractId;
+    const metronomeCustomerId = operation.metronomeCustomerId;
 
     const groups = this.groupRenewalResources(resources);
     const startingAt = new Date(
@@ -216,59 +228,123 @@ export class ManagedEmailLifecycleService {
     if (
       rateCard.id !== operation.metronomeRateCardId ||
       rateCard.fiatCreditType === null ||
-      rateCard.fiatCreditType.name !== 'USD' ||
+      rateCard.fiatCreditType.name !== METRONOME_USD_CREDIT_TYPE_NAME ||
       rateCard.fiatCreditType.id.trim() === ''
     ) {
       throw new Error('Managed email renewal rate card is not USD');
     }
+    const fiatCreditType = rateCard.fiatCreditType;
 
-    const expected: ExpectedPaidMetronomeInvoice = {
-      contractId: operation.metronomeContractId,
-      customerId: operation.metronomeCustomerId,
-      endingBefore: endingBefore.toISOString(),
-      lines: groups.map(({ line }) => line),
-      startingAt: startingAt.toISOString(),
-      total: groups.reduce((sum, { line }) => sum + line.total, 0),
-      usdRateCardProof: {
-        contractId: operation.metronomeContractId,
-        fiatCreditTypeId: rateCard.fiatCreditType.id,
-        fiatCreditTypeName: rateCard.fiatCreditType.name,
-        rateCardId: rateCard.id,
+    const invoiceGroups = (['ANNUAL', 'MONTHLY'] as const).flatMap(
+      (billingFrequency) => {
+        const cadenceGroups = groups.filter(
+          (group) => group.billingFrequency === billingFrequency,
+        );
+
+        if (cadenceGroups.length === 0) return [];
+
+        return [
+          {
+            expected: {
+              contractId: metronomeContractId,
+              customerId: metronomeCustomerId,
+              endingBefore: new Date(
+                Math.max(
+                  ...cadenceGroups.map((group) => group.endingBefore.getTime()),
+                ),
+              ).toISOString(),
+              lines: cadenceGroups.map(({ line }) => line),
+              startingAt: new Date(
+                Math.min(
+                  ...cadenceGroups.map((group) => group.startingAt.getTime()),
+                ),
+              ).toISOString(),
+              total: cadenceGroups.reduce(
+                (sum, { line }) => sum + line.total,
+                0,
+              ),
+              usdRateCardProof: {
+                contractId: metronomeContractId,
+                fiatCreditTypeId: fiatCreditType.id,
+                fiatCreditTypeName: fiatCreditType.name,
+                rateCardId: rateCard.id,
+              },
+            } satisfies ExpectedPaidMetronomeInvoice,
+            groups: cadenceGroups,
+          },
+        ];
       },
-    };
+    );
     const page = await this.metronomeClientService.listInvoicesFirstPage({
-      contractId: operation.metronomeContractId,
-      customerId: operation.metronomeCustomerId,
+      contractId: metronomeContractId,
+      customerId: metronomeCustomerId,
       endingBefore: endingBefore.toISOString(),
       startingOn: startingAt.toISOString(),
     });
-    const paidReceipt = matchExactPaidMetronomeInvoice(page, expected);
+    const paidInvoiceGroups = invoiceGroups.flatMap(({ expected, groups }) => {
+      const receipt = matchExactPaidMetronomeInvoice(page, expected);
 
-    if (paidReceipt !== null) {
-      const projection = this.createRenewalProjection(paidReceipt, groups);
+      return receipt === null ? [] : [{ expected, groups, receipt }];
+    });
+    let stripeProofError: unknown | null = null;
+    const verifiedPaidInvoiceGroups: typeof paidInvoiceGroups = [];
+    const verifiedPaymentReceipts: Array<
+      NonNullable<
+        ManagedEmailAcquisitionOperationEntity['paymentReceipts']
+      >[number]
+    > = [];
+
+    for (const paidInvoiceGroup of paidInvoiceGroups) {
+      const { expected, groups: paidGroups, receipt } = paidInvoiceGroup;
+
+      try {
+        await this.managedProviderStripeService.assertPaidExternalInvoice({
+          currency: operation.currency,
+          expectedAmountCents: expected.total,
+          expectedPaymentIntentId: receipt.externalPaymentId,
+          metronomeInvoiceId: receipt.invoiceId,
+          stripeInvoiceId: receipt.externalInvoiceId,
+          workspaceId,
+        });
+      } catch (error) {
+        stripeProofError ??= error;
+        continue;
+      }
+
+      const projection = this.createRenewalProjection([receipt], paidGroups);
+
+      verifiedPaymentReceipts.push({
+        externalInvoiceId: receipt.externalInvoiceId,
+        externalPaymentId: receipt.externalPaymentId,
+        metronomeInvoiceId: receipt.invoiceId,
+      });
+      const paymentReceipts = [...verifiedPaymentReceipts];
 
       await this.acquisitionOperationRepository.update(
         workspaceId,
         { id: operation.id },
         {
-          externalInvoiceId: paidReceipt.externalInvoiceId,
-          externalPaymentId: paidReceipt.externalPaymentId,
-          metronomeInvoiceId: paidReceipt.invoiceId,
+          paymentReceipts,
           paymentStatus: 'PAID',
           pendingRenewalProjection: projection,
         },
       );
+      operation.paymentReceipts = paymentReceipts;
       operation.pendingRenewalProjection = projection;
       await this.completePendingRenewalProjection(operation, projection);
-    } else if (
-      matchExactMetronomeInvoice(page, expected, 'PAYMENT_FAILED') !== null
-    ) {
-      await this.applyPaymentFailure(workspaceId, groups);
-      await this.acquisitionOperationRepository.update(
-        workspaceId,
-        { id: operation.id },
-        { paymentStatus: 'PAYMENT_FAILED' },
-      );
+      verifiedPaidInvoiceGroups.push(paidInvoiceGroup);
+    }
+
+    const failedGroups = invoiceGroups.flatMap(({ expected, groups }) =>
+      verifiedPaidInvoiceGroups.some(
+        (verified) => verified.expected === expected,
+      ) || matchExactMetronomeInvoice(page, expected, 'PAYMENT_FAILED') === null
+        ? []
+        : groups,
+    );
+
+    if (failedGroups.length > 0) {
+      await this.applyPaymentFailure(workspaceId, failedGroups);
     }
 
     await this.scheduleNextSubscriptionReconciliation(
@@ -277,6 +353,8 @@ export class ManagedEmailLifecycleService {
       mailboxes,
       now,
     );
+
+    return stripeProofError;
   }
 
   async cancelWarmupAtPeriodEnd(input: MailboxActionInput): Promise<void> {
@@ -654,6 +732,8 @@ export class ManagedEmailLifecycleService {
       const quantity = groupResources.length;
 
       return {
+        billingFrequency:
+          first.kind === 'domain' ? ('ANNUAL' as const) : ('MONTHLY' as const),
         endingBefore,
         line: {
           endingBefore: endingBefore.toISOString(),
@@ -672,15 +752,15 @@ export class ManagedEmailLifecycleService {
   }
 
   private createRenewalProjection(
-    receipt: NonNullable<ReturnType<typeof matchExactPaidMetronomeInvoice>>,
+    receipts: readonly PaidMetronomeInvoiceReceipt[],
     groups: RenewalGroup[],
   ): ManagedEmailRenewalProjection {
     return {
-      receipt: {
+      receipts: receipts.map((receipt) => ({
         externalInvoiceId: receipt.externalInvoiceId,
         externalPaymentId: receipt.externalPaymentId,
         metronomeInvoiceId: receipt.invoiceId,
-      },
+      })),
       resources: groups.flatMap((group) =>
         group.resources.map((renewal) => ({
           kind: renewal.kind,

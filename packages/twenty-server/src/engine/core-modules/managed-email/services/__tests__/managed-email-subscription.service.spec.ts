@@ -193,7 +193,7 @@ describe('ManagedEmailSubscriptionService', () => {
         aliases: [],
         fiatCreditType: {
           id: '123e4567-e89b-42d3-a456-426614174060',
-          name: 'USD',
+          name: 'USD (cents)',
         },
         id: quote.metronomeRateCardId,
       }),
@@ -459,7 +459,7 @@ describe('ManagedEmailSubscriptionService', () => {
     ).toHaveBeenCalledTimes(1);
   });
 
-  it('projects only one exact paid Stripe invoice onto the operation', async () => {
+  it('projects every exact cadence-separated paid Stripe invoice', async () => {
     const {
       managedProviderStripeService,
       metronomeClient,
@@ -478,23 +478,10 @@ describe('ManagedEmailSubscriptionService', () => {
       workspaceId,
     });
 
-    const exactInvoice = {
-      contractId: '123e4567-e89b-42d3-a456-426614174051',
-      creditType: {
-        id: '123e4567-e89b-42d3-a456-426614174060',
-        name: 'USD',
-      },
-      customerId: '123e4567-e89b-42d3-a456-426614174050',
-      endingBefore: annualEnd,
-      externalInvoice: {
-        billingProvider: 'stripe',
-        externalPaymentId: 'pi_exact',
-        externalStatus: 'PAID',
-        invoiceId: 'in_exact',
-        invoicedTotal: quote.dueTodayCents,
-      },
-      id: 'metronome-invoice-exact',
-      lines: quote.lines.map((line, index) => ({
+    const makeLine = (index: number) => {
+      const line = quote.lines[index];
+
+      return {
         endingBefore: line.endingBefore,
         hasAppliedCommitOrCredit: false,
         isProrated: false,
@@ -505,79 +492,109 @@ describe('ManagedEmailSubscriptionService', () => {
         total: line.amountCents,
         type: 'subscription',
         unitPrice: line.unitPriceCents,
-      })),
-      startingAt: periodStart,
-      status: 'FINALIZED',
-      total: quote.dueTodayCents,
+      };
     };
+    const makeInvoice = ({
+      id,
+      lineIndexes,
+      paymentId,
+      stripeInvoiceId,
+    }: {
+      id: string;
+      lineIndexes: number[];
+      paymentId: string;
+      stripeInvoiceId: string;
+    }) => {
+      const lines = lineIndexes.map(makeLine);
+      const total = lines.reduce((sum, line) => sum + line.total, 0);
+
+      return {
+        contractId: '123e4567-e89b-42d3-a456-426614174051',
+        creditType: {
+          id: '123e4567-e89b-42d3-a456-426614174060',
+          name: 'USD (cents)',
+        },
+        customerId: '123e4567-e89b-42d3-a456-426614174050',
+        endingBefore: periodStart,
+        externalInvoice: {
+          billingProvider: 'stripe',
+          externalPaymentId: paymentId,
+          externalStatus: 'PAID',
+          invoiceId: stripeInvoiceId,
+          invoicedTotal: total,
+        },
+        id,
+        lines,
+        startingAt: periodStart,
+        status: 'FINALIZED',
+        total,
+      };
+    };
+    const annualInvoice = makeInvoice({
+      id: 'metronome-invoice-annual',
+      lineIndexes: [0],
+      paymentId: 'pi_annual',
+      stripeInvoiceId: 'in_annual',
+    });
+    const monthlyInvoice = makeInvoice({
+      id: 'metronome-invoice-monthly',
+      lineIndexes: [1, 2],
+      paymentId: 'pi_monthly',
+      stripeInvoiceId: 'in_monthly',
+    });
+
     metronomeClient.listInvoicesFirstPage
       .mockResolvedValueOnce({
         hasNextPage: false,
-        invoices: [
-          {
-            ...exactInvoice,
-            id: 'unrelated-paid-invoice',
-            lines: exactInvoice.lines.map((line, index) =>
-              index === 0
-                ? {
-                    ...line,
-                    productId: '123e4567-e89b-42d3-a456-426614174099',
-                  }
-                : line,
-            ),
-          },
-        ],
+        invoices: [monthlyInvoice],
       })
       .mockResolvedValueOnce({
         hasNextPage: false,
-        invoices: [exactInvoice],
+        invoices: [annualInvoice, monthlyInvoice],
       });
 
     await expect(
       service.reconcilePayment({ operationId, workspaceId }),
     ).resolves.toMatchObject({ state: 'PAYMENT_PENDING' });
-    expect(persisted.get(operationId)?.externalInvoiceId).toBeNull();
+    expect(persisted.get(operationId)?.paymentReceipts).toBeNull();
 
     await expect(
       service.reconcilePayment({ operationId, workspaceId }),
     ).resolves.toMatchObject({
-      externalInvoiceId: 'in_exact',
-      externalPaymentId: 'pi_exact',
-      metronomeInvoiceId: 'metronome-invoice-exact',
+      paymentReceipts: [
+        {
+          externalInvoiceId: 'in_annual',
+          externalPaymentId: 'pi_annual',
+          metronomeInvoiceId: 'metronome-invoice-annual',
+        },
+        {
+          externalInvoiceId: 'in_monthly',
+          externalPaymentId: 'pi_monthly',
+          metronomeInvoiceId: 'metronome-invoice-monthly',
+        },
+      ],
       paymentStatus: 'PAID',
       state: 'PAYMENT_PAID',
     });
-    expect(persisted.get(operationId)?.correlatedSubscriptionLines).toEqual(
-      exactInvoice.lines.map(
-        ({
-          endingBefore,
-          isProrated,
-          productId,
-          quantity,
-          startingAt,
-          subscriptionId,
-          total,
-          unitPrice,
-        }) => ({
-          endingBefore,
-          isProrated,
-          productId,
-          quantity,
-          startingAt,
-          subscriptionId,
-          total,
-          unitPrice,
-        }),
-      ),
-    );
     expect(
       managedProviderStripeService.assertPaidExternalInvoice,
-    ).toHaveBeenCalledWith({
+    ).toHaveBeenNthCalledWith(1, {
       currency: 'USD',
-      expectedAmountCents: quote.dueTodayCents,
-      expectedPaymentIntentId: 'pi_exact',
-      metronomeInvoiceId: 'metronome-invoice-exact',
-      stripeInvoiceId: 'in_exact',
+      expectedAmountCents: quote.lines[0].amountCents,
+      expectedPaymentIntentId: 'pi_annual',
+      metronomeInvoiceId: 'metronome-invoice-annual',
+      stripeInvoiceId: 'in_annual',
+      workspaceId,
+    });
+    expect(
+      managedProviderStripeService.assertPaidExternalInvoice,
+    ).toHaveBeenNthCalledWith(2, {
+      currency: 'USD',
+      expectedAmountCents:
+        quote.lines[1].amountCents + quote.lines[2].amountCents,
+      expectedPaymentIntentId: 'pi_monthly',
+      metronomeInvoiceId: 'metronome-invoice-monthly',
+      stripeInvoiceId: 'in_monthly',
       workspaceId,
     });
   });

@@ -8,6 +8,7 @@ import { type ManagedEmailProductKey } from 'src/engine/core-modules/managed-ema
 import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
+  type ManagedEmailPaymentReceipt,
   type ManagedEmailResourceSnapshot,
   type ManagedEmailProviderReceipt,
   type ManagedEmailRenewalProjection,
@@ -687,18 +688,48 @@ const validateCorrelatedSubscriptionLines = (
 
   return value as readonly ManagedEmailCorrelatedSubscriptionLine[];
 };
+const validatePaymentReceipts = (
+  value: unknown,
+): readonly ManagedEmailPaymentReceipt[] => {
+  assertArray(value, MAX_COLLECTION_ITEMS);
+  if (value.length === 0) fail();
+
+  const externalInvoiceIds = new Set<string>();
+  const externalPaymentIds = new Set<string>();
+  const metronomeInvoiceIds = new Set<string>();
+
+  for (const receipt of value) {
+    assertRecord(receipt, [
+      'externalInvoiceId',
+      'externalPaymentId',
+      'metronomeInvoiceId',
+    ]);
+    assertString(receipt.externalInvoiceId, MAX_IDENTIFIER_LENGTH);
+    assertString(receipt.externalPaymentId, MAX_IDENTIFIER_LENGTH);
+    assertString(receipt.metronomeInvoiceId, MAX_IDENTIFIER_LENGTH);
+
+    if (
+      externalInvoiceIds.has(receipt.externalInvoiceId as string) ||
+      externalPaymentIds.has(receipt.externalPaymentId as string) ||
+      metronomeInvoiceIds.has(receipt.metronomeInvoiceId as string)
+    ) {
+      fail();
+    }
+    externalInvoiceIds.add(receipt.externalInvoiceId as string);
+    externalPaymentIds.add(receipt.externalPaymentId as string);
+    metronomeInvoiceIds.add(receipt.metronomeInvoiceId as string);
+  }
+
+  assertBoundedJson(value);
+
+  return value as readonly ManagedEmailPaymentReceipt[];
+};
+
 const validateRenewalProjection = (
   value: unknown,
 ): ManagedEmailRenewalProjection => {
-  assertRecord(value, ['receipt', 'resources']);
-  assertRecord(value.receipt, [
-    'externalInvoiceId',
-    'externalPaymentId',
-    'metronomeInvoiceId',
-  ]);
-  assertString(value.receipt.externalInvoiceId, MAX_IDENTIFIER_LENGTH);
-  assertString(value.receipt.externalPaymentId, MAX_IDENTIFIER_LENGTH);
-  assertString(value.receipt.metronomeInvoiceId, MAX_IDENTIFIER_LENGTH);
+  assertRecord(value, ['receipts', 'resources']);
+  validatePaymentReceipts(value.receipts);
 
   assertArray(value.resources, MAX_COLLECTION_ITEMS);
   if (value.resources.length === 0) {
@@ -750,6 +781,10 @@ export const managedEmailExpectedLineItemsTransformer = requiredTransformer(
 
 export const managedEmailCorrelatedSubscriptionLinesTransformer =
   nullableTransformer(validateCorrelatedSubscriptionLines);
+
+export const managedEmailPaymentReceiptsTransformer = nullableTransformer(
+  validatePaymentReceipts,
+);
 
 export const managedEmailNullableRenewalProjectionTransformer =
   nullableTransformer(validateRenewalProjection);

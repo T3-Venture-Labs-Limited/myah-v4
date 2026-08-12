@@ -579,58 +579,74 @@ export class MetronomeClientService {
         customer_id: input.customerId,
       }),
     );
-    const edits = response.data.filter(
+    const matchesInput = (edit: (typeof response.data)[number]): boolean => {
+      const addedSubscriptions = edit.add_subscriptions;
+
+      if (addedSubscriptions?.length !== 1 || !edit.id.trim()) {
+        return false;
+      }
+
+      const subscription = addedSubscriptions[0];
+      const quantitySchedule = subscription.quantity_schedule;
+      const actualRounding = subscription.proration.rounding;
+      const expectedRounding = input.proration.rounding;
+      const roundingMatches =
+        expectedRounding === undefined
+          ? actualRounding === undefined
+          : actualRounding?.decimal_places === expectedRounding.decimalPlaces &&
+            actualRounding.rounding_method === expectedRounding.roundingMethod;
+      const endingMatches =
+        input.endingBefore === undefined
+          ? subscription.ending_before === undefined
+          : subscription.ending_before !== undefined &&
+            Date.parse(subscription.ending_before) ===
+              Date.parse(input.endingBefore);
+
+      return (
+        !!subscription.id?.trim() &&
+        subscription.collection_schedule === 'ADVANCE' &&
+        subscription.quantity_management_mode === 'QUANTITY_ONLY' &&
+        Date.parse(subscription.starting_at) === Date.parse(input.startingAt) &&
+        endingMatches &&
+        subscription.subscription_rate.billing_frequency ===
+          input.billingFrequency &&
+        subscription.subscription_rate.product.id === input.productId &&
+        subscription.proration.invoice_behavior ===
+          input.proration.invoiceBehavior &&
+        subscription.proration.is_prorated === input.proration.isProrated &&
+        roundingMatches &&
+        quantitySchedule.length === 1 &&
+        quantitySchedule[0].quantity === input.quantity &&
+        Date.parse(quantitySchedule[0].starting_at) ===
+          Date.parse(input.startingAt)
+      );
+    };
+    const keyedEdits = response.data.filter(
       ({ uniqueness_key }) => uniqueness_key === input.uniquenessKey,
     );
+    const structuralMatches = response.data.filter(matchesInput);
+    const matchingEdits =
+      keyedEdits.length === 0
+        ? structuralMatches
+        : keyedEdits.filter(matchesInput);
 
-    if (edits.length === 0) {
-      return null;
-    }
-    const edit = edits[0];
-    const addedSubscriptions = edit?.add_subscriptions;
-
+    if (keyedEdits.length === 0 && matchingEdits.length === 0) return null;
     if (
-      edits.length !== 1 ||
-      edit === undefined ||
-      addedSubscriptions?.length !== 1
+      matchingEdits.length !== 1 ||
+      (keyedEdits.length > 0 && keyedEdits.length !== 1) ||
+      (keyedEdits.length === 0 &&
+        matchingEdits[0].uniqueness_key !== undefined &&
+        matchingEdits[0].uniqueness_key !== null)
     ) {
       throw new Error('Metronome subscription recovery mismatch');
     }
 
-    const subscription = addedSubscriptions[0];
-    const quantitySchedule = subscription.quantity_schedule;
-    const actualRounding = subscription.proration.rounding;
-    const expectedRounding = input.proration.rounding;
-    const roundingMatches =
-      expectedRounding === undefined
-        ? actualRounding === undefined
-        : actualRounding?.decimal_places === expectedRounding.decimalPlaces &&
-          actualRounding.rounding_method === expectedRounding.roundingMethod;
-    const endingMatches =
-      input.endingBefore === undefined
-        ? subscription.ending_before === undefined
-        : subscription.ending_before !== undefined &&
-          Date.parse(subscription.ending_before) ===
-            Date.parse(input.endingBefore);
+    const edit = matchingEdits[0];
+    const subscription = edit.add_subscriptions?.[0];
 
     if (
-      !edit.id.trim() ||
-      !subscription.id?.trim() ||
-      subscription.collection_schedule !== 'ADVANCE' ||
-      subscription.quantity_management_mode !== 'QUANTITY_ONLY' ||
-      Date.parse(subscription.starting_at) !== Date.parse(input.startingAt) ||
-      !endingMatches ||
-      subscription.subscription_rate.billing_frequency !==
-        input.billingFrequency ||
-      subscription.subscription_rate.product.id !== input.productId ||
-      subscription.proration.invoice_behavior !==
-        input.proration.invoiceBehavior ||
-      subscription.proration.is_prorated !== input.proration.isProrated ||
-      !roundingMatches ||
-      quantitySchedule.length !== 1 ||
-      quantitySchedule[0].quantity !== input.quantity ||
-      Date.parse(quantitySchedule[0].starting_at) !==
-        Date.parse(input.startingAt)
+      subscription?.id?.trim() === undefined ||
+      subscription.id.trim() === ''
     ) {
       throw new Error('Metronome subscription recovery mismatch');
     }

@@ -7,6 +7,7 @@ import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
+import { METRONOME_USD_CREDIT_TYPE_NAME } from 'src/engine/core-modules/managed-provider-billing/constants/metronome-workspace-alias-prefix.constant';
 import { MetronomeClientService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-client.service';
 import {
   MetronomeClientException,
@@ -14,7 +15,7 @@ import {
 } from 'src/engine/core-modules/managed-provider-billing/metronome-client.exception';
 import { type MetronomeSubscriptionReceipt } from 'src/engine/core-modules/managed-provider-billing/types/metronome-subscription.type';
 import { MetronomeWorkspaceCustomerService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-workspace-customer.service';
-import { matchExactPaidMetronomeInvoice } from 'src/engine/core-modules/managed-provider-billing/utils/match-exact-paid-metronome-invoice.util';
+import { matchExactPaidMetronomeInvoices } from 'src/engine/core-modules/managed-provider-billing/utils/match-exact-paid-metronome-invoice.util';
 import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
 
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
@@ -107,8 +108,7 @@ export class ManagedEmailSubscriptionService {
       currency: 'USD',
       expectedAmountCents: String(input.quote.dueTodayCents),
       expectedLineItems,
-      externalInvoiceId: null,
-      externalPaymentId: null,
+      paymentReceipts: null,
       idempotencyKey: input.idempotencyKey,
       metronomeContractId: null,
       metronomeCustomerId: null,
@@ -317,10 +317,11 @@ export class ManagedEmailSubscriptionService {
       rateCard.id !== operation.metronomeRateCardId ||
       rateCard.fiatCreditType === null ||
       rateCard.fiatCreditType.id.trim() === '' ||
-      rateCard.fiatCreditType.name !== 'USD'
+      rateCard.fiatCreditType.name !== METRONOME_USD_CREDIT_TYPE_NAME
     ) {
       throw new Error('Managed email payment correlation is incomplete');
     }
+    const fiatCreditType = rateCard.fiatCreditType;
 
     const page = await this.metronomeClientService.listInvoicesFirstPage({
       contractId,
@@ -339,38 +340,77 @@ export class ManagedEmailSubscriptionService {
         total: line.totalCents,
         unitPrice: line.unitPriceCents,
       }));
-    const receipt = matchExactPaidMetronomeInvoice(page, {
-      contractId,
-      customerId,
-      endingBefore: operation.servicePeriodEnd.toISOString(),
-      lines: correlatedSubscriptionLines,
-      startingAt: operation.servicePeriodStart.toISOString(),
-      total: Number(operation.expectedAmountCents),
-      usdRateCardProof: {
-        contractId,
-        fiatCreditTypeId: rateCard.fiatCreditType.id,
-        fiatCreditTypeName: rateCard.fiatCreditType.name,
-        rateCardId: rateCard.id,
-      },
-    });
+    const expectedInvoices = (['ANNUAL', 'MONTHLY'] as const).flatMap(
+      (billingFrequency) => {
+        const lineIndexes = operation.expectedLineItems.flatMap((line, index) =>
+          line.billingFrequency === billingFrequency ? [index] : [],
+        );
 
-    if (receipt === null) {
+        if (lineIndexes.length === 0) return [];
+        const expectedLines = lineIndexes.map(
+          (index) => correlatedSubscriptionLines[index],
+        );
+        const persistedLines = lineIndexes.map(
+          (index) => operation.expectedLineItems[index],
+        );
+
+        return [
+          {
+            contractId,
+            customerId,
+            endingBefore: new Date(
+              Math.max(
+                ...persistedLines.map(({ periodEnd }) => Date.parse(periodEnd)),
+              ),
+            ).toISOString(),
+            lines: expectedLines,
+            startingAt: new Date(
+              Math.min(
+                ...persistedLines.map(({ periodStart }) =>
+                  Date.parse(periodStart),
+                ),
+              ),
+            ).toISOString(),
+            total: expectedLines.reduce((sum, line) => sum + line.total, 0),
+            usdRateCardProof: {
+              contractId,
+              fiatCreditTypeId: fiatCreditType.id,
+              fiatCreditTypeName: fiatCreditType.name,
+              rateCardId: rateCard.id,
+            },
+          },
+        ];
+      },
+    );
+    if (
+      expectedInvoices.reduce((sum, invoice) => sum + invoice.total, 0) !==
+      Number(operation.expectedAmountCents)
+    ) {
+      throw new Error('Managed email payment correlation is incomplete');
+    }
+    const receipts = matchExactPaidMetronomeInvoices(page, expectedInvoices);
+
+    if (receipts === null) {
       return operation;
     }
-    await this.managedProviderStripeService.assertPaidExternalInvoice({
-      currency: operation.currency,
-      expectedAmountCents: Number(operation.expectedAmountCents),
-      expectedPaymentIntentId: receipt.externalPaymentId,
-      metronomeInvoiceId: receipt.invoiceId,
-      stripeInvoiceId: receipt.externalInvoiceId,
-      workspaceId,
-    });
+    for (const [index, receipt] of receipts.entries()) {
+      await this.managedProviderStripeService.assertPaidExternalInvoice({
+        currency: operation.currency,
+        expectedAmountCents: expectedInvoices[index].total,
+        expectedPaymentIntentId: receipt.externalPaymentId,
+        metronomeInvoiceId: receipt.invoiceId,
+        stripeInvoiceId: receipt.externalInvoiceId,
+        workspaceId,
+      });
+    }
 
     const patch = {
       correlatedSubscriptionLines,
-      externalInvoiceId: receipt.externalInvoiceId,
-      externalPaymentId: receipt.externalPaymentId,
-      metronomeInvoiceId: receipt.invoiceId,
+      paymentReceipts: receipts.map((receipt) => ({
+        externalInvoiceId: receipt.externalInvoiceId,
+        externalPaymentId: receipt.externalPaymentId,
+        metronomeInvoiceId: receipt.invoiceId,
+      })),
       paymentStatus: 'PAID',
       state: 'PAYMENT_PAID',
     };
