@@ -98,7 +98,9 @@ RUN apk add --no-cache \
     jq
 
 COPY ./packages/twenty-docker/twenty/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN --mount=type=bind,source=packages/twenty-docker/twenty/entrypoint.test.sh,target=/app/entrypoint.test.sh,ro \
+    chmod +x /app/entrypoint.sh \
+ && /bin/sh /app/entrypoint.test.sh
 WORKDIR /app/packages/twenty-server
 
 ARG APP_VERSION

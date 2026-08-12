@@ -20,6 +20,10 @@ setup_and_migrate_db() {
         echo "Warning: Failed to flush cache before upgrade, but continuing startup..."
     fi
 
+    if [ "$has_schema" != "f" ]; then
+        yarn database:migrate:prod --force --include-slow
+    fi
+
     if ! yarn command:prod upgrade; then
         echo "Error: Failed to upgrade database. Aborting startup."
         exit 1
