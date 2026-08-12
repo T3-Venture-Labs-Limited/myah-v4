@@ -4,20 +4,22 @@ import {
 } from 'twenty-shared/metadata';
 import {
   FieldMetadataType,
-  ViewFilterOperand,
   ViewOpenRecordIn,
   ViewType,
 } from 'twenty-shared/types';
+import { SystemPermissionFlag } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
 import { v5 as uuidv5 } from 'uuid';
 
 import type { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import type { FlatFieldPermission } from 'src/engine/metadata-modules/flat-field-permission/types/flat-field-permission.type';
 import type { FlatObjectPermission } from 'src/engine/metadata-modules/flat-object-permission/types/flat-object-permission.type';
+import type { FlatRolePermissionFlag } from 'src/engine/metadata-modules/flat-role-permission-flag/types/flat-role-permission-flag.type';
 
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
+import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { buildMyahStandardMetadataContract } from './myah-standard-metadata-contract.fixture';
 
 const contract = buildMyahStandardMetadataContract();
@@ -67,6 +69,7 @@ const ROLE_UNIVERSAL_IDENTIFIER_NAMESPACE =
 const mapsWithPermissions = result.allFlatEntityMaps as unknown as {
   flatObjectPermissionMaps: FlatEntityMaps<FlatObjectPermission>;
   flatFieldPermissionMaps: FlatEntityMaps<FlatFieldPermission>;
+  flatRolePermissionFlagMaps: FlatEntityMaps<FlatRolePermissionFlag>;
 };
 
 describe('Myah standard metadata contract', () => {
@@ -482,7 +485,21 @@ describe('Myah standard metadata contract', () => {
     expect(unsafeMembersWidget).toBeUndefined();
   });
 
-  it('materializes the Campaign information, native tabs, and operations contract', () => {
+  it('materializes the Campaign Home, native tabs, and operations contract', () => {
+    expect(MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG).toMatchObject({
+      defaultTabUniversalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+      tabs: {
+        home: {
+          universalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+          title: 'Home',
+          position: 10,
+        },
+      },
+    });
+    expect(MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.outreach).toMatchObject({
+      title: 'Outreach',
+      position: 20,
+    });
     const fields = Object.values(
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     ).filter(isDefined);
@@ -760,7 +777,6 @@ describe('Myah standard metadata contract', () => {
         }),
       ]),
     );
-
     const campaignPageLayout =
       result.allFlatEntityMaps.flatPageLayoutMaps.byUniversalIdentifier[
         'ad261155-3c89-436d-8898-3e52d8b37632'
@@ -779,7 +795,7 @@ describe('Myah standard metadata contract', () => {
       objectMetadataUniversalIdentifier:
         MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
       defaultTabToFocusOnMobileAndSidePanelUniversalIdentifier:
-        '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
+        '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
     });
     if (
       overviewFieldsWidget?.configuration.configurationType !==
@@ -861,7 +877,7 @@ describe('Myah standard metadata contract', () => {
         expect.arrayContaining([
           expect.objectContaining({
             universalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
-            title: 'Campaign information',
+            title: 'Home',
           }),
           expect.objectContaining({
             universalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
@@ -988,6 +1004,17 @@ describe('Myah standard metadata contract', () => {
     const fieldPermissions = Object.values(
       mapsWithPermissions.flatFieldPermissionMaps.byUniversalIdentifier,
     ).filter(isDefined);
+    const rolePermissionFlags = Object.values(
+      mapsWithPermissions.flatRolePermissionFlagMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+
+    expect(rolePermissionFlags).toContainEqual(
+      expect.objectContaining({
+        roleUniversalIdentifier: CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+        permissionFlagUniversalIdentifier: SystemPermissionFlag.WORKFLOWS,
+      }),
+    );
+
     const writableCreatorOpsObjectUniversalIdentifiers = [
       MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
       MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
@@ -1211,73 +1238,113 @@ describe('Myah standard metadata contract', () => {
     }
   });
 
-  it('keeps Campaign-owned Workflows out of the General Automations view', () => {
+  it('keeps All Workflows isolated to General Automations', () => {
     const viewFields =
       result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier;
-    const viewFilters =
-      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier;
+    const workflowFields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (field) =>
+          field.objectMetadataUniversalIdentifier ===
+            STANDARD_OBJECTS.workflow.universalIdentifier &&
+          field.name === 'outreachCampaign',
+      );
+    const allWorkflowFilters = Object.values(
+      result.allFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
+    )
+      .filter(isDefined)
+      .filter(
+        (filter) =>
+          filter.viewUniversalIdentifier ===
+          STANDARD_OBJECTS.workflow.views.allWorkflows.universalIdentifier,
+      );
 
-    expect(viewFields['9ecf92f8-6702-49bb-a25f-1d6e4ade47d8']).toMatchObject({
-      viewUniversalIdentifier:
-        STANDARD_OBJECTS.workflow.views.allWorkflows.universalIdentifier,
-      fieldMetadataUniversalIdentifier:
-        STANDARD_OBJECTS.workflow.fields.campaign.universalIdentifier,
-      isVisible: false,
-    });
-    expect(viewFilters['e505cfd8-a195-4b9a-997c-6c8208394a37']).toMatchObject({
-      viewUniversalIdentifier:
-        STANDARD_OBJECTS.workflow.views.allWorkflows.universalIdentifier,
-      fieldMetadataUniversalIdentifier:
-        STANDARD_OBJECTS.workflow.fields.campaign.universalIdentifier,
-      operand: ViewFilterOperand.IS_EMPTY,
-      value: '',
-    });
+    expect(viewFields['9ecf92f8-6702-49bb-a25f-1d6e4ade47d8']).toBeUndefined();
+    expect(workflowFields).toHaveLength(1);
+    expect(allWorkflowFilters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            workflowFields[0]?.universalIdentifier,
+          operand: 'IS_EMPTY',
+          value: JSON.stringify([]),
+        }),
+      ]),
+    );
   });
 
-  it('materializes Campaign Workflow ownership and copy provenance', () => {
-    const fields =
-      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier;
-    const campaign = fields['f173bd4d-0e7e-410b-876e-7c2dcf768a99'];
-    const sourceWorkflowId = fields['0a178c94-60ff-48e0-9982-64318f6ca3fa'];
-    const workflows = fields['a58a03e6-4c1d-4b0c-b40f-f3a78f6b6c16'];
-    expect(campaign).toMatchObject({
+  it('materializes the one-per-Campaign Outreach Workflow association', () => {
+    const fields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const outreachCampaign = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          STANDARD_OBJECTS.workflow.universalIdentifier &&
+        field.name === 'outreachCampaign',
+    );
+    const outreachWorkflows = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
+        field.name === 'outreachWorkflows',
+    );
+    const outreachCampaignUniqueIndex =
+      result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier[
+        STANDARD_OBJECTS.workflow.indexes.outreachCampaignUniqueIndex
+          .universalIdentifier
+      ];
+
+    expect(outreachCampaign).toMatchObject({
       objectMetadataUniversalIdentifier:
         STANDARD_OBJECTS.workflow.universalIdentifier,
-      name: 'campaign',
+      name: 'outreachCampaign',
       type: FieldMetadataType.RELATION,
       isNullable: true,
+      isUnique: true,
       isUIEditable: false,
       relationTargetObjectMetadataUniversalIdentifier:
         MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
-      relationTargetFieldMetadataUniversalIdentifier:
-        'a58a03e6-4c1d-4b0c-b40f-f3a78f6b6c16',
       universalSettings: expect.objectContaining({
         relationType: 'MANY_TO_ONE',
-        joinColumnName: 'campaignId',
+        joinColumnName: 'outreachCampaignId',
         onDelete: 'SET_NULL',
       }),
     });
-    expect(workflows).toMatchObject({
+    expect(outreachWorkflows).toMatchObject({
       objectMetadataUniversalIdentifier:
         MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
-      name: 'workflows',
+      name: 'outreachWorkflows',
       type: FieldMetadataType.RELATION,
       relationTargetObjectMetadataUniversalIdentifier:
         STANDARD_OBJECTS.workflow.universalIdentifier,
       relationTargetFieldMetadataUniversalIdentifier:
-        'f173bd4d-0e7e-410b-876e-7c2dcf768a99',
+        outreachCampaign?.universalIdentifier,
       universalSettings: expect.objectContaining({
         relationType: 'ONE_TO_MANY',
       }),
     });
-    expect(sourceWorkflowId).toMatchObject({
+    expect(outreachCampaignUniqueIndex).toMatchObject({
       objectMetadataUniversalIdentifier:
         STANDARD_OBJECTS.workflow.universalIdentifier,
-      name: 'sourceWorkflowId',
-      type: FieldMetadataType.UUID,
-      isNullable: true,
-      isUIEditable: false,
-      relationTargetObjectMetadataUniversalIdentifier: null,
+      isUnique: true,
+      indexWhereClause: '"deletedAt" IS NULL',
+      universalFlatIndexFieldMetadatas: [
+        expect.objectContaining({
+          fieldMetadataUniversalIdentifier:
+            outreachCampaign?.universalIdentifier,
+        }),
+      ],
     });
+    expect(
+      fields.some(
+        (field) =>
+          field.objectMetadataUniversalIdentifier ===
+            STANDARD_OBJECTS.workflow.universalIdentifier &&
+          (field.name === 'campaign' || field.name === 'sourceWorkflowId'),
+      ),
+    ).toBe(false);
   });
 });

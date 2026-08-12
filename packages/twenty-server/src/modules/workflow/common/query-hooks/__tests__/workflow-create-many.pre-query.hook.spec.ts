@@ -1,31 +1,15 @@
-import {
-  type CreateManyResolverArgs,
-  type CreateOneResolverArgs,
-} from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
+import { type CreateManyResolverArgs } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { WorkflowCreateManyPreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-create-many.pre-query.hook';
-import { WorkflowCampaignAssignmentService } from 'src/modules/workflow/common/services/workflow-campaign-assignment.service';
+import { WorkflowOutreachAssociationGuardService } from 'src/modules/workflow/common/services/workflow-outreach-association-guard.service';
 import {
   type WorkflowWorkspaceEntity,
   WorkflowStatus,
 } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 
 describe('WorkflowCreateManyPreQueryHook', () => {
-  const workflowCampaignAssignmentService = {
-    prepareCreateOne: jest.fn(
-      async (
-        _authContext: WorkspaceAuthContext,
-        _objectName: string,
-        payload: CreateOneResolverArgs<WorkflowWorkspaceEntity>,
-      ) => payload,
-    ),
-  } as unknown as WorkflowCampaignAssignmentService;
-  const WorkflowCreateManyPreQueryHookWithAssignmentService =
-    WorkflowCreateManyPreQueryHook as unknown as new (
-      assignmentService: WorkflowCampaignAssignmentService,
-    ) => WorkflowCreateManyPreQueryHook;
-  const hook = new WorkflowCreateManyPreQueryHookWithAssignmentService(
-    workflowCampaignAssignmentService,
+  const hook = new WorkflowCreateManyPreQueryHook(
+    new WorkflowOutreachAssociationGuardService(),
   );
   const authContext = {} as WorkspaceAuthContext;
   const objectName = 'workflow';
@@ -123,31 +107,18 @@ describe('WorkflowCreateManyPreQueryHook', () => {
     expect(result.data).toEqual([]);
   });
 
-  it('validates ownership on every entry after stripping statuses', async () => {
-    jest
-      .mocked(workflowCampaignAssignmentService.prepareCreateOne)
-      .mockRejectedValueOnce(new Error('Campaign assignment is forbidden'));
-
+  it('rejects an Outreach association in every global create input', async () => {
     await expect(
-      hook.execute(authContext, objectName, {
-        data: [
-          {
-            campaignId: 'campaign-a',
-            sourceWorkflowId: 'general-source',
-            statuses: [WorkflowStatus.DRAFT],
-          } as WorkflowWorkspaceEntity,
-        ],
-        upsert: true,
-      }),
-    ).rejects.toThrow('Campaign assignment is forbidden');
-    expect(
-      workflowCampaignAssignmentService.prepareCreateOne,
-    ).toHaveBeenCalledWith(authContext, objectName, {
-      data: {
-        campaignId: 'campaign-a',
-        sourceWorkflowId: 'general-source',
-      },
-      upsert: true,
+      hook.execute(
+        authContext,
+        objectName,
+        buildPayload([
+          { name: 'General automation' },
+          { outreachCampaignId: 'campaign-a' },
+        ]),
+      ),
+    ).rejects.toMatchObject({
+      message: 'Outreach association is managed by Campaign Outreach',
     });
   });
 });

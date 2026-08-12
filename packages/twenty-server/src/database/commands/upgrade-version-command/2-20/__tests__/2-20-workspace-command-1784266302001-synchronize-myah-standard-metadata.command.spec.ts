@@ -219,6 +219,12 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
           .byUniversalIdentifier,
       ),
     ).not.toHaveLength(0);
+    expect(
+      Object.keys(
+        migrationInput.fromToAllFlatEntityMaps.flatRolePermissionFlagMaps.to
+          .byUniversalIdentifier,
+      ),
+    ).toHaveLength(1);
   });
   it('includes Task and Note target extensions in the desired migration slice', async () => {
     const { allFlatEntityMaps } =
@@ -373,18 +379,18 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         twentyStandardApplicationId: STANDARD_APPLICATION_ID,
         now: '2026-07-15T00:00:00.000Z',
       });
-    const companyUniversalIdentifier =
-      STANDARD_OBJECTS.company.universalIdentifier;
-    const currentCompany =
+    const workflowUniversalIdentifier =
+      STANDARD_OBJECTS.workflow.universalIdentifier;
+    const currentWorkflow =
       allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
-        companyUniversalIdentifier
+        workflowUniversalIdentifier
       ];
 
-    if (!isDefined(currentCompany)) {
-      throw new Error('Company object fixture is required');
+    if (!isDefined(currentWorkflow)) {
+      throw new Error('Workflow object fixture is required');
     }
 
-    currentCompany.labelSingular = 'Account';
+    currentWorkflow.labelSingular = 'Automation';
     delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
       MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
     ];
@@ -397,14 +403,14 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     const migrationInput =
       validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
-    const desiredCompany =
+    const desiredWorkflow =
       migrationInput.fromToAllFlatEntityMaps.flatObjectMetadataMaps.to
-        .byUniversalIdentifier[companyUniversalIdentifier];
+        .byUniversalIdentifier[workflowUniversalIdentifier];
 
-    expect(desiredCompany.labelSingular).toBe('Account');
+    expect(desiredWorkflow.labelSingular).toBe('Automation');
   });
 
-  it('syncs only the Myah-owned Workflow extensions and General Automations filter', async () => {
+  it('syncs the native Outreach Campaign relation and General Automations filter', async () => {
     await runOnWorkspace();
 
     const migrationInput =
@@ -427,12 +433,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
 
     expect(
       desiredFields[
-        STANDARD_OBJECTS.workflow.fields.campaign.universalIdentifier
-      ],
-    ).toBeDefined();
-    expect(
-      desiredFields[
-        STANDARD_OBJECTS.workflow.fields.sourceWorkflowId.universalIdentifier
+        STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier
       ],
     ).toBeDefined();
     expect(
@@ -448,10 +449,18 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     ).toBeDefined();
     expect(
       desiredViewFields['9ecf92f8-6702-49bb-a25f-1d6e4ade47d8'],
-    ).toBeDefined();
+    ).toBeUndefined();
     expect(
-      desiredViewFilters['e505cfd8-a195-4b9a-997c-6c8208394a37'],
-    ).toBeDefined();
+      desiredViewFilters[
+        STANDARD_OBJECTS.workflow.views.allWorkflows.viewFilters
+          .outreachCampaignIsEmpty.universalIdentifier
+      ],
+    ).toMatchObject({
+      fieldMetadataUniversalIdentifier:
+        STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier,
+      operand: 'IS_EMPTY',
+      value: JSON.stringify([]),
+    });
   });
   it('provides isolated retained standard objects as migration dependencies', async () => {
     const { allFlatEntityMaps } =

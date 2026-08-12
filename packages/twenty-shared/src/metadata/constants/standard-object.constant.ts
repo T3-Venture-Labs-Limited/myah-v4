@@ -2632,11 +2632,8 @@ export const STANDARD_OBJECTS = {
       updatedBy: {
         universalIdentifier: '3559831e-caf2-4eb5-9db1-b47bf968c774',
       },
-      campaign: {
-        universalIdentifier: 'f173bd4d-0e7e-410b-876e-7c2dcf768a99',
-      },
-      sourceWorkflowId: {
-        universalIdentifier: '0a178c94-60ff-48e0-9982-64318f6ca3fa',
+      outreachCampaign: {
+        universalIdentifier: '87fceb87-0c45-438f-ae9a-28c76da94197',
       },
       searchVector: {
         universalIdentifier: '20202020-535d-4ffa-b7f3-4fa0d5da1b7a',
@@ -2645,6 +2642,9 @@ export const STANDARD_OBJECTS = {
     indexes: {
       searchVectorGinIndex: {
         universalIdentifier: 'c7e64c55-eb0c-4b93-b076-5cfcf2e2e042',
+      },
+      outreachCampaignUniqueIndex: {
+        universalIdentifier: 'cb077549-3289-42b5-b1ce-226e7bcd8f9a',
       },
     },
     views: {
@@ -2669,13 +2669,10 @@ export const STANDARD_OBJECTS = {
           runs: {
             universalIdentifier: '20202020-af09-4a09-8a09-a0bcf10aa11f',
           },
-          campaign: {
-            universalIdentifier: '9ecf92f8-6702-49bb-a25f-1d6e4ade47d8',
-          },
         },
         viewFilters: {
-          campaignIsNull: {
-            universalIdentifier: 'e505cfd8-a195-4b9a-997c-6c8208394a37',
+          outreachCampaignIsEmpty: {
+            universalIdentifier: 'a2a698b7-1ba6-4850-a044-56d2c5f3d00d',
           },
         },
       },

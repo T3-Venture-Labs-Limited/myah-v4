@@ -12,6 +12,7 @@ module.exports = {
     './src/modules/search/graphql/**/*.{ts,tsx}',
     './src/modules/command-menu/graphql/**/*.{ts,tsx}',
     './src/modules/myah/inbox/graphql/**/*.{ts,tsx}',
+    './src/modules/myah-outreach/graphql/**/*.{ts,tsx}',
 
     '!./src/**/*.test.{ts,tsx}',
     '!./src/**/*.stories.{ts,tsx}',

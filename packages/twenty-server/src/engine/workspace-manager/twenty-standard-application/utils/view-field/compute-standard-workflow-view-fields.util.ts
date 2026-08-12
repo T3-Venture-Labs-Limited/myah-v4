@@ -80,17 +80,5 @@ export const computeStandardWorkflowViewFields = (
         size: 150,
       },
     }),
-    allWorkflowsCampaign: createStandardViewFieldFlatMetadata({
-      ...args,
-      objectName: 'workflow',
-      context: {
-        viewName: 'allWorkflows',
-        viewFieldName: 'campaign',
-        fieldName: 'campaign',
-        position: 6,
-        isVisible: false,
-        size: 150,
-      },
-    }),
   };
 };

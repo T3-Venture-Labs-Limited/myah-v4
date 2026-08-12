@@ -34,6 +34,38 @@ import { WorkflowVersionStepOperationsWorkspaceService } from 'src/modules/workf
 import { WorkflowVersionStepWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step.workspace-service';
 import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
 
+const remapWorkflowStepReferences = (
+  value: unknown,
+  sourceToClonedStepIdMap: ReadonlyMap<string, string>,
+): unknown => {
+  if (typeof value === 'string') {
+    let remappedValue = value;
+
+    for (const [sourceStepId, clonedStepId] of sourceToClonedStepIdMap) {
+      remappedValue = remappedValue.split(sourceStepId).join(clonedStepId);
+    }
+
+    return remappedValue;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      remapWorkflowStepReferences(item, sourceToClonedStepIdMap),
+    );
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        remapWorkflowStepReferences(item, sourceToClonedStepIdMap),
+      ]),
+    );
+  }
+
+  return value;
+};
+
 @Injectable()
 export class WorkflowVersionWorkspaceService {
   constructor(
@@ -160,15 +192,10 @@ export class WorkflowVersionWorkspaceService {
     workspaceId,
     workflowIdToDuplicate,
     workflowVersionIdToCopy,
-    workflowAssignment,
   }: {
     workspaceId: string;
     workflowIdToDuplicate: string;
     workflowVersionIdToCopy: string;
-    workflowAssignment?: {
-      campaignId: string;
-      sourceWorkflowId: string;
-    };
   }) {
     const authContext = buildSystemAuthContext(workspaceId);
 
@@ -212,39 +239,6 @@ export class WorkflowVersionWorkspaceService {
             );
           }
 
-          if (
-            isDefined(workflowAssignment) &&
-            isDefined(sourceWorkflow.campaignId)
-          ) {
-            throw new WorkflowVersionStepException(
-              'Source workflow is no longer a General Automation',
-              WorkflowVersionStepExceptionCode.INVALID_REQUEST,
-            );
-          }
-
-          if (isDefined(workflowAssignment)) {
-            const campaignRepository =
-              await this.globalWorkspaceOrmManager.getRepository<{
-                id: string;
-              }>(workspaceId, 'campaign', {
-                shouldBypassPermissionChecks: true,
-              });
-            const campaign = await campaignRepository.findOne(
-              {
-                where: { id: workflowAssignment.campaignId },
-                lock: { mode: 'pessimistic_write' },
-              },
-              queryRunner.manager,
-            );
-
-            if (isDefined(campaign) === false) {
-              throw new WorkflowVersionStepException(
-                'Campaign not found',
-                WorkflowVersionStepExceptionCode.NOT_FOUND,
-              );
-            }
-          }
-
           const sourceVersion = await workflowVersionRepository.findOne(
             {
               where: {
@@ -281,7 +275,6 @@ export class WorkflowVersionWorkspaceService {
               name: `${sourceWorkflow.name} (Duplicate)`,
               statuses: [WorkflowStatus.DRAFT],
               position: workflowPosition,
-              ...workflowAssignment,
             },
             queryRunner.manager,
           );
@@ -343,6 +336,13 @@ export class WorkflowVersionWorkspaceService {
                 ),
               }
             : undefined;
+
+          if (isDefined(remappedTrigger)) {
+            remappedTrigger.settings = remapWorkflowStepReferences(
+              newTrigger.settings,
+              oldToNewIdMap,
+            ) as typeof remappedTrigger.settings;
+          }
           const remappedSteps: WorkflowAction[] = sourceToClonedPairs.map(
             ({ source, duplicated }) => {
               const remappedStep = {
@@ -351,6 +351,10 @@ export class WorkflowVersionWorkspaceService {
                   (oldId) => oldToNewIdMap.get(oldId) ?? oldId,
                 ),
               };
+              remappedStep.settings = remapWorkflowStepReferences(
+                duplicated.settings,
+                oldToNewIdMap,
+              ) as typeof remappedStep.settings;
 
               if (
                 source.type === WorkflowActionType.ITERATOR &&

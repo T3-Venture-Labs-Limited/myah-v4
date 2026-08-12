@@ -37,8 +37,8 @@ import { WorkflowVersionDeleteManyPreQueryHook } from 'src/modules/workflow/comm
 import { WorkflowVersionDeleteOnePreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-version-delete-one.pre-query.hook';
 import { WorkflowVersionUpdateManyPreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-version-update-many.pre-query.hook';
 import { WorkflowVersionUpdateOnePreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-version-update-one.pre-query.hook';
-import { WorkflowCampaignAssignmentService } from 'src/modules/workflow/common/services/workflow-campaign-assignment.service';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
+import { WorkflowOutreachAssociationGuardService } from 'src/modules/workflow/common/services/workflow-outreach-association-guard.service';
 import { WorkflowVersionValidationWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-version-validation.workspace-service';
 
 @Module({
@@ -54,7 +54,6 @@ import { WorkflowVersionValidationWorkspaceService } from 'src/modules/workflow/
     FeatureFlagModule,
   ],
   providers: [
-    WorkflowCampaignAssignmentService,
     WorkflowCreateOnePreQueryHook,
     WorkflowCreateManyPreQueryHook,
     WorkflowUpdateOnePreQueryHook,
@@ -78,12 +77,12 @@ import { WorkflowVersionValidationWorkspaceService } from 'src/modules/workflow/
     WorkflowCreateOnePostQueryHook,
     WorkflowCreateManyPostQueryHook,
     WorkflowVersionValidationWorkspaceService,
+    WorkflowOutreachAssociationGuardService,
     WorkflowCommonWorkspaceService,
     WorkflowDeleteManyPostQueryHook,
     WorkflowDeleteOnePostQueryHook,
     WorkflowDestroyOnePreQueryHook,
     WorkflowDestroyManyPreQueryHook,
   ],
-  exports: [WorkflowCampaignAssignmentService],
 })
 export class WorkflowQueryHookModule {}

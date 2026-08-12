@@ -4,28 +4,27 @@ import { type CreateOneResolverArgs } from 'src/engine/api/graphql/workspace-res
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
-import { WorkflowCampaignAssignmentService } from 'src/modules/workflow/common/services/workflow-campaign-assignment.service';
+import { WorkflowOutreachAssociationGuardService } from 'src/modules/workflow/common/services/workflow-outreach-association-guard.service';
 
 @WorkspaceQueryHook(`workflow.createOne`)
 export class WorkflowCreateOnePreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(
-    private readonly workflowCampaignAssignmentService: WorkflowCampaignAssignmentService,
+    private readonly workflowOutreachAssociationGuardService: WorkflowOutreachAssociationGuardService,
   ) {}
-
   async execute(
-    authContext: WorkspaceAuthContext,
-    objectName: string,
+    _authContext: WorkspaceAuthContext,
+    _objectName: string,
     payload: CreateOneResolverArgs<WorkflowWorkspaceEntity>,
   ): Promise<CreateOneResolverArgs<WorkflowWorkspaceEntity>> {
+    await this.workflowOutreachAssociationGuardService.assertNoOutreachAssociation(
+      payload.data,
+    );
+
     const { statuses: _statuses, ...dataWithoutStatuses } = payload.data;
 
-    return this.workflowCampaignAssignmentService.prepareCreateOne(
-      authContext,
-      objectName,
-      {
-        ...payload,
-        data: dataWithoutStatuses as WorkflowWorkspaceEntity,
-      },
-    );
+    return {
+      ...payload,
+      data: dataWithoutStatuses as WorkflowWorkspaceEntity,
+    };
   }
 }

@@ -47,6 +47,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
         '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
         'cd78ad8c-883a-4ce1-9b74-526adadb751d',
         '0d213a1a-e001-496c-970e-e692968cf17c',
+        '8d749a63-24d8-481b-9a10-d98d9b959db1',
         'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
       ].sort(),
       pageLayoutWidget: [
@@ -55,6 +56,7 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
         '9a05fd06-cf91-47a2-bbee-06cb4292f44d',
         '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392',
         'cdb1ad36-fcd3-4c6d-9b64-1df8d1c02a80',
+        'c8e6d1ae-8fa4-43df-95b4-94009c524632',
       ].sort(),
       view: [
         '6bfee1b9-d36a-4e41-9fc6-d413b4e8b746',
@@ -123,7 +125,11 @@ describe('SynchronizeMyahCampaignPageLayoutCommand', () => {
     }).toEqual({
       synchronizeExistingSelectedMetadata: true,
       deletionSelection: {
-        pageLayoutWidget: ['368b8c66-435d-4e5b-94b8-4d3f08fc283b'],
+        pageLayoutTab: ['1c137df3-a23f-477c-a890-fb40aecc40f7'],
+        pageLayoutWidget: [
+          '368b8c66-435d-4e5b-94b8-4d3f08fc283b',
+          '833783c1-7cc0-4993-a856-977f95e1e3b4',
+        ],
       },
     });
   });

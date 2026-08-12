@@ -8,7 +8,8 @@ describe('MYAH Campaign page layout', () => {
     const { influencers } =
       MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.influencers.widgets;
     expect(tabs.map(({ title }) => title)).toEqual([
-      'Campaign information',
+      'Home',
+      'Outreach',
       'Tasks',
       'Influencers',
       'Notes',
@@ -26,10 +27,10 @@ describe('MYAH Campaign page layout', () => {
     );
   });
 
-  it('keeps Creator Lists in Campaign information', () => {
+  it('keeps Creator Lists in Campaign Home', () => {
     expect(
-      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.overview.widgets
-        .creatorLists.title,
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.home.widgets.creatorLists
+        .title,
     ).toBe('Creator Lists');
   });
 });

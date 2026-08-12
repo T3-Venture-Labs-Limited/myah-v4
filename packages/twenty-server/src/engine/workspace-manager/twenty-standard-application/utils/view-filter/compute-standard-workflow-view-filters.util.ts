@@ -8,18 +8,16 @@ import {
 
 export const computeStandardWorkflowViewFilters = (
   args: Omit<CreateStandardViewFilterArgs<'workflow'>, 'context'>,
-): Record<string, FlatViewFilter> => {
-  return {
-    allWorkflowsCampaignIsNull: createStandardViewFilterFlatMetadata({
-      ...args,
-      objectName: 'workflow',
-      context: {
-        viewName: 'allWorkflows',
-        viewFilterName: 'campaignIsNull',
-        fieldName: 'campaign',
-        operand: ViewFilterOperand.IS_EMPTY,
-        value: '',
-      },
-    }),
-  };
-};
+): Record<string, FlatViewFilter> => ({
+  allWorkflowsOutreachCampaignIsEmpty: createStandardViewFilterFlatMetadata({
+    ...args,
+    objectName: 'workflow',
+    context: {
+      viewName: 'allWorkflows',
+      viewFilterName: 'outreachCampaignIsEmpty',
+      fieldName: 'outreachCampaign',
+      operand: ViewFilterOperand.IS_EMPTY,
+      value: JSON.stringify([]),
+    },
+  }),
+});

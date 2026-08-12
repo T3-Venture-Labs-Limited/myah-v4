@@ -36,6 +36,7 @@ export type CreateStandardMorphOrRelationFieldContext<
   targetFieldName: AllStandardObjectFieldName<T>;
   isNullable?: boolean;
   isUIEditable?: boolean;
+  isUnique?: boolean;
   defaultValue?: FieldMetadataDefaultValueForAnyType;
   settings: FieldMetadataSettings<F>;
   options?: FieldMetadataDefaultOption[] | FieldMetadataComplexOption[] | null;
@@ -66,6 +67,7 @@ export const createStandardRelationFieldFlatMetadata = <
     targetFieldName,
     isNullable = true,
     isUIEditable = true,
+    isUnique = false,
     defaultValue = null,
     settings,
     options: fieldOptions = null,
@@ -103,7 +105,7 @@ export const createStandardRelationFieldFlatMetadata = <
     isSystem: false,
     isSystemSideEffect: false,
     isNullable,
-    isUnique: false,
+    isUnique,
     isUIEditable,
     isLabelSyncedWithName: false,
     overrides: null,

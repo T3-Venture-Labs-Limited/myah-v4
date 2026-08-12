@@ -689,6 +689,9 @@ export const MYAH_STANDARD_OBJECTS = {
       workflows: {
         universalIdentifier: 'a58a03e6-4c1d-4b0c-b40f-f3a78f6b6c16',
       },
+      outreachWorkflows: {
+        universalIdentifier: '4ad8debc-6d8d-460c-8fb3-c77ea5712170',
+      },
       offers: { universalIdentifier: '1d33699f-76f3-5247-98b3-2de588543364' },
       outreachSequences: {
         universalIdentifier: '40b7c827-4699-5f99-bdb8-d8906dd948f5',

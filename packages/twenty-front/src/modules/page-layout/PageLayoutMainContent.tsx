@@ -1,7 +1,9 @@
 import { PageLayoutContent } from '@/page-layout/components/PageLayoutContent';
-import { MyahCampaignOperations } from '@/page-layout/components/MyahCampaignOperations';
+import { MyahCampaignHome } from '@/page-layout/components/MyahCampaignHome';
 import { MyahCreatorListMembers } from '@/page-layout/components/MyahCreatorListMembers';
-import { MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignOperationsTabUniversalIdentifier';
+import { CampaignOutreachTab } from '@/myah-outreach/components/CampaignOutreachTab';
+import { MYAH_CAMPAIGN_HOME_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignHomeTabUniversalIdentifier';
+import { MYAH_CAMPAIGN_OUTREACH_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignOutreachTabUniversalIdentifier';
 import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 import { MYAH_CREATOR_LIST_PAGE_LAYOUT_UNIVERSAL_IDENTIFIERS } from '@/page-layout/constants/MyahCreatorListPageLayoutUniversalIdentifiers';
 import { PageLayoutContentProvider } from '@/page-layout/contexts/PageLayoutContentContext';
@@ -25,12 +27,18 @@ export const PageLayoutMainContent = ({
     pageLayoutType: currentPageLayout.type,
   });
   const { targetRecordIdentifier } = useLayoutRenderingContext();
-  const shouldRenderCampaignOperations =
+  const shouldRenderCampaignHome =
     targetRecordIdentifier?.targetObjectNameSingular === 'campaign' &&
     currentPageLayout.universalIdentifier ===
       MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER &&
     activeTab.universalIdentifier ===
-      MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER;
+      MYAH_CAMPAIGN_HOME_TAB_UNIVERSAL_IDENTIFIER;
+  const shouldRenderCampaignOutreach =
+    targetRecordIdentifier?.targetObjectNameSingular === 'campaign' &&
+    currentPageLayout.universalIdentifier ===
+      MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER &&
+    activeTab.universalIdentifier ===
+      MYAH_CAMPAIGN_OUTREACH_TAB_UNIVERSAL_IDENTIFIER;
   const shouldRenderCreatorListMembers =
     targetRecordIdentifier?.targetObjectNameSingular === 'creatorList' &&
     currentPageLayout.universalIdentifier ===
@@ -45,10 +53,16 @@ export const PageLayoutMainContent = ({
         layoutMode,
       }}
     >
-      {shouldRenderCampaignOperations ? (
-        <MyahCampaignOperations campaignId={targetRecordIdentifier.id} />
-      ) : null}
-      <PageLayoutContent />
+      {shouldRenderCampaignOutreach ? (
+        <CampaignOutreachTab campaignId={targetRecordIdentifier.id} />
+      ) : (
+        <>
+          {shouldRenderCampaignHome ? (
+            <MyahCampaignHome campaignId={targetRecordIdentifier.id} />
+          ) : null}
+          <PageLayoutContent />
+        </>
+      )}
       {shouldRenderCreatorListMembers ? (
         <MyahCreatorListMembers creatorListId={targetRecordIdentifier.id} />
       ) : null}

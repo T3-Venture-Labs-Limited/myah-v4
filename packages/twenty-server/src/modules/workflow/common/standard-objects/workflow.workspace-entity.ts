@@ -19,9 +19,8 @@ export class WorkflowWorkspaceEntity extends BaseWorkspaceEntity {
   name: string | null;
   lastPublishedVersionId: string | null;
   statuses: WorkflowStatus[] | null;
-  campaign: EntityRelation<CustomWorkspaceEntity> | null;
-  campaignId: string | null;
-  sourceWorkflowId: string | null;
+  outreachCampaign: EntityRelation<CustomWorkspaceEntity> | null;
+  outreachCampaignId: string | null;
   position: number;
   searchVector: string;
   versions: EntityRelation<WorkflowVersionWorkspaceEntity[]>;

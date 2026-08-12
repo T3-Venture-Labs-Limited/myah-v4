@@ -19,6 +19,7 @@ import { buildStandardFlatPageLayoutWidgetMetadataMaps } from 'src/engine/worksp
 import { buildStandardFlatPageLayoutMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/build-standard-flat-page-layout-metadata-maps.util';
 import { buildStandardFlatPermissionFlagMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/permission-flag/build-standard-flat-permission-flag-metadata-maps.util';
 import { buildStandardFlatRoleMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/build-standard-flat-role-metadata-maps.util';
+import { buildStandardFlatRolePermissionFlagMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-permission-flag/build-standard-flat-role-permission-flag-maps.util';
 import { removeReplacedTwentyCrmMetadata as removeReplacedTwentyCrmMetadataFromMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/remove-replaced-twenty-crm-metadata.util';
 import { buildStandardFlatSearchFieldMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/search-field-metadata/build-standard-flat-search-field-metadata-maps.util';
 import { buildStandardFlatSkillMetadataMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/skill-metadata/build-standard-flat-skill-metadata-maps.util';
@@ -185,6 +186,16 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
     twentyStandardApplicationId,
   });
 
+  const flatRolePermissionFlagMaps = buildStandardFlatRolePermissionFlagMaps({
+    now,
+    workspaceId,
+    twentyStandardApplicationId,
+    dependencyFlatEntityMaps: {
+      flatPermissionFlagMaps,
+      flatRoleMaps,
+    },
+  });
+
   const flatAgentMaps = buildStandardFlatAgentMetadataMaps({
     now,
     workspaceId,
@@ -262,6 +273,7 @@ export const computeTwentyStandardApplicationAllFlatEntityMaps = ({
     flatNavigationMenuItemMaps,
     flatPermissionFlagMaps,
     flatRoleMaps,
+    flatRolePermissionFlagMaps,
     flatObjectPermissionMaps,
     flatFieldPermissionMaps,
     flatAgentMaps,
