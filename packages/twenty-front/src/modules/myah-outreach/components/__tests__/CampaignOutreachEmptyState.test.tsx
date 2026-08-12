@@ -8,7 +8,9 @@ describe('CampaignOutreachEmptyState', () => {
     const onCreate = jest.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
 
-    render(<CampaignOutreachEmptyState isCreating={false} onCreate={onCreate} />);
+    render(
+      <CampaignOutreachEmptyState isCreating={false} onCreate={onCreate} />,
+    );
 
     await user.click(
       screen.getByRole('button', { name: 'Create outreach workflow' }),
