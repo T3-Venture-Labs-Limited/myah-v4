@@ -340,48 +340,37 @@ export class ManagedEmailSubscriptionService {
         total: line.totalCents,
         unitPrice: line.unitPriceCents,
       }));
-    const expectedInvoices = (['ANNUAL', 'MONTHLY'] as const).flatMap(
-      (billingFrequency) => {
-        const lineIndexes = operation.expectedLineItems.flatMap((line, index) =>
-          line.billingFrequency === billingFrequency ? [index] : [],
-        );
-
-        if (lineIndexes.length === 0) return [];
-        const expectedLines = lineIndexes.map(
-          (index) => correlatedSubscriptionLines[index],
-        );
-        const persistedLines = lineIndexes.map(
-          (index) => operation.expectedLineItems[index],
-        );
-
-        return [
-          {
-            contractId,
-            customerId,
-            endingBefore: new Date(
-              Math.max(
-                ...persistedLines.map(({ periodEnd }) => Date.parse(periodEnd)),
-              ),
-            ).toISOString(),
-            lines: expectedLines,
-            startingAt: new Date(
-              Math.min(
-                ...persistedLines.map(({ periodStart }) =>
-                  Date.parse(periodStart),
-                ),
-              ),
-            ).toISOString(),
-            total: expectedLines.reduce((sum, line) => sum + line.total, 0),
-            usdRateCardProof: {
-              contractId,
-              fiatCreditTypeId: fiatCreditType.id,
-              fiatCreditTypeName: fiatCreditType.name,
-              rateCardId: rateCard.id,
-            },
-          },
-        ];
+    const expectedInvoices = [
+      {
+        contractId,
+        customerId,
+        endingBefore: new Date(
+          Math.max(
+            ...operation.expectedLineItems.map(({ periodEnd }) =>
+              Date.parse(periodEnd),
+            ),
+          ),
+        ).toISOString(),
+        lines: correlatedSubscriptionLines,
+        startingAt: new Date(
+          Math.min(
+            ...operation.expectedLineItems.map(({ periodStart }) =>
+              Date.parse(periodStart),
+            ),
+          ),
+        ).toISOString(),
+        total: correlatedSubscriptionLines.reduce(
+          (sum, line) => sum + line.total,
+          0,
+        ),
+        usdRateCardProof: {
+          contractId,
+          fiatCreditTypeId: fiatCreditType.id,
+          fiatCreditTypeName: fiatCreditType.name,
+          rateCardId: rateCard.id,
+        },
       },
-    );
+    ];
     if (
       expectedInvoices.reduce((sum, invoice) => sum + invoice.total, 0) !==
       Number(operation.expectedAmountCents)

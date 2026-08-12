@@ -459,7 +459,7 @@ describe('ManagedEmailSubscriptionService', () => {
     ).toHaveBeenCalledTimes(1);
   });
 
-  it('projects every exact cadence-separated paid Stripe invoice', async () => {
+  it('projects one exact paid Stripe invoice containing every subscription line', async () => {
     const {
       managedProviderStripeService,
       metronomeClient,
@@ -530,27 +530,21 @@ describe('ManagedEmailSubscriptionService', () => {
         total,
       };
     };
-    const annualInvoice = makeInvoice({
-      id: 'metronome-invoice-annual',
-      lineIndexes: [0],
-      paymentId: 'pi_annual',
-      stripeInvoiceId: 'in_annual',
-    });
-    const monthlyInvoice = makeInvoice({
-      id: 'metronome-invoice-monthly',
-      lineIndexes: [1, 2],
-      paymentId: 'pi_monthly',
-      stripeInvoiceId: 'in_monthly',
+    const consolidatedInvoice = makeInvoice({
+      id: 'metronome-invoice-consolidated',
+      lineIndexes: [0, 1, 2],
+      paymentId: 'pi_consolidated',
+      stripeInvoiceId: 'in_consolidated',
     });
 
     metronomeClient.listInvoicesFirstPage
       .mockResolvedValueOnce({
         hasNextPage: false,
-        invoices: [monthlyInvoice],
+        invoices: [],
       })
       .mockResolvedValueOnce({
         hasNextPage: false,
-        invoices: [annualInvoice, monthlyInvoice],
+        invoices: [consolidatedInvoice],
       });
 
     await expect(
@@ -563,14 +557,9 @@ describe('ManagedEmailSubscriptionService', () => {
     ).resolves.toMatchObject({
       paymentReceipts: [
         {
-          externalInvoiceId: 'in_annual',
-          externalPaymentId: 'pi_annual',
-          metronomeInvoiceId: 'metronome-invoice-annual',
-        },
-        {
-          externalInvoiceId: 'in_monthly',
-          externalPaymentId: 'pi_monthly',
-          metronomeInvoiceId: 'metronome-invoice-monthly',
+          externalInvoiceId: 'in_consolidated',
+          externalPaymentId: 'pi_consolidated',
+          metronomeInvoiceId: 'metronome-invoice-consolidated',
         },
       ],
       paymentStatus: 'PAID',
@@ -578,23 +567,15 @@ describe('ManagedEmailSubscriptionService', () => {
     });
     expect(
       managedProviderStripeService.assertPaidExternalInvoice,
-    ).toHaveBeenNthCalledWith(1, {
+    ).toHaveBeenCalledWith({
       currency: 'USD',
-      expectedAmountCents: quote.lines[0].amountCents,
-      expectedPaymentIntentId: 'pi_annual',
-      metronomeInvoiceId: 'metronome-invoice-annual',
-      stripeInvoiceId: 'in_annual',
-      workspaceId,
-    });
-    expect(
-      managedProviderStripeService.assertPaidExternalInvoice,
-    ).toHaveBeenNthCalledWith(2, {
-      currency: 'USD',
-      expectedAmountCents:
-        quote.lines[1].amountCents + quote.lines[2].amountCents,
-      expectedPaymentIntentId: 'pi_monthly',
-      metronomeInvoiceId: 'metronome-invoice-monthly',
-      stripeInvoiceId: 'in_monthly',
+      expectedAmountCents: quote.lines.reduce(
+        (sum, line) => sum + line.amountCents,
+        0,
+      ),
+      expectedPaymentIntentId: 'pi_consolidated',
+      metronomeInvoiceId: 'metronome-invoice-consolidated',
+      stripeInvoiceId: 'in_consolidated',
       workspaceId,
     });
   });

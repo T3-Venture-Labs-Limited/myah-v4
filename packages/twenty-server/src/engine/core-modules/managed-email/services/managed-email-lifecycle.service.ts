@@ -235,46 +235,25 @@ export class ManagedEmailLifecycleService {
     }
     const fiatCreditType = rateCard.fiatCreditType;
 
-    const invoiceGroups = (['ANNUAL', 'MONTHLY'] as const).flatMap(
-      (billingFrequency) => {
-        const cadenceGroups = groups.filter(
-          (group) => group.billingFrequency === billingFrequency,
-        );
-
-        if (cadenceGroups.length === 0) return [];
-
-        return [
-          {
-            expected: {
-              contractId: metronomeContractId,
-              customerId: metronomeCustomerId,
-              endingBefore: new Date(
-                Math.max(
-                  ...cadenceGroups.map((group) => group.endingBefore.getTime()),
-                ),
-              ).toISOString(),
-              lines: cadenceGroups.map(({ line }) => line),
-              startingAt: new Date(
-                Math.min(
-                  ...cadenceGroups.map((group) => group.startingAt.getTime()),
-                ),
-              ).toISOString(),
-              total: cadenceGroups.reduce(
-                (sum, { line }) => sum + line.total,
-                0,
-              ),
-              usdRateCardProof: {
-                contractId: metronomeContractId,
-                fiatCreditTypeId: fiatCreditType.id,
-                fiatCreditTypeName: fiatCreditType.name,
-                rateCardId: rateCard.id,
-              },
-            } satisfies ExpectedPaidMetronomeInvoice,
-            groups: cadenceGroups,
+    const invoiceGroups = [
+      {
+        expected: {
+          contractId: metronomeContractId,
+          customerId: metronomeCustomerId,
+          endingBefore: endingBefore.toISOString(),
+          lines: groups.map(({ line }) => line),
+          startingAt: startingAt.toISOString(),
+          total: groups.reduce((sum, { line }) => sum + line.total, 0),
+          usdRateCardProof: {
+            contractId: metronomeContractId,
+            fiatCreditTypeId: fiatCreditType.id,
+            fiatCreditTypeName: fiatCreditType.name,
+            rateCardId: rateCard.id,
           },
-        ];
+        } satisfies ExpectedPaidMetronomeInvoice,
+        groups,
       },
-    );
+    ];
     const page = await this.metronomeClientService.listInvoicesFirstPage({
       contractId: metronomeContractId,
       customerId: metronomeCustomerId,

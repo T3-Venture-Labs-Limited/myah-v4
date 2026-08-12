@@ -584,113 +584,68 @@ describe('ManagedEmailLifecycleService', () => {
     expect(test.domains[0].paidThrough).toEqual(nextAnnualBoundary);
   });
 
-  it('projects each paid cadence independently', async () => {
+  it('projects one exact paid invoice containing every due renewal line', async () => {
     const test = createHarness({
       domain: { paidThrough: monthlyBoundary },
     });
     const annual = annualInvoice();
+    const monthly = monthlyInvoice('PAID');
     const mixedAnnualBoundary = new Date('2027-09-01T00:00:00.000Z');
+    const consolidated = {
+      ...annual,
+      endingBefore: mixedAnnualBoundary.toISOString(),
+      externalInvoice: {
+        billingProvider: 'stripe',
+        externalPaymentId: 'pi_managed_email_consolidated',
+        externalStatus: 'PAID',
+        invoiceId: 'in_managed_email_consolidated',
+        invoicedTotal: 5500,
+      },
+      id: 'metronome-invoice-consolidated',
+      lines: [...annual.lines, ...monthly.lines],
+      startingAt: monthlyBoundary.toISOString(),
+      total: 5500,
+    };
 
-    annual.lines[0].startingAt = monthlyBoundary.toISOString();
-    annual.lines[0].endingBefore = mixedAnnualBoundary.toISOString();
-    test.metronomeClient.listInvoicesFirstPage
-      .mockResolvedValueOnce({
-        hasNextPage: false,
-        invoices: [monthlyInvoice('PAID')],
-      })
-      .mockResolvedValueOnce({
-        hasNextPage: false,
-        invoices: [annual],
-      });
+    consolidated.lines[0].startingAt = monthlyBoundary.toISOString();
+    consolidated.lines[0].endingBefore = mixedAnnualBoundary.toISOString();
+    test.metronomeClient.listInvoicesFirstPage.mockResolvedValueOnce({
+      hasNextPage: false,
+      invoices: [consolidated],
+    });
 
     await test.service.reconcileSubscriptions({ operationId, workspaceId });
-    expect(test.domains[0].paidThrough).toEqual(monthlyBoundary);
+
+    expect(test.domains[0].paidThrough).toEqual(mixedAnnualBoundary);
     expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
       nextMonthlyBoundary,
     );
     expect(test.mailboxes[0].warmupPaidThrough).toEqual(nextMonthlyBoundary);
     expect(test.operations[0].paymentReceipts).toEqual([
       {
-        externalInvoiceId: 'in_managed_email_monthly',
-        externalPaymentId: 'pi_managed_email_monthly',
-        metronomeInvoiceId: 'metronome-invoice-monthly',
+        externalInvoiceId: 'in_managed_email_consolidated',
+        externalPaymentId: 'pi_managed_email_consolidated',
+        metronomeInvoiceId: 'metronome-invoice-consolidated',
       },
     ]);
     expect(
       test.managedProviderStripeService.assertPaidExternalInvoice,
-    ).toHaveBeenNthCalledWith(1, {
+    ).toHaveBeenCalledWith({
       currency: 'USD',
-      expectedAmountCents: 4500,
-      expectedPaymentIntentId: 'pi_managed_email_monthly',
-      metronomeInvoiceId: 'metronome-invoice-monthly',
-      stripeInvoiceId: 'in_managed_email_monthly',
-      workspaceId,
-    });
-
-    await test.service.reconcileSubscriptions({ operationId, workspaceId });
-    expect(test.domains[0].paidThrough).toEqual(mixedAnnualBoundary);
-    expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
-      nextMonthlyBoundary,
-    );
-    expect(test.operations[0].paymentReceipts).toEqual([
-      {
-        externalInvoiceId: 'in_managed_email_annual',
-        externalPaymentId: 'pi_managed_email_annual',
-        metronomeInvoiceId: 'metronome-invoice-annual',
-      },
-    ]);
-    expect(
-      test.managedProviderStripeService.assertPaidExternalInvoice,
-    ).toHaveBeenNthCalledWith(2, {
-      currency: 'USD',
-      expectedAmountCents: 1000,
-      expectedPaymentIntentId: 'pi_managed_email_annual',
-      metronomeInvoiceId: 'metronome-invoice-annual',
-      stripeInvoiceId: 'in_managed_email_annual',
+      expectedAmountCents: 5500,
+      expectedPaymentIntentId: 'pi_managed_email_consolidated',
+      metronomeInvoiceId: 'metronome-invoice-consolidated',
+      stripeInvoiceId: 'in_managed_email_consolidated',
       workspaceId,
     });
   });
 
-  it('retains every verified cadence receipt from one reconciliation', async () => {
-    const test = createHarness({
-      domain: { paidThrough: monthlyBoundary },
-    });
-    const annual = annualInvoice();
+  it('does not project a paid invoice when Stripe proof fails', async () => {
+    const test = createHarness();
 
-    annual.lines[0].startingAt = monthlyBoundary.toISOString();
-    annual.lines[0].endingBefore = '2027-09-01T00:00:00.000Z';
     test.metronomeClient.listInvoicesFirstPage.mockResolvedValueOnce({
       hasNextPage: false,
-      invoices: [annual, monthlyInvoice('PAID')],
-    });
-
-    await test.service.reconcileSubscriptions({ operationId, workspaceId });
-
-    expect(test.operations[0].paymentReceipts).toEqual([
-      {
-        externalInvoiceId: 'in_managed_email_annual',
-        externalPaymentId: 'pi_managed_email_annual',
-        metronomeInvoiceId: 'metronome-invoice-annual',
-      },
-      {
-        externalInvoiceId: 'in_managed_email_monthly',
-        externalPaymentId: 'pi_managed_email_monthly',
-        metronomeInvoiceId: 'metronome-invoice-monthly',
-      },
-    ]);
-  });
-
-  it('commits valid cadences before surfacing another cadence Stripe proof failure', async () => {
-    const test = createHarness({
-      domain: { paidThrough: monthlyBoundary },
-    });
-    const annual = annualInvoice();
-
-    annual.lines[0].startingAt = monthlyBoundary.toISOString();
-    annual.lines[0].endingBefore = '2027-09-01T00:00:00.000Z';
-    test.metronomeClient.listInvoicesFirstPage.mockResolvedValueOnce({
-      hasNextPage: false,
-      invoices: [annual, monthlyInvoice('PAID')],
+      invoices: [monthlyInvoice('PAID')],
     });
     test.managedProviderStripeService.assertPaidExternalInvoice.mockRejectedValueOnce(
       new Error('Stripe invoice payment proof is invalid'),
@@ -699,66 +654,14 @@ describe('ManagedEmailLifecycleService', () => {
     await expect(
       test.service.reconcileSubscriptions({ operationId, workspaceId }),
     ).rejects.toThrow('Stripe invoice payment proof is invalid');
-    expect(test.domains[0].paidThrough).toEqual(monthlyBoundary);
     expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
-      nextMonthlyBoundary,
+      monthlyBoundary,
     );
-    expect(test.mailboxes[0].warmupPaidThrough).toEqual(nextMonthlyBoundary);
+    expect(test.mailboxes[0].warmupPaidThrough).toEqual(monthlyBoundary);
     expect(
       test.managedProviderStripeService.assertPaidExternalInvoice,
-    ).toHaveBeenCalledTimes(2);
+    ).toHaveBeenCalledTimes(1);
     expect(test.operations[0].pendingRenewalProjection).toBeNull();
-  });
-
-  it('keeps paid monthly resources healthy when annual renewal payment fails', async () => {
-    const test = createHarness({
-      domain: { paidThrough: monthlyBoundary },
-    });
-    const annual = annualInvoice();
-
-    annual.lines[0].startingAt = monthlyBoundary.toISOString();
-    annual.lines[0].endingBefore = '2027-09-01T00:00:00.000Z';
-    test.metronomeClient.listInvoicesFirstPage.mockResolvedValueOnce({
-      hasNextPage: false,
-      invoices: [
-        {
-          ...annual,
-          externalInvoice: {
-            ...annual.externalInvoice,
-            externalPaymentId: null,
-            externalStatus: 'PAYMENT_FAILED',
-          },
-        },
-        monthlyInvoice('PAID'),
-      ],
-    });
-
-    await test.service.reconcileSubscriptions({ operationId, workspaceId });
-
-    expect(test.domains[0].infrastructureState).toBe(
-      ManagedEmailInfrastructureState.PAYMENT_REQUIRED,
-    );
-    expect(test.mailboxes[0].infrastructureState).toBe(
-      ManagedEmailInfrastructureState.ACTIVE,
-    );
-    expect(test.mailboxes[0].warmupState).toBe(
-      ManagedEmailWarmupState.MAINTENANCE,
-    );
-    expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
-      nextMonthlyBoundary,
-    );
-    expect(test.mailboxes[0].warmupPaidThrough).toEqual(nextMonthlyBoundary);
-    expect(
-      test.managedProviderStripeService.assertPaidExternalInvoice,
-    ).toHaveBeenCalledWith({
-      currency: 'USD',
-      expectedAmountCents: 4500,
-      expectedPaymentIntentId: 'pi_managed_email_monthly',
-      metronomeInvoiceId: 'metronome-invoice-monthly',
-      stripeInvoiceId: 'in_managed_email_monthly',
-      workspaceId,
-    });
-    expect(test.operations[0].paymentStatus).toBe('PAID');
   });
 
   it.each(['OPEN', 'FINALIZED'])(
