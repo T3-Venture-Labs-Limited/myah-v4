@@ -95,7 +95,7 @@ export class ManagedProviderBillingRecoveryService {
         await this.messageQueueService.add(
           DeliverManagedProviderUsageJob.name,
           { operationId: operation.id },
-          { id: `managed-provider-usage:${operation.id}`, retryLimit: 3 },
+          { id: `managed-provider-usage-${operation.id}`, retryLimit: 3 },
         );
       }
 
@@ -336,7 +336,7 @@ export class ManagedProviderBillingRecoveryService {
           await this.messageQueueService.add(
             DeliverManagedProviderUsageJob.name,
             { operationId: operation.id },
-            { id: `managed-provider-usage:${operation.id}`, retryLimit: 3 },
+            { id: `managed-provider-usage-${operation.id}`, retryLimit: 3 },
           );
         }
       }

@@ -343,7 +343,7 @@ export class ManagedProviderOperationService {
           DeliverManagedProviderUsageJob.name,
           { operationId: completedOperation.id },
           {
-            id: `managed-provider-usage:${completedOperation.id}`,
+            id: `managed-provider-usage-${completedOperation.id}`,
             retryLimit: 3,
           },
         );
