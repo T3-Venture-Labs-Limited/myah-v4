@@ -756,7 +756,7 @@ describe('ManagedProviderOperationService', () => {
     expect(messageQueueService.add).toHaveBeenCalledWith(
       DeliverManagedProviderUsageJob.name,
       { operationId: 'operation-id' },
-      { id: 'managed-provider-usage:operation-id', retryLimit: 3 },
+      { id: 'managed-provider-usage-operation-id', retryLimit: 3 },
     );
   });
   it('returns durable billable completion when usage publication fails', async () => {

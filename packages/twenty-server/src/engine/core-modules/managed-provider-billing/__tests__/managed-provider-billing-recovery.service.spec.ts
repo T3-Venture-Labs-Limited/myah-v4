@@ -156,7 +156,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
       expect.any(String),
       { operationId: finalOperation.id },
       expect.objectContaining({
-        id: `managed-provider-usage:${finalOperation.id}`,
+        id: `managed-provider-usage-${finalOperation.id}`,
       }),
     );
   });
@@ -996,7 +996,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
       expect.any(String),
       { operationId: 'unknown-operation' },
       expect.objectContaining({
-        id: 'managed-provider-usage:unknown-operation',
+        id: 'managed-provider-usage-unknown-operation',
       }),
     );
   });
@@ -1112,7 +1112,7 @@ describe('ManagedProviderBillingRecoveryService', () => {
     expect(messageQueueService.add).toHaveBeenCalledWith(
       expect.any(String),
       { operationId: operation.id },
-      expect.objectContaining({ id: `managed-provider-usage:${operation.id}` }),
+      expect.objectContaining({ id: `managed-provider-usage-${operation.id}` }),
     );
     expect(save).toHaveBeenCalledWith(
       ManagedProviderOperationEntity,
