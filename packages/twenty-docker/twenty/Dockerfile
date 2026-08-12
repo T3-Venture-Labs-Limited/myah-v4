@@ -84,6 +84,13 @@ RUN if [ -d /app/packages/twenty-front/build ]; then \
 #   docker build --target twenty-server -f packages/twenty-docker/twenty/Dockerfile .
 # ===========================================================================
 
+FROM node:24.17.0-alpine3.23@sha256:7c70d1235c0b4c2bc9eeed5393d19f1bbdde6885ba0d58ba62bb385d7b0f3ff1 AS entrypoint-contract-test
+
+COPY ./packages/twenty-docker/twenty/entrypoint.sh /app/entrypoint.sh
+COPY ./packages/twenty-docker/twenty/entrypoint.test.sh /app/entrypoint.test.sh
+RUN chmod +x /app/entrypoint.sh \
+ && /bin/sh /app/entrypoint.test.sh
+
 FROM node:24.17.0-alpine3.23@sha256:7c70d1235c0b4c2bc9eeed5393d19f1bbdde6885ba0d58ba62bb385d7b0f3ff1 AS twenty-server
 
 # Force the patched Alpine OpenSSL libs (base bakes 3.5.6-r0; repo ships
@@ -97,10 +104,7 @@ RUN apk add --no-cache \
     'postgresql18-client>=18.4-r0' \
     jq
 
-COPY ./packages/twenty-docker/twenty/entrypoint.sh /app/entrypoint.sh
-RUN --mount=type=bind,source=packages/twenty-docker/twenty/entrypoint.test.sh,target=/app/entrypoint.test.sh,ro \
-    chmod +x /app/entrypoint.sh \
- && /bin/sh /app/entrypoint.test.sh
+COPY --from=entrypoint-contract-test /app/entrypoint.sh /app/entrypoint.sh
 WORKDIR /app/packages/twenty-server
 
 ARG APP_VERSION
