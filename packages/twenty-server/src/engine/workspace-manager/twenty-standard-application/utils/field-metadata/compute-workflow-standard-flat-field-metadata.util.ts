@@ -154,7 +154,7 @@ export const buildWorkflowStandardFlatFieldMetadatas = ({
       morphId: null,
       settings: {
         relationType: RelationType.MANY_TO_ONE,
-        onDelete: RelationOnDeleteAction.SET_NULL,
+        onDelete: RelationOnDeleteAction.CASCADE,
         joinColumnName: 'outreachCampaignId',
       },
     },

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IsNull } from 'typeorm';
 
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
@@ -7,7 +8,6 @@ import {
   type WorkflowToolContext,
   type WorkflowToolDependencies,
 } from 'src/modules/workflow/workflow-tools/types/workflow-tool-dependencies.type';
-import { isDefined } from 'twenty-shared/utils';
 
 type DeleteWorkflowToolContext = WorkflowToolContext & {
   rolePermissionConfig: RolePermissionConfig;
@@ -47,12 +47,15 @@ export const createDeleteWorkflowTool = (
                 context.rolePermissionConfig,
               );
 
-            return workflowRepository.softDelete(workflowId);
+            return workflowRepository.softDelete({
+              id: workflowId,
+              outreachCampaignId: IsNull(),
+            });
           },
           authContext,
         );
 
-      if (!isDefined(deleteResult.affected)) {
+      if (deleteResult.affected !== 1) {
         return {
           success: false,
           error: 'Workflow not found',

@@ -239,6 +239,13 @@ export class WorkflowVersionWorkspaceService {
             );
           }
 
+          if (isDefined(sourceWorkflow.outreachCampaignId)) {
+            throw new WorkflowVersionStepException(
+              'Campaign Outreach workflows cannot be duplicated as General Automations',
+              WorkflowVersionStepExceptionCode.INVALID_REQUEST,
+            );
+          }
+
           const sourceVersion = await workflowVersionRepository.findOne(
             {
               where: {

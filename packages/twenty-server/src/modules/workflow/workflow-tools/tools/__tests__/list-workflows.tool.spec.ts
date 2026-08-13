@@ -1,25 +1,26 @@
-import { createListWorkflowRunsTool } from 'src/modules/workflow/workflow-tools/tools/list-workflow-runs.tool';
+import { createListWorkflowsTool } from 'src/modules/workflow/workflow-tools/tools/list-workflows.tool';
 
-describe('createListWorkflowRunsTool', () => {
-  it('excludes Campaign Outreach workflow runs', async () => {
+describe('createListWorkflowsTool', () => {
+  it('excludes Campaign Outreach workflows', async () => {
     const queryBuilder = {
       andWhere: jest.fn().mockReturnThis(),
-      getMany: jest.fn().mockResolvedValue([]),
-      innerJoin: jest.fn().mockReturnThis(),
+      createQueryBuilder: jest.fn(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       orderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
     };
-    const workflowRunRepository = {
+    const workflowRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
     };
     const globalWorkspaceOrmManager = {
       executeInWorkspaceContext: jest.fn((callback: () => unknown) =>
         callback(),
       ),
-      getRepository: jest.fn().mockResolvedValue(workflowRunRepository),
+      getRepository: jest.fn().mockResolvedValue(workflowRepository),
     };
-    const tool = createListWorkflowRunsTool(
+    const tool = createListWorkflowsTool(
       { globalWorkspaceOrmManager } as never,
       {
         rolePermissionConfig: { shouldBypassPermissionChecks: true },
@@ -27,12 +28,8 @@ describe('createListWorkflowRunsTool', () => {
       } as never,
     );
 
-    await tool.execute({});
+    await tool.execute({ limit: 50, offset: 0 });
 
-    expect(queryBuilder.innerJoin).toHaveBeenCalledWith(
-      'workflowRun.workflow',
-      'workflow',
-    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'workflow.outreachCampaignId IS NULL',
     );

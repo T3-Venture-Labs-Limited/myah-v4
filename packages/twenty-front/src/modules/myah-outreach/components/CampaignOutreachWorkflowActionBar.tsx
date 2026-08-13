@@ -8,6 +8,8 @@ import { getTestPayloadFromTrigger } from '@/workflow/workflow-trigger/utils/get
 import { styled } from '@linaria/react';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { Button } from 'twenty-ui/input';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
+
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledActionBar = styled.div`
@@ -35,6 +37,12 @@ export const CampaignOutreachWorkflowActionBar = ({
   const { enqueueErrorSnackBar } = useSnackBar();
   const currentVersion = workflow?.currentVersion;
   const canManageDraft = currentVersion?.status === 'DRAFT';
+  const canActivate =
+    canManageDraft &&
+    currentVersion.trigger !== null &&
+    isNonEmptyArray(currentVersion.steps);
+  const canDiscardDraft =
+    canManageDraft && isDefined(workflow?.lastPublishedVersionId);
   const canTest =
     currentVersion?.trigger !== null && currentVersion !== undefined;
 
@@ -90,14 +98,14 @@ export const CampaignOutreachWorkflowActionBar = ({
     <StyledActionBar>
       <Button
         ariaLabel="Activate"
-        disabled={!canManageDraft}
+        disabled={!canActivate}
         onClick={handleActivate}
         title="Activate"
         variant="primary"
       />
       <Button
         ariaLabel="Discard Draft"
-        disabled={!canManageDraft}
+        disabled={!canDiscardDraft}
         onClick={handleDiscardDraft}
         title="Discard Draft"
         variant="secondary"

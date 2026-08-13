@@ -28,6 +28,7 @@ jest.mock('@/workflow/hooks/useWorkflowWithCurrentVersion', () => ({
       id: 'workflow-version-a',
       status: 'DRAFT',
       trigger: { type: 'MANUAL', settings: {} },
+      steps: [],
     },
     id: 'workflow-a',
   }),
@@ -42,6 +43,15 @@ describe('CampaignOutreachWorkflowActionBar', () => {
       expect(screen.getByRole('button', { name: label })).toBeVisible();
     },
   );
+
+  it('keeps the initial empty draft recoverable', () => {
+    render(<CampaignOutreachWorkflowActionBar workflowId="workflow-a" />);
+
+    expect(screen.getByRole('button', { name: 'Activate' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Discard Draft' }),
+    ).toBeDisabled();
+  });
 
   it('does not render See Runs or any run navigation', () => {
     render(<CampaignOutreachWorkflowActionBar workflowId="workflow-a" />);

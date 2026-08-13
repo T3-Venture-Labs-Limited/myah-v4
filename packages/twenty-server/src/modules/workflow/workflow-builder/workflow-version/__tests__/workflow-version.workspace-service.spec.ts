@@ -117,6 +117,50 @@ describe('WorkflowVersionWorkspaceService', () => {
     });
   });
 
+  it('rejects Campaign Outreach workflows as General duplication sources', async () => {
+    const queryRunner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      isTransactionActive: true,
+      manager: {},
+    };
+    const workflowRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'outreach-source',
+        outreachCampaignId: 'campaign-a',
+      }),
+    };
+    const globalWorkspaceOrmManager = {
+      executeInWorkspaceContext: jest.fn(
+        async (callback: () => unknown | Promise<unknown>) => callback(),
+      ),
+      getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+        createQueryRunner: jest.fn().mockReturnValue(queryRunner),
+      }),
+      getRepository: jest.fn().mockResolvedValue(workflowRepository),
+    };
+    const service = new WorkflowVersionWorkspaceService(
+      globalWorkspaceOrmManager as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(
+      service.duplicateWorkflow({
+        workspaceId: 'workspace-a',
+        workflowIdToDuplicate: 'outreach-source',
+        workflowVersionIdToCopy: 'version-a',
+      }),
+    ).rejects.toThrow(
+      'Campaign Outreach workflows cannot be duplicated as General Automations',
+    );
+  });
+
   it('rewires every copied step reference to its cloned step', async () => {
     const queryRunner = {
       connect: jest.fn(),

@@ -649,6 +649,11 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
         desiredFields[inboundCreatorRelation.universalIdentifier],
       ).toBeUndefined();
       expect(
+        desiredFields[
+          STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier
+        ],
+      ).toBeUndefined();
+      expect(
         desiredRoles[STANDARD_ROLE.creatorOpsDefault.universalIdentifier],
       ).toBeDefined();
       expect(

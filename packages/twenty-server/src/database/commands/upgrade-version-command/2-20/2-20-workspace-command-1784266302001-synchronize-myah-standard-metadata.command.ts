@@ -277,9 +277,11 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     const fieldUniversalIdentifiers = toUniversalIdentifiers(
       standardFields.filter(
         (field) =>
-          MYAH_NATIVE_OUTREACH_WORKFLOW_FIELD_UNIVERSAL_IDENTIFIERS.has(
-            field.universalIdentifier,
-          ) || shouldIncludeField(field),
+          (syncOptions.targetObjectUniversalIdentifiers === undefined &&
+            MYAH_NATIVE_OUTREACH_WORKFLOW_FIELD_UNIVERSAL_IDENTIFIERS.has(
+              field.universalIdentifier,
+            )) ||
+          shouldIncludeField(field),
       ),
     );
     const standardIndexes = getUniversalMetadataEntities(

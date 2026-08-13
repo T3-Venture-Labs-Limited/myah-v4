@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { CampaignOutreachTab } from '@/myah-outreach/components/CampaignOutreachTab';
@@ -10,9 +10,19 @@ import {
 
 const mockQuery = jest.fn();
 const mockMutate = jest.fn();
+const mockEnqueueErrorSnackBar = jest.fn();
 const mockApolloCoreClient = {
   mutate: mockMutate,
   query: mockQuery,
+};
+
+type CampaignOutreachWorkflowQueryResult = {
+  findCampaignOutreachWorkflow: {
+    campaignId: string;
+    currentVersionId: string | null;
+    name: string | null;
+    workflowId: string;
+  } | null;
 };
 
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
@@ -20,7 +30,9 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
 }));
 
 jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
-  useSnackBar: () => ({ enqueueErrorSnackBar: jest.fn() }),
+  useSnackBar: () => ({
+    enqueueErrorSnackBar: mockEnqueueErrorSnackBar,
+  }),
 }));
 jest.mock('@/myah-outreach/components/CampaignOutreachWorkflowEditor', () => ({
   CampaignOutreachWorkflowEditor: ({ workflowId }: { workflowId: string }) => (
@@ -64,6 +76,7 @@ describe('CampaignOutreachTab', () => {
   beforeEach(() => {
     mockQuery.mockReset();
     mockMutate.mockReset();
+    mockEnqueueErrorSnackBar.mockReset();
   });
 
   it('creates the only Outreach workflow from the empty state', async () => {
@@ -134,6 +147,7 @@ describe('CampaignOutreachTab', () => {
     expect(
       await screen.findByText('Campaign Outreach could not load. Retry.'),
     ).toBeVisible();
+    expect(screen.getByRole('button', { name: /Retry/ })).toBeVisible();
   });
 
   it('renders permission feedback when Campaign Outreach is forbidden', async () => {
@@ -173,5 +187,93 @@ describe('CampaignOutreachTab', () => {
         variables: { campaignId: 'campaign-a' },
       }),
     );
+  });
+
+  it('ignores a stale response after navigating to another Campaign', async () => {
+    let resolveCampaignA:
+      | ((result: CampaignOutreachWorkflowQueryResult) => void)
+      | undefined;
+    let resolveCampaignB:
+      | ((result: CampaignOutreachWorkflowQueryResult) => void)
+      | undefined;
+    mockQuery
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ data: CampaignOutreachWorkflowQueryResult }>(
+            (resolve) => {
+              resolveCampaignA = ({ findCampaignOutreachWorkflow }) =>
+                resolve({ data: { findCampaignOutreachWorkflow } });
+            },
+          ),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ data: CampaignOutreachWorkflowQueryResult }>(
+            (resolve) => {
+              resolveCampaignB = ({ findCampaignOutreachWorkflow }) =>
+                resolve({ data: { findCampaignOutreachWorkflow } });
+            },
+          ),
+      );
+    const { rerender } = render(
+      <CampaignOutreachTab campaignId="campaign-a" />,
+    );
+
+    rerender(<CampaignOutreachTab campaignId="campaign-b" />);
+
+    await act(async () => {
+      resolveCampaignB?.({
+        findCampaignOutreachWorkflow: {
+          campaignId: 'campaign-b',
+          currentVersionId: 'version-b',
+          name: 'Campaign B Outreach',
+          workflowId: 'workflow-b',
+        },
+      });
+    });
+    expect(
+      await screen.findByTestId('campaign-outreach-workflow-editor'),
+    ).toHaveTextContent('workflow-b');
+
+    await act(async () => {
+      resolveCampaignA?.({
+        findCampaignOutreachWorkflow: {
+          campaignId: 'campaign-a',
+          currentVersionId: 'version-a',
+          name: 'Campaign A Outreach',
+          workflowId: 'workflow-a',
+        },
+      });
+    });
+
+    expect(
+      screen.getByTestId('campaign-outreach-workflow-editor'),
+    ).toHaveTextContent('workflow-b');
+  });
+
+  it('ignores a failed creation after navigating to another Campaign', async () => {
+    const createResult = Promise.withResolvers<unknown>();
+
+    mockQuery.mockResolvedValue({
+      data: { findCampaignOutreachWorkflow: null },
+    });
+    mockMutate.mockReturnValueOnce(createResult.promise);
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <CampaignOutreachTab campaignId="campaign-a" />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Create outreach workflow',
+      }),
+    );
+    rerender(<CampaignOutreachTab campaignId="campaign-b" />);
+
+    await act(async () => {
+      createResult.reject(new Error('Campaign A failed'));
+    });
+
+    expect(mockEnqueueErrorSnackBar).not.toHaveBeenCalled();
   });
 });

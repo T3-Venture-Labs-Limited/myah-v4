@@ -31,11 +31,15 @@ type CampaignOutreachTabProps = {
   campaignId: string;
 };
 
-type CampaignOutreachTabState =
+type CampaignOutreachTabState = {
+  campaignId: string;
+  creationError?: boolean;
+} & (
   | { kind: 'loading' }
   | { kind: 'loaded'; workflow: CampaignOutreachWorkflow | null }
   | { kind: 'permission-error' }
-  | { kind: 'request-error' };
+  | { kind: 'request-error' }
+);
 
 const StyledCampaignOutreachTab = styled.div`
   display: flex;
@@ -51,47 +55,82 @@ export const CampaignOutreachTab = ({
   const apolloCoreClient = useApolloCoreClient();
   const { enqueueErrorSnackBar } = useSnackBar();
   const [state, setState] = useState<CampaignOutreachTabState>({
+    campaignId,
     kind: 'loading',
   });
-  const [isCreating, setIsCreating] = useState(false);
-
-  const loadCampaignOutreachWorkflow = useCallback(async () => {
-    setState({ kind: 'loading' });
-
-    try {
-      const { data } =
-        await apolloCoreClient.query<FindCampaignOutreachWorkflowResult>({
-          query: FIND_CAMPAIGN_OUTREACH_WORKFLOW,
-          variables: { campaignId },
-        });
-
-      if (!data) {
-        throw new Error('Campaign Outreach query returned no data');
-      }
-
-      setState({
-        kind: 'loaded',
-        workflow: data.findCampaignOutreachWorkflow,
-      });
-    } catch (error) {
-      setState(
-        isGraphqlErrorOfType(error, 'FORBIDDEN')
-          ? { kind: 'permission-error' }
-          : { kind: 'request-error' },
-      );
-    }
-  }, [apolloCoreClient, campaignId]);
+  const [creatingCampaignId, setCreatingCampaignId] = useState<string | null>(
+    null,
+  );
+  const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
+    let isMounted = true;
+
+    setState({ campaignId, kind: 'loading' });
+
+    const loadCampaignOutreachWorkflow = async () => {
+      try {
+        const { data } =
+          await apolloCoreClient.query<FindCampaignOutreachWorkflowResult>({
+            query: FIND_CAMPAIGN_OUTREACH_WORKFLOW,
+            variables: { campaignId },
+          });
+
+        if (!data) {
+          throw new Error('Campaign Outreach query returned no data');
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        setState({
+          campaignId,
+          kind: 'loaded',
+          workflow: data.findCampaignOutreachWorkflow,
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setState(
+          isGraphqlErrorOfType(error, 'FORBIDDEN')
+            ? { campaignId, kind: 'permission-error' }
+            : { campaignId, kind: 'request-error' },
+        );
+      }
+    };
+
     void loadCampaignOutreachWorkflow();
-  }, [loadCampaignOutreachWorkflow]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apolloCoreClient, campaignId, reloadCount]);
+
+  useEffect(() => {
+    if (state.campaignId !== campaignId || !state.creationError) {
+      return;
+    }
+
+    enqueueErrorSnackBar({
+      message: 'Unable to create the outreach workflow.',
+    });
+    setState((currentState) =>
+      currentState.campaignId === campaignId && currentState.creationError
+        ? { ...currentState, creationError: false }
+        : currentState,
+    );
+  }, [campaignId, enqueueErrorSnackBar, state.campaignId, state.creationError]);
+  const isCreating = creatingCampaignId === campaignId;
 
   const createCampaignOutreachWorkflow = useCallback(async () => {
     if (isCreating) {
       return;
     }
 
-    setIsCreating(true);
+    setCreatingCampaignId(campaignId);
 
     try {
       const { data } =
@@ -104,20 +143,29 @@ export const CampaignOutreachTab = ({
         throw new Error('Campaign Outreach creation returned no data');
       }
 
-      setState({
-        kind: 'loaded',
-        workflow: data.createCampaignOutreachWorkflow,
-      });
+      setState((currentState) =>
+        currentState.campaignId === campaignId
+          ? {
+              campaignId,
+              kind: 'loaded',
+              workflow: data.createCampaignOutreachWorkflow,
+            }
+          : currentState,
+      );
     } catch {
-      enqueueErrorSnackBar({
-        message: 'Unable to create the outreach workflow.',
-      });
+      setState((currentState) =>
+        currentState.campaignId === campaignId
+          ? { ...currentState, creationError: true }
+          : currentState,
+      );
     } finally {
-      setIsCreating(false);
+      setCreatingCampaignId((currentCampaignId) =>
+        currentCampaignId === campaignId ? null : currentCampaignId,
+      );
     }
-  }, [apolloCoreClient, campaignId, enqueueErrorSnackBar, isCreating]);
+  }, [apolloCoreClient, campaignId, isCreating]);
 
-  if (state.kind === 'loading') {
+  if (state.campaignId !== campaignId || state.kind === 'loading') {
     return (
       <div aria-label="Loading Campaign Outreach">
         <Loader />
@@ -138,7 +186,7 @@ export const CampaignOutreachTab = ({
     return (
       <InlineBanner
         button={{
-          onClick: () => void loadCampaignOutreachWorkflow(),
+          onClick: () => setReloadCount((count) => count + 1),
           title: 'Retry',
         }}
         color="danger"

@@ -1310,7 +1310,7 @@ describe('Myah standard metadata contract', () => {
       universalSettings: expect.objectContaining({
         relationType: 'MANY_TO_ONE',
         joinColumnName: 'outreachCampaignId',
-        onDelete: 'SET_NULL',
+        onDelete: 'CASCADE',
       }),
     });
     expect(outreachWorkflows).toMatchObject({
