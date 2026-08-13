@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { CampaignOutreachEmptyState } from '@/myah-outreach/components/CampaignOutreachEmptyState';
@@ -62,6 +62,9 @@ export const CampaignOutreachTab = ({
     null,
   );
   const [reloadCount, setReloadCount] = useState(0);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const currentCampaignIdRef = useRef(campaignId);
+  currentCampaignIdRef.current = campaignId;
 
   useEffect(() => {
     let isMounted = true;
@@ -143,6 +146,10 @@ export const CampaignOutreachTab = ({
         throw new Error('Campaign Outreach creation returned no data');
       }
 
+      if (currentCampaignIdRef.current !== campaignId) {
+        return;
+      }
+
       setState((currentState) =>
         currentState.campaignId === campaignId
           ? {
@@ -153,6 +160,9 @@ export const CampaignOutreachTab = ({
           : currentState,
       );
     } catch {
+      if (currentCampaignIdRef.current !== campaignId) {
+        return;
+      }
       setState((currentState) =>
         currentState.campaignId === campaignId
           ? { ...currentState, creationError: true }
@@ -163,7 +173,7 @@ export const CampaignOutreachTab = ({
         currentCampaignId === campaignId ? null : currentCampaignId,
       );
     }
-  }, [apolloCoreClient, campaignId, isCreating]);
+  }, [apolloCoreClient, campaignId, currentCampaignIdRef, isCreating]);
 
   if (state.campaignId !== campaignId || state.kind === 'loading') {
     return (

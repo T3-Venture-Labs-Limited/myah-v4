@@ -252,12 +252,15 @@ describe('CampaignOutreachTab', () => {
   });
 
   it('ignores a failed creation after navigating to another Campaign', async () => {
-    const createResult = Promise.withResolvers<unknown>();
+    let rejectCreate: (error: Error) => void = () => {};
+    const createResult = new Promise<unknown>((_resolve, reject) => {
+      rejectCreate = reject;
+    });
 
     mockQuery.mockResolvedValue({
       data: { findCampaignOutreachWorkflow: null },
     });
-    mockMutate.mockReturnValueOnce(createResult.promise);
+    mockMutate.mockReturnValueOnce(createResult);
     const user = userEvent.setup();
     const { rerender } = render(
       <CampaignOutreachTab campaignId="campaign-a" />,
@@ -268,10 +271,12 @@ describe('CampaignOutreachTab', () => {
         name: 'Create outreach workflow',
       }),
     );
+    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(1));
+
     rerender(<CampaignOutreachTab campaignId="campaign-b" />);
 
     await act(async () => {
-      createResult.reject(new Error('Campaign A failed'));
+      rejectCreate(new Error('Campaign A failed'));
     });
 
     expect(mockEnqueueErrorSnackBar).not.toHaveBeenCalled();
