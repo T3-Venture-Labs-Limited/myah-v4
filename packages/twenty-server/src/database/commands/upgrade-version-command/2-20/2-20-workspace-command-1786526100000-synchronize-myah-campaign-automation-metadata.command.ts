@@ -1,17 +1,13 @@
-import { InjectRepository } from '@nestjs/typeorm';
 import { Command } from 'nest-commander';
 
 import { SystemPermissionFlag } from 'twenty-shared/constants';
 import { MYAH_STANDARD_OBJECTS, STANDARD_OBJECTS } from 'twenty-shared/metadata';
-import { type Repository } from 'typeorm';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
-import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
-import { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/workspace-metadata-version/services/workspace-metadata-version.service';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 import { fromPermissionFlagToUniversalFlatRolePermissionFlag } from 'src/engine/core-modules/application/application-manifest/converters/from-permission-flag-to-universal-flat-role-permission-flag.util';
@@ -55,9 +51,6 @@ export class SynchronizeMyahCampaignAutomationMetadataCommand extends ActiveOrSu
     private readonly synchronizeMyahStandardMetadataCommand: SynchronizeMyahStandardMetadataCommand,
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly synchronizeSourceControlledMyahMetadataService: SynchronizeSourceControlledMyahMetadataService,
-    @InjectRepository(FieldMetadataEntity)
-    private readonly fieldMetadataRepository: Repository<FieldMetadataEntity>,
-    private readonly workspaceMetadataVersionService: WorkspaceMetadataVersionService,
   ) {
     super(workspaceIteratorService);
   }
@@ -80,33 +73,6 @@ export class SynchronizeMyahCampaignAutomationMetadataCommand extends ActiveOrSu
       return;
     }
 
-    const outreachCampaignField = await this.fieldMetadataRepository.findOne({
-      select: { isUnique: true },
-      where: {
-        universalIdentifier:
-          STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier,
-        workspaceId: args.workspaceId,
-      },
-    });
-
-    if (outreachCampaignField?.isUnique === true && !args.options.dryRun) {
-      await this.fieldMetadataRepository.update(
-        {
-          universalIdentifier:
-            STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier,
-          workspaceId: args.workspaceId,
-        },
-        { isUnique: false },
-      );
-      await this.workspaceCacheService.flush(args.workspaceId, [
-        'flatFieldMetadataMaps',
-        'ORMEntityMetadatas',
-        'graphQLResolverNameMap',
-      ]);
-      await this.workspaceMetadataVersionService.incrementMetadataVersion(
-        args.workspaceId,
-      );
-    }
 
     await this.synchronizeMyahStandardMetadataCommand.synchronizeWorkspace(
       args,

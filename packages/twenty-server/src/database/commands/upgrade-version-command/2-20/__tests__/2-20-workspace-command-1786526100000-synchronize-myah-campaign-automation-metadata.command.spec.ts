@@ -13,9 +13,6 @@ import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/u
 import { MYAH_STANDARD_OBJECTS, STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import type { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
-import type { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
-import type { WorkspaceMetadataVersionService } from 'src/engine/metadata-modules/workspace-metadata-version/services/workspace-metadata-version.service';
-import type { Repository } from 'typeorm';
 
 const args: RunOnWorkspaceArgs = {
   workspaceId: '20202020-0000-0000-0000-000000000001',
@@ -35,9 +32,6 @@ describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
     const synchronizeSourceControlledMetadata = jest
       .fn()
       .mockResolvedValue(undefined);
-    const findOne = jest.fn().mockResolvedValue({ isUnique: true });
-    const update = jest.fn().mockResolvedValue({ affected: 1 });
-    const incrementMetadataVersion = jest.fn().mockResolvedValue(undefined);
     const command = new SynchronizeMyahCampaignAutomationMetadataCommand(
       {} as WorkspaceIteratorService,
       { synchronizeWorkspace } as never,
@@ -49,15 +43,10 @@ describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
             },
           },
         }),
-        flush: jest.fn().mockResolvedValue(undefined),
       } as never as WorkspaceCacheService,
       {
         synchronizeWorkspace: synchronizeSourceControlledMetadata,
       } as unknown as SynchronizeSourceControlledMyahMetadataService,
-      { findOne, update } as unknown as Repository<FieldMetadataEntity>,
-      {
-        incrementMetadataVersion,
-      } as unknown as WorkspaceMetadataVersionService,
     );
 
     await command.runOnWorkspace(argsWithDataSource);
@@ -97,18 +86,6 @@ describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
         ]),
       },
     );
-    expect(update).toHaveBeenCalledWith(
-      {
-        universalIdentifier:
-          STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier,
-        workspaceId: args.workspaceId,
-      },
-      { isUnique: false },
-    );
-    expect(update.mock.invocationCallOrder[0]).toBeLessThan(
-      synchronizeWorkspace.mock.invocationCallOrder[0],
-    );
-    expect(incrementMetadataVersion).toHaveBeenCalledWith(args.workspaceId);
   });
 
   it('skips synchronization when Campaign metadata is absent', async () => {
@@ -131,8 +108,6 @@ describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
       {
         synchronizeWorkspace: synchronizeSourceControlledMetadata,
       } as unknown as SynchronizeSourceControlledMyahMetadataService,
-      {} as never,
-      {} as never,
     );
 
     await command.runOnWorkspace(argsWithDataSource);
