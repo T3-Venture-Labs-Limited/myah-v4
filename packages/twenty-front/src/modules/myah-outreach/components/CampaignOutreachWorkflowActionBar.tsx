@@ -44,7 +44,8 @@ export const CampaignOutreachWorkflowActionBar = ({
   const canDiscardDraft =
     canManageDraft && isDefined(workflow?.lastPublishedVersionId);
   const canTest =
-    currentVersion?.trigger !== null && currentVersion !== undefined;
+    isDefined(currentVersion?.trigger) &&
+    currentVersion.trigger.type !== 'DATABASE_EVENT';
 
   const handleActionFailure = (message: string) => {
     enqueueErrorSnackBar({ message });

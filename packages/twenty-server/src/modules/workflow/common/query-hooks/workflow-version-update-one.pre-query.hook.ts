@@ -7,11 +7,13 @@ import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runne
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type WorkflowVersionWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
 import { WorkflowVersionValidationWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-version-validation.workspace-service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkspaceNotFoundDefaultError } from 'src/engine/core-modules/workspace/workspace.exception';
 
 @WorkspaceQueryHook(`workflowVersion.updateOne`)
 export class WorkflowVersionUpdateOnePreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
     private readonly workflowVersionValidationWorkspaceService: WorkflowVersionValidationWorkspaceService,
   ) {}
 
@@ -23,6 +25,9 @@ export class WorkflowVersionUpdateOnePreQueryHook implements WorkspacePreQueryHo
     const { workspace } = authContext;
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      { workflowVersionId: payload.id, workspaceId: workspace.id },
+    );
 
     await this.workflowVersionValidationWorkspaceService.validateWorkflowVersionForUpdateOne(
       {

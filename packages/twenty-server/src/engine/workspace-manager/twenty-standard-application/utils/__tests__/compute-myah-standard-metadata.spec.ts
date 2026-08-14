@@ -19,7 +19,10 @@ import type { FlatRolePermissionFlag } from 'src/engine/metadata-modules/flat-ro
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
-import { MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import {
+  MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
+  MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { buildMyahStandardMetadataContract } from './myah-standard-metadata-contract.fixture';
 
 const contract = buildMyahStandardMetadataContract();
@@ -500,6 +503,11 @@ describe('Myah standard metadata contract', () => {
       title: 'Outreach',
       position: 20,
     });
+    expect(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.tasks.position,
+    ).toBeLessThan(
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.influencers.position,
+    );
     const fields = Object.values(
       result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     ).filter(isDefined);

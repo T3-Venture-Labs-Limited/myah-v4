@@ -323,7 +323,7 @@ export const MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG = {
     influencers: {
       universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
       title: 'Influencers',
-      position: 25,
+      position: 35,
       icon: 'IconUsers',
       layoutMode: PageLayoutTabLayoutMode.CANVAS,
       widgets: {

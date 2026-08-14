@@ -3,6 +3,7 @@ import { Args, Mutation } from '@nestjs/graphql';
 
 import graphqlTypeJson from 'graphql-type-json';
 import { PermissionFlagType } from 'twenty-shared/constants';
+import { isDefined } from 'twenty-shared/utils';
 
 import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
@@ -17,6 +18,7 @@ import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
 import { type OutputSchema } from 'src/modules/workflow/workflow-builder/workflow-schema/types/output-schema.type';
 import { WorkflowSchemaWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-schema/workflow-schema.workspace-service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 
 @CoreResolver()
 @UseGuards(
@@ -33,6 +35,7 @@ import { WorkflowSchemaWorkspaceService } from 'src/modules/workflow/workflow-bu
 export class WorkflowBuilderResolver {
   constructor(
     private readonly workflowSchemaWorkspaceService: WorkflowSchemaWorkspaceService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
 
   @Mutation(() => graphqlTypeJson)
@@ -40,6 +43,12 @@ export class WorkflowBuilderResolver {
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
     @Args('input') { step, workflowVersionId }: ComputeStepOutputSchemaInput,
   ): Promise<OutputSchema> {
+    if (isDefined(workflowVersionId)) {
+      await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+        { workflowVersionId, workspaceId },
+      );
+    }
+
     return this.workflowSchemaWorkspaceService.computeStepOutputSchema({
       step,
       workspaceId,

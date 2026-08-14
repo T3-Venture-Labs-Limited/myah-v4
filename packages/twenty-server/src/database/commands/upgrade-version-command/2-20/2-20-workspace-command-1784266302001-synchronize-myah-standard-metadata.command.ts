@@ -3,10 +3,7 @@ import { Command } from 'nest-commander';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { In, type DataSource } from 'typeorm';
 
-import {
-  MYAH_STANDARD_OBJECTS,
-  STANDARD_OBJECTS,
-} from 'twenty-shared/metadata';
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 
@@ -39,10 +36,6 @@ import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspa
 const MYAH_ROLE_UNIVERSAL_IDENTIFIERS = new Set<string>([
   STANDARD_ROLE.brandBrainAdmin.universalIdentifier,
   STANDARD_ROLE.creatorOpsDefault.universalIdentifier,
-]);
-
-const MYAH_NATIVE_OUTREACH_WORKFLOW_FIELD_UNIVERSAL_IDENTIFIERS = new Set<string>([
-  STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier,
 ]);
 
 const LEGACY_MYAH_APPLICATION_UNIVERSAL_IDENTIFIERS = [
@@ -267,22 +260,8 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
 
       return hasMyahEndpoint && hasAvailableFieldEndpoints(field);
     };
-    const selectedObjectFieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardFields.filter((field) =>
-        objectUniversalIdentifiers.has(
-          field.objectMetadataUniversalIdentifier ?? '',
-        ),
-      ),
-    );
     const fieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardFields.filter(
-        (field) =>
-          (syncOptions.targetObjectUniversalIdentifiers === undefined &&
-            MYAH_NATIVE_OUTREACH_WORKFLOW_FIELD_UNIVERSAL_IDENTIFIERS.has(
-              field.universalIdentifier,
-            )) ||
-          shouldIncludeField(field),
-      ),
+      standardFields.filter(shouldIncludeField),
     );
     const standardIndexes = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatIndexMaps.byUniversalIdentifier,
@@ -320,8 +299,6 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
           ? objectUniversalIdentifiers.has(
               view.objectMetadataUniversalIdentifier ?? '',
             ) ||
-            view.universalIdentifier ===
-              STANDARD_OBJECTS.workflow.views.allWorkflows.universalIdentifier ||
             standardViewFields.some(
               (viewField) =>
                 viewField.viewUniversalIdentifier === view.universalIdentifier &&
@@ -392,7 +369,6 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         viewUniversalIdentifiers.add(viewUniversalIdentifier);
       }
     }
-
     for (const viewField of standardViewFields) {
       const fieldMetadataUniversalIdentifier =
         viewField.fieldMetadataUniversalIdentifier;
@@ -406,9 +382,6 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       if (
         viewUniversalIdentifiers.has(viewField.viewUniversalIdentifier ?? '') &&
         isDefined(field) &&
-        selectedObjectFieldUniversalIdentifiers.has(
-          fieldMetadataUniversalIdentifier ?? '',
-        ) &&
         (syncOptions.targetObjectUniversalIdentifiers !== undefined ||
           hasAvailableFieldEndpoints(field))
       ) {
@@ -563,15 +536,6 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
               .map((permission) => permission.roleUniversalIdentifier)
               .filter(isDefined),
           ),
-    );
-    selectMetadata(
-      'rolePermissionFlag',
-      toUniversalIdentifiers(
-        getUniversalMetadataEntities(
-          standardAllFlatEntityMaps.flatRolePermissionFlagMaps
-            .byUniversalIdentifier,
-        ),
-      ),
     );
     selectMetadata(
           'objectPermission',

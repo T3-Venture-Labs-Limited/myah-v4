@@ -219,12 +219,6 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
           .byUniversalIdentifier,
       ),
     ).not.toHaveLength(0);
-    expect(
-      Object.keys(
-        migrationInput.fromToAllFlatEntityMaps.flatRolePermissionFlagMaps.to
-          .byUniversalIdentifier,
-      ),
-    ).toHaveLength(1);
   });
   it('includes Task and Note target extensions in the desired migration slice', async () => {
     const { allFlatEntityMaps } =
@@ -410,7 +404,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     expect(desiredWorkflow.labelSingular).toBe('Automation');
   });
 
-  it('syncs the native Outreach Campaign relation and General Automations filter', async () => {
+  it('does not alter native Workflow metadata after its command has run', async () => {
     await runOnWorkspace();
 
     const migrationInput =
@@ -424,43 +418,20 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     const desiredViews =
       migrationInput.fromToAllFlatEntityMaps.flatViewMaps.to
         .byUniversalIdentifier;
-    const desiredViewFields =
-      migrationInput.fromToAllFlatEntityMaps.flatViewFieldMaps.to
-        .byUniversalIdentifier;
-    const desiredViewFilters =
-      migrationInput.fromToAllFlatEntityMaps.flatViewFilterMaps.to
-        .byUniversalIdentifier;
 
     expect(
       desiredFields[
         STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier
       ],
-    ).toBeDefined();
-    expect(
-      desiredFields[STANDARD_OBJECTS.workflow.fields.name.universalIdentifier],
     ).toBeUndefined();
     expect(
       desiredObjects[STANDARD_OBJECTS.workflow.universalIdentifier],
-    ).toBeDefined();
+    ).toBeUndefined();
     expect(
       desiredViews[
         STANDARD_OBJECTS.workflow.views.allWorkflows.universalIdentifier
       ],
-    ).toBeDefined();
-    expect(
-      desiredViewFields['9ecf92f8-6702-49bb-a25f-1d6e4ade47d8'],
     ).toBeUndefined();
-    expect(
-      desiredViewFilters[
-        STANDARD_OBJECTS.workflow.views.allWorkflows.viewFilters
-          .outreachCampaignIsEmpty.universalIdentifier
-      ],
-    ).toMatchObject({
-      fieldMetadataUniversalIdentifier:
-        STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier,
-      operand: 'IS_EMPTY',
-      value: JSON.stringify([]),
-    });
   });
   it('provides isolated retained standard objects as migration dependencies', async () => {
     const { allFlatEntityMaps } =
@@ -978,6 +949,7 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
       ],
     ).toBeUndefined();
   });
+
 
   it('uses an already-owned Myah entity as the migration source', async () => {
     const { allFlatEntityMaps } =

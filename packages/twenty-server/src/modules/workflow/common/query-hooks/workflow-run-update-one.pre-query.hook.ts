@@ -8,14 +8,21 @@ import {
   WorkflowQueryValidationExceptionCode,
 } from 'src/modules/workflow/common/exceptions/workflow-query-validation.exception';
 import { type WorkflowRunWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 
 @WorkspaceQueryHook(`workflowRun.updateOne`)
 export class WorkflowRunUpdateOnePreQueryHook implements WorkspacePreQueryHookInstance {
+  constructor(
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
+  ) {}
   async execute(
-    _authContext: WorkspaceAuthContext,
+    authContext: WorkspaceAuthContext,
     _objectName: string,
     payload: UpdateOneResolverArgs<WorkflowRunWorkspaceEntity>,
   ): Promise<UpdateOneResolverArgs<WorkflowRunWorkspaceEntity>> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible(
+      { workflowRunId: payload.id, workspaceId: authContext.workspace.id },
+    );
     const allowedFields = ['name'];
     const payloadKeys = Object.keys(payload.data);
 

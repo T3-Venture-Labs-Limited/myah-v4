@@ -15,7 +15,6 @@ import { SynchronizeMyahCampaignInstructionsMetadataCommand } from 'src/database
 import { SynchronizeMyahCampaignPageLayoutCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1785839371449-synchronize-myah-campaign-page-layout.command';
 import { SynchronizeMyahCampaignAudienceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786149961997-synchronize-myah-campaign-audience.command';
 import { SynchronizeMyahCreatorListPageLayoutCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786155607567-synchronize-myah-creator-list-page-layout.command';
-import { SynchronizeMyahCampaignAutomationMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786526100000-synchronize-myah-campaign-automation-metadata.command';
 import { V2_20_UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/2-20/2-20-upgrade-version-command.module';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
@@ -59,7 +58,6 @@ import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/wor
     SynchronizeMyahCampaignAudienceCommand,
     SynchronizeMyahCreatorListPageLayoutCommand,
     SynchronizeMyahCampaignPageLayoutCommand,
-    SynchronizeMyahCampaignAutomationMetadataCommand,
   ],
 })
 export class V2_19_UpgradeVersionCommandModule {}

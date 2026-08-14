@@ -2,6 +2,7 @@ import { WORKSPACE_QUERY_HOOK_METADATA } from 'src/engine/api/graphql/workspace-
 import { WorkspaceQueryHookType } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/types/workspace-query-hook.type';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { WorkflowUpdateOnePreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-update-one.pre-query.hook';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkflowOutreachAssociationGuardService } from 'src/modules/workflow/common/services/workflow-outreach-association-guard.service';
 
 const authContext = {
@@ -9,10 +10,22 @@ const authContext = {
   workspace: { id: 'workspace-a' },
 } as WorkspaceAuthContext;
 
+type WorkflowUpdateOnePreQueryHookConstructor = new (
+  workflowOutreachAssociationGuardService: WorkflowOutreachAssociationGuardService,
+  workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
+) => WorkflowUpdateOnePreQueryHook;
+
 describe('WorkflowUpdateOnePreQueryHook', () => {
-  const hook = new WorkflowUpdateOnePreQueryHook(
-    new WorkflowOutreachAssociationGuardService(),
-  );
+  const workflowOutreachAssociationGuardService =
+    new WorkflowOutreachAssociationGuardService();
+  const workflowOutreachAccessGuardService = {
+    assertWorkflowIsAccessible: jest.fn(),
+  } as unknown as WorkflowOutreachAccessGuardService;
+  const hook =
+    new (WorkflowUpdateOnePreQueryHook as unknown as WorkflowUpdateOnePreQueryHookConstructor)(
+      workflowOutreachAssociationGuardService,
+      workflowOutreachAccessGuardService,
+    );
 
   it('preserves ordinary updates', async () => {
     const payload = { id: 'workflow-a', data: { name: 'Renamed' } };
@@ -20,6 +33,13 @@ describe('WorkflowUpdateOnePreQueryHook', () => {
     await expect(
       hook.execute(authContext, 'workflow', payload as never),
     ).resolves.toBe(payload);
+
+    expect(
+      workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
+    ).toHaveBeenCalledWith({
+      workflowId: 'workflow-a',
+      workspaceId: 'workspace-a',
+    });
   });
 
   it('rejects manual Workflow status updates', async () => {

@@ -1,11 +1,18 @@
+import { SystemPermissionFlag } from 'twenty-shared/constants';
+
+import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
+import { MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
+import { fromPermissionFlagToUniversalFlatRolePermissionFlag } from 'src/engine/core-modules/application/application-manifest/converters/from-permission-flag-to-universal-flat-role-permission-flag.util';
+
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
-import { SynchronizeMyahCampaignAutomationMetadataCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786526100000-synchronize-myah-campaign-automation-metadata.command';
-import { SynchronizeMyahCreatorListPageLayoutCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-workspace-command-1786155607567-synchronize-myah-creator-list-page-layout.command';
+import { SynchronizeMyahCampaignAutomationMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1786526100000-synchronize-myah-campaign-automation-metadata.command';
+import { SynchronizeManagedEmailCampaignAssignmentMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1786000001000-synchronize-managed-email-campaign-assignment-metadata.command';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { MYAH_STANDARD_OBJECTS, STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import type { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import type { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 
 const args: RunOnWorkspaceArgs = {
   workspaceId: '20202020-0000-0000-0000-000000000001',
@@ -20,8 +27,11 @@ const argsWithDataSource = {
 };
 
 describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
-  it('replaces obsolete Campaign Automation metadata', async () => {
+  it('replaces obsolete Campaign Automation metadata and grants Workflow access', async () => {
     const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
+    const synchronizeSourceControlledMetadata = jest
+      .fn()
+      .mockResolvedValue(undefined);
     const command = new SynchronizeMyahCampaignAutomationMetadataCommand(
       {} as WorkspaceIteratorService,
       { synchronizeWorkspace } as never,
@@ -34,6 +44,9 @@ describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
           },
         }),
       } as never as WorkspaceCacheService,
+      {
+        synchronizeWorkspace: synchronizeSourceControlledMetadata,
+      } as unknown as SynchronizeSourceControlledMyahMetadataService,
     );
 
     await command.runOnWorkspace(argsWithDataSource);
@@ -53,11 +66,33 @@ describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
           '833783c1-7cc0-4993-a856-977f95e1e3b4',
         ]),
       },
+      targetObjectUniversalIdentifiers: new Set([
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+        STANDARD_OBJECTS.workflow.universalIdentifier,
+      ]),
     });
+    expect(synchronizeSourceControlledMetadata).toHaveBeenCalledWith(
+      argsWithDataSource,
+      {
+        rolePermissionFlag: new Set([
+          fromPermissionFlagToUniversalFlatRolePermissionFlag({
+            applicationUniversalIdentifier:
+              TWENTY_STANDARD_APPLICATION.universalIdentifier,
+            now: '',
+            permissionFlagUniversalIdentifier: SystemPermissionFlag.WORKFLOWS,
+            roleUniversalIdentifier:
+              MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+          }).universalIdentifier,
+        ]),
+      },
+    );
   });
 
   it('skips synchronization when Campaign metadata is absent', async () => {
     const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
+    const synchronizeSourceControlledMetadata = jest
+      .fn()
+      .mockResolvedValue(undefined);
     const command = new SynchronizeMyahCampaignAutomationMetadataCommand(
       {} as WorkspaceIteratorService,
       { synchronizeWorkspace } as never,
@@ -70,19 +105,23 @@ describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
           },
         }),
       } as never as WorkspaceCacheService,
+      {
+        synchronizeWorkspace: synchronizeSourceControlledMetadata,
+      } as unknown as SynchronizeSourceControlledMyahMetadataService,
     );
 
     await command.runOnWorkspace(argsWithDataSource);
 
     expect(synchronizeWorkspace).not.toHaveBeenCalled();
+    expect(synchronizeSourceControlledMetadata).not.toHaveBeenCalled();
   });
 
-  it('registers after the latest current 2.19 workspace command', () => {
+  it('registers after the latest current 2.20 workspace command', () => {
     const commandMetadata = getRegisteredWorkspaceCommandMetadata(
       SynchronizeMyahCampaignAutomationMetadataCommand,
     );
     const latestCurrentCommandMetadata = getRegisteredWorkspaceCommandMetadata(
-      SynchronizeMyahCreatorListPageLayoutCommand,
+      SynchronizeManagedEmailCampaignAssignmentMetadataCommand,
     );
 
     if (
@@ -93,7 +132,7 @@ describe('SynchronizeMyahCampaignAutomationMetadataCommand', () => {
     }
 
     expect(commandMetadata).toMatchObject({
-      version: '2.19.0',
+      version: '2.20.0',
       timestamp: 1786526100000,
     });
     expect(commandMetadata.timestamp).toBeGreaterThan(

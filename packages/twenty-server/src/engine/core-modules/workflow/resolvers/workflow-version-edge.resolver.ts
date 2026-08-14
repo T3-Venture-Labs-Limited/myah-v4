@@ -16,6 +16,7 @@ import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
 import { WorkflowVersionEdgeWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-edge/workflow-version-edge.workspace-service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 
 @CoreResolver()
 @UsePipes(ResolverValidationPipe)
@@ -32,8 +33,8 @@ import { WorkflowVersionEdgeWorkspaceService } from 'src/modules/workflow/workfl
 export class WorkflowVersionEdgeResolver {
   constructor(
     private readonly workflowVersionEdgeWorkspaceService: WorkflowVersionEdgeWorkspaceService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
-
   @Mutation(() => WorkflowVersionStepChangesDTO)
   async createWorkflowVersionEdge(
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
@@ -45,6 +46,13 @@ export class WorkflowVersionEdgeResolver {
       sourceConnectionOptions,
     }: CreateWorkflowVersionEdgeInput,
   ): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      {
+        workflowVersionId,
+        workspaceId,
+      },
+    );
+
     return this.workflowVersionEdgeWorkspaceService.createWorkflowVersionEdge({
       source,
       target,
@@ -65,6 +73,13 @@ export class WorkflowVersionEdgeResolver {
       sourceConnectionOptions,
     }: CreateWorkflowVersionEdgeInput,
   ): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      {
+        workflowVersionId,
+        workspaceId,
+      },
+    );
+
     return this.workflowVersionEdgeWorkspaceService.deleteWorkflowVersionEdge({
       source,
       target,

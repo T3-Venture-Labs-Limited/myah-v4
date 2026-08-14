@@ -31,6 +31,7 @@ import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-module
 import { WorkflowVersionStepWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step.workspace-service';
 import { WorkflowRunWorkspaceService } from 'src/modules/workflow/workflow-runner/workflow-run/workflow-run.workspace-service';
 import { WorkflowRunnerWorkspaceService } from 'src/modules/workflow/workflow-runner/workspace-services/workflow-runner.workspace-service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 
 @CoreResolver()
 @UsePipes(ResolverValidationPipe)
@@ -52,8 +53,8 @@ export class WorkflowVersionStepResolver {
     private readonly httpTool: HttpTool,
     private readonly externalWritePolicyService: ExternalWritePolicyService,
     private readonly connectedAccountMetadataService: ConnectedAccountMetadataService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
   ) {}
-
   // Related to https://github.com/twentyhq/private-issues/issues/478
   @Query(() => ConnectedAccountHandleDTO, { nullable: true })
   async workflowStepConnectedAccountHandle(
@@ -82,6 +83,13 @@ export class WorkflowVersionStepResolver {
     @Args('input')
     input: CreateWorkflowVersionStepInput,
   ): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      {
+        workflowVersionId: input.workflowVersionId,
+        workspaceId,
+      },
+    );
+
     return this.workflowVersionStepWorkspaceService.createWorkflowVersionStep({
       workspaceId,
       input,
@@ -94,6 +102,13 @@ export class WorkflowVersionStepResolver {
     @Args('input')
     { step, workflowVersionId }: UpdateWorkflowVersionStepInput,
   ): Promise<WorkflowActionDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      {
+        workflowVersionId,
+        workspaceId,
+      },
+    );
+
     return this.workflowVersionStepWorkspaceService.updateWorkflowVersionStep({
       workspaceId,
       workflowVersionId,
@@ -107,6 +122,13 @@ export class WorkflowVersionStepResolver {
     @Args('input')
     { stepId, workflowVersionId }: DeleteWorkflowVersionStepInput,
   ): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      {
+        workflowVersionId,
+        workspaceId,
+      },
+    );
+
     return this.workflowVersionStepWorkspaceService.deleteWorkflowVersionStep({
       workspaceId,
       workflowVersionId,
@@ -120,14 +142,18 @@ export class WorkflowVersionStepResolver {
     @Args('input')
     { stepId, workflowRunId, response }: SubmitFormStepInput,
   ) {
+    await this.workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible(
+      {
+        workflowRunId,
+        workspaceId,
+      },
+    );
     await this.workflowRunnerWorkspaceService.submitFormStep({
       workspaceId,
       stepId,
       workflowRunId,
       response,
     });
-
-    return true;
   }
 
   @Mutation(() => WorkflowActionDTO)
@@ -136,6 +162,12 @@ export class WorkflowVersionStepResolver {
     @Args('input')
     { workflowRunId, step }: UpdateWorkflowRunStepInput,
   ): Promise<WorkflowActionDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible(
+      {
+        workflowRunId,
+        workspaceId,
+      },
+    );
     await this.workflowRunWorkspaceService.updateWorkflowRunStep({
       workspaceId,
       workflowRunId,
@@ -151,6 +183,13 @@ export class WorkflowVersionStepResolver {
     @Args('input')
     { stepId, workflowVersionId }: DuplicateWorkflowVersionStepInput,
   ): Promise<WorkflowVersionStepChangesDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      {
+        workflowVersionId,
+        workspaceId,
+      },
+    );
+
     return this.workflowVersionStepWorkspaceService.duplicateWorkflowVersionStep(
       {
         workspaceId,

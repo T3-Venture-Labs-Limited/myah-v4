@@ -23,6 +23,12 @@ import {
   CampaignLifecycleService,
   type CampaignUpdateManyArgs,
 } from 'src/modules/myah-campaign/services/campaign-lifecycle.service';
+import { CampaignOutreachWorkflowLifecycleWorkspaceService } from 'src/modules/myah-campaign/services/campaign-outreach-workflow-lifecycle.workspace-service';
+import { MyahCampaignDeleteOnePostQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-delete.post-query.hooks';
+import {
+  MyahCampaignDestroyManyPreQueryHook,
+  MyahCampaignDestroyOnePreQueryHook,
+} from 'src/modules/myah-campaign/query-hooks/myah-campaign-destroy.pre-query.hooks';
 
 jest.mock(
   'src/engine/twenty-orm/storage/orm-workspace-context.storage',
@@ -153,11 +159,68 @@ describe('Myah Campaign query hooks', () => {
 
     expect(lifecycleProviders).toContain(CampaignLifecycleService);
     expect(lifecycleExports).toContain(CampaignLifecycleService);
+    expect(lifecycleExports).toContain(
+      CampaignOutreachWorkflowLifecycleWorkspaceService,
+    );
     expect(queryHookImports).toContain(MyahCampaignLifecycleModule);
     expect(queryHookProviders).toEqual(
       expect.arrayContaining(hookCases.map(({ hookClass }) => hookClass)),
     );
     expect(workspaceHookImports).toContain(MyahCampaignQueryHookModule);
+  });
+
+  it('uses normalized delete-one results to clean Campaign Outreach workflows', async () => {
+    const campaignOutreachWorkflowLifecycleService = {
+      handleCampaignDeletion: jest.fn().mockResolvedValue(undefined),
+    } as unknown as CampaignOutreachWorkflowLifecycleWorkspaceService;
+    const hook = new MyahCampaignDeleteOnePostQueryHook(
+      campaignOutreachWorkflowLifecycleService,
+    );
+
+    await hook.execute(authContext, objectName, [
+      { id: 'campaign-a' },
+    ] as never);
+
+    expect(
+      campaignOutreachWorkflowLifecycleService.handleCampaignDeletion,
+    ).toHaveBeenCalledWith({
+      campaignIds: ['campaign-a'],
+      operation: 'delete',
+      workspaceId: 'workspace-a',
+    });
+  });
+
+  it('authorizes Campaign rows before destroy cleanup', async () => {
+    const campaignOutreachWorkflowLifecycleService = {
+      assertCampaignsAreAccessible: jest.fn().mockResolvedValue(undefined),
+      handleCampaignDeletion: jest.fn().mockResolvedValue(undefined),
+    } as unknown as CampaignOutreachWorkflowLifecycleWorkspaceService;
+    const destroyOneHook = new MyahCampaignDestroyOnePreQueryHook(
+      campaignOutreachWorkflowLifecycleService,
+    );
+    const destroyManyHook = new MyahCampaignDestroyManyPreQueryHook(
+      campaignOutreachWorkflowLifecycleService,
+    );
+
+    await destroyOneHook.execute(authContext, objectName, {
+      id: 'campaign-a',
+    } as never);
+    await destroyManyHook.execute(authContext, objectName, {
+      filter: { id: { in: ['campaign-a', 'campaign-b'] } },
+    } as never);
+
+    expect(
+      campaignOutreachWorkflowLifecycleService.assertCampaignsAreAccessible,
+    ).toHaveBeenNthCalledWith(1, {
+      campaignIds: ['campaign-a'],
+      workspaceId: 'workspace-a',
+    });
+    expect(
+      campaignOutreachWorkflowLifecycleService.assertCampaignsAreAccessible,
+    ).toHaveBeenNthCalledWith(2, {
+      campaignIds: ['campaign-a', 'campaign-b'],
+      workspaceId: 'workspace-a',
+    });
   });
 });
 

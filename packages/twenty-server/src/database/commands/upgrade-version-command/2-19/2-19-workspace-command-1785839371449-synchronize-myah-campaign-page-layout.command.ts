@@ -98,11 +98,7 @@ export class SynchronizeMyahCampaignPageLayoutCommand extends ActiveOrSuspendedW
       {
         synchronizeExistingSelectedMetadata: true,
         deletionSelection: {
-          pageLayoutTab: new Set(['1c137df3-a23f-477c-a890-fb40aecc40f7']),
-          pageLayoutWidget: new Set([
-            '368b8c66-435d-4e5b-94b8-4d3f08fc283b',
-            '833783c1-7cc0-4993-a856-977f95e1e3b4',
-          ]),
+          pageLayoutWidget: new Set(['368b8c66-435d-4e5b-94b8-4d3f08fc283b']),
         },
       },
     );

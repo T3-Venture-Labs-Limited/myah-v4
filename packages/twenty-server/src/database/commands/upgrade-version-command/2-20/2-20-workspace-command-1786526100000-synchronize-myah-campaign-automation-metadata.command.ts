@@ -1,13 +1,17 @@
 import { Command } from 'nest-commander';
 
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
-
+import { SystemPermissionFlag } from 'twenty-shared/constants';
+import { MYAH_STANDARD_OBJECTS, STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
+import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
+import { fromPermissionFlagToUniversalFlatRolePermissionFlag } from 'src/engine/core-modules/application/application-manifest/converters/from-permission-flag-to-universal-flat-role-permission-flag.util';
+import { MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER } from 'src/engine/workspace-manager/twenty-standard-application/utils/role-metadata/myah-standard-role-permission-definitions.constant';
 
 
 const OBSOLETE_CAMPAIGN_AUTOMATION_METADATA_IDS = {
@@ -25,9 +29,19 @@ const OBSOLETE_CAMPAIGN_AUTOMATION_METADATA_IDS = {
   ]),
 };
 
-@RegisteredWorkspaceCommand('2.19.0', 1786526100000)
+
+const CREATOR_OPS_WORKFLOW_ROLE_PERMISSION_FLAG_UNIVERSAL_IDENTIFIER =
+  fromPermissionFlagToUniversalFlatRolePermissionFlag({
+    applicationUniversalIdentifier:
+      TWENTY_STANDARD_APPLICATION.universalIdentifier,
+    now: '',
+    permissionFlagUniversalIdentifier: SystemPermissionFlag.WORKFLOWS,
+    roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+  }).universalIdentifier;
+
+@RegisteredWorkspaceCommand('2.20.0', 1786526100000)
 @Command({
-  name: 'upgrade:2-19:synchronize-myah-campaign-automation-metadata',
+  name: 'upgrade:2-20:synchronize-myah-campaign-automation-metadata',
   description:
     'Replace source-controlled Campaign Automation metadata for existing workspaces',
 })
@@ -36,6 +50,7 @@ export class SynchronizeMyahCampaignAutomationMetadataCommand extends ActiveOrSu
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly synchronizeMyahStandardMetadataCommand: SynchronizeMyahStandardMetadataCommand,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly synchronizeSourceControlledMyahMetadataService: SynchronizeSourceControlledMyahMetadataService,
   ) {
     super(workspaceIteratorService);
   }
@@ -63,6 +78,19 @@ export class SynchronizeMyahCampaignAutomationMetadataCommand extends ActiveOrSu
       {
         explicitObsoleteUniversalIdentifiersByMetadataName:
           OBSOLETE_CAMPAIGN_AUTOMATION_METADATA_IDS,
+        targetObjectUniversalIdentifiers: new Set([
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+          STANDARD_OBJECTS.workflow.universalIdentifier,
+        ]),
+      },
+    );
+
+    await this.synchronizeSourceControlledMyahMetadataService.synchronizeWorkspace(
+      args,
+      {
+        rolePermissionFlag: new Set([
+          CREATOR_OPS_WORKFLOW_ROLE_PERMISSION_FLAG_UNIVERSAL_IDENTIFIER,
+        ]),
       },
     );
   }
