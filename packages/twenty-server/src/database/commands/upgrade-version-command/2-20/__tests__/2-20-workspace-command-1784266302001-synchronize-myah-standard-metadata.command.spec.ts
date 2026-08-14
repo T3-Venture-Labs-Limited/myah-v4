@@ -201,6 +201,54 @@ describe('SynchronizeMyahStandardMetadataCommand', () => {
     );
   });
 
+  it('omits cache-derived field uniqueness from the metadata migration', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+        now: '2026-08-14T00:00:00.000Z',
+      });
+
+    delete allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+      MYAH_STANDARD_OBJECTS.campaign.universalIdentifier
+    ];
+
+    getOrRecompute.mockResolvedValue({
+      ...allFlatEntityMaps,
+      featureFlagsMap: {},
+    });
+
+    await command.synchronizeWorkspace(
+      {
+        workspaceId: WORKSPACE_ID,
+        options: { dryRun: false },
+        index: 0,
+        total: 1,
+      },
+      {
+        targetObjectUniversalIdentifiers: new Set([
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+          STANDARD_OBJECTS.workflow.universalIdentifier,
+        ]),
+      },
+    );
+
+    const fieldMaps =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0]
+        .fromToAllFlatEntityMaps.flatFieldMetadataMaps;
+    const outreachCampaignUniversalIdentifier =
+      STANDARD_OBJECTS.workflow.fields.outreachCampaign.universalIdentifier;
+
+    expect(
+      fieldMaps.from.byUniversalIdentifier[outreachCampaignUniversalIdentifier]
+        .isUnique,
+    ).toBeUndefined();
+    expect(
+      fieldMaps.to.byUniversalIdentifier[outreachCampaignUniversalIdentifier]
+        .isUnique,
+    ).toBeUndefined();
+  });
+
   it('includes Myah object and field permissions in the desired migration slice', async () => {
     await runOnWorkspace();
 
