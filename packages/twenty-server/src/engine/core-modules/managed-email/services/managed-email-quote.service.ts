@@ -75,27 +75,67 @@ export class ManagedEmailQuoteService {
       metronomeRateCardId,
     );
 
-    const domainQuoteAmounts = new Set(
-      proposal.domains.map(
-        ({ providerQuote }) => providerQuote.amountMinorUnits,
-      ),
-    );
-
-    if (domainQuoteAmounts.size !== 1) {
-      throw new Error(
-        'Managed email domain quotes cannot be represented exactly',
-      );
-    }
-
-    const [domainProviderCost] = domainQuoteAmounts;
-
-    if (domainProviderCost === undefined) {
+    if (proposal.domains.length === 0) {
       throw new Error('Managed email proposal contains no domains');
     }
 
     const products = new Map(
       catalog.products.map((product) => [product.key, product]),
     );
+    const domainProduct = this.getProduct(
+      products,
+      MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR,
+    );
+    const domainProviderQuotes = proposal.domains.map(
+      ({ providerQuote }) => providerQuote,
+    );
+
+    if (
+      domainProviderQuotes.some(
+        (providerQuote) =>
+          !Number.isSafeInteger(providerQuote.amountMinorUnits) ||
+          providerQuote.amountMinorUnits <= 0 ||
+          providerQuote.currency !== 'USD' ||
+          providerQuote.termCount !== 1 ||
+          providerQuote.termUnit !== 'YEAR',
+      )
+    ) {
+      throw new Error('Managed email domain provider quote is invalid');
+    }
+
+    let domainProviderCost: number | undefined;
+
+    if (domainProduct.customerPrice.kind === 'PROVIDER_QUOTE_MARGIN') {
+      const domainQuoteAmounts = new Set(
+        domainProviderQuotes.map(({ amountMinorUnits }) => amountMinorUnits),
+      );
+
+      if (domainQuoteAmounts.size !== 1) {
+        throw new Error(
+          'Managed email domain quotes cannot be represented exactly',
+        );
+      }
+
+      [domainProviderCost] = domainQuoteAmounts;
+    } else if (
+      domainProduct.customerPrice.kind === 'FIXED_PROVIDER_QUOTE_CEILING'
+    ) {
+      const maximumProviderQuoteMinorUnits =
+        domainProduct.customerPrice.maximumProviderQuoteMinorUnits;
+
+      if (
+        domainProviderQuotes.some(
+          ({ amountMinorUnits }) =>
+            amountMinorUnits > maximumProviderQuoteMinorUnits,
+        )
+      ) {
+        throw new Error(
+          'Managed email domain provider quote exceeds approved ceiling',
+        );
+      }
+    } else {
+      throw new Error('Managed email catalog is invalid');
+    }
     const mailboxProduct = this.getProduct(
       products,
       MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH,
@@ -126,10 +166,7 @@ export class ManagedEmailQuoteService {
         billingFrequency: 'ANNUAL',
         metronomeProductId:
           metronomeProducts[MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR],
-        product: this.getProduct(
-          products,
-          MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR,
-        ),
+        product: domainProduct,
         providerQuoteCost: domainProviderCost,
         quantity: proposal.domains.length,
         startingAt,
@@ -204,16 +241,16 @@ export class ManagedEmailQuoteService {
     startingAt: Date;
   }): ManagedEmailQuoteLine {
     const unitPriceCents =
-      product.customerPrice.kind === 'FIXED'
-        ? product.customerPrice.amountMinorUnits
-        : minimumCustomerPriceMinorUnits({
+      product.customerPrice.kind === 'PROVIDER_QUOTE_MARGIN'
+        ? minimumCustomerPriceMinorUnits({
             landedProviderCostMinorUnits: providerQuoteCost ?? 0,
             maximumFixedFeeMinorUnits:
               product.customerPrice.paymentProcessing.maximumFixedFeeMinorUnits,
             maximumVariableFeeBasisPoints:
               product.customerPrice.paymentProcessing
                 .maximumVariableFeeBasisPoints,
-          });
+          })
+        : product.customerPrice.amountMinorUnits;
     const amountCents = unitPriceCents * quantity;
 
     if (

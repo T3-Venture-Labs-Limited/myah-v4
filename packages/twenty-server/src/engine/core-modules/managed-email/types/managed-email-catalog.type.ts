@@ -58,6 +58,14 @@ export type ManagedEmailCustomerPrice =
       paymentProcessing: ManagedEmailPaymentProcessing;
     }>
   | Readonly<{
+      kind: 'FIXED_PROVIDER_QUOTE_CEILING';
+      amountMinorUnits: number;
+      maximumProviderQuoteMinorUnits: number;
+      currency: 'USD';
+      minimumGrossMarginBasisPoints: 3000;
+      paymentProcessing: ManagedEmailPaymentProcessing;
+    }>
+  | Readonly<{
       kind: 'PROVIDER_QUOTE_MARGIN';
       currency: 'USD';
       minimumGrossMarginBasisPoints: 3000;

@@ -123,26 +123,51 @@ import { ManagedEmailCustomerService } from './services/managed-email-customer.s
     {
       provide: MANAGED_EMAIL_PROPOSAL_POLICY,
       inject: [TwentyConfigService],
-      useFactory: (config: TwentyConfigService) =>
-        config.get('MANAGED_EMAIL_EXECUTION_MODE') === 'SANDBOX'
-          ? {
-              candidateDomains: (slug: string, count: number) =>
-                Array.from(
-                  { length: count },
-                  (_, index) => `${slug}-${index + 1}.test`,
-                ),
-              maxMailboxesPerDomain: 1,
-              proposalTtlMs: 15 * 60 * 1000,
-              version: 'sandbox-v1',
-            }
-          : {
-              candidateDomains: () => {
-                throw new Error('Managed email proposal policy is unavailable');
-              },
-              maxMailboxesPerDomain: 1,
-              proposalTtlMs: 1,
-              version: 'unconfigured',
+      useFactory: (config: TwentyConfigService) => {
+        const executionMode = config.get('MANAGED_EMAIL_EXECUTION_MODE');
+
+        if (executionMode === 'SANDBOX') {
+          return {
+            allowProviderAlternatives: true,
+            candidateDomains: (slug: string, count: number) =>
+              Array.from(
+                { length: count },
+                (_, index) => `${slug}-${index + 1}.test`,
+              ),
+            maxMailboxesPerDomain: 1,
+            proposalTtlMs: 15 * 60 * 1000,
+            version: 'sandbox-v1',
+          };
+        }
+
+        if (executionMode === 'PRODUCTION') {
+          return {
+            allowProviderAlternatives: false,
+            candidateDomains: (slug: string, count: number) => {
+              if (count !== 1) {
+                throw new Error(
+                  'Managed email production proposal supports one domain',
+                );
+              }
+
+              return [`${slug}.com`];
             },
+            maxMailboxesPerDomain: 1,
+            proposalTtlMs: 15 * 60 * 1000,
+            version: 'production-com-v1',
+          };
+        }
+
+        return {
+          allowProviderAlternatives: false,
+          candidateDomains: () => {
+            throw new Error('Managed email proposal policy is unavailable');
+          },
+          maxMailboxesPerDomain: 1,
+          proposalTtlMs: 1,
+          version: 'unconfigured',
+        };
+      },
     },
     {
       provide: MANAGED_EMAIL_CATALOG_CLOCK,

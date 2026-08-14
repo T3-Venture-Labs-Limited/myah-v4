@@ -36,6 +36,7 @@ const personas = [
 ];
 
 const policy: ManagedEmailProposalPolicy = {
+  allowProviderAlternatives: true,
   candidateDomains: () => ['creator-partners.co', 'creator-collabs.co'],
   maxMailboxesPerDomain: 3,
   proposalTtlMs: 15 * 60 * 1000,
@@ -43,7 +44,9 @@ const policy: ManagedEmailProposalPolicy = {
 };
 
 describe('ManagedEmailProposalService', () => {
-  const createService = () => {
+  const createService = (
+    proposalPolicy: ManagedEmailProposalPolicy = policy,
+  ) => {
     const icemailClient = {
       checkDomainAvailability: jest.fn(async (domain: string) => ({
         alternatives:
@@ -84,7 +87,7 @@ describe('ManagedEmailProposalService', () => {
       eventLogEmitterService,
       service: new ManagedEmailProposalService(
         icemailClient as unknown as IcemailClient,
-        policy,
+        proposalPolicy,
         () => now,
         () => 'proposal-id',
         eventLogEmitterService as unknown as EventLogEmitterService,
@@ -178,6 +181,27 @@ describe('ManagedEmailProposalService', () => {
     });
     expect(JSON.stringify(proposal)).not.toMatch(
       /providerId|providerType|credential|password|raw/i,
+    );
+  });
+
+  it('rejects provider alternatives when the proposal policy requires the exact candidate', async () => {
+    const { icemailClient, service } = createService({
+      ...policy,
+      allowProviderAlternatives: false,
+      candidateDomains: () => ['creator-partners.co'],
+    });
+
+    await expect(
+      service.createProposal(
+        {
+          mailboxCount: 1,
+          personas: [personas[0]],
+        },
+        { actorWorkspaceMemberId, workspaceId, workspaceSlug: 'creator' },
+      ),
+    ).rejects.toThrow('Managed email domain availability is insufficient');
+    expect(icemailClient.checkDomainAvailability).toHaveBeenCalledWith(
+      'creator-partners.co',
     );
   });
 
