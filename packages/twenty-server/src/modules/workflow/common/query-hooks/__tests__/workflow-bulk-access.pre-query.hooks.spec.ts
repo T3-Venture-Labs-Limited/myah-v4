@@ -29,9 +29,9 @@ describe.each([
     ) => WorkflowBulkAccessHook)(workflowOutreachAccessGuardService);
     const payload = { filter: { id: { in: ['workflow-a', 'workflow-b'] } } };
 
-    await expect(
-      hook.execute(authContext, 'workflow', payload),
-    ).resolves.toBe(payload);
+    await expect(hook.execute(authContext, 'workflow', payload)).resolves.toBe(
+      payload,
+    );
 
     expect(
       workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
