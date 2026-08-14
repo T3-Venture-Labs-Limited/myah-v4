@@ -36,6 +36,7 @@ const isValidPolicy = (
     isNonNegativeInteger(policy.minimumWarmupDays) &&
     isBoundedInteger(policy.minimumInboxPlacementBasisPoints, 10_000) &&
     isBoundedInteger(policy.maximumSpamPlacementBasisPoints, 10_000) &&
+    typeof policy.requiresPlacementMetrics === 'boolean' &&
     isNonEmpty(policy.dns.dkimSelector) &&
     policy.dns.expectedMxSuffixes.length > 0 &&
     policy.dns.expectedMxSuffixes.every(isNonEmpty) &&
@@ -80,7 +81,8 @@ export const createManagedEmailReadinessPolicyResolver =
       : clonePolicy(policy);
   };
 
-// Production remains fail-closed until a reviewed pilot policy is approved.
+// Production remains fail-closed until the pilot provider's DKIM selector is
+// observed with rotated credentials and the exact policy is reviewed.
 export const managedEmailReadinessPolicies: Readonly<
   Record<string, ManagedEmailReadinessPolicy>
 > = Object.freeze({});
@@ -98,6 +100,7 @@ export const managedEmailSandboxReadinessPolicies = Object.freeze({
     metricsLookbackMs: 60_000,
     minimumInboxPlacementBasisPoints: 0,
     minimumWarmupDays: 0,
+    requiresPlacementMetrics: true,
     providerConfigurationKey: 'sandbox-provider',
     version: 'sandbox-v1',
     warmupConfiguration: Object.freeze({

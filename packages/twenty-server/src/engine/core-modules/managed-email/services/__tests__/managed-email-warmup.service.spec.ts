@@ -15,6 +15,7 @@ import {
   WarmupInboxExceptionCode,
 } from '../../providers/warmup-inbox/warmup-inbox.exception';
 import { type ManagedEmailReadinessPolicy } from '../../types/managed-email-readiness.type';
+import { ManagedEmailReadinessService } from '../managed-email-readiness.service';
 import { ManagedEmailWarmupService } from '../managed-email-warmup.service';
 
 const now = new Date('2026-08-06T12:00:00.000Z');
@@ -44,6 +45,7 @@ const policy: ManagedEmailReadinessPolicy = {
   metricsLookbackMs: 7 * 24 * 60 * 60 * 1000,
   minimumInboxPlacementBasisPoints: 9500,
   minimumWarmupDays: 7,
+  requiresPlacementMetrics: true,
   providerConfigurationKey: 'warmup-test',
   version: 'approved-test-v1',
   warmupConfiguration: {
@@ -345,6 +347,65 @@ describe('ManagedEmailWarmupService', () => {
     expect(persisted.healthFacts).toEqual(
       expect.objectContaining({ schemaVersion: 1, facts: expect.any(Array) }),
     );
+  });
+
+  it('allows a technically healthy pilot before placement activity exists', async () => {
+    const test = setup();
+    const technicalPolicy: ManagedEmailReadinessPolicy = {
+      ...policy,
+      capacityCurve: [{ capacity: 10, days: 0 }],
+      maximumSpamPlacementBasisPoints: 10_000,
+      minimumInboxPlacementBasisPoints: 0,
+      minimumWarmupDays: 0,
+      requiresPlacementMetrics: false,
+      version: 'technical-pilot-v1',
+      warmupConfiguration: {
+        ...policy.warmupConfiguration,
+        version: 'technical-pilot-v1',
+      },
+    };
+    const readinessService = new ManagedEmailReadinessService(
+      () => technicalPolicy,
+    );
+    const service = new ManagedEmailWarmupService(
+      test.mailboxRepository as never,
+      test.warmupInboxClient as never,
+      test.icemailClient as never,
+      test.imapSmtpCaldavService as never,
+      test.workspaceMailboxConnectionService as never,
+      test.dnsResolver as never,
+      readinessService,
+      () => technicalPolicy,
+      () => now,
+    );
+    test.mailboxRepository.findOneBy.mockResolvedValue(
+      mailbox({ readinessPolicyVersion: technicalPolicy.version }),
+    );
+    test.warmupInboxClient.getMetrics.mockResolvedValue({
+      from: new Date(now.getTime() - technicalPolicy.metricsLookbackMs),
+      inboxId: 'warmup-1',
+      to: now,
+      totals: {
+        landedCategory: 0,
+        landedInbox: 0,
+        landedSpam: 0,
+        messages: 0,
+        repliesReceived: 0,
+        sent: 0,
+      },
+      trend: [],
+    });
+
+    await service.evaluateMailbox({ mailboxId, workspaceId });
+
+    const updateCalls = test.mailboxRepository.update.mock.calls;
+    const persisted = updateCalls[updateCalls.length - 1]?.[2];
+
+    expect(persisted).toMatchObject({
+      campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
+      policySafeDailyCapacity: 10,
+      warmupState: ManagedEmailWarmupState.MAINTENANCE,
+    });
   });
 
   it('fails protocol readiness when real IMAP or SMTP validation fails', async () => {

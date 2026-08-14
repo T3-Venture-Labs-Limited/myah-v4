@@ -13,6 +13,7 @@ export type ManagedEmailReadinessPolicy = Readonly<{
   metricsLookbackMs: number;
   minimumInboxPlacementBasisPoints: number;
   minimumWarmupDays: number;
+  requiresPlacementMetrics: boolean;
   providerConfigurationKey: string;
   version: string;
   warmupConfiguration: ManagedWarmupPolicyConfiguration;

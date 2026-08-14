@@ -17,6 +17,7 @@ const approvedPolicy: ManagedEmailReadinessPolicy = {
   metricsLookbackMs: 7 * 24 * 60 * 60 * 1000,
   minimumInboxPlacementBasisPoints: 9500,
   minimumWarmupDays: 7,
+  requiresPlacementMetrics: true,
   providerConfigurationKey: 'warmup-test',
   version: 'approved-test-v1',
   warmupConfiguration: {
@@ -138,6 +139,55 @@ describe('ManagedEmailReadinessService', () => {
       campaignEligibility: ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
       ready: false,
       safeReasonCode: 'HEALTH_EVIDENCE_UNAVAILABLE',
+    });
+  });
+
+  it('allows a technical pilot without placement metrics while preserving warmup health', () => {
+    const technicalPolicy: ManagedEmailReadinessPolicy = {
+      ...approvedPolicy,
+      capacityCurve: [{ capacity: 10, days: 0 }],
+      minimumWarmupDays: 0,
+      requiresPlacementMetrics: false,
+      version: 'technical-pilot-v1',
+      warmupConfiguration: {
+        ...approvedPolicy.warmupConfiguration,
+        version: 'technical-pilot-v1',
+      },
+    };
+    const technicalInput = readyInput({
+      inboxPlacementBasisPoints: null,
+      policyVersion: technicalPolicy.version,
+      spamPlacementBasisPoints: null,
+      warmupDays: 0,
+    });
+
+    expect(service(technicalPolicy).evaluate(technicalInput)).toMatchObject({
+      campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
+      policySafeDailyCapacity: 10,
+      ready: true,
+      safeReasonCode: null,
+    });
+    expect(
+      service(technicalPolicy).evaluate({
+        ...technicalInput,
+        inboxPlacementBasisPoints: 0,
+        spamPlacementBasisPoints: 10_000,
+      }),
+    ).toMatchObject({
+      campaignEligibility: ManagedEmailCampaignEligibility.ELIGIBLE,
+      policySafeDailyCapacity: 10,
+      ready: true,
+      safeReasonCode: null,
+    });
+    expect(
+      service(technicalPolicy).evaluate({
+        ...technicalInput,
+        warmupHealthy: false,
+      }),
+    ).toMatchObject({
+      campaignEligibility: ManagedEmailCampaignEligibility.NEW_THREADS_BLOCKED,
+      ready: false,
+      safeReasonCode: 'HEALTH_REGRESSION',
     });
   });
 
