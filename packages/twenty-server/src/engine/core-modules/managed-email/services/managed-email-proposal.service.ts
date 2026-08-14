@@ -161,7 +161,9 @@ export class ManagedEmailProposalService {
         await this.icemailClient.checkDomainAvailability(candidate);
       const selected = availability.available
         ? availability
-        : availability.alternatives.find(({ available }) => available);
+        : this.policy.allowProviderAlternatives
+          ? availability.alternatives.find(({ available }) => available)
+          : undefined;
 
       if (
         selected === undefined ||

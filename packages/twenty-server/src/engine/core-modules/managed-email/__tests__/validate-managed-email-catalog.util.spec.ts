@@ -33,10 +33,16 @@ const validCatalog = (): MutableManagedEmailCatalog => ({
     {
       ...structuredClone(MANAGED_EMAIL_PRODUCT_DEFINITIONS[0]),
       customerPrice: {
-        kind: 'PROVIDER_QUOTE_MARGIN',
+        kind: 'FIXED_PROVIDER_QUOTE_CEILING',
+        amountMinorUnits: 1429,
+        maximumProviderQuoteMinorUnits: 1000,
         currency: 'USD',
         minimumGrossMarginBasisPoints: 3000,
-        paymentProcessing: paymentProcessing(),
+        paymentProcessing: {
+          ...paymentProcessing(),
+          maximumVariableFeeBasisPoints: 0,
+          maximumFixedFeeMinorUnits: 0,
+        },
       },
     },
     {
@@ -205,6 +211,20 @@ describe('validateManagedEmailCatalog', () => {
     );
   });
 
+  it('rejects a fixed domain price below its provider-quote ceiling margin floor', () => {
+    const catalog = validCatalog();
+    const domain = catalog.products[0];
+
+    if (domain.customerPrice.kind !== 'FIXED_PROVIDER_QUOTE_CEILING') {
+      throw new Error('Expected fixed provider-quote ceiling test price');
+    }
+    domain.customerPrice.amountMinorUnits = 1428;
+
+    expect(() => validateManagedEmailCatalog(catalog)).toThrow(
+      'Managed email catalog is invalid',
+    );
+  });
+
   it.each([
     ['blank version', (c: MutableManagedEmailCatalog) => (c.version = ' ')],
     [
@@ -224,6 +244,16 @@ describe('validateManagedEmailCatalog', () => {
 
         if (mailbox.customerPrice.kind === 'FIXED') {
           mailbox.customerPrice.amountMinorUnits = 0;
+        }
+      },
+    ],
+    [
+      'zero provider quote ceiling',
+      (c: MutableManagedEmailCatalog) => {
+        const domain = c.products[0];
+
+        if (domain.customerPrice.kind === 'FIXED_PROVIDER_QUOTE_CEILING') {
+          domain.customerPrice.maximumProviderQuoteMinorUnits = 0;
         }
       },
     ],

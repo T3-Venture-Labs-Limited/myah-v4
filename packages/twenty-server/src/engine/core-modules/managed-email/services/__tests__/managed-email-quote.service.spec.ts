@@ -5,7 +5,6 @@ import {
 import { ManagedEmailQuoteService } from 'src/engine/core-modules/managed-email/services/managed-email-quote.service';
 import { type ManagedEmailCatalog } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 import { type ManagedEmailProposal } from 'src/engine/core-modules/managed-email/types/managed-email-proposal.type';
-import { minimumCustomerPriceMinorUnits } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-catalog.util';
 import { managedEmailQuoteSnapshotTransformer } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-offer-json.util';
 
 const paymentProcessing = {
@@ -18,16 +17,23 @@ const paymentProcessing = {
 
 const mailboxProviderCostMinorUnits = 250;
 const mailboxCustomerPriceMinorUnits = 650;
+const domainCustomerPriceMinorUnits = 1429;
 
 const catalog: ManagedEmailCatalog = {
   products: [
     {
       ...structuredClone(MANAGED_EMAIL_PRODUCT_DEFINITIONS[0]),
       customerPrice: {
+        amountMinorUnits: domainCustomerPriceMinorUnits,
         currency: 'USD',
-        kind: 'PROVIDER_QUOTE_MARGIN',
+        kind: 'FIXED_PROVIDER_QUOTE_CEILING',
+        maximumProviderQuoteMinorUnits: 1000,
         minimumGrossMarginBasisPoints: 3000,
-        paymentProcessing,
+        paymentProcessing: {
+          ...paymentProcessing,
+          maximumFixedFeeMinorUnits: 0,
+          maximumVariableFeeBasisPoints: 0,
+        },
       },
     },
     {
@@ -105,7 +111,7 @@ const proposal: ManagedEmailProposal = {
         },
       ],
       providerQuote: {
-        amountMinorUnits: 1000,
+        amountMinorUnits: 999 + index,
         currency: 'USD' as const,
         fingerprint: `quote-${index}`,
         observedAt: '2026-08-05T10:00:00.000Z',
@@ -142,11 +148,6 @@ describe('ManagedEmailQuoteService', () => {
       now: new Date('2026-08-05T10:05:00.000Z'),
       proposal,
     });
-    const domainPrice = minimumCustomerPriceMinorUnits({
-      landedProviderCostMinorUnits: 1000,
-      maximumFixedFeeMinorUnits: 30,
-      maximumVariableFeeBasisPoints: 290,
-    });
 
     expect(quote).toMatchObject({
       catalogVersion: 'test-catalog-2026-08-03',
@@ -157,7 +158,7 @@ describe('ManagedEmailQuoteService', () => {
     });
     expect(quote.lines).toEqual([
       {
-        amountCents: domainPrice * 2,
+        amountCents: domainCustomerPriceMinorUnits * 2,
         billingFrequency: 'ANNUAL',
         endingBefore: '2027-08-05T10:05:00.000Z',
         metronomeProductId:
@@ -166,7 +167,7 @@ describe('ManagedEmailQuoteService', () => {
         productTag: 'myah-managed-sending-domain-year',
         quantity: 2,
         startingAt: '2026-08-05T10:05:00.000Z',
-        unitPriceCents: domainPrice,
+        unitPriceCents: domainCustomerPriceMinorUnits,
       },
       {
         amountCents: mailboxCustomerPriceMinorUnits * 4,
@@ -266,7 +267,7 @@ describe('ManagedEmailQuoteService', () => {
     ).toThrow('Managed email prewarmed mailbox cost is not covered');
   });
 
-  it('rejects expired proposals and provider quotes that cannot form one exact product line', () => {
+  it('rejects expired, empty, malformed, and over-ceiling domain quotes', () => {
     expect(() =>
       service.createQuote({
         catalog,
@@ -285,6 +286,37 @@ describe('ManagedEmailQuoteService', () => {
         metronomeRateCardAlias: 'managed-email-test',
         metronomeRateCardId: '123e4567-e89b-42d3-a456-426614174020',
         now: new Date('2026-08-05T10:05:00.000Z'),
+        proposal: { ...proposal, domains: [] },
+      }),
+    ).toThrow('Managed email proposal contains no domains');
+
+    expect(() =>
+      service.createQuote({
+        catalog,
+        metronomeProducts,
+        metronomeRateCardAlias: 'managed-email-test',
+        metronomeRateCardId: '123e4567-e89b-42d3-a456-426614174020',
+        now: new Date('2026-08-05T10:05:00.000Z'),
+        proposal: {
+          ...proposal,
+          domains: proposal.domains.map((domain, index) => ({
+            ...domain,
+            providerQuote: {
+              ...domain.providerQuote,
+              amountMinorUnits: index === 0 ? 1.5 : 1000,
+            },
+          })),
+        },
+      }),
+    ).toThrow('Managed email domain provider quote is invalid');
+
+    expect(() =>
+      service.createQuote({
+        catalog,
+        metronomeProducts,
+        metronomeRateCardAlias: 'managed-email-test',
+        metronomeRateCardId: '123e4567-e89b-42d3-a456-426614174020',
+        now: new Date('2026-08-05T10:05:00.000Z'),
         proposal: {
           ...proposal,
           domains: proposal.domains.map((domain, index) => ({
@@ -295,6 +327,36 @@ describe('ManagedEmailQuoteService', () => {
             },
           })),
         },
+      }),
+    ).toThrow('Managed email domain provider quote exceeds approved ceiling');
+  });
+
+  it('retains exact quote homogeneity for dynamic margin pricing', () => {
+    const marginCatalog: ManagedEmailCatalog = {
+      ...catalog,
+      products: catalog.products.map((product) =>
+        product.key === MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR
+          ? {
+              ...product,
+              customerPrice: {
+                currency: 'USD',
+                kind: 'PROVIDER_QUOTE_MARGIN',
+                minimumGrossMarginBasisPoints: 3000,
+                paymentProcessing,
+              },
+            }
+          : product,
+      ),
+    };
+
+    expect(() =>
+      service.createQuote({
+        catalog: marginCatalog,
+        metronomeProducts,
+        metronomeRateCardAlias: 'managed-email-test',
+        metronomeRateCardId: '123e4567-e89b-42d3-a456-426614174020',
+        now: new Date('2026-08-05T10:05:00.000Z'),
+        proposal,
       }),
     ).toThrow('Managed email domain quotes cannot be represented exactly');
   });

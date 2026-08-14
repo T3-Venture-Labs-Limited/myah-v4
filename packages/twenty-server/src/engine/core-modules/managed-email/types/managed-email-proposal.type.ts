@@ -13,6 +13,7 @@ export type CreatePrewarmedManagedEmailProposalInput = {
 };
 
 export type ManagedEmailProposalPolicy = Readonly<{
+  allowProviderAlternatives: boolean;
   candidateDomains: (workspaceSlug: string, domainCount: number) => string[];
   maxMailboxesPerDomain: number;
   proposalTtlMs: number;

@@ -193,9 +193,26 @@ const hasValidCustomerPrice = (
   }
 
   if (providerCost.kind === 'PROVIDER_QUOTE') {
+    if (customerPrice.kind === 'PROVIDER_QUOTE_MARGIN') {
+      return providerCost.currency === 'USD';
+    }
+
     return (
-      customerPrice.kind === 'PROVIDER_QUOTE_MARGIN' &&
-      providerCost.currency === 'USD'
+      customerPrice.kind === 'FIXED_PROVIDER_QUOTE_CEILING' &&
+      providerCost.currency === 'USD' &&
+      Number.isSafeInteger(customerPrice.amountMinorUnits) &&
+      customerPrice.amountMinorUnits > 0 &&
+      Number.isSafeInteger(customerPrice.maximumProviderQuoteMinorUnits) &&
+      customerPrice.maximumProviderQuoteMinorUnits > 0 &&
+      customerPrice.amountMinorUnits >=
+        minimumCustomerPriceMinorUnits({
+          landedProviderCostMinorUnits:
+            customerPrice.maximumProviderQuoteMinorUnits,
+          maximumVariableFeeBasisPoints:
+            customerPrice.paymentProcessing.maximumVariableFeeBasisPoints,
+          maximumFixedFeeMinorUnits:
+            customerPrice.paymentProcessing.maximumFixedFeeMinorUnits,
+        })
     );
   }
 

@@ -294,17 +294,19 @@ describe('ManagedEmailModule', () => {
     ]);
   });
 
-  it('selects deterministic sandbox proposal domains but keeps production proposal policy unavailable', () => {
+  it('selects deterministic sandbox and production proposal domains', () => {
     const providers = Reflect.getMetadata(
       MODULE_METADATA.PROVIDERS,
       ManagedEmailModule,
     ) as Array<{
       provide?: unknown;
       useFactory?: (config: unknown) => {
+        allowProviderAlternatives: boolean;
         candidateDomains: (
           workspaceSlug: string,
           domainCount: number,
         ) => string[];
+        version: string;
       };
       useValue?: {
         candidateDomains: (
@@ -326,6 +328,9 @@ describe('ManagedEmailModule', () => {
       get: (key: string) =>
         key === 'MANAGED_EMAIL_EXECUTION_MODE' ? 'PRODUCTION' : 'v1',
     });
+    const unconfiguredPolicy = provider?.useFactory?.({
+      get: () => undefined,
+    });
 
     expect(sandboxPolicy?.candidateDomains('creator', 2)).toEqual([
       'creator-1.test',
@@ -336,7 +341,19 @@ describe('ManagedEmailModule', () => {
         ?.candidateDomains('creator', 2)
         .every((domain) => domain.endsWith('.test')),
     ).toBe(true);
-    expect(() => productionPolicy?.candidateDomains('creator', 1)).toThrow();
+    expect(sandboxPolicy?.allowProviderAlternatives).toBe(true);
+    expect(productionPolicy?.candidateDomains('creator', 1)).toEqual([
+      'creator.com',
+    ]);
+    expect(() => productionPolicy?.candidateDomains('creator', 2)).toThrow(
+      'Managed email production proposal supports one domain',
+    );
+    expect(productionPolicy?.version).toBe('production-com-v1');
+    expect(productionPolicy?.allowProviderAlternatives).toBe(false);
+    expect(() => unconfiguredPolicy?.candidateDomains('creator', 1)).toThrow(
+      'Managed email proposal policy is unavailable',
+    );
+    expect(unconfiguredPolicy?.allowProviderAlternatives).toBe(false);
   });
 
   it('resolves an accelerated sandbox readiness policy and remains fail-closed in production', () => {
