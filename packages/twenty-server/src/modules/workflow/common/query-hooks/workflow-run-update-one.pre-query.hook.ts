@@ -21,7 +21,11 @@ export class WorkflowRunUpdateOnePreQueryHook implements WorkspacePreQueryHookIn
     payload: UpdateOneResolverArgs<WorkflowRunWorkspaceEntity>,
   ): Promise<UpdateOneResolverArgs<WorkflowRunWorkspaceEntity>> {
     await this.workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible(
-      { workflowRunId: payload.id, workspaceId: authContext.workspace.id },
+      {
+        authContext,
+        workflowRunId: payload.id,
+        workspaceId: authContext.workspace.id,
+      },
     );
     const allowedFields = ['name'];
     const payloadKeys = Object.keys(payload.data);

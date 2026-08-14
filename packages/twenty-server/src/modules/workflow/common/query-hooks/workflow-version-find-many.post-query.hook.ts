@@ -30,7 +30,7 @@ export class WorkflowVersionFindManyPostQueryHook implements WorkspacePostQueryH
     await Promise.all(
       payload.map(({ id }) =>
         this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
-          { workflowVersionId: id, workspaceId: workspace.id },
+          { authContext, workflowVersionId: id, workspaceId: workspace.id },
         ),
       ),
     );

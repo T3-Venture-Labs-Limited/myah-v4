@@ -30,6 +30,7 @@ export class WorkflowFindManyPostQueryHook implements WorkspacePostQueryHookInst
     await Promise.all(
       payload.map(({ id }) =>
         this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
+          authContext,
           workflowId: id,
           workspaceId: workspace.id,
         }),

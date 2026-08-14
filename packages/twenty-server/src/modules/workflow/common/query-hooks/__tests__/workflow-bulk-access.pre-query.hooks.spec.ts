@@ -36,12 +36,14 @@ describe.each([
     expect(
       workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
     ).toHaveBeenNthCalledWith(1, {
+      authContext,
       workflowId: 'workflow-a',
       workspaceId: 'workspace-a',
     });
     expect(
       workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
     ).toHaveBeenNthCalledWith(2, {
+      authContext,
       workflowId: 'workflow-b',
       workspaceId: 'workspace-a',
     });

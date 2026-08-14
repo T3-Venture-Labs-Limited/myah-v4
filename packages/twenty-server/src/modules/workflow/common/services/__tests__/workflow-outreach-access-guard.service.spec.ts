@@ -1,4 +1,5 @@
 import { WorkflowQueryValidationExceptionCode } from 'src/modules/workflow/common/exceptions/workflow-query-validation.exception';
+import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
@@ -10,12 +11,23 @@ jest.mock(
   }),
 );
 
+jest.mock(
+  'src/engine/core-modules/auth/storage/workspace-auth-context.storage',
+  () => ({
+    getWorkspaceAuthContext: jest.fn(),
+  }),
+);
+
 const getWorkspaceContextMock = jest.mocked(getWorkspaceContext);
+const getWorkspaceAuthContextMock = jest.mocked(getWorkspaceAuthContext);
 
 describe('WorkflowOutreachAccessGuardService', () => {
   const workflowRepository = { findOne: jest.fn() };
   const workflowVersionRepository = { findOne: jest.fn() };
   const campaignRepository = { findOne: jest.fn() };
+  const executeInWorkspaceContext = jest.fn(
+    async (callback: () => Promise<void>) => callback(),
+  );
   const getRepository = jest.fn(
     async (_workspaceId: string, objectName: string) => {
       if (objectName === 'workflow') {
@@ -29,19 +41,26 @@ describe('WorkflowOutreachAccessGuardService', () => {
       return campaignRepository;
     },
   );
-  const service = new WorkflowOutreachAccessGuardService({
+  const globalWorkspaceOrmManager = {
+    executeInWorkspaceContext,
     getRepository,
-  } as unknown as GlobalWorkspaceOrmManager);
+  } as unknown as GlobalWorkspaceOrmManager;
+  const service = new WorkflowOutreachAccessGuardService(
+    globalWorkspaceOrmManager,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    const authContext = {
+      type: 'user',
+      userWorkspaceId: 'user-workspace-a',
+      workspace: { id: 'workspace-a' },
+    } as never;
+
+    getWorkspaceAuthContextMock.mockReturnValue(authContext);
     getWorkspaceContextMock.mockReturnValue({
       apiKeyRoleMap: {},
-      authContext: {
-        type: 'user',
-        userWorkspaceId: 'user-workspace-a',
-        workspace: { id: 'workspace-a' },
-      },
+      authContext,
       userWorkspaceRoleMap: { 'user-workspace-a': 'role-a' },
     } as never);
   });
@@ -110,6 +129,36 @@ describe('WorkflowOutreachAccessGuardService', () => {
         workspaceId: 'workspace-a',
       }),
     ).resolves.toBeUndefined();
+
+    expect(getWorkspaceAuthContextMock).toHaveBeenCalledTimes(1);
+    expect(executeInWorkspaceContext).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ workspace: { id: 'workspace-a' } }),
+    );
+  });
+
+  it('establishes ORM context from the query auth context for Outreach authorization', async () => {
+    workflowRepository.findOne.mockResolvedValue({
+      id: 'workflow-a',
+      outreachCampaignId: 'campaign-a',
+    });
+    campaignRepository.findOne.mockResolvedValue({ id: 'campaign-a' });
+    const authContext = {
+      type: 'user',
+      userWorkspaceId: 'user-workspace-a',
+      workspace: { id: 'workspace-a' },
+    } as never;
+
+    await service.assertWorkflowIsAccessible({
+      authContext,
+      workflowId: 'workflow-a',
+      workspaceId: 'workspace-a',
+    });
+
+    expect(executeInWorkspaceContext).toHaveBeenCalledWith(
+      expect.any(Function),
+      authContext,
+    );
   });
 
   it('rejects an Outreach workflow version whose Campaign is not readable', async () => {

@@ -34,6 +34,7 @@ describe('WorkflowVersionUpdateOnePreQueryHook', () => {
     expect(
       workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible,
     ).toHaveBeenCalledWith({
+      authContext,
       workflowVersionId: 'workflow-version-a',
       workspaceId: 'workspace-a',
     });

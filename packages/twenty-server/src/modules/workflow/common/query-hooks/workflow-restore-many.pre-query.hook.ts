@@ -51,6 +51,7 @@ export class WorkflowRestoreManyPreQueryHook implements WorkspacePreQueryHookIns
 
     for (const workflowId of getWorkflowIds(payload.filter)) {
       await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
+        authContext,
         workflowId,
         workspaceId: workspace.id,
       });

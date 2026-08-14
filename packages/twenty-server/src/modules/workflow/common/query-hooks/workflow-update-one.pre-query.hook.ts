@@ -20,6 +20,7 @@ export class WorkflowUpdateOnePreQueryHook implements WorkspacePreQueryHookInsta
     payload: UpdateOneResolverArgs<WorkflowWorkspaceEntity>,
   ): Promise<UpdateOneResolverArgs<WorkflowWorkspaceEntity>> {
     await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
+      authContext,
       workflowId: payload.id,
       workspaceId: authContext.workspace.id,
     });

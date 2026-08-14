@@ -22,7 +22,7 @@ export class WorkflowVersionRestoreOnePreQueryHook implements WorkspacePreQueryH
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
     await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
-      { workflowVersionId: payload.id, workspaceId: workspace.id },
+      { authContext, workflowVersionId: payload.id, workspaceId: workspace.id },
     );
 
     return payload;

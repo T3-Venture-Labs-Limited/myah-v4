@@ -24,6 +24,7 @@ export class WorkflowDeleteOnePreQueryHook implements WorkspacePreQueryHookInsta
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
 
     await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
+      authContext,
       workflowId: payload.id,
       workspaceId: workspace.id,
     });

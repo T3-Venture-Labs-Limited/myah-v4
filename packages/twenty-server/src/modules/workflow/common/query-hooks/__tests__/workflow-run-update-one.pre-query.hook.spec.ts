@@ -27,6 +27,7 @@ describe('WorkflowRunUpdateOnePreQueryHook', () => {
     expect(
       workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible,
     ).toHaveBeenCalledWith({
+      authContext,
       workflowRunId: 'workflow-run-a',
       workspaceId: 'workspace-a',
     });

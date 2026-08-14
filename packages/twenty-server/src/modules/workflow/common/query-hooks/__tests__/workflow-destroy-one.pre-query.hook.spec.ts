@@ -33,6 +33,7 @@ describe('WorkflowDestroyOnePreQueryHook', () => {
     expect(
       workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
     ).toHaveBeenCalledWith({
+      authContext,
       workflowId: 'workflow-a',
       workspaceId: 'workspace-a',
     });

@@ -62,6 +62,7 @@ describe.each([
         : guard.assertWorkflowRunIsAccessible;
 
     expect(authorization).toHaveBeenCalledWith({
+      authContext,
       [idKey]: 'record-a',
       workspaceId: 'workspace-a',
     });

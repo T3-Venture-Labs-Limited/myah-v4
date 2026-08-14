@@ -23,6 +23,7 @@ describe('WorkflowFindOnePostQueryHook', () => {
     expect(
       workflowOutreachAccessGuardService.assertWorkflowIsAccessible,
     ).toHaveBeenCalledWith({
+      authContext,
       workflowId: 'workflow-a',
       workspaceId: 'workspace-a',
     });

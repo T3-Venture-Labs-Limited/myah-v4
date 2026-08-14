@@ -75,7 +75,7 @@ describe.each([
       workflowOutreachAccessGuardService[
         guardMethod as keyof WorkflowOutreachAccessGuardService
       ],
-    ).toHaveBeenCalledWith(expectedArgs);
+    ).toHaveBeenCalledWith({ authContext, ...expectedArgs });
   });
 });
 
