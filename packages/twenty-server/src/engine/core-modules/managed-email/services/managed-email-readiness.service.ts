@@ -133,9 +133,12 @@ export class ManagedEmailReadinessService {
         safeReasonCode: 'WARMUP_INCOMPLETE',
       };
     }
+    const inboxPlacementBasisPoints = input.inboxPlacementBasisPoints;
+    const spamPlacementBasisPoints = input.spamPlacementBasisPoints;
+
     if (
-      input.inboxPlacementBasisPoints === null ||
-      input.spamPlacementBasisPoints === null
+      policy.requiresPlacementMetrics &&
+      (inboxPlacementBasisPoints === null || spamPlacementBasisPoints === null)
     ) {
       return {
         campaignEligibility:
@@ -145,11 +148,14 @@ export class ManagedEmailReadinessService {
         safeReasonCode: 'HEALTH_EVIDENCE_UNAVAILABLE',
       };
     }
+    const placementHealthRegressed =
+      policy.requiresPlacementMetrics &&
+      inboxPlacementBasisPoints !== null &&
+      spamPlacementBasisPoints !== null &&
+      (inboxPlacementBasisPoints < policy.minimumInboxPlacementBasisPoints ||
+        spamPlacementBasisPoints > policy.maximumSpamPlacementBasisPoints);
     const healthRegressed =
-      input.warmupHealthy === false ||
-      input.inboxPlacementBasisPoints <
-        policy.minimumInboxPlacementBasisPoints ||
-      input.spamPlacementBasisPoints > policy.maximumSpamPlacementBasisPoints;
+      input.warmupHealthy === false || placementHealthRegressed;
 
     if (healthRegressed) {
       return {

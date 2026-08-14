@@ -36,6 +36,7 @@ const isValidPolicy = (
     isNonNegativeInteger(policy.minimumWarmupDays) &&
     isBoundedInteger(policy.minimumInboxPlacementBasisPoints, 10_000) &&
     isBoundedInteger(policy.maximumSpamPlacementBasisPoints, 10_000) &&
+    typeof policy.requiresPlacementMetrics === 'boolean' &&
     isNonEmpty(policy.dns.dkimSelector) &&
     policy.dns.expectedMxSuffixes.length > 0 &&
     policy.dns.expectedMxSuffixes.every(isNonEmpty) &&
@@ -80,10 +81,37 @@ export const createManagedEmailReadinessPolicyResolver =
       : clonePolicy(policy);
   };
 
-// Production remains fail-closed until a reviewed pilot policy is approved.
+// Approved for one company-owned technical pilot after Icemail's live DNS
+// responses confirmed the `google` DKIM selector and `.google.com` MX suffix.
+// This proves integration health, not deliverability or sender reputation.
 export const managedEmailReadinessPolicies: Readonly<
   Record<string, ManagedEmailReadinessPolicy>
-> = Object.freeze({});
+> = Object.freeze({
+  'production-technical-pilot-v1': Object.freeze({
+    approvalState: 'APPROVED',
+    capacityCurve: Object.freeze([{ days: 0, capacity: 10 }]),
+    dns: Object.freeze({
+      dkimSelector: 'google',
+      expectedMxSuffixes: Object.freeze(['.google.com']),
+    }),
+    evaluationIntervalMs: 5 * 60 * 1000,
+    maximumSpamPlacementBasisPoints: 10_000,
+    metricsLookbackMs: 24 * 60 * 60 * 1000,
+    minimumInboxPlacementBasisPoints: 0,
+    minimumWarmupDays: 0,
+    providerConfigurationKey: 'icemail-warmup-inbox-google-v1',
+    requiresPlacementMetrics: false,
+    version: 'production-technical-pilot-v1',
+    warmupConfiguration: Object.freeze({
+      version: 'production-technical-pilot-v1',
+      strategy: 'progressive',
+      increasePerDay: 1,
+      maxSendsPerDay: 10,
+      replyRatePercent: 30,
+      startingBaseline: 1,
+    }),
+  }),
+});
 
 export const managedEmailSandboxReadinessPolicies = Object.freeze({
   'sandbox-v1': Object.freeze({
@@ -98,6 +126,7 @@ export const managedEmailSandboxReadinessPolicies = Object.freeze({
     metricsLookbackMs: 60_000,
     minimumInboxPlacementBasisPoints: 0,
     minimumWarmupDays: 0,
+    requiresPlacementMetrics: true,
     providerConfigurationKey: 'sandbox-provider',
     version: 'sandbox-v1',
     warmupConfiguration: Object.freeze({
