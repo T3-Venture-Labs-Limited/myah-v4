@@ -31,54 +31,50 @@ export class WorkflowOutreachAccessGuardService {
     workflowId: string;
     workspaceId: string;
   }): Promise<void> {
-    const workflowRepository =
-      await this.globalWorkspaceOrmManager.getRepository<WorkflowWorkspaceEntity>(
-        workspaceId,
-        'workflow',
-        { shouldBypassPermissionChecks: true },
-      );
-    const workflow = await workflowRepository.findOne({
-      where: { id: workflowId },
-      select: { id: true, outreachCampaignId: true },
-      withDeleted: true,
-    });
-
-    if (!isDefined(workflow?.outreachCampaignId)) {
-      return;
-    }
-
-    const outreachCampaignId = workflow.outreachCampaignId;
-
-    const assertCampaignIsAccessible = async (): Promise<void> => {
-      const workspaceContext = getWorkspaceContext();
-      const rolePermissionConfig = resolveRolePermissionConfig({
-        apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
-        authContext: workspaceContext.authContext,
-        userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
-      });
-      const campaignRepository =
-        await this.globalWorkspaceOrmManager.getRepository<CustomWorkspaceEntity>(
-          workspaceId,
-          'campaign',
-          rolePermissionConfig ?? undefined,
-        );
-      const campaign = await campaignRepository.findOne({
-        where: { id: outreachCampaignId },
-        select: { id: true },
-      });
-
-      if (!isDefined(campaign)) {
-        throw new WorkflowQueryValidationException(
-          'Campaign Outreach workflow is not accessible',
-          WorkflowQueryValidationExceptionCode.FORBIDDEN,
-        );
-      }
-    };
-
     const effectiveAuthContext = authContext ?? getWorkspaceAuthContext();
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      assertCampaignIsAccessible,
+      async () => {
+        const workflowRepository =
+          await this.globalWorkspaceOrmManager.getRepository<WorkflowWorkspaceEntity>(
+            workspaceId,
+            'workflow',
+            { shouldBypassPermissionChecks: true },
+          );
+        const workflow = await workflowRepository.findOne({
+          where: { id: workflowId },
+          select: { id: true, outreachCampaignId: true },
+          withDeleted: true,
+        });
+
+        if (!isDefined(workflow?.outreachCampaignId)) {
+          return;
+        }
+
+        const workspaceContext = getWorkspaceContext();
+        const rolePermissionConfig = resolveRolePermissionConfig({
+          apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+          authContext: workspaceContext.authContext,
+          userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+        });
+        const campaignRepository =
+          await this.globalWorkspaceOrmManager.getRepository<CustomWorkspaceEntity>(
+            workspaceId,
+            'campaign',
+            rolePermissionConfig ?? undefined,
+          );
+        const campaign = await campaignRepository.findOne({
+          where: { id: workflow.outreachCampaignId },
+          select: { id: true },
+        });
+
+        if (!isDefined(campaign)) {
+          throw new WorkflowQueryValidationException(
+            'Campaign Outreach workflow is not accessible',
+            WorkflowQueryValidationExceptionCode.FORBIDDEN,
+          );
+        }
+      },
       effectiveAuthContext,
     );
   }
