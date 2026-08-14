@@ -2,7 +2,7 @@ import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import type { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
-import { NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302000-normalize-legacy-myah-outreach-workflow-relation-metadata.command';
+import { NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1786688940000-normalize-legacy-myah-outreach-workflow-relation-metadata.command';
 import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
 import { getRegisteredWorkspaceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import type { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
@@ -24,7 +24,7 @@ const where = {
 };
 
 describe('NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand', () => {
-  it('runs before source-controlled synchronization', () => {
+  it('runs after source-controlled synchronization', () => {
     const commandMetadata = getRegisteredWorkspaceCommandMetadata(
       NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand,
     );
@@ -41,18 +41,19 @@ describe('NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand', () => {
 
     expect(commandMetadata).toMatchObject({
       version: '2.20.0',
-      timestamp: 1784266302000,
+      timestamp: 1786688940000,
     });
-    expect(commandMetadata.timestamp).toBeLessThan(
+    expect(commandMetadata.timestamp).toBeGreaterThan(
       synchronizerMetadata.timestamp,
     );
   });
 
-  it('repairs a legacy unique relation and evicts memoized metadata before synchronization', async () => {
+  it('repairs a legacy unique relation and re-synchronizes metadata', async () => {
     const findOne = jest.fn().mockResolvedValue({ isUnique: true });
     const update = jest.fn().mockResolvedValue({ affected: 1 });
     const invalidateAndRecompute = jest.fn().mockResolvedValue(undefined);
     const incrementMetadataVersion = jest.fn().mockResolvedValue(undefined);
+    const synchronizeWorkspace = jest.fn().mockResolvedValue(undefined);
     const command = new NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand(
       {} as WorkspaceIteratorService,
       { findOne, update } as unknown as Repository<FieldMetadataEntity>,
@@ -60,6 +61,9 @@ describe('NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand', () => {
       {
         incrementMetadataVersion,
       } as unknown as WorkspaceMetadataVersionService,
+      {
+        synchronizeWorkspace,
+      } as unknown as SynchronizeMyahStandardMetadataCommand,
     );
 
     await command.runOnWorkspace(args);
@@ -75,6 +79,7 @@ describe('NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand', () => {
       'graphQLResolverNameMap',
     ]);
     expect(incrementMetadataVersion).toHaveBeenCalledWith(args.workspaceId);
+    expect(synchronizeWorkspace).toHaveBeenCalledWith(args);
   });
 
   it('does not update current or absent metadata', async () => {
@@ -85,6 +90,7 @@ describe('NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand', () => {
     const update = jest.fn();
     const invalidateAndRecompute = jest.fn();
     const incrementMetadataVersion = jest.fn();
+    const synchronizeWorkspace = jest.fn();
     const command = new NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand(
       {} as WorkspaceIteratorService,
       { findOne, update } as unknown as Repository<FieldMetadataEntity>,
@@ -92,6 +98,9 @@ describe('NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand', () => {
       {
         incrementMetadataVersion,
       } as unknown as WorkspaceMetadataVersionService,
+      {
+        synchronizeWorkspace,
+      } as unknown as SynchronizeMyahStandardMetadataCommand,
     );
 
     await command.runOnWorkspace(args);
@@ -100,5 +109,6 @@ describe('NormalizeLegacyMyahOutreachWorkflowRelationMetadataCommand', () => {
     expect(update).not.toHaveBeenCalled();
     expect(invalidateAndRecompute).not.toHaveBeenCalled();
     expect(incrementMetadataVersion).not.toHaveBeenCalled();
+    expect(synchronizeWorkspace).not.toHaveBeenCalled();
   });
 });
