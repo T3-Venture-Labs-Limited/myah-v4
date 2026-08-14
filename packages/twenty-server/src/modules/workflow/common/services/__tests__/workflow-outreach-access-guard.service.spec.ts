@@ -22,27 +22,16 @@ const getWorkspaceContextMock = jest.mocked(getWorkspaceContext);
 const getWorkspaceAuthContextMock = jest.mocked(getWorkspaceAuthContext);
 
 describe('WorkflowOutreachAccessGuardService', () => {
-  const workflowRepository = { findOne: jest.fn() };
-  const workflowVersionRepository = { findOne: jest.fn() };
   const campaignRepository = { findOne: jest.fn() };
+  const query = jest.fn();
+  const getGlobalWorkspaceDataSource = jest.fn(async () => ({ query }));
   const executeInWorkspaceContext = jest.fn(
     async (callback: () => Promise<void>) => callback(),
   );
-  const getRepository = jest.fn(
-    async (_workspaceId: string, objectName: string) => {
-      if (objectName === 'workflow') {
-        return workflowRepository;
-      }
-
-      if (objectName === 'workflowVersion') {
-        return workflowVersionRepository;
-      }
-
-      return campaignRepository;
-    },
-  );
+  const getRepository = jest.fn(async () => campaignRepository);
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext,
+    getGlobalWorkspaceDataSource,
     getRepository,
   } as unknown as GlobalWorkspaceOrmManager;
   const service = new WorkflowOutreachAccessGuardService(
@@ -51,10 +40,11 @@ describe('WorkflowOutreachAccessGuardService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    getRepository.mockResolvedValue(campaignRepository);
     const authContext = {
       type: 'user',
       userWorkspaceId: 'user-workspace-a',
-      workspace: { id: 'workspace-a' },
+      workspace: { id: '20202020-0000-4000-8000-000000000001' },
     } as never;
 
     getWorkspaceAuthContextMock.mockReturnValue(authContext);
@@ -66,93 +56,54 @@ describe('WorkflowOutreachAccessGuardService', () => {
   });
 
   it('rejects an Outreach workflow whose Campaign is not readable', async () => {
-    workflowRepository.findOne.mockResolvedValue({
-      id: 'workflow-a',
-      outreachCampaignId: 'campaign-a',
-    });
+    query.mockResolvedValue([{ outreachCampaignId: 'campaign-a' }]);
     campaignRepository.findOne.mockResolvedValue(null);
 
     await expect(
       service.assertWorkflowIsAccessible({
         workflowId: 'workflow-a',
-        workspaceId: 'workspace-a',
+        workspaceId: '20202020-0000-4000-8000-000000000001',
       }),
     ).rejects.toMatchObject({
       code: WorkflowQueryValidationExceptionCode.FORBIDDEN,
     });
   });
 
-  it('includes soft-deleted workflows when authorizing restore and destruction', async () => {
-    workflowRepository.findOne.mockResolvedValue({
-      id: 'workflow-a',
-      outreachCampaignId: null,
-    });
-
-    await service.assertWorkflowIsAccessible({
-      workflowId: 'workflow-a',
-      workspaceId: 'workspace-a',
-    });
-
-    expect(workflowRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 'workflow-a' },
-      select: { id: true, outreachCampaignId: true },
-      withDeleted: true,
-    });
-  });
-
-  it('permits a general Automation without a Campaign owner', async () => {
-    workflowRepository.findOne.mockResolvedValue({
-      id: 'workflow-a',
-      outreachCampaignId: null,
-    });
+  it('permits a general Automation without an ORM context', async () => {
+    query.mockResolvedValue([{ outreachCampaignId: null }]);
+    getRepository.mockRejectedValue(new Error('Workspace context not set'));
 
     await expect(
       service.assertWorkflowIsAccessible({
         workflowId: 'workflow-a',
-        workspaceId: 'workspace-a',
+        workspaceId: '20202020-0000-4000-8000-000000000001',
       }),
     ).resolves.toBeUndefined();
 
-    expect(campaignRepository.findOne).not.toHaveBeenCalled();
-  });
-
-  it('permits an Outreach workflow whose Campaign is readable', async () => {
-    workflowRepository.findOne.mockResolvedValue({
-      id: 'workflow-a',
-      outreachCampaignId: 'campaign-a',
-    });
-    campaignRepository.findOne.mockResolvedValue({ id: 'campaign-a' });
-
-    await expect(
-      service.assertWorkflowIsAccessible({
-        workflowId: 'workflow-a',
-        workspaceId: 'workspace-a',
-      }),
-    ).resolves.toBeUndefined();
-
-    expect(getWorkspaceAuthContextMock).toHaveBeenCalledTimes(1);
-    expect(executeInWorkspaceContext).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.objectContaining({ workspace: { id: 'workspace-a' } }),
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('"workflow"'),
+      ['workflow-a'],
+      undefined,
+      { shouldBypassPermissionChecks: true },
     );
+    expect(getRepository).not.toHaveBeenCalled();
+    expect(getWorkspaceAuthContextMock).not.toHaveBeenCalled();
+    expect(executeInWorkspaceContext).not.toHaveBeenCalled();
   });
 
   it('establishes ORM context from the query auth context for Outreach authorization', async () => {
-    workflowRepository.findOne.mockResolvedValue({
-      id: 'workflow-a',
-      outreachCampaignId: 'campaign-a',
-    });
+    query.mockResolvedValue([{ outreachCampaignId: 'campaign-a' }]);
     campaignRepository.findOne.mockResolvedValue({ id: 'campaign-a' });
     const authContext = {
       type: 'user',
       userWorkspaceId: 'user-workspace-a',
-      workspace: { id: 'workspace-a' },
+      workspace: { id: '20202020-0000-4000-8000-000000000001' },
     } as never;
 
     await service.assertWorkflowIsAccessible({
       authContext,
       workflowId: 'workflow-a',
-      workspaceId: 'workspace-a',
+      workspaceId: '20202020-0000-4000-8000-000000000001',
     });
 
     expect(executeInWorkspaceContext).toHaveBeenCalledWith(
@@ -162,64 +113,55 @@ describe('WorkflowOutreachAccessGuardService', () => {
   });
 
   it('rejects an Outreach workflow version whose Campaign is not readable', async () => {
-    workflowVersionRepository.findOne.mockResolvedValue({
-      id: 'workflow-version-a',
-      workflowId: 'workflow-a',
-    });
-    workflowRepository.findOne.mockResolvedValue({
-      id: 'workflow-a',
-      outreachCampaignId: 'campaign-a',
-    });
+    query.mockResolvedValue([{ outreachCampaignId: 'campaign-a' }]);
     campaignRepository.findOne.mockResolvedValue(null);
-    const untypedService = service as unknown as {
-      assertWorkflowVersionIsAccessible: (args: {
-        workflowVersionId: string;
-        workspaceId: string;
-      }) => Promise<void>;
-    };
 
     await expect(
-      untypedService.assertWorkflowVersionIsAccessible({
+      service.assertWorkflowVersionIsAccessible({
         workflowVersionId: 'workflow-version-a',
-        workspaceId: 'workspace-a',
+        workspaceId: '20202020-0000-4000-8000-000000000001',
       }),
     ).rejects.toMatchObject({
       code: WorkflowQueryValidationExceptionCode.FORBIDDEN,
     });
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('"workflowVersion"'),
+      ['workflow-version-a'],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
   });
 
-  it('includes soft-deleted versions and runs when authorizing restore and destruction', async () => {
-    workflowVersionRepository.findOne.mockResolvedValue(null);
-    const workflowRunRepository = {
-      findOne: jest.fn().mockResolvedValue(null),
-    };
-    getRepository.mockImplementation(
-      async (_workspaceId: string, objectName: string) =>
-        objectName === 'workflowRun'
-          ? workflowRunRepository
-          : objectName === 'workflowVersion'
-            ? workflowVersionRepository
-            : workflowRepository,
-    );
+  it('permits general Automation versions and runs without an ORM context', async () => {
+    query.mockResolvedValue([{ outreachCampaignId: null }]);
+    getRepository.mockRejectedValue(new Error('Workspace context not set'));
 
     await service.assertWorkflowVersionIsAccessible({
       workflowVersionId: 'workflow-version-a',
-      workspaceId: 'workspace-a',
+      workspaceId: '20202020-0000-4000-8000-000000000001',
     });
     await service.assertWorkflowRunIsAccessible({
       workflowRunId: 'workflow-run-a',
-      workspaceId: 'workspace-a',
+      workspaceId: '20202020-0000-4000-8000-000000000001',
     });
 
-    expect(workflowVersionRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 'workflow-version-a' },
-      select: { workflowId: true },
-      withDeleted: true,
-    });
-    expect(workflowRunRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 'workflow-run-a' },
-      select: { workflowId: true },
-      withDeleted: true,
-    });
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('"workflowVersion"'),
+      ['workflow-version-a'],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('"workflowRun"'),
+      ['workflow-run-a'],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
+    expect(getRepository).not.toHaveBeenCalled();
+    expect(getWorkspaceAuthContextMock).not.toHaveBeenCalled();
+    expect(executeInWorkspaceContext).not.toHaveBeenCalled();
   });
 });

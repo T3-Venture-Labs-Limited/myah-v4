@@ -147,6 +147,7 @@ export const buildWorkflowStandardFlatFieldMetadatas = ({
       description: i18nLabel(msg`Campaign that owns this Outreach workflow`),
       icon: 'IconTarget',
       isNullable: true,
+      isUnique: true,
       isUIEditable: false,
       targetObjectName: 'campaign',
       targetFieldName: 'outreachWorkflows',

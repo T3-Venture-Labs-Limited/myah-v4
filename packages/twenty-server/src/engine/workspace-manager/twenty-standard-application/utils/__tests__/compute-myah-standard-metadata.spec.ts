@@ -1311,7 +1311,7 @@ describe('Myah standard metadata contract', () => {
       name: 'outreachCampaign',
       type: FieldMetadataType.RELATION,
       isNullable: true,
-      isUnique: false,
+      isUnique: true,
       isUIEditable: false,
       relationTargetObjectMetadataUniversalIdentifier:
         MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,

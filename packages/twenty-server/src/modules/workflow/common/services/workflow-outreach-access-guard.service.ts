@@ -7,14 +7,12 @@ import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/wo
 import { type CustomWorkspaceEntity } from 'src/engine/twenty-orm/custom.workspace-entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import {
   WorkflowQueryValidationException,
   WorkflowQueryValidationExceptionCode,
 } from 'src/modules/workflow/common/exceptions/workflow-query-validation.exception';
-import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
-import { type WorkflowVersionWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
-import { type WorkflowRunWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 
 @Injectable()
 export class WorkflowOutreachAccessGuardService {
@@ -31,52 +29,17 @@ export class WorkflowOutreachAccessGuardService {
     workflowId: string;
     workspaceId: string;
   }): Promise<void> {
-    const effectiveAuthContext = authContext ?? getWorkspaceAuthContext();
+    const outreachCampaignId = await this.getOutreachCampaignId({
+      sourceTable: 'workflow',
+      sourceId: workflowId,
+      workspaceId,
+    });
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const workflowRepository =
-          await this.globalWorkspaceOrmManager.getRepository<WorkflowWorkspaceEntity>(
-            workspaceId,
-            'workflow',
-            { shouldBypassPermissionChecks: true },
-          );
-        const workflow = await workflowRepository.findOne({
-          where: { id: workflowId },
-          select: { id: true, outreachCampaignId: true },
-          withDeleted: true,
-        });
-
-        if (!isDefined(workflow?.outreachCampaignId)) {
-          return;
-        }
-
-        const workspaceContext = getWorkspaceContext();
-        const rolePermissionConfig = resolveRolePermissionConfig({
-          apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
-          authContext: workspaceContext.authContext,
-          userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
-        });
-        const campaignRepository =
-          await this.globalWorkspaceOrmManager.getRepository<CustomWorkspaceEntity>(
-            workspaceId,
-            'campaign',
-            rolePermissionConfig ?? undefined,
-          );
-        const campaign = await campaignRepository.findOne({
-          where: { id: workflow.outreachCampaignId },
-          select: { id: true },
-        });
-
-        if (!isDefined(campaign)) {
-          throw new WorkflowQueryValidationException(
-            'Campaign Outreach workflow is not accessible',
-            WorkflowQueryValidationExceptionCode.FORBIDDEN,
-          );
-        }
-      },
-      effectiveAuthContext,
-    );
+    await this.assertOutreachCampaignIsAccessible({
+      authContext,
+      outreachCampaignId,
+      workspaceId,
+    });
   }
 
   async assertWorkflowVersionIsAccessible({
@@ -88,25 +51,15 @@ export class WorkflowOutreachAccessGuardService {
     workflowVersionId: string;
     workspaceId: string;
   }): Promise<void> {
-    const workflowVersionRepository =
-      await this.globalWorkspaceOrmManager.getRepository<WorkflowVersionWorkspaceEntity>(
-        workspaceId,
-        'workflowVersion',
-        { shouldBypassPermissionChecks: true },
-      );
-    const workflowVersion = await workflowVersionRepository.findOne({
-      where: { id: workflowVersionId },
-      select: { workflowId: true },
-      withDeleted: true,
+    const outreachCampaignId = await this.getOutreachCampaignId({
+      sourceTable: 'workflowVersion',
+      sourceId: workflowVersionId,
+      workspaceId,
     });
 
-    if (!isDefined(workflowVersion)) {
-      return;
-    }
-
-    await this.assertWorkflowIsAccessible({
+    await this.assertOutreachCampaignIsAccessible({
       authContext,
-      workflowId: workflowVersion.workflowId,
+      outreachCampaignId,
       workspaceId,
     });
   }
@@ -120,26 +73,94 @@ export class WorkflowOutreachAccessGuardService {
     workflowRunId: string;
     workspaceId: string;
   }): Promise<void> {
-    const workflowRunRepository =
-      await this.globalWorkspaceOrmManager.getRepository<WorkflowRunWorkspaceEntity>(
-        workspaceId,
-        'workflowRun',
-        { shouldBypassPermissionChecks: true },
-      );
-    const workflowRun = await workflowRunRepository.findOne({
-      where: { id: workflowRunId },
-      select: { workflowId: true },
-      withDeleted: true,
+    const outreachCampaignId = await this.getOutreachCampaignId({
+      sourceTable: 'workflowRun',
+      sourceId: workflowRunId,
+      workspaceId,
     });
 
-    if (!isDefined(workflowRun)) {
+    await this.assertOutreachCampaignIsAccessible({
+      authContext,
+      outreachCampaignId,
+      workspaceId,
+    });
+  }
+
+  private async getOutreachCampaignId({
+    sourceId,
+    sourceTable,
+    workspaceId,
+  }: {
+    sourceId: string;
+    sourceTable: 'workflow' | 'workflowRun' | 'workflowVersion';
+    workspaceId: string;
+  }): Promise<string | null | undefined> {
+    const workspaceDataSource =
+      await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+    const workspaceSchemaName = getWorkspaceSchemaName(workspaceId);
+    const workflowJoin =
+      sourceTable === 'workflow'
+        ? ''
+        : `INNER JOIN "${workspaceSchemaName}"."workflow" workflow
+             ON workflow.id = source."workflowId"`;
+    const outreachCampaignIdSelect =
+      sourceTable === 'workflow'
+        ? 'source."outreachCampaignId"'
+        : 'workflow."outreachCampaignId"';
+    const rows = await workspaceDataSource.query<
+      Array<{ outreachCampaignId: string | null }>
+    >(
+      `SELECT ${outreachCampaignIdSelect} AS "outreachCampaignId"
+       FROM "${workspaceSchemaName}"."${sourceTable}" source
+       ${workflowJoin}
+       WHERE source.id = $1
+       LIMIT 1`,
+      [sourceId],
+      undefined,
+      { shouldBypassPermissionChecks: true },
+    );
+
+    return rows[0]?.outreachCampaignId;
+  }
+
+  private async assertOutreachCampaignIsAccessible({
+    authContext,
+    outreachCampaignId,
+    workspaceId,
+  }: {
+    authContext?: WorkspaceAuthContext;
+    outreachCampaignId: string | null | undefined;
+    workspaceId: string;
+  }): Promise<void> {
+    if (!isDefined(outreachCampaignId)) {
       return;
     }
 
-    await this.assertWorkflowIsAccessible({
-      authContext,
-      workflowId: workflowRun.workflowId,
-      workspaceId,
-    });
+    const effectiveAuthContext = authContext ?? getWorkspaceAuthContext();
+
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const workspaceContext = getWorkspaceContext();
+      const rolePermissionConfig = resolveRolePermissionConfig({
+        apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+        authContext: workspaceContext.authContext,
+        userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+      });
+      const campaignRepository =
+        await this.globalWorkspaceOrmManager.getRepository<CustomWorkspaceEntity>(
+          workspaceId,
+          'campaign',
+          rolePermissionConfig ?? undefined,
+        );
+      const campaign = await campaignRepository.findOne({
+        where: { id: outreachCampaignId },
+      });
+
+      if (!isDefined(campaign)) {
+        throw new WorkflowQueryValidationException(
+          'Campaign Outreach workflow is not accessible',
+          WorkflowQueryValidationExceptionCode.FORBIDDEN,
+        );
+      }
+    }, effectiveAuthContext);
   }
 }
