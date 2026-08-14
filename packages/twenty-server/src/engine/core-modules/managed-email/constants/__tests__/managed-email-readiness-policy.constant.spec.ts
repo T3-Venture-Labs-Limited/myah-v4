@@ -28,11 +28,36 @@ const approvedPolicy: ManagedEmailReadinessPolicy = {
 };
 
 describe('managed email readiness policy registry', () => {
-  it('keeps production fail-closed until the provider DKIM selector is observed', () => {
-    expect(managedEmailReadinessPolicies).toEqual({});
+  it('resolves the provider-evidenced technical production pilot', () => {
+    expect(Object.keys(managedEmailReadinessPolicies)).toEqual([
+      'production-technical-pilot-v1',
+    ]);
     expect(
       resolveManagedEmailReadinessPolicy('production-technical-pilot-v1'),
-    ).toBeNull();
+    ).toEqual({
+      approvalState: 'APPROVED',
+      capacityCurve: [{ capacity: 10, days: 0 }],
+      dns: {
+        dkimSelector: 'google',
+        expectedMxSuffixes: ['.google.com'],
+      },
+      evaluationIntervalMs: 5 * 60 * 1000,
+      maximumSpamPlacementBasisPoints: 10_000,
+      metricsLookbackMs: 24 * 60 * 60 * 1000,
+      minimumInboxPlacementBasisPoints: 0,
+      minimumWarmupDays: 0,
+      providerConfigurationKey: 'icemail-warmup-inbox-google-v1',
+      requiresPlacementMetrics: false,
+      version: 'production-technical-pilot-v1',
+      warmupConfiguration: {
+        increasePerDay: 1,
+        maxSendsPerDay: 10,
+        replyRatePercent: 30,
+        startingBaseline: 1,
+        strategy: 'progressive',
+        version: 'production-technical-pilot-v1',
+      },
+    });
   });
   it('resolves an explicitly injected policy by exact version without exposing mutable state', () => {
     const technicalPolicy: ManagedEmailReadinessPolicy = {

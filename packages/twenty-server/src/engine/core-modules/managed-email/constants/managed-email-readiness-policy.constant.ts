@@ -81,11 +81,37 @@ export const createManagedEmailReadinessPolicyResolver =
       : clonePolicy(policy);
   };
 
-// Production remains fail-closed until the pilot provider's DKIM selector is
-// observed with rotated credentials and the exact policy is reviewed.
+// Approved for one company-owned technical pilot after Icemail's live DNS
+// responses confirmed the `google` DKIM selector and `.google.com` MX suffix.
+// This proves integration health, not deliverability or sender reputation.
 export const managedEmailReadinessPolicies: Readonly<
   Record<string, ManagedEmailReadinessPolicy>
-> = Object.freeze({});
+> = Object.freeze({
+  'production-technical-pilot-v1': Object.freeze({
+    approvalState: 'APPROVED',
+    capacityCurve: Object.freeze([{ days: 0, capacity: 10 }]),
+    dns: Object.freeze({
+      dkimSelector: 'google',
+      expectedMxSuffixes: Object.freeze(['.google.com']),
+    }),
+    evaluationIntervalMs: 5 * 60 * 1000,
+    maximumSpamPlacementBasisPoints: 10_000,
+    metricsLookbackMs: 24 * 60 * 60 * 1000,
+    minimumInboxPlacementBasisPoints: 0,
+    minimumWarmupDays: 0,
+    providerConfigurationKey: 'icemail-warmup-inbox-google-v1',
+    requiresPlacementMetrics: false,
+    version: 'production-technical-pilot-v1',
+    warmupConfiguration: Object.freeze({
+      version: 'production-technical-pilot-v1',
+      strategy: 'progressive',
+      increasePerDay: 1,
+      maxSendsPerDay: 10,
+      replyRatePercent: 30,
+      startingBaseline: 1,
+    }),
+  }),
+});
 
 export const managedEmailSandboxReadinessPolicies = Object.freeze({
   'sandbox-v1': Object.freeze({
