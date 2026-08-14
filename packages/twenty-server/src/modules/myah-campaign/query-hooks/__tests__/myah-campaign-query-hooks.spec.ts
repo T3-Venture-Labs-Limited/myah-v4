@@ -184,6 +184,7 @@ describe('Myah Campaign query hooks', () => {
     expect(
       campaignOutreachWorkflowLifecycleService.handleCampaignDeletion,
     ).toHaveBeenCalledWith({
+      authContext,
       campaignIds: ['campaign-a'],
       operation: 'delete',
       workspaceId: 'workspace-a',
@@ -212,12 +213,14 @@ describe('Myah Campaign query hooks', () => {
     expect(
       campaignOutreachWorkflowLifecycleService.assertCampaignsAreAccessible,
     ).toHaveBeenNthCalledWith(1, {
+      authContext,
       campaignIds: ['campaign-a'],
       workspaceId: 'workspace-a',
     });
     expect(
       campaignOutreachWorkflowLifecycleService.assertCampaignsAreAccessible,
     ).toHaveBeenNthCalledWith(2, {
+      authContext,
       campaignIds: ['campaign-a', 'campaign-b'],
       workspaceId: 'workspace-a',
     });

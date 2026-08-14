@@ -15,24 +15,30 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
     const campaignRepository = {
       find: jest.fn().mockResolvedValue([{ id: 'campaign-a' }]),
     };
+    const executeInWorkspaceContext = jest.fn(
+      async (callback: () => Promise<void>) => await callback(),
+    );
     const service = new CampaignOutreachWorkflowLifecycleWorkspaceService(
       {
+        executeInWorkspaceContext,
         getRepository: jest.fn().mockResolvedValue(campaignRepository),
       } as unknown as GlobalWorkspaceOrmManager,
       {} as WorkflowCommonWorkspaceService,
     );
+    const authContext = {
+      type: 'user',
+      userWorkspaceId: 'user-workspace-a',
+      workspace: { id: 'workspace-a' },
+    } as never;
     jest.mocked(getWorkspaceContext).mockReturnValue({
       apiKeyRoleMap: {},
-      authContext: {
-        type: 'user',
-        userWorkspaceId: 'user-workspace-a',
-        workspace: { id: 'workspace-a' },
-      },
+      authContext,
       userWorkspaceRoleMap: { 'user-workspace-a': 'role-a' },
     } as never);
 
     await expect(
       service.assertCampaignsAreAccessible({
+        authContext,
         campaignIds: ['campaign-a'],
         workspaceId: 'workspace-a',
       }),
@@ -43,5 +49,9 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
       select: { id: true },
       withDeleted: true,
     });
+    expect(executeInWorkspaceContext).toHaveBeenCalledWith(
+      expect.any(Function),
+      authContext,
+    );
   });
 });

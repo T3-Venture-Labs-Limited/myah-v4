@@ -54,10 +54,12 @@ const cleanCampaignWorkflowsBeforeDestruction = async ({
   }
 
   await campaignOutreachWorkflowLifecycleService.assertCampaignsAreAccessible({
+    authContext,
     campaignIds,
     workspaceId: workspace.id,
   });
   await campaignOutreachWorkflowLifecycleService.handleCampaignDeletion({
+    authContext,
     campaignIds,
     operation: 'destroy',
     workspaceId: workspace.id,

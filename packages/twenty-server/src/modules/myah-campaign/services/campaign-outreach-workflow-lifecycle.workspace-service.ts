@@ -3,6 +3,7 @@ import { In } from 'typeorm';
 import { isNonEmptyArray } from 'twenty-shared/utils';
 
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import {
@@ -14,7 +15,8 @@ import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/work
 
 type CampaignDeletionOperation = 'delete' | 'destroy';
 
-type HandleCampaignDeletionArgs = {
+type CampaignLifecycleArgs = {
+  authContext: WorkspaceAuthContext;
   campaignIds: string[];
   operation: CampaignDeletionOperation;
   workspaceId: string;
@@ -28,11 +30,12 @@ export class CampaignOutreachWorkflowLifecycleWorkspaceService {
   ) {}
 
   async assertCampaignsAreAccessible({
+    authContext,
     campaignIds,
     workspaceId,
   }: Pick<
-    HandleCampaignDeletionArgs,
-    'campaignIds' | 'workspaceId'
+    CampaignLifecycleArgs,
+    'authContext' | 'campaignIds' | 'workspaceId'
   >): Promise<void> {
     const uniqueCampaignIds = [...new Set(campaignIds)];
 
@@ -40,70 +43,75 @@ export class CampaignOutreachWorkflowLifecycleWorkspaceService {
       return;
     }
 
-    const workspaceContext = getWorkspaceContext();
-    const rolePermissionConfig = resolveRolePermissionConfig({
-      apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
-      authContext: workspaceContext.authContext,
-      userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
-    });
-    const campaignRepository =
-      await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'campaign',
-        rolePermissionConfig ?? undefined,
-      );
-    const accessibleCampaigns = await campaignRepository.find({
-      where: { id: In(uniqueCampaignIds) },
-      select: { id: true },
-      withDeleted: true,
-    });
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const workspaceContext = getWorkspaceContext();
+      const rolePermissionConfig = resolveRolePermissionConfig({
+        apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
+        authContext: workspaceContext.authContext,
+        userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
+      });
+      const campaignRepository =
+        await this.globalWorkspaceOrmManager.getRepository(
+          workspaceId,
+          'campaign',
+          rolePermissionConfig ?? undefined,
+        );
+      const accessibleCampaigns = await campaignRepository.find({
+        where: { id: In(uniqueCampaignIds) },
+        select: { id: true },
+        withDeleted: true,
+      });
 
-    if (accessibleCampaigns.length !== uniqueCampaignIds.length) {
-      throw new WorkflowQueryValidationException(
-        'Campaign is not accessible',
-        WorkflowQueryValidationExceptionCode.FORBIDDEN,
-      );
-    }
+      if (accessibleCampaigns.length !== uniqueCampaignIds.length) {
+        throw new WorkflowQueryValidationException(
+          'Campaign is not accessible',
+          WorkflowQueryValidationExceptionCode.FORBIDDEN,
+        );
+      }
+    }, authContext);
   }
 
   async handleCampaignDeletion({
+    authContext,
     campaignIds,
     operation,
     workspaceId,
-  }: HandleCampaignDeletionArgs): Promise<void> {
+  }: CampaignLifecycleArgs): Promise<void> {
     if (!isNonEmptyArray(campaignIds)) {
       return;
     }
 
-    const workflowRepository =
-      await this.globalWorkspaceOrmManager.getRepository<WorkflowWorkspaceEntity>(
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const workflowRepository =
+        await this.globalWorkspaceOrmManager.getRepository<WorkflowWorkspaceEntity>(
+          workspaceId,
+          'workflow',
+          { shouldBypassPermissionChecks: true },
+        );
+      const workflows = await workflowRepository.find({
+        where: { outreachCampaignId: In(campaignIds) },
+        withDeleted: operation === 'destroy',
+      });
+
+      if (!isNonEmptyArray(workflows)) {
+        return;
+      }
+
+      const workflowIds = workflows.map(({ id }) => id);
+
+      await this.workflowCommonWorkspaceService.handleWorkflowSubEntities({
+        operation,
+        workflowIds,
         workspaceId,
-        'workflow',
-        { shouldBypassPermissionChecks: true },
-      );
-    const workflows = await workflowRepository.find({
-      where: { outreachCampaignId: In(campaignIds) },
-      withDeleted: operation === 'destroy',
-    });
+      });
 
-    if (!isNonEmptyArray(workflows)) {
-      return;
-    }
+      if (operation === 'delete') {
+        await workflowRepository.softDelete(workflowIds);
 
-    const workflowIds = workflows.map(({ id }) => id);
+        return;
+      }
 
-    await this.workflowCommonWorkspaceService.handleWorkflowSubEntities({
-      operation,
-      workflowIds,
-      workspaceId,
-    });
-
-    if (operation === 'delete') {
-      await workflowRepository.softDelete(workflowIds);
-
-      return;
-    }
-
-    await workflowRepository.delete(workflowIds);
+      await workflowRepository.delete(workflowIds);
+    }, authContext);
   }
 }

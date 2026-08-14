@@ -9,13 +9,21 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
     softDelete: jest.fn(),
   };
   const getRepository = jest.fn().mockResolvedValue(workflowRepository);
+  const executeInWorkspaceContext = jest.fn(
+    async (callback: () => Promise<void>) => await callback(),
+  );
   const globalWorkspaceOrmManager = {
     getRepository,
+    executeInWorkspaceContext,
   } as unknown as GlobalWorkspaceOrmManager;
   const handleWorkflowSubEntities = jest.fn();
   const workflowCommonWorkspaceService = {
     handleWorkflowSubEntities,
   } as unknown as WorkflowCommonWorkspaceService;
+  const authContext = {
+    type: 'system',
+    workspace: { id: 'workspace-a' },
+  } as never;
   const service = new CampaignOutreachWorkflowLifecycleWorkspaceService(
     globalWorkspaceOrmManager,
     workflowCommonWorkspaceService,
@@ -29,6 +37,7 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
     workflowRepository.find.mockResolvedValue([{ id: 'workflow-a' }]);
 
     await service.handleCampaignDeletion({
+      authContext,
       campaignIds: ['campaign-a'],
       operation: 'destroy',
       workspaceId: 'workspace-a',
@@ -41,6 +50,10 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
     });
 
     expect(workflowRepository.delete).toHaveBeenCalledWith(['workflow-a']);
+    expect(executeInWorkspaceContext).toHaveBeenCalledWith(
+      expect.any(Function),
+      authContext,
+    );
 
     expect(workflowRepository.find).toHaveBeenCalledWith(
       expect.objectContaining({ withDeleted: true }),
@@ -51,6 +64,7 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
     workflowRepository.find.mockResolvedValue([{ id: 'workflow-a' }]);
 
     await service.handleCampaignDeletion({
+      authContext,
       campaignIds: ['campaign-a'],
       operation: 'delete',
       workspaceId: 'workspace-a',
@@ -69,6 +83,7 @@ describe('CampaignOutreachWorkflowLifecycleService', () => {
     workflowRepository.find.mockResolvedValue([]);
 
     await service.handleCampaignDeletion({
+      authContext,
       campaignIds: ['campaign-a'],
       operation: 'delete',
       workspaceId: 'workspace-a',

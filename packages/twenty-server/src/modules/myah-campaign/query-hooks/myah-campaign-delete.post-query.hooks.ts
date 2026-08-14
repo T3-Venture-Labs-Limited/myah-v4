@@ -22,6 +22,7 @@ const handleDeletedCampaigns = async ({
   assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
 
   await campaignOutreachWorkflowLifecycleService.handleCampaignDeletion({
+    authContext,
     campaignIds,
     operation: 'delete',
     workspaceId: workspace.id,
