@@ -154,6 +154,8 @@ export class WorkflowVersionStepResolver {
       workflowRunId,
       response,
     });
+
+    return true;
   }
 
   @Mutation(() => WorkflowActionDTO)

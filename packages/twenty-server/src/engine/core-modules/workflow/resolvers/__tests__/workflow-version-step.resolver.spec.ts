@@ -89,11 +89,12 @@ it('authorizes Campaign-owned workflow versions and runs before mutating them', 
     workflowVersionId: 'workflow-version-a',
     stepId: 'step-a',
   } as never);
-  await resolver.submitFormStep(workspace, {
+  const didSubmitFormStep = await resolver.submitFormStep(workspace, {
     workflowRunId: 'workflow-run-a',
     stepId: 'step-a',
     response: {},
   } as never);
+  expect(didSubmitFormStep).toBe(true);
   await resolver.updateWorkflowRunStep(workspace, {
     workflowRunId: 'workflow-run-a',
     step: {},
