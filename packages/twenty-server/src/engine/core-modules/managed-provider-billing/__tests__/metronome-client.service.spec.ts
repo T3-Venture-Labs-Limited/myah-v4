@@ -2635,6 +2635,28 @@ describe('MetronomeClientService rate-card product resolution', () => {
     });
   });
 
+  it('stops rate-card pagination at the SDK terminal empty cursor', async () => {
+    const { list } = configureSdk({
+      rateCardPages: [{ data: [activeCard], next_page: '' }],
+      schedulePages: [{ data: [mailboxRate], next_page: null }],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).resolves.toEqual({
+      rateCardId: 'active-card',
+      productIdsByTag: {
+        'myah-managed-mailbox-month': 'mailbox-product',
+      },
+    });
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a repeated rate-card pagination cursor', async () => {
     const { list } = configureSdk({
       rateCardPages: [
@@ -2673,6 +2695,28 @@ describe('MetronomeClientService rate-card product resolution', () => {
       }),
     ).rejects.toThrow('Metronome rate-card pagination exceeded its limit');
     expect(list).toHaveBeenCalledTimes(100);
+  });
+
+  it('stops rate-schedule pagination at the SDK terminal empty cursor', async () => {
+    const { retrieveRateSchedule } = configureSdk({
+      rateCardPages: [{ data: [activeCard], next_page: null }],
+      schedulePages: [{ data: [mailboxRate], next_page: '' }],
+    });
+    const service = new MetronomeClientService(makeConfig());
+
+    await expect(
+      service.resolveRateCardProducts({
+        alias: 'sandbox-managed-email',
+        at,
+        productTags: ['myah-managed-mailbox-month'],
+      }),
+    ).resolves.toEqual({
+      rateCardId: 'active-card',
+      productIdsByTag: {
+        'myah-managed-mailbox-month': 'mailbox-product',
+      },
+    });
+    expect(retrieveRateSchedule).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a repeated rate-schedule pagination cursor', async () => {
