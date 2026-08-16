@@ -848,7 +848,7 @@ export class MetronomeClientService {
       );
 
       cards.push(...(response.data as typeof cards));
-      const responseNextPage = response.next_page ?? undefined;
+      const responseNextPage = response.next_page || undefined;
 
       if (responseNextPage === undefined) {
         nextPage = undefined;
@@ -982,7 +982,7 @@ export class MetronomeClientService {
       );
 
       rates.push(...response.data);
-      const responseNextPage = response.next_page ?? undefined;
+      const responseNextPage = response.next_page || undefined;
 
       if (responseNextPage === undefined) {
         return rates;
