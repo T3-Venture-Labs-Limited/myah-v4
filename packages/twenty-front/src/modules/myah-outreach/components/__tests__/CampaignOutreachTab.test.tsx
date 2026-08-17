@@ -174,7 +174,7 @@ describe('CampaignOutreachTab', () => {
     expect(screen.queryByText(/copy general/i)).not.toBeInTheDocument();
   });
 
-  it('loads only the requested Campaign Outreach workflow', async () => {
+  it('loads the requested Campaign Outreach workflow from the server', async () => {
     mockQuery.mockResolvedValue({
       data: { findCampaignOutreachWorkflow: null },
     });
@@ -183,6 +183,7 @@ describe('CampaignOutreachTab', () => {
 
     await waitFor(() =>
       expect(mockQuery).toHaveBeenCalledWith({
+        fetchPolicy: 'network-only',
         query: FIND_CAMPAIGN_OUTREACH_WORKFLOW,
         variables: { campaignId: 'campaign-a' },
       }),

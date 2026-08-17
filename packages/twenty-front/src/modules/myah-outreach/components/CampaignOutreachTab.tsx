@@ -75,6 +75,7 @@ export const CampaignOutreachTab = ({
       try {
         const { data } =
           await apolloCoreClient.query<FindCampaignOutreachWorkflowResult>({
+            fetchPolicy: 'network-only',
             query: FIND_CAMPAIGN_OUTREACH_WORKFLOW,
             variables: { campaignId },
           });
