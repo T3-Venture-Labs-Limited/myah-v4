@@ -96,6 +96,7 @@ export const ViewBar = ({
             bottomComponent={
               <ViewBarDetails
                 hasFilterButton={!hideQueryOnlyRecordFilters}
+                hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
                 viewBarId={viewBarId}
                 objectNamePlural={objectNamePlural}
                 rightComponent={<UpdateViewButtonGroup />}

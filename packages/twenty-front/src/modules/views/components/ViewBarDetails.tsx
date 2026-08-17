@@ -10,6 +10,7 @@ import { ViewBarDetailsAddFilterButton } from '@/views/components/ViewBarDetails
 import { EditableSortChip } from '@/views/editable-chip/components/EditableSortChip';
 
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
+import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { SoftDeleteFilterChip } from '@/views/components/SoftDeleteFilterChip';
 import { useApplyCurrentViewFiltersToCurrentRecordFilters } from '@/views/hooks/useApplyCurrentViewFiltersToCurrentRecordFilters';
@@ -40,6 +41,7 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 export type ViewBarDetailsProps = {
   hasFilterButton?: boolean;
+  hideQueryOnlyRecordFilters?: boolean;
   rightComponent?: ReactNode;
   viewBarId: string;
   objectNamePlural: string;
@@ -101,6 +103,7 @@ const StyledAddFilterContainer = styled.div`
 
 export const ViewBarDetails = ({
   hasFilterButton = false,
+  hideQueryOnlyRecordFilters = false,
   rightComponent,
   viewBarId,
   objectNamePlural,
@@ -118,6 +121,10 @@ export const ViewBarDetails = ({
 
   const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
+    viewBarId,
+  );
+  const queryOnlyRecordFilters = useAtomComponentStateValue(
+    queryOnlyRecordFiltersComponentState,
     viewBarId,
   );
 
@@ -153,17 +160,35 @@ export const ViewBarDetails = ({
 
   const { isSeeDeletedRecordsFilter } = useCheckIsSoftDeleteFilter();
 
-  const allSoftDeletedRecordsFilter = currentRecordFilters.find(
+  const displayedCurrentRecordFilters = useMemo(() => {
+    if (!hideQueryOnlyRecordFilters) {
+      return currentRecordFilters;
+    }
+
+    const queryOnlyRecordFilterIds = new Set(
+      queryOnlyRecordFilters.map((recordFilter) => recordFilter.id),
+    );
+
+    return currentRecordFilters.filter(
+      (recordFilter) => !queryOnlyRecordFilterIds.has(recordFilter.id),
+    );
+  }, [
+    currentRecordFilters,
+    hideQueryOnlyRecordFilters,
+    queryOnlyRecordFilters,
+  ]);
+
+  const allSoftDeletedRecordsFilter = displayedCurrentRecordFilters.find(
     (recordFilter) => isSeeDeletedRecordsFilter(recordFilter),
   );
 
-  const recordFilters = useMemo(() => {
-    return currentRecordFilters.filter(
+  const displayedRecordFilters = useMemo(() => {
+    return displayedCurrentRecordFilters.filter(
       (recordFilter) =>
         !recordFilter.recordFilterGroupId &&
         !isSeeDeletedRecordsFilter(recordFilter),
     );
-  }, [currentRecordFilters, isSeeDeletedRecordsFilter]);
+  }, [displayedCurrentRecordFilters, isSeeDeletedRecordsFilter]);
 
   const { applyCurrentViewFilterGroupsToCurrentRecordFilterGroups } =
     useApplyCurrentViewFilterGroupsToCurrentRecordFilterGroups();
@@ -212,7 +237,7 @@ export const ViewBarDetails = ({
     viewFilterGroupsAreDifferentFromRecordFilterGroups ||
     viewAnyFieldFilterDifferentFromCurrentAnyFieldFilter ||
     ((currentRecordSorts.length > 0 ||
-      currentRecordFilters.length > 0 ||
+      displayedCurrentRecordFilters.length > 0 ||
       currentRecordFilterGroups.length > 0) &&
       isViewBarExpanded);
 
@@ -246,7 +271,7 @@ export const ViewBarDetails = ({
                 recordSort={recordSort}
               />
             ))}
-            {isNonEmptyArray(recordFilters) &&
+            {isNonEmptyArray(displayedRecordFilters) &&
               isNonEmptyArray(currentRecordSorts) && (
                 <StyledSeparatorContainer>
                   <StyledSeparator />
@@ -256,7 +281,7 @@ export const ViewBarDetails = ({
             {shouldShowAdvancedFilterDropdownButton && (
               <AdvancedFilterDropdownButton />
             )}
-            {recordFilters.map((recordFilter) => (
+            {displayedRecordFilters.map((recordFilter) => (
               <ObjectFilterDropdownComponentInstanceContext.Provider
                 key={recordFilter.id}
                 value={{
