@@ -38,6 +38,7 @@ import { type ReactNode, useCallback, useEffect, useState } from 'react';
 const StyledIndexContainer = styled.div`
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   width: 100%;
 `;
