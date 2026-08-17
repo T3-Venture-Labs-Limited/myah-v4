@@ -1,16 +1,13 @@
 import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
 import { useCreatorBulkRelationshipPreview } from '@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview';
 import { type CreatorBulkRelationshipAction } from '@/myah/creator-crm/types/CreatorBulkRelationshipTarget';
-import { GET_MANAGED_EMAIL_OVERVIEW } from '@/settings/workspace/graphql/managed-email/managedEmailQueries';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { plural, t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useState } from 'react';
-import { useQuery } from '@apollo/client/react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { type ManagedEmailMailbox } from '~/generated-metadata/graphql';
 import { H1Title, H1TitleFontColor } from 'twenty-ui/typography';
 
 export const getCreatorBulkRelationshipDialogId = (
@@ -94,10 +91,6 @@ type CreatorBulkRelationshipDialogPreview = {
 type CreatorBulkRelationshipDialogContentProps = {
   action: CreatorBulkRelationshipAction;
   preview: CreatorBulkRelationshipDialogPreview;
-  managedMailboxes: ManagedEmailMailbox[];
-  managedMailboxLoading: boolean;
-  selectedManagedMailboxId: string | null | undefined;
-  onSelectManagedMailbox: (mailboxId: string | null) => void;
   isApplying: boolean;
   isConfirmationDisabled: boolean;
   onCancel: () => void;
@@ -133,24 +126,14 @@ const getCampaignImpactFingerprint = (
 export const CreatorBulkRelationshipDialogContent = ({
   action,
   preview,
-  managedMailboxes,
-  managedMailboxLoading,
-  selectedManagedMailboxId,
-  onSelectManagedMailbox,
   isApplying,
   isConfirmationDisabled,
   onCancel,
   onConfirm,
 }: CreatorBulkRelationshipDialogContentProps) => {
   const isRemoval = action.operation === 'remove';
-  const requiresManagedMailbox =
-    action.operation === 'add' && action.target.kind === 'campaign';
   const title = isRemoval ? t`Confirm removal` : t`Confirm addition`;
-  const changedLabel = isRemoval
-    ? t`Will be removed`
-    : requiresManagedMailbox
-      ? t`Will be assigned`
-      : t`Will be added`;
+  const changedLabel = isRemoval ? t`Will be removed` : t`Will be added`;
   const unchangedLabel = isRemoval ? t`Already absent` : t`Already present`;
   const targetLabel =
     action.target.kind === 'creator-list' ? t`list` : t`campaign`;
@@ -207,52 +190,6 @@ export const CreatorBulkRelationshipDialogContent = ({
           </StyledReviewValue>
         </StyledReviewRow>
       </StyledReviewRows>
-      {requiresManagedMailbox && (
-        <>
-          <StyledReviewLabel>{t`Sending mailbox`}</StyledReviewLabel>
-          {managedMailboxLoading ? (
-            <StyledFeedback role="status">{t`Loading managed mailboxes…`}</StyledFeedback>
-          ) : (
-            <>
-              <Button
-                title={t`Clear mailbox assignment`}
-                variant="secondary"
-                onClick={() => onSelectManagedMailbox(null)}
-                accent={selectedManagedMailboxId === null ? 'brand' : 'default'}
-              />
-              {managedMailboxes.map((mailbox) => {
-                const isEligible = mailbox.campaignEligibility === 'ELIGIBLE';
-                const unavailableReason =
-                  mailbox.warmupState === 'WARMING' ||
-                  mailbox.warmupState === 'CONNECTING'
-                    ? t`Warming — not ready for new threads`
-                    : mailbox.safeFailureCode
-                      ? t`Needs attention`
-                      : t`New threads blocked`;
-
-                return (
-                  <Button
-                    key={mailbox.id}
-                    title={
-                      isEligible
-                        ? `${mailbox.personaDisplayName} — ${mailbox.address}`
-                        : `${mailbox.personaDisplayName} — ${mailbox.address}: ${unavailableReason}`
-                    }
-                    variant="secondary"
-                    disabled={!isEligible}
-                    onClick={() => onSelectManagedMailbox(mailbox.id)}
-                    accent={
-                      selectedManagedMailboxId === mailbox.id
-                        ? 'brand'
-                        : 'default'
-                    }
-                  />
-                );
-              })}
-            </>
-          )}
-        </>
-      )}
       <StyledFeedback role="status">{feedback}</StyledFeedback>
       <StyledActions>
         <Button
@@ -306,24 +243,11 @@ export const CreatorBulkRelationshipDialog = ({
     useApplyCreatorBulkRelationship();
   const { closeModal } = useModal();
   const [isApplying, setIsApplying] = useState(false);
-  const [selectedManagedMailboxId, setSelectedManagedMailboxId] = useState<
-    string | null | undefined
-  >(undefined);
-  const requiresManagedMailbox =
-    action.operation === 'add' && action.target.kind === 'campaign';
-  const { data: managedEmailData, loading: managedMailboxLoading } = useQuery<{
-    managedEmailMailboxes: ManagedEmailMailbox[];
-  }>(GET_MANAGED_EMAIL_OVERVIEW, {
-    skip: !requiresManagedMailbox,
-  });
-  const managedMailboxes = managedEmailData?.managedEmailMailboxes ?? [];
   const modalInstanceId = getCreatorBulkRelationshipDialogId(action);
   const isRemoval = action.operation === 'remove';
   const actionableCount = isRemoval
     ? preview.relationshipRecordIds.length
-    : requiresManagedMailbox
-      ? preview.selectedCreatorIds.length
-      : preview.unlinkedCreatorIds.length;
+    : preview.unlinkedCreatorIds.length;
   const isConfirmationDisabled =
     preview.loading ||
     preview.isPreviewUnavailable ||
@@ -331,9 +255,7 @@ export const CreatorBulkRelationshipDialog = ({
     isRejectedCampaignImpact ||
     preview.selectedCreatorIds.length === 0 ||
     actionableCount === 0 ||
-    (isRemoval && preview.relationshipRecordIds.length !== 1) ||
-    (requiresManagedMailbox &&
-      (managedMailboxLoading || selectedManagedMailboxId === undefined));
+    (isRemoval && preview.relationshipRecordIds.length !== 1);
 
   const handleConfirm = async () => {
     if (isConfirmationDisabled) {
@@ -382,16 +304,6 @@ export const CreatorBulkRelationshipDialog = ({
         await applyCreatorBulkRelationship({
           target: action.target,
           creatorIdsToAdd: preview.unlinkedCreatorIds,
-          ...(requiresManagedMailbox
-            ? {
-                ...(preview.relationshipRecordIds.length > 0
-                  ? {
-                      campaignCreatorIdsToUpdate: preview.relationshipRecordIds,
-                    }
-                  : {}),
-                assignedManagedMailboxId: selectedManagedMailboxId,
-              }
-            : {}),
         });
       }
       closeModal(modalInstanceId);
@@ -444,10 +356,6 @@ export const CreatorBulkRelationshipDialog = ({
               : 'ready',
           campaignImpact: preview.campaignImpact,
         }}
-        managedMailboxes={managedMailboxes}
-        managedMailboxLoading={managedMailboxLoading}
-        selectedManagedMailboxId={selectedManagedMailboxId}
-        onSelectManagedMailbox={setSelectedManagedMailboxId}
         isApplying={isApplying}
         isConfirmationDisabled={isConfirmationDisabled}
         onCancel={handleCancel}
