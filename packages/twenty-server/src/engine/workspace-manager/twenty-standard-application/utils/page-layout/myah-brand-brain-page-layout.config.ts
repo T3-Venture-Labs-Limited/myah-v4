@@ -191,11 +191,11 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
   type: PageLayoutType.RECORD_PAGE,
   universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
   objectUniversalIdentifier: MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
-  defaultTabUniversalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
+  defaultTabUniversalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
   tabs: {
-    overview: {
+    home: {
       universalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
-      title: 'Campaign information',
+      title: 'Home',
       position: 10,
       icon: 'IconHome',
       layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
@@ -210,10 +210,29 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
         },
       },
     },
+    outreach: {
+      universalIdentifier: '8d749a63-24d8-481b-9a10-d98d9b959db1',
+      title: 'Outreach',
+      position: 20,
+      icon: 'IconSend',
+      layoutMode: PageLayoutTabLayoutMode.CANVAS,
+      widgets: {
+        outreachWorkflows: {
+          universalIdentifier: 'c8e6d1ae-8fa4-43df-95b4-94009c524632',
+          title: 'Outreach workflow',
+          type: WidgetType.FIELD,
+          gridPosition: GRID_POSITIONS.FULL_WIDTH,
+          position: CANVAS_LAYOUT_POSITIONS.DEFAULT,
+          fieldUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.outreachWorkflows
+              .universalIdentifier,
+        },
+      },
+    },
     tasks: {
       universalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
       title: 'Tasks',
-      position: 20,
+      position: 30,
       icon: 'IconCheckbox',
       layoutMode: PageLayoutTabLayoutMode.CANVAS,
       widgets: {
@@ -229,7 +248,7 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
     notes: {
       universalIdentifier: 'cd78ad8c-883a-4ce1-9b74-526adadb751d',
       title: 'Notes',
-      position: 30,
+      position: 40,
       icon: 'IconNotes',
       layoutMode: PageLayoutTabLayoutMode.CANVAS,
       widgets: {
@@ -245,7 +264,7 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
     instructions: {
       universalIdentifier: '0d213a1a-e001-496c-970e-e692968cf17c',
       title: 'Agent',
-      position: 40,
+      position: 50,
       icon: 'IconFileText',
       layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
       widgets: {
@@ -262,7 +281,7 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
     operations: {
       universalIdentifier: 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
       title: 'Operations',
-      position: 50,
+      position: 60,
       icon: 'IconSettings',
       layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
       widgets: {
@@ -282,10 +301,10 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
 export const MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG = {
   ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
   tabs: {
-    overview: {
-      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.overview,
+    home: {
+      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
       widgets: {
-        ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.overview.widgets,
+        ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home.widgets,
         creatorLists: {
           universalIdentifier: 'a4f1aa45-0be4-4c75-bd2a-0f3a1d75d46c',
           title: 'Creator Lists',
@@ -299,11 +318,12 @@ export const MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG = {
         },
       },
     },
+    outreach: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.outreach,
     tasks: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.tasks,
     influencers: {
       universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
       title: 'Influencers',
-      position: 25,
+      position: 35,
       icon: 'IconUsers',
       layoutMode: PageLayoutTabLayoutMode.CANVAS,
       widgets: {

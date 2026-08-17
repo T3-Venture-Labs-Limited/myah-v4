@@ -18,9 +18,15 @@ jest.mock('@/page-layout/components/PageLayoutContent', () => ({
   PageLayoutContent: () => <div>Native page layout content</div>,
 }));
 
-jest.mock('@/page-layout/components/MyahCampaignOperations', () => ({
-  MyahCampaignOperations: ({ campaignId }: { campaignId: string }) => (
-    <div>{`Campaign operations integration:${campaignId}`}</div>
+jest.mock('@/page-layout/components/MyahCampaignHome', () => ({
+  MyahCampaignHome: ({ campaignId }: { campaignId: string }) => (
+    <div>{`Campaign home integration:${campaignId}`}</div>
+  ),
+}));
+
+jest.mock('@/myah-outreach/components/CampaignOutreachTab', () => ({
+  CampaignOutreachTab: ({ campaignId }: { campaignId: string }) => (
+    <div data-testid="campaign-outreach-tab">{campaignId}</div>
   ),
 }));
 
@@ -63,8 +69,8 @@ describe('PageLayoutMainContent', () => {
     };
     activeTab = {
       layout: 'VERTICAL_LIST',
-      title: 'Operations',
-      universalIdentifier: 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+      title: 'Home',
+      universalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
     };
     targetRecordIdentifier = {
       id: 'campaign-1',
@@ -72,12 +78,12 @@ describe('PageLayoutMainContent', () => {
     };
   });
 
-  it('mounts the first-party Campaign operations integration with Campaign Operations content', () => {
-    render(<PageLayoutMainContent tabId="operations-tab-id" />);
+  it('mounts Campaign Home with native page layout content', () => {
+    render(<PageLayoutMainContent tabId="home-tab-id" />);
 
     expect(screen.getByText('Native page layout content')).toBeVisible();
     expect(
-      screen.getByText('Campaign operations integration:campaign-1'),
+      screen.getByText('Campaign home integration:campaign-1'),
     ).toBeVisible();
   });
 
@@ -103,37 +109,65 @@ describe('PageLayoutMainContent', () => {
     ).toBeVisible();
   });
 
+  it('renders Campaign Outreach only for the Campaign Outreach tab', () => {
+    activeTab = {
+      ...activeTab,
+      title: 'Outreach',
+      universalIdentifier: '8d749a63-24d8-481b-9a10-d98d9b959db1',
+    };
+
+    render(<PageLayoutMainContent tabId="outreach-tab-id" />);
+
+    expect(screen.getByTestId('campaign-outreach-tab')).toHaveTextContent(
+      'campaign-1',
+    );
+    expect(
+      screen.queryByText('Native page layout content'),
+    ).not.toBeInTheDocument();
+  });
   it.each([
     {
-      description: 'the Campaign information tab',
+      description: 'the Campaign Tasks tab',
       setup: () => {
         activeTab = {
           ...activeTab,
-          title: 'Information',
-          universalIdentifier: '8482a6bc-bc2a-4f2d-8296-6d951f681c4f',
+          title: 'Tasks',
+          universalIdentifier: 'a2ad78b4-249f-45d4-85b5-ee9ea3c30fda',
         };
       },
     },
     {
-      description: 'a different Campaign tab also titled Operations',
+      description: 'the Campaign Notes tab',
       setup: () => {
         activeTab = {
           ...activeTab,
-          universalIdentifier: 'not-the-operations-tab',
+          title: 'Notes',
+          universalIdentifier: 'cbea3c1e-e0c2-43d9-a44a-f65f295d0a54',
         };
       },
     },
     {
-      description: 'a non-Campaign record in the Campaign layout',
+      description: 'the Campaign Agent tab',
       setup: () => {
-        targetRecordIdentifier = {
-          id: 'campaign-1',
-          targetObjectNameSingular: 'person',
+        activeTab = {
+          ...activeTab,
+          title: 'Agent',
+          universalIdentifier: 'd67e7fa1-87d2-4730-b4dd-0b06680f4c49',
         };
       },
     },
     {
-      description: 'a different record page layout',
+      description: 'the Campaign Operations tab',
+      setup: () => {
+        activeTab = {
+          ...activeTab,
+          title: 'Operations',
+          universalIdentifier: 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+        };
+      },
+    },
+    {
+      description: 'a different layout',
       setup: () => {
         currentPageLayout = {
           ...currentPageLayout,
@@ -141,13 +175,22 @@ describe('PageLayoutMainContent', () => {
         };
       },
     },
-  ])('does not mount operations in $description', ({ setup }) => {
+    {
+      description: 'a non-Campaign record',
+      setup: () => {
+        targetRecordIdentifier = {
+          id: 'campaign-1',
+          targetObjectNameSingular: 'person',
+        };
+      },
+    },
+  ])('does not mount Campaign Home on $description', ({ setup }) => {
     setup();
 
     render(<PageLayoutMainContent tabId="other-tab-id" />);
 
     expect(
-      screen.queryByText(/Campaign operations integration:/),
+      screen.queryByText(/Campaign home integration:/),
     ).not.toBeInTheDocument();
   });
 });

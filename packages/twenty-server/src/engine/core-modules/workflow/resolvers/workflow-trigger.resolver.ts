@@ -28,6 +28,7 @@ import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-module
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { WorkflowTriggerWorkspaceService } from 'src/modules/workflow/workflow-trigger/workspace-services/workflow-trigger.workspace-service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
 @CoreResolver()
@@ -45,6 +46,7 @@ import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/sta
 export class WorkflowTriggerResolver {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
     private readonly workflowTriggerWorkspaceService: WorkflowTriggerWorkspaceService,
   ) {}
 
@@ -54,6 +56,9 @@ export class WorkflowTriggerResolver {
     @Args('workflowVersionId', { type: () => UUIDScalarType })
     workflowVersionId: string,
   ) {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      { workflowVersionId, workspaceId: workspace.id },
+    );
     return this.workflowTriggerWorkspaceService.activateWorkflowVersion(
       workflowVersionId,
       workspace.id,
@@ -66,6 +71,9 @@ export class WorkflowTriggerResolver {
     @Args('workflowVersionId', { type: () => UUIDScalarType })
     workflowVersionId: string,
   ) {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      { workflowVersionId, workspaceId: workspace.id },
+    );
     return this.workflowTriggerWorkspaceService.deactivateWorkflowVersion(
       workflowVersionId,
       workspace.id,
@@ -79,6 +87,9 @@ export class WorkflowTriggerResolver {
     @Args('input')
     { workflowVersionId, workflowRunId, payload }: RunWorkflowVersionInput,
   ) {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      { workflowVersionId, workspaceId: workspace.id },
+    );
     const authContext = buildSystemAuthContext(workspace.id);
 
     const workspaceMember =
@@ -128,6 +139,9 @@ export class WorkflowTriggerResolver {
     @Args('workflowRunId', { type: () => UUIDScalarType })
     workflowRunId: string,
   ) {
+    await this.workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible(
+      { workflowRunId, workspaceId: workspace.id },
+    );
     return this.workflowTriggerWorkspaceService.stopWorkflowRun(
       workflowRunId,
       workspace.id,
@@ -140,6 +154,9 @@ export class WorkflowTriggerResolver {
     @Args('workflowRunId', { type: () => UUIDScalarType })
     workflowRunId: string,
   ) {
+    await this.workflowOutreachAccessGuardService.assertWorkflowRunIsAccessible(
+      { workflowRunId, workspaceId: workspace.id },
+    );
     return this.workflowTriggerWorkspaceService.retryWorkflowRun(
       workflowRunId,
       workspace.id,

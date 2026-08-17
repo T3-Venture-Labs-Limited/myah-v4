@@ -50,8 +50,10 @@ export const createListWorkflowsTool = (
           const queryBuilder =
             workflowRepository.createQueryBuilder('workflow');
 
+          queryBuilder.andWhere('workflow.outreachCampaignId IS NULL');
+
           if (parameters.status) {
-            queryBuilder.where(':status = ANY(workflow.statuses)', {
+            queryBuilder.andWhere(':status = ANY(workflow.statuses)', {
               status: parameters.status,
             });
           }

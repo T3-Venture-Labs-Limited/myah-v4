@@ -17,6 +17,7 @@ import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
 import { WorkflowVersionWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version/workflow-version.workspace-service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 
 @CoreResolver()
 @UsePipes(ResolverValidationPipe)
@@ -31,6 +32,7 @@ import { WorkflowVersionWorkspaceService } from 'src/modules/workflow/workflow-b
 )
 export class WorkflowVersionResolver {
   constructor(
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
     private readonly workflowVersionWorkspaceService: WorkflowVersionWorkspaceService,
   ) {}
 
@@ -43,6 +45,13 @@ export class WorkflowVersionResolver {
       workflowVersionIdToCopy,
     }: CreateDraftFromWorkflowVersionInput,
   ): Promise<WorkflowVersionDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
+      workflowId,
+      workspaceId,
+    });
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      { workflowVersionId: workflowVersionIdToCopy, workspaceId },
+    );
     return this.workflowVersionWorkspaceService.createDraftFromWorkflowVersion({
       workspaceId,
       workflowId,
@@ -56,6 +65,13 @@ export class WorkflowVersionResolver {
     @Args('input')
     { workflowIdToDuplicate, workflowVersionIdToCopy }: DuplicateWorkflowInput,
   ): Promise<WorkflowVersionDTO> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
+      workflowId: workflowIdToDuplicate,
+      workspaceId,
+    });
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      { workflowVersionId: workflowVersionIdToCopy, workspaceId },
+    );
     return this.workflowVersionWorkspaceService.duplicateWorkflow({
       workspaceId,
       workflowIdToDuplicate,
@@ -69,6 +85,9 @@ export class WorkflowVersionResolver {
     @Args('input')
     { workflowVersionId, positions }: UpdateWorkflowVersionPositionsInput,
   ) {
+    await this.workflowOutreachAccessGuardService.assertWorkflowVersionIsAccessible(
+      { workflowVersionId, workspaceId },
+    );
     await this.workflowVersionWorkspaceService.updateWorkflowVersionPositions({
       workspaceId,
       workflowVersionId,

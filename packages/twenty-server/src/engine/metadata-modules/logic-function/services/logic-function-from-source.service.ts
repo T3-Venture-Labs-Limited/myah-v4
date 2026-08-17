@@ -153,52 +153,70 @@ export class LogicFunctionFromSourceService {
       newId,
     );
 
-    await this.logicFunctionResourceService.copyResources({
-      fromSourceHandlerPath: sourceHandlerPath,
-      toSourceHandlerPath,
-      fromBuiltHandlerPath: builtHandlerPath,
-      toBuiltHandlerPath,
-      workspaceId,
-      applicationUniversalIdentifier: ownerFlatApplication.universalIdentifier,
-    });
+    let copiedResources = false;
 
-    const universalFlatLogicFunctionToCreate =
-      buildUniversalFlatLogicFunctionToCreate({
-        id: newId,
-        name: existingLogicFunction.name,
-        description: existingLogicFunction.description,
-        timeoutSeconds: existingLogicFunction.timeoutSeconds,
-        isBuildUpToDate: existingLogicFunction.isBuildUpToDate,
-        checksum: existingLogicFunction.checksum,
-        executionMode: LogicFunctionExecutionMode.LIVE,
-        handlerName: existingLogicFunction.handlerName,
-        sourceHandlerPath: toSourceHandlerPath,
-        builtHandlerPath: toBuiltHandlerPath,
-        cronTriggerSettings: existingLogicFunction.cronTriggerSettings,
-        databaseEventTriggerSettings:
-          existingLogicFunction.databaseEventTriggerSettings,
-        httpRouteTriggerSettings:
-          existingLogicFunction.httpRouteTriggerSettings,
-        toolTriggerSettings: existingLogicFunction.toolTriggerSettings,
-        workflowActionTriggerSettings:
-          existingLogicFunction.workflowActionTriggerSettings,
+    try {
+      await this.logicFunctionResourceService.copyResources({
+        fromSourceHandlerPath: sourceHandlerPath,
+        toSourceHandlerPath,
+        fromBuiltHandlerPath: builtHandlerPath,
+        toBuiltHandlerPath,
+        workspaceId,
         applicationUniversalIdentifier:
           ownerFlatApplication.universalIdentifier,
       });
+      copiedResources = true;
 
-    const created = await this.helperService.createOneFromMetadata({
-      universalFlatLogicFunctionToCreate,
-      workspaceId,
-    });
+      const universalFlatLogicFunctionToCreate =
+        buildUniversalFlatLogicFunctionToCreate({
+          id: newId,
+          name: existingLogicFunction.name,
+          description: existingLogicFunction.description,
+          timeoutSeconds: existingLogicFunction.timeoutSeconds,
+          isBuildUpToDate: existingLogicFunction.isBuildUpToDate,
+          checksum: existingLogicFunction.checksum,
+          executionMode: LogicFunctionExecutionMode.LIVE,
+          handlerName: existingLogicFunction.handlerName,
+          sourceHandlerPath: toSourceHandlerPath,
+          builtHandlerPath: toBuiltHandlerPath,
+          cronTriggerSettings: existingLogicFunction.cronTriggerSettings,
+          databaseEventTriggerSettings:
+            existingLogicFunction.databaseEventTriggerSettings,
+          httpRouteTriggerSettings:
+            existingLogicFunction.httpRouteTriggerSettings,
+          toolTriggerSettings: existingLogicFunction.toolTriggerSettings,
+          workflowActionTriggerSettings:
+            existingLogicFunction.workflowActionTriggerSettings,
+          applicationUniversalIdentifier:
+            ownerFlatApplication.universalIdentifier,
+        });
 
-    if (!isDefined(created)) {
-      throw new LogicFunctionException(
-        'Failed to duplicate logic function',
-        LogicFunctionExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
-      );
+      const created = await this.helperService.createOneFromMetadata({
+        universalFlatLogicFunctionToCreate,
+        workspaceId,
+      });
+
+      if (!isDefined(created)) {
+        throw new LogicFunctionException(
+          'Failed to duplicate logic function',
+          LogicFunctionExceptionCode.LOGIC_FUNCTION_NOT_FOUND,
+        );
+      }
+
+      return { id: created.id };
+    } catch (error) {
+      if (copiedResources) {
+        await this.logicFunctionResourceService.deleteCopiedResources({
+          workspaceId,
+          applicationUniversalIdentifier:
+            ownerFlatApplication.universalIdentifier,
+          sourceHandlerPath: toSourceHandlerPath,
+          builtHandlerPath: toBuiltHandlerPath,
+        });
+      }
+
+      throw error;
     }
-
-    return { id: created.id };
   }
 
   async updateOneFromSource({

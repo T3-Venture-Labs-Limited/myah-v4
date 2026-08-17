@@ -49,7 +49,10 @@ describe('createDeleteWorkflowTool', () => {
 
     const result = (await tool.execute(baseInput)) as Record<string, unknown>;
 
-    expect(workflowRepository.softDelete).toHaveBeenCalledWith(WORKFLOW_ID);
+    expect(workflowRepository.softDelete).toHaveBeenCalledWith({
+      id: WORKFLOW_ID,
+      outreachCampaignId: expect.anything(),
+    });
     expect(
       workflowCommonService.handleWorkflowSubEntities,
     ).toHaveBeenCalledWith({
@@ -59,6 +62,37 @@ describe('createDeleteWorkflowTool', () => {
     });
     expect(result.success).toBe(true);
     expect(result.workflowId).toBe(WORKFLOW_ID);
+  });
+
+  it('restricts deletion to General Automations', async () => {
+    const { tool, workflowRepository, workflowCommonService } = buildTool();
+
+    await tool.execute(baseInput);
+
+    expect(workflowRepository.softDelete).toHaveBeenCalledWith({
+      id: WORKFLOW_ID,
+      outreachCampaignId: expect.anything(),
+    });
+    expect(
+      workflowCommonService.handleWorkflowSubEntities,
+    ).toHaveBeenCalledWith({
+      workflowIds: [WORKFLOW_ID],
+      workspaceId: 'workspace-id',
+      operation: 'delete',
+    });
+  });
+
+  it('does not clean up Campaign Outreach sub-entities when deletion is constrained', async () => {
+    const { tool, workflowRepository, workflowCommonService } = buildTool();
+
+    workflowRepository.softDelete.mockResolvedValue({ affected: 0 });
+
+    const result = (await tool.execute(baseInput)) as Record<string, unknown>;
+
+    expect(
+      workflowCommonService.handleWorkflowSubEntities,
+    ).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
   });
 
   it('should return a failure result when deletion throws', async () => {

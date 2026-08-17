@@ -17,6 +17,8 @@ import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
 import type { SyncableFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-from.type';
 import type { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
+import type { FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+
 import { getSubFlatEntityMapsByUniversalIdentifiersOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/get-sub-flat-entity-maps-by-universal-identifiers-or-throw.util';
 import { pruneDanglingForeignKeyAggregatorsInAllFlatEntityMapsThroughMutation } from 'src/engine/metadata-modules/flat-entity/utils/prune-dangling-foreign-key-aggregators-in-all-flat-entity-maps-through-mutation.util';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
@@ -79,6 +81,25 @@ const toUniversalIdentifiers = (
 type SyncableFlatEntityMaps = FlatEntityMaps<SyncableFlatEntity>;
 type TwentyStandardMetadataName =
   (typeof TWENTY_STANDARD_ALL_METADATA_NAME)[number];
+
+const withoutCacheDerivedFieldMetadataProperties = <
+  T extends FlatEntityMaps<FlatFieldMetadata>,
+>(
+  flatFieldMetadataMaps: T,
+): T => {
+  const sanitizedFlatFieldMetadataMaps = structuredClone(
+    flatFieldMetadataMaps,
+  );
+
+  for (const flatFieldMetadata of Object.values(
+    sanitizedFlatFieldMetadataMaps.byUniversalIdentifier,
+  ).filter(isDefined)) {
+    Reflect.deleteProperty(flatFieldMetadata, 'isUnique');
+  }
+
+  return sanitizedFlatFieldMetadataMaps;
+};
+
 
 export type SynchronizeMyahStandardMetadataOptions = {
   targetObjectUniversalIdentifiers?: ReadonlySet<string>;
@@ -689,6 +710,15 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         >
       )[flatEntityMapsKey] = fromFlatEntitySubMaps;
     }
+
+    fromMyahFlatEntityMaps.flatFieldMetadataMaps =
+      withoutCacheDerivedFieldMetadataProperties(
+        fromMyahFlatEntityMaps.flatFieldMetadataMaps,
+      );
+    toAllFlatEntityMaps.flatFieldMetadataMaps =
+      withoutCacheDerivedFieldMetadataProperties(
+        toAllFlatEntityMaps.flatFieldMetadataMaps,
+      );
 
     const result =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigrationFromTo(

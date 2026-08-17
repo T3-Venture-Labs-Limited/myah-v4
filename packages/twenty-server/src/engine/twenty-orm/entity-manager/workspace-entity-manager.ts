@@ -248,7 +248,7 @@ export class WorkspaceEntityManager extends EntityManager {
     return this.createQueryBuilder(
       target,
       metadata.name,
-      undefined,
+      this.queryRunner,
       permissionOptions,
     )
       .insert()
@@ -368,7 +368,7 @@ export class WorkspaceEntityManager extends EntityManager {
       return this.createQueryBuilder(
         target,
         metadata.name,
-        undefined,
+        this.queryRunner,
         permissionOptions,
       )
         .update()
@@ -380,7 +380,7 @@ export class WorkspaceEntityManager extends EntityManager {
       return this.createQueryBuilder(
         target,
         metadata.name,
-        undefined,
+        this.queryRunner,
         permissionOptions,
       )
         .update()

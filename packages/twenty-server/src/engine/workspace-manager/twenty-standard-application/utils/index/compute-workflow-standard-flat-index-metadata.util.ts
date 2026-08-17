@@ -30,4 +30,18 @@ export const buildWorkflowStandardFlatIndexMetadatas = ({
     twentyStandardApplicationId,
     now,
   }),
+  outreachCampaignUniqueIndex: createStandardIndexFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      indexName: 'outreachCampaignUniqueIndex',
+      relatedFieldNames: ['outreachCampaign'],
+      isUnique: true,
+      indexWhereClause: '"deletedAt" IS NULL',
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
 });

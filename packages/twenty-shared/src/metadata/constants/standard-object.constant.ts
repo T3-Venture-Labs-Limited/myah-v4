@@ -2632,6 +2632,9 @@ export const STANDARD_OBJECTS = {
       updatedBy: {
         universalIdentifier: '3559831e-caf2-4eb5-9db1-b47bf968c774',
       },
+      outreachCampaign: {
+        universalIdentifier: '87fceb87-0c45-438f-ae9a-28c76da94197',
+      },
       searchVector: {
         universalIdentifier: '20202020-535d-4ffa-b7f3-4fa0d5da1b7a',
       },
@@ -2639,6 +2642,9 @@ export const STANDARD_OBJECTS = {
     indexes: {
       searchVectorGinIndex: {
         universalIdentifier: 'c7e64c55-eb0c-4b93-b076-5cfcf2e2e042',
+      },
+      outreachCampaignUniqueIndex: {
+        universalIdentifier: 'cb077549-3289-42b5-b1ce-226e7bcd8f9a',
       },
     },
     views: {
@@ -2662,6 +2668,11 @@ export const STANDARD_OBJECTS = {
           },
           runs: {
             universalIdentifier: '20202020-af09-4a09-8a09-a0bcf10aa11f',
+          },
+        },
+        viewFilters: {
+          outreachCampaignIsEmpty: {
+            universalIdentifier: 'a2a698b7-1ba6-4850-a044-56d2c5f3d00d',
           },
         },
       },

@@ -3,6 +3,7 @@ import { i18nLabel } from 'src/engine/workspace-manager/twenty-standard-applicat
 import {
   DateDisplayFormat,
   FieldMetadataType,
+  RelationOnDeleteAction,
   RelationType,
 } from 'twenty-shared/types';
 
@@ -130,6 +131,32 @@ export const buildWorkflowStandardFlatFieldMetadatas = ({
       icon: 'IconVersions',
       isNullable: true,
       isUIEditable: false,
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
+  outreachCampaign: createStandardRelationFieldFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      type: FieldMetadataType.RELATION,
+      fieldName: 'outreachCampaign',
+      label: i18nLabel(msg`Outreach Campaign`),
+      description: i18nLabel(msg`Campaign that owns this Outreach workflow`),
+      icon: 'IconTarget',
+      isNullable: true,
+      isUnique: true,
+      isUIEditable: false,
+      targetObjectName: 'campaign',
+      targetFieldName: 'outreachWorkflows',
+      morphId: null,
+      settings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: RelationOnDeleteAction.CASCADE,
+        joinColumnName: 'outreachCampaignId',
+      },
     },
     standardObjectMetadataRelatedEntityIds,
     dependencyFlatEntityMaps,

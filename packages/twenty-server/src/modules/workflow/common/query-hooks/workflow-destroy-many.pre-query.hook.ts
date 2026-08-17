@@ -6,11 +6,13 @@ import { type DestroyManyResolverArgs } from 'src/engine/api/graphql/workspace-r
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 import { WorkspaceNotFoundDefaultError } from 'src/engine/core-modules/workspace/workspace.exception';
 
 @WorkspaceQueryHook('workflow.destroyMany')
 export class WorkflowDestroyManyPreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
     private readonly workflowCommonWorkspaceService: WorkflowCommonWorkspaceService,
   ) {}
 
@@ -22,6 +24,13 @@ export class WorkflowDestroyManyPreQueryHook implements WorkspacePreQueryHookIns
     const workspace = authContext.workspace;
 
     assertIsDefinedOrThrow(workspace, WorkspaceNotFoundDefaultError);
+    for (const workflowId of payload.filter.id.in) {
+      await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
+        authContext,
+        workflowId,
+        workspaceId: workspace.id,
+      });
+    }
 
     await this.workflowCommonWorkspaceService.handleWorkflowSubEntities({
       workflowIds: payload.filter.id.in,

@@ -1,12 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { MyahCampaignOperations } from '@/page-layout/components/MyahCampaignOperations';
-
-jest.mock('@/page-layout/components/MyahCampaignAudienceControls', () => ({
-  MyahCampaignAudienceControls: ({ campaignId }: { campaignId: string }) => (
-    <div>{`Campaign audience controls:${campaignId}`}</div>
-  ),
-}));
+import { MyahCampaignReadiness } from '@/page-layout/components/MyahCampaignReadiness';
 
 const updateOneRecord = jest.fn();
 const refetchCampaign = jest.fn();
@@ -111,7 +105,7 @@ jest.mock('twenty-ui/theme-constants', () => ({
 }));
 
 const renderReadiness = (campaignId: string | undefined) =>
-  render(<MyahCampaignOperations campaignId={campaignId} />);
+  render(<MyahCampaignReadiness campaignId={campaignId} />);
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -140,7 +134,7 @@ beforeEach(() => {
   updateOneRecord.mockResolvedValue(undefined);
 });
 
-describe('MyahCampaignOperations', () => {
+describe('MyahCampaignReadiness', () => {
   it('shows the Campaign readiness state and applies an allowed lifecycle transition', async () => {
     renderReadiness('campaign-1');
 

@@ -1,5 +1,4 @@
 import { isDefined } from 'twenty-shared/utils';
-import { type FindOptionsWhere } from 'typeorm';
 import { z } from 'zod';
 
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
@@ -63,21 +62,29 @@ export const createListWorkflowRunsTool = (
               context.rolePermissionConfig,
             );
 
-          const where: FindOptionsWhere<WorkflowRunWorkspaceEntity> = {};
+          const queryBuilder =
+            workflowRunRepository.createQueryBuilder('workflowRun');
+
+          queryBuilder
+            .innerJoin('workflowRun.workflow', 'workflow')
+            .andWhere('workflow.outreachCampaignId IS NULL');
 
           if (isDefined(parameters.workflowId)) {
-            where.workflowId = parameters.workflowId;
+            queryBuilder.andWhere('workflowRun.workflowId = :workflowId', {
+              workflowId: parameters.workflowId,
+            });
           }
 
           if (isDefined(parameters.status)) {
-            where.status = parameters.status;
+            queryBuilder.andWhere('workflowRun.status = :status', {
+              status: parameters.status,
+            });
           }
 
-          const workflowRuns = await workflowRunRepository.find({
-            where,
-            order: { createdAt: 'DESC' },
-            take: parameters.limit ?? DEFAULT_LIMIT,
-          });
+          const workflowRuns = await queryBuilder
+            .orderBy('workflowRun.createdAt', 'DESC')
+            .take(parameters.limit ?? DEFAULT_LIMIT)
+            .getMany();
 
           return {
             success: true,
