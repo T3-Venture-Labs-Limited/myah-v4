@@ -55,6 +55,7 @@ export type RecordIndexSurfaceProps = {
   onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
   hideQueryOnlyRecordFilters?: boolean;
+  hideEmptyStateSubtitle?: boolean;
   headerTitle?: string;
   headerActionButton?: ReactNode;
 };
@@ -101,6 +102,7 @@ const RecordIndexSurfaceInstance = ({
   onViewChange,
   initialQueryOnlyRecordFilters = [],
   hideQueryOnlyRecordFilters,
+  hideEmptyStateSubtitle,
   headerTitle,
   headerActionButton,
 }: RecordIndexSurfaceInstanceProps) => {
@@ -170,6 +172,7 @@ const RecordIndexSurfaceInstance = ({
               onOpenRecordFromIndexView,
               shouldPreserveParentViewStateOnOpen,
               shouldUseIndexIdentifierUrlOnFullPageOpen,
+              hideEmptyStateSubtitle,
               onViewChange,
               onRecordCreated,
               recordFieldByFieldMetadataItemId,
@@ -278,6 +281,7 @@ export const RecordIndexSurface = ({
   onViewChange,
   initialQueryOnlyRecordFilters,
   hideQueryOnlyRecordFilters,
+  hideEmptyStateSubtitle,
   headerTitle,
   headerActionButton,
 }: RecordIndexSurfaceProps) => {
@@ -310,6 +314,7 @@ export const RecordIndexSurface = ({
       onRecordCreated={onRecordCreated}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
       hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
+      hideEmptyStateSubtitle={hideEmptyStateSubtitle}
       headerActionButton={headerActionButton}
       headerTitle={headerTitle}
     />

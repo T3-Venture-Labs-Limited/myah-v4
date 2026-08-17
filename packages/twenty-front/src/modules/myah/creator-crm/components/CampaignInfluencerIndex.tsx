@@ -258,6 +258,7 @@ export const CampaignInfluencerIndex = ({
       onViewChange={handleCampaignViewChange}
       initialQueryOnlyRecordFilters={[campaignFilter]}
       hideQueryOnlyRecordFilters
+      hideEmptyStateSubtitle
       headerTitle={t`Influencers`}
       headerActionButton={
         campaignPermissions.canUpdateObjectRecords ? (

@@ -18,6 +18,7 @@ export type RecordIndexContextValue = {
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
   shouldPreserveParentViewStateOnOpen?: boolean;
   shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
+  hideEmptyStateSubtitle?: boolean;
   onViewChange?: (viewId: string) => void;
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onIndexRecordsLoaded: () => void;

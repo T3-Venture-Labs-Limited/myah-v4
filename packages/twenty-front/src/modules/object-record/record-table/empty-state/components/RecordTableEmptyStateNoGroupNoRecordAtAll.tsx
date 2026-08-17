@@ -1,4 +1,5 @@
 import { useObjectLabel } from '@/object-metadata/hooks/useObjectLabel';
+import { useOptionalRecordIndexContext } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { RecordTableEmptyStateDisplay } from '@/object-record/record-table/empty-state/components/RecordTableEmptyStateDisplay';
 import { getEmptyStateSubTitle } from '@/object-record/record-table/empty-state/utils/getEmptyStateSubTitle';
@@ -8,6 +9,7 @@ import { IconPlus } from 'twenty-ui/icon';
 
 export const RecordTableEmptyStateNoGroupNoRecordAtAll = () => {
   const { objectMetadataItem } = useRecordTableContextOrThrow();
+  const recordIndexContext = useOptionalRecordIndexContext();
 
   const { createNewIndexRecord } = useCreateNewIndexRecord({
     objectMetadataItem,
@@ -34,7 +36,9 @@ export const RecordTableEmptyStateNoGroupNoRecordAtAll = () => {
   return (
     <RecordTableEmptyStateDisplay
       buttonTitle={buttonTitle}
-      subTitle={subTitle}
+      subTitle={
+        recordIndexContext?.hideEmptyStateSubtitle ? undefined : subTitle
+      }
       title={title}
       ButtonIcon={IconPlus}
       animatedPlaceholderType="noRecord"

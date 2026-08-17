@@ -37,7 +37,7 @@ type RecordTableEmptyStateDisplayButtonProps = {
 type RecordTableEmptyStateDisplayProps = {
   animatedPlaceholderType: AnimatedPlaceholderType;
   title: string;
-  subTitle: string;
+  subTitle?: string;
 } & (
   | RecordTableEmptyStateDisplayButtonComponentProps
   | RecordTableEmptyStateDisplayButtonProps
@@ -76,9 +76,11 @@ export const RecordTableEmptyStateDisplay = (
           <AnimatedPlaceholderEmptyTitle>
             {props.title}
           </AnimatedPlaceholderEmptyTitle>
-          <AnimatedPlaceholderEmptySubTitle>
-            {props.subTitle}
-          </AnimatedPlaceholderEmptySubTitle>
+          {props.subTitle && (
+            <AnimatedPlaceholderEmptySubTitle>
+              {props.subTitle}
+            </AnimatedPlaceholderEmptySubTitle>
+          )}
         </AnimatedPlaceholderEmptyTextContainer>
         {'buttonComponent' in props && props.buttonComponent}
         {'buttonTitle' in props &&
