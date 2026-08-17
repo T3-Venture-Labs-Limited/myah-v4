@@ -58,6 +58,8 @@ describe('RecordIndexSurface containment', () => {
 
     expect(indexContainerTemplate).toContain('min-width: 0;');
     expect(indexContainerTemplate).toContain('width: 100%;');
-    expect(indexContainerTemplate).not.toContain('overflow: hidden;');
+    expect(indexContainerTemplate).not.toMatch(
+      /\boverflow(?:-x)?\s*:\s*(?:hidden|clip)\s*;/,
+    );
   });
 });
