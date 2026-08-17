@@ -9,10 +9,12 @@ import { ViewBar } from '@/views/components/ViewBar';
 import { ViewType } from '@/views/types/ViewType';
 
 type RecordIndexViewBarProps = {
+  hideQueryOnlyRecordFilters?: boolean;
   recordIndexViewTypeOverride?: ViewType;
 };
 
 export const RecordIndexViewBar = ({
+  hideQueryOnlyRecordFilters,
   recordIndexViewTypeOverride,
 }: RecordIndexViewBarProps) => {
   const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
@@ -30,6 +32,7 @@ export const RecordIndexViewBar = ({
   return (
     <SpreadsheetImportProvider>
       <ViewBar
+        hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
         isReadOnly={hasCurrentViewNonReadableFields}
         viewBarId={recordIndexId}
         forcedViewType={recordIndexViewTypeOverride}

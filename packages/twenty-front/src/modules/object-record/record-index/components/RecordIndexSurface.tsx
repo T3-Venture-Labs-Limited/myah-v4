@@ -53,6 +53,7 @@ export type RecordIndexSurfaceProps = {
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
+  hideQueryOnlyRecordFilters?: boolean;
   headerTitle?: string;
   headerActionButton?: ReactNode;
 };
@@ -98,6 +99,7 @@ const RecordIndexSurfaceInstance = ({
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters = [],
+  hideQueryOnlyRecordFilters,
   headerTitle,
   headerActionButton,
 }: RecordIndexSurfaceInstanceProps) => {
@@ -215,6 +217,9 @@ const RecordIndexSurfaceInstance = ({
                       (!isIsolatedSurface ||
                         areInitialQueryOnlyRecordFiltersInitialized) && (
                         <RecordIndexViewBar
+                          hideQueryOnlyRecordFilters={
+                            hideQueryOnlyRecordFilters
+                          }
                           recordIndexViewTypeOverride={
                             isIsolatedSurface ? ViewType.TABLE : undefined
                           }
@@ -271,6 +276,7 @@ export const RecordIndexSurface = ({
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters,
+  hideQueryOnlyRecordFilters,
   headerTitle,
   headerActionButton,
 }: RecordIndexSurfaceProps) => {
@@ -302,6 +308,7 @@ export const RecordIndexSurface = ({
       onViewChange={onViewChange}
       onRecordCreated={onRecordCreated}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
+      hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
       headerActionButton={headerActionButton}
       headerTitle={headerTitle}
     />

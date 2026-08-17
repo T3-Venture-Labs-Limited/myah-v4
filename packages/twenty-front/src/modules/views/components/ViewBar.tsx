@@ -29,6 +29,7 @@ type ViewBarProps = {
   isReadOnly?: boolean;
   onViewChange?: (viewId: string) => void;
   forcedViewType?: ViewType;
+  hideQueryOnlyRecordFilters?: boolean;
 };
 
 export const ViewBar = ({
@@ -38,6 +39,7 @@ export const ViewBar = ({
   isReadOnly = false,
   onViewChange,
   forcedViewType,
+  hideQueryOnlyRecordFilters,
 }: ViewBarProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
 
@@ -93,7 +95,7 @@ export const ViewBar = ({
             }
             bottomComponent={
               <ViewBarDetails
-                hasFilterButton
+                hasFilterButton={!hideQueryOnlyRecordFilters}
                 viewBarId={viewBarId}
                 objectNamePlural={objectNamePlural}
                 rightComponent={<UpdateViewButtonGroup />}

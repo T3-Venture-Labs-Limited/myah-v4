@@ -12,7 +12,7 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
 import { IconArrowLeft } from 'twenty-ui/icon';
 import { IconButton } from 'twenty-ui/input';
-import { ViewFilterOperand } from 'twenty-shared/types';
+import { ViewFilterOperand, ViewType } from 'twenty-shared/types';
 
 const mockRecordIndexContainer = jest.fn();
 const mockRecordIndexViewBar = jest.fn();
@@ -437,7 +437,34 @@ describe('RecordIndexSurface', () => {
     ]);
   });
 
-  it('mounts the isolated view bar only after its membership filters are installed', async () => {
+  it('forwards query-only filter visibility policy without changing isolated filter scope', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-a"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listAFilter]}
+        hideQueryOnlyRecordFilters
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexViewBar).toHaveBeenCalled();
+    });
+
+    expect(mockRecordIndexViewBar).toHaveBeenLastCalledWith(
+      [listAFilter],
+      expect.objectContaining({ hideQueryOnlyRecordFilters: true }),
+    );
+    expect(mockRecordIndexContainer).toHaveBeenLastCalledWith(
+      [listAFilter],
+      expect.any(String),
+      ViewType.TABLE,
+    );
+  });
+
+  it('shows query-only filters by default on isolated surfaces', async () => {
     renderSurface(
       <RecordIndexSurface
         contextStoreInstanceId="creator-list-pane-list-a"
@@ -452,9 +479,10 @@ describe('RecordIndexSurface', () => {
       expect(mockRecordIndexViewBar).toHaveBeenCalled();
     });
 
-    expect(
-      mockRecordIndexViewBar.mock.calls.map(([recordFilters]) => recordFilters),
-    ).not.toContainEqual([]);
+    expect(mockRecordIndexViewBar).toHaveBeenLastCalledWith(
+      [listAFilter],
+      expect.objectContaining({ hideQueryOnlyRecordFilters: undefined }),
+    );
   });
 
   it('retains canonical record-index identity for the main context gater', async () => {

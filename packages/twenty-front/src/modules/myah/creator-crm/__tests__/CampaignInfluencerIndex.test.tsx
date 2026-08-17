@@ -24,6 +24,7 @@ const mockRecordIndexSurface = jest.fn(
   }: {
     contextStoreInstanceId: string;
     headerActionButton?: ReactNode;
+    hideQueryOnlyRecordFilters?: boolean;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onViewChange?: (viewId: string) => void;
@@ -80,6 +81,7 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
   RecordIndexSurface: (props: {
     contextStoreInstanceId: string;
     headerActionButton?: ReactNode;
+    hideQueryOnlyRecordFilters?: boolean;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onViewChange?: (viewId: string) => void;
@@ -184,6 +186,7 @@ describe('CampaignInfluencerIndex', () => {
       contextStoreInstanceId: 'campaign-influencers-campaign-a',
       objectNameSingular: 'campaignCreator',
       viewId: campaignInfluencersViewId,
+      hideQueryOnlyRecordFilters: true,
       initialQueryOnlyRecordFilters: [
         {
           id: 'a03b0867-2a0d-49ee-afd3-8a91de66462e',
