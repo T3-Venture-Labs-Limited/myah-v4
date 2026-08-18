@@ -62,7 +62,6 @@ describe('RecordIndexSurface containment', () => {
     expect(indexContainerTemplate).not.toMatch(
       /\boverflow(?:-x)?\s*:\s*(?:hidden|clip)\s*;/,
     );
-
   });
   it('uses one compact footer boundary above Calculate', () => {
     const templates = (globalThis as RecordIndexSurfaceStyleTestGlobal)

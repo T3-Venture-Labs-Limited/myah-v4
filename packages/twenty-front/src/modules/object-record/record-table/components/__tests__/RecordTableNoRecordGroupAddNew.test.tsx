@@ -31,26 +31,39 @@ jest.mock('@/object-record/record-store/hooks/useUpsertRecordsInStore', () => ({
 jest.mock(
   '@/object-record/record-table/virtualization/hooks/useLoadRecordsToVirtualRows',
   () => ({
-    useLoadRecordsToVirtualRows: () => ({ loadRecordsToVirtualRows: jest.fn() }),
+    useLoadRecordsToVirtualRows: () => ({
+      loadRecordsToVirtualRows: jest.fn(),
+    }),
   }),
 );
 
-jest.mock('@/object-record/utils/canCreateRecordsForObjectMetadataItem', () => ({
-  canCreateRecordsForObjectMetadataItem: () => true,
-}));
+jest.mock(
+  '@/object-record/utils/canCreateRecordsForObjectMetadataItem',
+  () => ({
+    canCreateRecordsForObjectMetadataItem: () => true,
+  }),
+);
 
-jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue', () => ({
-  useAtomComponentStateValue: () => false,
-}));
+jest.mock(
+  '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue',
+  () => ({
+    useAtomComponentStateValue: () => false,
+  }),
+);
 
-jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue', () => ({
-  useAtomComponentSelectorValue: () => false,
-}));
+jest.mock(
+  '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue',
+  () => ({
+    useAtomComponentSelectorValue: () => false,
+  }),
+);
 
 jest.mock(
   '@/object-record/record-table/record-table-row/components/RecordTableActionRow',
   () => ({
-    RecordTableActionRow: ({ text }: { text: string }) => <button>{text}</button>,
+    RecordTableActionRow: ({ text }: { text: string }) => (
+      <button>{text}</button>
+    ),
   }),
 );
 
@@ -70,6 +83,8 @@ describe('RecordTableNoRecordGroupAddNew', () => {
 
     render(<RecordTableNoRecordGroupAddNew />);
 
-    expect(screen.queryByRole('button', { name: 'Add New' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add New' }),
+    ).not.toBeInTheDocument();
   });
 });

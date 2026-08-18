@@ -9,15 +9,12 @@ import {
 import { RecordTableWithWrappers } from '@/object-record/record-table/components/RecordTableWithWrappers';
 import { PageFocusId } from '@/types/PageFocusId';
 
-
-
 const mockUseHotkeysOnFocusedElement = jest.fn();
 const mockResetFocusStackToRecordIndex = jest.fn();
 
 const mockScrollWrapper = jest.fn(
   ({ children }: { children: React.ReactNode }) => <>{children}</>,
 );
-
 
 jest.mock('@/object-record/hooks/useDeleteOneRecord', () => ({
   useDeleteOneRecord: () => ({ deleteOneRecord: jest.fn() }),

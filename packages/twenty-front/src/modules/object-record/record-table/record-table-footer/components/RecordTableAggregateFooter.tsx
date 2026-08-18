@@ -43,7 +43,9 @@ const StyledPlaceholderLastColumnEmptyFooterCell = styled.div`
 
 const StyledAggregateFooterContainer = styled.div<{ compactTable: boolean }>`
   border-top: ${({ compactTable }) =>
-    compactTable ? `1px solid ${themeCssVariables.border.color.light}` : 'none'};
+    compactTable
+      ? `1px solid ${themeCssVariables.border.color.light}`
+      : 'none'};
   bottom: 0;
   display: flex;
   position: sticky;
@@ -58,28 +60,31 @@ export const RecordTableAggregateFooter = ({
   const { visibleRecordFields } = useRecordTableContextOrThrow();
   const { embeddedSurfaceOptions } = useRecordIndexContextOrThrow();
 
-
   return (
-    <StyledAggregateFooterContainer compactTable={embeddedSurfaceOptions?.compactTable ?? false}><StyledPlaceholderDragAndDropFooterCell />
-    {visibleRecordFields.map((recordField, index) => {
-      return (
-        <RecordTableColumnAggregateFooterCellContext.Provider
-          key={`${recordField.fieldMetadataItemId}${currentRecordGroupId ? '-' + currentRecordGroupId : ''}`}
-          value={{
-            viewFieldId: recordField.id || '',
-            fieldMetadataId: recordField.fieldMetadataItemId,
-          }}
-        >
-          <RecordTableAggregateFooterCell
-            currentRecordGroupId={currentRecordGroupId}
-            columnIndex={index}
-          />
-        </RecordTableColumnAggregateFooterCellContext.Provider>
-      );
-    })}
-    <StyledPlaceholderAddButtonPlaceholderFooterCell />
-    <StyledPlaceholderLastColumnEmptyFooterCell
-      className={RECORD_TABLE_COLUMN_LAST_EMPTY_COLUMN_WIDTH_CLASS_NAME}
-    /></StyledAggregateFooterContainer>
+    <StyledAggregateFooterContainer
+      compactTable={embeddedSurfaceOptions?.compactTable ?? false}
+    >
+      <StyledPlaceholderDragAndDropFooterCell />
+      {visibleRecordFields.map((recordField, index) => {
+        return (
+          <RecordTableColumnAggregateFooterCellContext.Provider
+            key={`${recordField.fieldMetadataItemId}${currentRecordGroupId ? '-' + currentRecordGroupId : ''}`}
+            value={{
+              viewFieldId: recordField.id || '',
+              fieldMetadataId: recordField.fieldMetadataItemId,
+            }}
+          >
+            <RecordTableAggregateFooterCell
+              currentRecordGroupId={currentRecordGroupId}
+              columnIndex={index}
+            />
+          </RecordTableColumnAggregateFooterCellContext.Provider>
+        );
+      })}
+      <StyledPlaceholderAddButtonPlaceholderFooterCell />
+      <StyledPlaceholderLastColumnEmptyFooterCell
+        className={RECORD_TABLE_COLUMN_LAST_EMPTY_COLUMN_WIDTH_CLASS_NAME}
+      />
+    </StyledAggregateFooterContainer>
   );
 };

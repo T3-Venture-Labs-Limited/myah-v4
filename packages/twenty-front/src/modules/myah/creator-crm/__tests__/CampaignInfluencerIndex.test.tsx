@@ -111,10 +111,7 @@ jest.mock(
         onSubmit,
         shouldResetStateOnClose,
       }: {
-        onChange?: (value: {
-          isSelected: boolean;
-          recordId: string;
-        }) => void;
+        onChange?: (value: { isSelected: boolean; recordId: string }) => void;
         onSubmit?: () => void;
         shouldResetStateOnClose?: boolean;
       }) => {
@@ -226,34 +223,28 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
   useAtomStateValue: jest.fn(),
 }));
 
-jest.mock(
-  '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue',
-  () => {
-    const { useSyncExternalStore } = jest.requireActual('react');
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue', () => {
+  const { useSyncExternalStore } = jest.requireActual('react');
 
-    return {
-      useAtomComponentStateValue: () =>
-        useSyncExternalStore(
-          (subscriber) => {
-            mockPickerItemSubscribers.add(subscriber);
+  return {
+    useAtomComponentStateValue: () =>
+      useSyncExternalStore(
+        (subscriber) => {
+          mockPickerItemSubscribers.add(subscriber);
 
-            return () => mockPickerItemSubscribers.delete(subscriber);
-          },
-          () => mockPickerItems,
-        ),
-    };
-  },
-);
+          return () => mockPickerItemSubscribers.delete(subscriber);
+        },
+        () => mockPickerItems,
+      ),
+  };
+});
 
-jest.mock(
-  '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState',
-  () => ({
-    useSetAtomComponentState: (atom: unknown) =>
-      atom === multipleRecordPickerSearchFilterComponentState
-        ? mockSetPickerSearchFilter
-        : mockSetPickerItems,
-  }),
-);
+jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomComponentState', () => ({
+  useSetAtomComponentState: (atom: unknown) =>
+    atom === multipleRecordPickerSearchFilterComponentState
+      ? mockSetPickerSearchFilter
+      : mockSetPickerItems,
+}));
 
 jest.mock('@/ui/layout/selectable-list/hooks/useSelectableList', () => ({
   useSelectableList: () => ({

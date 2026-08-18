@@ -27,7 +27,6 @@ const CAMPAIGN_INFLUENCERS_FILTER_ID = 'a03b0867-2a0d-49ee-afd3-8a91de66462e';
 const CAMPAIGN_INFLUENCERS_VIEW_UNIVERSAL_IDENTIFIER =
   'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b';
 
-
 const StyledScopeState = styled.div`
   align-items: center;
   color: ${themeCssVariables.font.color.secondary};

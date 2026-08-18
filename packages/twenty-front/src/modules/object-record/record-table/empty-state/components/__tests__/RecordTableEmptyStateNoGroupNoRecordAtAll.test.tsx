@@ -11,14 +11,11 @@ let recordIndexContext:
     }
   | undefined = { hideEmptyStateSubtitle: true };
 
-jest.mock(
-  '@/object-record/record-table/contexts/RecordTableContext',
-  () => ({
-    useRecordTableContextOrThrow: () => ({
-      objectMetadataItem: { nameSingular: 'campaignCreator' },
-    }),
+jest.mock('@/object-record/record-table/contexts/RecordTableContext', () => ({
+  useRecordTableContextOrThrow: () => ({
+    objectMetadataItem: { nameSingular: 'campaignCreator' },
   }),
-);
+}));
 
 jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
   useOptionalRecordIndexContext: () => recordIndexContext,
@@ -28,12 +25,9 @@ jest.mock('@/object-metadata/hooks/useObjectLabel', () => ({
   useObjectLabel: () => 'Campaign Creator',
 }));
 
-jest.mock(
-  '@/object-record/record-table/hooks/useCreateNewIndexRecord',
-  () => ({
-    useCreateNewIndexRecord: () => ({ createNewIndexRecord: jest.fn() }),
-  }),
-);
+jest.mock('@/object-record/record-table/hooks/useCreateNewIndexRecord', () => ({
+  useCreateNewIndexRecord: () => ({ createNewIndexRecord: jest.fn() }),
+}));
 
 jest.mock(
   '@/object-record/record-table/empty-state/utils/getEmptyStateTitle',
@@ -115,8 +109,8 @@ describe('RecordTableEmptyStateNoGroupNoRecordAtAll', () => {
     expect(
       screen.queryByRole('button', { name: 'Add a Campaign Creator' }),
     ).not.toBeInTheDocument();
-    expect(mockRecordTableEmptyStateDisplay.mock.calls.at(-1)?.[0]).not.toHaveProperty(
-      'buttonTitle',
-    );
+    expect(
+      mockRecordTableEmptyStateDisplay.mock.calls.at(-1)?.[0],
+    ).not.toHaveProperty('buttonTitle');
   });
 });
