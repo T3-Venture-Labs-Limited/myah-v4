@@ -1,4 +1,5 @@
 import { useObjectLabel } from '@/object-metadata/hooks/useObjectLabel';
+import { useOptionalRecordIndexContext } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { RecordTableEmptyStateDisplay } from '@/object-record/record-table/empty-state/components/RecordTableEmptyStateDisplay';
 import { useCreateNewIndexRecord } from '@/object-record/record-table/hooks/useCreateNewIndexRecord';
@@ -7,6 +8,7 @@ import { IconPlus } from 'twenty-ui/icon';
 
 export const RecordTableEmptyStateNoRecordFoundForFilter = () => {
   const { objectMetadataItem } = useRecordTableContextOrThrow();
+  const recordIndexContext = useOptionalRecordIndexContext();
 
   const { createNewIndexRecord } = useCreateNewIndexRecord({
     objectMetadataItem,
@@ -26,12 +28,16 @@ export const RecordTableEmptyStateNoRecordFoundForFilter = () => {
 
   return (
     <RecordTableEmptyStateDisplay
-      buttonTitle={buttonTitle}
+      animatedPlaceholderType="noMatchRecord"
       subTitle={subTitle}
       title={title}
-      ButtonIcon={IconPlus}
-      animatedPlaceholderType="noMatchRecord"
-      onClick={handleButtonClick}
+      {...(recordIndexContext?.embeddedSurfaceOptions?.hideAddNew
+        ? {}
+        : {
+            buttonTitle,
+            ButtonIcon: IconPlus,
+            onClick: handleButtonClick,
+          })}
     />
   );
 };
