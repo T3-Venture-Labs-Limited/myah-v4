@@ -57,6 +57,7 @@ const mockRecordIndexSurface = jest.fn(
     contextStoreInstanceId: string;
     embeddedSurfaceOptions?: {
       hideAddNew?: boolean;
+      compactTable?: boolean;
       hidePageHeader?: boolean;
       hideQueryOnlyRecordFilters?: boolean;
       toolbarAction?: ReactNode;
@@ -187,6 +188,7 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
     contextStoreInstanceId: string;
     embeddedSurfaceOptions?: {
       hideAddNew?: boolean;
+      compactTable?: boolean;
       hidePageHeader?: boolean;
       hideQueryOnlyRecordFilters?: boolean;
       toolbarAction?: ReactNode;
@@ -357,6 +359,7 @@ describe('CampaignInfluencerIndex', () => {
       ],
       embeddedSurfaceOptions: {
         hideAddNew: true,
+        compactTable: true,
         hidePageHeader: true,
         hideQueryOnlyRecordFilters: true,
       },

@@ -299,6 +299,7 @@ export const CampaignInfluencerIndex = ({
       hideEmptyStateSubtitle
       embeddedSurfaceOptions={{
         hideAddNew: true,
+        compactTable: true,
         hidePageHeader: true,
         hideQueryOnlyRecordFilters: true,
         toolbarAction: campaignPermissions.canUpdateObjectRecords ? (

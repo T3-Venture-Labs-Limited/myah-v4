@@ -2,6 +2,7 @@ import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPe
 import { useCurrentRecordGroupId } from '@/object-record/record-group/hooks/useCurrentRecordGroupId';
 import { recordGroupDefinitionFamilyState } from '@/object-record/record-group/states/recordGroupDefinitionFamilyState';
 import { getFieldMetadataItemGqlFieldName } from '@/object-metadata/utils/getFieldMetadataItemGqlFieldName';
+import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useCreateNewIndexRecord } from '@/object-record/record-table/hooks/useCreateNewIndexRecord';
@@ -14,6 +15,7 @@ import { IconPlus } from 'twenty-ui/icon';
 
 export const RecordTableRecordGroupSectionAddNew = () => {
   const { objectMetadataItem } = useRecordTableContextOrThrow();
+  const { embeddedSurfaceOptions } = useRecordIndexContextOrThrow();
 
   const currentRecordGroupId = useCurrentRecordGroupId();
 
@@ -37,6 +39,10 @@ export const RecordTableRecordGroupSectionAddNew = () => {
   const objectPermissions = useObjectPermissionsForObject(
     objectMetadataItem.id,
   );
+
+  if (embeddedSurfaceOptions?.hideAddNew) {
+    return null;
+  }
 
   if (
     !canCreateRecordsForObjectMetadataItem({

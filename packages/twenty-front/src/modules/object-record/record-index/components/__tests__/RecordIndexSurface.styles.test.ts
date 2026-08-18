@@ -43,6 +43,7 @@ jest.mock(
 );
 
 import '@/object-record/record-index/components/RecordIndexSurface';
+import '@/object-record/record-table/record-table-footer/components/RecordTableAggregateFooter';
 
 describe('RecordIndexSurface containment', () => {
   it('lets an embedded flex item shrink while preserving table-wide overflow', () => {
@@ -61,5 +62,21 @@ describe('RecordIndexSurface containment', () => {
     expect(indexContainerTemplate).not.toMatch(
       /\boverflow(?:-x)?\s*:\s*(?:hidden|clip)\s*;/,
     );
+
+  });
+  it('uses one compact footer boundary above Calculate', () => {
+    const templates = (globalThis as RecordIndexSurfaceStyleTestGlobal)
+      .__recordIndexSurfaceStyledTemplates;
+    const aggregateFooterTemplate = templates?.find(
+      (template) =>
+        template.includes('bottom: 0;') &&
+        template.includes('display: flex;') &&
+        template.includes('position: sticky;') &&
+        template.includes('z-index:'),
+    );
+    expect(aggregateFooterTemplate).toMatch(
+      /border-top:\s*[\s\S]*compactTable[\s\S]*;/,
+    );
+    expect(aggregateFooterTemplate).not.toContain('border-bottom:');
   });
 });

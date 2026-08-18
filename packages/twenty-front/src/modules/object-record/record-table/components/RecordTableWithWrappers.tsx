@@ -1,6 +1,7 @@
 import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
 import { useOpenRecordFromIndexView } from '@/object-record/record-index/hooks/useOpenRecordFromIndexView';
 import { useRecordIndexFocusId } from '@/object-record/record-index/hooks/useRecordIndexFocusId';
+import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordTable } from '@/object-record/record-table/components/RecordTable';
 import { RecordTableComponentInstance } from '@/object-record/record-table/components/RecordTableComponentInstance';
 import { RecordTableContextProvider } from '@/object-record/record-table/components/RecordTableContextProvider';
@@ -11,6 +12,7 @@ import { useFocusedRecordTableRow } from '@/object-record/record-table/hooks/use
 import { RecordTableRecordLimitReloadEffect } from '@/object-record/record-table/virtualization/components/RecordTableRecordLimitReloadEffect';
 import { useResetFocusStackToRecordIndex } from '@/object-record/record-index/hooks/useResetFocusStackToRecordIndex';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
+import { ScrollWrapperComponentInstanceContext } from '@/ui/utilities/scroll/states/contexts/ScrollWrapperComponentInstanceContext';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { styled } from '@linaria/react';
 
@@ -56,6 +58,8 @@ export const RecordTableWithWrappers = ({
   const { activateRecordTableRow } = useActiveRecordTableRow(recordTableId);
   const { unfocusRecordTableRow } = useFocusedRecordTableRow(recordTableId);
   const { openRecordFromIndexView } = useOpenRecordFromIndexView();
+  const { embeddedSurfaceOptions } = useRecordIndexContextOrThrow();
+
 
   const handleRecordIdentifierClick = (
     rowIndex: number,
@@ -77,6 +81,13 @@ export const RecordTableWithWrappers = ({
     resetFocusStackToRecordIndex(recordIndexFocusId);
   };
 
+  const tableContent = (
+    <>
+      <RecordTableRecordLimitReloadEffect />
+      <RecordTable />
+    </>
+  );
+
   return (
     <RecordTableComponentInstance recordTableId={recordTableId}>
       <RecordTableContextProvider
@@ -89,12 +100,21 @@ export const RecordTableWithWrappers = ({
           <StyledRecordTablePrintBoundary
             onMouseDownCapture={handleTablePointerDown}
           >
+          {embeddedSurfaceOptions?.compactTable ? (
+            <ScrollWrapperComponentInstanceContext.Provider
+              value={{
+                instanceId: `record-table-scroll-${recordTableId}`,
+              }}
+            >
+              {tableContent}
+            </ScrollWrapperComponentInstanceContext.Provider>
+          ) : (
             <ScrollWrapper
               componentInstanceId={`record-table-scroll-${recordTableId}`}
             >
-              <RecordTableRecordLimitReloadEffect />
-              <RecordTable />
+              {tableContent}
             </ScrollWrapper>
+          )}
           </StyledRecordTablePrintBoundary>
         </EntityDeleteContext.Provider>
       </RecordTableContextProvider>

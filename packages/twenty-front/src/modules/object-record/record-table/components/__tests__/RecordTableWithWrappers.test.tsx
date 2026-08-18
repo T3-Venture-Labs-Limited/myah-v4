@@ -12,6 +12,11 @@ import { PageFocusId } from '@/types/PageFocusId';
 const mockUseHotkeysOnFocusedElement = jest.fn();
 const mockResetFocusStackToRecordIndex = jest.fn();
 
+const mockScrollWrapper = jest.fn(
+  ({ children }: { children: React.ReactNode }) => <>{children}</>,
+);
+
+
 jest.mock('@/object-record/hooks/useDeleteOneRecord', () => ({
   useDeleteOneRecord: () => ({ deleteOneRecord: jest.fn() }),
 }));
@@ -87,9 +92,8 @@ jest.mock('@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement', () => ({
 }));
 
 jest.mock('@/ui/utilities/scroll/components/ScrollWrapper', () => ({
-  ScrollWrapper: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  ScrollWrapper: (props: { children: React.ReactNode }) =>
+    mockScrollWrapper(props),
 }));
 
 const scopedRecordIndexContextValue: RecordIndexContextValue = {
@@ -107,12 +111,17 @@ const scopedRecordIndexContextValue: RecordIndexContextValue = {
   viewBarInstanceId: 'creator-index-list-a',
 };
 
-const renderRecordTable = (contextStoreInstanceId: string) =>
+const renderRecordTable = (
+  contextStoreInstanceId: string,
+  embeddedSurfaceOptions?: RecordIndexContextValue['embeddedSurfaceOptions'],
+) =>
   render(
     <ContextStoreComponentInstanceContext.Provider
       value={{ instanceId: contextStoreInstanceId }}
     >
-      <RecordIndexContextProvider value={scopedRecordIndexContextValue}>
+      <RecordIndexContextProvider
+        value={{ ...scopedRecordIndexContextValue, embeddedSurfaceOptions }}
+      >
         <RecordTableWithWrappers
           objectNameSingular="creator"
           recordTableId="creator-index-list-a"
@@ -125,6 +134,7 @@ const renderRecordTable = (contextStoreInstanceId: string) =>
 describe('RecordTableWithWrappers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockScrollWrapper.mockClear();
   });
 
   it('routes native table keyboard and pointer focus to its scoped index', () => {
@@ -147,5 +157,18 @@ describe('RecordTableWithWrappers', () => {
     expect(mockUseHotkeysOnFocusedElement).toHaveBeenCalledWith(
       expect.objectContaining({ focusId: PageFocusId.RecordIndex }),
     );
+  });
+  it('keeps the normal Creators table in its horizontal scroll wrapper', () => {
+    renderRecordTable(MAIN_CONTEXT_STORE_INSTANCE_ID);
+
+    expect(mockScrollWrapper).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the compact embedded table without a horizontal scroll wrapper', () => {
+    renderRecordTable('campaign-influencers-campaign-a', {
+      compactTable: true,
+    });
+
+    expect(mockScrollWrapper).not.toHaveBeenCalled();
   });
 });
