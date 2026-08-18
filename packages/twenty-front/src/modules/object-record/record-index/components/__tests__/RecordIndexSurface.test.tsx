@@ -1,5 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { act, useEffect } from 'react';
+import type { ComponentProps } from 'react';
+
+import type { ViewBar as ViewBarComponent } from '@/views/components/ViewBar';
 
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
@@ -15,7 +18,7 @@ import { IconButton } from 'twenty-ui/input';
 import { ViewFilterOperand, ViewType } from 'twenty-shared/types';
 
 const mockRecordIndexContainer = jest.fn();
-const mockRecordIndexViewBar = jest.fn();
+const mockViewBar = jest.fn();
 const mockRecordTableWidget = jest.fn();
 const mockReadOnlyWidgetEffect = jest.fn();
 const mockContextStoreIds: string[] = [];
@@ -28,6 +31,7 @@ const mockRecordIndexConfigurations: Array<{
 }> = [];
 const mockRecordIndexLoad = jest.fn();
 const mockRecordIndexViewFieldsSSESync = jest.fn();
+let hasCurrentViewNonReadableFields = false;
 let deferContextStoreInitialization = false;
 let mockInitializeContextStore: (() => void) | undefined;
 const mockQueryOnlyRecordFilterWrites = jest.fn();
@@ -152,26 +156,119 @@ jest.mock(
     },
   }),
 );
+jest.mock(
+  '@/object-record/record-index/components/RecordIndexViewBarEffect',
+  () => ({
+    RecordIndexViewBarEffect: () => null,
+  }),
+);
 
-jest.mock('@/object-record/record-index/components/RecordIndexViewBar', () => ({
-  RecordIndexViewBar: (props: unknown) => {
-    const queryOnlyRecordFilters = useAtomComponentStateValue(
-      queryOnlyRecordFiltersComponentState,
-    );
-    const { embeddedSurfaceOptions } = useRecordIndexContextOrThrow();
+jest.mock(
+  '@/object-record/record-index/hooks/useHasCurrentViewNonReadableFields',
+  () => ({
+    useHasCurrentViewNonReadableFields: () => ({
+      hasCurrentViewNonReadableFields,
+    }),
+  }),
+);
 
-    mockRecordIndexViewBar(queryOnlyRecordFilters, props);
-
-    return (
-      <>
-        {embeddedSurfaceOptions?.toolbarAction}
-        <div data-testid="filter-control" />
-        <div data-testid="sort-control" />
-        <div data-testid="options-control" />
-      </>
-    );
-  },
+jest.mock('@/object-record/object-options-dropdown/components/ObjectOptionsDropdown', () => ({
+  ObjectOptionsDropdown: () => <div data-testid="options-control" />,
 }));
+
+jest.mock('@/spreadsheet-import/provider/components/SpreadsheetImportProvider', () => ({
+  SpreadsheetImportProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+}));
+
+jest.mock('@/ui/layout/top-bar/components/TopBar', () => ({
+  TopBar: ({
+    leftComponent,
+    rightComponent,
+  }: {
+    leftComponent?: React.ReactNode;
+    rightComponent?: React.ReactNode;
+  }) => (
+    <div data-testid="view-bar-top-bar">
+      {leftComponent}
+      <div data-testid="view-bar-right">{rightComponent}</div>
+    </div>
+  ),
+}));
+
+jest.mock('@/views/view-picker/components/ViewPickerDropdown', () => ({
+  ViewPickerDropdown: () => <div data-testid="view-picker-control" />,
+}));
+
+jest.mock('@/views/components/ViewBarFilterDropdown', () => ({
+  ViewBarFilterDropdown: () => <div data-testid="filter-control" />,
+}));
+
+jest.mock(
+  '@/object-record/object-sort-dropdown/components/ObjectSortDropdownButton',
+  () => ({
+    ObjectSortDropdownButton: () => <div data-testid="sort-control" />,
+  }),
+);
+
+jest.mock('@/views/contexts/ViewBarControlIdsContext', () => ({
+  ViewBarControlIdsProvider: ({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) => <>{children}</>,
+  useViewBarControlIds: () => ({
+    filterDropdownId: 'filter-dropdown',
+    viewSortDropdownId: 'view-sort-dropdown',
+  }),
+}));
+
+jest.mock('@/views/components/ViewBarRecordFilterGroupEffect', () => ({
+  ViewBarRecordFilterGroupEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarAnyFieldFilterEffect', () => ({
+  ViewBarAnyFieldFilterEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarRecordFieldEffect', () => ({
+  ViewBarRecordFieldEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarRecordFilterEffect', () => ({
+  ViewBarRecordFilterEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarRecordSortEffect', () => ({
+  ViewBarRecordSortEffect: () => null,
+}));
+jest.mock('@/views/components/QueryParamsFiltersEffect', () => ({
+  QueryParamsFiltersEffect: () => null,
+}));
+jest.mock('@/views/components/QueryParamsSortsEffect', () => ({
+  QueryParamsSortsEffect: () => null,
+}));
+jest.mock('@/views/components/QueryParamsCleanupEffect', () => ({
+  QueryParamsCleanupEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarPageTitle', () => ({
+  ViewBarPageTitle: () => null,
+}));
+jest.mock('@/views/components/ViewBar', () => {
+  const actual = jest.requireActual('@/views/components/ViewBar') as {
+    ViewBar: typeof ViewBarComponent;
+  };
+
+  return {
+    ...actual,
+    ViewBar: (props: ComponentProps<typeof actual.ViewBar>) => {
+      mockViewBar(props);
+      return <actual.ViewBar {...props} />;
+    },
+  };
+});
+jest.mock('@/views/components/UpdateViewButtonGroup', () => ({
+  UpdateViewButtonGroup: () => null,
+}));
+
+
 
 jest.mock(
   '@/object-record/record-index/components/RecordIndexPageHeader',
@@ -312,7 +409,8 @@ describe('RecordIndexSurface', () => {
     mockRecordIndexLoad.mockClear();
     mockRecordIndexViewFieldsSSESync.mockClear();
     mockQueryOnlyRecordFilterWrites.mockClear();
-    mockRecordIndexViewBar.mockClear();
+    mockViewBar.mockClear();
+    hasCurrentViewNonReadableFields = false;
     mockRecordIndexPageHeader.mockClear();
     deferContextStoreInitialization = false;
     mockInitializeContextStore = undefined;
@@ -434,13 +532,7 @@ describe('RecordIndexSurface', () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Add creator' }),
-      ).toBeInTheDocument();
-    });
-
-    const toolbarAction = screen.getByRole('button', {
+    const toolbarAction = await screen.findByRole('button', {
       name: 'Add creator',
     });
 
@@ -457,6 +549,33 @@ describe('RecordIndexSurface', () => {
         screen.getByTestId('options-control'),
       ),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('renders an embedded toolbar action in a read-only view bar', async () => {
+    hasCurrentViewNonReadableFields = true;
+
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="embedded-creator-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        embeddedSurfaceOptions={{
+          toolbarAction: <button type="button">Add creator</button>,
+        }}
+      />,
+    );
+
+    const toolbarAction = await screen.findByRole('button', {
+      name: 'Add creator',
+    });
+
+    expect(
+      screen.getByTestId('view-bar-right').contains(toolbarAction),
+    ).toBe(true);
+    expect(screen.queryByTestId('filter-control')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sort-control')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('options-control')).not.toBeInTheDocument();
   });
 
   it('forwards scoped header overrides to the native header', async () => {
@@ -517,11 +636,10 @@ describe('RecordIndexSurface', () => {
     );
 
     await waitFor(() => {
-      expect(mockRecordIndexViewBar).toHaveBeenCalled();
+      expect(mockViewBar).toHaveBeenCalled();
     });
 
-    expect(mockRecordIndexViewBar).toHaveBeenLastCalledWith(
-      [listAFilter],
+    expect(mockViewBar).toHaveBeenLastCalledWith(
       expect.objectContaining({ hideQueryOnlyRecordFilters: true }),
     );
     expect(mockRecordIndexContainer).toHaveBeenLastCalledWith(
@@ -543,11 +661,10 @@ describe('RecordIndexSurface', () => {
     );
 
     await waitFor(() => {
-      expect(mockRecordIndexViewBar).toHaveBeenCalled();
+      expect(mockViewBar).toHaveBeenCalled();
     });
 
-    expect(mockRecordIndexViewBar).toHaveBeenLastCalledWith(
-      [listAFilter],
+    expect(mockViewBar).toHaveBeenLastCalledWith(
       expect.objectContaining({ hideQueryOnlyRecordFilters: undefined }),
     );
   });

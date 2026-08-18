@@ -62,6 +62,7 @@ export const ViewBar = ({
               forcedViewType={forcedViewType}
             />
           }
+          rightComponent={toolbarAction}
         />
       ) : (
         <ObjectSortDropdownComponentInstanceContext.Provider
