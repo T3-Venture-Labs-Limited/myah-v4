@@ -20,7 +20,7 @@ const queryOnlyCampaignFilter = {
 const currentRecordCampaignFilter = {
   id: 'campaign-current-record-filter',
   fieldMetadataId: 'campaign-field',
-  relationTargetFieldMetadataId: 'campaign-id-field',
+  relationTargetFieldMetadataId: null,
   operand: 'IS',
   type: 'RELATION',
   value: currentRecordValue,
@@ -35,6 +35,16 @@ const unrelatedCurrentRecordRelationFilter = {
   type: 'RELATION',
   value: currentRecordValue,
   label: 'Other relation',
+};
+
+const sameFieldCurrentRecordRelationFilter = {
+  id: 'same-field-current-record-relation-filter',
+  fieldMetadataId: 'campaign-field',
+  relationTargetFieldMetadataId: 'different-relation-id-field',
+  operand: 'IS',
+  type: 'RELATION',
+  value: currentRecordValue,
+  label: 'Different relation target',
 };
 
 const jsonTextFilter = {
@@ -62,6 +72,7 @@ jest.mock(
             currentRecordCampaignFilter,
             unrelatedCurrentRecordRelationFilter,
             jsonTextFilter,
+            sameFieldCurrentRecordRelationFilter,
             userStatusFilter,
           ];
         case 'queryOnlyRecordFiltersComponentState':
@@ -196,7 +207,11 @@ describe('ViewBarDetails', () => {
     render(
       <ViewBarDetails
         hideQueryOnlyRecordFilters
-        hideCurrentRecordFilters
+        hideCurrentRecordFilter={{
+          fieldMetadataId: 'campaign-field',
+          relationTargetFieldMetadataId: null,
+          operand: 'IS',
+        }}
         hasFilterButton={false}
         viewBarId="campaign-influencers"
         objectNamePlural="creators"
@@ -208,6 +223,7 @@ describe('ViewBarDetails', () => {
     expect(screen.getByText('Other relation')).toBeInTheDocument();
     expect(screen.getByText('JSON text')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add filter' })).not.toBeInTheDocument();
+    expect(screen.getByText('Different relation target')).toBeInTheDocument();
   });
 
   it('shows query-only filter chips unless explicitly hidden', () => {

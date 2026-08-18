@@ -302,7 +302,11 @@ export const CampaignInfluencerIndex = ({
         hidePageHeader: true,
         hideQueryOnlyRecordFilters: true,
         hideViewPicker: true,
-        hideCurrentRecordFilters: true,
+        hideCurrentRecordFilter: {
+          fieldMetadataId: campaignFieldMetadataItem.id,
+          relationTargetFieldMetadataId: null,
+          operand: ViewFilterOperand.IS,
+        },
         toolbarAction: campaignPermissions.canUpdateObjectRecords ? (
           <AddCampaignInfluencersButton campaignId={campaignId} />
         ) : undefined,

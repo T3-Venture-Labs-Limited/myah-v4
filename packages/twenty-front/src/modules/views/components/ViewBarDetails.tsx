@@ -11,6 +11,7 @@ import { EditableSortChip } from '@/views/editable-chip/components/EditableSortC
 
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { SoftDeleteFilterChip } from '@/views/components/SoftDeleteFilterChip';
 import { useApplyCurrentViewFiltersToCurrentRecordFilters } from '@/views/hooks/useApplyCurrentViewFiltersToCurrentRecordFilters';
@@ -42,7 +43,10 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 export type ViewBarDetailsProps = {
   hasFilterButton?: boolean;
   hideQueryOnlyRecordFilters?: boolean;
-  hideCurrentRecordFilters?: boolean;
+  hideCurrentRecordFilter?: Pick<
+    RecordFilter,
+    'fieldMetadataId' | 'relationTargetFieldMetadataId' | 'operand'
+  >;
   rightComponent?: ReactNode;
   viewBarId: string;
   objectNamePlural: string;
@@ -104,7 +108,7 @@ const StyledAddFilterContainer = styled.div`
 
 export const ViewBarDetails = ({
   hasFilterButton = false,
-  hideCurrentRecordFilters = false,
+  hideCurrentRecordFilter,
   hideQueryOnlyRecordFilters = false,
   rightComponent,
   viewBarId,
@@ -163,7 +167,7 @@ export const ViewBarDetails = ({
   const { isSeeDeletedRecordsFilter } = useCheckIsSoftDeleteFilter();
 
   const displayedCurrentRecordFilters = useMemo(() => {
-    if (!hideQueryOnlyRecordFilters && !hideCurrentRecordFilters) {
+    if (!hideQueryOnlyRecordFilters && !hideCurrentRecordFilter) {
       return currentRecordFilters;
     }
 
@@ -175,24 +179,20 @@ export const ViewBarDetails = ({
       (recordFilter) =>
         (!hideQueryOnlyRecordFilters ||
           !queryOnlyRecordFilterIds.has(recordFilter.id)) &&
-        (!hideCurrentRecordFilters ||
+        (!hideCurrentRecordFilter ||
           recordFilter.type !== 'RELATION' ||
+          recordFilter.fieldMetadataId !==
+            hideCurrentRecordFilter.fieldMetadataId ||
+          recordFilter.relationTargetFieldMetadataId !==
+            hideCurrentRecordFilter.relationTargetFieldMetadataId ||
+          recordFilter.operand !== hideCurrentRecordFilter.operand ||
           jsonRelationFilterValueSchema.safeParse(recordFilter.value).data
-            ?.isCurrentRecordSelected !== true ||
-          !queryOnlyRecordFilters.some(
-            (queryOnlyRecordFilter) =>
-              queryOnlyRecordFilter.type === 'RELATION' &&
-              queryOnlyRecordFilter.fieldMetadataId ===
-                recordFilter.fieldMetadataId &&
-              queryOnlyRecordFilter.relationTargetFieldMetadataId ===
-                recordFilter.relationTargetFieldMetadataId &&
-              queryOnlyRecordFilter.operand === recordFilter.operand,
-          )),
+            ?.isCurrentRecordSelected !== true),
     );
   }, [
     currentRecordFilters,
+    hideCurrentRecordFilter,
     hideQueryOnlyRecordFilters,
-    hideCurrentRecordFilters,
     queryOnlyRecordFilters,
   ]);
 

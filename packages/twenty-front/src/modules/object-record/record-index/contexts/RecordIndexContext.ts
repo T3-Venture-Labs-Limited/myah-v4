@@ -1,6 +1,7 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { type RecordField } from '@/object-record/record-field/types/RecordField';
 import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
@@ -21,7 +22,10 @@ export type RecordIndexEmbeddedSurfaceOptions = {
   compactTable?: boolean;
   hideQueryOnlyRecordFilters?: boolean;
   hideViewPicker?: boolean;
-  hideCurrentRecordFilters?: boolean;
+  hideCurrentRecordFilter?: Pick<
+    RecordFilter,
+    'fieldMetadataId' | 'relationTargetFieldMetadataId' | 'operand'
+  >;
 };
 
 export type RecordIndexContextValue = {

@@ -528,7 +528,11 @@ describe('RecordIndexSurface', () => {
         initialQueryOnlyRecordFilters={[listAFilter]}
         embeddedSurfaceOptions={{
           hideViewPicker: true,
-          hideCurrentRecordFilters: true,
+          hideCurrentRecordFilter: {
+            fieldMetadataId: listAFilter.fieldMetadataId,
+            relationTargetFieldMetadataId: null,
+            operand: ViewFilterOperand.IS,
+          },
           toolbarAction: <button type="button">Add influencers</button>,
         }}
       />,
@@ -553,7 +557,11 @@ describe('RecordIndexSurface', () => {
       ViewType.TABLE,
     );
     expect(mockViewBar).toHaveBeenLastCalledWith(
-      expect.objectContaining({ hideCurrentRecordFilters: true }),
+      expect.objectContaining({
+        hideCurrentRecordFilter: expect.objectContaining({
+          relationTargetFieldMetadataId: null,
+        }),
+      }),
     );
   });
 

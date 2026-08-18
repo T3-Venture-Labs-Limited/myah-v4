@@ -61,7 +61,11 @@ const mockRecordIndexSurface = jest.fn(
       hidePageHeader?: boolean;
       hideQueryOnlyRecordFilters?: boolean;
       hideViewPicker?: boolean;
-      hideCurrentRecordFilters?: boolean;
+      hideCurrentRecordFilter?: {
+        fieldMetadataId: string;
+        relationTargetFieldMetadataId?: string | null;
+        operand: ViewFilterOperand;
+      };
       toolbarAction?: ReactNode;
     };
     hideEmptyStateSubtitle?: boolean;
@@ -191,7 +195,11 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
       hidePageHeader?: boolean;
       hideQueryOnlyRecordFilters?: boolean;
       hideViewPicker?: boolean;
-      hideCurrentRecordFilters?: boolean;
+      hideCurrentRecordFilter?: {
+        fieldMetadataId: string;
+        relationTargetFieldMetadataId?: string | null;
+        operand: ViewFilterOperand;
+      };
       toolbarAction?: ReactNode;
     };
     hideEmptyStateSubtitle?: boolean;
@@ -358,7 +366,11 @@ describe('CampaignInfluencerIndex', () => {
         hidePageHeader: true,
         hideQueryOnlyRecordFilters: true,
         hideViewPicker: true,
-        hideCurrentRecordFilters: true,
+        hideCurrentRecordFilter: {
+          fieldMetadataId: 'campaign-creator-campaign-field',
+          relationTargetFieldMetadataId: null,
+          operand: ViewFilterOperand.IS,
+        },
       },
     });
     expect(indexSurfaceProps).not.toHaveProperty('headerActionButton');
