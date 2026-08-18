@@ -20,6 +20,7 @@ export type RecordIndexEmbeddedSurfaceOptions = {
   toolbarAction?: ReactNode;
   compactTable?: boolean;
   hideQueryOnlyRecordFilters?: boolean;
+  hideViewPicker?: boolean;
 };
 
 export type RecordIndexContextValue = {

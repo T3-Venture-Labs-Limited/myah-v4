@@ -30,6 +30,7 @@ type ViewBarProps = {
   onViewChange?: (viewId: string) => void;
   forcedViewType?: ViewType;
   hideQueryOnlyRecordFilters?: boolean;
+  hideViewPicker?: boolean;
   toolbarAction?: ReactNode;
 };
 
@@ -41,6 +42,7 @@ export const ViewBar = ({
   onViewChange,
   forcedViewType,
   hideQueryOnlyRecordFilters,
+  hideViewPicker,
   toolbarAction,
 }: ViewBarProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
@@ -57,10 +59,12 @@ export const ViewBar = ({
         <TopBar
           className={className}
           leftComponent={
-            <ViewPickerDropdown
-              onViewChange={onViewChange}
-              forcedViewType={forcedViewType}
-            />
+            hideViewPicker ? undefined : (
+              <ViewPickerDropdown
+                onViewChange={onViewChange}
+                forcedViewType={forcedViewType}
+              />
+            )
           }
           rightComponent={toolbarAction}
         />
@@ -80,10 +84,12 @@ export const ViewBar = ({
           <TopBar
             className={className}
             leftComponent={
-              <ViewPickerDropdown
-                onViewChange={onViewChange}
-                forcedViewType={forcedViewType}
-              />
+              hideViewPicker ? undefined : (
+                <ViewPickerDropdown
+                  onViewChange={onViewChange}
+                  forcedViewType={forcedViewType}
+                />
+              )
             }
             rightComponent={
               <>

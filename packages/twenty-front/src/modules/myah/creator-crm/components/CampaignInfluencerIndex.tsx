@@ -301,6 +301,7 @@ export const CampaignInfluencerIndex = ({
         compactTable: true,
         hidePageHeader: true,
         hideQueryOnlyRecordFilters: true,
+        hideViewPicker: true,
         toolbarAction: campaignPermissions.canUpdateObjectRecords ? (
           <AddCampaignInfluencersButton campaignId={campaignId} />
         ) : undefined,

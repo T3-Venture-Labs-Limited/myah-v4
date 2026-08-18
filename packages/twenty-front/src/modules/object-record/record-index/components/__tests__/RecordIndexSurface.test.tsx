@@ -518,6 +518,41 @@ describe('RecordIndexSurface', () => {
     expect(screen.queryByTestId('page-header')).not.toBeInTheDocument();
     expect(mockRecordIndexPageHeader).not.toHaveBeenCalled();
   });
+  it('hides the embedded view-picker title while retaining native toolbar controls', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="campaign-influencers-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listAFilter]}
+        embeddedSurfaceOptions={{
+          hideViewPicker: true,
+          toolbarAction: <button type="button">Add influencers</button>,
+        }}
+      />,
+    );
+
+    const toolbarAction = await screen.findByRole('button', {
+      name: 'Add influencers',
+    });
+
+    expect(screen.queryByTestId('view-picker-control')).not.toBeInTheDocument();
+    expect(screen.getByTestId('filter-control')).toBeInTheDocument();
+    expect(screen.getByTestId('sort-control')).toBeInTheDocument();
+    expect(screen.getByTestId('options-control')).toBeInTheDocument();
+    expect(
+      toolbarAction.compareDocumentPosition(
+        screen.getByTestId('filter-control'),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(mockRecordIndexContainer).toHaveBeenLastCalledWith(
+      [listAFilter],
+      expect.any(String),
+      ViewType.TABLE,
+    );
+  });
+
 
   it('renders an embedded toolbar action before native view controls', async () => {
     renderSurface(
