@@ -31,6 +31,7 @@ type ViewBarProps = {
   forcedViewType?: ViewType;
   hideQueryOnlyRecordFilters?: boolean;
   hideViewPicker?: boolean;
+  hideCurrentRecordFilters?: boolean;
   toolbarAction?: ReactNode;
 };
 
@@ -43,6 +44,7 @@ export const ViewBar = ({
   forcedViewType,
   hideQueryOnlyRecordFilters,
   hideViewPicker,
+  hideCurrentRecordFilters,
   toolbarAction,
 }: ViewBarProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
@@ -105,6 +107,7 @@ export const ViewBar = ({
             }
             bottomComponent={
               <ViewBarDetails
+                hideCurrentRecordFilters={hideCurrentRecordFilters}
                 hasFilterButton={!hideQueryOnlyRecordFilters}
                 hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
                 viewBarId={viewBarId}

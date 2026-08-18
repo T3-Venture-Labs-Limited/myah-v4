@@ -35,13 +35,14 @@ import { useIsViewAnyFieldFilterDifferentFromCurrentAnyFieldFilter } from '@/vie
 import { isViewBarExpandedComponentState } from '@/views/states/isViewBarExpandedComponentState';
 import { t } from '@lingui/core/macro';
 import { isNonEmptyArray, isNonEmptyString } from '@sniptt/guards';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, jsonRelationFilterValueSchema } from 'twenty-shared/utils';
 import { LightButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 export type ViewBarDetailsProps = {
   hasFilterButton?: boolean;
   hideQueryOnlyRecordFilters?: boolean;
+  hideCurrentRecordFilters?: boolean;
   rightComponent?: ReactNode;
   viewBarId: string;
   objectNamePlural: string;
@@ -103,6 +104,7 @@ const StyledAddFilterContainer = styled.div`
 
 export const ViewBarDetails = ({
   hasFilterButton = false,
+  hideCurrentRecordFilters = false,
   hideQueryOnlyRecordFilters = false,
   rightComponent,
   viewBarId,
@@ -161,7 +163,7 @@ export const ViewBarDetails = ({
   const { isSeeDeletedRecordsFilter } = useCheckIsSoftDeleteFilter();
 
   const displayedCurrentRecordFilters = useMemo(() => {
-    if (!hideQueryOnlyRecordFilters) {
+    if (!hideQueryOnlyRecordFilters && !hideCurrentRecordFilters) {
       return currentRecordFilters;
     }
 
@@ -170,11 +172,16 @@ export const ViewBarDetails = ({
     );
 
     return currentRecordFilters.filter(
-      (recordFilter) => !queryOnlyRecordFilterIds.has(recordFilter.id),
+      (recordFilter) =>
+        !queryOnlyRecordFilterIds.has(recordFilter.id) &&
+        (!hideCurrentRecordFilters ||
+          jsonRelationFilterValueSchema.safeParse(recordFilter.value).data
+            ?.isCurrentRecordSelected !== true),
     );
   }, [
     currentRecordFilters,
     hideQueryOnlyRecordFilters,
+    hideCurrentRecordFilters,
     queryOnlyRecordFilters,
   ]);
 

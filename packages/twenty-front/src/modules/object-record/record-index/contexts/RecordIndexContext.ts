@@ -21,6 +21,7 @@ export type RecordIndexEmbeddedSurfaceOptions = {
   compactTable?: boolean;
   hideQueryOnlyRecordFilters?: boolean;
   hideViewPicker?: boolean;
+  hideCurrentRecordFilters?: boolean;
 };
 
 export type RecordIndexContextValue = {

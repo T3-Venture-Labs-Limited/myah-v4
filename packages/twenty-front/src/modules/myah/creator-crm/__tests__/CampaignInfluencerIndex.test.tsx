@@ -61,6 +61,7 @@ const mockRecordIndexSurface = jest.fn(
       hidePageHeader?: boolean;
       hideQueryOnlyRecordFilters?: boolean;
       hideViewPicker?: boolean;
+      hideCurrentRecordFilters?: boolean;
       toolbarAction?: ReactNode;
     };
     hideEmptyStateSubtitle?: boolean;
@@ -190,6 +191,7 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
       hidePageHeader?: boolean;
       hideQueryOnlyRecordFilters?: boolean;
       hideViewPicker?: boolean;
+      hideCurrentRecordFilters?: boolean;
       toolbarAction?: ReactNode;
     };
     hideEmptyStateSubtitle?: boolean;
@@ -356,6 +358,7 @@ describe('CampaignInfluencerIndex', () => {
         hidePageHeader: true,
         hideQueryOnlyRecordFilters: true,
         hideViewPicker: true,
+        hideCurrentRecordFilters: true,
       },
     });
     expect(indexSurfaceProps).not.toHaveProperty('headerActionButton');

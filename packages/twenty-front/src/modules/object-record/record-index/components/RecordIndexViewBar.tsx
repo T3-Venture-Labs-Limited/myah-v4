@@ -43,6 +43,9 @@ export const RecordIndexViewBar = ({
         forcedViewType={recordIndexViewTypeOverride}
         onViewChange={onViewChange}
         hideViewPicker={embeddedSurfaceOptions?.hideViewPicker}
+        hideCurrentRecordFilters={
+          embeddedSurfaceOptions?.hideCurrentRecordFilters
+        }
         toolbarAction={embeddedSurfaceOptions?.toolbarAction}
         optionsDropdownButton={
           <ObjectOptionsDropdown

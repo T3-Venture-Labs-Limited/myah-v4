@@ -528,6 +528,7 @@ describe('RecordIndexSurface', () => {
         initialQueryOnlyRecordFilters={[listAFilter]}
         embeddedSurfaceOptions={{
           hideViewPicker: true,
+          hideCurrentRecordFilters: true,
           toolbarAction: <button type="button">Add influencers</button>,
         }}
       />,
@@ -550,6 +551,9 @@ describe('RecordIndexSurface', () => {
       [listAFilter],
       expect.any(String),
       ViewType.TABLE,
+    );
+    expect(mockViewBar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ hideCurrentRecordFilters: true }),
     );
   });
 

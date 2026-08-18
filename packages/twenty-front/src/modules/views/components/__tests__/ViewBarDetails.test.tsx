@@ -3,11 +3,20 @@ import { render, screen } from '@testing-library/react';
 import { ViewBarDetails } from '@/views/components/ViewBarDetails';
 
 const queryOnlyCampaignFilter = {
-  id: 'campaign-scope-filter',
+  id: 'campaign-query-only-filter',
   fieldMetadataId: 'campaign-field',
   label: 'Campaign',
 };
 
+const currentRecordCampaignFilter = {
+  id: 'campaign-current-record-filter',
+  fieldMetadataId: 'campaign-field',
+  label: 'Campaign',
+  value: JSON.stringify({
+    selectedRecordIds: [],
+    isCurrentRecordSelected: true,
+  }),
+};
 const userStatusFilter = {
   id: 'status-filter',
   fieldMetadataId: 'status-field',
@@ -20,7 +29,7 @@ jest.mock(
     useAtomComponentStateValue: (componentState: { key: string }) => {
       switch (componentState.key) {
         case 'currentRecordFiltersComponentState':
-          return [queryOnlyCampaignFilter, userStatusFilter];
+          return [currentRecordCampaignFilter, userStatusFilter];
         case 'queryOnlyRecordFiltersComponentState':
           return [queryOnlyCampaignFilter];
         case 'isViewBarExpandedComponentState':
@@ -153,6 +162,7 @@ describe('ViewBarDetails', () => {
     render(
       <ViewBarDetails
         hideQueryOnlyRecordFilters
+        hideCurrentRecordFilters
         hasFilterButton={false}
         viewBarId="campaign-influencers"
         objectNamePlural="creators"
