@@ -7,6 +7,7 @@ import { useNavigateSidePanel } from '@/side-panel/hooks/useNavigateSidePanel';
 import { isSidePanelClosingState } from '@/side-panel/states/isSidePanelClosingState';
 import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
 import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
+import { sidePanelSearchFocusRestoreElementState } from '@/side-panel/states/sidePanelSearchFocusRestoreElementState';
 import { sidePanelSearchObjectFilterState } from '@/side-panel/states/sidePanelSearchObjectFilterState';
 import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
 import { useCloseAnyOpenDropdown } from '@/ui/layout/dropdown/hooks/useCloseAnyOpenDropdown';
@@ -37,6 +38,9 @@ export const useSidePanelMenu = () => {
     if (!isSidePanelOpened) {
       return;
     }
+    const restoreTarget = store.get(
+      sidePanelSearchFocusRestoreElementState.atom,
+    );
 
     const isLayoutCustomizationModeEnabled = store.get(
       isLayoutCustomizationModeEnabledState.atom,
@@ -55,6 +59,22 @@ export const useSidePanelMenu = () => {
     });
 
     await waitForSidePanelClose();
+
+    if (
+      store.get(sidePanelSearchFocusRestoreElementState.atom) !== restoreTarget
+    ) {
+      return;
+    }
+
+    if (store.get(isSidePanelOpenedState.atom)) {
+      store.set(sidePanelSearchFocusRestoreElementState.atom, null);
+      return;
+    }
+
+    if (restoreTarget?.restoreElement?.isConnected) {
+      restoreTarget.restoreElement.focus();
+    }
+    store.set(sidePanelSearchFocusRestoreElementState.atom, null);
   }, [
     closeAnyOpenDropdown,
     removeFocusItemFromFocusStackById,
@@ -63,6 +83,7 @@ export const useSidePanelMenu = () => {
   ]);
 
   const openSidePanelMenu = useCallback(() => {
+    store.set(sidePanelSearchFocusRestoreElementState.atom, null);
     emitSidePanelOpenEvent();
     closeAnyOpenDropdown();
     store.set(sidePanelSearchState.atom, '');

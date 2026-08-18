@@ -178,6 +178,53 @@ describe('SidePanelTopBar', () => {
     expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(1);
     expect(mockCloseSidePanelMenu).not.toHaveBeenCalled();
   });
+  it('clears a command menu edit query with Escape without navigating', () => {
+    const { store } = renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelPage: SidePanelPages.CommandMenuEdit,
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.CommandMenuEdit,
+            pageTitle: 'Edit command',
+            pageIcon: IconDotsVertical,
+            pageId: 'command-menu-edit',
+          },
+        ],
+      }),
+    );
+    const input = screen.getByTestId(SIDE_PANEL_FOCUS_ID);
+
+    fireEvent.change(input, { target: { value: 'company' } });
+    fireEvent.keyDown(input, { key: 'Escape', code: 'Escape' });
+
+    expect(store.get(sidePanelSearchState.atom)).toBe('');
+    expect(store.get(sidePanelNavigationStackState.atom)).toHaveLength(1);
+    expect(mockCloseSidePanelMenu).not.toHaveBeenCalled();
+  });
+
+  it('closes Search with one Escape from a focused input', () => {
+    const { store } = renderSidePanelCommandMenu(
+      createSidePanelTopBarStore({
+        sidePanelPage: SidePanelPages.SearchRecords,
+        sidePanelNavigationStack: [
+          {
+            page: SidePanelPages.SearchRecords,
+            pageTitle: 'Search',
+            pageIcon: IconDotsVertical,
+            pageId: 'search-records',
+          },
+        ],
+      }),
+    );
+    const input = screen.getByTestId(SIDE_PANEL_FOCUS_ID);
+
+    fireEvent.change(input, { target: { value: 'company' } });
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Escape', code: 'Escape' });
+
+    expect(store.get(sidePanelSearchState.atom)).toBe('company');
+    expect(mockCloseSidePanelMenu).toHaveBeenCalledTimes(1);
+  });
 
   it('closes the side panel with Escape from an empty root search', () => {
     renderSidePanelCommandMenu();

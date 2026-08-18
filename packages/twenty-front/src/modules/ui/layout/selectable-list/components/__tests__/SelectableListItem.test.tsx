@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, waitFor } from '@testing-library/react';
 import { createStore, Provider as JotaiProvider } from 'jotai';
 
 import { SelectableList } from '@/ui/layout/selectable-list/components/SelectableList';
@@ -74,5 +74,65 @@ describe('SelectableListItem', () => {
         block: 'nearest',
       });
     });
+  });
+
+  it('supports opt-in listbox option semantics, roving focus, keyboard handling, and item refs', () => {
+    const store = createStore();
+    const onKeyDown = jest.fn();
+    const itemRef = jest.fn();
+
+    store.set(
+      isSelectedItemIdComponentFamilyState.atomFamily({
+        instanceId: selectableListInstanceId,
+        familyKey: 'second-item',
+      }),
+      true,
+    );
+
+    const { getByRole } = render(
+      <JotaiProvider store={store}>
+        <SelectableList
+          selectableListInstanceId={selectableListInstanceId}
+          selectableItemIdArray={['first-item', 'second-item']}
+          focusId="test-focus-id"
+        >
+          <SelectableListItem
+            itemId="first-item"
+            role="option"
+            ariaLabel="First result, Campaign"
+            isRoving
+          >
+            First result
+          </SelectableListItem>
+          <SelectableListItem
+            itemId="second-item"
+            role="option"
+            ariaLabel="Second result, Campaign"
+            isRoving
+            onKeyDown={onKeyDown}
+            itemRef={itemRef}
+          >
+            Second result
+          </SelectableListItem>
+        </SelectableList>
+      </JotaiProvider>,
+    );
+
+    const selectedOption = getByRole('option', {
+      name: 'Second result, Campaign',
+    });
+    const unselectedOption = getByRole('option', {
+      name: 'First result, Campaign',
+    });
+
+    expect(selectedOption).toHaveAttribute('aria-selected', 'true');
+    expect(selectedOption).toHaveAttribute('tabindex', '0');
+    expect(unselectedOption).toHaveAttribute('aria-selected', 'false');
+    expect(unselectedOption).toHaveAttribute('tabindex', '-1');
+
+    fireEvent.keyDown(selectedOption, { key: 'ArrowDown' });
+
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    expect(itemRef).toHaveBeenCalledWith(selectedOption);
   });
 });

@@ -196,6 +196,7 @@ export const SidePanelTopBar = () => {
         {COMMAND_MENU_SIDE_PANEL_PAGES.includes(sidePanelPage) && (
           <>
             <StyledInput
+              id={SIDE_PANEL_FOCUS_ID}
               data-testid={SIDE_PANEL_FOCUS_ID}
               ref={inputRef}
               value={sidePanelSearch}
