@@ -6,8 +6,11 @@ import { RecordIndexSurface } from '@/object-record/record-index/components/Reco
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
+import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState';
+import { getMultipleRecordPickerSelectableListId } from '@/object-record/record-picker/multiple-record-picker/utils/getMultipleRecordPickerSelectableListId';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
@@ -60,6 +63,13 @@ const AddCampaignInfluencersButton = ({
     multipleRecordPickerPickableMorphItemsComponentState,
     pickerInstanceId,
   );
+  const setPickerSearchFilter = useSetAtomComponentState(
+    multipleRecordPickerSearchFilterComponentState,
+    pickerInstanceId,
+  );
+  const { resetSelectedItem } = useSelectableList(
+    getMultipleRecordPickerSelectableListId(pickerInstanceId),
+  );
   const selectedCreatorIds = useMemo(
     () =>
       pickerItems
@@ -69,11 +79,19 @@ const AddCampaignInfluencersButton = ({
   );
 
   const closeAndReset = useCallback(() => {
+    resetSelectedItem();
+    setPickerItems([]);
+    setPickerSearchFilter('');
     closeModal(modalInstanceId);
     setIsOpen(false);
-    setPickerItems([]);
     setError(undefined);
-  }, [closeModal, modalInstanceId, setPickerItems]);
+  }, [
+    closeModal,
+    modalInstanceId,
+    resetSelectedItem,
+    setPickerItems,
+    setPickerSearchFilter,
+  ]);
 
   const handleOpen = useCallback(() => {
     setError(undefined);

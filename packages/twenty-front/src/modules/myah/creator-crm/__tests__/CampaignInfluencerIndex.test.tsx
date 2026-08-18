@@ -3,6 +3,7 @@ import { type ReactNode } from 'react';
 
 import { CampaignInfluencerIndex } from '@/myah/creator-crm/components/CampaignInfluencerIndex';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import {
   FieldMetadataType,
@@ -23,6 +24,17 @@ const mockSetPickerItems = (
   mockPickerItems = pickerItems;
   mockPickerItemSubscribers.forEach((subscriber) => subscriber());
 };
+
+let mockPickerSearchFilter = '';
+let mockPickerKeyboardSelection: string | null = null;
+const mockSetPickerSearchFilter = (searchFilter: string) => {
+  mockPickerSearchFilter = searchFilter;
+  mockPickerItemSubscribers.forEach((subscriber) => subscriber());
+};
+const mockResetPickerKeyboardSelection = jest.fn(() => {
+  mockPickerKeyboardSelection = null;
+  mockPickerItemSubscribers.forEach((subscriber) => subscriber());
+});
 
 const createDeferred = () => {
   let reject!: (reason?: unknown) => void;
@@ -119,6 +131,12 @@ jest.mock(
             <output data-testid="picker-selection-count">
               {mockPickerItems.filter(({ isSelected }) => isSelected).length}
             </output>
+            <output data-testid="picker-search-filter">
+              {mockPickerSearchFilter}
+            </output>
+            <output data-testid="picker-keyboard-selection">
+              {mockPickerKeyboardSelection ?? 'none'}
+            </output>
             <button
               onClick={() => {
                 const selectedPickerItems = [
@@ -127,6 +145,8 @@ jest.mock(
                 ];
 
                 mockSetPickerItems(selectedPickerItems);
+                mockSetPickerSearchFilter('creator');
+                mockPickerKeyboardSelection = 'creator-a';
                 onChange?.(selectedPickerItems[0]);
                 onChange?.(selectedPickerItems[1]);
               }}
@@ -139,6 +159,8 @@ jest.mock(
 
                 if (shouldResetStateOnClose !== false) {
                   mockSetPickerItems([]);
+                  mockSetPickerSearchFilter('');
+                  mockResetPickerKeyboardSelection();
                 }
               }}
             >
@@ -224,9 +246,18 @@ jest.mock(
 jest.mock(
   '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState',
   () => ({
-    useSetAtomComponentState: () => mockSetPickerItems,
+    useSetAtomComponentState: (atom: unknown) =>
+      atom === multipleRecordPickerSearchFilterComponentState
+        ? mockSetPickerSearchFilter
+        : mockSetPickerItems,
   }),
 );
+
+jest.mock('@/ui/layout/selectable-list/hooks/useSelectableList', () => ({
+  useSelectableList: () => ({
+    resetSelectedItem: mockResetPickerKeyboardSelection,
+  }),
+}));
 
 jest.mock('twenty-ui/input', () => ({
   Button: ({
@@ -273,6 +304,8 @@ describe('CampaignInfluencerIndex', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSetPickerItems([]);
+    mockPickerSearchFilter = '';
+    mockPickerKeyboardSelection = null;
     setCampaignMetadata();
     mockApplyCreatorBulkRelationship.mockResolvedValue(undefined);
     (useObjectPermissionsForObject as jest.Mock).mockReturnValue({
@@ -477,6 +510,35 @@ describe('CampaignInfluencerIndex', () => {
     });
   });
 
+  it('resets picker state when explicit close is followed by reopen', () => {
+    render(
+      <CampaignInfluencerIndex
+        campaignId="campaign-a"
+        viewId={campaignInfluencersViewId}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Influencers' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select creators' }));
+    expect(screen.getByTestId('picker-selection-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('picker-search-filter')).toHaveTextContent(
+      'creator',
+    );
+    expect(screen.getByTestId('picker-keyboard-selection')).toHaveTextContent(
+      'creator-a',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit picker' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Influencers' }));
+    expect(screen.getByTestId('picker-selection-count')).toHaveTextContent('0');
+    expect(screen.getByTestId('picker-search-filter')).toBeEmptyDOMElement();
+    expect(screen.getByTestId('picker-keyboard-selection')).toHaveTextContent(
+      'none',
+    );
+  });
+
   it('keeps direct-add bounded and retryable when the guarded mutation fails', async () => {
     mockApplyCreatorBulkRelationship.mockRejectedValueOnce(
       new Error('direct add failed'),
@@ -520,6 +582,12 @@ describe('CampaignInfluencerIndex', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add Influencers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select creators' }));
     expect(screen.getByTestId('picker-selection-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('picker-search-filter')).toHaveTextContent(
+      'creator',
+    );
+    expect(screen.getByTestId('picker-keyboard-selection')).toHaveTextContent(
+      'creator-a',
+    );
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Add selected influencers' }),
@@ -530,6 +598,12 @@ describe('CampaignInfluencerIndex', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Submit picker' }));
     expect(screen.getByTestId('picker-selection-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('picker-search-filter')).toHaveTextContent(
+      'creator',
+    );
+    expect(screen.getByTestId('picker-keyboard-selection')).toHaveTextContent(
+      'creator-a',
+    );
 
     await act(async () => {
       deferredAdd.reject(new Error('direct add failed'));
@@ -538,6 +612,12 @@ describe('CampaignInfluencerIndex', () => {
 
     expect(screen.getByText('Unable to add influencers.')).toBeVisible();
     expect(screen.getByTestId('picker-selection-count')).toHaveTextContent('2');
+    expect(screen.getByTestId('picker-search-filter')).toHaveTextContent(
+      'creator',
+    );
+    expect(screen.getByTestId('picker-keyboard-selection')).toHaveTextContent(
+      'creator-a',
+    );
 
     await act(async () => {
       fireEvent.click(
