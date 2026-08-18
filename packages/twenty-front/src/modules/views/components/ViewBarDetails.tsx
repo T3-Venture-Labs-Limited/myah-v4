@@ -173,10 +173,21 @@ export const ViewBarDetails = ({
 
     return currentRecordFilters.filter(
       (recordFilter) =>
-        !queryOnlyRecordFilterIds.has(recordFilter.id) &&
+        (!hideQueryOnlyRecordFilters ||
+          !queryOnlyRecordFilterIds.has(recordFilter.id)) &&
         (!hideCurrentRecordFilters ||
+          recordFilter.type !== 'RELATION' ||
           jsonRelationFilterValueSchema.safeParse(recordFilter.value).data
-            ?.isCurrentRecordSelected !== true),
+            ?.isCurrentRecordSelected !== true ||
+          !queryOnlyRecordFilters.some(
+            (queryOnlyRecordFilter) =>
+              queryOnlyRecordFilter.type === 'RELATION' &&
+              queryOnlyRecordFilter.fieldMetadataId ===
+                recordFilter.fieldMetadataId &&
+              queryOnlyRecordFilter.relationTargetFieldMetadataId ===
+                recordFilter.relationTargetFieldMetadataId &&
+              queryOnlyRecordFilter.operand === recordFilter.operand,
+          )),
     );
   }, [
     currentRecordFilters,

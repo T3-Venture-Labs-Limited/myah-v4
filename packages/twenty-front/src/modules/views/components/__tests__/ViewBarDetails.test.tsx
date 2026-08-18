@@ -2,21 +2,50 @@ import { render, screen } from '@testing-library/react';
 
 import { ViewBarDetails } from '@/views/components/ViewBarDetails';
 
+const currentRecordValue = JSON.stringify({
+  selectedRecordIds: [],
+  isCurrentRecordSelected: true,
+});
+
 const queryOnlyCampaignFilter = {
   id: 'campaign-query-only-filter',
   fieldMetadataId: 'campaign-field',
+  relationTargetFieldMetadataId: 'campaign-id-field',
+  operand: 'IS',
+  type: 'RELATION',
+  value: 'campaign-id',
   label: 'Campaign',
 };
 
 const currentRecordCampaignFilter = {
   id: 'campaign-current-record-filter',
   fieldMetadataId: 'campaign-field',
+  relationTargetFieldMetadataId: 'campaign-id-field',
+  operand: 'IS',
+  type: 'RELATION',
+  value: currentRecordValue,
   label: 'Campaign',
-  value: JSON.stringify({
-    selectedRecordIds: [],
-    isCurrentRecordSelected: true,
-  }),
 };
+
+const unrelatedCurrentRecordRelationFilter = {
+  id: 'unrelated-current-record-relation-filter',
+  fieldMetadataId: 'other-relation-field',
+  relationTargetFieldMetadataId: 'other-relation-id-field',
+  operand: 'IS',
+  type: 'RELATION',
+  value: currentRecordValue,
+  label: 'Other relation',
+};
+
+const jsonTextFilter = {
+  id: 'json-text-filter',
+  fieldMetadataId: 'json-text-field',
+  operand: 'IS',
+  type: 'TEXT',
+  value: currentRecordValue,
+  label: 'JSON text',
+};
+
 const userStatusFilter = {
   id: 'status-filter',
   fieldMetadataId: 'status-field',
@@ -29,7 +58,12 @@ jest.mock(
     useAtomComponentStateValue: (componentState: { key: string }) => {
       switch (componentState.key) {
         case 'currentRecordFiltersComponentState':
-          return [currentRecordCampaignFilter, userStatusFilter];
+          return [
+            currentRecordCampaignFilter,
+            unrelatedCurrentRecordRelationFilter,
+            jsonTextFilter,
+            userStatusFilter,
+          ];
         case 'queryOnlyRecordFiltersComponentState':
           return [queryOnlyCampaignFilter];
         case 'isViewBarExpandedComponentState':
@@ -171,6 +205,8 @@ describe('ViewBarDetails', () => {
 
     expect(screen.queryByText('Campaign')).not.toBeInTheDocument();
     expect(screen.getByText('Status')).toBeInTheDocument();
+    expect(screen.getByText('Other relation')).toBeInTheDocument();
+    expect(screen.getByText('JSON text')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add filter' })).not.toBeInTheDocument();
   });
 
