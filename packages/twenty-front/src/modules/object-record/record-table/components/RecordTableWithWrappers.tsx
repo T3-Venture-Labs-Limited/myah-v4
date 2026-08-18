@@ -26,6 +26,23 @@ const StyledRecordTablePrintBoundary = styled.div`
   }
 `;
 
+const StyledCompactRecordTableScrollWrapper = styled.div`
+  height: 100%;
+  min-width: 0;
+  overflow-y: auto;
+  width: 100%;
+`;
+
+const StyledCompactRecordTableLayout = styled.div`
+  min-width: 0;
+  width: 100%;
+
+  & > div {
+    min-width: 0;
+    width: 100%;
+  }
+`;
+
 type RecordTableWithWrappersProps = {
   objectNameSingular: string;
   recordTableId: string;
@@ -106,7 +123,13 @@ export const RecordTableWithWrappers = ({
                 instanceId: `record-table-scroll-${recordTableId}`,
               }}
             >
-              {tableContent}
+              <StyledCompactRecordTableScrollWrapper
+                id={`scroll-wrapper-record-table-scroll-${recordTableId}`}
+              >
+                <StyledCompactRecordTableLayout>
+                  {tableContent}
+                </StyledCompactRecordTableLayout>
+              </StyledCompactRecordTableScrollWrapper>
             </ScrollWrapperComponentInstanceContext.Provider>
           ) : (
             <ScrollWrapper

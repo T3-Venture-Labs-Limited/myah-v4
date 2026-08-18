@@ -9,6 +9,8 @@ import {
 import { RecordTableWithWrappers } from '@/object-record/record-table/components/RecordTableWithWrappers';
 import { PageFocusId } from '@/types/PageFocusId';
 
+
+
 const mockUseHotkeysOnFocusedElement = jest.fn();
 const mockResetFocusStackToRecordIndex = jest.fn();
 
@@ -170,5 +172,25 @@ describe('RecordTableWithWrappers', () => {
     });
 
     expect(mockScrollWrapper).not.toHaveBeenCalled();
+  });
+  it('keeps compact table layout constrained inside its native vertical scroll target', () => {
+    renderRecordTable('campaign-influencers-campaign-a', {
+      compactTable: true,
+    });
+
+    const compactScrollTarget = document.getElementById(
+      'scroll-wrapper-record-table-scroll-creator-index-list-a',
+    );
+
+    if (!compactScrollTarget) {
+      throw new Error('Expected compact table native scroll target');
+    }
+
+    expect(compactScrollTarget.firstElementChild?.tagName).toBe('DIV');
+
+    compactScrollTarget.scrollTop = 48;
+    fireEvent.scroll(compactScrollTarget);
+
+    expect(compactScrollTarget.scrollTop).toBe(48);
   });
 });
