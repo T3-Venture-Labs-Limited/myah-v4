@@ -1,9 +1,11 @@
 import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
-import { FormMultiRecordPicker } from '@/object-record/record-field/ui/form-types/components/FormMultiRecordPicker';
+import { useOpenFormMultiRecordPicker } from '@/object-record/record-field/ui/form-types/hooks/useOpenFormMultiRecordPicker';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
+import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
+import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -39,18 +41,28 @@ const AddCampaignInfluencersButton = ({
   campaignId,
 }: AddCampaignInfluencersButtonProps) => {
   const { applyCreatorBulkRelationship } = useApplyCreatorBulkRelationship();
+  const { openFormMultiRecordPicker } = useOpenFormMultiRecordPicker({
+    objectNameSingular: 'creator',
+  });
   const { closeModal, openModal } = useModal();
   const [selectedCreatorIds, setSelectedCreatorIds] = useState<string[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState<string>();
   const modalInstanceId = `campaign-influencers-add-${campaignId}`;
+  const pickerInstanceId = `campaign-influencers-picker-${campaignId}`;
 
   const handleOpen = useCallback(() => {
+    setSelectedCreatorIds([]);
     setError(undefined);
+    openFormMultiRecordPicker({
+      pickerInstanceId,
+      selectedRecordIds: [],
+      selectedRecords: [],
+    });
     setIsOpen(true);
     openModal(modalInstanceId);
-  }, [modalInstanceId, openModal]);
+  }, [modalInstanceId, openFormMultiRecordPicker, openModal, pickerInstanceId]);
 
   const handleClose = useCallback(() => {
     if (isAdding) {
@@ -63,16 +75,18 @@ const AddCampaignInfluencersButton = ({
     setError(undefined);
   }, [closeModal, isAdding, modalInstanceId]);
 
-  const handleSelectedCreatorsChange = useCallback((value: unknown) => {
-    setSelectedCreatorIds(
-      Array.isArray(value)
-        ? value.filter(
-            (creatorId): creatorId is string => typeof creatorId === 'string',
-          )
-        : [],
-    );
-  }, []);
-
+  const handleSelectedCreatorsChange = useCallback(
+    ({ isSelected, recordId }: RecordPickerPickableMorphItem) => {
+      setSelectedCreatorIds((currentCreatorIds) =>
+        isSelected
+          ? currentCreatorIds.includes(recordId)
+            ? currentCreatorIds
+            : [...currentCreatorIds, recordId]
+          : currentCreatorIds.filter((creatorId) => creatorId !== recordId),
+      );
+    },
+    [],
+  );
   const handleAdd = useCallback(async () => {
     if (selectedCreatorIds.length === 0 || isAdding) {
       return;
@@ -123,9 +137,12 @@ const AddCampaignInfluencersButton = ({
           autoHeight
         >
           <h2>{t`Add Influencers`}</h2>
-          <FormMultiRecordPicker
-            objectNameSingular="creator"
+          <MultipleRecordPicker
+            componentInstanceId={pickerInstanceId}
+            focusId={pickerInstanceId}
             onChange={handleSelectedCreatorsChange}
+            onClickOutside={handleClose}
+            onSubmit={handleClose}
           />
           {error ? <StyledScopeState>{error}</StyledScopeState> : null}
           <Button
@@ -257,14 +274,15 @@ export const CampaignInfluencerIndex = ({
       indexIdentifierUrl={campaignCreatorShowUrl}
       onViewChange={handleCampaignViewChange}
       initialQueryOnlyRecordFilters={[campaignFilter]}
-      hideQueryOnlyRecordFilters
       hideEmptyStateSubtitle
-      headerTitle={t`Influencers`}
-      headerActionButton={
-        campaignPermissions.canUpdateObjectRecords ? (
+      embeddedSurfaceOptions={{
+        hideAddNew: true,
+        hidePageHeader: true,
+        hideQueryOnlyRecordFilters: true,
+        toolbarAction: campaignPermissions.canUpdateObjectRecords ? (
           <AddCampaignInfluencersButton campaignId={campaignId} />
-        ) : undefined
-      }
+        ) : undefined,
+      }}
     />
   );
 };

@@ -17,15 +17,19 @@ const mockApplyCreatorBulkRelationship = jest.fn();
 const mockRecordIndexSurface = jest.fn(
   ({
     contextStoreInstanceId,
-    headerActionButton,
+    embeddedSurfaceOptions,
     initialQueryOnlyRecordFilters,
     onViewChange,
     viewId,
   }: {
     contextStoreInstanceId: string;
-    headerActionButton?: ReactNode;
+    embeddedSurfaceOptions?: {
+      hideAddNew?: boolean;
+      hidePageHeader?: boolean;
+      hideQueryOnlyRecordFilters?: boolean;
+      toolbarAction?: ReactNode;
+    };
     hideEmptyStateSubtitle?: boolean;
-    hideQueryOnlyRecordFilters?: boolean;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onViewChange?: (viewId: string) => void;
@@ -35,7 +39,7 @@ const mockRecordIndexSurface = jest.fn(
       data-context-store-id={contextStoreInstanceId}
       data-testid="record-index-surface"
     >
-      {headerActionButton}
+      {embeddedSurfaceOptions?.toolbarAction}
       {`Rows for ${initialQueryOnlyRecordFilters[0]?.value} in ${viewId}`}
       <button onClick={() => onViewChange?.('campaign-secondary-view')}>
         Switch Campaign view
@@ -64,26 +68,47 @@ jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
 }));
 
 jest.mock(
-  '@/object-record/record-field/ui/form-types/components/FormMultiRecordPicker',
+  '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker',
   () => ({
-    FormMultiRecordPicker: ({
+    MultipleRecordPicker: ({
       onChange,
     }: {
-      onChange: (value: string[]) => void;
+      onChange: (value: {
+        isSelected: boolean;
+        recordId: string;
+      }) => void;
     }) => (
-      <button onClick={() => onChange(['creator-a', 'creator-b'])}>
+      <button
+        onClick={() => {
+          onChange({ isSelected: true, recordId: 'creator-a' });
+          onChange({ isSelected: true, recordId: 'creator-b' });
+        }}
+      >
         Select creators
       </button>
     ),
   }),
 );
 
+jest.mock(
+  '@/object-record/record-field/ui/form-types/hooks/useOpenFormMultiRecordPicker',
+  () => ({
+    useOpenFormMultiRecordPicker: () => ({
+      openFormMultiRecordPicker: jest.fn(),
+    }),
+  }),
+);
+
 jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
   RecordIndexSurface: (props: {
     contextStoreInstanceId: string;
-    headerActionButton?: ReactNode;
+    embeddedSurfaceOptions?: {
+      hideAddNew?: boolean;
+      hidePageHeader?: boolean;
+      hideQueryOnlyRecordFilters?: boolean;
+      toolbarAction?: ReactNode;
+    };
     hideEmptyStateSubtitle?: boolean;
-    hideQueryOnlyRecordFilters?: boolean;
     indexIdentifierUrl: (recordId: string) => string;
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onViewChange?: (viewId: string) => void;
@@ -97,10 +122,15 @@ jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
   }),
 }));
 
-jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
-  ModalStatefulWrapper: ({ children }: { children: ReactNode }) => (
-    <>{children}</>
+const mockModalStatefulWrapper = jest.fn(
+  ({ children }: { children: ReactNode }) => (
+    <div role="dialog">{children}</div>
   ),
+);
+
+jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
+  ModalStatefulWrapper: (props: { children: ReactNode }) =>
+    mockModalStatefulWrapper(props),
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
@@ -176,7 +206,7 @@ describe('CampaignInfluencerIndex', () => {
     ]);
   });
 
-  it('renders the fixed Campaign Influencers view in an isolated native index', () => {
+  it('uses native Campaign controls and keeps creator selection in one dialog', () => {
     render(
       <CampaignInfluencerIndex
         campaignId="campaign-a"
@@ -184,11 +214,12 @@ describe('CampaignInfluencerIndex', () => {
       />,
     );
 
-    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+    const indexSurfaceProps = mockRecordIndexSurface.mock.calls.at(-1)?.[0];
+
+    expect(indexSurfaceProps).toMatchObject({
       contextStoreInstanceId: 'campaign-influencers-campaign-a',
       objectNameSingular: 'campaignCreator',
       viewId: campaignInfluencersViewId,
-      hideQueryOnlyRecordFilters: true,
       hideEmptyStateSubtitle: true,
       initialQueryOnlyRecordFilters: [
         {
@@ -203,8 +234,22 @@ describe('CampaignInfluencerIndex', () => {
           subFieldName: null,
         },
       ],
-      headerTitle: 'Influencers',
+      embeddedSurfaceOptions: {
+        hideAddNew: true,
+        hidePageHeader: true,
+        hideQueryOnlyRecordFilters: true,
+      },
     });
+    expect(indexSurfaceProps).not.toHaveProperty('headerActionButton');
+    expect(indexSurfaceProps).not.toHaveProperty('headerTitle');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Influencers' }));
+
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select creators' }));
+
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
   });
 
   it('uses the source-controlled Campaign Influencers view when a field widget has no view ID', () => {
