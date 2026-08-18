@@ -32,6 +32,7 @@ type MultipleRecordPickerProps = {
   componentInstanceId: string;
   onClickOutside: () => void;
   focusId: string;
+  shouldResetStateOnClose?: boolean;
   objectMetadataItemIdForCreate?: string;
   dropdownWidth?: number;
 };
@@ -46,6 +47,7 @@ export const MultipleRecordPicker = ({
   focusId,
   objectMetadataItemIdForCreate,
   dropdownWidth,
+  shouldResetStateOnClose = true,
 }: MultipleRecordPickerProps) => {
   const selectableListComponentInstanceId =
     getMultipleRecordPickerSelectableListId(componentInstanceId);
@@ -79,13 +81,19 @@ export const MultipleRecordPicker = ({
 
   const handleSubmit = () => {
     onSubmit?.();
-    resetSelectedItem();
-    resetState();
+
+    if (shouldResetStateOnClose) {
+      resetSelectedItem();
+      resetState();
+    }
   };
 
   const handleClickOutside = () => {
     onClickOutside();
-    resetState();
+
+    if (shouldResetStateOnClose) {
+      resetState();
+    }
   };
 
   useHotkeysOnFocusedElement({

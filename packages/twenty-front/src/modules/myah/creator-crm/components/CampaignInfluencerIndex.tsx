@@ -5,10 +5,12 @@ import { useOpenFormMultiRecordPicker } from '@/object-record/record-field/ui/fo
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
-import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
+import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
@@ -45,15 +47,35 @@ const AddCampaignInfluencersButton = ({
     objectNameSingular: 'creator',
   });
   const { closeModal, openModal } = useModal();
-  const [selectedCreatorIds, setSelectedCreatorIds] = useState<string[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState<string>();
   const modalInstanceId = `campaign-influencers-add-${campaignId}`;
   const pickerInstanceId = `campaign-influencers-picker-${campaignId}`;
+  const pickerItems = useAtomComponentStateValue(
+    multipleRecordPickerPickableMorphItemsComponentState,
+    pickerInstanceId,
+  );
+  const setPickerItems = useSetAtomComponentState(
+    multipleRecordPickerPickableMorphItemsComponentState,
+    pickerInstanceId,
+  );
+  const selectedCreatorIds = useMemo(
+    () =>
+      pickerItems
+        .filter(({ isSelected }) => isSelected)
+        .map(({ recordId }) => recordId),
+    [pickerItems],
+  );
+
+  const closeAndReset = useCallback(() => {
+    closeModal(modalInstanceId);
+    setIsOpen(false);
+    setPickerItems([]);
+    setError(undefined);
+  }, [closeModal, modalInstanceId, setPickerItems]);
 
   const handleOpen = useCallback(() => {
-    setSelectedCreatorIds([]);
     setError(undefined);
     openFormMultiRecordPicker({
       pickerInstanceId,
@@ -69,24 +91,9 @@ const AddCampaignInfluencersButton = ({
       return;
     }
 
-    closeModal(modalInstanceId);
-    setIsOpen(false);
-    setSelectedCreatorIds([]);
-    setError(undefined);
-  }, [closeModal, isAdding, modalInstanceId]);
+    closeAndReset();
+  }, [closeAndReset, isAdding]);
 
-  const handleSelectedCreatorsChange = useCallback(
-    ({ isSelected, recordId }: RecordPickerPickableMorphItem) => {
-      setSelectedCreatorIds((currentCreatorIds) =>
-        isSelected
-          ? currentCreatorIds.includes(recordId)
-            ? currentCreatorIds
-            : [...currentCreatorIds, recordId]
-          : currentCreatorIds.filter((creatorId) => creatorId !== recordId),
-      );
-    },
-    [],
-  );
   const handleAdd = useCallback(async () => {
     if (selectedCreatorIds.length === 0 || isAdding) {
       return;
@@ -100,9 +107,7 @@ const AddCampaignInfluencersButton = ({
         target: { kind: 'campaign', id: campaignId, label: 'Campaign' },
         creatorIdsToAdd: selectedCreatorIds,
       });
-      closeModal(modalInstanceId);
-      setIsOpen(false);
-      setSelectedCreatorIds([]);
+      closeAndReset();
     } catch {
       setError(t`Unable to add influencers.`);
     } finally {
@@ -111,9 +116,8 @@ const AddCampaignInfluencersButton = ({
   }, [
     applyCreatorBulkRelationship,
     campaignId,
-    closeModal,
+    closeAndReset,
     isAdding,
-    modalInstanceId,
     selectedCreatorIds,
   ]);
 
@@ -140,9 +144,9 @@ const AddCampaignInfluencersButton = ({
           <MultipleRecordPicker
             componentInstanceId={pickerInstanceId}
             focusId={pickerInstanceId}
-            onChange={handleSelectedCreatorsChange}
             onClickOutside={handleClose}
             onSubmit={handleClose}
+            shouldResetStateOnClose={false}
           />
           {error ? <StyledScopeState>{error}</StyledScopeState> : null}
           <Button

@@ -14,6 +14,26 @@ const campaignInfluencersViewUniversalIdentifier =
   'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b';
 
 const mockApplyCreatorBulkRelationship = jest.fn();
+
+let mockPickerItems: Array<{ isSelected: boolean; recordId: string }> = [];
+const mockPickerItemSubscribers = new Set<() => void>();
+const mockSetPickerItems = (
+  pickerItems: Array<{ isSelected: boolean; recordId: string }>,
+) => {
+  mockPickerItems = pickerItems;
+  mockPickerItemSubscribers.forEach((subscriber) => subscriber());
+};
+
+const createDeferred = () => {
+  let reject!: (reason?: unknown) => void;
+
+  const promise = new Promise<void>((_, promiseReject) => {
+    reject = promiseReject;
+  });
+
+  return { promise, reject };
+};
+
 const mockRecordIndexSurface = jest.fn(
   ({
     contextStoreInstanceId,
@@ -69,25 +89,66 @@ jest.mock('@/object-record/hooks/useObjectPermissionsForObject', () => ({
 
 jest.mock(
   '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker',
-  () => ({
-    MultipleRecordPicker: ({
-      onChange,
-    }: {
-      onChange: (value: {
-        isSelected: boolean;
-        recordId: string;
-      }) => void;
-    }) => (
-      <button
-        onClick={() => {
-          onChange({ isSelected: true, recordId: 'creator-a' });
-          onChange({ isSelected: true, recordId: 'creator-b' });
-        }}
-      >
-        Select creators
-      </button>
-    ),
-  }),
+  () => {
+    const { useSyncExternalStore } = jest.requireActual('react');
+
+    return {
+      MultipleRecordPicker: ({
+        onChange,
+        onSubmit,
+        shouldResetStateOnClose,
+      }: {
+        onChange?: (value: {
+          isSelected: boolean;
+          recordId: string;
+        }) => void;
+        onSubmit?: () => void;
+        shouldResetStateOnClose?: boolean;
+      }) => {
+        useSyncExternalStore(
+          (subscriber) => {
+            mockPickerItemSubscribers.add(subscriber);
+
+            return () => mockPickerItemSubscribers.delete(subscriber);
+          },
+          () => mockPickerItems,
+        );
+
+        return (
+          <>
+            <output data-testid="picker-selection-count">
+              {mockPickerItems.filter(({ isSelected }) => isSelected).length}
+            </output>
+            <button
+              onClick={() => {
+                const selectedPickerItems = [
+                  { isSelected: true, recordId: 'creator-a' },
+                  { isSelected: true, recordId: 'creator-b' },
+                ];
+
+                mockSetPickerItems(selectedPickerItems);
+                onChange?.(selectedPickerItems[0]);
+                onChange?.(selectedPickerItems[1]);
+              }}
+            >
+              Select creators
+            </button>
+            <button
+              onClick={() => {
+                onSubmit?.();
+
+                if (shouldResetStateOnClose !== false) {
+                  mockSetPickerItems([]);
+                }
+              }}
+            >
+              Submit picker
+            </button>
+          </>
+        );
+      },
+    };
+  },
 );
 
 jest.mock(
@@ -141,6 +202,32 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
   useAtomStateValue: jest.fn(),
 }));
 
+jest.mock(
+  '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue',
+  () => {
+    const { useSyncExternalStore } = jest.requireActual('react');
+
+    return {
+      useAtomComponentStateValue: () =>
+        useSyncExternalStore(
+          (subscriber) => {
+            mockPickerItemSubscribers.add(subscriber);
+
+            return () => mockPickerItemSubscribers.delete(subscriber);
+          },
+          () => mockPickerItems,
+        ),
+    };
+  },
+);
+
+jest.mock(
+  '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState',
+  () => ({
+    useSetAtomComponentState: () => mockSetPickerItems,
+  }),
+);
+
 jest.mock('twenty-ui/input', () => ({
   Button: ({
     children,
@@ -185,6 +272,7 @@ const setCampaignMetadata = () => {
 describe('CampaignInfluencerIndex', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSetPickerItems([]);
     setCampaignMetadata();
     mockApplyCreatorBulkRelationship.mockResolvedValue(undefined);
     (useObjectPermissionsForObject as jest.Mock).mockReturnValue({
@@ -414,5 +502,52 @@ describe('CampaignInfluencerIndex', () => {
     expect(
       screen.getByRole('button', { name: 'Add selected influencers' }),
     ).toBeVisible();
+  });
+
+  it('retains visible picker selection after a pending direct add fails', async () => {
+    const deferredAdd = createDeferred();
+    mockApplyCreatorBulkRelationship
+      .mockImplementationOnce(() => deferredAdd.promise)
+      .mockResolvedValueOnce(undefined);
+
+    render(
+      <CampaignInfluencerIndex
+        campaignId="campaign-a"
+        viewId={campaignInfluencersViewId}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Influencers' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select creators' }));
+    expect(screen.getByTestId('picker-selection-count')).toHaveTextContent('2');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add selected influencers' }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Add selected influencers' }),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit picker' }));
+    expect(screen.getByTestId('picker-selection-count')).toHaveTextContent('2');
+
+    await act(async () => {
+      deferredAdd.reject(new Error('direct add failed'));
+      await deferredAdd.promise.catch(() => undefined);
+    });
+
+    expect(screen.getByText('Unable to add influencers.')).toBeVisible();
+    expect(screen.getByTestId('picker-selection-count')).toHaveTextContent('2');
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Add selected influencers' }),
+      );
+    });
+
+    expect(mockApplyCreatorBulkRelationship).toHaveBeenLastCalledWith({
+      target: { kind: 'campaign', id: 'campaign-a', label: 'Campaign' },
+      creatorIdsToAdd: ['creator-a', 'creator-b'],
+    });
   });
 });
