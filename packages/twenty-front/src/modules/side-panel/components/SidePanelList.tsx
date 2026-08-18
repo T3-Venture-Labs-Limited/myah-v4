@@ -17,6 +17,9 @@ export type SidePanelListProps = {
   loading?: boolean;
   noResults?: boolean;
   noResultsText?: string;
+  role?: 'listbox';
+  ariaLabel?: string;
+  status?: string;
 };
 
 const StyledInnerList = styled.div`
@@ -45,12 +48,27 @@ const StyledEmpty = styled.div`
   white-space: pre-wrap;
 `;
 
+const StyledStatus = styled.div`
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+`;
+
 export const SidePanelList = ({
   selectableItemIds,
   children,
   loading = false,
   noResults = false,
   noResultsText,
+  role,
+  ariaLabel,
+  status,
 }: SidePanelListProps) => {
   const setHasUserSelectedSidePanelListItem = useSetAtomState(
     hasUserSelectedSidePanelListItemState,
@@ -60,7 +78,7 @@ export const SidePanelList = ({
     <>
       <SidePanelDefaultSelectionEffect selectableItemIds={selectableItemIds} />
       <ScrollWrapper componentInstanceId={`scroll-wrapper-side-panel`}>
-        <StyledInnerList>
+        <StyledInnerList role={role} aria-label={ariaLabel}>
           <SelectableList
             selectableListInstanceId={SIDE_PANEL_SELECTABLE_LIST_ID}
             focusId={SIDE_PANEL_FOCUS_ID}
@@ -75,6 +93,11 @@ export const SidePanelList = ({
             )}
           </SelectableList>
         </StyledInnerList>
+        {status !== undefined && (
+          <StyledStatus role="status" aria-live="polite">
+            {status}
+          </StyledStatus>
+        )}
       </ScrollWrapper>
     </>
   );

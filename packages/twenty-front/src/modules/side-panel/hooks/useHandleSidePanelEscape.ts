@@ -5,6 +5,7 @@ import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { isNonEmptyString } from '@sniptt/guards';
+import { SidePanelPages } from 'twenty-shared/types';
 
 export const useHandleSidePanelEscape = () => {
   const [sidePanelSearch, setSidePanelSearch] =
@@ -16,6 +17,7 @@ export const useHandleSidePanelEscape = () => {
   return () => {
     const canClearSidePanelSearch =
       COMMAND_MENU_SIDE_PANEL_PAGES.includes(sidePanelPage) &&
+      sidePanelPage !== SidePanelPages.SearchRecords &&
       isNonEmptyString(sidePanelSearch);
 
     if (canClearSidePanelSearch) {
