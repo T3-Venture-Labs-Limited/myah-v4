@@ -26,6 +26,7 @@ import {
   MyahInboxState,
   type UpdateMyahInboxThreadInput,
 } from '~/generated/graphql';
+import { useRef } from 'react';
 import { v4 } from 'uuid';
 
 const StyledActions = styled.div`
@@ -65,6 +66,9 @@ export const MyahInboxThreadActions = ({
   const { openMyahInboxContextInSidePanel } =
     useOpenMyahInboxContextInSidePanel();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
+
+  const creatorPickerTriggerRef = useRef<HTMLDivElement>(null);
+  const campaignPickerTriggerRef = useRef<HTMLDivElement>(null);
 
   const areRecordPickersReady = [
     'creator',
@@ -120,12 +124,24 @@ export const MyahInboxThreadActions = ({
     <StyledActions aria-label="Thread actions">
       <Dropdown
         dropdownId={`myah-inbox-creator-${thread.id}`}
+        dropdownRole="dialog"
+        dropdownAriaLabel="Creator selector"
+        clickableComponentAriaLabel="Creator selector"
+        isClickableComponentKeyboardAccessible
+        onClickableComponentRef={(element) => {
+          creatorPickerTriggerRef.current = element;
+        }}
+        onClose={() => {
+          creatorPickerTriggerRef.current?.focus();
+        }}
         clickableComponent={
           <IconButton
             Icon={IconUser}
+            ariaHidden
             ariaLabel="Creator"
             dataTestId="myah-inbox-thread-creator-action"
             size="small"
+            tabIndex={-1}
             variant="tertiary"
           />
         }
@@ -136,6 +152,8 @@ export const MyahInboxThreadActions = ({
                 label="Creator"
                 objectNameSingulars={['creator']}
                 defaultValue={thread.creator?.id ?? null}
+                shouldPreventRecordNavigation
+                shouldAutoFocusPickerTrigger
                 onChange={(creatorId) =>
                   void update(
                     { threadId: thread.id, creatorId },
@@ -157,13 +175,25 @@ export const MyahInboxThreadActions = ({
         dropdownPlacement="bottom-end"
       />
       <Dropdown
+        dropdownRole="dialog"
         dropdownId={`myah-inbox-campaign-${thread.id}`}
+        dropdownAriaLabel="Campaign selector"
+        clickableComponentAriaLabel="Campaign selector"
+        isClickableComponentKeyboardAccessible
+        onClickableComponentRef={(element) => {
+          campaignPickerTriggerRef.current = element;
+        }}
+        onClose={() => {
+          campaignPickerTriggerRef.current?.focus();
+        }}
         clickableComponent={
           <IconButton
             Icon={IconTarget}
+            ariaHidden
             ariaLabel="Campaign"
             dataTestId="myah-inbox-thread-campaign-action"
             size="small"
+            tabIndex={-1}
             variant="tertiary"
           />
         }
@@ -174,6 +204,8 @@ export const MyahInboxThreadActions = ({
                 label="Campaign"
                 objectNameSingulars={['campaign']}
                 defaultValue={thread.campaign?.id ?? null}
+                shouldPreventRecordNavigation
+                shouldAutoFocusPickerTrigger
                 onChange={(campaignId) =>
                   void update(
                     { threadId: thread.id, campaignId },

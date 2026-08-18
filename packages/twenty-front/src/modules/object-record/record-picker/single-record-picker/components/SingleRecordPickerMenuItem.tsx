@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react';
+
 import { getAvatarType } from '@/object-metadata/utils/getAvatarType';
 import { searchRecordStoreFamilyState } from '@/object-record/record-picker/multiple-record-picker/states/searchRecordStoreComponentFamilyState';
 import { SingleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/single-record-picker/states/contexts/SingleRecordPickerComponentInstanceContext';
@@ -19,12 +21,14 @@ type SingleRecordPickerMenuItemProps = {
   morphItem: RecordPickerPickableMorphItem;
   onMorphItemSelected: (morphItem?: RecordPickerPickableMorphItem) => void;
   isRecordSelected: boolean;
+  getOptionId: (recordId: string) => string;
 };
 
 export const SingleRecordPickerMenuItem = ({
   morphItem,
   onMorphItemSelected,
   isRecordSelected,
+  getOptionId,
 }: SingleRecordPickerMenuItemProps) => {
   const recordPickerComponentInstanceId =
     useAvailableComponentInstanceIdOrThrow(
@@ -51,6 +55,15 @@ export const SingleRecordPickerMenuItem = ({
       recordPickerComponentInstanceId,
     );
 
+  const optionContainerRef = useRef<HTMLDivElement>(null);
+  const optionId = getOptionId(morphItem.recordId);
+
+  useLayoutEffect(() => {
+    optionContainerRef.current
+      ?.querySelector('[role="option"]')
+      ?.setAttribute('id', optionId);
+  }, [optionId, searchRecordStore]);
+
   if (!isDefined(searchRecordStore)) {
     return null;
   }
@@ -59,36 +72,38 @@ export const SingleRecordPickerMenuItem = ({
     singleRecordPickerSearchableObjectMetadataItems.length > 1;
 
   return (
-    <SelectableListItem
-      itemId={morphItem.recordId}
-      key={morphItem.recordId}
-      onEnter={() => {
-        onMorphItemSelected(morphItem);
-      }}
-    >
-      <MenuItemSelectAvatar
-        testId="menu-item"
-        onClick={() => onMorphItemSelected(morphItem)}
-        text={searchRecordStore.label}
-        selected={isRecordSelected}
-        focused={isSelectedItemId}
-        avatar={
-          <Avatar
-            avatarUrl={getAbsoluteImageUrl(searchRecordStore.imageUrl)}
-            placeholderColorSeed={morphItem.recordId}
-            placeholder={searchRecordStore.label}
-            size="md"
-            type={
-              getAvatarType(searchRecordStore.objectNameSingular) ?? 'rounded'
-            }
-          />
-        }
-        contextualText={
-          showObjectName
-            ? capitalize(searchRecordStore.objectLabelSingular)
-            : undefined
-        }
-      />
-    </SelectableListItem>
+    <div ref={optionContainerRef}>
+      <SelectableListItem
+        itemId={morphItem.recordId}
+        key={morphItem.recordId}
+        onEnter={() => {
+          onMorphItemSelected(morphItem);
+        }}
+      >
+        <MenuItemSelectAvatar
+          testId="menu-item"
+          onClick={() => onMorphItemSelected(morphItem)}
+          text={searchRecordStore.label}
+          selected={isRecordSelected}
+          focused={isSelectedItemId}
+          avatar={
+            <Avatar
+              avatarUrl={getAbsoluteImageUrl(searchRecordStore.imageUrl)}
+              placeholderColorSeed={morphItem.recordId}
+              placeholder={searchRecordStore.label}
+              size="md"
+              type={
+                getAvatarType(searchRecordStore.objectNameSingular) ?? 'rounded'
+              }
+            />
+          }
+          contextualText={
+            showObjectName
+              ? capitalize(searchRecordStore.objectLabelSingular)
+              : undefined
+          }
+        />
+      </SelectableListItem>
+    </div>
   );
 };

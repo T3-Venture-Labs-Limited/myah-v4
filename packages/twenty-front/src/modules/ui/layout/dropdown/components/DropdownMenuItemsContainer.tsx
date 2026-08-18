@@ -72,17 +72,25 @@ const StyledInternalContainer = styled.div`
   }
 `;
 
+export type DropdownMenuItemsContainerProps = {
+  children: React.ReactNode;
+  hasMaxHeight?: boolean;
+  scrollable?: boolean;
+  className?: string;
+  id?: string;
+  ariaLabel?: string;
+  role?: 'listbox' | 'presentation';
+};
+
 export const DropdownMenuItemsContainer = ({
   children,
   hasMaxHeight,
   scrollable = true,
   className,
-}: {
-  children: React.ReactNode;
-  hasMaxHeight?: boolean;
-  scrollable?: boolean;
-  className?: string;
-}) => {
+  id,
+  ariaLabel,
+  role = 'listbox',
+}: DropdownMenuItemsContainerProps) => {
   return scrollable === true ? (
     <StyledScrollableContainer
       className={className}
@@ -90,12 +98,17 @@ export const DropdownMenuItemsContainer = ({
         hasMaxHeight ? DROPDOWN_MENU_ITEMS_CONTAINER_MAX_HEIGHT : undefined
       }
     >
-      <StyledExternalContainer role="listbox">
+      <StyledExternalContainer aria-label={ariaLabel} id={id} role={role}>
         <StyledInternalContainer>{children}</StyledInternalContainer>
       </StyledExternalContainer>
     </StyledScrollableContainer>
   ) : (
-    <StyledExternalContainer role="listbox" className={className}>
+    <StyledExternalContainer
+      aria-label={ariaLabel}
+      className={className}
+      id={id}
+      role={role}
+    >
       <StyledInternalContainer>{children}</StyledInternalContainer>
     </StyledExternalContainer>
   );

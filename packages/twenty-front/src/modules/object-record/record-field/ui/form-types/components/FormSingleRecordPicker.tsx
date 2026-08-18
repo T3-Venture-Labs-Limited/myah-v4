@@ -1,3 +1,4 @@
+import { PreComputedChipGeneratorsContext } from '@/object-metadata/contexts/PreComputedChipGeneratorsContext';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { FormFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputContainer';
 import { FormFieldInputInnerContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputInnerContainer';
@@ -20,7 +21,7 @@ import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSe
 import { isStandaloneVariableString } from '@/workflow/utils/isStandaloneVariableString';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { useCallback, useContext, useId } from 'react';
+import { useCallback, useContext, useId, useRef } from 'react';
 import { CustomError, isDefined, isValidUuid } from 'twenty-shared/utils';
 import { IconChevronDown, IconForbid } from 'twenty-ui/icon';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
@@ -78,6 +79,8 @@ export type FormSingleRecordPickerProps = {
   testId?: string;
   VariablePicker?: VariablePickerComponent;
   shouldDisplayRecordFieldsInVariablePicker?: boolean;
+  shouldPreventRecordNavigation?: boolean;
+  shouldAutoFocusPickerTrigger?: boolean;
 };
 
 export const FormSingleRecordPicker = ({
@@ -93,8 +96,13 @@ export const FormSingleRecordPicker = ({
   testId,
   VariablePicker,
   shouldDisplayRecordFieldsInVariablePicker = false,
+  shouldPreventRecordNavigation = false,
+  shouldAutoFocusPickerTrigger = false,
 }: FormSingleRecordPickerProps) => {
   const { theme } = useContext(ThemeContext);
+  const { identifierChipGeneratorPerObject } = useContext(
+    PreComputedChipGeneratorsContext,
+  );
 
   const resolvedObjectNameSingular =
     selectedObjectNameSingular ?? objectNameSingulars[0];
@@ -123,9 +131,34 @@ export const FormSingleRecordPicker = ({
     skip: !isDefined(defaultValue) || !isValidUuid(defaultValue),
   });
 
+  const fieldLabel = label ?? t`Record`;
+  const selectedRecordLabel = isDefined(selectedRecord)
+    ? identifierChipGeneratorPerObject[resolvedObjectNameSingular]?.(
+        selectedRecord,
+      )?.name
+    : undefined;
+  const currentValueLabel =
+    draftValue.type === 'no-record' || draftValue.value === ''
+      ? t`No record`
+      : draftValue.type === 'variable'
+        ? draftValue.value
+        : isDefined(selectedRecord)
+          ? selectedRecordLabel?.trim() || t`Untitled`
+          : t`Loading record`;
+  const relationPickerTriggerAriaLabel = `${fieldLabel}: ${currentValueLabel}`;
+
   const componentId = useId();
   const dropdownId = `form-record-picker-${componentId}`;
   const variablesDropdownId = `form-record-picker-${componentId}-variables`;
+
+  const relationPickerTriggerRef = useRef<HTMLDivElement>(null);
+
+  const handleRelationPickerTriggerRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      relationPickerTriggerRef.current = element;
+    },
+    [],
+  );
 
   const { closeDropdown } = useCloseDropdown();
 
@@ -136,6 +169,7 @@ export const FormSingleRecordPicker = ({
 
   const handleCloseRelationPickerDropdown = useCallback(() => {
     setSingleRecordPickerSearchFilter('');
+    relationPickerTriggerRef.current?.focus();
   }, [setSingleRecordPickerSearchFilter]);
 
   const handleMorphItemSelected = (
@@ -211,6 +245,7 @@ export const FormSingleRecordPicker = ({
                 objectNameSingular={resolvedObjectNameSingular}
                 onRemove={handleUnlinkVariable}
                 disabled={disabled}
+                shouldPreventRecordNavigation={shouldPreventRecordNavigation}
               />
             </FormFieldInputInnerContainer>
           </StyledFormSelectContainerWrapper>
@@ -218,6 +253,12 @@ export const FormSingleRecordPicker = ({
           <StyledDropdownContainer>
             <Dropdown
               dropdownId={dropdownId}
+              dropdownRole="dialog"
+              dropdownAriaLabel={`${fieldLabel} selector`}
+              clickableComponentAriaLabel={relationPickerTriggerAriaLabel}
+              isClickableComponentKeyboardAccessible
+              autoFocusClickableComponent={shouldAutoFocusPickerTrigger}
+              onClickableComponentRef={handleRelationPickerTriggerRef}
               dropdownPlacement="bottom-start"
               clickableComponentWidth="100%"
               onClose={handleCloseRelationPickerDropdown}
@@ -239,6 +280,9 @@ export const FormSingleRecordPicker = ({
                       objectNameSingular={resolvedObjectNameSingular}
                       onRemove={handleUnlinkVariable}
                       disabled={disabled}
+                      shouldPreventRecordNavigation={
+                        shouldPreventRecordNavigation
+                      }
                     />
                     <StyledIconButton>
                       <IconChevronDown
