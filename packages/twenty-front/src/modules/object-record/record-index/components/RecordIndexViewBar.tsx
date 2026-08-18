@@ -23,8 +23,13 @@ export const RecordIndexViewBar = ({
 
   const isLayoutLocked = recordIndexViewTypeOverride !== undefined;
 
-  const { objectNamePlural, recordIndexId, objectMetadataItem, onViewChange } =
-    useRecordIndexContextOrThrow();
+  const {
+    embeddedSurfaceOptions,
+    objectNamePlural,
+    recordIndexId,
+    objectMetadataItem,
+    onViewChange,
+  } = useRecordIndexContextOrThrow();
 
   const { hasCurrentViewNonReadableFields } =
     useHasCurrentViewNonReadableFields(objectMetadataItem);
@@ -37,6 +42,7 @@ export const RecordIndexViewBar = ({
         viewBarId={recordIndexId}
         forcedViewType={recordIndexViewTypeOverride}
         onViewChange={onViewChange}
+        toolbarAction={embeddedSurfaceOptions?.toolbarAction}
         optionsDropdownButton={
           <ObjectOptionsDropdown
             recordIndexId={recordIndexId}

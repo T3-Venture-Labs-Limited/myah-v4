@@ -158,10 +158,18 @@ jest.mock('@/object-record/record-index/components/RecordIndexViewBar', () => ({
     const queryOnlyRecordFilters = useAtomComponentStateValue(
       queryOnlyRecordFiltersComponentState,
     );
+    const { embeddedSurfaceOptions } = useRecordIndexContextOrThrow();
 
     mockRecordIndexViewBar(queryOnlyRecordFilters, props);
 
-    return null;
+    return (
+      <>
+        {embeddedSurfaceOptions?.toolbarAction}
+        <div data-testid="filter-control" />
+        <div data-testid="sort-control" />
+        <div data-testid="options-control" />
+      </>
+    );
   },
 }));
 
@@ -250,11 +258,11 @@ jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
     secondaryBar,
   }: {
     children: React.ReactNode;
-    header: React.ReactNode;
+    header?: React.ReactNode;
     secondaryBar: React.ReactNode;
   }) => (
     <>
-      {header}
+      {header && <div data-testid="page-header">{header}</div>}
       {secondaryBar}
       {children}
     </>
@@ -373,7 +381,7 @@ describe('RecordIndexSurface', () => {
     );
   });
 
-  it('forwards no header overrides for an ordinary surface', async () => {
+  it('renders the page header for an ordinary surface', async () => {
     renderSurface(
       <RecordIndexSurface
         contextStoreInstanceId={MAIN_CONTEXT_STORE_INSTANCE_ID}
@@ -390,6 +398,65 @@ describe('RecordIndexSurface', () => {
         headerTitle: undefined,
       });
     });
+
+    expect(screen.getByTestId('page-header')).toBeInTheDocument();
+  });
+
+  it('removes the page-header block for an embedded surface', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="embedded-creator-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        embeddedSurfaceOptions={{ hidePageHeader: true }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexContainer).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByTestId('page-header')).not.toBeInTheDocument();
+    expect(mockRecordIndexPageHeader).not.toHaveBeenCalled();
+  });
+
+  it('renders an embedded toolbar action before native view controls', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="embedded-creator-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        embeddedSurfaceOptions={{
+          toolbarAction: <button type="button">Add creator</button>,
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Add creator' }),
+      ).toBeInTheDocument();
+    });
+
+    const toolbarAction = screen.getByRole('button', {
+      name: 'Add creator',
+    });
+
+    expect(
+      toolbarAction.compareDocumentPosition(
+        screen.getByTestId('filter-control'),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      toolbarAction.compareDocumentPosition(screen.getByTestId('sort-control')),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      toolbarAction.compareDocumentPosition(
+        screen.getByTestId('options-control'),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('forwards scoped header overrides to the native header', async () => {

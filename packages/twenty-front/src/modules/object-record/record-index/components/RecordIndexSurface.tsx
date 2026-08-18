@@ -12,6 +12,7 @@ import { RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect } from '@
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
 import {
   RecordIndexContextProvider,
+  type RecordIndexEmbeddedSurfaceOptions,
   type RecordIndexOpenRequest,
 } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordIndexLoadBaseOnContextStoreEffect } from '@/object-record/record-index/components/RecordIndexLoadBaseOnContextStoreEffect';
@@ -58,6 +59,7 @@ export type RecordIndexSurfaceProps = {
   hideEmptyStateSubtitle?: boolean;
   headerTitle?: string;
   headerActionButton?: ReactNode;
+  embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;
 };
 
 type RecordIndexSurfaceInstanceProps = RecordIndexSurfaceProps;
@@ -105,6 +107,7 @@ const RecordIndexSurfaceInstance = ({
   hideEmptyStateSubtitle,
   headerTitle,
   headerActionButton,
+  embeddedSurfaceOptions,
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -172,6 +175,7 @@ const RecordIndexSurfaceInstance = ({
               onOpenRecordFromIndexView,
               shouldPreserveParentViewStateOnOpen,
               shouldUseIndexIdentifierUrlOnFullPageOpen,
+              embeddedSurfaceOptions,
               hideEmptyStateSubtitle,
               onViewChange,
               onRecordCreated,
@@ -210,11 +214,13 @@ const RecordIndexSurfaceInstance = ({
                   />
                   <PageCardLayout
                     header={
-                      <RecordIndexPageHeader
-                        contextStoreInstanceId={contextStoreInstanceId}
-                        headerActionButton={headerActionButton}
-                        headerTitle={headerTitle}
-                      />
+                      embeddedSurfaceOptions?.hidePageHeader ? undefined : (
+                        <RecordIndexPageHeader
+                          contextStoreInstanceId={contextStoreInstanceId}
+                          headerActionButton={headerActionButton}
+                          headerTitle={headerTitle}
+                        />
+                      )
                     }
                     secondaryBar={
                       objectPermissions.canReadObjectRecords &&
@@ -222,6 +228,7 @@ const RecordIndexSurfaceInstance = ({
                         areInitialQueryOnlyRecordFiltersInitialized) && (
                         <RecordIndexViewBar
                           hideQueryOnlyRecordFilters={
+                            embeddedSurfaceOptions?.hideQueryOnlyRecordFilters ??
                             hideQueryOnlyRecordFilters
                           }
                           recordIndexViewTypeOverride={
@@ -284,6 +291,7 @@ export const RecordIndexSurface = ({
   hideEmptyStateSubtitle,
   headerTitle,
   headerActionButton,
+  embeddedSurfaceOptions,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -317,6 +325,7 @@ export const RecordIndexSurface = ({
       hideEmptyStateSubtitle={hideEmptyStateSubtitle}
       headerActionButton={headerActionButton}
       headerTitle={headerTitle}
+      embeddedSurfaceOptions={embeddedSurfaceOptions}
     />
   );
 };

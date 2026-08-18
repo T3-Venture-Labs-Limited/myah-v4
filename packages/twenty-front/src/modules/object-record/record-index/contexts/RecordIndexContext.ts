@@ -4,6 +4,7 @@ import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { type RecordField } from '@/object-record/record-field/types/RecordField';
 import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
+import { type ReactNode } from 'react';
 import { type ObjectPermissions } from 'twenty-shared/types';
 import { createRequiredContext } from '~/utils/createRequiredContext';
 
@@ -13,11 +14,20 @@ export type RecordIndexOpenRequest = {
   activationElement?: HTMLElement;
 };
 
+export type RecordIndexEmbeddedSurfaceOptions = {
+  hidePageHeader?: boolean;
+  hideAddNew?: boolean;
+  toolbarAction?: ReactNode;
+  compactTable?: boolean;
+  hideQueryOnlyRecordFilters?: boolean;
+};
+
 export type RecordIndexContextValue = {
   indexIdentifierUrl: (recordId: string) => string;
   onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
   shouldPreserveParentViewStateOnOpen?: boolean;
   shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
+  embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;
   hideEmptyStateSubtitle?: boolean;
   onViewChange?: (viewId: string) => void;
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;

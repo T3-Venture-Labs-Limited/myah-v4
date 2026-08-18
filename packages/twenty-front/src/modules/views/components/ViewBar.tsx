@@ -30,6 +30,7 @@ type ViewBarProps = {
   onViewChange?: (viewId: string) => void;
   forcedViewType?: ViewType;
   hideQueryOnlyRecordFilters?: boolean;
+  toolbarAction?: ReactNode;
 };
 
 export const ViewBar = ({
@@ -40,6 +41,7 @@ export const ViewBar = ({
   onViewChange,
   forcedViewType,
   hideQueryOnlyRecordFilters,
+  toolbarAction,
 }: ViewBarProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
 
@@ -84,6 +86,7 @@ export const ViewBar = ({
             }
             rightComponent={
               <>
+                {toolbarAction}
                 <ObjectFilterDropdownComponentInstanceContext.Provider
                   value={{ instanceId: filterDropdownId }}
                 >
