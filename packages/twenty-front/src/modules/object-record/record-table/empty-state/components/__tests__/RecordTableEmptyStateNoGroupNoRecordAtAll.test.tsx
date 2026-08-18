@@ -4,6 +4,10 @@ import { RecordTableEmptyStateNoGroupNoRecordAtAll } from '@/object-record/recor
 
 const mockRecordTableEmptyStateDisplay = jest.fn();
 
+let recordIndexContext:
+  | { hideEmptyStateSubtitle: boolean }
+  | undefined = { hideEmptyStateSubtitle: true };
+
 jest.mock(
   '@/object-record/record-table/contexts/RecordTableContext',
   () => ({
@@ -14,7 +18,7 @@ jest.mock(
 );
 
 jest.mock('@/object-record/record-index/contexts/RecordIndexContext', () => ({
-  useOptionalRecordIndexContext: () => ({ hideEmptyStateSubtitle: true }),
+  useOptionalRecordIndexContext: () => recordIndexContext,
 }));
 
 jest.mock('@/object-metadata/hooks/useObjectLabel', () => ({
@@ -63,10 +67,16 @@ jest.mock(
 );
 
 describe('RecordTableEmptyStateNoGroupNoRecordAtAll', () => {
+  beforeEach(() => {
+    recordIndexContext = { hideEmptyStateSubtitle: true };
+  });
+
   it('suppresses the inherited subtitle without changing the native empty state title', () => {
     render(<RecordTableEmptyStateNoGroupNoRecordAtAll />);
 
-    expect(screen.getByText('Add your first Campaign Creator')).toBeInTheDocument();
+    expect(
+      screen.getByText('Add your first Campaign Creator'),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText(
         'Use our API or add your first Campaign Creator manually',
@@ -75,5 +85,17 @@ describe('RecordTableEmptyStateNoGroupNoRecordAtAll', () => {
     expect(mockRecordTableEmptyStateDisplay).toHaveBeenCalledWith(
       expect.objectContaining({ animatedPlaceholderType: 'noRecord' }),
     );
+  });
+
+  it('keeps the inherited subtitle for non-opt-in record index surfaces', () => {
+    recordIndexContext = undefined;
+
+    render(<RecordTableEmptyStateNoGroupNoRecordAtAll />);
+
+    expect(
+      screen.getByText(
+        'Use our API or add your first Campaign Creator manually',
+      ),
+    ).toBeInTheDocument();
   });
 });
