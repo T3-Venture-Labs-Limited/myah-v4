@@ -160,37 +160,30 @@ describe('RecordTableWithWrappers', () => {
       expect.objectContaining({ focusId: PageFocusId.RecordIndex }),
     );
   });
-  it('keeps the normal Creators table in its horizontal scroll wrapper', () => {
+  it('keeps the normal Creators table in its native ScrollWrapper', () => {
     renderRecordTable(MAIN_CONTEXT_STORE_INSTANCE_ID);
 
-    expect(mockScrollWrapper).toHaveBeenCalledTimes(1);
+    expect(mockScrollWrapper).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentInstanceId: 'record-table-scroll-creator-index-list-a',
+      }),
+    );
   });
 
-  it('uses the compact embedded table without a horizontal scroll wrapper', () => {
+  it('gives compact Campaign tables the standard native ScrollWrapper defaults', () => {
     renderRecordTable('campaign-influencers-campaign-a', {
       compactTable: true,
     });
 
-    expect(mockScrollWrapper).not.toHaveBeenCalled();
-  });
-  it('keeps compact table layout constrained inside its native vertical scroll target', () => {
-    renderRecordTable('campaign-influencers-campaign-a', {
-      compactTable: true,
-    });
-
-    const compactScrollTarget = document.getElementById(
-      'scroll-wrapper-record-table-scroll-creator-index-list-a',
+    expect(mockScrollWrapper).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentInstanceId: 'record-table-scroll-creator-index-list-a',
+      }),
     );
 
-    if (!compactScrollTarget) {
-      throw new Error('Expected compact table native scroll target');
-    }
+    const scrollWrapperProps = mockScrollWrapper.mock.calls.at(-1)?.[0];
 
-    expect(compactScrollTarget.firstElementChild?.tagName).toBe('DIV');
-
-    compactScrollTarget.scrollTop = 48;
-    fireEvent.scroll(compactScrollTarget);
-
-    expect(compactScrollTarget.scrollTop).toBe(48);
+    expect(scrollWrapperProps).not.toHaveProperty('defaultEnableXScroll');
+    expect(scrollWrapperProps).not.toHaveProperty('defaultEnableYScroll');
   });
 });

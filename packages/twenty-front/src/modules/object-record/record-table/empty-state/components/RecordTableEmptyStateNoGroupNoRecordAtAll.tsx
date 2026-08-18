@@ -35,14 +35,18 @@ export const RecordTableEmptyStateNoGroupNoRecordAtAll = () => {
 
   return (
     <RecordTableEmptyStateDisplay
-      buttonTitle={buttonTitle}
+      animatedPlaceholderType="noRecord"
       subTitle={
         recordIndexContext?.hideEmptyStateSubtitle ? undefined : subTitle
       }
       title={title}
-      ButtonIcon={IconPlus}
-      animatedPlaceholderType="noRecord"
-      onClick={handleButtonClick}
+      {...(recordIndexContext?.embeddedSurfaceOptions?.hideAddNew
+        ? {}
+        : {
+            buttonTitle,
+            ButtonIcon: IconPlus,
+            onClick: handleButtonClick,
+          })}
     />
   );
 };

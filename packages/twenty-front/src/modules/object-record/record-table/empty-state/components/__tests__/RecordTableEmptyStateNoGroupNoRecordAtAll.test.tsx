@@ -5,7 +5,10 @@ import { RecordTableEmptyStateNoGroupNoRecordAtAll } from '@/object-record/recor
 const mockRecordTableEmptyStateDisplay = jest.fn();
 
 let recordIndexContext:
-  | { hideEmptyStateSubtitle: boolean }
+  | {
+      embeddedSurfaceOptions?: { hideAddNew?: boolean };
+      hideEmptyStateSubtitle: boolean;
+    }
   | undefined = { hideEmptyStateSubtitle: true };
 
 jest.mock(
@@ -52,6 +55,7 @@ jest.mock(
   () => ({
     RecordTableEmptyStateDisplay: (props: {
       animatedPlaceholderType: string;
+      buttonTitle?: string;
       subTitle?: string;
       title: string;
     }) => {
@@ -60,6 +64,7 @@ jest.mock(
         <>
           <div>{props.title}</div>
           {props.subTitle && <div>{props.subTitle}</div>}
+          {props.buttonTitle && <button>{props.buttonTitle}</button>}
         </>
       );
     },
@@ -97,5 +102,21 @@ describe('RecordTableEmptyStateNoGroupNoRecordAtAll', () => {
         'Use our API or add your first Campaign Creator manually',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('removes the empty-state create control for Campaign tables', () => {
+    recordIndexContext = {
+      embeddedSurfaceOptions: { hideAddNew: true },
+      hideEmptyStateSubtitle: true,
+    };
+
+    render(<RecordTableEmptyStateNoGroupNoRecordAtAll />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Add a Campaign Creator' }),
+    ).not.toBeInTheDocument();
+    expect(mockRecordTableEmptyStateDisplay.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+      'buttonTitle',
+    );
   });
 });
