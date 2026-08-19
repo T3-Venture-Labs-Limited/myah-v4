@@ -32,7 +32,6 @@ type WorkspaceOrmManager = {
 const generateProposalMutation = gql`
   mutation Task7GenerateProposal($input: GenerateMyahInboxReplyProposalInput!) {
     generateMyahInboxReplyProposal(input: $input) {
-      subject
       body {
         markdown
         blocknote
@@ -42,7 +41,6 @@ const generateProposalMutation = gql`
 `;
 
 const proposal = {
-  subject: 'Re: Partnership timing',
   body: {
     markdown: 'Tuesday works. Please send the final assets.',
     blocknote: null,

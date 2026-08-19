@@ -7,6 +7,7 @@ import {
 import { MessageParticipantRole } from 'twenty-shared/types';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
 import { In, type FindOptionsSelect, type ObjectLiteral } from 'typeorm';
+import { EntityPropertyNotFoundError } from 'typeorm/error/EntityPropertyNotFoundError';
 
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
@@ -598,7 +599,7 @@ export class MyahInboxReplyBriefingService {
     try {
       return await load(fields);
     } catch (error) {
-      if (!this.isPermissionDenied(error)) {
+      if (!this.isUnavailableReplyBriefingField(error)) {
         throw error;
       }
     }
@@ -614,7 +615,7 @@ export class MyahInboxReplyBriefingService {
           });
         }
       } catch (error) {
-        if (!this.isPermissionDenied(error)) {
+        if (!this.isUnavailableReplyBriefingField(error)) {
           throw error;
         }
       }
@@ -630,7 +631,7 @@ export class MyahInboxReplyBriefingService {
     try {
       return await load(fields);
     } catch (error) {
-      if (!this.isPermissionDenied(error)) {
+      if (!this.isUnavailableReplyBriefingField(error)) {
         throw error;
       }
     }
@@ -647,7 +648,7 @@ export class MyahInboxReplyBriefingService {
           hasReadableField = true;
         }
       } catch (error) {
-        if (!this.isPermissionDenied(error)) {
+        if (!this.isUnavailableReplyBriefingField(error)) {
           throw error;
         }
       }
@@ -660,6 +661,13 @@ export class MyahInboxReplyBriefingService {
     return (
       error instanceof PermissionsException &&
       error.code === PermissionsExceptionCode.PERMISSION_DENIED
+    );
+  }
+
+  private isUnavailableReplyBriefingField(error: unknown): boolean {
+    return (
+      this.isPermissionDenied(error) ||
+      error instanceof EntityPropertyNotFoundError
     );
   }
 

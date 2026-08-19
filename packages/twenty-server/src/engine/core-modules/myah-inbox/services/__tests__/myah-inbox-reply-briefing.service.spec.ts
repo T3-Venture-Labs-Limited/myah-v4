@@ -1,3 +1,4 @@
+import { EntityPropertyNotFoundError } from 'typeorm/error/EntityPropertyNotFoundError';
 import { MessageParticipantRole } from 'twenty-shared/types';
 
 import {
@@ -431,6 +432,58 @@ describe('MyahInboxReplyBriefingService', () => {
         nextActionAt: true,
         selectionReason: true,
         dealSummary: true,
+      },
+    });
+  });
+
+  it('keeps available Campaign context when instructions fields are not provisioned', async () => {
+    const { repositories, service } = createService();
+    const unavailableInstructionsField = new EntityPropertyNotFoundError(
+      'campaignBrief',
+      { targetName: 'campaign' } as never,
+    );
+
+    repositories.campaign.findOne.mockImplementation(
+      ({ select }: { select: Record<string, boolean> }) => {
+        const fields = Object.keys(select);
+        const hasInstructionsField = fields.some((field) =>
+          [
+            'campaignBrief',
+            'communicationGuidelines',
+            'replyRules',
+            'escalationBoundaries',
+            'additionalNotes',
+          ].includes(field),
+        );
+
+        if (hasInstructionsField) {
+          return Promise.reject(unavailableInstructionsField);
+        }
+
+        return Promise.resolve(
+          Object.fromEntries(
+            fields.map((field) => [
+              field,
+              allowedCampaign[field as keyof typeof allowedCampaign],
+            ]),
+          ),
+        );
+      },
+    );
+
+    await expect(
+      service.loadReplyBriefing({ ...listInput(), threadId }),
+    ).resolves.toMatchObject({
+      campaign: {
+        objective: allowedCampaign.objective,
+        icpGoal: allowedCampaign.icpGoal,
+        agent: {
+          campaignBrief: null,
+          communicationGuidelines: null,
+          replyRules: null,
+          escalationBoundaries: null,
+          additionalNotes: null,
+        },
       },
     });
   });
