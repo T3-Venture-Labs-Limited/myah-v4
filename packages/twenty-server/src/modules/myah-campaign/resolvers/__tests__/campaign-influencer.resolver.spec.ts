@@ -16,6 +16,8 @@ describe('CampaignInfluencerResolver', () => {
     attachCampaignCreatorLists: jest.fn(),
     addDirectCampaignCreators: jest.fn(),
     detachCampaignCreatorList: jest.fn(),
+    campaignCreatorListRemovalImpact: jest.fn(),
+    creatorListMembershipRemovalImpact: jest.fn(),
     campaignCreatorListAdditionCandidates: jest.fn(),
     approveCampaignCreatorListAdditions: jest.fn(),
     addCreatorListMemberIntent: jest.fn(),
@@ -39,6 +41,11 @@ describe('CampaignInfluencerResolver', () => {
     ['attachCampaignCreatorLists', 'attachCampaignCreatorLists'],
     ['addDirectCampaignCreators', 'addDirectCampaignCreators'],
     ['detachCampaignCreatorList', 'detachCampaignCreatorList'],
+    ['campaignCreatorListRemovalImpact', 'campaignCreatorListRemovalImpact'],
+    [
+      'creatorListMembershipRemovalImpact',
+      'creatorListMembershipRemovalImpact',
+    ],
     [
       'campaignCreatorListAdditionCandidates',
       'campaignCreatorListAdditionCandidates',

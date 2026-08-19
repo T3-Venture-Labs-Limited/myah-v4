@@ -50,7 +50,18 @@ export class CampaignCreatorListInput extends CampaignInfluencerCampaignInput {
 }
 
 @InputType()
-export class DetachCampaignCreatorListInput extends CampaignCreatorListInput {}
+export class CampaignCreatorListRemovalImpactInput extends CampaignCreatorListInput {}
+
+@InputType()
+export class DetachCampaignCreatorListInput extends CampaignCreatorListRemovalImpactInput {
+  @Field(() => [UUIDScalarType])
+  @IsArray()
+  @IsUUID('4', { each: true })
+  confirmedCreatorIds!: string[];
+
+  @Field({ nullable: true })
+  confirmationToken?: string;
+}
 
 @InputType()
 export class CampaignCreatorListAdditionCandidatesInput extends CampaignCreatorListInput {}
@@ -100,6 +111,18 @@ export class CampaignInfluencerSnapshotDTO {
   @Field(() => [CampaignCreatorListDTO])
   campaignCreatorLists!: CampaignCreatorListDTO[];
 }
+
+@ObjectType()
+export class CampaignCreatorListRemovalImpactDTO {
+  @Field(() => Boolean)
+  requiresConfirmation!: boolean;
+
+  @Field(() => [UUIDScalarType])
+  affectedCreatorIds!: string[];
+
+  @Field({ nullable: true })
+  confirmationToken?: string;
+}
 @ObjectType()
 export class CampaignCreatorListAdditionCandidatesDTO {
   @Field(() => [UUIDScalarType])
@@ -117,6 +140,17 @@ export class CreatorListMembershipIntentInput {
   creatorId!: string;
 }
 
+@InputType()
+export class RemoveCreatorListMemberIntentInput extends CreatorListMembershipIntentInput {
+  @Field(() => [UUIDScalarType])
+  @IsArray()
+  @IsUUID('4', { each: true })
+  confirmedCampaignIds!: string[];
+
+  @Field({ nullable: true })
+  confirmationToken?: string;
+}
+
 @ObjectType()
 export class CreatorListMemberDTO {
   @Field(() => UUIDScalarType)
@@ -125,6 +159,18 @@ export class CreatorListMemberDTO {
   creatorListId!: string;
   @Field(() => UUIDScalarType)
   creatorId!: string;
+}
+
+@ObjectType()
+export class CreatorListMembershipRemovalImpactDTO {
+  @Field(() => [UUIDScalarType])
+  affectedCampaignIds!: string[];
+
+  @Field(() => Boolean)
+  requiresConfirmation!: boolean;
+
+  @Field({ nullable: true })
+  confirmationToken?: string;
 }
 
 @InputType()

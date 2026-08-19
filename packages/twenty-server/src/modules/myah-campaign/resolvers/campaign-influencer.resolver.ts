@@ -12,12 +12,16 @@ import {
   AttachCampaignCreatorListsInput,
   CampaignCreatorListAdditionCandidatesDTO,
   CampaignCreatorListAdditionCandidatesInput,
+  CampaignCreatorListRemovalImpactDTO,
+  CampaignCreatorListRemovalImpactInput,
   CampaignInfluencerCampaignInput,
   CampaignInfluencerSnapshotDTO,
   CreatorListMemberDTO,
   CreatorListMembersIntentInput,
   CreatorListMembershipIntentInput,
+  CreatorListMembershipRemovalImpactDTO,
   DetachCampaignCreatorListInput,
+  RemoveCreatorListMemberIntentInput,
 } from 'src/modules/myah-campaign/dtos/campaign-influencer.dto';
 @MetadataResolver()
 @UsePipes(ResolverValidationPipe)
@@ -47,6 +51,16 @@ export class CampaignInfluencerResolver {
     @Args('input') input: AddDirectCampaignCreatorsInput,
   ): Promise<CampaignInfluencerSnapshotDTO> {
     return this.service.addDirectCampaignCreators(
+      input,
+      getWorkspaceAuthContext(),
+    );
+  }
+
+  @Query(() => CampaignCreatorListRemovalImpactDTO)
+  async campaignCreatorListRemovalImpact(
+    @Args('input') input: CampaignCreatorListRemovalImpactInput,
+  ): Promise<CampaignCreatorListRemovalImpactDTO> {
+    return this.service.campaignCreatorListRemovalImpact(
       input,
       getWorkspaceAuthContext(),
     );
@@ -83,6 +97,16 @@ export class CampaignInfluencerResolver {
     );
   }
 
+  @Query(() => CreatorListMembershipRemovalImpactDTO)
+  async creatorListMembershipRemovalImpact(
+    @Args('input') input: CreatorListMembershipIntentInput,
+  ): Promise<CreatorListMembershipRemovalImpactDTO> {
+    return this.service.creatorListMembershipRemovalImpact(
+      input,
+      getWorkspaceAuthContext(),
+    );
+  }
+
   @Mutation(() => CreatorListMemberDTO)
   async addCreatorListMemberIntent(
     @Args('input') input: CreatorListMembershipIntentInput,
@@ -105,7 +129,7 @@ export class CampaignInfluencerResolver {
 
   @Mutation(() => Boolean)
   async removeCreatorListMemberIntent(
-    @Args('input') input: CreatorListMembershipIntentInput,
+    @Args('input') input: RemoveCreatorListMemberIntentInput,
   ) {
     return this.service.removeCreatorListMemberIntent(
       input,

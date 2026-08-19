@@ -784,6 +784,30 @@ export class CampaignInfluencerService {
     return this.addDirectCampaignCreators(input, authContext);
   }
 
+  async campaignCreatorListRemovalImpact(
+    input: { campaignId: string; creatorListId: string },
+    authContext: WorkspaceAuthContext,
+  ) {
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        await this.authorizeTargets(
+          authContext,
+          input.campaignId,
+          [],
+          [input.creatorListId],
+          undefined,
+          false,
+        );
+
+        return {
+          affectedCreatorIds: [],
+          requiresConfirmation: false,
+        };
+      },
+      authContext,
+    );
+  }
+
   async detachCampaignCreatorList(
     input: { campaignId: string; creatorListId: string },
     authContext: WorkspaceAuthContext,
@@ -899,6 +923,38 @@ export class CampaignInfluencerService {
       }
       return rows;
     });
+  }
+
+  async creatorListMembershipRemovalImpact(
+    input: { creatorListId: string; creatorId: string },
+    authContext: WorkspaceAuthContext,
+  ) {
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const options = this.permissionOptions(authContext);
+        const [lists, members] = await Promise.all([
+          this.repository(authContext, 'creatorList', options),
+          this.repository(authContext, 'creatorListMember', options),
+        ]);
+        if (!(await lists.findOne({ where: { id: input.creatorListId } })))
+          throw new Error('Creator list not found');
+        if (
+          !(await members.findOne({
+            where: {
+              creatorListId: input.creatorListId,
+              creatorId: input.creatorId,
+            },
+          }))
+        )
+          throw new Error('Creator list membership not found');
+
+        return {
+          affectedCampaignIds: [],
+          requiresConfirmation: false,
+        };
+      },
+      authContext,
+    );
   }
 
   async removeCreatorListMemberIntent(

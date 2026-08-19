@@ -1793,6 +1793,12 @@ type CampaignInfluencerSnapshotDTO {
   campaignCreatorLists: [CampaignCreatorListDTO!]!
 }
 
+type CampaignCreatorListRemovalImpactDTO {
+  requiresConfirmation: Boolean!
+  affectedCreatorIds: [UUID!]!
+  confirmationToken: String
+}
+
 type CampaignCreatorListAdditionCandidatesDTO {
   creatorIds: [UUID!]!
 }
@@ -1801,6 +1807,12 @@ type CreatorListMemberDTO {
   id: UUID!
   creatorListId: UUID!
   creatorId: UUID!
+}
+
+type CreatorListMembershipRemovalImpactDTO {
+  affectedCampaignIds: [UUID!]!
+  requiresConfirmation: Boolean!
+  confirmationToken: String
 }
 
 type ApprovedAccessDomain {
@@ -3410,7 +3422,9 @@ type Query {
   getViewFilterGroups(viewId: String): [ViewFilterGroup!]!
   getViewFilterGroup(id: String!): ViewFilterGroup
   campaignInfluencerSnapshot(input: CampaignInfluencerCampaignInput!): CampaignInfluencerSnapshotDTO!
+  campaignCreatorListRemovalImpact(input: CampaignCreatorListRemovalImpactInput!): CampaignCreatorListRemovalImpactDTO!
   campaignCreatorListAdditionCandidates(input: CampaignCreatorListAdditionCandidatesInput!): CampaignCreatorListAdditionCandidatesDTO!
+  creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
   commandMenuItems: [CommandMenuItem!]!
   commandMenuItem(id: UUID!): CommandMenuItem
   frontComponents: [FrontComponent!]!
@@ -3509,9 +3523,19 @@ input CampaignInfluencerCampaignInput {
   campaignId: UUID!
 }
 
+input CampaignCreatorListRemovalImpactInput {
+  campaignId: UUID!
+  creatorListId: UUID!
+}
+
 input CampaignCreatorListAdditionCandidatesInput {
   campaignId: UUID!
   creatorListId: UUID!
+}
+
+input CreatorListMembershipIntentInput {
+  creatorListId: UUID!
+  creatorId: UUID!
 }
 
 input LogicFunctionIdInput {
@@ -3737,7 +3761,7 @@ type Mutation {
   detachCampaignCreatorList(input: DetachCampaignCreatorListInput!): CampaignInfluencerSnapshotDTO!
   addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
   addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
-  removeCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): Boolean!
+  removeCreatorListMemberIntent(input: RemoveCreatorListMemberIntentInput!): Boolean!
   createCommandMenuItem(input: CreateCommandMenuItemInput!): CommandMenuItem!
   updateCommandMenuItem(input: UpdateCommandMenuItemInput!): CommandMenuItem!
   resetCommandMenuItem(id: UUID!): CommandMenuItem!
@@ -4558,16 +4582,20 @@ input ApproveCampaignCreatorListAdditionsInput {
 input DetachCampaignCreatorListInput {
   campaignId: UUID!
   creatorListId: UUID!
-}
-
-input CreatorListMembershipIntentInput {
-  creatorListId: UUID!
-  creatorId: UUID!
+  confirmedCreatorIds: [UUID!]!
+  confirmationToken: String
 }
 
 input CreatorListMembersIntentInput {
   creatorListId: UUID!
   creatorIds: [UUID!]!
+}
+
+input RemoveCreatorListMemberIntentInput {
+  creatorListId: UUID!
+  creatorId: UUID!
+  confirmedCampaignIds: [UUID!]!
+  confirmationToken: String
 }
 
 input CreateCommandMenuItemInput {
