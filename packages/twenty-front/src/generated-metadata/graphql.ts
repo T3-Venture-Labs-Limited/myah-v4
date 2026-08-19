@@ -918,6 +918,18 @@ export type CampaignCreatorListDto = {
   id: Scalars['UUID']['output'];
 };
 
+export type CampaignCreatorListRemovalImpactDto = {
+  __typename?: 'CampaignCreatorListRemovalImpactDTO';
+  affectedCreatorIds: Array<Scalars['UUID']['output']>;
+  confirmationToken?: Maybe<Scalars['String']['output']>;
+  requiresConfirmation: Scalars['Boolean']['output'];
+};
+
+export type CampaignCreatorListRemovalImpactInput = {
+  campaignId: Scalars['UUID']['input'];
+  creatorListId: Scalars['UUID']['input'];
+};
+
 export type CampaignInfluencerCampaignInput = {
   campaignId: Scalars['UUID']['input'];
 };
@@ -1491,6 +1503,13 @@ export type CreatorListMembershipIntentInput = {
   creatorListId: Scalars['UUID']['input'];
 };
 
+export type CreatorListMembershipRemovalImpactDto = {
+  __typename?: 'CreatorListMembershipRemovalImpactDTO';
+  affectedCampaignIds: Array<Scalars['UUID']['output']>;
+  confirmationToken?: Maybe<Scalars['String']['output']>;
+  requiresConfirmation: Scalars['Boolean']['output'];
+};
+
 export type CursorPaging = {
   /** Paginate after opaque cursor */
   after?: InputMaybe<Scalars['ConnectionCursor']['input']>;
@@ -1607,6 +1626,8 @@ export type DestroyViewSortInput = {
 
 export type DetachCampaignCreatorListInput = {
   campaignId: Scalars['UUID']['input'];
+  confirmationToken?: InputMaybe<Scalars['String']['input']>;
+  confirmedCreatorIds: Array<Scalars['UUID']['input']>;
   creatorListId: Scalars['UUID']['input'];
 };
 
@@ -3785,7 +3806,7 @@ export type MutationReconnectWorkspaceMailboxArgs = {
 
 
 export type MutationRemoveCreatorListMemberIntentArgs = {
-  input: CreatorListMembershipIntentInput;
+  input: RemoveCreatorListMemberIntentInput;
 };
 
 
@@ -4846,6 +4867,7 @@ export type Query = {
   barChartData: BarChartData;
   billingPortalSession: BillingSession;
   campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDto;
+  campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDto;
   campaignInfluencerSnapshot: CampaignInfluencerSnapshotDto;
   chatMessages: Array<AgentMessage>;
   chatStreamCatchupChunks: ChatStreamCatchupChunks;
@@ -4856,6 +4878,7 @@ export type Query = {
   checkWorkspaceSubdomainAvailability: SubdomainAvailabilityDto;
   commandMenuItem?: Maybe<CommandMenuItem>;
   commandMenuItems: Array<CommandMenuItem>;
+  creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDto;
   currentUser: User;
   currentWorkspace: Workspace;
   enterpriseCheckoutSession?: Maybe<Scalars['String']['output']>;
@@ -5008,6 +5031,11 @@ export type QueryCampaignCreatorListAdditionCandidatesArgs = {
 };
 
 
+export type QueryCampaignCreatorListRemovalImpactArgs = {
+  input: CampaignCreatorListRemovalImpactInput;
+};
+
+
 export type QueryCampaignInfluencerSnapshotArgs = {
   input: CampaignInfluencerCampaignInput;
 };
@@ -5046,6 +5074,11 @@ export type QueryCheckWorkspaceSubdomainAvailabilityArgs = {
 
 export type QueryCommandMenuItemArgs = {
   id: Scalars['UUID']['input'];
+};
+
+
+export type QueryCreatorListMembershipRemovalImpactArgs = {
+  input: CreatorListMembershipIntentInput;
 };
 
 
@@ -5427,6 +5460,13 @@ export enum RelationType {
   MANY_TO_ONE = 'MANY_TO_ONE',
   ONE_TO_MANY = 'ONE_TO_MANY'
 }
+
+export type RemoveCreatorListMemberIntentInput = {
+  confirmationToken?: InputMaybe<Scalars['String']['input']>;
+  confirmedCampaignIds: Array<Scalars['UUID']['input']>;
+  creatorId: Scalars['UUID']['input'];
+  creatorListId: Scalars['UUID']['input'];
+};
 
 export type RemoveQueryFromEventStreamInput = {
   eventStreamId: Scalars['String']['input'];
