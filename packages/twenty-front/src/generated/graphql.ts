@@ -299,7 +299,6 @@ export enum MyahInboxDraftSaveStatus {
 export type MyahInboxReplyProposal = {
   __typename?: 'MyahInboxReplyProposal';
   body: MyahInboxReplyProposalBody;
-  subject?: Maybe<Scalars['String']['output']>;
 };
 
 export type MyahInboxReplyProposalBody = {
