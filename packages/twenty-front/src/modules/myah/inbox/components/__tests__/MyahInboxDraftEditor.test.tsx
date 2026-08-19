@@ -6,7 +6,6 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-
 import type * as ReactType from 'react';
 
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';

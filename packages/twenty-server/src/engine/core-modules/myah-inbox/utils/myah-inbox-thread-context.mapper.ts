@@ -54,10 +54,12 @@ const loadOptionalContextRecords = async (
     return [];
   }
 
+  let records: ContextRecord[];
+
   try {
-    return await repository.find({
+    records = await repository.find({
       where: { id: In(ids), deletedAt: IsNull() },
-      select: { id: true, name: true },
+      select: { id: true },
     });
   } catch (error) {
     if (
@@ -65,6 +67,27 @@ const loadOptionalContextRecords = async (
       error.code === PermissionsExceptionCode.PERMISSION_DENIED
     ) {
       return [];
+    }
+
+    throw error;
+  }
+
+  try {
+    const recordsWithNames = await repository.find({
+      where: { id: In(ids), deletedAt: IsNull() },
+      select: { id: true, name: true },
+    });
+    const namesById = new Map(
+      recordsWithNames.map(({ id, name }) => [id, name]),
+    );
+
+    return records.map(({ id }) => ({ id, name: namesById.get(id) }));
+  } catch (error) {
+    if (
+      error instanceof PermissionsException &&
+      error.code === PermissionsExceptionCode.PERMISSION_DENIED
+    ) {
+      return records.map(({ id }) => ({ id }));
     }
 
     throw error;

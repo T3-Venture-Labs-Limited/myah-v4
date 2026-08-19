@@ -52,9 +52,10 @@ const executeTool = async (
 describe('MyahInboxToolWorkspaceService', () => {
   it('exposes exactly the selected-thread context and reply-proposal tools', async () => {
     const proposalService = {
-      getThreadContext: jest.fn().mockResolvedValue({ id: threadId }),
+      getReplyBriefing: jest
+        .fn()
+        .mockResolvedValue({ thread: { id: threadId } }),
       generateReplyProposal: jest.fn().mockResolvedValue({
-        subject: 'Re: Hello',
         body: { markdown: 'Thanks!', blocknote: null },
       }),
     };
@@ -78,16 +79,48 @@ describe('MyahInboxToolWorkspaceService', () => {
     );
   });
 
-  it('returns ToolOutput from the shared read and proposal service without writes or provider sends', async () => {
-    const thread = { id: threadId, subject: 'Hello' };
+  it('returns the selected-thread reply briefing and proposal', async () => {
+    const briefing = {
+      thread: { id: threadId, subject: 'Hello' },
+      history: [
+        {
+          receivedAt: '2026-07-24T09:00:00.000Z',
+          sender: 'creator@example.com',
+          subject: 'Hello',
+          text: 'Can we launch next Tuesday?',
+        },
+      ],
+      campaign: {
+        objective: 'Recruit reviewers',
+        icpGoal: 'Reach skincare shoppers',
+        agent: {
+          campaignBrief: 'Hydration launch',
+          communicationGuidelines: 'Be warm',
+          replyRules: 'No compensation promises',
+          escalationBoundaries: 'Escalate contracts',
+          additionalNotes: 'Confirm shade',
+        },
+      },
+      campaignCreator: {
+        stage: 'SHORTLISTED',
+        selectedContactMethod: 'Email',
+        nextActionAt: '2026-07-25T10:00:00.000Z',
+        selectionReason: 'Relevant content',
+        dealSummary: 'Gifted collaboration',
+      },
+      creator: {
+        name: 'Ada Creator',
+        language: 'English',
+        location: 'London',
+        categories: ['Beauty'],
+        niches: ['Skincare'],
+      },
+    };
     const proposal = {
-      subject: 'Re: Hello',
       body: { markdown: 'Thanks!', blocknote: null },
     };
-    const draftRepositoryUpdate = jest.fn();
-    const messageProviderSend = jest.fn();
     const proposalService = {
-      getThreadContext: jest.fn().mockResolvedValue(thread),
+      getReplyBriefing: jest.fn().mockResolvedValue(briefing),
       generateReplyProposal: jest.fn().mockResolvedValue(proposal),
     };
     const service = new MyahInboxToolWorkspaceService(proposalService as never);
@@ -100,7 +133,7 @@ describe('MyahInboxToolWorkspaceService', () => {
     ).resolves.toEqual({
       success: true,
       message: 'Retrieved Myah Inbox thread context',
-      result: thread,
+      result: briefing,
     });
     await expect(
       executeTool(toolSet, 'generate_myah_inbox_reply_proposal', {
@@ -113,7 +146,7 @@ describe('MyahInboxToolWorkspaceService', () => {
       result: proposal,
     });
 
-    expect(proposalService.getThreadContext).toHaveBeenCalledWith({
+    expect(proposalService.getReplyBriefing).toHaveBeenCalledWith({
       authContext: userAuthContext,
       threadId,
     });
@@ -122,7 +155,5 @@ describe('MyahInboxToolWorkspaceService', () => {
       threadId,
       operatorInstructions: 'Thank them and confirm Tuesday.',
     });
-    expect(draftRepositoryUpdate).not.toHaveBeenCalled();
-    expect(messageProviderSend).not.toHaveBeenCalled();
   });
 });

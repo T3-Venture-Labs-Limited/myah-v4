@@ -55,10 +55,7 @@ export const MyahInboxProposalPreview = ({
   renderGenerateAction,
 }: MyahInboxProposalPreviewProps) => {
   const { generateProposal } = useMyahInboxThreadMutations();
-  const [proposal, setProposal] = useState<{
-    subject: string | null;
-    body: ProposalBody;
-  } | null>(null);
+  const [proposal, setProposal] = useState<ProposalBody | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,11 +69,8 @@ export const MyahInboxProposalPreview = ({
         operatorInstructions: 'Draft a concise reply to this conversation.',
       });
       setProposal({
-        subject: generatedProposal.subject ?? null,
-        body: {
-          markdown: generatedProposal.body.markdown,
-          blocknote: generatedProposal.body.blocknote ?? null,
-        },
+        markdown: generatedProposal.body.markdown,
+        blocknote: generatedProposal.body.blocknote ?? null,
       });
     } catch {
       setError('Could not generate a proposal. Try again.');
@@ -109,8 +103,8 @@ export const MyahInboxProposalPreview = ({
       {proposal && (
         <>
           <StyledPreview aria-label="Proposal preview">
-            <strong>{proposal.subject || 'Reply proposal'}</strong>
-            <span>{proposal.body.markdown}</span>
+            <strong>Reply proposal</strong>
+            <span>{proposal.markdown}</span>
           </StyledPreview>
           <StyledActions>
             <Button
@@ -118,7 +112,7 @@ export const MyahInboxProposalPreview = ({
               variant="secondary"
               size="small"
               disabled={disabled}
-              onClick={() => onApply(proposal.body)}
+              onClick={() => onApply(proposal)}
             />
           </StyledActions>
         </>

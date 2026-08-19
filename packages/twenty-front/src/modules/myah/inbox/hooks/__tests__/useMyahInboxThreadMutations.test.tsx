@@ -95,9 +95,8 @@ describe('useMyahInboxThreadMutations', () => {
     });
   });
 
-  it('calls Task 5 for a proposal and does not expose a send operation', async () => {
+  it('generates a proposal body and does not expose a send operation', async () => {
     const proposal = {
-      subject: 'Re: Spring campaign',
       body: { markdown: 'Proposal', blocknote: null },
     };
     mockGenerate.mockResolvedValue({

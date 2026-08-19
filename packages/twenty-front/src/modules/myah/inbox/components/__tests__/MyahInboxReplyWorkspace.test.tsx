@@ -132,7 +132,6 @@ jest.mock('@/myah/inbox/components/MyahInboxProposalPreview', () => ({
     </>
   ),
 }));
-
 const thread = {
   id: 'thread-1',
   lastActivityAt: '2026-07-24T12:00:00.000Z',

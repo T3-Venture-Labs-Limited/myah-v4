@@ -55,7 +55,6 @@ describe('MyahInboxProposalPreview', () => {
   it('keeps a generated proposal separate until Apply is explicitly clicked', async () => {
     const onApply = jest.fn();
     const proposal = {
-      subject: 'Re: Spring campaign',
       body: { markdown: 'Thanks for the update.', blocknote: null },
     };
     mockGenerateProposal.mockResolvedValue(proposal);
@@ -81,7 +80,7 @@ describe('MyahInboxProposalPreview', () => {
       threadId: 'thread-1',
       operatorInstructions: 'Draft a concise reply to this conversation.',
     });
-    expect(screen.getByText('Re: Spring campaign')).toBeVisible();
+    expect(screen.getByText('Reply proposal')).toBeVisible();
     expect(screen.getByLabelText('Proposal preview')).toHaveTextContent(
       'Thanks for the update.',
     );
