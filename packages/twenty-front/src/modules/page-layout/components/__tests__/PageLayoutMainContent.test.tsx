@@ -1,6 +1,18 @@
 import { render, screen } from '@testing-library/react';
 
 import { PageLayoutMainContent } from '@/page-layout/PageLayoutMainContent';
+
+jest.mock('@/myah/creator-crm/components/CampaignInfluencerIndex', () => ({
+  CampaignInfluencerIndex: ({
+    campaignId,
+    viewId,
+  }: {
+    campaignId: string;
+    viewId?: string;
+  }) => (
+    <div>{`Campaign Influencers integration:${campaignId}:${viewId ?? 'default'}`}</div>
+  ),
+}));
 let currentPageLayout: {
   type: string;
   universalIdentifier: string;
@@ -9,6 +21,7 @@ let activeTab: {
   layout: string;
   title: string;
   universalIdentifier: string;
+  widgets?: unknown[];
 };
 let targetRecordIdentifier:
   | { id: string; targetObjectNameSingular: string }
@@ -60,6 +73,9 @@ jest.mock('@/page-layout/utils/getTabLayoutMode', () => ({
 jest.mock('@/ui/layout/contexts/LayoutRenderingContext', () => ({
   useLayoutRenderingContext: () => ({ targetRecordIdentifier }),
 }));
+jest.mock('@/page-layout/utils/getWidgetConfigurationViewId', () => ({
+  getWidgetConfigurationViewId: () => 'campaign-influencers-view',
+}));
 
 describe('PageLayoutMainContent', () => {
   beforeEach(() => {
@@ -85,6 +101,26 @@ describe('PageLayoutMainContent', () => {
     expect(
       screen.getByText('Campaign home integration:campaign-1'),
     ).toBeVisible();
+  });
+
+  it('mounts the native Campaign Influencers index only on its tab', () => {
+    activeTab = {
+      ...activeTab,
+      title: 'Influencers',
+      widgets: [{}],
+      universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+    };
+
+    render(<PageLayoutMainContent tabId="influencers-tab-id" />);
+
+    expect(
+      screen.getByText(
+        'Campaign Influencers integration:campaign-1:campaign-influencers-view',
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Native page layout content'),
+    ).not.toBeInTheDocument();
   });
 
   it('mounts Creator List membership controls on the Creator List Home tab', () => {

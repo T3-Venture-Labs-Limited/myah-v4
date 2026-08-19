@@ -44,14 +44,17 @@ const audienceViews = new Set([
   MYAH_STANDARD_OBJECTS.campaign.views.viewCampaignInformationCreatorLists
     .universalIdentifier,
 ]);
-const audienceViewFields = new Set([
-  'd2fa2cd5-9df0-4e85-85b8-47f5ed2a2a71',
-  '8d5e6b5f-125e-4f3f-9c73-2f52208b2897',
-  MYAH_STANDARD_OBJECTS.campaignCreatorList.views.campaignCreatorLists
-    .viewFields.creatorList.universalIdentifier,
-  'e26a2ba0-7cd6-46b8-a4a5-d74716f98e3c',
-  'b2e85f41-2f5a-4c33-bb24-bc3a1f8ac7df',
-]);
+const audienceViewFields = new Set(
+  [
+    MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers,
+    MYAH_STANDARD_OBJECTS.campaignCreatorList.views.campaignCreatorLists,
+    MYAH_STANDARD_OBJECTS.campaign.views.viewCampaignInformationCreatorLists,
+  ].flatMap(({ viewFields }) =>
+    Object.values(viewFields).map(
+      ({ universalIdentifier }) => universalIdentifier,
+    ),
+  ),
+);
 const audienceObjectPermissions = new Set(
   MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS.filter(
     ({ objectMetadataUniversalIdentifier }) =>

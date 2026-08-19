@@ -461,6 +461,12 @@ export type ApplicationVariable = {
   value: Scalars['String']['output'];
 };
 
+export type ApproveCampaignCreatorListAdditionsInput = {
+  campaignId: Scalars['UUID']['input'];
+  creatorIds: Array<Scalars['UUID']['input']>;
+  creatorListId: Scalars['UUID']['input'];
+};
+
 export type ApprovedAccessDomain = {
   __typename?: 'ApprovedAccessDomain';
   createdAt: Scalars['DateTime']['output'];
@@ -893,6 +899,16 @@ export type CampaignCreatorDto = {
   creatorId: Scalars['UUID']['output'];
   id: Scalars['UUID']['output'];
   isDirectlyAdded: Scalars['Boolean']['output'];
+};
+
+export type CampaignCreatorListAdditionCandidatesDto = {
+  __typename?: 'CampaignCreatorListAdditionCandidatesDTO';
+  creatorIds: Array<Scalars['UUID']['output']>;
+};
+
+export type CampaignCreatorListAdditionCandidatesInput = {
+  campaignId: Scalars['UUID']['input'];
+  creatorListId: Scalars['UUID']['input'];
 };
 
 export type CampaignCreatorListDto = {
@@ -2880,6 +2896,7 @@ export type Mutation = {
   addDirectCampaignCreators: CampaignInfluencerSnapshotDto;
   addQueryToEventStream: Scalars['Boolean']['output'];
   answerAgentChatQuestion: SendChatMessageResult;
+  approveCampaignCreatorListAdditions: Scalars['Boolean']['output'];
   archiveChatThread: AgentChatThread;
   assignRoleToAgent: Scalars['Boolean']['output'];
   assignRoleToApiKey: Scalars['Boolean']['output'];
@@ -3158,6 +3175,11 @@ export type MutationAnswerAgentChatQuestionArgs = {
   messageId: Scalars['UUID']['input'];
   modelId?: InputMaybe<Scalars['String']['input']>;
   threadId: Scalars['UUID']['input'];
+};
+
+
+export type MutationApproveCampaignCreatorListAdditionsArgs = {
+  input: ApproveCampaignCreatorListAdditionsInput;
 };
 
 
@@ -4844,6 +4866,7 @@ export type Query = {
   applicationRegistrationTarballUrl?: Maybe<Scalars['String']['output']>;
   barChartData: BarChartData;
   billingPortalSession: BillingSession;
+  campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDto;
   campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDto;
   campaignInfluencerSnapshot: CampaignInfluencerSnapshotDto;
   chatMessages: Array<AgentMessage>;
@@ -5000,6 +5023,11 @@ export type QueryBarChartDataArgs = {
 export type QueryBillingPortalSessionArgs = {
   forPaymentMethodUpdate?: InputMaybe<Scalars['Boolean']['input']>;
   returnUrlPath?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryCampaignCreatorListAdditionCandidatesArgs = {
+  input: CampaignCreatorListAdditionCandidatesInput;
 };
 
 

@@ -1,7 +1,4 @@
-import { gql } from '@apollo/client';
-import { useQuery } from '@apollo/client/react';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
-import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -17,32 +14,6 @@ type CreatorBulkRelationshipPreviewRecord = {
 type CreatorBulkRelationshipRecord = CreatorBulkRelationshipPreviewRecord & {
   __typename: string;
   isDirectlyAdded?: boolean;
-};
-
-type CreatorListMembershipRemovalImpact = {
-  affectedCampaignIds: string[];
-  requiresConfirmation: boolean;
-  confirmationToken?: string;
-};
-
-type CreatorListMembershipRemovalImpactData = {
-  creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpact;
-};
-
-const CREATOR_LIST_MEMBERSHIP_REMOVAL_IMPACT = gql`
-  query CreatorListMembershipRemovalImpact(
-    $input: CreatorListMembershipIntentInput!
-  ) {
-    creatorListMembershipRemovalImpact(input: $input) {
-      affectedCampaignIds
-      requiresConfirmation
-      confirmationToken
-    }
-  }
-`;
-
-type CampaignPreviewRecord = ObjectRecord & {
-  name?: string;
 };
 
 export const buildCreatorBulkRelationshipPreview = ({
@@ -131,51 +102,6 @@ export const useCreatorBulkRelationshipPreview = ({
     [records, selectedCreatorIds, target.kind],
   );
 
-  const impactEnabled =
-    target.kind === 'creator-list' &&
-    preview.relationshipRecordIds.length === 1 &&
-    preview.linkedCreatorIds.length === 1;
-  const {
-    data: impactData,
-    loading: impactLoading,
-    error: impactError,
-    refetch: refetchImpact,
-  } = useQuery<
-    CreatorListMembershipRemovalImpactData,
-    { input: { creatorListId: string; creatorId: string } }
-  >(CREATOR_LIST_MEMBERSHIP_REMOVAL_IMPACT, {
-    variables: {
-      input: {
-        creatorListId: target.id,
-        creatorId: preview.linkedCreatorIds[0] ?? '',
-      },
-    },
-    skip: !impactEnabled,
-  });
-  const impact = impactData?.creatorListMembershipRemovalImpact;
-  const {
-    records: campaignRecords = [],
-    loading: campaignsLoading,
-    error: campaignsError,
-  } = useFindManyRecords<CampaignPreviewRecord>({
-    objectNameSingular: 'campaign',
-    filter: { id: { in: impact?.affectedCampaignIds ?? [] } },
-    recordGqlFields: { id: true, name: true },
-    limit: impact?.affectedCampaignIds.length ?? 0,
-    skip: !impactEnabled || !impact?.requiresConfirmation,
-  });
-  const campaignImpact =
-    impact?.requiresConfirmation === true
-      ? {
-          campaignIds: impact.affectedCampaignIds,
-          campaigns: campaignRecords.map(({ id, name }) => ({
-            id,
-            label: name?.trim() || 'Campaign (name unavailable)',
-          })),
-          confirmationToken: impact.confirmationToken,
-        }
-      : undefined;
-
   useEffect(() => {
     if (
       selectedCreatorIds.length === 0 ||
@@ -208,20 +134,10 @@ export const useCreatorBulkRelationshipPreview = ({
 
   return {
     ...preview,
-    loading:
-      loading ||
-      hasNextPage ||
-      pageInfo?.hasNextPage === true ||
-      (impactEnabled && (impactLoading || campaignsLoading)),
+    loading: loading || hasNextPage || pageInfo?.hasNextPage === true,
     isPreviewUnavailable:
       selectedCreatorIds.length > 0 &&
-      (!hasReadPermission ||
-        error !== undefined ||
-        hasPaginationError ||
-        (impactEnabled &&
-          (impactError !== undefined || campaignsError !== undefined))),
-    campaignImpact,
+      (!hasReadPermission || error !== undefined || hasPaginationError),
     refetch,
-    refetchImpact,
   };
 };

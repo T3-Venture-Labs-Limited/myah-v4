@@ -1,13 +1,24 @@
 import { useEffect } from 'react';
 
+import { useHasSortsInQueryParams } from '@/views/hooks/internal/useHasSortsInQueryParams';
 import { useSortsFromQueryParams } from '@/views/hooks/internal/useSortsFromQueryParams';
 import { useApplyViewSortsToCurrentRecordSorts } from '@/views/hooks/useApplyViewSortsToCurrentRecordSorts';
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
+const QueryParamsSorts = () => {
+  const { hasSortsQueryParams } = useHasSortsInQueryParams();
 
-export const QueryParamsSortsEffect = () => {
-  const { hasSortsQueryParams, getSortsFromQueryParams, objectMetadataItem } =
+  if (!hasSortsQueryParams) {
+    return null;
+  }
+
+  return <QueryParamsSortsEffect />;
+};
+
+export { QueryParamsSorts as QueryParamsSortsEffect };
+
+const QueryParamsSortsEffect = () => {
+  const { getSortsFromQueryParams, objectMetadataItem } =
     useSortsFromQueryParams();
-
   const { currentView } = useGetCurrentViewOnly();
 
   const { applyViewSortsToCurrentRecordSorts } =
@@ -17,10 +28,7 @@ export const QueryParamsSortsEffect = () => {
     currentView?.objectMetadataId !== objectMetadataItem.id;
 
   useEffect(() => {
-    if (
-      !hasSortsQueryParams ||
-      currentViewObjectMetadataItemIsDifferentFromURLObjectMetadataItem
-    ) {
+    if (currentViewObjectMetadataItemIsDifferentFromURLObjectMetadataItem) {
       return;
     }
 
@@ -34,7 +42,6 @@ export const QueryParamsSortsEffect = () => {
       applyViewSortsToCurrentRecordSorts(viewSorts);
     }
   }, [
-    hasSortsQueryParams,
     getSortsFromQueryParams,
     applyViewSortsToCurrentRecordSorts,
     currentViewObjectMetadataItemIsDifferentFromURLObjectMetadataItem,

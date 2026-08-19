@@ -8,7 +8,10 @@ import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { CampaignInfluencerService } from 'src/modules/myah-campaign/services/campaign-influencer.service';
 import {
   AddDirectCampaignCreatorsInput,
+  ApproveCampaignCreatorListAdditionsInput,
   AttachCampaignCreatorListsInput,
+  CampaignCreatorListAdditionCandidatesDTO,
+  CampaignCreatorListAdditionCandidatesInput,
   CampaignCreatorListRemovalImpactDTO,
   CampaignCreatorListRemovalImpactInput,
   CampaignInfluencerCampaignInput,
@@ -17,8 +20,8 @@ import {
   CreatorListMembersIntentInput,
   CreatorListMembershipIntentInput,
   CreatorListMembershipRemovalImpactDTO,
-  RemoveCreatorListMemberIntentInput,
   DetachCampaignCreatorListInput,
+  RemoveCreatorListMemberIntentInput,
 } from 'src/modules/myah-campaign/dtos/campaign-influencer.dto';
 @MetadataResolver()
 @UsePipes(ResolverValidationPipe)
@@ -63,6 +66,27 @@ export class CampaignInfluencerResolver {
     );
   }
 
+  @Query(() => CampaignCreatorListAdditionCandidatesDTO)
+  async campaignCreatorListAdditionCandidates(
+    @Args('input') input: CampaignCreatorListAdditionCandidatesInput,
+  ): Promise<CampaignCreatorListAdditionCandidatesDTO> {
+    return this.service.campaignCreatorListAdditionCandidates(
+      input,
+      getWorkspaceAuthContext(),
+    );
+  }
+
+  @Mutation(() => Boolean)
+  async approveCampaignCreatorListAdditions(
+    @Args('input') input: ApproveCampaignCreatorListAdditionsInput,
+  ) {
+    await this.service.approveCampaignCreatorListAdditions(
+      input,
+      getWorkspaceAuthContext(),
+    );
+    return true;
+  }
+
   @Mutation(() => CampaignInfluencerSnapshotDTO)
   async detachCampaignCreatorList(
     @Args('input') input: DetachCampaignCreatorListInput,
@@ -72,10 +96,11 @@ export class CampaignInfluencerResolver {
       getWorkspaceAuthContext(),
     );
   }
+
   @Query(() => CreatorListMembershipRemovalImpactDTO)
   async creatorListMembershipRemovalImpact(
     @Args('input') input: CreatorListMembershipIntentInput,
-  ) {
+  ): Promise<CreatorListMembershipRemovalImpactDTO> {
     return this.service.creatorListMembershipRemovalImpact(
       input,
       getWorkspaceAuthContext(),

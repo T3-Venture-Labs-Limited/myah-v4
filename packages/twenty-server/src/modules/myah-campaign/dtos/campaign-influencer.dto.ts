@@ -43,11 +43,14 @@ export class AddDirectCampaignCreatorsInput extends CampaignInfluencerCampaignIn
 }
 
 @InputType()
-export class CampaignCreatorListRemovalImpactInput extends CampaignInfluencerCampaignInput {
+export class CampaignCreatorListInput extends CampaignInfluencerCampaignInput {
   @Field(() => UUIDScalarType)
   @IsUUID()
   creatorListId!: string;
 }
+
+@InputType()
+export class CampaignCreatorListRemovalImpactInput extends CampaignCreatorListInput {}
 
 @InputType()
 export class DetachCampaignCreatorListInput extends CampaignCreatorListRemovalImpactInput {
@@ -58,6 +61,19 @@ export class DetachCampaignCreatorListInput extends CampaignCreatorListRemovalIm
 
   @Field({ nullable: true })
   confirmationToken?: string;
+}
+
+@InputType()
+export class CampaignCreatorListAdditionCandidatesInput extends CampaignCreatorListInput {}
+
+@InputType()
+export class ApproveCampaignCreatorListAdditionsInput extends CampaignCreatorListInput {
+  @Field(() => [UUIDScalarType])
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_IDS)
+  @IsUUID('4', { each: true })
+  creatorIds!: string[];
 }
 
 @ObjectType()
@@ -107,6 +123,11 @@ export class CampaignCreatorListRemovalImpactDTO {
   @Field({ nullable: true })
   confirmationToken?: string;
 }
+@ObjectType()
+export class CampaignCreatorListAdditionCandidatesDTO {
+  @Field(() => [UUIDScalarType])
+  creatorIds!: string[];
+}
 
 @InputType()
 export class CreatorListMembershipIntentInput {
@@ -131,6 +152,16 @@ export class RemoveCreatorListMemberIntentInput extends CreatorListMembershipInt
 }
 
 @ObjectType()
+export class CreatorListMemberDTO {
+  @Field(() => UUIDScalarType)
+  id!: string;
+  @Field(() => UUIDScalarType)
+  creatorListId!: string;
+  @Field(() => UUIDScalarType)
+  creatorId!: string;
+}
+
+@ObjectType()
 export class CreatorListMembershipRemovalImpactDTO {
   @Field(() => [UUIDScalarType])
   affectedCampaignIds!: string[];
@@ -140,16 +171,6 @@ export class CreatorListMembershipRemovalImpactDTO {
 
   @Field({ nullable: true })
   confirmationToken?: string;
-}
-
-@ObjectType()
-export class CreatorListMemberDTO {
-  @Field(() => UUIDScalarType)
-  id!: string;
-  @Field(() => UUIDScalarType)
-  creatorListId!: string;
-  @Field(() => UUIDScalarType)
-  creatorId!: string;
 }
 
 @InputType()

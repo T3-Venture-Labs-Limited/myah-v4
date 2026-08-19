@@ -19,6 +19,7 @@ import type { FlatRolePermissionFlag } from 'src/engine/metadata-modules/flat-ro
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
+import { FieldDisplayMode } from 'src/engine/metadata-modules/page-layout-widget/enums/field-display-mode.enum';
 import {
   MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
   MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
@@ -797,6 +798,15 @@ describe('Myah standard metadata contract', () => {
       result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
         '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392'
       ];
+    const influencersWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2'
+      ];
+    const campaignInfluencersView =
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+          .universalIdentifier
+      ];
 
     expect(campaignPageLayout).toMatchObject({
       universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
@@ -831,6 +841,20 @@ describe('Myah standard metadata contract', () => {
     );
     expect(instructionsFieldsWidget.configuration.viewId).toBe(
       campaignInstructionsView?.id,
+    );
+    if (
+      influencersWidget?.configuration.configurationType !==
+      WidgetConfigurationType.FIELD
+    ) {
+      throw new Error(
+        'Campaign Influencers widget must use FIELD configuration',
+      );
+    }
+    expect(influencersWidget.configuration.fieldDisplayMode).toBe(
+      FieldDisplayMode.TABLE,
+    );
+    expect(influencersWidget.configuration.viewId).toBe(
+      campaignInfluencersView?.id,
     );
     {
       expect(overviewFieldsWidget.configuration.viewId).not.toBe(
@@ -890,6 +914,10 @@ describe('Myah standard metadata contract', () => {
           expect.objectContaining({
             universalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
             title: 'Tasks',
+          }),
+          expect.objectContaining({
+            universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+            title: 'Influencers',
           }),
           expect.objectContaining({
             universalIdentifier: 'cd78ad8c-883a-4ce1-9b74-526adadb751d',
@@ -1005,6 +1033,158 @@ describe('Myah standard metadata contract', () => {
     }
   });
 
+  it('materializes retained Campaign Creator List sources as read-only provenance', () => {
+    const sourceObjectUniversalIdentifier =
+      '7973bfbb-ff71-47c3-94a6-9e4435eca326';
+    const campaignCreatorSourceFieldUniversalIdentifier =
+      '2fdb9140-873c-4984-8e00-a8656e268f4c';
+    const creatorListSourceFieldUniversalIdentifier =
+      'e4706d30-af24-4437-a8a1-466e485e71db';
+
+    const flatObjects = Object.values(
+      result.allFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const flatFields = Object.values(
+      result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const flatIndexes = Object.values(
+      result.allFlatEntityMaps.flatIndexMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const flatViewFields = Object.values(
+      result.allFlatEntityMaps.flatViewFieldMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const objectPermissions = Object.values(
+      mapsWithPermissions.flatObjectPermissionMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    const fieldPermissions = Object.values(
+      mapsWithPermissions.flatFieldPermissionMaps.byUniversalIdentifier,
+    ).filter(isDefined);
+    expect(contract.flatObjectMetadataMaps).toEqual(
+      expect.arrayContaining([
+        MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+        sourceObjectUniversalIdentifier,
+      ]),
+    );
+
+    expect(flatObjects).toContainEqual(
+      expect.objectContaining({
+        nameSingular: 'campaignCreatorListSource',
+        universalIdentifier: sourceObjectUniversalIdentifier,
+      }),
+    );
+    expect(flatIndexes).toContainEqual(
+      expect.objectContaining({
+        universalIdentifier: '83039fc0-5444-42d6-9f8d-1e4bb4f92841',
+        indexWhereClause: '"deletedAt" IS NULL',
+        isUnique: true,
+        objectMetadataUniversalIdentifier: sourceObjectUniversalIdentifier,
+      }),
+    );
+    expect(flatFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'campaignCreator',
+          universalIdentifier: campaignCreatorSourceFieldUniversalIdentifier,
+          objectMetadataUniversalIdentifier: sourceObjectUniversalIdentifier,
+          relationTargetFieldMetadataUniversalIdentifier:
+            '27519164-4421-49a2-a988-8bd4a6f18f89',
+        }),
+        expect.objectContaining({
+          name: 'creatorList',
+          universalIdentifier: creatorListSourceFieldUniversalIdentifier,
+          objectMetadataUniversalIdentifier: sourceObjectUniversalIdentifier,
+          relationTargetFieldMetadataUniversalIdentifier:
+            'c0587a89-8b1e-4067-9d1c-6f050528c34b',
+        }),
+        expect.objectContaining({
+          name: 'campaignCreatorListSources',
+          universalIdentifier: '27519164-4421-49a2-a988-8bd4a6f18f89',
+          objectMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+          relationTargetFieldMetadataUniversalIdentifier:
+            campaignCreatorSourceFieldUniversalIdentifier,
+          universalSettings: expect.objectContaining({
+            emptyStateLabel: 'Legacy / source unavailable',
+            emptyStateWhenBooleanFieldIsFalse: 'isDirectlyAdded',
+            junctionTargetFieldUniversalIdentifier:
+              creatorListSourceFieldUniversalIdentifier,
+          }),
+        }),
+        expect.objectContaining({
+          name: 'campaignCreatorListSources',
+          universalIdentifier: 'c0587a89-8b1e-4067-9d1c-6f050528c34b',
+          objectMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.creatorList.universalIdentifier,
+          relationTargetFieldMetadataUniversalIdentifier:
+            creatorListSourceFieldUniversalIdentifier,
+          universalSettings: expect.objectContaining({
+            junctionTargetFieldUniversalIdentifier:
+              campaignCreatorSourceFieldUniversalIdentifier,
+          }),
+        }),
+      ]),
+    );
+    expect(objectPermissions).toContainEqual(
+      expect.objectContaining({
+        roleUniversalIdentifier: CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+        objectMetadataUniversalIdentifier: sourceObjectUniversalIdentifier,
+        canReadObjectRecords: true,
+        canUpdateObjectRecords: false,
+        canSoftDeleteObjectRecords: false,
+        canDestroyObjectRecords: false,
+      }),
+    );
+    expect(fieldPermissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          objectMetadataUniversalIdentifier: sourceObjectUniversalIdentifier,
+          fieldMetadataUniversalIdentifier:
+            campaignCreatorSourceFieldUniversalIdentifier,
+          canReadFieldValue: true,
+          canUpdateFieldValue: false,
+        }),
+        expect.objectContaining({
+          objectMetadataUniversalIdentifier: sourceObjectUniversalIdentifier,
+          fieldMetadataUniversalIdentifier:
+            creatorListSourceFieldUniversalIdentifier,
+          canReadFieldValue: true,
+          canUpdateFieldValue: false,
+        }),
+        expect.objectContaining({
+          objectMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaignCreator.fields.isDirectlyAdded
+              .universalIdentifier,
+          canReadFieldValue: true,
+          canUpdateFieldValue: false,
+        }),
+      ]),
+    );
+    const campaignInfluencersFieldNames = flatViewFields
+      .filter(
+        ({ viewUniversalIdentifier }) =>
+          viewUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+            .universalIdentifier,
+      )
+      .sort((left, right) => left.position - right.position)
+      .map(
+        ({ fieldMetadataUniversalIdentifier }) =>
+          result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+            fieldMetadataUniversalIdentifier
+          ]?.name,
+      );
+
+    expect(campaignInfluencersFieldNames).toEqual([
+      'creator',
+      'stage',
+      'isDirectlyAdded',
+      'campaignCreatorListSources',
+    ]);
+    expect(campaignInfluencersFieldNames).not.toContain('campaignCreator');
+  });
+
   it('materializes the canonical Myah role permissions', () => {
     const objectPermissions = Object.values(
       mapsWithPermissions.flatObjectPermissionMaps.byUniversalIdentifier,
@@ -1067,6 +1247,7 @@ describe('Myah standard metadata contract', () => {
       },
       ...[
         MYAH_STANDARD_OBJECTS.campaignCreatorList.universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaignCreatorListSource.universalIdentifier,
         MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
       ].map((objectMetadataUniversalIdentifier) => ({
         roleUniversalIdentifier: CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
@@ -1110,6 +1291,17 @@ describe('Myah standard metadata contract', () => {
       ].map((fieldMetadataUniversalIdentifier) => ({
         objectMetadataUniversalIdentifier:
           MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
+        fieldMetadataUniversalIdentifier,
+        canReadFieldValue: true,
+      })),
+      ...[
+        MYAH_STANDARD_OBJECTS.campaignCreatorListSource.fields.campaignCreator
+          .universalIdentifier,
+        MYAH_STANDARD_OBJECTS.campaignCreatorListSource.fields.creatorList
+          .universalIdentifier,
+      ].map((fieldMetadataUniversalIdentifier) => ({
+        objectMetadataUniversalIdentifier:
+          MYAH_STANDARD_OBJECTS.campaignCreatorListSource.universalIdentifier,
         fieldMetadataUniversalIdentifier,
         canReadFieldValue: true,
       })),

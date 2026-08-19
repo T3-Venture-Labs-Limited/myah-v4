@@ -1,6 +1,7 @@
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { hasAnySoftDeleteFilterOnViewComponentSelector } from '@/object-record/record-filter/states/hasAnySoftDeleteFilterOnView';
 import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useUpsertRecordsInStore';
+import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useCreateNewIndexRecord } from '@/object-record/record-table/hooks/useCreateNewIndexRecord';
 import { isRecordTableCellsNonEditableComponentState } from '@/object-record/record-table/states/isRecordTableCellsNonEditableComponentState';
@@ -17,6 +18,7 @@ import { IconPlus } from 'twenty-ui/icon';
 
 export const RecordTableNoRecordGroupAddNew = () => {
   const { objectMetadataItem } = useRecordTableContextOrThrow();
+  const { embeddedSurfaceOptions } = useRecordIndexContextOrThrow();
 
   const isRecordTableCellsNonEditable = useAtomComponentStateValue(
     isRecordTableCellsNonEditableComponentState,
@@ -60,6 +62,10 @@ export const RecordTableNoRecordGroupAddNew = () => {
     loadRecordsToVirtualRows,
     totalNumberOfRecordsToVirtualize,
   ]);
+
+  if (embeddedSurfaceOptions?.hideAddNew) {
+    return null;
+  }
 
   if (isRecordTableCellsNonEditable) {
     return null;

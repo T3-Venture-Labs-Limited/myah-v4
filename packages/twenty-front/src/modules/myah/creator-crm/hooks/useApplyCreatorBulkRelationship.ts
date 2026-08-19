@@ -3,7 +3,6 @@ import { useMutation } from '@apollo/client/react';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { t } from '@lingui/core/macro';
 import { useCallback } from 'react';
@@ -65,7 +64,7 @@ const ADD_CREATOR_LIST_MEMBERS_INTENT = gql`
 `;
 const REMOVE_CREATOR_LIST_MEMBER_INTENT = gql`
   mutation RemoveCreatorListMemberIntent(
-    $input: RemoveCreatorListMemberIntentInput!
+    $input: CreatorListMembershipIntentInput!
   ) {
     removeCreatorListMemberIntent(input: $input)
   }
@@ -89,7 +88,6 @@ export const useApplyCreatorBulkRelationship = () => {
     REMOVE_CREATOR_LIST_MEMBER_INTENT,
   );
   const [addDirectCampaignCreators] = useMutation(ADD_DIRECT_CAMPAIGN_CREATORS);
-  const { updateOneRecord } = useUpdateOneRecord();
   const { objectMetadataItem: creatorObjectMetadataItem } =
     useObjectMetadataItem({
       objectNameSingular: 'creator',
@@ -210,20 +208,11 @@ export const useApplyCreatorBulkRelationship = () => {
     async ({
       target,
       creatorIdsToAdd,
-      campaignCreatorIdsToUpdate = [],
-      assignedManagedMailboxId,
     }: {
       target: CreatorBulkRelationshipTarget;
       creatorIdsToAdd: string[];
-      campaignCreatorIdsToUpdate?: string[];
-      assignedManagedMailboxId?: string | null;
     }) => {
-      const hasCampaignUpdates =
-        target.kind === 'campaign' &&
-        assignedManagedMailboxId !== undefined &&
-        campaignCreatorIdsToUpdate.length > 0;
-
-      if (creatorIdsToAdd.length === 0 && !hasCampaignUpdates) {
+      if (creatorIdsToAdd.length === 0) {
         return;
       }
 
@@ -240,30 +229,14 @@ export const useApplyCreatorBulkRelationship = () => {
             });
           }
         } else {
-          if (hasCampaignUpdates) {
-            await Promise.all(
-              campaignCreatorIdsToUpdate.map((campaignCreatorId) =>
-                updateOneRecord({
-                  objectNameSingular: 'campaignCreator',
-                  idToUpdate: campaignCreatorId,
-                  updateOneRecordInput: { assignedManagedMailboxId },
-                }),
-              ),
-            );
-          }
-          if (creatorIdsToAdd.length > 0) {
-            await addDirectCampaignCreators({
-              variables: {
-                input: {
-                  campaignId: target.id,
-                  creatorIds: creatorIdsToAdd,
-                  ...(assignedManagedMailboxId !== undefined
-                    ? { assignedManagedMailboxId }
-                    : {}),
-                },
+          await addDirectCampaignCreators({
+            variables: {
+              input: {
+                campaignId: target.id,
+                creatorIds: creatorIdsToAdd,
               },
-            });
-          }
+            },
+          });
         }
       } catch {
         enqueueErrorSnackBar({
@@ -278,7 +251,6 @@ export const useApplyCreatorBulkRelationship = () => {
       addDirectCampaignCreators,
       enqueueErrorSnackBar,
       refetchCreatorRelationships,
-      updateOneRecord,
     ],
   );
 
@@ -287,14 +259,10 @@ export const useApplyCreatorBulkRelationship = () => {
       creatorListId,
       creatorListMemberIdsToRemove,
       creatorIdsToRemove,
-      confirmedCampaignIds = [],
-      confirmationToken,
     }: {
       creatorListId: string;
       creatorListMemberIdsToRemove: string[];
       creatorIdsToRemove: string[];
-      confirmedCampaignIds?: string[];
-      confirmationToken?: string;
     }) => {
       if (creatorListMemberIdsToRemove.length === 0) {
         return { removedCount: 0, wasPartial: false };
@@ -309,8 +277,6 @@ export const useApplyCreatorBulkRelationship = () => {
           input: {
             creatorListId,
             creatorId: creatorIdsToRemove[0],
-            confirmedCampaignIds,
-            confirmationToken,
           },
         },
       }).catch(() => {

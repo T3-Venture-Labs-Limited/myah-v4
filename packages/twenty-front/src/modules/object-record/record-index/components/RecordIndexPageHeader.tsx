@@ -54,7 +54,8 @@ export const RecordIndexPageHeader = ({
 
   const { formatNumber } = useNumberFormat();
 
-  const { objectNamePlural } = useRecordIndexContextOrThrow();
+  const { objectNamePlural, embeddedSurfaceOptions } =
+    useRecordIndexContextOrThrow();
 
   const objectMetadataItem =
     findObjectMetadataItemByNamePlural(objectNamePlural);
@@ -89,7 +90,7 @@ export const RecordIndexPageHeader = ({
       }
       title={pageHeaderTitle}
       actionButton={
-        isDefined(contextStoreCurrentViewId) ? (
+        !embeddedSurfaceOptions && isDefined(contextStoreCurrentViewId) ? (
           <>
             {headerActionButton}
             <MyahCreatorBulkActions

@@ -83,6 +83,7 @@ const STANDARD_FLAT_FIELD_METADATA_BUILDERS_BY_OBJECT_NAME = {
   promotedAsset: buildMyahStandardFlatFieldMetadatas,
   campaignCreator: buildMyahStandardFlatFieldMetadatas,
   campaignCreatorList: buildMyahStandardFlatFieldMetadatas,
+  campaignCreatorListSource: buildMyahStandardFlatFieldMetadatas,
   campaign: buildMyahStandardFlatFieldMetadatas,
   creatorListMember: buildMyahStandardFlatFieldMetadatas,
   creatorList: buildMyahStandardFlatFieldMetadatas,

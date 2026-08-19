@@ -1799,16 +1799,20 @@ type CampaignCreatorListRemovalImpactDTO {
   confirmationToken: String
 }
 
-type CreatorListMembershipRemovalImpactDTO {
-  affectedCampaignIds: [UUID!]!
-  requiresConfirmation: Boolean!
-  confirmationToken: String
+type CampaignCreatorListAdditionCandidatesDTO {
+  creatorIds: [UUID!]!
 }
 
 type CreatorListMemberDTO {
   id: UUID!
   creatorListId: UUID!
   creatorId: UUID!
+}
+
+type CreatorListMembershipRemovalImpactDTO {
+  affectedCampaignIds: [UUID!]!
+  requiresConfirmation: Boolean!
+  confirmationToken: String
 }
 
 type ApprovedAccessDomain {
@@ -3419,6 +3423,7 @@ type Query {
   getViewFilterGroup(id: String!): ViewFilterGroup
   campaignInfluencerSnapshot(input: CampaignInfluencerCampaignInput!): CampaignInfluencerSnapshotDTO!
   campaignCreatorListRemovalImpact(input: CampaignCreatorListRemovalImpactInput!): CampaignCreatorListRemovalImpactDTO!
+  campaignCreatorListAdditionCandidates(input: CampaignCreatorListAdditionCandidatesInput!): CampaignCreatorListAdditionCandidatesDTO!
   creatorListMembershipRemovalImpact(input: CreatorListMembershipIntentInput!): CreatorListMembershipRemovalImpactDTO!
   commandMenuItems: [CommandMenuItem!]!
   commandMenuItem(id: UUID!): CommandMenuItem
@@ -3519,6 +3524,11 @@ input CampaignInfluencerCampaignInput {
 }
 
 input CampaignCreatorListRemovalImpactInput {
+  campaignId: UUID!
+  creatorListId: UUID!
+}
+
+input CampaignCreatorListAdditionCandidatesInput {
   campaignId: UUID!
   creatorListId: UUID!
 }
@@ -3747,6 +3757,7 @@ type Mutation {
   destroyViewFilterGroup(id: String!): Boolean!
   attachCampaignCreatorLists(input: AttachCampaignCreatorListsInput!): CampaignInfluencerSnapshotDTO!
   addDirectCampaignCreators(input: AddDirectCampaignCreatorsInput!): CampaignInfluencerSnapshotDTO!
+  approveCampaignCreatorListAdditions(input: ApproveCampaignCreatorListAdditionsInput!): Boolean!
   detachCampaignCreatorList(input: DetachCampaignCreatorListInput!): CampaignInfluencerSnapshotDTO!
   addCreatorListMemberIntent(input: CreatorListMembershipIntentInput!): CreatorListMemberDTO!
   addCreatorListMembersIntent(input: CreatorListMembersIntentInput!): [CreatorListMemberDTO!]!
@@ -4560,6 +4571,12 @@ input AddDirectCampaignCreatorsInput {
   campaignId: UUID!
   creatorIds: [UUID!]!
   assignedManagedMailboxId: UUID
+}
+
+input ApproveCampaignCreatorListAdditionsInput {
+  campaignId: UUID!
+  creatorListId: UUID!
+  creatorIds: [UUID!]!
 }
 
 input DetachCampaignCreatorListInput {

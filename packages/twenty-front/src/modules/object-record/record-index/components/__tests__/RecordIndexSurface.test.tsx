@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { act, useEffect } from 'react';
+import { act, createElement, type ComponentProps, useEffect } from 'react';
+
+import type { ViewBar as ViewBarComponent } from '@/views/components/ViewBar';
 
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
@@ -12,10 +14,10 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
 import { IconArrowLeft } from 'twenty-ui/icon';
 import { IconButton } from 'twenty-ui/input';
-import { ViewFilterOperand } from 'twenty-shared/types';
+import { ViewFilterOperand, ViewType } from 'twenty-shared/types';
 
 const mockRecordIndexContainer = jest.fn();
-const mockRecordIndexViewBar = jest.fn();
+const mockViewBar = jest.fn();
 const mockRecordTableWidget = jest.fn();
 const mockReadOnlyWidgetEffect = jest.fn();
 const mockContextStoreIds: string[] = [];
@@ -28,6 +30,7 @@ const mockRecordIndexConfigurations: Array<{
 }> = [];
 const mockRecordIndexLoad = jest.fn();
 const mockRecordIndexViewFieldsSSESync = jest.fn();
+let hasCurrentViewNonReadableFields = false;
 let deferContextStoreInitialization = false;
 let mockInitializeContextStore: (() => void) | undefined;
 const mockQueryOnlyRecordFilterWrites = jest.fn();
@@ -152,17 +155,122 @@ jest.mock(
     },
   }),
 );
+jest.mock(
+  '@/object-record/record-index/components/RecordIndexViewBarEffect',
+  () => ({
+    RecordIndexViewBarEffect: () => null,
+  }),
+);
 
-jest.mock('@/object-record/record-index/components/RecordIndexViewBar', () => ({
-  RecordIndexViewBar: (props: unknown) => {
-    const queryOnlyRecordFilters = useAtomComponentStateValue(
-      queryOnlyRecordFiltersComponentState,
-    );
+jest.mock(
+  '@/object-record/record-index/hooks/useHasCurrentViewNonReadableFields',
+  () => ({
+    useHasCurrentViewNonReadableFields: () => ({
+      hasCurrentViewNonReadableFields,
+    }),
+  }),
+);
 
-    mockRecordIndexViewBar(queryOnlyRecordFilters, props);
+jest.mock(
+  '@/object-record/object-options-dropdown/components/ObjectOptionsDropdown',
+  () => ({
+    ObjectOptionsDropdown: () => <div data-testid="options-control" />,
+  }),
+);
 
-    return null;
-  },
+jest.mock(
+  '@/spreadsheet-import/provider/components/SpreadsheetImportProvider',
+  () => ({
+    SpreadsheetImportProvider: ({
+      children,
+    }: {
+      children: React.ReactNode;
+    }) => <>{children}</>,
+  }),
+);
+
+jest.mock('@/ui/layout/top-bar/components/TopBar', () => ({
+  TopBar: ({
+    leftComponent,
+    rightComponent,
+  }: {
+    leftComponent?: React.ReactNode;
+    rightComponent?: React.ReactNode;
+  }) => (
+    <div data-testid="view-bar-top-bar">
+      {leftComponent}
+      <div data-testid="view-bar-right">{rightComponent}</div>
+    </div>
+  ),
+}));
+
+jest.mock('@/views/view-picker/components/ViewPickerDropdown', () => ({
+  ViewPickerDropdown: () => <div data-testid="view-picker-control" />,
+}));
+
+jest.mock('@/views/components/ViewBarFilterDropdown', () => ({
+  ViewBarFilterDropdown: () => <div data-testid="filter-control" />,
+}));
+
+jest.mock(
+  '@/object-record/object-sort-dropdown/components/ObjectSortDropdownButton',
+  () => ({
+    ObjectSortDropdownButton: () => <div data-testid="sort-control" />,
+  }),
+);
+
+jest.mock('@/views/contexts/ViewBarControlIdsContext', () => ({
+  ViewBarControlIdsProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  useViewBarControlIds: () => ({
+    filterDropdownId: 'filter-dropdown',
+    viewSortDropdownId: 'view-sort-dropdown',
+  }),
+}));
+
+jest.mock('@/views/components/ViewBarRecordFilterGroupEffect', () => ({
+  ViewBarRecordFilterGroupEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarAnyFieldFilterEffect', () => ({
+  ViewBarAnyFieldFilterEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarRecordFieldEffect', () => ({
+  ViewBarRecordFieldEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarRecordFilterEffect', () => ({
+  ViewBarRecordFilterEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarRecordSortEffect', () => ({
+  ViewBarRecordSortEffect: () => null,
+}));
+jest.mock('@/views/components/QueryParamsFiltersEffect', () => ({
+  QueryParamsFiltersEffect: () => null,
+}));
+jest.mock('@/views/components/QueryParamsSortsEffect', () => ({
+  QueryParamsSortsEffect: () => null,
+}));
+jest.mock('@/views/components/QueryParamsCleanupEffect', () => ({
+  QueryParamsCleanupEffect: () => null,
+}));
+jest.mock('@/views/components/ViewBarPageTitle', () => ({
+  ViewBarPageTitle: () => null,
+}));
+jest.mock('@/views/components/ViewBar', () => {
+  const actual = jest.requireActual('@/views/components/ViewBar') as {
+    ViewBar: typeof ViewBarComponent;
+  };
+
+  return {
+    ...actual,
+    ViewBar: (props: ComponentProps<typeof actual.ViewBar>) => {
+      mockViewBar(props);
+      return createElement(actual.ViewBar, props);
+    },
+  };
+});
+jest.mock('@/views/components/UpdateViewButtonGroup', () => ({
+  UpdateViewButtonGroup: () => null,
 }));
 
 jest.mock(
@@ -250,11 +358,13 @@ jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
     secondaryBar,
   }: {
     children: React.ReactNode;
-    header: React.ReactNode;
+    header?: React.ReactNode;
     secondaryBar: React.ReactNode;
   }) => (
     <>
-      {header}
+      {header === undefined || header === null ? null : (
+        <div data-testid="page-header">{header}</div>
+      )}
       {secondaryBar}
       {children}
     </>
@@ -304,7 +414,8 @@ describe('RecordIndexSurface', () => {
     mockRecordIndexLoad.mockClear();
     mockRecordIndexViewFieldsSSESync.mockClear();
     mockQueryOnlyRecordFilterWrites.mockClear();
-    mockRecordIndexViewBar.mockClear();
+    mockViewBar.mockClear();
+    hasCurrentViewNonReadableFields = false;
     mockRecordIndexPageHeader.mockClear();
     deferContextStoreInitialization = false;
     mockInitializeContextStore = undefined;
@@ -373,7 +484,7 @@ describe('RecordIndexSurface', () => {
     );
   });
 
-  it('forwards no header overrides for an ordinary surface', async () => {
+  it('renders the page header for an ordinary surface', async () => {
     renderSurface(
       <RecordIndexSurface
         contextStoreInstanceId={MAIN_CONTEXT_STORE_INSTANCE_ID}
@@ -390,6 +501,132 @@ describe('RecordIndexSurface', () => {
         headerTitle: undefined,
       });
     });
+
+    expect(screen.getByTestId('page-header')).toBeInTheDocument();
+  });
+
+  it('removes the page-header block for an embedded surface', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="embedded-creator-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        embeddedSurfaceOptions={{ hidePageHeader: true }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexContainer).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByTestId('page-header')).not.toBeInTheDocument();
+    expect(mockRecordIndexPageHeader).not.toHaveBeenCalled();
+  });
+  it('hides the embedded view-picker title while retaining native toolbar controls', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="campaign-influencers-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listAFilter]}
+        embeddedSurfaceOptions={{
+          hideViewPicker: true,
+          hideCurrentRecordFilter: {
+            fieldMetadataId: listAFilter.fieldMetadataId,
+            relationTargetFieldMetadataId: null,
+            operand: ViewFilterOperand.IS,
+          },
+          toolbarAction: <button type="button">Add influencers</button>,
+        }}
+      />,
+    );
+
+    const toolbarAction = await screen.findByRole('button', {
+      name: 'Add influencers',
+    });
+
+    expect(screen.queryByTestId('view-picker-control')).not.toBeInTheDocument();
+    expect(screen.getByTestId('filter-control')).toBeInTheDocument();
+    expect(screen.getByTestId('sort-control')).toBeInTheDocument();
+    expect(screen.getByTestId('options-control')).toBeInTheDocument();
+    expect(
+      toolbarAction.compareDocumentPosition(
+        screen.getByTestId('filter-control'),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(mockRecordIndexContainer).toHaveBeenLastCalledWith(
+      [listAFilter],
+      expect.any(String),
+      ViewType.TABLE,
+    );
+    expect(mockViewBar).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        hideCurrentRecordFilter: expect.objectContaining({
+          relationTargetFieldMetadataId: null,
+        }),
+      }),
+    );
+  });
+
+  it('renders an embedded toolbar action before native view controls', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="embedded-creator-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        embeddedSurfaceOptions={{
+          toolbarAction: <button type="button">Add creator</button>,
+        }}
+      />,
+    );
+
+    const toolbarAction = await screen.findByRole('button', {
+      name: 'Add creator',
+    });
+
+    expect(
+      toolbarAction.compareDocumentPosition(
+        screen.getByTestId('filter-control'),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      toolbarAction.compareDocumentPosition(screen.getByTestId('sort-control')),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      toolbarAction.compareDocumentPosition(
+        screen.getByTestId('options-control'),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('renders an embedded toolbar action in a read-only view bar', async () => {
+    hasCurrentViewNonReadableFields = true;
+
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="embedded-creator-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        embeddedSurfaceOptions={{
+          toolbarAction: <button type="button">Add creator</button>,
+        }}
+      />,
+    );
+
+    const toolbarAction = await screen.findByRole('button', {
+      name: 'Add creator',
+    });
+
+    expect(screen.getByTestId('view-bar-right').contains(toolbarAction)).toBe(
+      true,
+    );
+    expect(screen.queryByTestId('filter-control')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sort-control')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('options-control')).not.toBeInTheDocument();
   });
 
   it('forwards scoped header overrides to the native header', async () => {
@@ -437,7 +674,33 @@ describe('RecordIndexSurface', () => {
     ]);
   });
 
-  it('mounts the isolated view bar only after its membership filters are installed', async () => {
+  it('forwards query-only filter visibility policy without changing isolated filter scope', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="creator-list-pane-list-a"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        initialQueryOnlyRecordFilters={[listAFilter]}
+        hideQueryOnlyRecordFilters
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockViewBar).toHaveBeenCalled();
+    });
+
+    expect(mockViewBar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ hideQueryOnlyRecordFilters: true }),
+    );
+    expect(mockRecordIndexContainer).toHaveBeenLastCalledWith(
+      [listAFilter],
+      expect.any(String),
+      ViewType.TABLE,
+    );
+  });
+
+  it('shows query-only filters by default on isolated surfaces', async () => {
     renderSurface(
       <RecordIndexSurface
         contextStoreInstanceId="creator-list-pane-list-a"
@@ -449,12 +712,12 @@ describe('RecordIndexSurface', () => {
     );
 
     await waitFor(() => {
-      expect(mockRecordIndexViewBar).toHaveBeenCalled();
+      expect(mockViewBar).toHaveBeenCalled();
     });
 
-    expect(
-      mockRecordIndexViewBar.mock.calls.map(([recordFilters]) => recordFilters),
-    ).not.toContainEqual([]);
+    expect(mockViewBar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ hideQueryOnlyRecordFilters: undefined }),
+    );
   });
 
   it('retains canonical record-index identity for the main context gater', async () => {

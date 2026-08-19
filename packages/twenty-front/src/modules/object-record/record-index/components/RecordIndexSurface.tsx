@@ -12,6 +12,7 @@ import { RecordIndexContainerContextStoreNumberOfSelectedRecordsEffect } from '@
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
 import {
   RecordIndexContextProvider,
+  type RecordIndexEmbeddedSurfaceOptions,
   type RecordIndexOpenRequest,
 } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { RecordIndexLoadBaseOnContextStoreEffect } from '@/object-record/record-index/components/RecordIndexLoadBaseOnContextStoreEffect';
@@ -39,6 +40,7 @@ const StyledIndexContainer = styled.div`
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   width: 100%;
 `;
 
@@ -53,8 +55,11 @@ export type RecordIndexSurfaceProps = {
   onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onViewChange?: (viewId: string) => void;
   initialQueryOnlyRecordFilters?: RecordFilter[];
+  hideQueryOnlyRecordFilters?: boolean;
+  hideEmptyStateSubtitle?: boolean;
   headerTitle?: string;
   headerActionButton?: ReactNode;
+  embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;
 };
 
 type RecordIndexSurfaceInstanceProps = RecordIndexSurfaceProps;
@@ -98,8 +103,11 @@ const RecordIndexSurfaceInstance = ({
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters = [],
+  hideQueryOnlyRecordFilters,
+  hideEmptyStateSubtitle,
   headerTitle,
   headerActionButton,
+  embeddedSurfaceOptions,
 }: RecordIndexSurfaceInstanceProps) => {
   const store = useStore();
   const { objectMetadataItem } = useObjectMetadataItem({
@@ -167,6 +175,8 @@ const RecordIndexSurfaceInstance = ({
               onOpenRecordFromIndexView,
               shouldPreserveParentViewStateOnOpen,
               shouldUseIndexIdentifierUrlOnFullPageOpen,
+              embeddedSurfaceOptions,
+              hideEmptyStateSubtitle,
               onViewChange,
               onRecordCreated,
               recordFieldByFieldMetadataItemId,
@@ -204,17 +214,23 @@ const RecordIndexSurfaceInstance = ({
                   />
                   <PageCardLayout
                     header={
-                      <RecordIndexPageHeader
-                        contextStoreInstanceId={contextStoreInstanceId}
-                        headerActionButton={headerActionButton}
-                        headerTitle={headerTitle}
-                      />
+                      embeddedSurfaceOptions?.hidePageHeader ? undefined : (
+                        <RecordIndexPageHeader
+                          contextStoreInstanceId={contextStoreInstanceId}
+                          headerActionButton={headerActionButton}
+                          headerTitle={headerTitle}
+                        />
+                      )
                     }
                     secondaryBar={
                       objectPermissions.canReadObjectRecords &&
                       (!isIsolatedSurface ||
                         areInitialQueryOnlyRecordFiltersInitialized) && (
                         <RecordIndexViewBar
+                          hideQueryOnlyRecordFilters={
+                            embeddedSurfaceOptions?.hideQueryOnlyRecordFilters ??
+                            hideQueryOnlyRecordFilters
+                          }
                           recordIndexViewTypeOverride={
                             isIsolatedSurface ? ViewType.TABLE : undefined
                           }
@@ -271,8 +287,11 @@ export const RecordIndexSurface = ({
   onRecordCreated,
   onViewChange,
   initialQueryOnlyRecordFilters,
+  hideQueryOnlyRecordFilters,
+  hideEmptyStateSubtitle,
   headerTitle,
   headerActionButton,
+  embeddedSurfaceOptions,
 }: RecordIndexSurfaceProps) => {
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -302,8 +321,11 @@ export const RecordIndexSurface = ({
       onViewChange={onViewChange}
       onRecordCreated={onRecordCreated}
       initialQueryOnlyRecordFilters={initialQueryOnlyRecordFilters}
+      hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
+      hideEmptyStateSubtitle={hideEmptyStateSubtitle}
       headerActionButton={headerActionButton}
       headerTitle={headerTitle}
+      embeddedSurfaceOptions={embeddedSurfaceOptions}
     />
   );
 };

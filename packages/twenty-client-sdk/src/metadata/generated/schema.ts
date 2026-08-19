@@ -1443,11 +1443,9 @@ export interface CampaignCreatorListRemovalImpactDTO {
     __typename: 'CampaignCreatorListRemovalImpactDTO'
 }
 
-export interface CreatorListMembershipRemovalImpactDTO {
-    affectedCampaignIds: Scalars['UUID'][]
-    requiresConfirmation: Scalars['Boolean']
-    confirmationToken?: Scalars['String']
-    __typename: 'CreatorListMembershipRemovalImpactDTO'
+export interface CampaignCreatorListAdditionCandidatesDTO {
+    creatorIds: Scalars['UUID'][]
+    __typename: 'CampaignCreatorListAdditionCandidatesDTO'
 }
 
 export interface CreatorListMemberDTO {
@@ -1455,6 +1453,13 @@ export interface CreatorListMemberDTO {
     creatorListId: Scalars['UUID']
     creatorId: Scalars['UUID']
     __typename: 'CreatorListMemberDTO'
+}
+
+export interface CreatorListMembershipRemovalImpactDTO {
+    affectedCampaignIds: Scalars['UUID'][]
+    requiresConfirmation: Scalars['Boolean']
+    confirmationToken?: Scalars['String']
+    __typename: 'CreatorListMembershipRemovalImpactDTO'
 }
 
 export interface ApprovedAccessDomain {
@@ -3059,6 +3064,7 @@ export interface Query {
     getViewFilterGroup?: ViewFilterGroup
     campaignInfluencerSnapshot: CampaignInfluencerSnapshotDTO
     campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDTO
+    campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDTO
     creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
     commandMenuItems: CommandMenuItem[]
     commandMenuItem?: CommandMenuItem
@@ -3264,6 +3270,7 @@ export interface Mutation {
     destroyViewFilterGroup: Scalars['Boolean']
     attachCampaignCreatorLists: CampaignInfluencerSnapshotDTO
     addDirectCampaignCreators: CampaignInfluencerSnapshotDTO
+    approveCampaignCreatorListAdditions: Scalars['Boolean']
     detachCampaignCreatorList: CampaignInfluencerSnapshotDTO
     addCreatorListMemberIntent: CreatorListMemberDTO
     addCreatorListMembersIntent: CreatorListMemberDTO[]
@@ -4875,10 +4882,8 @@ export interface CampaignCreatorListRemovalImpactDTOGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface CreatorListMembershipRemovalImpactDTOGenqlSelection{
-    affectedCampaignIds?: boolean | number
-    requiresConfirmation?: boolean | number
-    confirmationToken?: boolean | number
+export interface CampaignCreatorListAdditionCandidatesDTOGenqlSelection{
+    creatorIds?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -4887,6 +4892,14 @@ export interface CreatorListMemberDTOGenqlSelection{
     id?: boolean | number
     creatorListId?: boolean | number
     creatorId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface CreatorListMembershipRemovalImpactDTOGenqlSelection{
+    affectedCampaignIds?: boolean | number
+    requiresConfirmation?: boolean | number
+    confirmationToken?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6629,6 +6642,7 @@ export interface QueryGenqlSelection{
     getViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String']} })
     campaignInfluencerSnapshot?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: CampaignInfluencerCampaignInput} })
     campaignCreatorListRemovalImpact?: (CampaignCreatorListRemovalImpactDTOGenqlSelection & { __args: {input: CampaignCreatorListRemovalImpactInput} })
+    campaignCreatorListAdditionCandidates?: (CampaignCreatorListAdditionCandidatesDTOGenqlSelection & { __args: {input: CampaignCreatorListAdditionCandidatesInput} })
     creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     commandMenuItems?: CommandMenuItemGenqlSelection
     commandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
@@ -6706,6 +6720,8 @@ export interface GetApiKeyInput {id: Scalars['UUID']}
 export interface CampaignInfluencerCampaignInput {campaignId: Scalars['UUID']}
 
 export interface CampaignCreatorListRemovalImpactInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
+
+export interface CampaignCreatorListAdditionCandidatesInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
 
 export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID']}
 
@@ -6877,6 +6893,7 @@ export interface MutationGenqlSelection{
     destroyViewFilterGroup?: { __args: {id: Scalars['String']} }
     attachCampaignCreatorLists?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AttachCampaignCreatorListsInput} })
     addDirectCampaignCreators?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AddDirectCampaignCreatorsInput} })
+    approveCampaignCreatorListAdditions?: { __args: {input: ApproveCampaignCreatorListAdditionsInput} }
     detachCampaignCreatorList?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: DetachCampaignCreatorListInput} })
     addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
@@ -7244,6 +7261,8 @@ export interface UpdateViewFilterGroupInput {id?: (Scalars['UUID'] | null),paren
 export interface AttachCampaignCreatorListsInput {campaignId: Scalars['UUID'],creatorListIds: Scalars['UUID'][]}
 
 export interface AddDirectCampaignCreatorsInput {campaignId: Scalars['UUID'],creatorIds: Scalars['UUID'][],assignedManagedMailboxId?: (Scalars['UUID'] | null)}
+
+export interface ApproveCampaignCreatorListAdditionsInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
 
 export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
 
@@ -8339,10 +8358,10 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
-    const CreatorListMembershipRemovalImpactDTO_possibleTypes: string[] = ['CreatorListMembershipRemovalImpactDTO']
-    export const isCreatorListMembershipRemovalImpactDTO = (obj?: { __typename?: any } | null): obj is CreatorListMembershipRemovalImpactDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCreatorListMembershipRemovalImpactDTO"')
-      return CreatorListMembershipRemovalImpactDTO_possibleTypes.includes(obj.__typename)
+    const CampaignCreatorListAdditionCandidatesDTO_possibleTypes: string[] = ['CampaignCreatorListAdditionCandidatesDTO']
+    export const isCampaignCreatorListAdditionCandidatesDTO = (obj?: { __typename?: any } | null): obj is CampaignCreatorListAdditionCandidatesDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorListAdditionCandidatesDTO"')
+      return CampaignCreatorListAdditionCandidatesDTO_possibleTypes.includes(obj.__typename)
     }
     
 
@@ -8351,6 +8370,14 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isCreatorListMemberDTO = (obj?: { __typename?: any } | null): obj is CreatorListMemberDTO => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isCreatorListMemberDTO"')
       return CreatorListMemberDTO_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const CreatorListMembershipRemovalImpactDTO_possibleTypes: string[] = ['CreatorListMembershipRemovalImpactDTO']
+    export const isCreatorListMembershipRemovalImpactDTO = (obj?: { __typename?: any } | null): obj is CreatorListMembershipRemovalImpactDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCreatorListMembershipRemovalImpactDTO"')
+      return CreatorListMembershipRemovalImpactDTO_possibleTypes.includes(obj.__typename)
     }
     
 

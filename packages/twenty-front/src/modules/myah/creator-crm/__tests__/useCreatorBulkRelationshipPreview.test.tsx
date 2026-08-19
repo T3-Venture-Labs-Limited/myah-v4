@@ -1,12 +1,9 @@
 import { InMemoryCache } from '@apollo/client/cache';
 
+const mockUseQuery = jest.fn();
+
 jest.mock('@apollo/client/react', () => ({
-  useQuery: () => ({
-    data: undefined,
-    loading: false,
-    error: undefined,
-    refetch: jest.fn(),
-  }),
+  useQuery: (...args: unknown[]) => mockUseQuery(...args),
 }));
 import { renderHook } from '@testing-library/react';
 
@@ -184,5 +181,30 @@ describe('useCreatorBulkRelationshipPreview', () => {
     );
 
     expect(result.current.isPreviewUnavailable).toBe(true);
+  });
+
+  it('does not query Campaign impact for a List membership removal preview', () => {
+    mockUseFindManyRecords.mockReturnValue({
+      records: [
+        {
+          id: 'membership-a',
+          __typename: 'CreatorListMember',
+          creatorId: 'creator-a',
+        },
+      ],
+      loading: false,
+      refetch: jest.fn(),
+      error: undefined,
+      hasReadPermission: true,
+    });
+
+    renderHook(() =>
+      useCreatorBulkRelationshipPreview({
+        target: creatorListTarget,
+        selectedCreatorIds: ['creator-a'],
+      }),
+    );
+
+    expect(mockUseQuery).not.toHaveBeenCalled();
   });
 });

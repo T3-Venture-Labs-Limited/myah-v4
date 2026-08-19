@@ -1,5 +1,5 @@
 import { gql } from '@apollo/client';
-import { useMutation, useQuery } from '@apollo/client/react';
+import { useMutation } from '@apollo/client/react';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { SingleRecordPicker } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPicker';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
@@ -20,21 +20,9 @@ const ADD_MEMBER = gql`
   }
 `;
 
-const REMOVAL_IMPACT = gql`
-  query CreatorListMembershipRemovalImpact(
-    $input: CreatorListMembershipIntentInput!
-  ) {
-    creatorListMembershipRemovalImpact(input: $input) {
-      affectedCampaignIds
-      requiresConfirmation
-      confirmationToken
-    }
-  }
-`;
-
 const REMOVE_MEMBER = gql`
   mutation RemoveCreatorListMemberIntent(
-    $input: RemoveCreatorListMemberIntentInput!
+    $input: CreatorListMembershipIntentInput!
   ) {
     removeCreatorListMemberIntent(input: $input)
   }
@@ -49,23 +37,6 @@ type CreatorListMemberRecord = ObjectRecord & {
   creator?: NamedRecord;
 };
 
-type MembershipRemovalImpact = {
-  affectedCampaignIds: string[];
-  requiresConfirmation: boolean;
-  confirmationToken?: string;
-};
-
-type MembershipRemovalImpactData = {
-  creatorListMembershipRemovalImpact: MembershipRemovalImpact;
-};
-
-type MembershipRemovalImpactVariables = {
-  input: {
-    creatorListId: string;
-    creatorId: string | null;
-  };
-};
-
 export const MyahCreatorListMembers = ({
   creatorListId,
 }: {
@@ -77,9 +48,6 @@ export const MyahCreatorListMembers = ({
   const [removingCreatorId, setRemovingCreatorId] = useState<string | null>(
     null,
   );
-  const [confirmed, setConfirmed] = useState(false);
-  const [reviewedImpact, setReviewedImpact] =
-    useState<MembershipRemovalImpact | null>(null);
   const { openModal, closeModal } = useModal();
   const [addMember] = useMutation(ADD_MEMBER);
   const [removeMember] = useMutation(REMOVE_MEMBER);
@@ -103,35 +71,8 @@ export const MyahCreatorListMembers = ({
       creator?.name?.trim() || 'Creator',
     ]),
   );
-  const { data: impactData, refetch: refetchImpact } = useQuery<
-    MembershipRemovalImpactData,
-    MembershipRemovalImpactVariables
-  >(REMOVAL_IMPACT, {
-    variables: {
-      input: { creatorListId, creatorId: removingCreatorId },
-    },
-    skip: !removingCreatorId,
-    fetchPolicy: 'network-only',
-  });
-  const removalImpact =
-    reviewedImpact ?? impactData?.creatorListMembershipRemovalImpact;
-  const affectedCampaignIds = removalImpact?.affectedCampaignIds ?? [];
-  const { records: affectedCampaigns } = useFindManyRecords<NamedRecord>({
-    objectNameSingular: 'campaign',
-    filter: { id: { in: affectedCampaignIds } },
-    recordGqlFields: { id: true, name: true },
-    skip: affectedCampaignIds.length === 0,
-  });
-  const affectedCampaignNames = new Map(
-    affectedCampaigns.map(({ id, name }) => [
-      id,
-      name?.trim() || 'Campaign (unavailable)',
-    ]),
-  );
 
   const selectCreatorForRemoval = (creatorId: string) => {
-    setConfirmed(false);
-    setReviewedImpact(null);
     setRemovingCreatorId(creatorId);
   };
 
@@ -147,34 +88,17 @@ export const MyahCreatorListMembers = ({
   };
 
   const submitRemoval = async () => {
-    if (!removingCreatorId || !removalImpact) return;
-    const latestImpact = (await refetchImpact()).data
-      ?.creatorListMembershipRemovalImpact;
-    if (!latestImpact) return;
-    const displayedCampaignIds = [...removalImpact.affectedCampaignIds].sort();
-    const latestCampaignIds = [...latestImpact.affectedCampaignIds].sort();
-    if (
-      latestImpact.confirmationToken !== removalImpact.confirmationToken ||
-      JSON.stringify(latestCampaignIds) !== JSON.stringify(displayedCampaignIds)
-    ) {
-      setReviewedImpact(latestImpact);
-      setConfirmed(false);
-      return;
-    }
-    if (latestImpact.requiresConfirmation && !confirmed) return;
+    if (!removingCreatorId) return;
+
     await removeMember({
       variables: {
         input: {
           creatorListId,
           creatorId: removingCreatorId,
-          confirmedCampaignIds: latestImpact.affectedCampaignIds,
-          confirmationToken: latestImpact.confirmationToken,
         },
       },
     });
     setRemovingCreatorId(null);
-    setConfirmed(false);
-    setReviewedImpact(null);
     await refetchMemberships();
   };
 
@@ -255,39 +179,10 @@ export const MyahCreatorListMembers = ({
           variant="primary"
         />
       ) : null}
-      {removingCreatorId && removalImpact ? (
+      {removingCreatorId ? (
         <div role="alertdialog" aria-label="Confirm Creator removal">
           <p>Remove {creatorNames.get(removingCreatorId) ?? 'Creator'}?</p>
-          {affectedCampaignIds.length === 0 ? (
-            <p>No Campaign loses this Creator as a list source.</p>
-          ) : (
-            <ul aria-label="Affected Campaigns">
-              {affectedCampaignIds
-                .map((id) => ({
-                  id,
-                  label:
-                    affectedCampaignNames.get(id) || 'Campaign (unavailable)',
-                }))
-                .sort(
-                  (first, second) =>
-                    first.label.localeCompare(second.label) ||
-                    first.id.localeCompare(second.id),
-                )
-                .map(({ id, label }) => (
-                  <li key={id}>{label}</li>
-                ))}
-            </ul>
-          )}
-          {removalImpact.requiresConfirmation ? (
-            <label>
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(event) => setConfirmed(event.target.checked)}
-              />
-              Confirm removal from affected Campaigns
-            </label>
-          ) : null}
+          <p>This only removes the Creator from this List.</p>
           <Button
             title="Confirm Creator removal"
             ariaLabel="Confirm Creator removal"
@@ -298,11 +193,7 @@ export const MyahCreatorListMembers = ({
           <Button
             title="Cancel Creator removal"
             ariaLabel="Cancel Creator removal"
-            onClick={() => {
-              setRemovingCreatorId(null);
-              setConfirmed(false);
-              setReviewedImpact(null);
-            }}
+            onClick={() => setRemovingCreatorId(null)}
             type="button"
             variant="secondary"
           />

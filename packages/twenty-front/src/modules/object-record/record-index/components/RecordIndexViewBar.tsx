@@ -9,10 +9,12 @@ import { ViewBar } from '@/views/components/ViewBar';
 import { ViewType } from '@/views/types/ViewType';
 
 type RecordIndexViewBarProps = {
+  hideQueryOnlyRecordFilters?: boolean;
   recordIndexViewTypeOverride?: ViewType;
 };
 
 export const RecordIndexViewBar = ({
+  hideQueryOnlyRecordFilters,
   recordIndexViewTypeOverride,
 }: RecordIndexViewBarProps) => {
   const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
@@ -21,8 +23,13 @@ export const RecordIndexViewBar = ({
 
   const isLayoutLocked = recordIndexViewTypeOverride !== undefined;
 
-  const { objectNamePlural, recordIndexId, objectMetadataItem, onViewChange } =
-    useRecordIndexContextOrThrow();
+  const {
+    embeddedSurfaceOptions,
+    objectNamePlural,
+    recordIndexId,
+    objectMetadataItem,
+    onViewChange,
+  } = useRecordIndexContextOrThrow();
 
   const { hasCurrentViewNonReadableFields } =
     useHasCurrentViewNonReadableFields(objectMetadataItem);
@@ -30,10 +37,16 @@ export const RecordIndexViewBar = ({
   return (
     <SpreadsheetImportProvider>
       <ViewBar
+        hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
         isReadOnly={hasCurrentViewNonReadableFields}
         viewBarId={recordIndexId}
         forcedViewType={recordIndexViewTypeOverride}
         onViewChange={onViewChange}
+        hideViewPicker={embeddedSurfaceOptions?.hideViewPicker}
+        hideCurrentRecordFilter={
+          embeddedSurfaceOptions?.hideCurrentRecordFilter
+        }
+        toolbarAction={embeddedSurfaceOptions?.toolbarAction}
         optionsDropdownButton={
           <ObjectOptionsDropdown
             recordIndexId={recordIndexId}

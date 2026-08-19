@@ -11,6 +11,8 @@ import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldCont
 import { useFieldFocus } from '@/object-record/record-field/ui/hooks/useFieldFocus';
 import { MAX_RELATION_CHIPS_DISPLAYED_INLINE } from '@/object-record/record-field/ui/meta-types/display/constants/MaxRelationChipsDisplayedInline';
 import { useRelationFromManyFieldDisplay } from '@/object-record/record-field/ui/meta-types/hooks/useRelationFromManyFieldDisplay';
+import { getRelationEmptyStateLabel } from '@/object-record/record-field/ui/meta-types/display/utils/getRelationEmptyStateLabel';
+import { useRecordFieldValue } from '@/object-record/record-store/hooks/useRecordFieldValue';
 import { extractTargetRecordsFromJunction } from '@/object-record/record-field/ui/utils/junction/extractTargetRecordsFromJunction';
 import { getJunctionConfig } from '@/object-record/record-field/ui/utils/junction/getJunctionConfig';
 import { hasJunctionConfig } from '@/object-record/record-field/ui/utils/junction/hasJunctionConfig';
@@ -32,11 +34,23 @@ const StyledContainer = styled.div`
 `;
 
 export const RelationFromManyFieldDisplay = () => {
-  const { fieldValue, fieldDefinition, generateRecordChipData } =
+  const { fieldValue, fieldDefinition, recordId, generateRecordChipData } =
     useRelationFromManyFieldDisplay();
   const { isFocused } = useFieldFocus();
   const { disableChipClick, triggerEvent } = useContext(FieldContext);
   const { objectMetadataItems } = useObjectMetadataItems();
+  const { emptyStateWhenBooleanFieldIsFalse } =
+    fieldDefinition.metadata.settings ?? {};
+  const booleanFieldValue = useRecordFieldValue<boolean>(
+    recordId,
+    emptyStateWhenBooleanFieldIsFalse ?? '',
+    fieldDefinition,
+  );
+  const emptyStateLabel = getRelationEmptyStateLabel({
+    fieldValue,
+    booleanFieldValue,
+    settings: fieldDefinition.metadata.settings,
+  });
 
   const { fieldName, objectMetadataNameSingular } = fieldDefinition.metadata;
 
@@ -69,6 +83,10 @@ export const RelationFromManyFieldDisplay = () => {
 
   if (!isArray(fieldValue)) {
     return null;
+  }
+
+  if (emptyStateLabel !== undefined) {
+    return <StyledContainer>{emptyStateLabel}</StyledContainer>;
   }
 
   if (!isDefined(relationObjectNameSingular)) {

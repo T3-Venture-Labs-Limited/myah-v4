@@ -13,11 +13,21 @@ import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { useMapViewFiltersToFilters } from '@/views/hooks/useMapViewFiltersToFilters';
 import { isDefined } from 'twenty-shared/utils';
 
-export const QueryParamsFiltersEffect = () => {
-  const { getFiltersFromQueryParams, getFilterGroupsFromQueryParams } =
-    useFiltersFromQueryParams();
+const QueryParamsFilters = () => {
   const { hasFiltersQueryParams } = useHasFiltersInQueryParams();
 
+  if (!hasFiltersQueryParams) {
+    return null;
+  }
+
+  return <QueryParamsFiltersEffect />;
+};
+
+export { QueryParamsFilters as QueryParamsFiltersEffect };
+
+const QueryParamsFiltersEffect = () => {
+  const { getFiltersFromQueryParams, getFilterGroupsFromQueryParams } =
+    useFiltersFromQueryParams();
   const { objectNamePlural = '' } = useParams();
   const { objectNameSingular } = useObjectNameSingularFromPlural({
     objectNamePlural,
@@ -44,10 +54,7 @@ export const QueryParamsFiltersEffect = () => {
     currentView?.objectMetadataId !== objectMetadataItem.id;
 
   useEffect(() => {
-    if (
-      !hasFiltersQueryParams ||
-      currentViewObjectMetadataItemIsDifferentFromURLObjectMetadataItem
-    ) {
+    if (currentViewObjectMetadataItemIsDifferentFromURLObjectMetadataItem) {
       return;
     }
 
@@ -90,7 +97,6 @@ export const QueryParamsFiltersEffect = () => {
     mapViewFiltersToRecordFilters,
     getFiltersFromQueryParams,
     getFilterGroupsFromQueryParams,
-    hasFiltersQueryParams,
     setCurrentRecordFilterGroups,
     setCurrentRecordFilters,
   ]);

@@ -10,6 +10,8 @@ import { ViewBarDetailsAddFilterButton } from '@/views/components/ViewBarDetails
 import { EditableSortChip } from '@/views/editable-chip/components/EditableSortChip';
 
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
+import { queryOnlyRecordFiltersComponentState } from '@/object-record/record-filter/states/queryOnlyRecordFiltersComponentState';
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { SoftDeleteFilterChip } from '@/views/components/SoftDeleteFilterChip';
 import { useApplyCurrentViewFiltersToCurrentRecordFilters } from '@/views/hooks/useApplyCurrentViewFiltersToCurrentRecordFilters';
@@ -34,12 +36,17 @@ import { useIsViewAnyFieldFilterDifferentFromCurrentAnyFieldFilter } from '@/vie
 import { isViewBarExpandedComponentState } from '@/views/states/isViewBarExpandedComponentState';
 import { t } from '@lingui/core/macro';
 import { isNonEmptyArray, isNonEmptyString } from '@sniptt/guards';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, jsonRelationFilterValueSchema } from 'twenty-shared/utils';
 import { LightButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 export type ViewBarDetailsProps = {
   hasFilterButton?: boolean;
+  hideQueryOnlyRecordFilters?: boolean;
+  hideCurrentRecordFilter?: Pick<
+    RecordFilter,
+    'fieldMetadataId' | 'relationTargetFieldMetadataId' | 'operand'
+  >;
   rightComponent?: ReactNode;
   viewBarId: string;
   objectNamePlural: string;
@@ -101,6 +108,8 @@ const StyledAddFilterContainer = styled.div`
 
 export const ViewBarDetails = ({
   hasFilterButton = false,
+  hideCurrentRecordFilter,
+  hideQueryOnlyRecordFilters = false,
   rightComponent,
   viewBarId,
   objectNamePlural,
@@ -118,6 +127,10 @@ export const ViewBarDetails = ({
 
   const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
+    viewBarId,
+  );
+  const queryOnlyRecordFilters = useAtomComponentStateValue(
+    queryOnlyRecordFiltersComponentState,
     viewBarId,
   );
 
@@ -153,17 +166,47 @@ export const ViewBarDetails = ({
 
   const { isSeeDeletedRecordsFilter } = useCheckIsSoftDeleteFilter();
 
-  const allSoftDeletedRecordsFilter = currentRecordFilters.find(
+  const displayedCurrentRecordFilters = useMemo(() => {
+    if (!hideQueryOnlyRecordFilters && !hideCurrentRecordFilter) {
+      return currentRecordFilters;
+    }
+
+    const queryOnlyRecordFilterIds = new Set(
+      queryOnlyRecordFilters.map((recordFilter) => recordFilter.id),
+    );
+
+    return currentRecordFilters.filter(
+      (recordFilter) =>
+        (!hideQueryOnlyRecordFilters ||
+          !queryOnlyRecordFilterIds.has(recordFilter.id)) &&
+        (!hideCurrentRecordFilter ||
+          recordFilter.type !== 'RELATION' ||
+          recordFilter.fieldMetadataId !==
+            hideCurrentRecordFilter.fieldMetadataId ||
+          recordFilter.relationTargetFieldMetadataId !==
+            hideCurrentRecordFilter.relationTargetFieldMetadataId ||
+          recordFilter.operand !== hideCurrentRecordFilter.operand ||
+          jsonRelationFilterValueSchema.safeParse(recordFilter.value).data
+            ?.isCurrentRecordSelected !== true),
+    );
+  }, [
+    currentRecordFilters,
+    hideCurrentRecordFilter,
+    hideQueryOnlyRecordFilters,
+    queryOnlyRecordFilters,
+  ]);
+
+  const allSoftDeletedRecordsFilter = displayedCurrentRecordFilters.find(
     (recordFilter) => isSeeDeletedRecordsFilter(recordFilter),
   );
 
-  const recordFilters = useMemo(() => {
-    return currentRecordFilters.filter(
+  const displayedRecordFilters = useMemo(() => {
+    return displayedCurrentRecordFilters.filter(
       (recordFilter) =>
         !recordFilter.recordFilterGroupId &&
         !isSeeDeletedRecordsFilter(recordFilter),
     );
-  }, [currentRecordFilters, isSeeDeletedRecordsFilter]);
+  }, [displayedCurrentRecordFilters, isSeeDeletedRecordsFilter]);
 
   const { applyCurrentViewFilterGroupsToCurrentRecordFilterGroups } =
     useApplyCurrentViewFilterGroupsToCurrentRecordFilterGroups();
@@ -212,7 +255,7 @@ export const ViewBarDetails = ({
     viewFilterGroupsAreDifferentFromRecordFilterGroups ||
     viewAnyFieldFilterDifferentFromCurrentAnyFieldFilter ||
     ((currentRecordSorts.length > 0 ||
-      currentRecordFilters.length > 0 ||
+      displayedCurrentRecordFilters.length > 0 ||
       currentRecordFilterGroups.length > 0) &&
       isViewBarExpanded);
 
@@ -246,7 +289,7 @@ export const ViewBarDetails = ({
                 recordSort={recordSort}
               />
             ))}
-            {isNonEmptyArray(recordFilters) &&
+            {isNonEmptyArray(displayedRecordFilters) &&
               isNonEmptyArray(currentRecordSorts) && (
                 <StyledSeparatorContainer>
                   <StyledSeparator />
@@ -256,7 +299,7 @@ export const ViewBarDetails = ({
             {shouldShowAdvancedFilterDropdownButton && (
               <AdvancedFilterDropdownButton />
             )}
-            {recordFilters.map((recordFilter) => (
+            {displayedRecordFilters.map((recordFilter) => (
               <ObjectFilterDropdownComponentInstanceContext.Provider
                 key={recordFilter.id}
                 value={{

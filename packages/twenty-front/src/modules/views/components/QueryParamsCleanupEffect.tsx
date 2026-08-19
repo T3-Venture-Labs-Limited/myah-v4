@@ -2,12 +2,25 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useHasFiltersInQueryParams } from '@/views/hooks/internal/useHasFiltersInQueryParams';
+import { useHasSortsInQueryParams } from '@/views/hooks/internal/useHasSortsInQueryParams';
 import { useSortsFromQueryParams } from '@/views/hooks/internal/useSortsFromQueryParams';
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 
-export const QueryParamsCleanupEffect = () => {
+const QueryParamsCleanup = () => {
   const { hasFiltersQueryParams } = useHasFiltersInQueryParams();
-  const { hasSortsQueryParams, objectMetadataItem } = useSortsFromQueryParams();
+  const { hasSortsQueryParams } = useHasSortsInQueryParams();
+
+  if (!hasFiltersQueryParams && !hasSortsQueryParams) {
+    return null;
+  }
+
+  return <QueryParamsCleanupEffect />;
+};
+
+export { QueryParamsCleanup as QueryParamsCleanupEffect };
+
+const QueryParamsCleanupEffect = () => {
+  const { objectMetadataItem } = useSortsFromQueryParams();
 
   const { currentView } = useGetCurrentViewOnly();
 
@@ -23,10 +36,6 @@ export const QueryParamsCleanupEffect = () => {
       currentViewObjectMetadataItemIsDifferentFromURLObjectMetadataItem ||
       hasCleanedQueryParams
     ) {
-      return;
-    }
-
-    if (!hasFiltersQueryParams && !hasSortsQueryParams) {
       return;
     }
 
@@ -46,8 +55,6 @@ export const QueryParamsCleanupEffect = () => {
     setHasCleanedQueryParams(true);
   }, [
     currentViewObjectMetadataItemIsDifferentFromURLObjectMetadataItem,
-    hasFiltersQueryParams,
-    hasSortsQueryParams,
     hasCleanedQueryParams,
     searchParams,
     setSearchParams,

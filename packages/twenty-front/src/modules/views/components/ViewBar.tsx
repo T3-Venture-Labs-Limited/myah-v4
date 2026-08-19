@@ -1,7 +1,10 @@
 import { type ReactNode } from 'react';
 
 import { ObjectSortDropdownButton } from '@/object-record/object-sort-dropdown/components/ObjectSortDropdownButton';
-import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
+import {
+  type RecordIndexEmbeddedSurfaceOptions,
+  useRecordIndexContextOrThrow,
+} from '@/object-record/record-index/contexts/RecordIndexContext';
 import { TopBar } from '@/ui/layout/top-bar/components/TopBar';
 import { QueryParamsFiltersEffect } from '@/views/components/QueryParamsFiltersEffect';
 import { QueryParamsSortsEffect } from '@/views/components/QueryParamsSortsEffect';
@@ -29,6 +32,10 @@ type ViewBarProps = {
   isReadOnly?: boolean;
   onViewChange?: (viewId: string) => void;
   forcedViewType?: ViewType;
+  hideQueryOnlyRecordFilters?: boolean;
+  hideViewPicker?: boolean;
+  hideCurrentRecordFilter?: RecordIndexEmbeddedSurfaceOptions['hideCurrentRecordFilter'];
+  toolbarAction?: ReactNode;
 };
 
 export const ViewBar = ({
@@ -38,6 +45,10 @@ export const ViewBar = ({
   isReadOnly = false,
   onViewChange,
   forcedViewType,
+  hideQueryOnlyRecordFilters,
+  hideViewPicker,
+  hideCurrentRecordFilter,
+  toolbarAction,
 }: ViewBarProps) => {
   const { objectNamePlural } = useRecordIndexContextOrThrow();
 
@@ -53,11 +64,14 @@ export const ViewBar = ({
         <TopBar
           className={className}
           leftComponent={
-            <ViewPickerDropdown
-              onViewChange={onViewChange}
-              forcedViewType={forcedViewType}
-            />
+            hideViewPicker ? undefined : (
+              <ViewPickerDropdown
+                onViewChange={onViewChange}
+                forcedViewType={forcedViewType}
+              />
+            )
           }
+          rightComponent={toolbarAction}
         />
       ) : (
         <ObjectSortDropdownComponentInstanceContext.Provider
@@ -75,13 +89,16 @@ export const ViewBar = ({
           <TopBar
             className={className}
             leftComponent={
-              <ViewPickerDropdown
-                onViewChange={onViewChange}
-                forcedViewType={forcedViewType}
-              />
+              hideViewPicker ? undefined : (
+                <ViewPickerDropdown
+                  onViewChange={onViewChange}
+                  forcedViewType={forcedViewType}
+                />
+              )
             }
             rightComponent={
               <>
+                {toolbarAction}
                 <ObjectFilterDropdownComponentInstanceContext.Provider
                   value={{ instanceId: filterDropdownId }}
                 >
@@ -93,7 +110,9 @@ export const ViewBar = ({
             }
             bottomComponent={
               <ViewBarDetails
-                hasFilterButton
+                hideCurrentRecordFilter={hideCurrentRecordFilter}
+                hasFilterButton={!hideQueryOnlyRecordFilters}
+                hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
                 viewBarId={viewBarId}
                 objectNamePlural={objectNamePlural}
                 rightComponent={<UpdateViewButtonGroup />}
