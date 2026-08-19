@@ -51,6 +51,8 @@ jobs:
           fetch-depth: 10
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
+        with:
+          cache-node-modules: false
       - name: Restore server build cache
         id: restore-server-build-cache
         uses: ./.github/actions/restore-cache
@@ -79,6 +81,8 @@ jobs:
           fetch-depth: 10
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
+        with:
+          cache-node-modules: false
       - name: Build twenty-shared
         run: npx nx build twenty-shared
       - name: Server / Run lint, typecheck & lingui extract
