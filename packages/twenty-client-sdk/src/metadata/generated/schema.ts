@@ -7234,7 +7234,6 @@ export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],c
 
 export interface CreateCommandMenuItemInput {workflowVersionId?: (Scalars['UUID'] | null),frontComponentId?: (Scalars['UUID'] | null),engineComponentKey: EngineComponentKey,label: Scalars['String'],icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),hotKeys?: (Scalars['String'][] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),payload?: (Scalars['JSON'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
 
-
 export interface UpdateCommandMenuItemInput {id: Scalars['UUID'],label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),engineComponentKey?: (EngineComponentKey | null),hotKeys?: (Scalars['String'][] | null),pageLayoutId?: (Scalars['UUID'] | null)}
 
 export interface CreateFrontComponentInput {id?: (Scalars['UUID'] | null),name: Scalars['String'],description?: (Scalars['String'] | null),sourceComponentPath: Scalars['String'],builtComponentPath: Scalars['String'],componentName: Scalars['String'],builtComponentChecksum: Scalars['String']}
@@ -8173,14 +8172,6 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isBillingSubscriptionItem = (obj?: { __typename?: any } | null): obj is BillingSubscriptionItem => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionItem"')
       return BillingSubscriptionItem_possibleTypes.includes(obj.__typename)
-    }
-
-
-
-    const BillingSubscription_possibleTypes: string[] = ['BillingSubscription']
-    export const isBillingSubscription = (obj?: { __typename?: any } | null): obj is BillingSubscription => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscription"')
-      return BillingSubscription_possibleTypes.includes(obj.__typename)
     }
 
 
