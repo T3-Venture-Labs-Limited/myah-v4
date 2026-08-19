@@ -261,8 +261,8 @@ jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
   ),
 }));
 
-jest.mock('@/ui/utilities/page-title/components/PageTitle', () => ({
-  PageTitle: () => null,
+jest.mock('@/ui/utilities/page-title/components/PageTitleEffect', () => ({
+  PageTitleEffect: () => null,
 }));
 
 const creatorShowUrl = (recordId: string) => `/object/creator/${recordId}`;

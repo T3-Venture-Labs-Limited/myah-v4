@@ -30,7 +30,8 @@ import { SnackBarProvider } from '@/ui/feedback/snack-bar-manager/components/Sna
 import { GlobalFilePreviewModal } from '@/ui/field/display/components/GlobalFilePreviewModal';
 import { UserThemeProviderEffect } from '@/ui/theme/components/UserThemeProviderEffect';
 import { PageFavicon } from '@/ui/utilities/page-favicon/components/PageFavicon';
-import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
+import { DocumentTitleProvider } from '@/ui/utilities/page-title/components/DocumentTitleProvider';
+import { PageTitleEffect } from '@/ui/utilities/page-title/components/PageTitleEffect';
 import { UserContextProvider } from '@/users/components/UserContextProvider';
 import { WorkspaceProviderEffect } from '@/workspace/components/WorkspaceProviderEffect';
 import { getPageTitleFromPath } from '~/utils/title-utils';
@@ -63,9 +64,11 @@ export const WorkspaceAppProviders = () => {
                             <PromiseRejectionEffect />
                             <EndTrialAfterPaymentMethodGater />
                             <GotoHotkeysEffectsProvider />
-                            <PageTitle title={pageTitle} />
-                            <PageFavicon />
-                            <Outlet />
+                            <DocumentTitleProvider>
+                              <PageTitleEffect title={pageTitle} />
+                              <PageFavicon />
+                              <Outlet />
+                            </DocumentTitleProvider>
                             <GlobalFilePreviewModal />
                             <CommandMenuConfirmationModalManager />
                             <CommandRunner />

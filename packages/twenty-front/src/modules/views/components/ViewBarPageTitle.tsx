@@ -4,7 +4,7 @@ import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadata
 import { useObjectNameSingularFromPlural } from '@/object-metadata/hooks/useObjectNameSingularFromPlural';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { recordIndexContextualViewNameComponentState } from '@/object-record/record-index/states/recordIndexContextualViewNameComponentState';
-import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
+import { PageTitleEffect } from '@/ui/utilities/page-title/components/PageTitleEffect';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 
@@ -28,5 +28,10 @@ export const ViewBarPageTitle = () => {
     ? `${viewName} - ${objectMetadataItem.labelPlural}`
     : objectMetadataItem.labelPlural;
 
-  return <PageTitle title={pageTitle} />;
+  return (
+    <PageTitleEffect
+      key={`${recordIndexId}:${currentView?.id ?? ''}`}
+      title={pageTitle}
+    />
+  );
 };

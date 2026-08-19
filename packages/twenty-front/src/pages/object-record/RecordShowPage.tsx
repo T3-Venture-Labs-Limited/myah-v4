@@ -46,6 +46,7 @@ export const RecordShowPage = () => {
           value={{ instanceId: recordShowComponentInstanceId }}
         >
           <RecordShowPageTitle
+            key={`${objectNameSingular}:${objectRecordId}`}
             objectNameSingular={objectNameSingular}
             objectRecordId={objectRecordId}
           />
