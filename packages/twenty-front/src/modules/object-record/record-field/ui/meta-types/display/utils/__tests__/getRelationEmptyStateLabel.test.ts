@@ -1,4 +1,4 @@
-import { getRelationEmptyStateLabel } from '../getRelationEmptyStateLabel';
+import { getRelationEmptyStateLabel } from '@/object-record/record-field/ui/meta-types/display/utils/getRelationEmptyStateLabel';
 
 describe('getRelationEmptyStateLabel', () => {
   const settings = {

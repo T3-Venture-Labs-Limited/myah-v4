@@ -808,7 +808,6 @@ describe('Myah standard metadata contract', () => {
           .universalIdentifier
       ];
 
-
     expect(campaignPageLayout).toMatchObject({
       universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
       objectMetadataUniversalIdentifier:
@@ -847,7 +846,9 @@ describe('Myah standard metadata contract', () => {
       influencersWidget?.configuration.configurationType !==
       WidgetConfigurationType.FIELD
     ) {
-      throw new Error('Campaign Influencers widget must use FIELD configuration');
+      throw new Error(
+        'Campaign Influencers widget must use FIELD configuration',
+      );
     }
     expect(influencersWidget.configuration.fieldDisplayMode).toBe(
       FieldDisplayMode.TABLE,
