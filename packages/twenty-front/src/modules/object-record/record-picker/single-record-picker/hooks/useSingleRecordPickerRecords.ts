@@ -17,14 +17,15 @@ export const useSingleRecordPickerRecords = ({
   const singleRecordPickerSelectedId = useAtomComponentStateValue(
     singleRecordPickerSelectedIdComponentState,
   );
-  const { pickableMorphItems, loading } = useSingleRecordPickerPerformSearch({
-    searchFilter: singleRecordPickerSearchFilter,
-    selectedIds: singleRecordPickerSelectedId
-      ? [singleRecordPickerSelectedId]
-      : [],
-    excludedRecordIds: excludedRecordIds,
-    objectNameSingulars,
-  });
+  const { pickableMorphItems, loading, error } =
+    useSingleRecordPickerPerformSearch({
+      searchFilter: singleRecordPickerSearchFilter,
+      selectedIds: singleRecordPickerSelectedId
+        ? [singleRecordPickerSelectedId]
+        : [],
+      excludedRecordIds: excludedRecordIds,
+      objectNameSingulars,
+    });
 
-  return { pickableMorphItems, loading };
+  return { pickableMorphItems, loading, error };
 };

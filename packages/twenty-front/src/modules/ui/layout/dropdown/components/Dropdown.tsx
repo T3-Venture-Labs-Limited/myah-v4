@@ -24,7 +24,14 @@ import {
   useFloating,
 } from '@floating-ui/react';
 import { styled } from '@linaria/react';
-import { type MouseEvent, type ReactNode, useCallback } from 'react';
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { type Keys } from 'react-hotkeys-hook';
 import { isDefined } from 'twenty-shared/utils';
@@ -56,6 +63,12 @@ export type DropdownProps = {
   dropdownPlacement?: Placement;
   dropdownOffset?: DropdownOffset;
   dropdownStrategy?: 'fixed' | 'absolute';
+  dropdownRole?: 'dialog' | 'listbox';
+  dropdownAriaLabel?: string;
+  clickableComponentAriaLabel?: string;
+  isClickableComponentKeyboardAccessible?: boolean;
+  autoFocusClickableComponent?: boolean;
+  onClickableComponentRef?: (element: HTMLDivElement | null) => void;
   onClickOutside?: () => void;
   onClose?: () => void;
   onOpen?: () => void;
@@ -79,6 +92,12 @@ export const Dropdown = ({
   dropdownPlacement = 'bottom-end',
   dropdownStrategy = 'absolute',
   dropdownOffset,
+  dropdownRole = 'listbox',
+  dropdownAriaLabel,
+  clickableComponentAriaLabel,
+  isClickableComponentKeyboardAccessible = false,
+  autoFocusClickableComponent = false,
+  onClickableComponentRef,
   onClickOutside,
   onClose,
   onOpen,
@@ -172,8 +191,25 @@ export const Dropdown = ({
     strategy: dropdownStrategy,
   });
 
-  const handleClickableComponentClick = useCallback(
-    async (event: MouseEvent) => {
+  const clickableComponentRef = useRef<HTMLDivElement>(null);
+
+  const setClickableComponentReference = useCallback(
+    (element: HTMLDivElement | null) => {
+      clickableComponentRef.current = element;
+      refs.setReference(element);
+      onClickableComponentRef?.(element);
+    },
+    [onClickableComponentRef, refs],
+  );
+
+  useEffect(() => {
+    if (autoFocusClickableComponent) {
+      clickableComponentRef.current?.focus();
+    }
+  }, [autoFocusClickableComponent]);
+
+  const handleClickableComponentToggle = useCallback(
+    (event: MouseEvent | KeyboardEvent) => {
       if (disableClickForClickableComponent) return;
       event.stopPropagation();
       event.preventDefault();
@@ -191,18 +227,48 @@ export const Dropdown = ({
     ],
   );
 
+  const handleClickableComponentClick = (event: MouseEvent) => {
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest('a') !== null
+    ) {
+      return;
+    }
+
+    handleClickableComponentToggle(event);
+  };
+
+  const handleClickableComponentKeyDown = (event: KeyboardEvent) => {
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest('a') !== null
+    ) {
+      return;
+    }
+
+    if (
+      isClickableComponentKeyboardAccessible &&
+      (event.key === 'Enter' || event.key === ' ')
+    ) {
+      handleClickableComponentToggle(event);
+    }
+  };
+
   return (
     <DropdownComponentInstanceContext.Provider
       value={{ instanceId: dropdownId }}
     >
       {isDefined(clickableComponent) ? (
         <StyledClickableComponent
-          ref={refs.setReference}
+          ref={setClickableComponentReference}
           onClick={handleClickableComponentClick}
+          onKeyDown={handleClickableComponentKeyDown}
           aria-controls={`${dropdownId}-options`}
           aria-expanded={isDropdownOpen}
-          aria-haspopup={true}
+          aria-haspopup={dropdownRole === 'dialog' ? 'dialog' : true}
+          aria-label={clickableComponentAriaLabel}
           role="button"
+          tabIndex={isClickableComponentKeyboardAccessible ? 0 : undefined}
           width={clickableComponentWidth}
         >
           {clickableComponent}
@@ -212,6 +278,8 @@ export const Dropdown = ({
       )}
       {isDropdownOpen && (
         <DropdownInternalContainer
+          dropdownRole={dropdownRole}
+          dropdownAriaLabel={dropdownAriaLabel}
           floatingStyles={floatingStyles}
           dropdownComponents={dropdownComponents}
           dropdownId={dropdownId}

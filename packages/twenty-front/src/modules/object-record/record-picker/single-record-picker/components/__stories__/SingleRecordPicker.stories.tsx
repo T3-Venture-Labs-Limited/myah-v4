@@ -65,7 +65,7 @@ export const WithEmptyOption: Story = {
 export const WithSearchFilter: Story = {
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
-    const searchInput = await canvas.findByRole('textbox');
+    const searchInput = await canvas.findByRole('combobox');
 
     await step('Enter search text', async () => {
       await sleep(50);

@@ -46,6 +46,8 @@ const StyledDropdownInsideContainer = styled.div`
 export type DropdownInternalContainerProps = {
   dropdownId: string;
   dropdownPlacement: Placement;
+  dropdownRole: 'dialog' | 'listbox';
+  dropdownAriaLabel?: string;
   floatingUiRefs: UseFloatingReturn['refs'];
   onClickOutside?: () => void;
   floatingStyles: UseFloatingReturn['floatingStyles'];
@@ -63,6 +65,8 @@ export const DropdownInternalContainer = ({
   dropdownId,
   dropdownPlacement,
   floatingUiRefs,
+  dropdownRole,
+  dropdownAriaLabel,
   onClickOutside,
   floatingStyles,
   hotkey,
@@ -158,7 +162,8 @@ export const DropdownInternalContainer = ({
         <StyledDropdownContentContainer
           ref={floatingUiRefs.setFloating}
           style={dropdownMenuStyles}
-          role="listbox"
+          role={dropdownRole}
+          aria-label={dropdownAriaLabel}
           id={`${dropdownId}-options`}
           data-click-outside-id={excludedClickOutsideId}
           isDropdownInModal={isDropdownInModal}

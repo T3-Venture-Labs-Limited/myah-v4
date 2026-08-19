@@ -55,7 +55,7 @@ const defaultSearchPlaceholder = msg`Search`;
 export const DropdownMenuSearchInput = forwardRef<
   HTMLInputElement,
   InputHTMLAttributes<HTMLInputElement>
->(({ value, onChange, placeholder, type }, forwardedRef) => {
+>(({ value, onChange, placeholder, type, ...inputProps }, forwardedRef) => {
   const { i18n } = useLingui();
   const { inputRef } = useInputFocusWithoutScrollOnMount();
   const ref = forwardedRef ?? inputRef;
@@ -63,9 +63,14 @@ export const DropdownMenuSearchInput = forwardRef<
   return (
     <StyledDropdownMenuSearchInputContainer>
       <StyledInput
+        // oxlint-disable-next-line react/jsx-props-no-spreading -- Forward native input accessibility props.
+        {...inputProps}
         autoComplete="off"
-        {...{ onChange, placeholder: translatedPlaceholder, type, value }}
+        onChange={onChange}
+        placeholder={translatedPlaceholder}
         ref={ref}
+        type={type}
+        value={value}
       />
     </StyledDropdownMenuSearchInputContainer>
   );
