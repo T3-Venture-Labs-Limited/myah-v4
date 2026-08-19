@@ -289,8 +289,28 @@ const buildFieldWidgetConfiguration = ({
   const fieldMetadataId = fieldName ? (fields[fieldName]?.id ?? null) : null;
 
   const view = viewUniversalIdentifier
-    ? Object.values(standardObjectMetadataRelatedEntityIds)
-        .flatMap((metadata) => Object.values(metadata.views))
+    ? Object.entries(STANDARD_OBJECTS)
+        .flatMap(([objectName, standardObject]) => {
+          const views = (
+            'views' in standardObject ? standardObject.views : {}
+          ) as Record<string, { universalIdentifier: string }>;
+          const relatedViews = standardObjectMetadataRelatedEntityIds[
+            objectName as AllStandardObjectName
+          ].views as Record<string, { id: string }>;
+
+          return Object.entries(views).flatMap(([viewName, standardView]) => {
+            const relatedView = relatedViews[viewName];
+
+            return relatedView
+              ? [
+                  {
+                    ...relatedView,
+                    universalIdentifier: standardView.universalIdentifier,
+                  },
+                ]
+              : [];
+          });
+        })
         .find(
           (candidate) =>
             candidate.universalIdentifier === viewUniversalIdentifier,

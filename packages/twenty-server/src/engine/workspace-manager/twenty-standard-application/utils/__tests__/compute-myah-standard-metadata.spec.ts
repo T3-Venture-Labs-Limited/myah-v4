@@ -19,6 +19,7 @@ import type { FlatRolePermissionFlag } from 'src/engine/metadata-modules/flat-ro
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import type { TwentyStandardAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/types/twenty-standard-all-flat-entity-maps.type';
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
+import { FieldDisplayMode } from 'src/engine/metadata-modules/page-layout-widget/enums/field-display-mode.enum';
 import {
   MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
   MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
@@ -797,6 +798,16 @@ describe('Myah standard metadata contract', () => {
       result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
         '23f43b7f-5d8b-4fa8-ba79-9b39ea1ca392'
       ];
+    const influencersWidget =
+      result.allFlatEntityMaps.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        '4f261ef0-51c3-4c6d-ae8f-c76d7fb2b4d2'
+      ];
+    const campaignInfluencersView =
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+          .universalIdentifier
+      ];
+
 
     expect(campaignPageLayout).toMatchObject({
       universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
@@ -831,6 +842,18 @@ describe('Myah standard metadata contract', () => {
     );
     expect(instructionsFieldsWidget.configuration.viewId).toBe(
       campaignInstructionsView?.id,
+    );
+    if (
+      influencersWidget?.configuration.configurationType !==
+      WidgetConfigurationType.FIELD
+    ) {
+      throw new Error('Campaign Influencers widget must use FIELD configuration');
+    }
+    expect(influencersWidget.configuration.fieldDisplayMode).toBe(
+      FieldDisplayMode.TABLE,
+    );
+    expect(influencersWidget.configuration.viewId).toBe(
+      campaignInfluencersView?.id,
     );
     {
       expect(overviewFieldsWidget.configuration.viewId).not.toBe(
@@ -890,6 +913,10 @@ describe('Myah standard metadata contract', () => {
           expect.objectContaining({
             universalIdentifier: '37c7d06e-5dc5-4e9e-938e-7fbaa7daf3d0',
             title: 'Tasks',
+          }),
+          expect.objectContaining({
+            universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+            title: 'Influencers',
           }),
           expect.objectContaining({
             universalIdentifier: 'cd78ad8c-883a-4ce1-9b74-526adadb751d',
@@ -1076,6 +1103,8 @@ describe('Myah standard metadata contract', () => {
           relationTargetFieldMetadataUniversalIdentifier:
             campaignCreatorSourceFieldUniversalIdentifier,
           universalSettings: expect.objectContaining({
+            emptyStateLabel: 'Legacy / source unavailable',
+            emptyStateWhenBooleanFieldIsFalse: 'isDirectlyAdded',
             junctionTargetFieldUniversalIdentifier:
               creatorListSourceFieldUniversalIdentifier,
           }),
@@ -1141,8 +1170,9 @@ describe('Myah standard metadata contract', () => {
       .sort((left, right) => left.position - right.position)
       .map(
         ({ fieldMetadataUniversalIdentifier }) =>
-          result.allFlatEntityMaps.flatFieldMetadataMaps
-            .byUniversalIdentifier[fieldMetadataUniversalIdentifier]?.name,
+          result.allFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+            fieldMetadataUniversalIdentifier
+          ]?.name,
       );
 
     expect(campaignInfluencersFieldNames).toEqual([

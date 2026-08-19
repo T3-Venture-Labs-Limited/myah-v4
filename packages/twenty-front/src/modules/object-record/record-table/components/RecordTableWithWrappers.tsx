@@ -77,13 +77,6 @@ export const RecordTableWithWrappers = ({
     resetFocusStackToRecordIndex(recordIndexFocusId);
   };
 
-  const tableContent = (
-    <>
-      <RecordTableRecordLimitReloadEffect />
-      <RecordTable />
-    </>
-  );
-
   return (
     <RecordTableComponentInstance recordTableId={recordTableId}>
       <RecordTableContextProvider
@@ -99,7 +92,8 @@ export const RecordTableWithWrappers = ({
             <ScrollWrapper
               componentInstanceId={`record-table-scroll-${recordTableId}`}
             >
-              {tableContent}
+              <RecordTableRecordLimitReloadEffect />
+              <RecordTable />
             </ScrollWrapper>
           </StyledRecordTablePrintBoundary>
         </EntityDeleteContext.Provider>
