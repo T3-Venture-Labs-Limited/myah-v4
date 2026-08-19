@@ -333,11 +333,8 @@ describe('CreatorBulkRelationshipDialog', () => {
       screen.getByRole('button', { name: 'Add to campaign' }),
     ).toBeDisabled();
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Add to campaign' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add to campaign' }));
 
     expect(mockApplyCreatorBulkRelationship).not.toHaveBeenCalled();
   });
-
 });

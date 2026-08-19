@@ -1,12 +1,15 @@
 import { gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
+import { SingleRecordPicker } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPicker';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { useState } from 'react';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { SingleRecordPicker } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPicker';
-import { Button } from 'twenty-ui/input';
+import { useState } from 'react';
+import { Button, Checkbox } from 'twenty-ui/input';
+
+const APPROVAL_BATCH_SIZE = 500;
 
 const SNAPSHOT = gql`
   query CampaignInfluencerSnapshot($input: CampaignInfluencerCampaignInput!) {
@@ -18,6 +21,7 @@ const SNAPSHOT = gql`
     }
   }
 `;
+
 const ATTACH = gql`
   mutation AttachCampaignCreatorLists(
     $input: AttachCampaignCreatorListsInput!
@@ -30,27 +34,25 @@ const ATTACH = gql`
     }
   }
 `;
-const ADD_DIRECT = gql`
-  mutation AddDirectCampaignCreators($input: AddDirectCampaignCreatorsInput!) {
-    addDirectCampaignCreators(input: $input) {
-      campaignCreators {
-        id
-        creatorId
-      }
-    }
-  }
-`;
-const IMPACT = gql`
-  query CampaignCreatorListRemovalImpact(
-    $input: CampaignCreatorListRemovalImpactInput!
+
+const ADDITION_CANDIDATES = gql`
+  query CampaignCreatorListAdditionCandidates(
+    $input: CampaignCreatorListAdditionCandidatesInput!
   ) {
-    campaignCreatorListRemovalImpact(input: $input) {
-      affectedCreatorIds
-      requiresConfirmation
-      confirmationToken
+    campaignCreatorListAdditionCandidates(input: $input) {
+      creatorIds
     }
   }
 `;
+
+const APPROVE_ADDITIONS = gql`
+  mutation ApproveCampaignCreatorListAdditions(
+    $input: ApproveCampaignCreatorListAdditionsInput!
+  ) {
+    approveCampaignCreatorListAdditions(input: $input)
+  }
+`;
+
 const DETACH = gql`
   mutation DetachCampaignCreatorList($input: DetachCampaignCreatorListInput!) {
     detachCampaignCreatorList(input: $input) {
@@ -74,64 +76,264 @@ type CampaignInfluencerSnapshotData = {
 };
 
 type CampaignInfluencerSnapshotVariables = {
-  input: {
-    campaignId: string;
+  input: { campaignId: string };
+};
+
+type CampaignCreatorListAdditionCandidatesData = {
+  campaignCreatorListAdditionCandidates: { creatorIds: string[] };
+};
+
+type CampaignCreatorListAdditionCandidatesVariables = {
+  input: { campaignId: string; creatorListId: string };
+};
+
+type ApproveCampaignCreatorListAdditionsData = {
+  approveCampaignCreatorListAdditions: boolean;
+};
+
+type ApproveCampaignCreatorListAdditionsVariables = {
+  input: { campaignId: string; creatorListId: string; creatorIds: string[] };
+};
+
+type DetachCampaignCreatorListData = {
+  detachCampaignCreatorList: {
+    campaignCreatorLists: CampaignCreatorList[];
   };
 };
 
-type CampaignCreatorListRemovalImpact = {
-  affectedCreatorIds: string[];
-  requiresConfirmation: boolean;
-  confirmationToken: string;
+type DetachCampaignCreatorListVariables = {
+  input: { campaignId: string; creatorListId: string };
 };
 
-type CampaignCreatorListRemovalImpactData = {
-  campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpact;
+type CreatorListAttachmentProps = {
+  campaignId: string;
+  creatorListId: string;
+  creatorListName: string;
+  onDetach: (creatorListId: string) => void;
+  onChanged: () => Promise<void>;
 };
 
-type CampaignCreatorListRemovalImpactVariables = {
-  input: {
-    campaignId: string;
-    creatorListId: string | null;
+const CreatorListAttachment = ({
+  campaignId,
+  creatorListId,
+  creatorListName,
+  onDetach,
+  onChanged,
+}: CreatorListAttachmentProps) => {
+  const { closeModal, openModal } = useModal();
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [selectedCreatorIds, setSelectedCreatorIds] = useState<string[]>([]);
+  const [reviewError, setReviewError] = useState<string>();
+  const [refreshError, setRefreshError] = useState<string>();
+  const reviewModalInstanceId = `campaign-list-additions-${campaignId}-${creatorListId}`;
+  const { data, refetch } = useQuery<
+    CampaignCreatorListAdditionCandidatesData,
+    CampaignCreatorListAdditionCandidatesVariables
+  >(ADDITION_CANDIDATES, {
+    variables: { input: { campaignId, creatorListId } },
+  });
+  const [approve] = useMutation<
+    ApproveCampaignCreatorListAdditionsData,
+    ApproveCampaignCreatorListAdditionsVariables
+  >(APPROVE_ADDITIONS);
+  const candidateIds =
+    data?.campaignCreatorListAdditionCandidates.creatorIds ?? [];
+  const { records: creators, loading: areCandidateLabelsLoading } =
+    useFindManyRecords<ObjectRecord & { name?: string }>({
+      limit: candidateIds.length,
+      objectNameSingular: 'creator',
+      filter: { id: { in: candidateIds } },
+      recordGqlFields: { id: true, name: true },
+      skip: candidateIds.length === 0,
+    });
+  const creatorNames = new Map(
+    creators.map((record) => [record.id, record.name?.trim()]),
+  );
+  const candidates = candidateIds.map((id) => ({
+    id,
+    label: creatorNames.get(id) || 'Creator (unavailable)',
+  }));
+
+  const openReview = () => {
+    setRefreshError(undefined);
+    setSelectedCreatorIds(candidateIds);
+    setReviewError(undefined);
+    setIsReviewOpen(true);
+    openModal(reviewModalInstanceId);
   };
+
+  const closeReview = (force = false) => {
+    if (isApproving && !force) {
+      return;
+    }
+
+    closeModal(reviewModalInstanceId);
+    setIsReviewOpen(false);
+    setSelectedCreatorIds([]);
+    setReviewError(undefined);
+  };
+
+  const submitApproval = async () => {
+    if (selectedCreatorIds.length === 0 || isApproving) {
+      return;
+    }
+
+    setIsApproving(true);
+    setRefreshError(undefined);
+    setReviewError(undefined);
+
+    try {
+      for (
+        let batchStartIndex = 0;
+        batchStartIndex < selectedCreatorIds.length;
+        batchStartIndex += APPROVAL_BATCH_SIZE
+      ) {
+        await approve({
+          variables: {
+            input: {
+              campaignId,
+              creatorListId,
+              creatorIds: selectedCreatorIds.slice(
+                batchStartIndex,
+                batchStartIndex + APPROVAL_BATCH_SIZE,
+              ),
+            },
+          },
+        });
+      }
+    } catch {
+      const result = await refetch().catch(() => undefined);
+      setSelectedCreatorIds(
+        result?.data?.campaignCreatorListAdditionCandidates.creatorIds ?? [],
+      );
+      setReviewError('The additions changed. Review the current candidates.');
+      setIsReviewOpen(true);
+      openModal(reviewModalInstanceId);
+      setIsApproving(false);
+      return;
+    }
+
+    closeReview(true);
+    try {
+      await Promise.all([refetch(), onChanged()]);
+    } catch {
+      setRefreshError(
+        'Approved additions were saved, but the view could not refresh.',
+      );
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        alignItems: 'center',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+      }}
+    >
+      <span>{creatorListName}</span>
+      {refreshError ? <p role="alert">{refreshError}</p> : null}
+      {candidateIds.length > 0 ? (
+        <Button
+          disabled={areCandidateLabelsLoading}
+          ariaLabel={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
+          onClick={openReview}
+          title={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
+          type="button"
+          variant="secondary"
+        />
+      ) : null}
+      <Button
+        ariaLabel="Remove Creator List"
+        onClick={() => onDetach(creatorListId)}
+        title="Remove Creator List"
+        type="button"
+        variant="secondary"
+      />
+      {isReviewOpen ? (
+        <ModalStatefulWrapper
+          isClosable
+          modalInstanceId={reviewModalInstanceId}
+          onClose={closeReview}
+          shouldCloseModalOnClickOutsideOrEscape={!isApproving}
+        >
+          <h2>{`Review additions from ${creatorListName}`}</h2>
+          <div aria-label="Creator List additions" role="group">
+            {candidates.map(({ id, label }) => (
+              <label key={id}>
+                <Checkbox
+                  aria-label={label}
+                  checked={selectedCreatorIds.includes(id)}
+                  onCheckedChange={(isSelected) =>
+                    setSelectedCreatorIds((current) =>
+                      isSelected
+                        ? [...new Set([...current, id])]
+                        : current.filter((creatorId) => creatorId !== id),
+                    )
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          {reviewError ? <p role="alert">{reviewError}</p> : null}
+          <Button
+            ariaLabel="Approve selected additions"
+            disabled={
+              areCandidateLabelsLoading ||
+              selectedCreatorIds.length === 0 ||
+              isApproving
+            }
+            onClick={() => void submitApproval()}
+            title="Approve selected additions"
+            type="button"
+            variant="primary"
+          />
+          <Button
+            ariaLabel="Cancel additions review"
+            onClick={() => closeReview()}
+            title="Cancel additions review"
+            type="button"
+            variant="secondary"
+          />
+        </ModalStatefulWrapper>
+      ) : null}
+    </div>
+  );
 };
+
+type MyahCampaignAudienceControlsProps = {
+  campaignId: string;
+  onAudienceChanged?: () => Promise<unknown>;
+};
+
 export const MyahCampaignAudienceControls = ({
   campaignId,
   onAudienceChanged,
-}: {
-  campaignId: string;
-  onAudienceChanged?: () => Promise<unknown>;
-}) => {
-  const [picker, setPicker] = useState<'list' | 'creator' | null>(null);
+}: MyahCampaignAudienceControlsProps) => {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(
-    null,
-  );
-  const [removingListId, setRemovingListId] = useState<string | null>(null);
-  const { openModal, closeModal } = useModal();
-  const [confirmed, setConfirmed] = useState(false);
-  const [reviewedRemovalImpact, setReviewedRemovalImpact] =
-    useState<CampaignCreatorListRemovalImpact | null>(null);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [detachingListId, setDetachingListId] = useState<string | null>(null);
+  const { closeModal, openModal } = useModal();
+  const pickerModalInstanceId = 'campaign-list-picker';
+  const detachModalInstanceId = `campaign-list-detach-${campaignId}`;
   const { data, refetch } = useQuery<
     CampaignInfluencerSnapshotData,
     CampaignInfluencerSnapshotVariables
-  >(SNAPSHOT, {
-    variables: { input: { campaignId } },
-  });
+  >(SNAPSHOT, { variables: { input: { campaignId } } });
   const [attach] = useMutation(ATTACH);
-  const [addDirect] = useMutation(ADD_DIRECT);
-  const [detach] = useMutation(DETACH);
-  const { data: impact, refetch: refetchImpact } = useQuery<
-    CampaignCreatorListRemovalImpactData,
-    CampaignCreatorListRemovalImpactVariables
-  >(IMPACT, {
-    variables: { input: { campaignId, creatorListId: removingListId } },
-    skip: !removingListId,
-    fetchPolicy: 'network-only',
-  });
-  const attachedListIds = (
-    data?.campaignInfluencerSnapshot?.campaignCreatorLists ?? []
-  ).map((list: { creatorListId: string }) => list.creatorListId);
+  const [detach] = useMutation<
+    DetachCampaignCreatorListData,
+    DetachCampaignCreatorListVariables
+  >(DETACH);
+  const apolloCoreClient = useApolloCoreClient();
+  const attachedLists =
+    data?.campaignInfluencerSnapshot.campaignCreatorLists ?? [];
+  const attachedListIds = attachedLists.map((list) => list.creatorListId);
   const { records: creatorLists } = useFindManyRecords<
     ObjectRecord & { name?: string }
   >({
@@ -150,222 +352,135 @@ export const MyahCampaignAudienceControls = ({
   const creatorListNames = new Map(
     creatorLists.map((record) => [record.id, record.name ?? 'Creator List']),
   );
-  const attachedLists =
-    data?.campaignInfluencerSnapshot?.campaignCreatorLists ?? [];
-  const removalImpact =
-    reviewedRemovalImpact ?? impact?.campaignCreatorListRemovalImpact;
-  const affectedCreatorIds = removalImpact?.affectedCreatorIds ?? [];
-  const { records: affectedCreators } = useFindManyRecords<
-    ObjectRecord & { name?: string }
-  >({
-    objectNameSingular: 'creator',
-    filter: { id: { in: affectedCreatorIds } },
-    recordGqlFields: { id: true, name: true },
-    skip: affectedCreatorIds.length === 0,
-  });
-  const affectedCreatorNames = new Map(
-    affectedCreators.map((record) => [record.id, record.name?.trim()]),
-  );
-  const affectedCreatorLabels = affectedCreatorIds
-    .map((id) => ({
-      id,
-      label: affectedCreatorNames.get(id) || 'Creator (unavailable)',
-    }))
-    .sort(
-      (first, second) =>
-        first.label.localeCompare(second.label) ||
-        first.id.localeCompare(second.id),
-    );
+
   const refresh = async () => {
-    await Promise.all([refetch(), refetchCampaignCreatorLists()]);
+    await Promise.all([
+      refetch(),
+      refetchCampaignCreatorLists(),
+      apolloCoreClient.refetchQueries({
+        include: ['active', 'inactive', 'FindManyCampaignCreators'],
+        updateCache: (cache) => {
+          cache.evict({ fieldName: 'campaignCreators' });
+        },
+      }),
+    ]);
     await onAudienceChanged?.();
   };
-  const selectListForRemoval = (creatorListId: string) => {
-    setConfirmed(false);
-    setReviewedRemovalImpact(null);
-    setRemovingListId(creatorListId);
-  };
+
   const submitList = async () => {
-    if (!selectedListId) return;
+    if (!selectedListId) {
+      return;
+    }
+
     await attach({
       variables: { input: { campaignId, creatorListIds: [selectedListId] } },
     });
     setSelectedListId(null);
     await refresh();
   };
-  const submitCreator = async () => {
-    if (!selectedCreatorId) return;
-    await addDirect({
-      variables: { input: { campaignId, creatorIds: [selectedCreatorId] } },
-    });
-    setSelectedCreatorId(null);
-    await refresh();
+
+  const openDetach = (creatorListId: string) => {
+    setDetachingListId(creatorListId);
+    openModal(detachModalInstanceId);
   };
+
+  const closeDetach = () => {
+    closeModal(detachModalInstanceId);
+    setDetachingListId(null);
+  };
+
   const submitDetach = async () => {
-    if (!removingListId || !removalImpact) return;
-    const latestImpact = (await refetchImpact()).data
-      ?.campaignCreatorListRemovalImpact;
-    if (!latestImpact) return;
-    const displayedIds = [...removalImpact.affectedCreatorIds].sort();
-    const latestIds = [...latestImpact.affectedCreatorIds].sort();
-    if (
-      latestImpact.confirmationToken !== removalImpact.confirmationToken ||
-      JSON.stringify(latestIds) !== JSON.stringify(displayedIds)
-    ) {
-      setReviewedRemovalImpact(latestImpact);
-      setConfirmed(false);
+    if (!detachingListId) {
       return;
     }
-    if (latestImpact.requiresConfirmation && !confirmed) return;
+
     await detach({
-      variables: {
-        input: {
-          campaignId,
-          creatorListId: removingListId,
-          confirmedCreatorIds: latestImpact.affectedCreatorIds,
-          confirmationToken: latestImpact.confirmationToken,
-        },
-      },
+      variables: { input: { campaignId, creatorListId: detachingListId } },
     });
-    setRemovingListId(null);
-    setConfirmed(false);
-    setReviewedRemovalImpact(null);
+    closeDetach();
     await refresh();
   };
+
   return (
     <>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <Button
-          title="Attach Creator List"
-          ariaLabel="Attach Creator List"
-          onClick={() => {
-            setPicker('list');
-            openModal('campaign-list-picker');
-          }}
-          type="button"
-          variant="secondary"
-        />
-        <Button
-          title="Add Direct Creator"
-          ariaLabel="Add Direct Creator"
-          onClick={() => {
-            setPicker('creator');
-            openModal('campaign-creator-picker');
-          }}
-          type="button"
-          variant="secondary"
-        />
-      </div>
-      {attachedLists.map((list: { id: string; creatorListId: string }) => (
-        <div
+      <Button
+        ariaLabel="Attach Creator List"
+        onClick={() => {
+          setIsPickerOpen(true);
+          openModal(pickerModalInstanceId);
+        }}
+        title="Attach Creator List"
+        type="button"
+        variant="secondary"
+      />
+      {attachedLists.map((list) => (
+        <CreatorListAttachment
+          campaignId={campaignId}
+          creatorListId={list.creatorListId}
+          creatorListName={
+            creatorListNames.get(list.creatorListId) ?? 'Creator List'
+          }
           key={list.id}
-          style={{
-            alignItems: 'center',
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-          }}
-        >
-          <span>
-            {creatorListNames.get(list.creatorListId) ?? 'Creator List'}
-          </span>
-          <Button
-            title="Remove Creator List"
-            ariaLabel="Remove Creator List"
-            onClick={() => selectListForRemoval(list.creatorListId)}
-            type="button"
-            variant="secondary"
-          />
-        </div>
+          onChanged={refresh}
+          onDetach={openDetach}
+        />
       ))}
-      {picker && (
+      {isPickerOpen ? (
         <ModalStatefulWrapper
           isClosable
-          modalInstanceId={`campaign-${picker}-picker`}
-          onClose={() => setPicker(null)}
+          modalInstanceId={pickerModalInstanceId}
+          onClose={() => setIsPickerOpen(false)}
         >
           <SingleRecordPicker
-            focusId={`campaign-${picker}-picker`}
-            componentInstanceId={`campaign-${picker}-picker`}
-            objectNameSingulars={[
-              picker === 'list' ? 'creatorList' : 'creator',
-            ]}
-            recordPickerInstanceId={`campaign-${picker}-picker`}
-            onCancel={() => setPicker(null)}
+            componentInstanceId={pickerModalInstanceId}
+            focusId={pickerModalInstanceId}
+            objectNameSingulars={['creatorList']}
+            onCancel={() => setIsPickerOpen(false)}
             onMorphItemSelected={(item) => {
-              if (picker === 'list') setSelectedListId(item?.recordId ?? null);
-              else setSelectedCreatorId(item?.recordId ?? null);
-              closeModal(`campaign-${picker}-picker`);
-              setPicker(null);
+              setSelectedListId(item?.recordId ?? null);
+              closeModal(pickerModalInstanceId);
+              setIsPickerOpen(false);
             }}
+            recordPickerInstanceId={pickerModalInstanceId}
           />
         </ModalStatefulWrapper>
-      )}
-      {removingListId && removalImpact && (
-        <div role="alertdialog" aria-label="Confirm Creator List removal">
+      ) : null}
+      {selectedListId ? (
+        <Button
+          ariaLabel="Attach selected Creator List"
+          onClick={() => void submitList()}
+          title="Attach selected Creator List"
+          type="button"
+          variant="primary"
+        />
+      ) : null}
+      {detachingListId ? (
+        <ModalStatefulWrapper
+          isClosable
+          modalInstanceId={detachModalInstanceId}
+          onClose={closeDetach}
+        >
+          <h2>{`Detach ${creatorListNames.get(detachingListId) ?? 'Creator List'}?`}</h2>
           <p>
-            Remove {creatorListNames.get(removingListId) ?? 'Creator List'}?
+            This only detaches the List. Existing Campaign influencers remain
+            unchanged.
           </p>
-          <p>
-            {removalImpact.affectedCreatorIds.length === 0
-              ? 'No creators lose their final source.'
-              : `${removalImpact.affectedCreatorIds.length} creator${removalImpact.affectedCreatorIds.length === 1 ? '' : 's'} lose their final source.`}
-          </p>
-          {affectedCreatorLabels.length > 0 && (
-            <ul aria-label="Affected Creators">
-              {affectedCreatorLabels.map(({ id, label }) => (
-                <li key={id}>{label}</li>
-              ))}
-            </ul>
-          )}
-          {removalImpact.requiresConfirmation && (
-            <label>
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(event) => setConfirmed(event.target.checked)}
-              />
-              Confirm removal of final-source creators
-            </label>
-          )}
           <Button
-            title="Confirm Creator List removal"
-            ariaLabel="Confirm Creator List removal"
+            ariaLabel="Confirm Creator List detach"
             onClick={() => void submitDetach()}
+            title="Confirm Creator List detach"
             type="button"
             variant="primary"
           />
           <Button
-            title="Cancel Creator List removal"
-            ariaLabel="Cancel Creator List removal"
-            onClick={() => {
-              setRemovingListId(null);
-              setConfirmed(false);
-              setReviewedRemovalImpact(null);
-            }}
+            ariaLabel="Cancel Creator List detach"
+            onClick={closeDetach}
+            title="Cancel Creator List detach"
             type="button"
             variant="secondary"
           />
-        </div>
-      )}
-      {selectedListId && (
-        <Button
-          title="Attach selected Creator List"
-          ariaLabel="Attach selected Creator List"
-          onClick={() => void submitList()}
-          type="button"
-          variant="primary"
-        />
-      )}
-      {selectedCreatorId && (
-        <Button
-          title="Add selected Direct Creator"
-          ariaLabel="Add selected Direct Creator"
-          onClick={() => void submitCreator()}
-          type="button"
-          variant="primary"
-        />
-      )}
+        </ModalStatefulWrapper>
+      ) : null}
     </>
   );
 };

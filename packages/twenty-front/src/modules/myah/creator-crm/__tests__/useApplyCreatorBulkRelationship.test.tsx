@@ -66,6 +66,14 @@ describe('useApplyCreatorBulkRelationship', () => {
       .mockReturnValueOnce([mockAddDirectCampaignCreators]);
   });
 
+  it('uses the current shared membership input type for bulk removal', () => {
+    renderHook(() => useApplyCreatorBulkRelationship());
+
+    expect(mockUseMutation.mock.calls[1][0].loc.source.body).toContain(
+      '$input: CreatorListMembershipIntentInput!',
+    );
+  });
+
   it('refreshes live List results and resets the contextual Creator table after removal', async () => {
     const executionOrder: string[] = [];
     mockRefetchQueries.mockImplementationOnce(() => {
@@ -253,7 +261,6 @@ describe('useApplyCreatorBulkRelationship', () => {
       }
     },
   );
-
   it('adds direct campaign creators without a mailbox assignment', async () => {
     const { result } = renderHook(() => useApplyCreatorBulkRelationship());
 
@@ -269,9 +276,8 @@ describe('useApplyCreatorBulkRelationship', () => {
         input: {
           campaignId: 'campaign-1',
           creatorIds: ['creator-1', 'creator-2'],
-          },
+        },
       },
     });
   });
-
 });

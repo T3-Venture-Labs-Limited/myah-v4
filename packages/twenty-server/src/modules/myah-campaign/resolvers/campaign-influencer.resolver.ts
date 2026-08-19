@@ -8,16 +8,15 @@ import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { CampaignInfluencerService } from 'src/modules/myah-campaign/services/campaign-influencer.service';
 import {
   AddDirectCampaignCreatorsInput,
+  ApproveCampaignCreatorListAdditionsInput,
   AttachCampaignCreatorListsInput,
-  CampaignCreatorListRemovalImpactDTO,
-  CampaignCreatorListRemovalImpactInput,
+  CampaignCreatorListAdditionCandidatesDTO,
+  CampaignCreatorListAdditionCandidatesInput,
   CampaignInfluencerCampaignInput,
   CampaignInfluencerSnapshotDTO,
   CreatorListMemberDTO,
   CreatorListMembersIntentInput,
   CreatorListMembershipIntentInput,
-  CreatorListMembershipRemovalImpactDTO,
-  RemoveCreatorListMemberIntentInput,
   DetachCampaignCreatorListInput,
 } from 'src/modules/myah-campaign/dtos/campaign-influencer.dto';
 @MetadataResolver()
@@ -53,14 +52,25 @@ export class CampaignInfluencerResolver {
     );
   }
 
-  @Query(() => CampaignCreatorListRemovalImpactDTO)
-  async campaignCreatorListRemovalImpact(
-    @Args('input') input: CampaignCreatorListRemovalImpactInput,
-  ): Promise<CampaignCreatorListRemovalImpactDTO> {
-    return this.service.campaignCreatorListRemovalImpact(
+  @Query(() => CampaignCreatorListAdditionCandidatesDTO)
+  async campaignCreatorListAdditionCandidates(
+    @Args('input') input: CampaignCreatorListAdditionCandidatesInput,
+  ): Promise<CampaignCreatorListAdditionCandidatesDTO> {
+    return this.service.campaignCreatorListAdditionCandidates(
       input,
       getWorkspaceAuthContext(),
     );
+  }
+
+  @Mutation(() => Boolean)
+  async approveCampaignCreatorListAdditions(
+    @Args('input') input: ApproveCampaignCreatorListAdditionsInput,
+  ) {
+    await this.service.approveCampaignCreatorListAdditions(
+      input,
+      getWorkspaceAuthContext(),
+    );
+    return true;
   }
 
   @Mutation(() => CampaignInfluencerSnapshotDTO)
@@ -68,15 +78,6 @@ export class CampaignInfluencerResolver {
     @Args('input') input: DetachCampaignCreatorListInput,
   ): Promise<CampaignInfluencerSnapshotDTO> {
     return this.service.detachCampaignCreatorList(
-      input,
-      getWorkspaceAuthContext(),
-    );
-  }
-  @Query(() => CreatorListMembershipRemovalImpactDTO)
-  async creatorListMembershipRemovalImpact(
-    @Args('input') input: CreatorListMembershipIntentInput,
-  ) {
-    return this.service.creatorListMembershipRemovalImpact(
       input,
       getWorkspaceAuthContext(),
     );
@@ -104,7 +105,7 @@ export class CampaignInfluencerResolver {
 
   @Mutation(() => Boolean)
   async removeCreatorListMemberIntent(
-    @Args('input') input: RemoveCreatorListMemberIntentInput,
+    @Args('input') input: CreatorListMembershipIntentInput,
   ) {
     return this.service.removeCreatorListMemberIntent(
       input,

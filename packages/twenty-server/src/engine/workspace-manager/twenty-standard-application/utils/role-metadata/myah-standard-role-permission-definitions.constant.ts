@@ -101,6 +101,11 @@ export const MYAH_STANDARD_OBJECT_PERMISSION_DEFINITIONS = [
   buildReadOnlyObjectPermissionDefinition({
     roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
     objectMetadataUniversalIdentifier:
+      MYAH_STANDARD_OBJECTS.campaignCreatorListSource.universalIdentifier,
+  }),
+  buildReadOnlyObjectPermissionDefinition({
+    roleUniversalIdentifier: MYAH_CREATOR_OPS_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
+    objectMetadataUniversalIdentifier:
       MYAH_STANDARD_OBJECTS.creatorListMember.universalIdentifier,
   }),
 ] as const;
@@ -146,9 +151,24 @@ const CAMPAIGN_CREATOR_PROTECTED_FIELDS = [
       .universalIdentifier,
   ],
 ] as const;
+const CAMPAIGN_CREATOR_LIST_SOURCE_PROTECTED_FIELDS = [
+  [
+    MYAH_STANDARD_OBJECTS.campaignCreatorListSource.universalIdentifier,
+    MYAH_STANDARD_OBJECTS.campaignCreatorListSource.fields.campaignCreator
+      .universalIdentifier,
+  ],
+  [
+    MYAH_STANDARD_OBJECTS.campaignCreatorListSource.universalIdentifier,
+    MYAH_STANDARD_OBJECTS.campaignCreatorListSource.fields.creatorList
+      .universalIdentifier,
+  ],
+] as const;
 
 export const MYAH_STANDARD_FIELD_PERMISSION_DEFINITIONS = [
-  ...CAMPAIGN_CREATOR_PROTECTED_FIELDS.map(
+  ...[
+    ...CAMPAIGN_CREATOR_PROTECTED_FIELDS,
+    ...CAMPAIGN_CREATOR_LIST_SOURCE_PROTECTED_FIELDS,
+  ].map(
     ([
       objectMetadataUniversalIdentifier,
       fieldMetadataUniversalIdentifier,

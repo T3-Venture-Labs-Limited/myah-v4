@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
 import { ViewBarDetails } from '@/views/components/ViewBarDetails';
+import { ViewFilterOperand } from 'twenty-shared/types';
 
 const currentRecordValue = JSON.stringify({
   selectedRecordIds: [],
@@ -142,23 +143,32 @@ jest.mock(
   }),
 );
 
-jest.mock('@/views/hooks/useApplyCurrentViewFilterGroupsToCurrentRecordFilterGroups', () => ({
-  useApplyCurrentViewFilterGroupsToCurrentRecordFilterGroups: () => ({
-    applyCurrentViewFilterGroupsToCurrentRecordFilterGroups: jest.fn(),
+jest.mock(
+  '@/views/hooks/useApplyCurrentViewFilterGroupsToCurrentRecordFilterGroups',
+  () => ({
+    useApplyCurrentViewFilterGroupsToCurrentRecordFilterGroups: () => ({
+      applyCurrentViewFilterGroupsToCurrentRecordFilterGroups: jest.fn(),
+    }),
   }),
-}));
+);
 
-jest.mock('@/views/hooks/useApplyCurrentViewFiltersToCurrentRecordFilters', () => ({
-  useApplyCurrentViewFiltersToCurrentRecordFilters: () => ({
-    applyCurrentViewFiltersToCurrentRecordFilters: jest.fn(),
+jest.mock(
+  '@/views/hooks/useApplyCurrentViewFiltersToCurrentRecordFilters',
+  () => ({
+    useApplyCurrentViewFiltersToCurrentRecordFilters: () => ({
+      applyCurrentViewFiltersToCurrentRecordFilters: jest.fn(),
+    }),
   }),
-}));
+);
 
-jest.mock('@/views/hooks/useApplyCurrentViewAnyFieldFilterToAnyFieldFilter', () => ({
-  useApplyCurrentViewAnyFieldFilterToAnyFieldFilter: () => ({
-    applyCurrentViewAnyFieldFilterToAnyFieldFilter: jest.fn(),
+jest.mock(
+  '@/views/hooks/useApplyCurrentViewAnyFieldFilterToAnyFieldFilter',
+  () => ({
+    useApplyCurrentViewAnyFieldFilterToAnyFieldFilter: () => ({
+      applyCurrentViewAnyFieldFilterToAnyFieldFilter: jest.fn(),
+    }),
   }),
-}));
+);
 
 jest.mock('@/views/hooks/useApplyCurrentViewSortsToCurrentRecordSorts', () => ({
   useApplyCurrentViewSortsToCurrentRecordSorts: () => ({
@@ -171,16 +181,21 @@ jest.mock('@/views/contexts/ViewBarControlIdsContext', () => ({
 }));
 
 jest.mock('@/ui/utilities/scroll/components/ScrollWrapper', () => ({
-  ScrollWrapper: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  ScrollWrapper: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
-jest.mock('@/views/editable-chip/components/EditableFilterDropdownButton', () => ({
-  EditableFilterDropdownButton: ({
-    recordFilter,
-  }: {
-    recordFilter: { label: string };
-  }) => <div>{recordFilter.label}</div>,
-}));
+jest.mock(
+  '@/views/editable-chip/components/EditableFilterDropdownButton',
+  () => ({
+    EditableFilterDropdownButton: ({
+      recordFilter,
+    }: {
+      recordFilter: { label: string };
+    }) => <div>{recordFilter.label}</div>,
+  }),
+);
 
 jest.mock('@/views/components/ViewBarDetailsAddFilterButton', () => ({
   ViewBarDetailsAddFilterButton: () => <button>Add filter</button>,
@@ -198,9 +213,12 @@ jest.mock('@/views/components/AnyFieldSearchDropdownButton', () => ({
   AnyFieldSearchDropdownButton: () => null,
 }));
 
-jest.mock('@/views/advanced-filter-chip/components/AdvancedFilterDropdownButton', () => ({
-  AdvancedFilterDropdownButton: () => null,
-}));
+jest.mock(
+  '@/views/advanced-filter-chip/components/AdvancedFilterDropdownButton',
+  () => ({
+    AdvancedFilterDropdownButton: () => null,
+  }),
+);
 
 describe('ViewBarDetails', () => {
   it('hides query-only filter chips while retaining user filters', () => {
@@ -210,7 +228,7 @@ describe('ViewBarDetails', () => {
         hideCurrentRecordFilter={{
           fieldMetadataId: 'campaign-field',
           relationTargetFieldMetadataId: null,
-          operand: 'IS',
+          operand: ViewFilterOperand.IS,
         }}
         hasFilterButton={false}
         viewBarId="campaign-influencers"
@@ -222,7 +240,9 @@ describe('ViewBarDetails', () => {
     expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByText('Other relation')).toBeInTheDocument();
     expect(screen.getByText('JSON text')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add filter' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add filter' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('Different relation target')).toBeInTheDocument();
   });
 

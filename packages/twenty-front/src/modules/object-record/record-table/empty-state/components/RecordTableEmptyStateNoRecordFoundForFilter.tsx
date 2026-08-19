@@ -26,18 +26,24 @@ export const RecordTableEmptyStateNoRecordFoundForFilter = () => {
 
   const subTitle = t`No records matching the filter criteria were found.`;
 
+  if (recordIndexContext?.embeddedSurfaceOptions?.hideAddNew) {
+    return (
+      <RecordTableEmptyStateDisplay
+        animatedPlaceholderType="noMatchRecord"
+        subTitle={subTitle}
+        title={title}
+      />
+    );
+  }
+
   return (
     <RecordTableEmptyStateDisplay
       animatedPlaceholderType="noMatchRecord"
+      ButtonIcon={IconPlus}
+      buttonTitle={buttonTitle}
       subTitle={subTitle}
       title={title}
-      {...(recordIndexContext?.embeddedSurfaceOptions?.hideAddNew
-        ? {}
-        : {
-            buttonTitle,
-            ButtonIcon: IconPlus,
-            onClick: handleButtonClick,
-          })}
+      onClick={handleButtonClick}
     />
   );
 };

@@ -143,6 +143,8 @@ export type FieldRelationMetadataSettings = {
   relationType?: RelationType;
   // Join column name for the foreign key (e.g., "petId" for a "pet" relation)
   joinColumnName?: string | null;
+  emptyStateLabel?: string;
+  emptyStateWhenBooleanFieldIsFalse?: string;
   // Points to the target field on the junction object
   // For MORPH_RELATION fields, morphRelations already contains all targets
   junctionTargetFieldId?: string;

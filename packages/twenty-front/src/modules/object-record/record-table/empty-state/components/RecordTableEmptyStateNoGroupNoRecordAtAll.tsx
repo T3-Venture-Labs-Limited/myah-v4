@@ -33,20 +33,28 @@ export const RecordTableEmptyStateNoGroupNoRecordAtAll = () => {
     objectLabelSingular,
   );
 
+  if (recordIndexContext?.embeddedSurfaceOptions?.hideAddNew) {
+    return (
+      <RecordTableEmptyStateDisplay
+        animatedPlaceholderType="noRecord"
+        subTitle={
+          recordIndexContext?.hideEmptyStateSubtitle ? undefined : subTitle
+        }
+        title={title}
+      />
+    );
+  }
+
   return (
     <RecordTableEmptyStateDisplay
       animatedPlaceholderType="noRecord"
+      ButtonIcon={IconPlus}
+      buttonTitle={buttonTitle}
       subTitle={
         recordIndexContext?.hideEmptyStateSubtitle ? undefined : subTitle
       }
       title={title}
-      {...(recordIndexContext?.embeddedSurfaceOptions?.hideAddNew
-        ? {}
-        : {
-            buttonTitle,
-            ButtonIcon: IconPlus,
-            onClick: handleButtonClick,
-          })}
+      onClick={handleButtonClick}
     />
   );
 };

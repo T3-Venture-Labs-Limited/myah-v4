@@ -43,21 +43,26 @@ export class AddDirectCampaignCreatorsInput extends CampaignInfluencerCampaignIn
 }
 
 @InputType()
-export class CampaignCreatorListRemovalImpactInput extends CampaignInfluencerCampaignInput {
+export class CampaignCreatorListInput extends CampaignInfluencerCampaignInput {
   @Field(() => UUIDScalarType)
   @IsUUID()
   creatorListId!: string;
 }
 
 @InputType()
-export class DetachCampaignCreatorListInput extends CampaignCreatorListRemovalImpactInput {
+export class DetachCampaignCreatorListInput extends CampaignCreatorListInput {}
+
+@InputType()
+export class CampaignCreatorListAdditionCandidatesInput extends CampaignCreatorListInput {}
+
+@InputType()
+export class ApproveCampaignCreatorListAdditionsInput extends CampaignCreatorListInput {
   @Field(() => [UUIDScalarType])
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_IDS)
   @IsUUID('4', { each: true })
-  confirmedCreatorIds!: string[];
-
-  @Field({ nullable: true })
-  confirmationToken?: string;
+  creatorIds!: string[];
 }
 
 @ObjectType()
@@ -95,17 +100,10 @@ export class CampaignInfluencerSnapshotDTO {
   @Field(() => [CampaignCreatorListDTO])
   campaignCreatorLists!: CampaignCreatorListDTO[];
 }
-
 @ObjectType()
-export class CampaignCreatorListRemovalImpactDTO {
-  @Field(() => Boolean)
-  requiresConfirmation!: boolean;
-
+export class CampaignCreatorListAdditionCandidatesDTO {
   @Field(() => [UUIDScalarType])
-  affectedCreatorIds!: string[];
-
-  @Field({ nullable: true })
-  confirmationToken?: string;
+  creatorIds!: string[];
 }
 
 @InputType()
@@ -117,29 +115,6 @@ export class CreatorListMembershipIntentInput {
   @Field(() => UUIDScalarType)
   @IsUUID()
   creatorId!: string;
-}
-
-@InputType()
-export class RemoveCreatorListMemberIntentInput extends CreatorListMembershipIntentInput {
-  @Field(() => [UUIDScalarType])
-  @IsArray()
-  @IsUUID('4', { each: true })
-  confirmedCampaignIds!: string[];
-
-  @Field({ nullable: true })
-  confirmationToken?: string;
-}
-
-@ObjectType()
-export class CreatorListMembershipRemovalImpactDTO {
-  @Field(() => [UUIDScalarType])
-  affectedCampaignIds!: string[];
-
-  @Field(() => Boolean)
-  requiresConfirmation!: boolean;
-
-  @Field({ nullable: true })
-  confirmationToken?: string;
 }
 
 @ObjectType()

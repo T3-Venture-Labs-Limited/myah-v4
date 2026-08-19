@@ -1,18 +1,12 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { type ReactNode } from 'react';
+import { type ReactNode, useContext } from 'react';
 
 import { CampaignInfluencerIndex } from '@/myah/creator-crm/components/CampaignInfluencerIndex';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { RecordFilterValueDependenciesContext } from '@/object-record/record-filter/contexts/RecordFilterValueDependenciesContext';
 import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import {
-  FieldMetadataType,
-  ViewFilterOperand,
-  ViewType,
-} from 'twenty-shared/types';
+import { FieldMetadataType, ViewFilterOperand } from 'twenty-shared/types';
 const campaignInfluencersViewId = 'campaign-influencers-view';
-const campaignInfluencersViewUniversalIdentifier =
-  'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b';
 
 const mockApplyCreatorBulkRelationship = jest.fn();
 
@@ -49,12 +43,14 @@ const createDeferred = () => {
 const mockRecordIndexSurface = jest.fn(
   ({
     contextStoreInstanceId,
+    currentRecordId,
     embeddedSurfaceOptions,
     initialQueryOnlyRecordFilters,
     onViewChange,
     viewId,
   }: {
     contextStoreInstanceId: string;
+    currentRecordId?: string;
     embeddedSurfaceOptions?: {
       hideAddNew?: boolean;
       compactTable?: boolean;
@@ -79,6 +75,9 @@ const mockRecordIndexSurface = jest.fn(
       data-testid="record-index-surface"
     >
       {embeddedSurfaceOptions?.toolbarAction}
+      <output data-testid="current-record-id">
+        {currentRecordId ?? 'none'}
+      </output>
       {`Rows for ${initialQueryOnlyRecordFilters[0]?.value} in ${viewId}`}
       <button onClick={() => onViewChange?.('campaign-secondary-view')}>
         Switch Campaign view
@@ -122,7 +121,7 @@ jest.mock(
         shouldResetStateOnClose?: boolean;
       }) => {
         useSyncExternalStore(
-          (subscriber) => {
+          (subscriber: () => void) => {
             mockPickerItemSubscribers.add(subscriber);
 
             return () => mockPickerItemSubscribers.delete(subscriber);
@@ -207,7 +206,14 @@ jest.mock('@/object-record/record-index/components/RecordIndexSurface', () => ({
     initialQueryOnlyRecordFilters: Array<{ value: string }>;
     onViewChange?: (viewId: string) => void;
     viewId: string;
-  }) => mockRecordIndexSurface(props),
+  }) => {
+    const { currentRecord } = useContext(RecordFilterValueDependenciesContext);
+
+    return mockRecordIndexSurface({
+      ...props,
+      currentRecordId: currentRecord?.id,
+    });
+  },
 }));
 
 jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
@@ -231,17 +237,13 @@ jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
   useModal: () => ({ closeModal: jest.fn(), openModal: jest.fn() }),
 }));
 
-jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
-  useAtomStateValue: jest.fn(),
-}));
-
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue', () => {
   const { useSyncExternalStore } = jest.requireActual('react');
 
   return {
     useAtomComponentStateValue: () =>
       useSyncExternalStore(
-        (subscriber) => {
+        (subscriber: () => void) => {
           mockPickerItemSubscribers.add(subscriber);
 
           return () => mockPickerItemSubscribers.delete(subscriber);
@@ -269,13 +271,31 @@ jest.mock('twenty-ui/input', () => ({
     children,
     onClick,
     ariaLabel,
+    variant,
     ...props
   }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
     ariaLabel?: string;
+    variant?: string;
   }) => (
     <button
       aria-label={ariaLabel}
+      data-variant={variant}
       onClick={onClick}
+      // oxlint-disable-next-line react/jsx-props-no-spreading
+      {...props}
+    >
+      {children}
+    </button>
+  ),
+}));
+
+jest.mock('@/ui/layout/dropdown/components/StyledHeaderDropdownButton', () => ({
+  StyledHeaderDropdownButton: ({
+    children,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button
+      data-toolbar-action="true"
       // oxlint-disable-next-line react/jsx-props-no-spreading
       {...props}
     >
@@ -317,19 +337,6 @@ describe('CampaignInfluencerIndex', () => {
       canReadObjectRecords: true,
       canUpdateObjectRecords: true,
     });
-    (useAtomStateValue as jest.Mock).mockReturnValue([
-      {
-        id: 'decoy-campaign-creator-table-widget-view',
-        objectMetadataId: 'campaign-creator-object',
-        type: ViewType.TABLE_WIDGET,
-      },
-      {
-        id: campaignInfluencersViewId,
-        objectMetadataId: 'campaign-creator-object',
-        type: ViewType.TABLE_WIDGET,
-        universalIdentifier: campaignInfluencersViewUniversalIdentifier,
-      },
-    ]);
   });
 
   it('uses native Campaign controls and keeps creator selection in one dialog', () => {
@@ -376,6 +383,10 @@ describe('CampaignInfluencerIndex', () => {
     expect(indexSurfaceProps).not.toHaveProperty('headerActionButton');
     expect(indexSurfaceProps).not.toHaveProperty('headerTitle');
 
+    expect(
+      screen.getByRole('button', { name: 'Add Influencers' }),
+    ).toHaveAttribute('data-toolbar-action', 'true');
+
     fireEvent.click(screen.getByRole('button', { name: 'Add Influencers' }));
 
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
@@ -385,12 +396,17 @@ describe('CampaignInfluencerIndex', () => {
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
   });
 
-  it('uses the source-controlled Campaign Influencers view when a field widget has no view ID', () => {
-    render(<CampaignInfluencerIndex campaignId="campaign-a" />);
+  it('provides the open Campaign to the source-controlled current-record filter', () => {
+    render(
+      <CampaignInfluencerIndex
+        campaignId="campaign-a"
+        viewId={campaignInfluencersViewId}
+      />,
+    );
 
-    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
-      viewId: campaignInfluencersViewId,
-    });
+    expect(screen.getByTestId('current-record-id')).toHaveTextContent(
+      'campaign-a',
+    );
   });
 
   it('changes only the scoped Campaign view when its native picker selects a view', () => {
@@ -425,24 +441,6 @@ describe('CampaignInfluencerIndex', () => {
       '/object/campaignCreator/campaign-creator-a?viewId=campaign-secondary-view',
     );
     expect(window.location.href).toBe(parentUrl);
-  });
-
-  it('renders a bounded state when the Campaign Influencers view is unavailable', () => {
-    (useAtomStateValue as jest.Mock).mockReturnValue([]);
-
-    render(
-      <CampaignInfluencerIndex
-        campaignId="campaign-a"
-        viewId={campaignInfluencersViewId}
-      />,
-    );
-
-    expect(
-      screen.getByText('Campaign Influencers are unavailable.'),
-    ).toBeVisible();
-    expect(
-      screen.queryByTestId('record-index-surface'),
-    ).not.toBeInTheDocument();
   });
 
   it('hides Direct addition when Campaign updates are forbidden', () => {

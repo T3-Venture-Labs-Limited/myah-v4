@@ -64,7 +64,7 @@ const ADD_CREATOR_LIST_MEMBERS_INTENT = gql`
 `;
 const REMOVE_CREATOR_LIST_MEMBER_INTENT = gql`
   mutation RemoveCreatorListMemberIntent(
-    $input: RemoveCreatorListMemberIntentInput!
+    $input: CreatorListMembershipIntentInput!
   ) {
     removeCreatorListMemberIntent(input: $input)
   }
@@ -259,14 +259,10 @@ export const useApplyCreatorBulkRelationship = () => {
       creatorListId,
       creatorListMemberIdsToRemove,
       creatorIdsToRemove,
-      confirmedCampaignIds = [],
-      confirmationToken,
     }: {
       creatorListId: string;
       creatorListMemberIdsToRemove: string[];
       creatorIdsToRemove: string[];
-      confirmedCampaignIds?: string[];
-      confirmationToken?: string;
     }) => {
       if (creatorListMemberIdsToRemove.length === 0) {
         return { removedCount: 0, wasPartial: false };
@@ -281,8 +277,6 @@ export const useApplyCreatorBulkRelationship = () => {
           input: {
             creatorListId,
             creatorId: creatorIdsToRemove[0],
-            confirmedCampaignIds,
-            confirmationToken,
           },
         },
       }).catch(() => {

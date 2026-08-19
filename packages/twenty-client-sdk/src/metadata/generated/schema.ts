@@ -1436,18 +1436,9 @@ export interface CampaignInfluencerSnapshotDTO {
     __typename: 'CampaignInfluencerSnapshotDTO'
 }
 
-export interface CampaignCreatorListRemovalImpactDTO {
-    requiresConfirmation: Scalars['Boolean']
-    affectedCreatorIds: Scalars['UUID'][]
-    confirmationToken?: Scalars['String']
-    __typename: 'CampaignCreatorListRemovalImpactDTO'
-}
-
-export interface CreatorListMembershipRemovalImpactDTO {
-    affectedCampaignIds: Scalars['UUID'][]
-    requiresConfirmation: Scalars['Boolean']
-    confirmationToken?: Scalars['String']
-    __typename: 'CreatorListMembershipRemovalImpactDTO'
+export interface CampaignCreatorListAdditionCandidatesDTO {
+    creatorIds: Scalars['UUID'][]
+    __typename: 'CampaignCreatorListAdditionCandidatesDTO'
 }
 
 export interface CreatorListMemberDTO {
@@ -3058,8 +3049,7 @@ export interface Query {
     getViewFilterGroups: ViewFilterGroup[]
     getViewFilterGroup?: ViewFilterGroup
     campaignInfluencerSnapshot: CampaignInfluencerSnapshotDTO
-    campaignCreatorListRemovalImpact: CampaignCreatorListRemovalImpactDTO
-    creatorListMembershipRemovalImpact: CreatorListMembershipRemovalImpactDTO
+    campaignCreatorListAdditionCandidates: CampaignCreatorListAdditionCandidatesDTO
     commandMenuItems: CommandMenuItem[]
     commandMenuItem?: CommandMenuItem
     frontComponents: FrontComponent[]
@@ -3264,6 +3254,7 @@ export interface Mutation {
     destroyViewFilterGroup: Scalars['Boolean']
     attachCampaignCreatorLists: CampaignInfluencerSnapshotDTO
     addDirectCampaignCreators: CampaignInfluencerSnapshotDTO
+    approveCampaignCreatorListAdditions: Scalars['Boolean']
     detachCampaignCreatorList: CampaignInfluencerSnapshotDTO
     addCreatorListMemberIntent: CreatorListMemberDTO
     addCreatorListMembersIntent: CreatorListMemberDTO[]
@@ -4867,18 +4858,8 @@ export interface CampaignInfluencerSnapshotDTOGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface CampaignCreatorListRemovalImpactDTOGenqlSelection{
-    requiresConfirmation?: boolean | number
-    affectedCreatorIds?: boolean | number
-    confirmationToken?: boolean | number
-    __typename?: boolean | number
-    __scalar?: boolean | number
-}
-
-export interface CreatorListMembershipRemovalImpactDTOGenqlSelection{
-    affectedCampaignIds?: boolean | number
-    requiresConfirmation?: boolean | number
-    confirmationToken?: boolean | number
+export interface CampaignCreatorListAdditionCandidatesDTOGenqlSelection{
+    creatorIds?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6628,8 +6609,7 @@ export interface QueryGenqlSelection{
     getViewFilterGroups?: (ViewFilterGroupGenqlSelection & { __args?: {viewId?: (Scalars['String'] | null)} })
     getViewFilterGroup?: (ViewFilterGroupGenqlSelection & { __args: {id: Scalars['String']} })
     campaignInfluencerSnapshot?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: CampaignInfluencerCampaignInput} })
-    campaignCreatorListRemovalImpact?: (CampaignCreatorListRemovalImpactDTOGenqlSelection & { __args: {input: CampaignCreatorListRemovalImpactInput} })
-    creatorListMembershipRemovalImpact?: (CreatorListMembershipRemovalImpactDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
+    campaignCreatorListAdditionCandidates?: (CampaignCreatorListAdditionCandidatesDTOGenqlSelection & { __args: {input: CampaignCreatorListAdditionCandidatesInput} })
     commandMenuItems?: CommandMenuItemGenqlSelection
     commandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
     frontComponents?: FrontComponentGenqlSelection
@@ -6705,9 +6685,7 @@ export interface GetApiKeyInput {id: Scalars['UUID']}
 
 export interface CampaignInfluencerCampaignInput {campaignId: Scalars['UUID']}
 
-export interface CampaignCreatorListRemovalImpactInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
-
-export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID']}
+export interface CampaignCreatorListAdditionCandidatesInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
 
 export interface LogicFunctionIdInput {
 /** The id of the function. */
@@ -6877,10 +6855,11 @@ export interface MutationGenqlSelection{
     destroyViewFilterGroup?: { __args: {id: Scalars['String']} }
     attachCampaignCreatorLists?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AttachCampaignCreatorListsInput} })
     addDirectCampaignCreators?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: AddDirectCampaignCreatorsInput} })
+    approveCampaignCreatorListAdditions?: { __args: {input: ApproveCampaignCreatorListAdditionsInput} }
     detachCampaignCreatorList?: (CampaignInfluencerSnapshotDTOGenqlSelection & { __args: {input: DetachCampaignCreatorListInput} })
     addCreatorListMemberIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembershipIntentInput} })
     addCreatorListMembersIntent?: (CreatorListMemberDTOGenqlSelection & { __args: {input: CreatorListMembersIntentInput} })
-    removeCreatorListMemberIntent?: { __args: {input: RemoveCreatorListMemberIntentInput} }
+    removeCreatorListMemberIntent?: { __args: {input: CreatorListMembershipIntentInput} }
     createCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {input: CreateCommandMenuItemInput} })
     updateCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {input: UpdateCommandMenuItemInput} })
     resetCommandMenuItem?: (CommandMenuItemGenqlSelection & { __args: {id: Scalars['UUID']} })
@@ -7245,13 +7224,16 @@ export interface AttachCampaignCreatorListsInput {campaignId: Scalars['UUID'],cr
 
 export interface AddDirectCampaignCreatorsInput {campaignId: Scalars['UUID'],creatorIds: Scalars['UUID'][],assignedManagedMailboxId?: (Scalars['UUID'] | null)}
 
-export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],confirmedCreatorIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
+export interface ApproveCampaignCreatorListAdditionsInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
+
+export interface DetachCampaignCreatorListInput {campaignId: Scalars['UUID'],creatorListId: Scalars['UUID']}
+
+export interface CreatorListMembershipIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID']}
 
 export interface CreatorListMembersIntentInput {creatorListId: Scalars['UUID'],creatorIds: Scalars['UUID'][]}
 
-export interface RemoveCreatorListMemberIntentInput {creatorListId: Scalars['UUID'],creatorId: Scalars['UUID'],confirmedCampaignIds: Scalars['UUID'][],confirmationToken?: (Scalars['String'] | null)}
-
 export interface CreateCommandMenuItemInput {workflowVersionId?: (Scalars['UUID'] | null),frontComponentId?: (Scalars['UUID'] | null),engineComponentKey: EngineComponentKey,label: Scalars['String'],icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),hotKeys?: (Scalars['String'][] | null),conditionalAvailabilityExpression?: (Scalars['String'] | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),payload?: (Scalars['JSON'] | null),pageLayoutId?: (Scalars['UUID'] | null)}
+
 
 export interface UpdateCommandMenuItemInput {id: Scalars['UUID'],label?: (Scalars['String'] | null),icon?: (Scalars['String'] | null),shortLabel?: (Scalars['String'] | null),position?: (Scalars['Float'] | null),isPinned?: (Scalars['Boolean'] | null),availabilityType?: (CommandMenuItemAvailabilityType | null),availabilityObjectMetadataId?: (Scalars['UUID'] | null),engineComponentKey?: (EngineComponentKey | null),hotKeys?: (Scalars['String'][] | null),pageLayoutId?: (Scalars['UUID'] | null)}
 
@@ -8048,7 +8030,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isRecordIdentifier"')
       return RecordIdentifier_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const NavigationMenuItem_possibleTypes: string[] = ['NavigationMenuItem']
@@ -8104,7 +8086,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isLogicFunctionExecutionResult"')
       return LogicFunctionExecutionResult_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const LogicFunctionLogs_possibleTypes: string[] = ['LogicFunctionLogs']
@@ -8184,7 +8166,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingMeteredProduct"')
       return BillingMeteredProduct_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const BillingSubscriptionItem_possibleTypes: string[] = ['BillingSubscriptionItem']
@@ -8192,7 +8174,15 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscriptionItem"')
       return BillingSubscriptionItem_possibleTypes.includes(obj.__typename)
     }
-    
+
+
+
+    const BillingSubscription_possibleTypes: string[] = ['BillingSubscription']
+    export const isBillingSubscription = (obj?: { __typename?: any } | null): obj is BillingSubscription => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isBillingSubscription"')
+      return BillingSubscription_possibleTypes.includes(obj.__typename)
+    }
+
 
 
     const BillingSubscription_possibleTypes: string[] = ['BillingSubscription']
@@ -8208,7 +8198,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingCustomer"')
       return BillingCustomer_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const IndexField_possibleTypes: string[] = ['IndexField']
@@ -8216,7 +8206,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isIndexField"')
       return IndexField_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const IndexEdge_possibleTypes: string[] = ['IndexEdge']
@@ -8224,7 +8214,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isIndexEdge"')
       return IndexEdge_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const PageInfo_possibleTypes: string[] = ['PageInfo']
@@ -8232,7 +8222,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isPageInfo"')
       return PageInfo_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const IndexConnection_possibleTypes: string[] = ['IndexConnection']
@@ -8240,7 +8230,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isIndexConnection"')
       return IndexConnection_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectEdge_possibleTypes: string[] = ['ObjectEdge']
@@ -8248,7 +8238,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectEdge"')
       return ObjectEdge_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const IndexObjectMetadataConnection_possibleTypes: string[] = ['IndexObjectMetadataConnection']
@@ -8256,7 +8246,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isIndexObjectMetadataConnection"')
       return IndexObjectMetadataConnection_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectRecordCount_possibleTypes: string[] = ['ObjectRecordCount']
@@ -8264,7 +8254,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectRecordCount"')
       return ObjectRecordCount_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const SearchField_possibleTypes: string[] = ['SearchField']
@@ -8272,7 +8262,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isSearchField"')
       return SearchField_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectConnection_possibleTypes: string[] = ['ObjectConnection']
@@ -8280,7 +8270,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectConnection"')
       return ObjectConnection_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectIndexMetadatasConnection_possibleTypes: string[] = ['ObjectIndexMetadatasConnection']
@@ -8288,7 +8278,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectIndexMetadatasConnection"')
       return ObjectIndexMetadatasConnection_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const FieldEdge_possibleTypes: string[] = ['FieldEdge']
@@ -8296,7 +8286,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isFieldEdge"')
       return FieldEdge_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const ObjectFieldsConnection_possibleTypes: string[] = ['ObjectFieldsConnection']
@@ -8304,7 +8294,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isObjectFieldsConnection"')
       return ObjectFieldsConnection_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CampaignCreatorDTO_possibleTypes: string[] = ['CampaignCreatorDTO']
@@ -8312,7 +8302,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorDTO"')
       return CampaignCreatorDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CampaignCreatorListDTO_possibleTypes: string[] = ['CampaignCreatorListDTO']
@@ -8320,7 +8310,7 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
       if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorListDTO"')
       return CampaignCreatorListDTO_possibleTypes.includes(obj.__typename)
     }
-    
+
 
 
     const CampaignInfluencerSnapshotDTO_possibleTypes: string[] = ['CampaignInfluencerSnapshotDTO']
@@ -8331,18 +8321,10 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
-    const CampaignCreatorListRemovalImpactDTO_possibleTypes: string[] = ['CampaignCreatorListRemovalImpactDTO']
-    export const isCampaignCreatorListRemovalImpactDTO = (obj?: { __typename?: any } | null): obj is CampaignCreatorListRemovalImpactDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorListRemovalImpactDTO"')
-      return CampaignCreatorListRemovalImpactDTO_possibleTypes.includes(obj.__typename)
-    }
-    
-
-
-    const CreatorListMembershipRemovalImpactDTO_possibleTypes: string[] = ['CreatorListMembershipRemovalImpactDTO']
-    export const isCreatorListMembershipRemovalImpactDTO = (obj?: { __typename?: any } | null): obj is CreatorListMembershipRemovalImpactDTO => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isCreatorListMembershipRemovalImpactDTO"')
-      return CreatorListMembershipRemovalImpactDTO_possibleTypes.includes(obj.__typename)
+    const CampaignCreatorListAdditionCandidatesDTO_possibleTypes: string[] = ['CampaignCreatorListAdditionCandidatesDTO']
+    export const isCampaignCreatorListAdditionCandidatesDTO = (obj?: { __typename?: any } | null): obj is CampaignCreatorListAdditionCandidatesDTO => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isCampaignCreatorListAdditionCandidatesDTO"')
+      return CampaignCreatorListAdditionCandidatesDTO_possibleTypes.includes(obj.__typename)
     }
     
 

@@ -3,6 +3,7 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useOpenFormMultiRecordPicker } from '@/object-record/record-field/ui/form-types/hooks/useOpenFormMultiRecordPicker';
 import { RecordIndexSurface } from '@/object-record/record-index/components/RecordIndexSurface';
+import { RecordFilterValueDependenciesContext } from '@/object-record/record-filter/contexts/RecordFilterValueDependenciesContext';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
@@ -10,11 +11,10 @@ import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/
 import { getMultipleRecordPickerSelectableListId } from '@/object-record/record-picker/multiple-record-picker/utils/getMultipleRecordPickerSelectableListId';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { StyledHeaderDropdownButton } from '@/ui/layout/dropdown/components/StyledHeaderDropdownButton';
 import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { viewsSelector } from '@/views/states/selectors/viewsSelector';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useCallback, useMemo, useState } from 'react';
@@ -24,8 +24,6 @@ import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const CAMPAIGN_INFLUENCERS_FILTER_ID = 'a03b0867-2a0d-49ee-afd3-8a91de66462e';
-const CAMPAIGN_INFLUENCERS_VIEW_UNIVERSAL_IDENTIFIER =
-  'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b';
 
 const StyledScopeState = styled.div`
   align-items: center;
@@ -54,15 +52,15 @@ const AddCampaignInfluencersButton = ({
   const [error, setError] = useState<string>();
   const modalInstanceId = `campaign-influencers-add-${campaignId}`;
   const pickerInstanceId = `campaign-influencers-picker-${campaignId}`;
-  const pickerItems = useAtomComponentStateValue(
+  const multipleRecordPickerPickableMorphItems = useAtomComponentStateValue(
     multipleRecordPickerPickableMorphItemsComponentState,
     pickerInstanceId,
   );
-  const setPickerItems = useSetAtomComponentState(
+  const setMultipleRecordPickerPickableMorphItems = useSetAtomComponentState(
     multipleRecordPickerPickableMorphItemsComponentState,
     pickerInstanceId,
   );
-  const setPickerSearchFilter = useSetAtomComponentState(
+  const setMultipleRecordPickerSearchFilter = useSetAtomComponentState(
     multipleRecordPickerSearchFilterComponentState,
     pickerInstanceId,
   );
@@ -71,16 +69,16 @@ const AddCampaignInfluencersButton = ({
   );
   const selectedCreatorIds = useMemo(
     () =>
-      pickerItems
+      multipleRecordPickerPickableMorphItems
         .filter(({ isSelected }) => isSelected)
         .map(({ recordId }) => recordId),
-    [pickerItems],
+    [multipleRecordPickerPickableMorphItems],
   );
 
   const closeAndReset = useCallback(() => {
     resetSelectedItem();
-    setPickerItems([]);
-    setPickerSearchFilter('');
+    setMultipleRecordPickerPickableMorphItems([]);
+    setMultipleRecordPickerSearchFilter('');
     closeModal(modalInstanceId);
     setIsOpen(false);
     setError(undefined);
@@ -88,8 +86,8 @@ const AddCampaignInfluencersButton = ({
     closeModal,
     modalInstanceId,
     resetSelectedItem,
-    setPickerItems,
-    setPickerSearchFilter,
+    setMultipleRecordPickerPickableMorphItems,
+    setMultipleRecordPickerSearchFilter,
   ]);
 
   const handleOpen = useCallback(() => {
@@ -140,11 +138,9 @@ const AddCampaignInfluencersButton = ({
 
   return (
     <>
-      <Button
-        ariaLabel={t`Add Influencers`}
-        onClick={handleOpen}
-        title={t`Add Influencers`}
-      />
+      <StyledHeaderDropdownButton onClick={handleOpen}>
+        {t`Add Influencers`}
+      </StyledHeaderDropdownButton>
       {isOpen ? (
         <ModalStatefulWrapper
           modalInstanceId={modalInstanceId}
@@ -180,7 +176,7 @@ const AddCampaignInfluencersButton = ({
 
 type CampaignInfluencerIndexProps = {
   campaignId: string;
-  viewId?: string;
+  viewId: string;
 };
 
 export const CampaignInfluencerIndex = ({
@@ -194,20 +190,6 @@ export const CampaignInfluencerIndex = ({
   );
   const campaignCreatorPermissions = useObjectPermissionsForObject(
     campaignCreatorObjectMetadataItem?.id ?? '',
-  );
-  const views = useAtomStateValue(viewsSelector);
-  const fallbackCampaignInfluencersViewId = views.find(
-    (view) =>
-      view.objectMetadataId === campaignCreatorObjectMetadataItem?.id &&
-      view.universalIdentifier ===
-        CAMPAIGN_INFLUENCERS_VIEW_UNIVERSAL_IDENTIFIER,
-  )?.id;
-  const resolvedCampaignInfluencersViewId =
-    campaignInfluencersViewId ?? fallbackCampaignInfluencersViewId;
-  const hasCampaignInfluencersView = views.some(
-    (view) =>
-      view.id === resolvedCampaignInfluencersViewId &&
-      view.objectMetadataId === campaignCreatorObjectMetadataItem?.id,
   );
   const campaignFieldMetadataItem =
     campaignCreatorObjectMetadataItem?.fields.find(
@@ -230,7 +212,7 @@ export const CampaignInfluencerIndex = ({
   const selectedCampaignViewId =
     selectedCampaignView?.campaignId === campaignId
       ? selectedCampaignView.viewId
-      : resolvedCampaignInfluencersViewId;
+      : campaignInfluencersViewId;
   const campaignFilter = useMemo<RecordFilter | undefined>(() => {
     if (!campaignFieldMetadataItem || !campaignIdFieldMetadataItem) {
       return undefined;
@@ -269,9 +251,8 @@ export const CampaignInfluencerIndex = ({
 
   if (
     !campaignCreatorObjectMetadataItem ||
-    !campaignFilter ||
-    !hasCampaignInfluencersView ||
-    !selectedCampaignViewId
+    !campaignFieldMetadataItem ||
+    !campaignFilter
   ) {
     return (
       <StyledScopeState>{t`Campaign Influencers are unavailable.`}</StyledScopeState>
@@ -287,30 +268,39 @@ export const CampaignInfluencerIndex = ({
   }
 
   return (
-    <RecordIndexSurface
-      key={campaignId}
-      contextStoreInstanceId={`campaign-influencers-${campaignId}`}
-      objectNameSingular="campaignCreator"
-      viewId={selectedCampaignViewId}
-      indexIdentifierUrl={campaignCreatorShowUrl}
-      onViewChange={handleCampaignViewChange}
-      initialQueryOnlyRecordFilters={[campaignFilter]}
-      hideEmptyStateSubtitle
-      embeddedSurfaceOptions={{
-        hideAddNew: true,
-        compactTable: true,
-        hidePageHeader: true,
-        hideQueryOnlyRecordFilters: true,
-        hideViewPicker: true,
-        hideCurrentRecordFilter: {
-          fieldMetadataId: campaignFieldMetadataItem.id,
-          relationTargetFieldMetadataId: null,
-          operand: ViewFilterOperand.IS,
+    <RecordFilterValueDependenciesContext.Provider
+      value={{
+        currentRecord: {
+          id: campaignId,
+          objectMetadataNameSingular: 'campaign',
         },
-        toolbarAction: campaignPermissions.canUpdateObjectRecords ? (
-          <AddCampaignInfluencersButton campaignId={campaignId} />
-        ) : undefined,
       }}
-    />
+    >
+      <RecordIndexSurface
+        key={campaignId}
+        contextStoreInstanceId={`campaign-influencers-${campaignId}`}
+        objectNameSingular="campaignCreator"
+        viewId={selectedCampaignViewId}
+        indexIdentifierUrl={campaignCreatorShowUrl}
+        onViewChange={handleCampaignViewChange}
+        initialQueryOnlyRecordFilters={[campaignFilter]}
+        hideEmptyStateSubtitle
+        embeddedSurfaceOptions={{
+          hideAddNew: true,
+          compactTable: true,
+          hidePageHeader: true,
+          hideQueryOnlyRecordFilters: true,
+          hideViewPicker: true,
+          hideCurrentRecordFilter: {
+            fieldMetadataId: campaignFieldMetadataItem.id,
+            relationTargetFieldMetadataId: null,
+            operand: ViewFilterOperand.IS,
+          },
+          toolbarAction: campaignPermissions.canUpdateObjectRecords ? (
+            <AddCampaignInfluencersButton campaignId={campaignId} />
+          ) : undefined,
+        }}
+      />
+    </RecordFilterValueDependenciesContext.Provider>
   );
 };

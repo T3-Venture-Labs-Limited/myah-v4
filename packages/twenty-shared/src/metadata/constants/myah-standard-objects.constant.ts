@@ -544,6 +544,9 @@ export const MYAH_STANDARD_OBJECTS = {
       outreachActions: {
         universalIdentifier: 'e9b9d246-f49e-5200-9819-0a4c9cd0d19a',
       },
+      campaignCreatorListSources: {
+        universalIdentifier: '27519164-4421-49a2-a988-8bd4a6f18f89',
+      },
     },
     indexes: {
       creatorCampaignUniqueIndex: {
@@ -563,6 +566,9 @@ export const MYAH_STANDARD_OBJECTS = {
           isDirectlyAdded: {
             universalIdentifier: 'e26a2ba0-7cd6-46b8-a4a5-d74716f98e3c',
           },
+          campaignCreatorListSources: {
+            universalIdentifier: 'bdd20323-9414-4425-8a5a-283d0222c3b6',
+          },
         },
         viewFilters: {
           campaignCurrentRecord: {
@@ -571,6 +577,43 @@ export const MYAH_STANDARD_OBJECTS = {
         },
       },
     },
+  },
+  campaignCreatorListSource: {
+    universalIdentifier: '7973bfbb-ff71-47c3-94a6-9e4435eca326',
+    fields: {
+      id: { universalIdentifier: '4712068c-2d39-4361-a408-4fc01511a65d' },
+      createdAt: {
+        universalIdentifier: '07737c3b-8c94-4466-bf0d-706bc2525742',
+      },
+      updatedAt: {
+        universalIdentifier: 'da8ac377-d33f-4061-a093-e56cea8896b2',
+      },
+      deletedAt: {
+        universalIdentifier: 'bd58f15a-31c3-454b-849c-43679a06bf05',
+      },
+      position: { universalIdentifier: '297b8ce4-e729-4d6d-a1f7-cf49ffb0a683' },
+      createdBy: {
+        universalIdentifier: '756b0892-95bf-4bdb-8884-4ab6f249126a',
+      },
+      updatedBy: {
+        universalIdentifier: '3fa0973c-6e26-4330-b219-901b0f5a9f24',
+      },
+      searchVector: {
+        universalIdentifier: '26b9217a-80a4-4ba8-9b11-920d1e867598',
+      },
+      campaignCreator: {
+        universalIdentifier: '2fdb9140-873c-4984-8e00-a8656e268f4c',
+      },
+      creatorList: {
+        universalIdentifier: 'e4706d30-af24-4437-a8a1-466e485e71db',
+      },
+    },
+    indexes: {
+      campaignCreatorListSourceUniqueIndex: {
+        universalIdentifier: '83039fc0-5444-42d6-9f8d-1e4bb4f92841',
+      },
+    },
+    views: {},
   },
   campaignCreatorList: {
     universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b20',
@@ -887,6 +930,9 @@ export const MYAH_STANDARD_OBJECTS = {
       members: { universalIdentifier: 'ade71f2b-7f9d-5e4d-9d0b-3f20ce4d15df' },
       campaignCreatorLists: {
         universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b2d',
+      },
+      campaignCreatorListSources: {
+        universalIdentifier: 'c0587a89-8b1e-4067-9d1c-6f050528c34b',
       },
     },
     indexes: {},

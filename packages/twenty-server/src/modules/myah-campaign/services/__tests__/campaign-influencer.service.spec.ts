@@ -3,265 +3,714 @@ import {
   type ORMWorkspaceContext,
   withWorkspaceContext,
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
-import {
-  buildEffectiveCampaignCreators,
-  CampaignInfluencerService,
-  getCampaignListSyncChanges,
-  getSourceRemovalImpact,
-} from 'src/modules/myah-campaign/services/campaign-influencer.service';
+import { CampaignInfluencerService } from 'src/modules/myah-campaign/services/campaign-influencer.service';
 
-describe('CampaignInfluencerService audience invariants', () => {
-  it('deduplicates overlapping lists and preserves direct provenance', () => {
-    expect(
-      buildEffectiveCampaignCreators({
-        campaignId: 'campaign-1',
-        directCreatorIds: ['creator-1'],
-        listMembersByListId: {
-          'list-a': ['creator-1', 'creator-2'],
-          'list-b': ['creator-1'],
-        },
-      }),
-    ).toEqual([
-      {
-        campaignId: 'campaign-1',
-        creatorId: 'creator-1',
-        isDirectlyAdded: true,
-        sourceListIds: ['list-a', 'list-b'],
-      },
-      {
-        campaignId: 'campaign-1',
-        creatorId: 'creator-2',
-        isDirectlyAdded: false,
-        sourceListIds: ['list-a'],
-      },
-    ]);
-  });
+const campaignId = '11111111-1111-4111-8111-111111111111';
+const listOneId = '22222222-2222-4222-8222-222222222222';
+const listTwoId = '33333333-3333-4333-8333-333333333333';
+const creatorOneId = '44444444-4444-4444-8444-444444444444';
+const creatorTwoId = '55555555-5555-4555-8555-555555555555';
+const creatorThreeId = '66666666-6666-4666-8666-666666666666';
+const authContext = {
+  type: 'system',
+  workspace: { id: 'workspace-1' },
+} as never;
+const workspaceContext = {
+  authContext,
+  userWorkspaceRoleMap: {},
+  apiKeyRoleMap: {},
+} as unknown as ORMWorkspaceContext;
 
-  it('returns only new list members for explicit add-only review', () => {
+type Row = {
+  id: string;
+  campaignId?: string;
+  creatorId?: string;
+  creatorListId?: string;
+  campaignCreatorId?: string;
+  isDirectlyAdded?: boolean;
+  deletedAt?: string;
+};
+
+const matches = (row: Row, where: Record<string, unknown>) =>
+  Object.entries(where).every(
+    ([key, value]) => row[key as keyof Row] === value,
+  );
+type TestRepository = {
+  find: jest.Mock;
+  findOne: jest.Mock;
+  exists: jest.Mock;
+  upsert: jest.Mock;
+  softDelete: jest.Mock;
+  restore: jest.Mock;
+};
+
+const createRepository = (rows: Row[]) => ({
+  find: jest.fn(
+    async ({
+      where,
+      withDeleted = false,
+    }: {
+      where?: Record<string, unknown> | Record<string, unknown>[];
+      withDeleted?: boolean;
+    } = {}) =>
+      rows.filter(
+        (row) =>
+          (withDeleted || !row.deletedAt) &&
+          (!where ||
+            (Array.isArray(where)
+              ? where.some((item) => matches(row, item))
+              : matches(row, where))),
+      ),
+  ),
+  findOne: jest.fn(
+    async ({ where }: { where: Record<string, unknown> }) =>
+      rows.find((row) => !row.deletedAt && matches(row, where)) ?? null,
+  ),
+  exists: jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
+    rows.some((row) => !row.deletedAt && matches(row, where)),
+  ),
+  upsert: jest.fn(
+    async (
+      input: Row | Row[],
+      { conflictPaths }: { conflictPaths: (keyof Row)[] },
+    ) => {
+      for (const item of Array.isArray(input) ? input : [input]) {
+        const existing = rows.find(
+          (row) =>
+            !row.deletedAt &&
+            conflictPaths.every((key) => row[key] === item[key]),
+        );
+        if (existing) Object.assign(existing, item);
+        else rows.push({ ...item });
+      }
+    },
+  ),
+  softDelete: jest.fn(async (where: Record<string, unknown>) => {
+    for (const row of rows) if (matches(row, where)) row.deletedAt = 'deleted';
+  }),
+  restore: jest.fn(async (id: string) => {
+    const row = rows.find((candidate) => candidate.id === id);
+    if (row) row.deletedAt = undefined;
+  }),
+});
+
+const createHarness = (
+  seed: Partial<Record<string, Row[]>> = {},
+  {
+    testWorkspaceContext = workspaceContext,
+    callerVisibleRows = {},
+  }: {
+    testWorkspaceContext?: ORMWorkspaceContext;
+    callerVisibleRows?: Partial<Record<string, Row[]>>;
+  } = {},
+) => {
+  const rows = {
+    campaign: [{ id: campaignId }, ...(seed.campaign ?? [])],
+    creator: [
+      { id: creatorOneId },
+      { id: creatorTwoId },
+      { id: creatorThreeId },
+      ...(seed.creator ?? []),
+    ],
+    creatorList: [
+      { id: listOneId },
+      { id: listTwoId },
+      ...(seed.creatorList ?? []),
+    ],
+    campaignCreator: seed.campaignCreator ?? [],
+    campaignCreatorList: seed.campaignCreatorList ?? [],
+    campaignCreatorListSource: seed.campaignCreatorListSource ?? [],
+    creatorListMember: seed.creatorListMember ?? [],
+  };
+  const repositories = Object.fromEntries(
+    Object.entries(rows).map(([name, values]) => [
+      name,
+      createRepository(values),
+    ]),
+  ) as Record<string, TestRepository>;
+  const callerScopedRepositories = Object.fromEntries(
+    Object.entries(rows).map(([name, values]) => [
+      name,
+      createRepository(callerVisibleRows[name] ?? values),
+    ]),
+  ) as Record<string, TestRepository>;
+  const transactionManager = { id: 'transaction-manager' };
+  const manager = {
+    executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
+      withWorkspaceContext(testWorkspaceContext, callback),
+    ),
+    getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+      transaction: jest.fn(
+        async (callback: (transaction: unknown) => unknown) =>
+          callback(transactionManager),
+      ),
+    }),
+    getRepository: jest.fn(
+      async (
+        _workspaceId: string,
+        name: string,
+        options: { shouldBypassPermissionChecks?: boolean },
+      ) =>
+        options.shouldBypassPermissionChecks
+          ? repositories[name]
+          : callerScopedRepositories[name],
+    ),
+  } as unknown as GlobalWorkspaceOrmManager;
+  return {
+    rows,
+    repositories,
+    transactionManager,
+    service: new CampaignInfluencerService(manager),
+  };
+};
+
+describe('CampaignInfluencerService retained List admissions', () => {
+  it('snapshots source pairs and deduplicates overlapping List members', async () => {
+    const harness = createHarness({
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorOneId },
+        { id: 'member-2', creatorListId: listOneId, creatorId: creatorTwoId },
+        { id: 'member-3', creatorListId: listTwoId, creatorId: creatorOneId },
+      ],
+    });
+
+    await harness.service.attachCampaignCreatorLists(
+      { campaignId, creatorListIds: [listOneId, listTwoId] },
+      authContext,
+    );
+
+    expect(harness.rows.campaignCreator).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+        }),
+        expect.objectContaining({
+          campaignId,
+          creatorId: creatorTwoId,
+          isDirectlyAdded: false,
+        }),
+      ]),
+    );
     expect(
-      getCampaignListSyncChanges({
-        attachedListIds: ['list-a'],
-        existingCreators: [
-          { campaignId: 'campaign-1', creatorId: 'creator-1' },
+      harness.rows.campaignCreator.filter(
+        (row) => row.creatorId === creatorOneId,
+      ),
+    ).toHaveLength(1);
+    expect(
+      harness.rows.campaignCreatorListSource.map(
+        ({ campaignCreatorId, creatorListId }) => [
+          campaignCreatorId,
+          creatorListId,
         ],
-        listMembersByListId: { 'list-a': ['creator-1', 'creator-2'] },
-      }),
-    ).toEqual({ additions: ['creator-2'], preserved: ['creator-1'] });
-  });
-
-  it('keeps a campaign creator when one of several sources is removed', () => {
-    expect(
-      buildEffectiveCampaignCreators({
-        campaignId: 'campaign-1',
-        directCreatorIds: ['creator-1'],
-        listMembersByListId: { 'list-b': ['creator-1'] },
-      }),
-    ).toEqual([
-      {
-        campaignId: 'campaign-1',
-        creatorId: 'creator-1',
-        isDirectlyAdded: true,
-        sourceListIds: ['list-b'],
-      },
-    ]);
-  });
-  it('requires confirmation only when a removed List was the final source', () => {
-    expect(
-      getSourceRemovalImpact({
-        removedListId: 'list-a',
-        directCreatorIds: ['creator-1'],
-        listMembersByListId: {
-          'list-a': ['creator-1', 'creator-2'],
-          'list-b': ['creator-1'],
-        },
-      }),
-    ).toEqual({
-      affectedCreatorIds: ['creator-2'],
-      requiresConfirmation: true,
-    });
-  });
-});
-describe('CampaignInfluencerService generic membership guard', () => {
-  const authContext = {
-    type: 'system',
-    workspace: { id: 'workspace-1' },
-  } as never;
-  const workspaceContext = {
-    authContext,
-    userWorkspaceRoleMap: {},
-    apiKeyRoleMap: {},
-  } as unknown as ORMWorkspaceContext;
-
-  it.each([
-    [false, 'allows generic membership writes for unattached lists'],
-    [true, 'rejects generic membership writes for attached lists'],
-  ])('%s', async (attached) => {
-    const attachments = { exists: jest.fn().mockResolvedValue(attached) };
-    const manager = {
-      executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
-        withWorkspaceContext(workspaceContext, callback),
       ),
-      getRepository: jest.fn().mockResolvedValue(attachments),
-    } as unknown as GlobalWorkspaceOrmManager;
-    const service = new CampaignInfluencerService(manager);
-
-    const mutation = service.assertGenericMembershipMutationAllowed(
-      'list-1',
-      authContext,
-    );
-
-    if (attached) {
-      await expect(mutation).rejects.toThrow(
-        'Use the creator-list membership intent for attached lists',
-      );
-    } else {
-      await expect(mutation).resolves.toBeUndefined();
-    }
-    expect(attachments.exists).toHaveBeenCalledWith({
-      where: { creatorListId: 'list-1' },
-    });
-  });
-});
-
-describe('CampaignInfluencerService membership transaction safety', () => {
-  const authContext = {
-    type: 'system',
-    workspace: { id: 'workspace-1' },
-  } as never;
-  const workspaceContext = {
-    authContext,
-    userWorkspaceRoleMap: {},
-    apiKeyRoleMap: {},
-  } as unknown as ORMWorkspaceContext;
-
-  it('upserts and reloads a new membership on the transaction manager', async () => {
-    const transactionManager = { id: 'transaction-manager' };
-    const membership = {
-      id: 'membership-1',
-      creatorListId: 'list-1',
-      creatorId: 'creator-1',
-    };
-    const members = {
-      findOne: jest
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(membership),
-      save: jest.fn(),
-      upsert: jest.fn().mockResolvedValue(undefined),
-    };
-    const repositories = {
-      campaign: {},
-      campaignCreatorList: {
-        find: jest.fn().mockResolvedValue([]),
-      },
-      creator: {
-        findOne: jest.fn().mockResolvedValue({ id: 'creator-1' }),
-      },
-      creatorList: {
-        findOne: jest.fn().mockResolvedValue({ id: 'list-1' }),
-      },
-      creatorListMember: members,
-    };
-    const manager = {
-      executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
-        withWorkspaceContext(workspaceContext, callback),
-      ),
-      getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
-        transaction: jest.fn(async (callback: (manager: unknown) => unknown) =>
-          callback(transactionManager),
-        ),
-      }),
-      getRepository: jest.fn(
-        async (_workspaceId: string, name: keyof typeof repositories) =>
-          repositories[name],
-      ),
-    } as unknown as GlobalWorkspaceOrmManager;
-    const service = new CampaignInfluencerService(manager);
-
-    await expect(
-      service.addCreatorListMemberIntent(
-        { creatorListId: 'list-1', creatorId: 'creator-1' },
-        authContext,
-      ),
-    ).resolves.toEqual(membership);
-    expect(members.upsert).toHaveBeenCalledWith(
-      { creatorListId: 'list-1', creatorId: 'creator-1' },
-      {
-        conflictPaths: ['creatorListId', 'creatorId'],
-        indexPredicate: '"deletedAt" IS NULL',
-      },
-      transactionManager,
-    );
-    expect(members.save).not.toHaveBeenCalled();
-    expect(members.findOne).toHaveBeenLastCalledWith(
-      {
-        where: {
-          creatorListId: 'list-1',
-          creatorId: 'creator-1',
-        },
-      },
-      transactionManager,
+    ).toEqual(
+      expect.arrayContaining([
+        [
+          harness.rows.campaignCreator.find(
+            (row) => row.creatorId === creatorOneId,
+          )?.id,
+          listOneId,
+        ],
+        [
+          harness.rows.campaignCreator.find(
+            (row) => row.creatorId === creatorOneId,
+          )?.id,
+          listTwoId,
+        ],
+        [
+          harness.rows.campaignCreator.find(
+            (row) => row.creatorId === creatorTwoId,
+          )?.id,
+          listOneId,
+        ],
+      ]),
     );
   });
 
-  it('persists a managed mailbox on transactional direct additions', async () => {
-    const transactionManager = { id: 'transaction-manager' };
-    const campaignCreators = {
-      find: jest.fn().mockResolvedValue([]),
-      upsert: jest.fn().mockResolvedValue(undefined),
-    };
-    const repositories = {
-      campaign: {
-        findOne: jest.fn().mockResolvedValue({ id: 'campaign-1' }),
-      },
-      campaignCreator: campaignCreators,
-      campaignCreatorList: {
-        find: jest.fn().mockResolvedValue([]),
-      },
-      creator: {
-        findOne: jest.fn().mockResolvedValue({ id: 'creator-1' }),
-      },
-      creatorList: {},
-    };
-    const manager = {
-      executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
-        withWorkspaceContext(workspaceContext, callback),
-      ),
-      getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
-        transaction: jest.fn(async (callback: (manager: unknown) => unknown) =>
-          callback(transactionManager),
-        ),
-      }),
-      getRepository: jest.fn(
-        async (_workspaceId: string, name: keyof typeof repositories) =>
-          repositories[name],
-      ),
-    } as unknown as GlobalWorkspaceOrmManager;
-    const service = new CampaignInfluencerService(manager);
-
-    await service.addDirectCampaignCreators(
-      {
-        campaignId: 'campaign-1',
-        creatorIds: ['creator-1'],
-        assignedManagedMailboxId: 'mailbox-1',
-      },
-      authContext,
-    );
-
-    expect(campaignCreators.upsert).toHaveBeenCalledWith(
-      [
+  it('keeps later List members out of Campaigns until their current candidacy is approved', async () => {
+    const harness = createHarness({
+      campaignCreatorList: [
+        { id: 'attachment-1', campaignId, creatorListId: listOneId },
+      ],
+      campaignCreator: [
         {
-          campaignId: 'campaign-1',
-          creatorId: 'creator-1',
-          isDirectlyAdded: true,
-          assignedManagedMailboxId: 'mailbox-1',
+          id: 'creator-row-1',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
         },
       ],
+      campaignCreatorListSource: [
+        {
+          id: 'source-1',
+          campaignCreatorId: 'creator-row-1',
+          creatorListId: listOneId,
+        },
+      ],
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorOneId },
+      ],
+    });
+
+    await harness.service.addCreatorListMemberIntent(
+      { creatorListId: listOneId, creatorId: creatorTwoId },
+      authContext,
+    );
+
+    expect(harness.rows.campaignCreator).not.toContainEqual(
+      expect.objectContaining({ creatorId: creatorTwoId }),
+    );
+    await expect(
+      harness.service.campaignCreatorListAdditionCandidates(
+        { campaignId, creatorListId: listOneId },
+        authContext,
+      ),
+    ).resolves.toEqual({ creatorIds: [creatorTwoId] });
+    await harness.service.approveCampaignCreatorListAdditions(
+      { campaignId, creatorListId: listOneId, creatorIds: [creatorTwoId] },
+      authContext,
+    );
+    expect(harness.rows.campaignCreator).toContainEqual(
+      expect.objectContaining({ campaignId, creatorId: creatorTwoId }),
+    );
+    expect(harness.rows.campaignCreatorListSource).toContainEqual(
+      expect.objectContaining({ creatorListId: listOneId }),
+    );
+  });
+
+  it('locks the Creator List while approving additions', async () => {
+    const harness = createHarness({
+      campaignCreatorList: [
+        { id: 'attachment-1', campaignId, creatorListId: listOneId },
+      ],
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorTwoId },
+      ],
+    });
+
+    await harness.service.approveCampaignCreatorListAdditions(
+      { campaignId, creatorListId: listOneId, creatorIds: [creatorTwoId] },
+      authContext,
+    );
+
+    expect(harness.repositories.creatorList.findOne).toHaveBeenCalledWith(
       {
-        conflictPaths: ['campaignId', 'creatorId'],
-        indexPredicate: '"deletedAt" IS NULL',
+        where: { id: listOneId },
+        lock: { mode: 'pessimistic_write' },
       },
-      transactionManager,
+      harness.transactionManager,
+    );
+  });
+
+  it('does not admit a candidate when the List is detached during approval', async () => {
+    const harness = createHarness({
+      campaignCreatorList: [
+        { id: 'attachment-1', campaignId, creatorListId: listOneId },
+      ],
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorTwoId },
+      ],
+    });
+    const originalFindOne = harness.repositories.campaignCreatorList.findOne;
+    let attachmentLookups = 0;
+    harness.repositories.campaignCreatorList.findOne = jest.fn(
+      async (options, manager) => {
+        attachmentLookups += 1;
+        if (attachmentLookups === 2) {
+          harness.rows.campaignCreatorList.length = 0;
+        }
+        return originalFindOne(options, manager);
+      },
+    );
+
+    await expect(
+      harness.service.approveCampaignCreatorListAdditions(
+        { campaignId, creatorListId: listOneId, creatorIds: [creatorTwoId] },
+        authContext,
+      ),
+    ).rejects.toThrow('Campaign Creator List attachment not found');
+
+    expect(harness.rows.campaignCreator).not.toContainEqual(
+      expect.objectContaining({ campaignId, creatorId: creatorTwoId }),
+    );
+  });
+  it('approves and detaches Campaign List sources without Creator List update permission', async () => {
+    const campaignOperatorAuthContext = {
+      type: 'user',
+      workspace: { id: 'workspace-1' },
+      userWorkspaceId: 'user-workspace-1',
+    } as never;
+    const campaignOperatorWorkspaceContext = {
+      authContext: campaignOperatorAuthContext,
+      userWorkspaceRoleMap: { 'user-workspace-1': 'role-1' },
+      apiKeyRoleMap: {},
+      objectIdByNameSingular: {
+        campaign: 'campaign-object',
+        creatorList: 'creator-list-object',
+      },
+      permissionsPerRoleId: {
+        'role-1': {
+          'campaign-object': { canUpdateObjectRecords: true },
+          'creator-list-object': { canReadObjectRecords: true },
+        },
+      },
+    } as unknown as ORMWorkspaceContext;
+    const harness = createHarness(
+      {
+        campaignCreatorList: [
+          { id: 'attachment-1', campaignId, creatorListId: listOneId },
+        ],
+        creatorListMember: [
+          {
+            id: 'member-1',
+            creatorListId: listOneId,
+            creatorId: creatorTwoId,
+          },
+        ],
+      },
+      { testWorkspaceContext: campaignOperatorWorkspaceContext },
+    );
+
+    await expect(
+      harness.service.approveCampaignCreatorListAdditions(
+        { campaignId, creatorListId: listOneId, creatorIds: [creatorTwoId] },
+        campaignOperatorAuthContext,
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      harness.service.detachCampaignCreatorList(
+        { campaignId, creatorListId: listOneId },
+        campaignOperatorAuthContext,
+      ),
+    ).resolves.toEqual({
+      campaignCreators: expect.any(Array),
+      campaignCreatorLists: [],
+    });
+  });
+
+  it('rejects stale, not-member, invalid, or inaccessible candidates without admitting them', async () => {
+    const harness = createHarness({
+      campaignCreatorList: [
+        { id: 'attachment-1', campaignId, creatorListId: listOneId },
+      ],
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorTwoId },
+      ],
+    });
+
+    await harness.service.removeCreatorListMemberIntent(
+      { creatorListId: listOneId, creatorId: creatorTwoId },
+      authContext,
+    );
+    await expect(
+      harness.service.approveCampaignCreatorListAdditions(
+        { campaignId, creatorListId: listOneId, creatorIds: [creatorTwoId] },
+        authContext,
+      ),
+    ).rejects.toThrow('Creator is not an eligible List addition candidate');
+    await expect(
+      harness.service.campaignCreatorListAdditionCandidates(
+        { campaignId: 'not-a-uuid', creatorListId: listOneId },
+        authContext,
+      ),
+    ).rejects.toThrow('UUID');
+    await expect(
+      harness.service.campaignCreatorListAdditionCandidates(
+        {
+          campaignId: '77777777-7777-4777-8777-777777777777',
+          creatorListId: listOneId,
+        },
+        authContext,
+      ),
+    ).rejects.toThrow('Campaign not found');
+    const inaccessibleCreator = createHarness({
+      campaignCreatorList: [
+        { id: 'attachment-1', campaignId, creatorListId: listOneId },
+      ],
+      creatorListMember: [
+        {
+          id: 'member-2',
+          creatorListId: listOneId,
+          creatorId: '88888888-8888-4888-8888-888888888888',
+        },
+      ],
+    });
+    await expect(
+      inaccessibleCreator.service.campaignCreatorListAdditionCandidates(
+        { campaignId, creatorListId: listOneId },
+        authContext,
+      ),
+    ).rejects.toThrow('Creator not found');
+    expect(harness.rows.campaignCreator).toHaveLength(0);
+  });
+
+  it('does not bypass caller visibility when removing a List member', async () => {
+    const callerAuthContext = {
+      type: 'user',
+      workspace: { id: 'workspace-1' },
+      userWorkspaceId: 'user-workspace-1',
+    } as never;
+    const callerWorkspaceContext = {
+      authContext: callerAuthContext,
+      userWorkspaceRoleMap: { 'user-workspace-1': 'role-1' },
+      apiKeyRoleMap: {},
+      objectIdByNameSingular: { creatorList: 'creator-list-object' },
+      permissionsPerRoleId: {
+        'role-1': {
+          'creator-list-object': { canUpdateObjectRecords: true },
+        },
+      },
+    } as unknown as ORMWorkspaceContext;
+    const member = {
+      id: 'member-1',
+      creatorListId: listOneId,
+      creatorId: creatorOneId,
+    };
+    const inaccessibleCreator = createHarness(
+      { creatorListMember: [member] },
+      {
+        testWorkspaceContext: callerWorkspaceContext,
+        callerVisibleRows: { creator: [], creatorListMember: [] },
+      },
+    );
+    const inaccessibleMembership = createHarness(
+      { creatorListMember: [member] },
+      {
+        testWorkspaceContext: callerWorkspaceContext,
+        callerVisibleRows: { creatorListMember: [] },
+      },
+    );
+
+    await expect(
+      inaccessibleCreator.service.removeCreatorListMemberIntent(
+        { creatorListId: listOneId, creatorId: creatorOneId },
+        callerAuthContext,
+      ),
+    ).rejects.toThrow('Creator not found');
+    await expect(
+      inaccessibleMembership.service.removeCreatorListMemberIntent(
+        { creatorListId: listOneId, creatorId: creatorOneId },
+        callerAuthContext,
+      ),
+    ).rejects.toThrow('Creator list membership not found');
+    expect(inaccessibleCreator.rows.creatorListMember).toEqual([member]);
+    expect(inaccessibleMembership.rows.creatorListMember).toEqual([member]);
+  });
+
+  it('does not alter retained Creators, Direct, or List sources when a member leaves or a List detaches', async () => {
+    const harness = createHarness({
+      campaignCreatorList: [
+        { id: 'attachment-1', campaignId, creatorListId: listOneId },
+      ],
+      campaignCreator: [
+        {
+          id: 'creator-row-1',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+        },
+      ],
+      campaignCreatorListSource: [
+        {
+          id: 'source-1',
+          campaignCreatorId: 'creator-row-1',
+          creatorListId: listOneId,
+        },
+      ],
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorOneId },
+      ],
+    });
+
+    await harness.service.addDirectCampaignCreators(
+      { campaignId, creatorIds: [creatorOneId] },
+      authContext,
+    );
+    await harness.service.removeCreatorListMemberIntent(
+      { creatorListId: listOneId, creatorId: creatorOneId },
+      authContext,
+    );
+    await harness.service.detachCampaignCreatorList(
+      { campaignId, creatorListId: listOneId },
+      authContext,
+    );
+
+    expect(harness.rows.campaignCreator).toContainEqual(
+      expect.objectContaining({ id: 'creator-row-1', isDirectlyAdded: true }),
+    );
+    expect(harness.rows.campaignCreatorListSource).toEqual([
+      {
+        id: 'source-1',
+        campaignCreatorId: 'creator-row-1',
+        creatorListId: listOneId,
+      },
+    ]);
+  });
+
+  it('restores a soft-deleted Campaign Creator for direct re-addition', async () => {
+    const harness = createHarness({
+      campaignCreator: [
+        {
+          id: 'creator-row-1',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+          deletedAt: 'deleted',
+        },
+      ],
+    });
+
+    await harness.service.addDirectCampaignCreators(
+      { campaignId, creatorIds: [creatorOneId] },
+      authContext,
+    );
+
+    expect(harness.rows.campaignCreator).toHaveLength(1);
+    expect(harness.rows.campaignCreator).toContainEqual({
+      id: 'creator-row-1',
+      campaignId,
+      creatorId: creatorOneId,
+      isDirectlyAdded: true,
+    });
+  });
+
+  it('restores a soft-deleted Campaign Creator for an approved List addition', async () => {
+    const harness = createHarness({
+      campaignCreator: [
+        {
+          id: 'creator-row-1',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+          deletedAt: 'deleted',
+        },
+      ],
+      campaignCreatorList: [
+        { id: 'attachment-1', campaignId, creatorListId: listOneId },
+      ],
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorOneId },
+      ],
+    });
+
+    await harness.service.approveCampaignCreatorListAdditions(
+      { campaignId, creatorListId: listOneId, creatorIds: [creatorOneId] },
+      authContext,
+    );
+
+    expect(harness.rows.campaignCreator).toHaveLength(1);
+    expect(harness.rows.campaignCreator).toContainEqual({
+      id: 'creator-row-1',
+      campaignId,
+      creatorId: creatorOneId,
+      isDirectlyAdded: false,
+    });
+  });
+
+  it('does not restore a deleted duplicate when an active Creator exists', async () => {
+    const harness = createHarness({
+      campaignCreator: [
+        {
+          id: 'creator-row-active',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+        },
+        {
+          id: 'creator-row-deleted',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+          deletedAt: 'deleted',
+        },
+      ],
+      campaignCreatorList: [
+        { id: 'attachment-1', campaignId, creatorListId: listOneId },
+      ],
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorOneId },
+      ],
+    });
+
+    await harness.service.approveCampaignCreatorListAdditions(
+      { campaignId, creatorListId: listOneId, creatorIds: [creatorOneId] },
+      authContext,
+    );
+
+    expect(harness.repositories.campaignCreator.restore).not.toHaveBeenCalled();
+    expect(harness.rows.campaignCreator).toContainEqual(
+      expect.objectContaining({
+        id: 'creator-row-deleted',
+        deletedAt: 'deleted',
+      }),
+    );
+  });
+
+  it('restores only one deleted duplicate for direct re-addition', async () => {
+    const harness = createHarness({
+      campaignCreator: [
+        {
+          id: 'creator-row-a',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+          deletedAt: 'deleted',
+        },
+        {
+          id: 'creator-row-b',
+          campaignId,
+          creatorId: creatorOneId,
+          isDirectlyAdded: false,
+          deletedAt: 'deleted',
+        },
+      ],
+    });
+
+    await harness.service.addDirectCampaignCreators(
+      { campaignId, creatorIds: [creatorOneId] },
+      authContext,
+    );
+
+    expect(harness.repositories.campaignCreator.restore).toHaveBeenCalledWith(
+      'creator-row-a',
+      harness.transactionManager,
+    );
+    expect(harness.rows.campaignCreator).toContainEqual(
+      expect.objectContaining({ id: 'creator-row-b', deletedAt: 'deleted' }),
+    );
+  });
+
+  it('re-reads once after a dependent Creator write conflict', async () => {
+    const harness = createHarness({
+      creatorListMember: [
+        { id: 'member-1', creatorListId: listOneId, creatorId: creatorOneId },
+      ],
+    });
+    const creators = harness.repositories.campaignCreator;
+    creators.upsert.mockImplementationOnce(async () => {
+      harness.rows.campaignCreator.push({
+        id: 'creator-row-1',
+        campaignId,
+        creatorId: creatorOneId,
+        isDirectlyAdded: false,
+      });
+      throw Object.assign(new Error('duplicate key'), { code: '23505' });
+    });
+
+    await expect(
+      harness.service.attachCampaignCreatorLists(
+        { campaignId, creatorListIds: [listOneId] },
+        authContext,
+      ),
+    ).resolves.toBeDefined();
+    expect(harness.rows.campaignCreator).toHaveLength(1);
+    expect(harness.rows.campaignCreatorListSource).toContainEqual(
+      expect.objectContaining({
+        campaignCreatorId: 'creator-row-1',
+        creatorListId: listOneId,
+      }),
     );
   });
 });

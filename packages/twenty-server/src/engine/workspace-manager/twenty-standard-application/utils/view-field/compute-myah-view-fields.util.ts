@@ -896,6 +896,14 @@ const campaignInfluencerFields = [
     isVisible: true,
     size: 140,
   },
+  {
+    viewName: 'campaignInfluencers',
+    viewFieldName: 'campaignCreatorListSources',
+    fieldName: 'campaignCreatorListSources',
+    position: 3,
+    isVisible: true,
+    size: 220,
+  },
 ] satisfies readonly Spec<'campaignCreator', 'campaignInfluencers'>[];
 
 const campaignInformationCreatorListsFields = [

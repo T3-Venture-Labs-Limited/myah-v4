@@ -1,6 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { act, useEffect } from 'react';
-import type { ComponentProps } from 'react';
+import { act, createElement, type ComponentProps, useEffect } from 'react';
 
 import type { ViewBar as ViewBarComponent } from '@/views/components/ViewBar';
 
@@ -172,15 +171,23 @@ jest.mock(
   }),
 );
 
-jest.mock('@/object-record/object-options-dropdown/components/ObjectOptionsDropdown', () => ({
-  ObjectOptionsDropdown: () => <div data-testid="options-control" />,
-}));
+jest.mock(
+  '@/object-record/object-options-dropdown/components/ObjectOptionsDropdown',
+  () => ({
+    ObjectOptionsDropdown: () => <div data-testid="options-control" />,
+  }),
+);
 
-jest.mock('@/spreadsheet-import/provider/components/SpreadsheetImportProvider', () => ({
-  SpreadsheetImportProvider: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
-}));
+jest.mock(
+  '@/spreadsheet-import/provider/components/SpreadsheetImportProvider',
+  () => ({
+    SpreadsheetImportProvider: ({
+      children,
+    }: {
+      children: React.ReactNode;
+    }) => <>{children}</>,
+  }),
+);
 
 jest.mock('@/ui/layout/top-bar/components/TopBar', () => ({
   TopBar: ({
@@ -213,11 +220,9 @@ jest.mock(
 );
 
 jest.mock('@/views/contexts/ViewBarControlIdsContext', () => ({
-  ViewBarControlIdsProvider: ({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) => <>{children}</>,
+  ViewBarControlIdsProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
   useViewBarControlIds: () => ({
     filterDropdownId: 'filter-dropdown',
     viewSortDropdownId: 'view-sort-dropdown',
@@ -260,15 +265,13 @@ jest.mock('@/views/components/ViewBar', () => {
     ...actual,
     ViewBar: (props: ComponentProps<typeof actual.ViewBar>) => {
       mockViewBar(props);
-      return <actual.ViewBar {...props} />;
+      return createElement(actual.ViewBar, props);
     },
   };
 });
 jest.mock('@/views/components/UpdateViewButtonGroup', () => ({
   UpdateViewButtonGroup: () => null,
 }));
-
-
 
 jest.mock(
   '@/object-record/record-index/components/RecordIndexPageHeader',
@@ -359,7 +362,9 @@ jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
     secondaryBar: React.ReactNode;
   }) => (
     <>
-      {header && <div data-testid="page-header">{header}</div>}
+      {header === undefined || header === null ? null : (
+        <div data-testid="page-header">{header}</div>
+      )}
       {secondaryBar}
       {children}
     </>
@@ -565,7 +570,6 @@ describe('RecordIndexSurface', () => {
     );
   });
 
-
   it('renders an embedded toolbar action before native view controls', async () => {
     renderSurface(
       <RecordIndexSurface
@@ -617,9 +621,9 @@ describe('RecordIndexSurface', () => {
       name: 'Add creator',
     });
 
-    expect(
-      screen.getByTestId('view-bar-right').contains(toolbarAction),
-    ).toBe(true);
+    expect(screen.getByTestId('view-bar-right').contains(toolbarAction)).toBe(
+      true,
+    );
     expect(screen.queryByTestId('filter-control')).not.toBeInTheDocument();
     expect(screen.queryByTestId('sort-control')).not.toBeInTheDocument();
     expect(screen.queryByTestId('options-control')).not.toBeInTheDocument();

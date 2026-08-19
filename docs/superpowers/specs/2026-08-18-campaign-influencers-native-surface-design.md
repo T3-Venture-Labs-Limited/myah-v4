@@ -2,14 +2,14 @@
 
 ## Goal
 
-Make the Campaign Influencers tab read and behave as a compact, campaign-scoped use of Twenty's native Creators table. Remove the Campaign-only chrome, hidden-scope leakage, narrow-width overflow, misplaced table boundary, and nested selector dialog.
+Make the Campaign Influencers tab behave as a compact, campaign-scoped use of Twenty's native Creators table. Remove the Campaign-only chrome, hidden-scope leakage, misplaced table boundary, and nested selector dialog while preserving the native table's overflow behavior.
 
 ## Scope
 
 - Remove the bespoke Campaign Influencers page header and its menu.
 - Render `Add Influencers` in the native Record Index toolbar immediately before Filter, Sort, and Options.
 - Keep the Campaign relation query active, but never render its serialized current-record filter chip or remove control.
-- Preserve native table columns and interaction while fitting the Campaign tab without a horizontal scrollbar at supported narrow widths.
+- Preserve native table columns, interaction, and horizontal-scroll behavior: scroll only when the Campaign pane cannot fit the native columns, exactly as the normal Creators index does.
 - Use the normal Creators table footer boundary: after the last row and above Calculate; omit Add New in this embedded Campaign surface.
 - Replace the outer `Add Influencers` modal plus nested picker with one dialog that owns selection and submission.
 
@@ -28,10 +28,10 @@ The Campaign presentation policy continues to initialize the active current-reco
 
 The Campaign add action opens one stateful dialog. That dialog directly hosts the multi-record selector and confirmation button. Selecting Creators must not open another modal. Selection success applies the existing campaign relationship mutation and closes the dialog; failures retain selection and display the existing error state.
 
-The embedded table receives a Campaign-only layout policy based on the native Creators table structure. It disables Add New, uses intrinsic/flexible columns without an overflow-x scroll wrapper, and retains exactly one separator above Calculate.
+The embedded table uses the native Creators table wrapper and overflow behavior unchanged. It disables Add New and retains exactly one separator above Calculate.
 
 ## Verification
 
 Focused tests cover: the toolbar action placement/configuration; scope-chip omission while the query remains configured; default generic behavior remains unchanged; no Add New; Campaign table/footer layout contract; a single modal through picker selection and add confirmation; successful and failed add behavior.
 
-Browser UAT exercises the exact cmux Campaign route at desktop and narrow viewport widths. It verifies no serialized chip, no horizontal scroller, no below-Calculate separator, Add Influencers positioned left of Filter/Sort/Options, and one visible dialog while selecting and adding a Creator.
+Browser UAT exercises the exact cmux Campaign route at desktop and narrow viewport widths. It verifies no serialized chip, the native horizontal-scroll behavior only when the constrained table requires it, no below-Calculate separator, Add Influencers positioned left of Filter/Sort/Options, and one visible dialog while selecting and adding a Creator.
