@@ -1,15 +1,12 @@
 import {
   MyahInboxDraftEditor,
-  type MyahInboxAppliedProposal,
   type MyahInboxRichText,
 } from '@/myah/inbox/components/MyahInboxDraftEditor';
-import { MyahInboxProposalPreview } from '@/myah/inbox/components/MyahInboxProposalPreview';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 
 import { styled } from '@linaria/react';
-import { useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledReplyWorkspace = styled.section`
@@ -68,10 +65,6 @@ const MyahInboxReplyWorkspaceContent = ({
       },
       skip: false,
     });
-  const [appliedProposal, setAppliedProposal] =
-    useState<MyahInboxAppliedProposal | null>(null);
-  const [isApplyingProposal, setIsApplyingProposal] = useState(false);
-  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const canEditDraft = true;
 
   if (draftLoading) {
@@ -79,28 +72,11 @@ const MyahInboxReplyWorkspaceContent = ({
   }
 
   return (
-    <MyahInboxProposalPreview
+    <MyahInboxDraftEditor
       threadId={thread.id}
-      disabled={!canEditDraft || isDraftSaving || isApplyingProposal}
-      onApply={(body) => {
-        setIsApplyingProposal(true);
-        setAppliedProposal((current) => ({
-          applicationId: (current?.applicationId ?? 0) + 1,
-          body,
-        }));
-      }}
-      renderGenerateAction={(generateAction) => (
-        <MyahInboxDraftEditor
-          threadId={thread.id}
-          initialBody={draftRecord?.myahReplyDraftBody ?? null}
-          initialRevision={draftRecord?.myahReplyDraftRevision ?? 0}
-          canEdit={canEditDraft}
-          appliedProposal={appliedProposal}
-          proposalAction={generateAction}
-          onDraftSavingChange={setIsDraftSaving}
-          onProposalApplicationSettled={() => setIsApplyingProposal(false)}
-        />
-      )}
+      initialBody={draftRecord?.myahReplyDraftBody ?? null}
+      initialRevision={draftRecord?.myahReplyDraftRevision ?? 0}
+      canEdit={canEditDraft}
     />
   );
 };

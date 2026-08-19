@@ -1,13 +1,5 @@
 /* oxlint-disable react/jsx-props-no-spreading -- Tests reuse a typed baseline prop fixture. */
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
-import { StrictMode } from 'react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import type * as ReactType from 'react';
 
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
@@ -34,10 +26,12 @@ jest.mock('twenty-ui/theme-constants', () => ({
 }));
 
 const mockSaveDraft = jest.fn();
+const mockGenerateProposal = jest.fn();
 
 jest.mock('@/myah/inbox/hooks/useMyahInboxThreadMutations', () => ({
   useMyahInboxThreadMutations: () => ({
     saveDraft: mockSaveDraft,
+    generateProposal: mockGenerateProposal,
   }),
 }));
 
@@ -102,16 +96,13 @@ const defaultProps = {
   initialRevision: 2,
   canEdit: true,
   readOnlyReason: undefined,
-  appliedProposal: null,
-  proposalAction: null,
-  onDraftSavingChange: jest.fn(),
-  onProposalApplicationSettled: jest.fn(),
 };
 
 describe('MyahInboxDraftEditor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSaveDraft.mockReset();
+    mockGenerateProposal.mockReset();
   });
 
   it('saves with the last confirmed revision and announces success', async () => {
@@ -164,12 +155,7 @@ describe('MyahInboxDraftEditor', () => {
   });
 
   it('keeps Save draft and proposal generation in one action row without Clear draft', () => {
-    render(
-      <MyahInboxDraftEditor
-        {...defaultProps}
-        proposalAction={<button>Generate proposal</button>}
-      />,
-    );
+    render(<MyahInboxDraftEditor {...defaultProps} />);
 
     const actions = screen.getByLabelText('Draft actions');
     expect(
@@ -272,65 +258,66 @@ describe('MyahInboxDraftEditor', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('persists an applied proposal once in StrictMode', async () => {
-    mockSaveDraft.mockResolvedValue({
-      status: 'SAVED',
-      revision: 3,
+  it('replaces local editor text with a generated proposal without saving it', async () => {
+    mockGenerateProposal.mockResolvedValue({
       body: { markdown: 'proposed reply', blocknote: null },
     });
 
-    render(
-      <StrictMode>
-        <MyahInboxDraftEditor
-          {...defaultProps}
-          appliedProposal={{
-            applicationId: 1,
-            body: { markdown: 'proposed reply', blocknote: null },
-          }}
-        />
-      </StrictMode>,
-    );
+    render(<MyahInboxDraftEditor {...defaultProps} />);
 
-    await waitFor(() => expect(mockSaveDraft).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Generate proposal' }),
+      );
+    });
+
+    expect(mockGenerateProposal).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      operatorInstructions: 'Draft a concise reply to this conversation.',
+    });
+    expect(screen.getByLabelText('Shared reply draft')).toHaveValue(
+      'proposed reply',
+    );
+    expect(mockSaveDraft).not.toHaveBeenCalled();
   });
 
-  it('remounts proposal text after a conflict reload with the same proposal counter', async () => {
-    mockSaveDraft.mockResolvedValue({
-      status: 'CONFLICT',
-      revision: 4,
-      body: { markdown: 'newer server draft', blocknote: null },
+  it('announces a generated proposal in the draft action row', async () => {
+    mockGenerateProposal.mockResolvedValue({
+      body: { markdown: 'proposed reply', blocknote: null },
     });
-    const { rerender } = render(
-      <MyahInboxDraftEditor {...defaultProps} appliedProposal={null} />,
-    );
 
-    fireEvent.change(screen.getByLabelText('Shared reply draft'), {
-      target: { value: 'my unsaved local draft' },
-    });
+    render(<MyahInboxDraftEditor {...defaultProps} />);
+
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Generate proposal' }),
+      );
     });
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Reload and discard local changes',
-      }),
-    );
 
-    rerender(
-      <MyahInboxDraftEditor
-        {...defaultProps}
-        appliedProposal={{
-          applicationId: 1,
-          body: { markdown: 'first proposed reply', blocknote: null },
-        }}
-      />,
+    expect(
+      within(screen.getByLabelText('Draft actions')).getByRole('status'),
+    ).toHaveTextContent(
+      'Proposal generated. Review and save the draft when ready.',
     );
+    const actionRow = screen.getByLabelText('Draft actions');
 
-    await waitFor(() =>
-      expect(screen.getByLabelText('Shared reply draft')).toHaveValue(
-        'first proposed reply',
+    expect(
+      within(screen.getByLabelText('Draft action feedback')).getByRole(
+        'status',
       ),
-    );
+    ).toBe(within(actionRow).getByRole('status'));
+    expect(
+      within(screen.getByLabelText('Draft action buttons')).getByRole(
+        'button',
+        { name: 'Save draft' },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText('Draft action buttons')).getByRole(
+        'button',
+        { name: 'Generate proposal' },
+      ),
+    ).toBeInTheDocument();
   });
 
   it('keeps local text after a failed save and exposes a retryable error', async () => {
@@ -384,35 +371,5 @@ describe('MyahInboxDraftEditor', () => {
     rerender(<MyahInboxDraftEditor {...defaultProps} canEdit />);
 
     expect(screen.getByLabelText('Shared reply draft')).toBeEnabled();
-  });
-
-  it('persists an applied proposal through the revision-protected draft mutation', async () => {
-    mockSaveDraft.mockResolvedValue({
-      status: 'SAVED',
-      revision: 3,
-      body: { markdown: 'proposed reply', blocknote: null },
-    });
-    const { rerender } = render(<MyahInboxDraftEditor {...defaultProps} />);
-
-    rerender(
-      <MyahInboxDraftEditor
-        {...defaultProps}
-        appliedProposal={{
-          applicationId: 1,
-          body: { markdown: 'proposed reply', blocknote: null },
-        }}
-      />,
-    );
-
-    await waitFor(() =>
-      expect(mockSaveDraft).toHaveBeenCalledWith({
-        threadId: 'thread-1',
-        expectedRevision: 2,
-        body: { markdown: 'proposed reply', blocknote: null },
-      }),
-    );
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Draft saved at revision 3',
-    );
   });
 });

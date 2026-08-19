@@ -1,12 +1,6 @@
 import { FormAdvancedTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput';
 import { styled } from '@linaria/react';
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -19,7 +13,9 @@ const StyledDraftEditor = styled.section`
 `;
 
 const StyledActions = styled.div`
+  align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[2]};
   justify-content: flex-end;
 `;
@@ -27,6 +23,17 @@ const StyledActions = styled.div`
 const StyledHint = styled.div`
   color: ${themeCssVariables.font.color.tertiary};
   font-size: ${themeCssVariables.font.size.xs};
+`;
+
+const StyledActionFeedback = styled.div`
+  flex: 1 1 180px;
+  min-width: 0;
+`;
+
+const StyledActionButtons = styled.div`
+  display: flex;
+  flex: none;
+  gap: ${themeCssVariables.spacing[2]};
 `;
 
 const StyledStatus = styled.div`
@@ -57,21 +64,12 @@ export type MyahInboxRichText = {
   blocknote: string | null;
 };
 
-export type MyahInboxAppliedProposal = {
-  applicationId: number;
-  body: MyahInboxRichText;
-};
-
 type MyahInboxDraftEditorProps = {
   threadId: string;
   initialBody: MyahInboxRichText | null;
   initialRevision: number;
   canEdit: boolean;
   readOnlyReason?: string;
-  appliedProposal: MyahInboxAppliedProposal | null;
-  proposalAction: ReactNode;
-  onDraftSavingChange: (isSaving: boolean) => void;
-  onProposalApplicationSettled: () => void;
 };
 
 type DraftConflict = {
@@ -92,12 +90,8 @@ export const MyahInboxDraftEditor = ({
   initialRevision,
   canEdit,
   readOnlyReason,
-  appliedProposal,
-  proposalAction,
-  onDraftSavingChange,
-  onProposalApplicationSettled,
 }: MyahInboxDraftEditorProps) => {
-  const { saveDraft } = useMyahInboxThreadMutations();
+  const { generateProposal, saveDraft } = useMyahInboxThreadMutations();
   const [draftBody, setDraftBody] = useState(initialBody ?? EMPTY_DRAFT);
   const [confirmedRevision, setConfirmedRevision] = useState(initialRevision);
   const [editorVersion, setEditorVersion] = useState(0);
@@ -105,13 +99,11 @@ export const MyahInboxDraftEditor = ({
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  // oxlint-disable-next-line twenty/no-state-useref -- The ID suppresses StrictMode effect replays before state updates render.
-  const lastAppliedProposalApplicationIdRef = useRef<number | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const persistDraft = useCallback(
     async (submittedBody: MyahInboxRichText) => {
       setIsSaving(true);
-      onDraftSavingChange(true);
       setError(null);
       setStatus(null);
 
@@ -143,36 +135,35 @@ export const MyahInboxDraftEditor = ({
         setError('Could not save the draft. Your changes are still here.');
       } finally {
         setIsSaving(false);
-        onDraftSavingChange(false);
       }
     },
-    [confirmedRevision, onDraftSavingChange, saveDraft, threadId],
+    [confirmedRevision, saveDraft, threadId],
   );
 
-  useEffect(() => {
-    if (
-      !appliedProposal ||
-      appliedProposal.applicationId ===
-        lastAppliedProposalApplicationIdRef.current
-    ) {
-      return;
-    }
-
-    lastAppliedProposalApplicationIdRef.current = appliedProposal.applicationId;
-    setDraftBody(appliedProposal.body);
-    setEditorVersion((version) => version + 1);
+  const handleGenerateProposal = async () => {
+    setIsGenerating(true);
     setConflict(null);
     setError(null);
+    setStatus(null);
 
-    if (!canEdit) {
-      onProposalApplicationSettled();
-      return;
+    try {
+      const proposal = await generateProposal({
+        threadId,
+        operatorInstructions: 'Draft a concise reply to this conversation.',
+      });
+
+      setDraftBody({
+        markdown: proposal.body.markdown,
+        blocknote: proposal.body.blocknote ?? null,
+      });
+      setEditorVersion((version) => version + 1);
+      setStatus('Proposal generated. Review and save the draft when ready.');
+    } catch {
+      setError('Could not generate a proposal. Try again.');
+    } finally {
+      setIsGenerating(false);
     }
-
-    void persistDraft(appliedProposal.body).finally(
-      onProposalApplicationSettled,
-    );
-  }, [appliedProposal, canEdit, onProposalApplicationSettled, persistDraft]);
+  };
 
   const handleReloadConflict = () => {
     if (!conflict) {
@@ -206,17 +197,27 @@ export const MyahInboxDraftEditor = ({
       />
       {readOnlyReason && <StyledHint>{readOnlyReason}</StyledHint>}
       <StyledActions aria-label="Draft actions">
-        <Button
-          title={isSaving ? 'Saving draft' : 'Save draft'}
-          variant="primary"
-          size="small"
-          disabled={!canEdit || isSaving || conflict !== null}
-          onClick={() => void persistDraft(draftBody)}
-        />
-        {proposalAction}
+        <StyledActionFeedback aria-label="Draft action feedback">
+          {status && <StyledStatus role="status">{status}</StyledStatus>}
+          {error && <StyledError role="alert">{error}</StyledError>}
+        </StyledActionFeedback>
+        <StyledActionButtons aria-label="Draft action buttons">
+          <Button
+            title={isSaving ? 'Saving draft' : 'Save draft'}
+            variant="primary"
+            size="small"
+            disabled={!canEdit || isSaving || isGenerating || conflict !== null}
+            onClick={() => void persistDraft(draftBody)}
+          />
+          <Button
+            title={isGenerating ? 'Generating proposal' : 'Generate proposal'}
+            variant="secondary"
+            size="small"
+            disabled={!canEdit || isSaving || isGenerating || conflict !== null}
+            onClick={() => void handleGenerateProposal()}
+          />
+        </StyledActionButtons>
       </StyledActions>
-      {status && <StyledStatus role="status">{status}</StyledStatus>}
-      {error && <StyledError role="alert">{error}</StyledError>}
       {conflict && (
         <StyledConflict role="alert">
           <strong>Draft conflict at revision {conflict.revision}</strong>

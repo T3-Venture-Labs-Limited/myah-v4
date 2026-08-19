@@ -16,7 +16,7 @@ import {
   type MyahInboxListThreadsInput,
   MyahInboxQueryService,
 } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
-import { MyahInboxThreadProposalContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-thread-proposal-context.service';
+import { MyahInboxReplyBriefingService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service';
 import { MessageVisibilityAccess } from 'src/modules/messaging/common/query-hooks/message/message-visibility-policy.service';
 
 const rolePermissionConfig = { unionOf: ['role-id'] };
@@ -177,6 +177,11 @@ const createService = ({
   ownerFilterRecord,
   creatorFindError,
   campaignFindError,
+  creatorFind,
+  campaignFind,
+  creatorBriefingRecord,
+  campaignCreatorBriefingRecord,
+  messageParticipantRecords = [],
 }: {
   rows?: unknown[];
   historyRows?: unknown[];
@@ -187,6 +192,11 @@ const createService = ({
   ownerFilterRecord?: unknown;
   creatorFindError?: Error;
   campaignFindError?: Error;
+  creatorFind?: (options: unknown) => Promise<unknown[]>;
+  campaignFind?: (options: unknown) => Promise<unknown[]>;
+  creatorBriefingRecord?: unknown;
+  campaignCreatorBriefingRecord?: unknown;
+  messageParticipantRecords?: unknown[];
 } = {}) => {
   const { queryBuilder, calls } = createQueryBuilder(rows);
   const { queryBuilder: historyQueryBuilder, calls: historyCalls } =
@@ -200,12 +210,17 @@ const createService = ({
   const creatorRepository = {
     find: creatorFindError
       ? jest.fn().mockRejectedValue(creatorFindError)
-      : jest.fn().mockResolvedValue(creatorRecords),
+      : creatorFind
+        ? jest.fn(creatorFind)
+        : jest.fn().mockResolvedValue(creatorRecords),
+    findOne: jest.fn().mockResolvedValue(creatorBriefingRecord),
   };
   const campaignRepository = {
     find: campaignFindError
       ? jest.fn().mockRejectedValue(campaignFindError)
-      : jest.fn().mockResolvedValue(campaignRecords),
+      : campaignFind
+        ? jest.fn(campaignFind)
+        : jest.fn().mockResolvedValue(campaignRecords),
     findOne: jest.fn().mockResolvedValue(campaignFilterRecord),
   };
   const workspaceMemberRepository = {
@@ -219,11 +234,19 @@ const createService = ({
         return Promise.resolve(ownerFilterRecord ?? null);
       }),
   };
+  const messageParticipantRepository = {
+    find: jest.fn().mockResolvedValue(messageParticipantRecords),
+  };
+
   const repositories = {
     messageThread: messageThreadRepository,
     message: messageRepository,
+    messageParticipant: messageParticipantRepository,
     creator: creatorRepository,
     campaign: campaignRepository,
+    campaignCreator: {
+      findOne: jest.fn().mockResolvedValue(campaignCreatorBriefingRecord),
+    },
     workspaceMember: workspaceMemberRepository,
   };
   const globalWorkspaceOrmManager = {
@@ -609,6 +632,94 @@ describe('MyahInboxQueryService', () => {
     );
   });
 
+  it('keeps role-readable relation IDs and briefing fields when optional names are denied', async () => {
+    const relationNameDenied = new PermissionsException(
+      'Relation name is unreadable',
+      PermissionsExceptionCode.PERMISSION_DENIED,
+    );
+    const creatorId = '20202020-0b5c-4178-bed7-d371f6411ea3';
+    const campaignId = '20202020-0b5c-4178-bed7-d371f6411ea4';
+    const {
+      service,
+      creatorRepository,
+      campaignRepository,
+      globalWorkspaceOrmManager,
+      visibilityPolicy,
+    } = createService({
+      rows: [
+        row(tiedThreadAId, '2026-07-21T10:00:00.000Z', {
+          creatorId,
+          campaignId,
+        }),
+      ],
+      creatorFind: ({ select }: { select: Record<string, boolean> }) => {
+        if (select.name) {
+          return Promise.reject(relationNameDenied);
+        }
+
+        return Promise.resolve([{ id: creatorId }]);
+      },
+      campaignFind: ({ select }: { select: Record<string, boolean> }) => {
+        if (select.name) {
+          return Promise.reject(relationNameDenied);
+        }
+
+        return Promise.resolve([{ id: campaignId }]);
+      },
+      campaignFilterRecord: { objective: 'Reach skincare creators' },
+      campaignCreatorBriefingRecord: { stage: 'CONTACTED' },
+    });
+    creatorRepository.findOne.mockImplementation(
+      ({ select }: { select: Record<string, boolean> }) => {
+        if (select.name) {
+          return Promise.reject(relationNameDenied);
+        }
+
+        return Promise.resolve({
+          language: 'English',
+          location: 'London',
+          categories: 'Beauty',
+          niches: 'Skincare',
+        });
+      },
+    );
+
+    const briefing = await new MyahInboxReplyBriefingService(
+      service,
+      globalWorkspaceOrmManager as never,
+      visibilityPolicy as never,
+    ).loadReplyBriefing({
+      ...listInput(),
+      threadId: tiedThreadAId,
+    });
+
+    expect(briefing).toMatchObject({
+      thread: {
+        id: tiedThreadAId,
+        creator: { id: creatorId, name: null },
+        campaign: { id: campaignId, name: null },
+      },
+      campaign: { objective: 'Reach skincare creators' },
+      campaignCreator: { stage: 'CONTACTED' },
+      creator: {
+        name: null,
+        language: 'English',
+        location: 'London',
+        categories: ['Beauty'],
+        niches: ['Skincare'],
+      },
+    });
+    expect(JSON.stringify(briefing)).not.toContain(
+      'Relation name is unreadable',
+    );
+    expect(creatorRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({ select: { id: true } }),
+    );
+    expect(campaignRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({ select: { id: true } }),
+    );
+  });
+
   it('returns null relation context when Creator or Campaign was deleted or is unreadable', async () => {
     const { service } = createService({
       rows: [
@@ -666,10 +777,10 @@ describe('MyahInboxQueryService', () => {
       ],
     });
     expect(creatorRepository.find).toHaveBeenCalledWith(
-      expect.objectContaining({ select: { id: true, name: true } }),
+      expect.objectContaining({ select: { id: true } }),
     );
     expect(campaignRepository.find).toHaveBeenCalledWith(
-      expect.objectContaining({ select: { id: true, name: true } }),
+      expect.objectContaining({ select: { id: true } }),
     );
   });
 
@@ -776,7 +887,7 @@ describe('MyahInboxQueryService', () => {
     expect(calls.limit).toBe(2);
   });
 
-  it('loads bounded full-visibility native history before ordering and pagination for proposal context', async () => {
+  it('loads full chronological native history for proposal context without a page-size limit', async () => {
     const {
       service,
       historyCalls,
@@ -786,26 +897,41 @@ describe('MyahInboxQueryService', () => {
       rows: [row(tiedThreadAId, '2026-07-21T10:00:00.000Z')],
       historyRows: [
         {
-          receivedAt: '2026-07-21T10:00:00.000Z',
-          sender: 'operator@example.com',
-          subject: 'Re: Partnership',
-          text: 'The launch date works.',
-        },
-        {
+          id: '20202020-0b5c-4178-bed7-d371f6411ea5',
           receivedAt: '2026-07-21T09:00:00.000Z',
-          sender: 'creator@example.com',
           subject: 'Partnership',
           text: 'Can we launch Tuesday?',
         },
+        {
+          id: '20202020-0b5c-4178-bed7-d371f6411ea6',
+          receivedAt: '2026-07-21T10:00:00.000Z',
+          subject: 'Re: Partnership',
+          text: 'The launch date works.',
+        },
+      ],
+      messageParticipantRecords: [
+        {
+          id: '20202020-0b5c-4178-bed7-d371f6411ea7',
+          messageId: '20202020-0b5c-4178-bed7-d371f6411ea5',
+          displayName: 'creator@example.com',
+          handle: 'creator@example.com',
+          person: null,
+        },
+        {
+          id: '20202020-0b5c-4178-bed7-d371f6411ea8',
+          messageId: '20202020-0b5c-4178-bed7-d371f6411ea6',
+          displayName: 'operator@example.com',
+          handle: 'operator@example.com',
+          person: null,
+        },
       ],
     });
-
     await expect(
-      new MyahInboxThreadProposalContextService(
+      new MyahInboxReplyBriefingService(
         service,
         globalWorkspaceOrmManager as never,
         visibilityPolicy as never,
-      ).getThreadProposalContext({
+      ).loadReplyBriefing({
         ...listInput(),
         threadId: tiedThreadAId,
       }),
@@ -837,10 +963,28 @@ describe('MyahInboxQueryService', () => {
     expect(historyCalls.operations.indexOf('where')).toBeLessThan(
       historyCalls.operations.indexOf('order'),
     );
-    expect(historyCalls.operations.indexOf('order')).toBeLessThan(
-      historyCalls.operations.indexOf('limit'),
+    expect(historyCalls.operations).not.toContain('limit');
+    expect(historyCalls.limit).toBeUndefined();
+    expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
+      workspaceId,
+      'message',
+      rolePermissionConfig,
     );
-    expect(historyCalls.limit).toBe(MYAH_INBOX_MAX_PAGE_SIZE);
+    expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
+      workspaceId,
+      'creator',
+      rolePermissionConfig,
+    );
+    expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
+      workspaceId,
+      'campaign',
+      rolePermissionConfig,
+    );
+    expect(globalWorkspaceOrmManager.getRepository).toHaveBeenCalledWith(
+      workspaceId,
+      'campaignCreator',
+      rolePermissionConfig,
+    );
   });
 
   it('enters proposal/tool thread reads with the real caller user auth context, never system auth', async () => {

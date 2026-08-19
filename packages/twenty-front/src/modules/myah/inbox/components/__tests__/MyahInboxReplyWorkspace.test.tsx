@@ -1,5 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import type * as ReactType from 'react';
+import { render, screen, within } from '@testing-library/react';
 
 import { MyahInboxReplyWorkspace } from '@/myah/inbox/components/MyahInboxReplyWorkspace';
 
@@ -36,63 +35,10 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
 }));
 
 jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
-  MyahInboxDraftEditor: ({
-    canEdit,
-    readOnlyReason,
-    appliedProposal,
-    onDraftSavingChange,
-    onProposalApplicationSettled,
-  }: {
-    canEdit: boolean;
-    readOnlyReason?: string;
-    appliedProposal: { body: { markdown: string } } | null;
-    onDraftSavingChange: (isSaving: boolean) => void;
-    onProposalApplicationSettled: () => void;
-  }) => (
+  MyahInboxDraftEditor: ({ canEdit }: { canEdit: boolean }) => (
     <div aria-label="Shared reply draft editor">
       Draft is {canEdit ? 'editable' : 'read-only'}
-      {readOnlyReason && <span>{readOnlyReason}</span>}
-      <output aria-label="Applied proposal">
-        {appliedProposal?.body.markdown ?? 'none'}
-      </output>
-      <button onClick={() => onDraftSavingChange(true)}>
-        Start manual draft save test double
-      </button>
-      <button onClick={() => onDraftSavingChange(false)}>
-        Finish manual draft save test double
-      </button>
-      <button onClick={onProposalApplicationSettled}>
-        Finish proposal persistence test double
-      </button>
     </div>
-  ),
-}));
-
-jest.mock('@/myah/inbox/components/MyahInboxProposalPreview', () => ({
-  MyahInboxProposalPreview: ({
-    disabled,
-    onApply,
-    renderGenerateAction,
-  }: {
-    disabled: boolean;
-    onApply: (body: { markdown: string; blocknote: null }) => void;
-    renderGenerateAction: (
-      generateAction: ReactType.ReactNode,
-    ) => ReactType.ReactNode;
-  }) => (
-    <>
-      {renderGenerateAction(
-        <button disabled={disabled}>Generate proposal test double</button>,
-      )}
-      <button
-        disabled={disabled}
-        onClick={() =>
-          onApply({ markdown: 'proposal copied explicitly', blocknote: null })
-        }
-      >
-        Apply proposal test double
-      </button>
-    </>
   ),
 }));
 
@@ -135,7 +81,7 @@ describe('MyahInboxReplyWorkspace', () => {
     expect(mockUseFindOneRecord).not.toHaveBeenCalled();
   });
 
-  it('places the draft editor and proposal controls in one labelled reply composer', () => {
+  it('renders the draft editor without a separate proposal preview or Apply action', () => {
     render(<MyahInboxReplyWorkspace thread={thread} />);
 
     const composer = screen.getByRole('region', { name: 'Reply composer' });
@@ -143,81 +89,13 @@ describe('MyahInboxReplyWorkspace', () => {
       within(composer).getByLabelText('Shared reply draft editor'),
     ).toBeVisible();
     expect(
-      within(composer).getByRole('button', {
-        name: 'Apply proposal test double',
-      }),
-    ).toBeVisible();
+      within(composer).queryByLabelText('AI proposal'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(composer).queryByRole('button', { name: /apply/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getAllByRole('region', { name: 'Reply composer' }),
     ).toHaveLength(1);
-  });
-
-  it('keeps the shared draft editable for a non-owner', () => {
-    mockCurrentWorkspaceMember = { id: 'member-2' };
-
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    expect(screen.getByText('Draft is editable')).toBeVisible();
-    expect(
-      screen.queryByText('Only Zachary can edit this shared draft.'),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Apply proposal test double' }),
-    ).toBeEnabled();
-  });
-
-  it('blocks applying a proposal while a manual draft save is pending', () => {
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    const applyProposalButton = screen.getByRole('button', {
-      name: 'Apply proposal test double',
-    });
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Start manual draft save test double',
-      }),
-    );
-
-    expect(applyProposalButton).toBeDisabled();
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Finish manual draft save test double',
-      }),
-    );
-
-    expect(applyProposalButton).toBeEnabled();
-  });
-
-  it('blocks repeated proposal application until draft persistence settles', () => {
-    render(<MyahInboxReplyWorkspace thread={thread} />);
-
-    const applyProposalButton = screen.getByRole('button', {
-      name: 'Apply proposal test double',
-    });
-    fireEvent.click(applyProposalButton);
-
-    expect(screen.getByLabelText('Applied proposal')).toHaveTextContent(
-      'proposal copied explicitly',
-    );
-    expect(applyProposalButton).toBeDisabled();
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Finish proposal persistence test double',
-      }),
-    );
-
-    expect(applyProposalButton).toBeEnabled();
-    expect(mockUseFindOneRecord).toHaveBeenCalledWith({
-      objectNameSingular: 'messageThread',
-      objectRecordId: 'thread-1',
-      recordGqlFields: {
-        id: true,
-        myahReplyDraftBody: { markdown: true, blocknote: true },
-        myahReplyDraftRevision: true,
-      },
-      skip: false,
-    });
   });
 });

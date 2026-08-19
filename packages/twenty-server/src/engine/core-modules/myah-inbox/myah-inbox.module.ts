@@ -6,7 +6,7 @@ import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-p
 import { MyahInboxResolver } from 'src/engine/core-modules/myah-inbox/resolvers/myah-inbox.resolver';
 import { MyahInboxMutationService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-mutation.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
-import { MyahInboxThreadProposalContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-thread-proposal-context.service';
+import { MyahInboxReplyBriefingService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service';
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
 import { AiAgentExecutionModule } from 'src/engine/metadata-modules/ai/ai-agent-execution/ai-agent-execution.module';
@@ -27,7 +27,7 @@ import { MessagingQueryHookModule } from 'src/modules/messaging/common/query-hoo
   providers: [
     MyahInboxMutationService,
     MyahInboxQueryService,
-    MyahInboxThreadProposalContextService,
+    MyahInboxReplyBriefingService,
     MyahInboxReplyProposalService,
     MyahInboxToolWorkspaceService,
     BrandBrainPreflightService,

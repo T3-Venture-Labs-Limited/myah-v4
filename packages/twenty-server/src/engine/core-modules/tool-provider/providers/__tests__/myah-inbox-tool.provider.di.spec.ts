@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
 import { MyahInboxReplyProposalService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service';
 import { MyahInboxQueryService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-query.service';
-import { MyahInboxThreadProposalContextService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-thread-proposal-context.service';
+import { MyahInboxReplyBriefingService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service';
 import { MyahInboxToolWorkspaceService } from 'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service';
 import { MYAH_INBOX_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-tool-service.token';
 import { TOOL_PROVIDERS } from 'src/engine/core-modules/tool-provider/constants/tool-providers.token';
@@ -39,7 +39,7 @@ describe('MyahInboxToolProvider dependency graph', () => {
         },
         ...[
           MyahInboxQueryService,
-          MyahInboxThreadProposalContextService,
+          MyahInboxReplyBriefingService,
           AgentActorContextService,
           AiModelRegistryService,
           BillingUsageService,

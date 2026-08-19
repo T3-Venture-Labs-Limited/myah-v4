@@ -46,11 +46,11 @@ export class MyahInboxToolWorkspaceService {
     const getThreadContextTool = {
       name: 'get_myah_inbox_thread_context' as const,
       description:
-        'Read the currently selected policy-visible Myah Inbox MessageThread and its readable Creator/Campaign context. This tool never mutates the thread and accepts no thread ID.',
+        'Read the selected Myah Inbox MessageThread’s readable reply briefing. This tool never mutates the thread and accepts no thread ID.',
       inputSchema: threadContextInputSchema,
       execute: async () => {
         const result =
-          await this.myahInboxReplyProposalService.getThreadContext({
+          await this.myahInboxReplyProposalService.getReplyBriefing({
             authContext,
             threadId: selectedThread.threadId,
           });

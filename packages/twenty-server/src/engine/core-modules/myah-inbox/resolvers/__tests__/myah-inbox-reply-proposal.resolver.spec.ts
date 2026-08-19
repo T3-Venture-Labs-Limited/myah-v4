@@ -24,7 +24,6 @@ const userAuthContext = {
 };
 
 const proposal = {
-  subject: 'Re: Partnership timing',
   body: { markdown: 'Tuesday works.', blocknote: null },
 };
 

@@ -95,7 +95,6 @@ export const GENERATE_MYAH_INBOX_REPLY_PROPOSAL = gql`
     $input: GenerateMyahInboxReplyProposalInput!
   ) {
     generateMyahInboxReplyProposal(input: $input) {
-      subject
       body {
         markdown
         blocknote
