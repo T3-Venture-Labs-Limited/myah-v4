@@ -15,7 +15,8 @@ import { DialogManager } from '@/ui/feedback/dialog-manager/components/DialogMan
 import { DialogComponentInstanceContext } from '@/ui/feedback/dialog-manager/contexts/DialogComponentInstanceContext';
 import { SnackBarProvider } from '@/ui/feedback/snack-bar-manager/components/SnackBarProvider';
 import { PageFavicon } from '@/ui/utilities/page-favicon/components/PageFavicon';
-import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
+import { DocumentTitleProvider } from '@/ui/utilities/page-title/components/DocumentTitleProvider';
+import { PageTitleEffect } from '@/ui/utilities/page-title/components/PageTitleEffect';
 import { WorkspaceProviderEffect } from '@/workspace/components/WorkspaceProviderEffect';
 import { getPageTitleFromPath } from '~/utils/title-utils';
 
@@ -37,9 +38,11 @@ export const RootAppProviders = () => {
               <DialogManager>
                 <StrictMode>
                   <PromiseRejectionEffect />
-                  <PageTitle title={pageTitle} />
-                  <PageFavicon />
-                  <Outlet />
+                  <DocumentTitleProvider>
+                    <PageTitleEffect title={pageTitle} />
+                    <PageFavicon />
+                    <Outlet />
+                  </DocumentTitleProvider>
                   <InitializeQueryParamStateEffect />
                   <TrackPageViewEffect />
                   <RequestFreshCaptchaTokenEffect />

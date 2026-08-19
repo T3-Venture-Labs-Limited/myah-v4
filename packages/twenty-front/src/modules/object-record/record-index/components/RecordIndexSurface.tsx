@@ -26,7 +26,7 @@ import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { RECORD_INDEX_DRAG_SELECT_BOUNDARY_CLASS } from '@/ui/utilities/drag-select/constants/RecordIndecDragSelectBoundaryClass';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
+import { PageTitleEffect } from '@/ui/utilities/page-title/components/PageTitleEffect';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
 import { ViewType } from '@/views/types/ViewType';
@@ -198,7 +198,8 @@ const RecordIndexSurfaceInstance = ({
                       getCommandMenuIdFromRecordIndexId(recordIndexId),
                   }}
                 >
-                  <PageTitle
+                  <PageTitleEffect
+                    key={recordIndexId}
                     title={headerTitle ?? objectMetadataItem.labelPlural}
                   />
                   <PageCardLayout
