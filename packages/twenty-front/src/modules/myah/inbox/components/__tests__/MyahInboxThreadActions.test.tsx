@@ -148,15 +148,25 @@ jest.mock(
 jest.mock('twenty-ui/input', () => ({
   Button: ({ title }: { title: string }) => <button>{title}</button>,
   IconButton: ({
+    ariaHidden,
     ariaLabel,
     dataTestId,
     onClick,
+    tabIndex,
   }: {
+    ariaHidden?: boolean;
     ariaLabel: string;
     dataTestId?: string;
     onClick?: () => void;
+    tabIndex?: number;
   }) => (
-    <button aria-label={ariaLabel} data-testid={dataTestId} onClick={onClick} />
+    <button
+      aria-hidden={ariaHidden}
+      aria-label={ariaLabel}
+      data-testid={dataTestId}
+      onClick={onClick}
+      tabIndex={tabIndex}
+    />
   ),
 }));
 
@@ -175,19 +185,55 @@ jest.mock('@/ui/layout/dropdown/components/Dropdown', () => {
   return {
     Dropdown: ({
       clickableComponent,
+      clickableComponentAriaLabel,
       dropdownComponents,
+      dropdownRole,
+      isClickableComponentKeyboardAccessible,
+      onClickableComponentRef,
+      onClose,
     }: {
       clickableComponent: React.ReactNode;
       dropdownComponents: React.ReactNode;
+      dropdownRole?: ReactType.AriaRole;
+      clickableComponentAriaLabel?: string;
+      isClickableComponentKeyboardAccessible?: boolean;
+      onClickableComponentRef?: (element: HTMLDivElement | null) => void;
+      onClose?: () => void;
     }) => {
       const [isOpen, setIsOpen] = React.useState(false);
+      const toggle = () => setIsOpen((current) => !current);
 
       return (
-        <div>
-          <div onClick={() => setIsOpen((current) => !current)}>
+        <div role={dropdownRole}>
+          <div
+            ref={onClickableComponentRef}
+            aria-label={clickableComponentAriaLabel}
+            onClick={toggle}
+            onKeyDown={(event) => {
+              if (
+                isClickableComponentKeyboardAccessible &&
+                (event.key === 'Enter' || event.key === ' ')
+              ) {
+                event.preventDefault();
+                toggle();
+              }
+            }}
+            role={clickableComponentAriaLabel ? 'button' : undefined}
+            tabIndex={isClickableComponentKeyboardAccessible ? 0 : undefined}
+          >
             {clickableComponent}
           </div>
           {isOpen && dropdownComponents}
+          {onClose && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onClose();
+              }}
+            >
+              {`Close ${clickableComponentAriaLabel}`}
+            </button>
+          )}
         </div>
       );
     },
@@ -227,17 +273,71 @@ describe('MyahInboxThreadActions', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Creator' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Campaign' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Creator selector' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Campaign selector' }),
+    ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Owner' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'State' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Snooze' })).toBeVisible();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(
+      screen
+        .getByRole('button', { name: 'Creator selector' })
+        .closest('[role="dialog"]'),
+    ).not.toBeNull();
+    expect(
+      screen
+        .getByRole('button', { name: 'Campaign selector' })
+        .closest('[role="dialog"]'),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Owner' }).closest('[role="dialog"]'),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'State' }).closest('[role="dialog"]'),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Snooze' }).closest('[role="dialog"]'),
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'State' }));
     expect(
       screen.queryByRole('option', { name: 'Snoozed' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('restores focus to the Creator and Campaign triggers when their dialogs close', () => {
+    render(
+      <MyahInboxThreadActions
+        thread={unlinkedThread}
+        onThreadUpdated={jest.fn()}
+      />,
+    );
+
+    const creatorTrigger = screen.getByRole('button', {
+      name: 'Creator selector',
+    });
+    fireEvent.keyDown(creatorTrigger, { key: 'Enter' });
+    screen.getByRole('combobox', { name: 'Creator' }).focus();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close Creator selector' }),
+    );
+
+    expect(creatorTrigger).toHaveFocus();
+
+    const campaignTrigger = screen.getByRole('button', {
+      name: 'Campaign selector',
+    });
+    fireEvent.keyDown(campaignTrigger, { key: 'Enter' });
+    screen.getByRole('combobox', { name: 'Campaign' }).focus();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close Campaign selector' }),
+    );
+
+    expect(campaignTrigger).toHaveFocus();
   });
 
   it('opens the native Inbox context side panel', () => {
@@ -264,7 +364,7 @@ describe('MyahInboxThreadActions', () => {
     expect(mockAppTooltip).toHaveBeenCalledTimes(6);
   });
 
-  it('keeps Creator available for an unlinked thread and writes only the selected creator', async () => {
+  it('uses dialog popups and writes only the selected creator for an unlinked thread', async () => {
     render(
       <MyahInboxThreadActions
         thread={unlinkedThread}
@@ -272,17 +372,96 @@ describe('MyahInboxThreadActions', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Creator' }));
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Creator selector' }),
+      { key: 'Enter' },
+    );
     fireEvent.change(screen.getByRole('combobox', { name: 'Creator' }), {
       target: { value: 'creator-1' },
     });
 
-    await waitFor(() =>
+    await waitFor(() => {
+      expect(mockUpdateThread).toHaveBeenCalledTimes(1);
       expect(mockUpdateThread).toHaveBeenCalledWith({
         threadId: 'thread-1',
         creatorId: 'creator-1',
-      }),
+      });
+    });
+  });
+
+  it('clears only the linked creator', async () => {
+    render(
+      <MyahInboxThreadActions
+        thread={{
+          ...unlinkedThread,
+          creator: { id: 'creator-1', name: 'Ada Creator' },
+        }}
+        onThreadUpdated={jest.fn()}
+      />,
     );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Creator selector' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Creator' }), {
+      target: { value: '' },
+    });
+
+    await waitFor(() => {
+      expect(mockUpdateThread).toHaveBeenCalledTimes(1);
+      expect(mockUpdateThread).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        creatorId: null,
+      });
+    });
+  });
+
+  it('writes only the selected campaign for an unlinked thread', async () => {
+    render(
+      <MyahInboxThreadActions
+        thread={unlinkedThread}
+        onThreadUpdated={jest.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Campaign selector' }),
+      { key: ' ' },
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'Campaign' }), {
+      target: { value: 'campaign-1' },
+    });
+
+    await waitFor(() => {
+      expect(mockUpdateThread).toHaveBeenCalledTimes(1);
+      expect(mockUpdateThread).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        campaignId: 'campaign-1',
+      });
+    });
+  });
+
+  it('clears only the linked campaign', async () => {
+    render(
+      <MyahInboxThreadActions
+        thread={{
+          ...unlinkedThread,
+          campaign: { id: 'campaign-1', name: 'Spring campaign' },
+        }}
+        onThreadUpdated={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Campaign selector' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Campaign' }), {
+      target: { value: '' },
+    });
+
+    await waitFor(() => {
+      expect(mockUpdateThread).toHaveBeenCalledTimes(1);
+      expect(mockUpdateThread).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        campaignId: null,
+      });
+    });
   });
 
   it('opens a native unsaved Creator form from the Creator picker without linking the thread', () => {
@@ -293,7 +472,7 @@ describe('MyahInboxThreadActions', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Creator' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Creator selector' }));
     fireEvent.click(screen.getByRole('button', { name: 'Create Creator' }));
 
     expect(mockOpenRecordInSidePanel).toHaveBeenCalledWith({
@@ -316,7 +495,7 @@ describe('MyahInboxThreadActions', () => {
       <MyahInboxThreadActions thread={thread} onThreadUpdated={jest.fn()} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Campaign' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Campaign selector' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Campaign' }), {
       target: { value: '' },
     });

@@ -22,6 +22,7 @@ import { isEmailVerificationRequiredState } from '@/client-config/states/isEmail
 import { isGoogleCalendarEnabledState } from '@/client-config/states/isGoogleCalendarEnabledState';
 import { isGoogleMessagingEnabledState } from '@/client-config/states/isGoogleMessagingEnabledState';
 import { isImapSmtpCaldavEnabledState } from '@/client-config/states/isImapSmtpCaldavEnabledState';
+import { isManagedEmailEnabledState } from '@/client-config/states/isManagedEmailEnabledState';
 import { maintenanceModeState } from '@/client-config/states/maintenanceModeState';
 import { isMicrosoftCalendarEnabledState } from '@/client-config/states/isMicrosoftCalendarEnabledState';
 import { isMicrosoftMessagingEnabledState } from '@/client-config/states/isMicrosoftMessagingEnabledState';
@@ -135,6 +136,8 @@ export const useClientConfig = (): UseClientConfigResult => {
   const setIsImapSmtpCaldavEnabled = useSetAtomState(
     isImapSmtpCaldavEnabledState,
   );
+
+  const setIsManagedEmailEnabled = useSetAtomState(isManagedEmailEnabledState);
 
   const setAllowRequestsToTwentyIcons = useSetAtomState(
     allowRequestsToTwentyIconsState,
@@ -309,6 +312,7 @@ export const useClientConfig = (): UseClientConfigResult => {
 
       setCalendarBookingPageId(clientConfig?.calendarBookingPageId ?? null);
       setIsImapSmtpCaldavEnabled(clientConfig?.isImapSmtpCaldavEnabled);
+      setIsManagedEmailEnabled(clientConfig?.isManagedEmailEnabled ?? false);
       setIsEmailingDomainInDemoMode(
         clientConfig?.isEmailingDomainInDemoMode ?? false,
       );
@@ -352,6 +356,7 @@ export const useClientConfig = (): UseClientConfigResult => {
     setIsDeveloperDefaultSignInPrefilled,
     setIsEmailVerificationRequired,
     setIsImapSmtpCaldavEnabled,
+    setIsManagedEmailEnabled,
     setIsMultiWorkspaceEnabled,
     setIsEmailingDomainInDemoMode,
     setIsClickHouseConfigured,

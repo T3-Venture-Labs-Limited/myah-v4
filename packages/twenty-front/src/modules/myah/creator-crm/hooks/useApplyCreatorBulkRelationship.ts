@@ -1,8 +1,8 @@
+import { gql } from '@apollo/client';
+import { useMutation } from '@apollo/client/react';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { useBatchCreateManyRecords } from '@/object-record/hooks/useBatchCreateManyRecords';
-import { useDestroyManyRecords } from '@/object-record/hooks/useDestroyManyRecords';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { t } from '@lingui/core/macro';
 import { useCallback } from 'react';
@@ -53,20 +53,41 @@ const getCreatorListIdsFromStoreFieldName = (storeFieldName: string) => {
     return [];
   }
 };
+const ADD_CREATOR_LIST_MEMBERS_INTENT = gql`
+  mutation AddCreatorListMembersIntent($input: CreatorListMembersIntentInput!) {
+    addCreatorListMembersIntent(input: $input) {
+      id
+      creatorListId
+      creatorId
+    }
+  }
+`;
+const REMOVE_CREATOR_LIST_MEMBER_INTENT = gql`
+  mutation RemoveCreatorListMemberIntent(
+    $input: CreatorListMembershipIntentInput!
+  ) {
+    removeCreatorListMemberIntent(input: $input)
+  }
+`;
+const ADD_DIRECT_CAMPAIGN_CREATORS = gql`
+  mutation AddDirectCampaignCreators($input: AddDirectCampaignCreatorsInput!) {
+    addDirectCampaignCreators(input: $input) {
+      campaignCreators {
+        id
+        creatorId
+      }
+    }
+  }
+`;
 
 export const useApplyCreatorBulkRelationship = () => {
-  const { batchCreateManyRecords: batchCreateCreatorListMembers } =
-    useBatchCreateManyRecords({
-      objectNameSingular: 'creatorListMember',
-    });
-  const { batchCreateManyRecords: batchCreateCampaignCreators } =
-    useBatchCreateManyRecords({
-      objectNameSingular: 'campaignCreator',
-    });
-  const { destroyManyRecords: destroyCreatorListMembers } =
-    useDestroyManyRecords({
-      objectNameSingular: 'creatorListMember',
-    });
+  const [addCreatorListMembersIntent] = useMutation(
+    ADD_CREATOR_LIST_MEMBERS_INTENT,
+  );
+  const [removeCreatorListMemberIntent] = useMutation(
+    REMOVE_CREATOR_LIST_MEMBER_INTENT,
+  );
+  const [addDirectCampaignCreators] = useMutation(ADD_DIRECT_CAMPAIGN_CREATORS);
   const { objectMetadataItem: creatorObjectMetadataItem } =
     useObjectMetadataItem({
       objectNameSingular: 'creator',
@@ -76,21 +97,28 @@ export const useApplyCreatorBulkRelationship = () => {
 
   const refetchCreatorRelationships = useCallback(
     async (targetKind: CreatorBulkRelationshipTarget['kind']) => {
-      const relationshipObjectNamePlural =
+      const relationshipObjectNames =
         targetKind === 'creator-list'
-          ? 'creatorListMembers'
-          : 'campaignCreators';
-      const relationshipFindManyQueryName =
+          ? ['creatorListMembers', 'campaignCreators']
+          : ['campaignCreators'];
+      const relationshipFindManyQueryNames =
         targetKind === 'creator-list'
-          ? 'FindManyCreatorListMembers'
-          : 'FindManyCampaignCreators';
+          ? ['FindManyCreatorListMembers', 'FindManyCampaignCreators']
+          : ['FindManyCampaignCreators'];
 
       try {
         await apolloCoreClient.refetchQueries({
-          include: ['FindManyCreators', relationshipFindManyQueryName],
+          include: [
+            'active',
+            'inactive',
+            'FindManyCreators',
+            ...relationshipFindManyQueryNames,
+          ],
           updateCache: (cache) => {
             cache.evict({ fieldName: 'creators' });
-            cache.evict({ fieldName: relationshipObjectNamePlural });
+            relationshipObjectNames.forEach((fieldName) => {
+              cache.evict({ fieldName });
+            });
           },
         });
 
@@ -188,17 +216,27 @@ export const useApplyCreatorBulkRelationship = () => {
         return;
       }
 
-      const recordsToCreate = creatorIdsToAdd.map((creatorId) =>
-        target.kind === 'creator-list'
-          ? { name: '', creatorId, creatorListId: target.id }
-          : { name: '', creatorId, campaignId: target.id },
-      );
-
       try {
         if (target.kind === 'creator-list') {
-          await batchCreateCreatorListMembers({ recordsToCreate });
+          if (creatorIdsToAdd.length > 0) {
+            await addCreatorListMembersIntent({
+              variables: {
+                input: {
+                  creatorListId: target.id,
+                  creatorIds: creatorIdsToAdd,
+                },
+              },
+            });
+          }
         } else {
-          await batchCreateCampaignCreators({ recordsToCreate });
+          await addDirectCampaignCreators({
+            variables: {
+              input: {
+                campaignId: target.id,
+                creatorIds: creatorIdsToAdd,
+              },
+            },
+          });
         }
       } catch {
         enqueueErrorSnackBar({
@@ -206,12 +244,11 @@ export const useApplyCreatorBulkRelationship = () => {
         });
         throw new Error('Creator bulk relationship creation failed');
       }
-
       await refetchCreatorRelationships(target.kind);
     },
     [
-      batchCreateCampaignCreators,
-      batchCreateCreatorListMembers,
+      addCreatorListMembersIntent,
+      addDirectCampaignCreators,
       enqueueErrorSnackBar,
       refetchCreatorRelationships,
     ],
@@ -230,19 +267,26 @@ export const useApplyCreatorBulkRelationship = () => {
       if (creatorListMemberIdsToRemove.length === 0) {
         return { removedCount: 0, wasPartial: false };
       }
+      if (creatorIdsToRemove.length > 1) {
+        enqueueErrorSnackBar({ message: t`Select one creator at a time.` });
+        throw new Error('Only one creator relationship change is allowed');
+      }
 
-      const destroyedCreatorListMembers = await destroyCreatorListMembers({
-        recordIdsToDestroy: creatorListMemberIdsToRemove,
-        skipOptimisticEffect: true,
+      await removeCreatorListMemberIntent({
+        variables: {
+          input: {
+            creatorListId,
+            creatorId: creatorIdsToRemove[0],
+          },
+        },
       }).catch(() => {
         enqueueErrorSnackBar({
           message: t`Failed to remove creators from this list.`,
         });
         throw new Error('Creator List membership removal failed');
       });
-      const wasPartial =
-        destroyedCreatorListMembers.length !==
-        creatorListMemberIdsToRemove.length;
+      const removedCount = creatorIdsToRemove.length;
+      const wasPartial = false;
 
       removeCreatorListMembersFromCache({
         creatorListId,
@@ -265,12 +309,12 @@ export const useApplyCreatorBulkRelationship = () => {
       }
 
       return {
-        removedCount: destroyedCreatorListMembers.length,
+        removedCount,
         wasPartial,
       };
     },
     [
-      destroyCreatorListMembers,
+      removeCreatorListMemberIntent,
       enqueueErrorSnackBar,
       enqueueWarningSnackBar,
       notifyCreatorListMembershipsChanged,

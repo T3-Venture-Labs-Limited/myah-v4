@@ -37,6 +37,8 @@ import { createUpdateWorkflowVersionStepTool } from 'src/modules/workflow/workfl
 import { createUpdateWorkflowVersionTriggerTool } from 'src/modules/workflow/workflow-tools/tools/update-workflow-version-trigger.tool';
 import { createValidateWorkflowTool } from 'src/modules/workflow/workflow-tools/tools/validate-workflow.tool';
 import { type WorkflowToolDependencies } from 'src/modules/workflow/workflow-tools/types/workflow-tool-dependencies.type';
+import { guardWorkflowTools } from 'src/modules/workflow/workflow-tools/services/guard-workflow-tools.util';
+import { WorkflowToolOutreachAccessGuardService } from 'src/modules/workflow/workflow-tools/services/workflow-tool-outreach-access-guard.service';
 import { WorkflowTriggerWorkspaceService } from 'src/modules/workflow/workflow-trigger/workspace-services/workflow-trigger.workspace-service';
 
 @Injectable()
@@ -57,6 +59,7 @@ export class WorkflowToolWorkspaceService {
     flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     agentService: AgentService,
     workflowCommonService: WorkflowCommonWorkspaceService,
+    private readonly workflowToolOutreachAccessGuardService: WorkflowToolOutreachAccessGuardService,
   ) {
     this.deps = {
       workflowVersionStepService,
@@ -152,34 +155,45 @@ export class WorkflowToolWorkspaceService {
       context,
     );
     const listLogicFunctionTools = createListLogicFunctionToolsTool(
-      this.deps,
+      {
+        flatEntityMapsCacheService: this.deps.flatEntityMapsCacheService,
+        workflowToolOutreachAccessGuardService:
+          this.workflowToolOutreachAccessGuardService,
+      },
       context,
     );
     const updateAgent = createUpdateAgentTool(this.deps, context);
     const validateWorkflow = createValidateWorkflowTool(this.deps, context);
 
-    return {
-      [createCompleteWorkflow.name]: createCompleteWorkflow,
-      [createWorkflowVersionStep.name]: createWorkflowVersionStep,
-      [updateWorkflowVersionStep.name]: updateWorkflowVersionStep,
-      [updateWorkflowVersionTrigger.name]: updateWorkflowVersionTrigger,
-      [deleteWorkflowVersionStep.name]: deleteWorkflowVersionStep,
-      [createWorkflowVersionEdge.name]: createWorkflowVersionEdge,
-      [deleteWorkflowVersionEdge.name]: deleteWorkflowVersionEdge,
-      [createDraftFromWorkflowVersion.name]: createDraftFromWorkflowVersion,
-      [updateWorkflowVersionPositions.name]: updateWorkflowVersionPositions,
-      [activateWorkflowVersion.name]: activateWorkflowVersion,
-      [deactivateWorkflowVersion.name]: deactivateWorkflowVersion,
-      [computeStepOutputSchema.name]: computeStepOutputSchema,
-      [getWorkflowCurrentVersion.name]: getWorkflowCurrentVersion,
-      [listWorkflows.name]: listWorkflows,
-      [deleteWorkflow.name]: deleteWorkflow,
-      [getWorkflowRun.name]: getWorkflowRun,
-      [listWorkflowRuns.name]: listWorkflowRuns,
-      [updateLogicFunctionSource.name]: updateLogicFunctionSource,
-      [listLogicFunctionTools.name]: listLogicFunctionTools,
-      [updateAgent.name]: updateAgent,
-      [validateWorkflow.name]: validateWorkflow,
-    };
+    return guardWorkflowTools({
+      assertTargetIsGeneralAutomation: (args) =>
+        this.workflowToolOutreachAccessGuardService.assertTargetIsGeneralAutomation(
+          args,
+        ),
+      tools: {
+        [createCompleteWorkflow.name]: createCompleteWorkflow,
+        [createWorkflowVersionStep.name]: createWorkflowVersionStep,
+        [updateWorkflowVersionStep.name]: updateWorkflowVersionStep,
+        [updateWorkflowVersionTrigger.name]: updateWorkflowVersionTrigger,
+        [deleteWorkflowVersionStep.name]: deleteWorkflowVersionStep,
+        [createWorkflowVersionEdge.name]: createWorkflowVersionEdge,
+        [deleteWorkflowVersionEdge.name]: deleteWorkflowVersionEdge,
+        [createDraftFromWorkflowVersion.name]: createDraftFromWorkflowVersion,
+        [updateWorkflowVersionPositions.name]: updateWorkflowVersionPositions,
+        [activateWorkflowVersion.name]: activateWorkflowVersion,
+        [deactivateWorkflowVersion.name]: deactivateWorkflowVersion,
+        [computeStepOutputSchema.name]: computeStepOutputSchema,
+        [getWorkflowCurrentVersion.name]: getWorkflowCurrentVersion,
+        [listWorkflows.name]: listWorkflows,
+        [deleteWorkflow.name]: deleteWorkflow,
+        [getWorkflowRun.name]: getWorkflowRun,
+        [listWorkflowRuns.name]: listWorkflowRuns,
+        [updateLogicFunctionSource.name]: updateLogicFunctionSource,
+        [listLogicFunctionTools.name]: listLogicFunctionTools,
+        [updateAgent.name]: updateAgent,
+        [validateWorkflow.name]: validateWorkflow,
+      },
+      workspaceId,
+    });
   }
 }

@@ -4,14 +4,17 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/flattenedFieldMetadataItemsSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { isRecordFilterAboutSoftDelete } from '@/object-record/record-filter/utils/isRecordFilterAboutSoftDelete';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { getQueryVariablesFromFiltersAndSorts } from '@/views/utils/getQueryVariablesFromFiltersAndSorts';
 
 export const useQueryVariablesFromParentView = ({
+  additionalRecordFilters = [],
   objectMetadataItem,
 }: {
+  additionalRecordFilters?: RecordFilter[];
   objectMetadataItem: EnrichedObjectMetadataItem;
 }) => {
   const { objectMetadataItems } = useObjectMetadataItems();
@@ -30,7 +33,10 @@ export const useQueryVariablesFromParentView = ({
   const { filter, orderBy } = getQueryVariablesFromFiltersAndSorts({
     recordFilterGroups:
       contextStoreRecordShowParentView?.parentViewFilterGroups ?? [],
-    recordFilters: contextStoreRecordShowParentView?.parentViewFilters ?? [],
+    recordFilters: [
+      ...(contextStoreRecordShowParentView?.parentViewFilters ?? []),
+      ...additionalRecordFilters,
+    ],
     recordSorts: contextStoreRecordShowParentView?.parentViewSorts ?? [],
     objectMetadataItem,
     objectMetadataItems,

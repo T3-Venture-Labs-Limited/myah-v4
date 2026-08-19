@@ -26,6 +26,7 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     const command = new MigrateMyahCreatorImportMetadataCommand(
       {} as WorkspaceIteratorService,
       {
+        workspaceSchemaExists: jest.fn().mockResolvedValue(true),
         synchronizeWorkspace,
       } as unknown as SynchronizeMyahStandardMetadataCommand,
       { migrate } as unknown as MigrateMyahCreatorSocialLinksService,
@@ -64,6 +65,7 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     const command = new MigrateMyahCreatorImportMetadataCommand(
       {} as WorkspaceIteratorService,
       {
+        workspaceSchemaExists: jest.fn().mockResolvedValue(true),
         synchronizeWorkspace,
       } as unknown as SynchronizeMyahStandardMetadataCommand,
       { migrate } as unknown as MigrateMyahCreatorSocialLinksService,
@@ -89,6 +91,7 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     const command = new MigrateMyahCreatorImportMetadataCommand(
       {} as WorkspaceIteratorService,
       {
+        workspaceSchemaExists: jest.fn().mockResolvedValue(true),
         synchronizeWorkspace,
       } as unknown as SynchronizeMyahStandardMetadataCommand,
       { migrate } as unknown as MigrateMyahCreatorSocialLinksService,
@@ -105,6 +108,7 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     const command = new MigrateMyahCreatorImportMetadataCommand(
       {} as WorkspaceIteratorService,
       {
+        workspaceSchemaExists: jest.fn().mockResolvedValue(true),
         synchronizeWorkspace: jest.fn(),
       } as unknown as SynchronizeMyahStandardMetadataCommand,
       {
@@ -115,6 +119,28 @@ describe('MigrateMyahCreatorImportMetadataCommand', () => {
     await expect(
       command.runOnWorkspace({ ...args, dataSource: undefined }),
     ).rejects.toThrow('Workspace data source is required');
+  });
+
+  it('skips workspaces without a physical database schema', async () => {
+    const workspaceSchemaExists = jest.fn().mockResolvedValue(false);
+    const synchronizeWorkspace = jest.fn();
+    const migrate = jest.fn();
+    const command = new MigrateMyahCreatorImportMetadataCommand(
+      {} as WorkspaceIteratorService,
+      {
+        workspaceSchemaExists,
+        synchronizeWorkspace,
+      } as unknown as SynchronizeMyahStandardMetadataCommand,
+      { migrate } as unknown as MigrateMyahCreatorSocialLinksService,
+    );
+
+    await expect(
+      command.runOnWorkspace({ ...args, dataSource: undefined }),
+    ).resolves.toBeUndefined();
+
+    expect(workspaceSchemaExists).toHaveBeenCalledWith(WORKSPACE_ID);
+    expect(synchronizeWorkspace).not.toHaveBeenCalled();
+    expect(migrate).not.toHaveBeenCalled();
   });
 
   it('registers the forward-only migration after command 1784266302005', () => {

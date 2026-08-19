@@ -109,13 +109,13 @@ describe('CustomerAccountService', () => {
 
     await expect(
       service.attachWorkspace({ customerAccountId, workspaceId }),
-    ).resolves.toBe(firstInstallation);
+    ).resolves.toEqual({ created: true, installation: firstInstallation });
     await expect(
       service.attachWorkspace({
         customerAccountId,
         workspaceId: secondWorkspaceId,
       }),
-    ).resolves.toBe(secondInstallation);
+    ).resolves.toEqual({ created: true, installation: secondInstallation });
 
     expect(myahWorkspaceInstallationRepository.create).toHaveBeenNthCalledWith(
       1,
@@ -136,7 +136,10 @@ describe('CustomerAccountService', () => {
 
     await expect(
       service.attachWorkspace({ customerAccountId, workspaceId }),
-    ).resolves.toBe(existingInstallation);
+    ).resolves.toEqual({
+      created: false,
+      installation: existingInstallation,
+    });
 
     expect(myahWorkspaceInstallationRepository.create).not.toHaveBeenCalled();
     expect(myahWorkspaceInstallationRepository.save).not.toHaveBeenCalled();
@@ -169,7 +172,7 @@ describe('CustomerAccountService', () => {
 
     await expect(
       service.attachWorkspace({ customerAccountId, workspaceId }),
-    ).resolves.toBe(installation);
+    ).resolves.toEqual({ created: false, installation });
   });
 
   it('rejects a unique-constraint race when another account won it', async () => {

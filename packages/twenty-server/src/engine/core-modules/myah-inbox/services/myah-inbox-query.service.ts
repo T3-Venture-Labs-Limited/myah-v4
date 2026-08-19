@@ -44,7 +44,6 @@ export type MyahInboxListThreadsInput = MyahInboxThreadsInput & {
   user: AuthContextUser;
   workspace: Pick<WorkspaceEntity, 'id'>;
   workspaceMemberId: string;
-  threadId?: string;
 };
 
 type ContextRecord = {
@@ -316,6 +315,14 @@ export class MyahInboxQueryService {
               AND latest_message.subject ILIKE :search)
             OR (${latestMessageVisibility.expression} = :messageVisibilityFull
               AND latest_message.text ILIKE :search)
+            OR EXISTS (
+              SELECT 1
+              FROM "${workspaceSchemaName}"."messageParticipant" search_sender
+              WHERE search_sender."messageId" = latest_message.id
+                AND search_sender."deletedAt" IS NULL
+                AND search_sender.role = :fromParticipantRole
+                AND (search_sender."displayName" ILIKE :search OR search_sender.handle ILIKE :search)
+            )
           )`,
             { search: `%${search}%` },
           );

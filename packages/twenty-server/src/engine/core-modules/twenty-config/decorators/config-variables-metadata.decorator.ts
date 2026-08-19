@@ -16,6 +16,7 @@ export interface ConfigVariablesMetadataOptions {
   isSensitive?: boolean;
   isEnvOnly?: boolean;
   isHiddenInAdminPanel?: boolean;
+  isRequired?: boolean;
   type: ConfigVariableType;
   options?: ConfigVariableOptions;
 }
@@ -48,7 +49,7 @@ export function ConfigVariablesMetadata(
     const hasDefaultValue =
       propertyDescriptor && propertyDescriptor.value !== undefined;
 
-    if (!hasDefaultValue) {
+    if (!hasDefaultValue && options.isRequired !== true) {
       IsOptional()(target, propertyKey);
     }
 

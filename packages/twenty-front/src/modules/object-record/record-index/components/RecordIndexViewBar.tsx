@@ -8,11 +8,28 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { ViewBar } from '@/views/components/ViewBar';
 import { ViewType } from '@/views/types/ViewType';
 
-export const RecordIndexViewBar = () => {
-  const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+type RecordIndexViewBarProps = {
+  hideQueryOnlyRecordFilters?: boolean;
+  recordIndexViewTypeOverride?: ViewType;
+};
 
-  const { objectNamePlural, recordIndexId, objectMetadataItem } =
-    useRecordIndexContextOrThrow();
+export const RecordIndexViewBar = ({
+  hideQueryOnlyRecordFilters,
+  recordIndexViewTypeOverride,
+}: RecordIndexViewBarProps) => {
+  const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+  const resolvedRecordIndexViewType =
+    recordIndexViewTypeOverride ?? recordIndexViewType;
+
+  const isLayoutLocked = recordIndexViewTypeOverride !== undefined;
+
+  const {
+    embeddedSurfaceOptions,
+    objectNamePlural,
+    recordIndexId,
+    objectMetadataItem,
+    onViewChange,
+  } = useRecordIndexContextOrThrow();
 
   const { hasCurrentViewNonReadableFields } =
     useHasCurrentViewNonReadableFields(objectMetadataItem);
@@ -20,13 +37,23 @@ export const RecordIndexViewBar = () => {
   return (
     <SpreadsheetImportProvider>
       <ViewBar
+        hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
         isReadOnly={hasCurrentViewNonReadableFields}
         viewBarId={recordIndexId}
+        forcedViewType={recordIndexViewTypeOverride}
+        onViewChange={onViewChange}
+        hideViewPicker={embeddedSurfaceOptions?.hideViewPicker}
+        hideCurrentRecordFilter={
+          embeddedSurfaceOptions?.hideCurrentRecordFilter
+        }
+        toolbarAction={embeddedSurfaceOptions?.toolbarAction}
         optionsDropdownButton={
           <ObjectOptionsDropdown
             recordIndexId={recordIndexId}
+            onViewChange={onViewChange}
             objectMetadataItem={objectMetadataItem}
-            viewType={recordIndexViewType ?? ViewType.TABLE}
+            viewType={resolvedRecordIndexViewType ?? ViewType.TABLE}
+            isLayoutLocked={isLayoutLocked}
           />
         }
       />

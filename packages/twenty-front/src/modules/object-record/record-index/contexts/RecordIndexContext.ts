@@ -1,13 +1,42 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { type RecordField } from '@/object-record/record-field/types/RecordField';
 import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
+import { type ReactNode } from 'react';
 import { type ObjectPermissions } from 'twenty-shared/types';
 import { createRequiredContext } from '~/utils/createRequiredContext';
 
+export type RecordIndexOpenRequest = {
+  recordId: string;
+  source: 'record-chip' | 'table-identifier-action' | 'record-board-card';
+  activationElement?: HTMLElement;
+};
+
+export type RecordIndexEmbeddedSurfaceOptions = {
+  hidePageHeader?: boolean;
+  hideAddNew?: boolean;
+  toolbarAction?: ReactNode;
+  compactTable?: boolean;
+  hideQueryOnlyRecordFilters?: boolean;
+  hideViewPicker?: boolean;
+  hideCurrentRecordFilter?: Pick<
+    RecordFilter,
+    'fieldMetadataId' | 'relationTargetFieldMetadataId' | 'operand'
+  >;
+};
+
 export type RecordIndexContextValue = {
   indexIdentifierUrl: (recordId: string) => string;
+  onOpenRecordFromIndexView?: (request: RecordIndexOpenRequest) => void;
+  shouldPreserveParentViewStateOnOpen?: boolean;
+  shouldUseIndexIdentifierUrlOnFullPageOpen?: boolean;
+  embeddedSurfaceOptions?: RecordIndexEmbeddedSurfaceOptions;
+  hideEmptyStateSubtitle?: boolean;
+  onViewChange?: (viewId: string) => void;
+  onRecordCreated?: (record: ObjectRecord) => Promise<void>;
   onIndexRecordsLoaded: () => void;
   objectNamePlural: string;
   objectNameSingular: string;
@@ -28,5 +57,8 @@ export type RecordIndexContextValue = {
   recordLimit?: number;
 };
 
-export const [RecordIndexContextProvider, useRecordIndexContextOrThrow] =
-  createRequiredContext<RecordIndexContextValue>('RecordIndexContext');
+export const [
+  RecordIndexContextProvider,
+  useRecordIndexContextOrThrow,
+  useOptionalRecordIndexContext,
+] = createRequiredContext<RecordIndexContextValue>('RecordIndexContext');

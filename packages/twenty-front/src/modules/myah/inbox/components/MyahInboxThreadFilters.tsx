@@ -5,7 +5,7 @@ import { Select } from '@/ui/input/components/Select';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { styled } from '@linaria/react';
-import { IconFilter } from 'twenty-ui/icon';
+import { IconFilter, IconRefresh } from 'twenty-ui/icon';
 import { IconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -16,6 +16,9 @@ import {
 
 const StyledFilters = styled.div`
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[2]};
   padding: ${themeCssVariables.spacing[3]};
 `;
 
@@ -23,8 +26,10 @@ const StyledSearch = styled.div`
   position: relative;
 `;
 
-const StyledFilterTrigger = styled.div`
+const StyledSearchActions = styled.div`
   bottom: ${themeCssVariables.spacing[1]};
+  display: flex;
+  gap: ${themeCssVariables.spacing[1]};
   position: absolute;
   right: ${themeCssVariables.spacing[1]};
 `;
@@ -43,14 +48,32 @@ const STATE_OPTIONS = [
   { label: 'Closed', value: 'CLOSED' },
 ] satisfies Array<{ label: string; value: MyahInboxStateFilter }>;
 
+export type MyahInboxRefreshStatus =
+  | 'idle'
+  | 'refreshing'
+  | 'succeeded'
+  | 'failed';
+
 export type MyahInboxThreadFiltersProps = {
   filters: MyahInboxFilters;
+  isRefreshing: boolean;
+  loading: boolean;
+  loadingMore: boolean;
   onFiltersChange: (filters: MyahInboxFilters) => void;
+  onRefresh: () => void;
+  refreshError: string | null;
+  refreshStatus: MyahInboxRefreshStatus;
 };
 
 export const MyahInboxThreadFilters = ({
   filters,
+  isRefreshing,
+  loading,
+  loadingMore,
   onFiltersChange,
+  onRefresh,
+  refreshError,
+  refreshStatus,
 }: MyahInboxThreadFiltersProps) => {
   const { objectMetadataItems } = useObjectMetadataItems();
   const isCampaignMetadataReady = objectMetadataItems.some(
@@ -67,7 +90,7 @@ export const MyahInboxThreadFilters = ({
           fullWidth
           onChange={(search) => onFiltersChange({ ...filters, search })}
         />
-        <StyledFilterTrigger>
+        <StyledSearchActions role="group" aria-label="Inbox search actions">
           <Dropdown
             dropdownId="myah-inbox-filter-menu"
             clickableComponent={
@@ -112,8 +135,19 @@ export const MyahInboxThreadFilters = ({
             }
             dropdownPlacement="bottom-end"
           />
-        </StyledFilterTrigger>
+          <IconButton
+            Icon={IconRefresh}
+            ariaLabel="Refresh Inbox"
+            size="small"
+            variant="tertiary"
+            disabled={loading || loadingMore || isRefreshing}
+            onClick={onRefresh}
+          />
+        </StyledSearchActions>
       </StyledSearch>
+      {refreshStatus === 'failed' && refreshError && (
+        <span role="alert">{refreshError}</span>
+      )}
     </StyledFilters>
   );
 };

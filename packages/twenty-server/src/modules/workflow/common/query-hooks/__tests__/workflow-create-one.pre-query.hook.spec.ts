@@ -1,13 +1,16 @@
 import { type CreateOneResolverArgs } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { WorkflowCreateOnePreQueryHook } from 'src/modules/workflow/common/query-hooks/workflow-create-one.pre-query.hook';
+import { WorkflowOutreachAssociationGuardService } from 'src/modules/workflow/common/services/workflow-outreach-association-guard.service';
 import {
   type WorkflowWorkspaceEntity,
   WorkflowStatus,
 } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 
 describe('WorkflowCreateOnePreQueryHook', () => {
-  const hook = new WorkflowCreateOnePreQueryHook();
+  const hook = new WorkflowCreateOnePreQueryHook(
+    new WorkflowOutreachAssociationGuardService(),
+  );
   const authContext = {} as WorkspaceAuthContext;
   const objectName = 'workflow';
 
@@ -87,5 +90,17 @@ describe('WorkflowCreateOnePreQueryHook', () => {
     expect(result.upsert).toBe(true);
     expect(result.data).not.toHaveProperty('statuses');
     expect(result.data.name).toBe('My workflow');
+  });
+
+  it('rejects an Outreach association in global create input', async () => {
+    await expect(
+      hook.execute(
+        authContext,
+        objectName,
+        buildPayload({ outreachCampaignId: 'campaign-a' }),
+      ),
+    ).rejects.toMatchObject({
+      message: 'Outreach association is managed by Campaign Outreach',
+    });
   });
 });

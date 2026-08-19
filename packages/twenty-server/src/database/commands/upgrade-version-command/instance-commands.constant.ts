@@ -114,6 +114,13 @@ import { CreateManagedProviderBillingFoundationFastInstanceCommand } from 'src/d
 import { AddActionApprovalContextFingerprintFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1785453079000-add-action-approval-context-fingerprint';
 import { AddActionReceiptProviderIdentifiersFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1785453081000-add-action-receipt-provider-identifiers';
 import { RepairManagedProviderOperationRetentionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-19/2-19-instance-command-fast-1784488000000-repair-managed-provider-operation-retention';
+import { CreateManagedEmailFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1785325829908-create-managed-email';
+import { AddManagedEmailQuoteAndPersonaEvidenceFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1785699702326-add-managed-email-quote-and-persona-evidence';
+import { AddManagedEmailLifecycleFieldsFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000000000-add-managed-email-lifecycle-fields';
+import { AddManagedProviderStripeCustomerFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000002000-add-managed-provider-stripe-customer';
+import { CreateManagedEmailOfferFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000003000-create-managed-email-offer';
+import { AddManagedEmailPaymentReceiptsColumnFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000004000-add-managed-email-payment-receipts-column';
+import { MigrateManagedEmailPaymentReceiptsSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1786000004001-migrate-managed-email-payment-receipts';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -229,4 +236,11 @@ export const INSTANCE_COMMANDS = [
   FinalizeInstagramApprovalActionAuthoritySlowInstanceCommand,
   AddActionApprovalContextFingerprintFastInstanceCommand,
   AddActionReceiptProviderIdentifiersFastInstanceCommand,
+  CreateManagedEmailFastInstanceCommand,
+  AddManagedEmailQuoteAndPersonaEvidenceFastInstanceCommand,
+  AddManagedEmailLifecycleFieldsFastInstanceCommand,
+  AddManagedProviderStripeCustomerFastInstanceCommand,
+  CreateManagedEmailOfferFastInstanceCommand,
+  AddManagedEmailPaymentReceiptsColumnFastInstanceCommand,
+  MigrateManagedEmailPaymentReceiptsSlowInstanceCommand,
 ];

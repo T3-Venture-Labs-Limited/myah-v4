@@ -16,6 +16,7 @@ import { ApolloCoreClientMockedProvider } from '@/object-metadata/hooks/__mocks_
 import { DefaultLayout } from '@/ui/layout/page/components/DefaultLayout';
 import { UserMetadataProviderInitialEffect } from '@/metadata-store/effect-components/UserMetadataProviderInitialEffect';
 import { UserContextProvider } from '@/users/components/UserContextProvider';
+import { DocumentTitleProvider } from '@/ui/utilities/page-title/components/DocumentTitleProvider';
 import { MockedMetadataLoadEffect } from '~/testing/decorators/MockedMetadataLoadEffect';
 import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { type JSX, useState } from 'react';
@@ -101,9 +102,11 @@ const Providers = () => {
                     <FullHeightStorybookLayout>
                       <HelmetProvider>
                         <IconsProvider>
-                          <RecordComponentInstanceContextsWrapper componentInstanceId="storybook-test-record">
-                            <MinimalMetadataGate />
-                          </RecordComponentInstanceContextsWrapper>
+                          <DocumentTitleProvider>
+                            <RecordComponentInstanceContextsWrapper componentInstanceId="storybook-test-record">
+                              <MinimalMetadataGate />
+                            </RecordComponentInstanceContextsWrapper>
+                          </DocumentTitleProvider>
                         </IconsProvider>
                       </HelmetProvider>
                     </FullHeightStorybookLayout>

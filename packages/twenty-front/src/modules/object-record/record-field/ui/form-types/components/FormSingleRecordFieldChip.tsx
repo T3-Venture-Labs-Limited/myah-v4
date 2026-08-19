@@ -47,6 +47,7 @@ type FormSingleRecordFieldChipProps = {
   objectNameSingular: string;
   onRemove: (event?: React.MouseEvent<HTMLDivElement>) => void;
   disabled?: boolean;
+  shouldPreventRecordNavigation?: boolean;
 };
 
 export const FormSingleRecordFieldChip = ({
@@ -55,6 +56,7 @@ export const FormSingleRecordFieldChip = ({
   objectNameSingular,
   onRemove,
   disabled,
+  shouldPreventRecordNavigation = false,
 }: FormSingleRecordFieldChipProps) => {
   if (
     draftValue.type === 'variable' &&
@@ -84,6 +86,7 @@ export const FormSingleRecordFieldChip = ({
         <RecordChip
           record={selectedRecord}
           objectNameSingular={objectNameSingular}
+          forceDisableClick={shouldPreventRecordNavigation}
         />
       </StyledRecordChipContainer>
     );

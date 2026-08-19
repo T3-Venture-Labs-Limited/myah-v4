@@ -6,10 +6,12 @@ import { useApplyCreatorBulkRelationship } from '@/myah/creator-crm/hooks/useApp
 const mockModify = jest.fn();
 const mockEvict = jest.fn();
 const mockRefetchQueries = jest.fn();
-const mockDestroyCreatorListMembers = jest.fn();
-const mockBatchCreateCreatorListMembers = jest.fn();
+const mockAddCreatorListMembersIntent = jest.fn();
+const mockRemoveCreatorListMemberIntent = jest.fn();
+const mockAddDirectCampaignCreators = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockEnqueueWarningSnackBar = jest.fn();
+const mockUseMutation = jest.fn();
 const mockCreatorObjectMetadataItem = {
   id: 'creator-object-metadata-id',
   nameSingular: 'creator',
@@ -21,6 +23,10 @@ jest.mock(
     dispatchObjectRecordOperationBrowserEvent: jest.fn(),
   }),
 );
+
+jest.mock('@apollo/client/react', () => ({
+  useMutation: (...args: unknown[]) => mockUseMutation(...args),
+}));
 
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
   useApolloCoreClient: () => ({
@@ -34,18 +40,6 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
 jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
   useObjectMetadataItem: () => ({
     objectMetadataItem: mockCreatorObjectMetadataItem,
-  }),
-}));
-
-jest.mock('@/object-record/hooks/useDestroyManyRecords', () => ({
-  useDestroyManyRecords: () => ({
-    destroyManyRecords: mockDestroyCreatorListMembers,
-  }),
-}));
-
-jest.mock('@/object-record/hooks/useBatchCreateManyRecords', () => ({
-  useBatchCreateManyRecords: () => ({
-    batchCreateManyRecords: mockBatchCreateCreatorListMembers,
   }),
 }));
 
@@ -63,7 +57,21 @@ describe('useApplyCreatorBulkRelationship', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockDestroyCreatorListMembers.mockResolvedValue(['membership-1']);
+    mockAddCreatorListMembersIntent.mockResolvedValue({ data: {} });
+    mockRemoveCreatorListMemberIntent.mockResolvedValue({ data: {} });
+    mockAddDirectCampaignCreators.mockResolvedValue({ data: {} });
+    mockUseMutation
+      .mockReturnValueOnce([mockAddCreatorListMembersIntent])
+      .mockReturnValueOnce([mockRemoveCreatorListMemberIntent])
+      .mockReturnValueOnce([mockAddDirectCampaignCreators]);
+  });
+
+  it('uses the current shared membership input type for bulk removal', () => {
+    renderHook(() => useApplyCreatorBulkRelationship());
+
+    expect(mockUseMutation.mock.calls[1][0].loc.source.body).toContain(
+      '$input: CreatorListMembershipIntentInput!',
+    );
   });
 
   it('refreshes live List results and resets the contextual Creator table after removal', async () => {
@@ -89,13 +97,21 @@ describe('useApplyCreatorBulkRelationship', () => {
     });
 
     expect(mockRefetchQueries).toHaveBeenCalledWith({
-      include: ['FindManyCreators', 'FindManyCreatorListMembers'],
+      include: [
+        'active',
+        'inactive',
+        'FindManyCreators',
+        'FindManyCreatorListMembers',
+        'FindManyCampaignCreators',
+      ],
       updateCache: expect.any(Function),
     });
     expect(executionOrder).toEqual(['modify', 'refetch', 'dispatch']);
     const updateCache = mockRefetchQueries.mock.calls[0][0].updateCache;
     updateCache({ evict: mockEvict });
     expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creators' });
+    expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creatorListMembers' });
+    expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'campaignCreators' });
     expect(mockDispatchObjectRecordOperationBrowserEvent).toHaveBeenCalledWith({
       objectMetadataItem: mockCreatorObjectMetadataItem,
       operation: {
@@ -196,8 +212,11 @@ describe('useApplyCreatorBulkRelationship', () => {
   it.each([
     {
       target: { kind: 'creator-list' as const, id: 'list-1', label: 'List' },
-      relationshipObjectNamePlural: 'creatorListMembers',
-      relationshipFindManyQueryName: 'FindManyCreatorListMembers',
+      relationshipObjectNamesPlural: ['creatorListMembers', 'campaignCreators'],
+      relationshipFindManyQueryNames: [
+        'FindManyCreatorListMembers',
+        'FindManyCampaignCreators',
+      ],
     },
     {
       target: {
@@ -205,15 +224,15 @@ describe('useApplyCreatorBulkRelationship', () => {
         id: 'campaign-1',
         label: 'Campaign',
       },
-      relationshipObjectNamePlural: 'campaignCreators',
-      relationshipFindManyQueryName: 'FindManyCampaignCreators',
+      relationshipObjectNamesPlural: ['campaignCreators'],
+      relationshipFindManyQueryNames: ['FindManyCampaignCreators'],
     },
   ])(
-    'invalidates $relationshipObjectNamePlural after adding creators',
+    'invalidates $relationshipObjectNamesPlural after adding creators',
     async ({
       target,
-      relationshipObjectNamePlural,
-      relationshipFindManyQueryName,
+      relationshipObjectNamesPlural,
+      relationshipFindManyQueryNames,
     }) => {
       const { result } = renderHook(() => useApplyCreatorBulkRelationship());
 
@@ -225,16 +244,40 @@ describe('useApplyCreatorBulkRelationship', () => {
       });
 
       expect(mockRefetchQueries).toHaveBeenCalledWith({
-        include: ['FindManyCreators', relationshipFindManyQueryName],
+        include: [
+          'active',
+          'inactive',
+          'FindManyCreators',
+          ...relationshipFindManyQueryNames,
+        ],
         updateCache: expect.any(Function),
       });
       const updateCache = mockRefetchQueries.mock.calls[0][0].updateCache;
       updateCache({ evict: mockEvict });
 
       expect(mockEvict).toHaveBeenCalledWith({ fieldName: 'creators' });
-      expect(mockEvict).toHaveBeenCalledWith({
-        fieldName: relationshipObjectNamePlural,
-      });
+      for (const fieldName of relationshipObjectNamesPlural) {
+        expect(mockEvict).toHaveBeenCalledWith({ fieldName });
+      }
     },
   );
+  it('adds direct campaign creators without a mailbox assignment', async () => {
+    const { result } = renderHook(() => useApplyCreatorBulkRelationship());
+
+    await act(async () => {
+      await result.current.applyCreatorBulkRelationship({
+        target: { kind: 'campaign', id: 'campaign-1', label: 'Campaign' },
+        creatorIdsToAdd: ['creator-1', 'creator-2'],
+      });
+    });
+
+    expect(mockAddDirectCampaignCreators).toHaveBeenCalledWith({
+      variables: {
+        input: {
+          campaignId: 'campaign-1',
+          creatorIds: ['creator-1', 'creator-2'],
+        },
+      },
+    });
+  });
 });

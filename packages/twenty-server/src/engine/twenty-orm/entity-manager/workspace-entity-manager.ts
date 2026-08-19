@@ -209,14 +209,15 @@ export class WorkspaceEntityManager extends EntityManager {
       queryBuilder = this.connection.createQueryBuilder(
         entityClassOrQueryRunner as EntityTarget<Entity>,
         alias as string,
-        queryRunner as QueryRunner | undefined,
+        queryRunner ?? this.queryRunner,
         {
           calledByWorkspaceEntityManager: true,
         },
       );
     } else {
       queryBuilder = this.connection.createQueryBuilder(
-        entityClassOrQueryRunner as QueryRunner,
+        (entityClassOrQueryRunner as QueryRunner | undefined) ??
+          this.queryRunner,
         {
           calledByWorkspaceEntityManager: true,
         },
@@ -247,7 +248,7 @@ export class WorkspaceEntityManager extends EntityManager {
     return this.createQueryBuilder(
       target,
       metadata.name,
-      undefined,
+      this.queryRunner,
       permissionOptions,
     )
       .insert()
@@ -367,7 +368,7 @@ export class WorkspaceEntityManager extends EntityManager {
       return this.createQueryBuilder(
         target,
         metadata.name,
-        undefined,
+        this.queryRunner,
         permissionOptions,
       )
         .update()
@@ -379,7 +380,7 @@ export class WorkspaceEntityManager extends EntityManager {
       return this.createQueryBuilder(
         target,
         metadata.name,
-        undefined,
+        this.queryRunner,
         permissionOptions,
       )
         .update()

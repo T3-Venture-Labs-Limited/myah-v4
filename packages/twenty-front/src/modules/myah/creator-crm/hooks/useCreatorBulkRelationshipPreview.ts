@@ -13,21 +13,31 @@ type CreatorBulkRelationshipPreviewRecord = {
 
 type CreatorBulkRelationshipRecord = CreatorBulkRelationshipPreviewRecord & {
   __typename: string;
+  isDirectlyAdded?: boolean;
 };
 
 export const buildCreatorBulkRelationshipPreview = ({
   selectedCreatorIds,
   relationshipRecords,
+  targetKind = 'creator-list',
 }: {
   selectedCreatorIds: string[];
-  relationshipRecords: ReadonlyArray<CreatorBulkRelationshipPreviewRecord>;
+  relationshipRecords: ReadonlyArray<
+    CreatorBulkRelationshipPreviewRecord & { isDirectlyAdded?: boolean }
+  >;
+  targetKind?: CreatorBulkRelationshipTarget['kind'];
 }): CreatorBulkRelationshipPreview => {
   const selectedCreatorIdsSet = new Set(selectedCreatorIds);
   const selectedRelationshipRecords = relationshipRecords.filter(
     ({ creatorId }) => selectedCreatorIdsSet.has(creatorId),
   );
   const linkedCreatorIds = new Set(
-    selectedRelationshipRecords.map(({ creatorId }) => creatorId),
+    selectedRelationshipRecords
+      .filter(
+        ({ isDirectlyAdded }) =>
+          targetKind !== 'campaign' || isDirectlyAdded !== false,
+      )
+      .map(({ creatorId }) => creatorId),
   );
 
   return {
@@ -74,14 +84,23 @@ export const useCreatorBulkRelationshipPreview = ({
         { creatorId: { in: selectedCreatorIds } },
       ],
     },
-    recordGqlFields: { id: true, creatorId: true },
+    recordGqlFields: {
+      id: true,
+      creatorId: true,
+      ...(target.kind === 'campaign' ? { isDirectlyAdded: true } : {}),
+    },
     limit: selectedCreatorIds.length,
     skip: selectedCreatorIds.length === 0,
   });
-
-  useEffect(() => {
-    setHasPaginationError(false);
-  }, [target.id, target.kind, selectedCreatorIds]);
+  const preview = useMemo(
+    () =>
+      buildCreatorBulkRelationshipPreview({
+        selectedCreatorIds,
+        relationshipRecords: records,
+        targetKind: target.kind,
+      }),
+    [records, selectedCreatorIds, target.kind],
+  );
 
   useEffect(() => {
     if (
@@ -112,15 +131,6 @@ export const useCreatorBulkRelationshipPreview = ({
     records,
     selectedCreatorIds.length,
   ]);
-
-  const preview = useMemo(
-    () =>
-      buildCreatorBulkRelationshipPreview({
-        selectedCreatorIds,
-        relationshipRecords: records,
-      }),
-    [records, selectedCreatorIds],
-  );
 
   return {
     ...preview,

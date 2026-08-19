@@ -14,6 +14,7 @@ import { WorkflowVersionModule } from 'src/modules/workflow/workflow-builder/wor
 import { WorkflowTriggerModule } from 'src/modules/workflow/workflow-trigger/workflow-trigger.module';
 
 import { WorkflowToolWorkspaceService } from './services/workflow-tool.workspace-service';
+import { WorkflowToolOutreachAccessGuardService } from './services/workflow-tool-outreach-access-guard.service';
 
 // Global module to make WORKFLOW_TOOL_SERVICE_TOKEN available to ToolProviderModule
 // without creating a circular dependency (ToolProviderModule cannot import this module directly)
@@ -33,6 +34,7 @@ import { WorkflowToolWorkspaceService } from './services/workflow-tool.workspace
     AiAgentModule,
   ],
   providers: [
+    WorkflowToolOutreachAccessGuardService,
     WorkflowToolWorkspaceService,
     {
       provide: WORKFLOW_TOOL_SERVICE_TOKEN,

@@ -1,3 +1,4 @@
+import { isNonEmptyString } from '@sniptt/guards';
 import { Command } from 'nest-commander';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { In, type DataSource } from 'typeorm';
@@ -10,11 +11,14 @@ import { buildFromToAllUniversalFlatEntityMaps } from 'src/engine/core-modules/a
 import { RegisteredWorkspaceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-workspace-command.decorator';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
 import type { SyncableFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-from.type';
 import type { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
+import type { FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+
 import { getSubFlatEntityMapsByUniversalIdentifiersOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/get-sub-flat-entity-maps-by-universal-identifiers-or-throw.util';
 import { pruneDanglingForeignKeyAggregatorsInAllFlatEntityMapsThroughMutation } from 'src/engine/metadata-modules/flat-entity/utils/prune-dangling-foreign-key-aggregators-in-all-flat-entity-maps-through-mutation.util';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
@@ -78,6 +82,25 @@ type SyncableFlatEntityMaps = FlatEntityMaps<SyncableFlatEntity>;
 type TwentyStandardMetadataName =
   (typeof TWENTY_STANDARD_ALL_METADATA_NAME)[number];
 
+const withoutCacheDerivedFieldMetadataProperties = <
+  T extends FlatEntityMaps<FlatFieldMetadata>,
+>(
+  flatFieldMetadataMaps: T,
+): T => {
+  const sanitizedFlatFieldMetadataMaps = structuredClone(
+    flatFieldMetadataMaps,
+  );
+
+  for (const flatFieldMetadata of Object.values(
+    sanitizedFlatFieldMetadataMaps.byUniversalIdentifier,
+  ).filter(isDefined)) {
+    Reflect.deleteProperty(flatFieldMetadata, 'isUnique');
+  }
+
+  return sanitizedFlatFieldMetadataMaps;
+};
+
+
 export type SynchronizeMyahStandardMetadataOptions = {
   targetObjectUniversalIdentifiers?: ReadonlySet<string>;
   migrateLegacyMyahApplication?: boolean;
@@ -106,6 +129,43 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     super(workspaceIteratorService);
   }
 
+  async workspaceSchemaExists(workspaceId: string): Promise<boolean> {
+    const workspace = await this.coreDataSource
+      .getRepository(WorkspaceEntity)
+      .findOne({
+        select: ['databaseSchema'],
+        where: { id: workspaceId },
+      });
+
+    if (!isNonEmptyString(workspace?.databaseSchema)) {
+      this.logger.log(
+        `Skipping Myah standard metadata synchronization for workspace ${workspaceId}: no database schema is configured`,
+      );
+
+      return false;
+    }
+
+    const queryRunner = this.coreDataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+
+      const schemaExists = await queryRunner.hasSchema(
+        workspace.databaseSchema,
+      );
+
+      if (!schemaExists) {
+        this.logger.log(
+          `Skipping Myah standard metadata synchronization for workspace ${workspaceId}: schema ${workspace.databaseSchema} does not exist`,
+        );
+      }
+
+      return schemaExists;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   override runOnWorkspace(args: RunOnWorkspaceArgs): Promise<void> {
     return this.synchronizeWorkspace(args);
   }
@@ -114,6 +174,10 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     { workspaceId, options }: RunOnWorkspaceArgs,
     syncOptions: SynchronizeMyahStandardMetadataOptions = {},
   ): Promise<void> {
+    if (!(await this.workspaceSchemaExists(workspaceId))) {
+      return;
+    }
+
     const { twentyStandardFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow({
         workspaceId,
@@ -159,32 +223,66 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
     twentyStandardApplicationId: twentyStandardFlatApplication.id, removeReplacedTwentyCrmMetadata: shouldMigrateLegacyMyahApplication,  });
 
     const objectUniversalIdentifiers =
-          syncOptions.targetObjectUniversalIdentifiers ??
-          new Set<string>(
-            Object.values(MYAH_STANDARD_OBJECTS).map(
-              ({ universalIdentifier }) => universalIdentifier,
-            ),
-          );
+      syncOptions.targetObjectUniversalIdentifiers ??
+      new Set<string>(
+        Object.values(MYAH_STANDARD_OBJECTS).map(
+          ({ universalIdentifier }) => universalIdentifier,
+        ),
+      );
+    const currentObjectUniversalIdentifiers = new Set(
+      Object.keys(
+        fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier,
+      ),
+    );
     const standardFields = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier,
     );
-    const fieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardFields.filter((field) =>
-        syncOptions.targetObjectUniversalIdentifiers === undefined
-          ? objectUniversalIdentifiers.has(
-              field.objectMetadataUniversalIdentifier ?? '',
-            ) ||
+    const isObjectAvailable = (universalIdentifier: string): boolean =>
+      objectUniversalIdentifiers.has(universalIdentifier) ||
+      currentObjectUniversalIdentifiers.has(universalIdentifier);
+    const hasAvailableFieldEndpoints = (
+      field: (typeof standardFields)[number],
+    ): boolean => {
+      const objectUniversalIdentifier =
+        field.objectMetadataUniversalIdentifier ?? '';
+      const relationTargetObjectUniversalIdentifier =
+        field.relationTargetObjectMetadataUniversalIdentifier;
+
+      return (
+        isObjectAvailable(objectUniversalIdentifier) &&
+        (!isDefined(relationTargetObjectUniversalIdentifier) ||
+          isObjectAvailable(relationTargetObjectUniversalIdentifier))
+      );
+    };
+    const shouldIncludeField = (
+      field: (typeof standardFields)[number],
+    ): boolean => {
+      const objectUniversalIdentifier =
+        field.objectMetadataUniversalIdentifier ?? '';
+      const relationTargetObjectUniversalIdentifier =
+        field.relationTargetObjectMetadataUniversalIdentifier;
+
+      if (syncOptions.targetObjectUniversalIdentifiers !== undefined) {
+        return (
+          objectUniversalIdentifiers.has(objectUniversalIdentifier) &&
+          (!isDefined(relationTargetObjectUniversalIdentifier) ||
             objectUniversalIdentifiers.has(
-              field.relationTargetObjectMetadataUniversalIdentifier ?? '',
-            )
-          : objectUniversalIdentifiers.has(
-                field.objectMetadataUniversalIdentifier ?? '',
-              ) &&
-              (field.relationTargetObjectMetadataUniversalIdentifier == null ||
-                objectUniversalIdentifiers.has(
-                  field.relationTargetObjectMetadataUniversalIdentifier,
-                )),
-      ),
+              relationTargetObjectUniversalIdentifier,
+            ))
+        );
+      }
+
+      const hasMyahEndpoint =
+        objectUniversalIdentifiers.has(objectUniversalIdentifier) ||
+        (isDefined(relationTargetObjectUniversalIdentifier) &&
+          objectUniversalIdentifiers.has(
+            relationTargetObjectUniversalIdentifier,
+          ));
+
+      return hasMyahEndpoint && hasAvailableFieldEndpoints(field);
+    };
+    const fieldUniversalIdentifiers = toUniversalIdentifiers(
+      standardFields.filter(shouldIncludeField),
     );
     const standardIndexes = getUniversalMetadataEntities(
       standardAllFlatEntityMaps.flatIndexMaps.byUniversalIdentifier,
@@ -296,24 +394,65 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       const fieldMetadataUniversalIdentifier =
         viewField.fieldMetadataUniversalIdentifier;
 
+      const field = isDefined(fieldMetadataUniversalIdentifier)
+        ? standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+            fieldMetadataUniversalIdentifier
+          ]
+        : undefined;
+
       if (
         viewUniversalIdentifiers.has(viewField.viewUniversalIdentifier ?? '') &&
-        isDefined(fieldMetadataUniversalIdentifier)
+        isDefined(field) &&
+        (syncOptions.targetObjectUniversalIdentifiers !== undefined ||
+          hasAvailableFieldEndpoints(field))
       ) {
-        fieldUniversalIdentifiers.add(fieldMetadataUniversalIdentifier);
+        fieldUniversalIdentifiers.add(field.universalIdentifier);
       }
     }
 
     for (const field of standardFields) {
       if (
-        fieldUniversalIdentifiers.has(field.universalIdentifier) &&
-        isDefined(field.relationTargetFieldMetadataUniversalIdentifier)
+        !fieldUniversalIdentifiers.has(field.universalIdentifier) ||
+        !isDefined(field.relationTargetFieldMetadataUniversalIdentifier)
       ) {
-        fieldUniversalIdentifiers.add(
-          field.relationTargetFieldMetadataUniversalIdentifier,
+        continue;
+      }
+
+      const relationTargetField =
+        standardAllFlatEntityMaps.flatFieldMetadataMaps.byUniversalIdentifier[
+          field.relationTargetFieldMetadataUniversalIdentifier
+        ];
+
+      if (
+        isDefined(relationTargetField) &&
+        (syncOptions.targetObjectUniversalIdentifiers !== undefined ||
+          hasAvailableFieldEndpoints(relationTargetField))
+      ) {
+        fieldUniversalIdentifiers.add(relationTargetField.universalIdentifier);
+      }
+    }
+    const objectUniversalIdentifiersToSynchronize = new Set(
+      objectUniversalIdentifiers,
+    );
+
+    for (const field of standardFields) {
+      if (!fieldUniversalIdentifiers.has(field.universalIdentifier)) {
+        continue;
+      }
+
+      if (isDefined(field.objectMetadataUniversalIdentifier)) {
+        objectUniversalIdentifiersToSynchronize.add(
+          field.objectMetadataUniversalIdentifier,
+        );
+      }
+
+      if (isDefined(field.relationTargetObjectMetadataUniversalIdentifier)) {
+        objectUniversalIdentifiersToSynchronize.add(
+          field.relationTargetObjectMetadataUniversalIdentifier,
         );
       }
     }
+
     const viewFilterUniversalIdentifiers = toUniversalIdentifiers(
       getUniversalMetadataEntities(
         standardAllFlatEntityMaps.flatViewFilterMaps.byUniversalIdentifier,
@@ -324,10 +463,16 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
       ),
     );
     const viewFieldUniversalIdentifiers = toUniversalIdentifiers(
-      standardViewFields.filter((viewField) =>
-        viewUniversalIdentifiers.has(
-          viewField.viewUniversalIdentifier ?? '',
-        ),
+      standardViewFields.filter(
+        (viewField) =>
+          viewUniversalIdentifiers.has(
+            viewField.viewUniversalIdentifier ?? '',
+          ) &&
+          (syncOptions.targetObjectUniversalIdentifiers !== undefined ||
+            (isDefined(viewField.fieldMetadataUniversalIdentifier) &&
+              fieldUniversalIdentifiers.has(
+                viewField.fieldMetadataUniversalIdentifier,
+              ))),
       ),
     );
     const navigationMenuItemUniversalIdentifiers = toUniversalIdentifiers(
@@ -368,7 +513,10 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         });
     };
 
-    selectMetadata('objectMetadata', objectUniversalIdentifiers);
+    selectMetadata(
+      'objectMetadata',
+      objectUniversalIdentifiersToSynchronize,
+    );
     selectMetadata('fieldMetadata', fieldUniversalIdentifiers);
     selectMetadata('index', indexUniversalIdentifiers);
     selectMetadata('view', viewUniversalIdentifiers);
@@ -453,6 +601,23 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         'navigationMenuItem',
         navigationMenuItemUniversalIdentifiers,
       );
+      for (const universalIdentifier of objectUniversalIdentifiersToSynchronize) {
+        if (objectUniversalIdentifiers.has(universalIdentifier)) {
+          continue;
+        }
+
+        const currentObject =
+          fromAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+            universalIdentifier
+          ];
+
+        if (isDefined(currentObject)) {
+          toAllFlatEntityMaps.flatObjectMetadataMaps.byUniversalIdentifier[
+            universalIdentifier
+          ] = { ...currentObject };
+        }
+      }
+
       pruneDanglingForeignKeyAggregatorsInAllFlatEntityMapsThroughMutation({
         allFlatEntityMapsToMutate: toAllFlatEntityMaps,
       });
@@ -545,6 +710,15 @@ export class SynchronizeMyahStandardMetadataCommand extends ActiveOrSuspendedWor
         >
       )[flatEntityMapsKey] = fromFlatEntitySubMaps;
     }
+
+    fromMyahFlatEntityMaps.flatFieldMetadataMaps =
+      withoutCacheDerivedFieldMetadataProperties(
+        fromMyahFlatEntityMaps.flatFieldMetadataMaps,
+      );
+    toAllFlatEntityMaps.flatFieldMetadataMaps =
+      withoutCacheDerivedFieldMetadataProperties(
+        toAllFlatEntityMaps.flatFieldMetadataMaps,
+      );
 
     const result =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigrationFromTo(

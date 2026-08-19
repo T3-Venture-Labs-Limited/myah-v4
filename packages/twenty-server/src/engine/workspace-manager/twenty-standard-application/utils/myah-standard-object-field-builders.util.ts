@@ -3,7 +3,7 @@ import {
   RelationOnDeleteAction,
   RelationType,
 } from 'twenty-shared/types';
-import { type MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import {
@@ -400,6 +400,8 @@ export const buildMyahCampaignCreatorStandardFlatObjectMetadata = (
       description: 'A selected creator in a campaign workflow',
       icon: 'IconUserCheck',
       isSearchable: true,
+      isUICreatable: false,
+      isUIEditable: true,
       labelIdentifierFieldMetadataName: 'name',
     },
   });
@@ -459,6 +461,45 @@ export const buildMyahCreatorListStandardFlatObjectMetadata = (
       icon: 'IconListDetails',
       isSearchable: true,
       labelIdentifierFieldMetadataName: 'name',
+    },
+  });
+
+export const buildMyahCampaignCreatorListStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'campaignCreatorList',
+    context: {
+      universalIdentifier: 'd4d9c1e1-3f0f-4e1a-8d0d-4a3d5f5a1b20',
+      nameSingular: 'campaignCreatorList',
+      namePlural: 'campaignCreatorLists',
+      labelSingular: 'Campaign Creator List',
+      labelPlural: 'Campaign Creator Lists',
+      description: 'A Creator List attached to a Campaign',
+      icon: 'IconList',
+      isSearchable: false,
+      labelIdentifierFieldMetadataName: 'id',
+    },
+  });
+
+export const buildMyahCampaignCreatorListSourceStandardFlatObjectMetadata = (
+  args: ObjectArgs,
+): FlatObjectMetadata =>
+  createStandardObjectFlatMetadata({
+    ...args,
+    objectName: 'campaignCreatorListSource',
+    context: {
+      universalIdentifier: '7973bfbb-ff71-47c3-94a6-9e4435eca326',
+      nameSingular: 'campaignCreatorListSource',
+      namePlural: 'campaignCreatorListSources',
+      labelSingular: 'Campaign Creator List Source',
+      labelPlural: 'Campaign Creator List Sources',
+      description:
+        'A retained Creator List admission source for a Campaign Creator',
+      icon: 'IconListCheck',
+      isSearchable: false,
+      labelIdentifierFieldMetadataName: 'id',
     },
   });
 
@@ -2302,6 +2343,112 @@ export const buildMyahStandardFlatFieldMetadatas = ({
         }),
       };
 
+    case 'campaignCreatorList':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        campaign: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreatorList',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaign',
+            label: 'Campaign',
+            description: 'Campaign',
+            icon: 'IconTargetArrow',
+            targetObjectName: 'campaign',
+            targetFieldName: 'campaignCreatorLists',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.CASCADE,
+              joinColumnName: 'campaignId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        creatorList: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreatorList',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'creatorList',
+            label: 'Creator List',
+            description: 'Creator List',
+            icon: 'IconList',
+            targetObjectName: 'creatorList',
+            targetFieldName: 'campaignCreatorLists',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.CASCADE,
+              joinColumnName: 'creatorListId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
+    case 'campaignCreatorListSource':
+      return {
+        ...buildMyahBaseSystemFields({ objectName, ...args }),
+        campaignCreator: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreatorListSource',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreator',
+            label: 'Campaign Creator',
+            description: 'Campaign Creator',
+            icon: 'IconUserStar',
+            targetObjectName: 'campaignCreator',
+            targetFieldName: 'campaignCreatorListSources',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.CASCADE,
+              joinColumnName: 'campaignCreatorId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        creatorList: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreatorListSource',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'creatorList',
+            label: 'Creator List',
+            description: 'Creator List',
+            icon: 'IconList',
+            targetObjectName: 'creatorList',
+            targetFieldName: 'campaignCreatorListSources',
+            morphId: null,
+            settings: {
+              relationType: RelationType.MANY_TO_ONE,
+              onDelete: RelationOnDeleteAction.CASCADE,
+              joinColumnName: 'creatorListId',
+            },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+      };
+
     case 'campaignCreator':
       return {
         ...buildMyahBaseSystemFields({ objectName, ...args }),
@@ -2371,6 +2518,25 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        isDirectlyAdded: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'isDirectlyAdded',
+            type: FieldMetadataType.BOOLEAN,
+            label: 'Directly added',
+            description:
+              'Whether this Creator was added directly to the Campaign',
+            icon: 'IconUserPlus',
+            isNullable: false,
+            defaultValue: false,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         stage: createMyahStandardFieldFlatMetadata({
           objectName: 'campaignCreator',
           workspaceId: args.workspaceId,
@@ -2397,6 +2563,23 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             label: 'Selected contact method',
             description: 'Selected contact method',
             icon: 'IconSend',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        assignedManagedMailboxId: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'assignedManagedMailboxId',
+            type: FieldMetadataType.TEXT,
+            label: 'Managed mailbox',
+            description: 'Managed mailbox assigned for campaign outreach',
+            icon: 'IconMail',
             isNullable: true,
           },
           standardObjectMetadataRelatedEntityIds:
@@ -2486,6 +2669,33 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             targetFieldName: 'campaignCreator',
             morphId: null,
             settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreatorListSources: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaignCreator',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreatorListSources',
+            label: 'Creator List Sources',
+            description: 'Retained Creator List admission sources',
+            icon: 'IconListCheck',
+            targetObjectName: 'campaignCreatorListSource',
+            targetFieldName: 'campaignCreator',
+            morphId: null,
+            settings: {
+              relationType: RelationType.ONE_TO_MANY,
+              emptyStateLabel: 'Legacy / source unavailable',
+              emptyStateWhenBooleanFieldIsFalse: 'isDirectlyAdded',
+            },
+            junctionTargetFieldUniversalIdentifier:
+              MYAH_STANDARD_OBJECTS.campaignCreatorListSource.fields.creatorList
+                .universalIdentifier,
           },
           standardObjectMetadataRelatedEntityIds:
             args.standardObjectMetadataRelatedEntityIds,
@@ -2812,6 +3022,27 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        outreachWorkflows: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'outreachWorkflows',
+            label: 'Outreach workflows',
+            description: 'Outreach workflow owned by this Campaign',
+            icon: 'IconSettingsAutomation',
+            targetObjectName: 'workflow',
+            targetFieldName: 'outreachCampaign',
+            morphId: null,
+            isUIEditable: false,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         campaignCreators: createStandardRelationFieldFlatMetadata({
           objectName: 'campaign',
           workspaceId: args.workspaceId,
@@ -2822,6 +3053,26 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             description: 'Campaign creators',
             icon: 'IconUsersGroup',
             targetObjectName: 'campaignCreator',
+            targetFieldName: 'campaign',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreatorLists: createStandardRelationFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreatorLists',
+            label: 'Creator Lists',
+            description: 'Creator Lists attached to this Campaign',
+            icon: 'IconList',
+            targetObjectName: 'campaignCreatorList',
             targetFieldName: 'campaign',
             morphId: null,
             settings: { relationType: RelationType.ONE_TO_MANY },
@@ -3113,6 +3364,49 @@ export const buildMyahStandardFlatFieldMetadatas = ({
             targetFieldName: 'creatorList',
             morphId: null,
             settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreatorLists: createStandardRelationFieldFlatMetadata({
+          objectName: 'creatorList',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreatorLists',
+            label: 'Campaign Creator Lists',
+            description: 'Campaigns using this Creator List',
+            icon: 'IconTargetArrow',
+            targetObjectName: 'campaignCreatorList',
+            targetFieldName: 'creatorList',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
+        campaignCreatorListSources: createStandardRelationFieldFlatMetadata({
+          objectName: 'creatorList',
+          workspaceId: args.workspaceId,
+          context: {
+            type: FieldMetadataType.RELATION,
+            fieldName: 'campaignCreatorListSources',
+            label: 'Campaign Creator List Sources',
+            description: 'Campaign Creator admissions from this List',
+            icon: 'IconTargetArrow',
+            targetObjectName: 'campaignCreatorListSource',
+            targetFieldName: 'creatorList',
+            morphId: null,
+            settings: { relationType: RelationType.ONE_TO_MANY },
+            junctionTargetFieldUniversalIdentifier:
+              MYAH_STANDARD_OBJECTS.campaignCreatorListSource.fields
+                .campaignCreator.universalIdentifier,
           },
           standardObjectMetadataRelatedEntityIds:
             args.standardObjectMetadataRelatedEntityIds,

@@ -5,14 +5,29 @@ import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runne
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
 import { assertWorkflowStatusesNotSet } from 'src/modules/workflow/common/utils/assert-workflow-statuses-not-set';
+import { WorkflowOutreachAssociationGuardService } from 'src/modules/workflow/common/services/workflow-outreach-association-guard.service';
+import { WorkflowOutreachAccessGuardService } from 'src/modules/workflow/common/services/workflow-outreach-access-guard.service';
 
 @WorkspaceQueryHook(`workflow.updateOne`)
 export class WorkflowUpdateOnePreQueryHook implements WorkspacePreQueryHookInstance {
+  constructor(
+    private readonly workflowOutreachAssociationGuardService: WorkflowOutreachAssociationGuardService,
+    private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
+  ) {}
   async execute(
-    _authContext: WorkspaceAuthContext,
+    authContext: WorkspaceAuthContext,
     _objectName: string,
     payload: UpdateOneResolverArgs<WorkflowWorkspaceEntity>,
   ): Promise<UpdateOneResolverArgs<WorkflowWorkspaceEntity>> {
+    await this.workflowOutreachAccessGuardService.assertWorkflowIsAccessible({
+      authContext,
+      workflowId: payload.id,
+      workspaceId: authContext.workspace.id,
+    });
+    await this.workflowOutreachAssociationGuardService.assertNoOutreachAssociation(
+      payload.data,
+    );
+
     assertWorkflowStatusesNotSet(payload.data.statuses);
 
     return payload;

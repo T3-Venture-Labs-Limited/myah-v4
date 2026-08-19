@@ -52,6 +52,8 @@ jobs:
           fetch-depth: 10
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
+        with:
+          cache-node-modules: false
       - name: Diagnostic disk space issue
         run: df -h || true
       - name: Front / Write .env
@@ -247,6 +249,8 @@ jobs:
           fetch-depth: 10
       - name: Install dependencies
         uses: ./.github/actions/yarn-install
+        with:
+          cache-node-modules: false
       - name: Front / Write .env
         run: npx nx reset:env twenty-front
       - name: Build frontend
@@ -264,13 +268,13 @@ jobs:
     needs:
       [
         changed-files-check,
+        select-runner,
         front-task,
         front-build,
         # merge-reports-and-check-coverage,
         front-sb-test,
         front-sb-build,
         front-sb-screenshots,
-        select-runner,
       ]
     steps:
       - name: Fail job if any needs failed

@@ -24,12 +24,35 @@ type SummaryCardProps = {
   isInSidePanel: boolean;
 };
 
-// TODO: refactor all this hierarchy of side panel / show page record to avoid drill down
-export const SummaryCard = ({
+type SummaryCardContentProps = SummaryCardProps & {
+  onUploadPicture?: (file: File) => Promise<void>;
+};
+
+type PersonSummaryCardProps = SummaryCardProps;
+
+const PersonSummaryCard = ({
   objectNameSingular,
   objectRecordId,
   isInSidePanel,
-}: SummaryCardProps) => {
+}: PersonSummaryCardProps) => {
+  const { onUploadPicture } = usePersonAvatarUpload(objectRecordId);
+
+  return (
+    <SummaryCardContent
+      objectNameSingular={objectNameSingular}
+      objectRecordId={objectRecordId}
+      isInSidePanel={isInSidePanel}
+      onUploadPicture={onUploadPicture}
+    />
+  );
+};
+
+const SummaryCardContent = ({
+  objectNameSingular,
+  objectRecordId,
+  isInSidePanel,
+  onUploadPicture,
+}: SummaryCardContentProps) => {
   const { recordLoading } = useRecordShowContainerData({
     objectRecordId,
   });
@@ -48,8 +71,6 @@ export const SummaryCard = ({
   const { useUpdateOneObjectRecordMutation } = useRecordShowContainerActions({
     objectNameSingular,
   });
-
-  const { onUploadPicture } = usePersonAvatarUpload(objectRecordId);
 
   const isMobile = useIsMobile() || isInSidePanel;
 
@@ -115,11 +136,27 @@ export const SummaryCard = ({
         </FieldContext.Provider>
       }
       avatarType={recordIdentifier?.avatarType ?? 'rounded'}
-      onUploadPicture={
-        objectNameSingular === CoreObjectNameSingular.Person
-          ? onUploadPicture
-          : undefined
-      }
+      onUploadPicture={onUploadPicture}
     />
   );
 };
+
+// TODO: refactor all this hierarchy of side panel / show page record to avoid drill down
+export const SummaryCard = ({
+  objectNameSingular,
+  objectRecordId,
+  isInSidePanel,
+}: SummaryCardProps) =>
+  objectNameSingular === CoreObjectNameSingular.Person ? (
+    <PersonSummaryCard
+      objectNameSingular={objectNameSingular}
+      objectRecordId={objectRecordId}
+      isInSidePanel={isInSidePanel}
+    />
+  ) : (
+    <SummaryCardContent
+      objectNameSingular={objectNameSingular}
+      objectRecordId={objectRecordId}
+      isInSidePanel={isInSidePanel}
+    />
+  );

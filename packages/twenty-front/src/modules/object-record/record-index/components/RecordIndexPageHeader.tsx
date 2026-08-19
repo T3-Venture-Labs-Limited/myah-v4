@@ -14,6 +14,7 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
+import { type ReactNode } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -33,7 +34,17 @@ const StyledSelectedRecordsCount = styled.div`
   padding-left: ${themeCssVariables.spacing['0.5']};
 `;
 
-export const RecordIndexPageHeader = () => {
+export type RecordIndexPageHeaderProps = {
+  contextStoreInstanceId: string;
+  headerTitle?: string;
+  headerActionButton?: ReactNode;
+};
+
+export const RecordIndexPageHeader = ({
+  contextStoreInstanceId,
+  headerTitle,
+  headerActionButton,
+}: RecordIndexPageHeaderProps) => {
   const { findObjectMetadataItemByNamePlural } =
     useFilteredObjectMetadataItems();
 
@@ -43,24 +54,25 @@ export const RecordIndexPageHeader = () => {
 
   const { formatNumber } = useNumberFormat();
 
-  const { objectNamePlural } = useRecordIndexContextOrThrow();
+  const { objectNamePlural, embeddedSurfaceOptions } =
+    useRecordIndexContextOrThrow();
 
   const objectMetadataItem =
     findObjectMetadataItemByNamePlural(objectNamePlural);
 
-  const label = objectMetadataItem?.labelPlural ?? objectNamePlural;
+  const metadataLabel = objectMetadataItem?.labelPlural ?? objectNamePlural;
 
   const pageHeaderTitle =
     contextStoreNumberOfSelectedRecords > 0 ? (
       <StyledTitleWithSelectedRecords>
-        <StyledTitle>{label}</StyledTitle>
+        <StyledTitle>{headerTitle ?? metadataLabel}</StyledTitle>
         <>{'->'}</>
         <StyledSelectedRecordsCount>
           {t`${formatNumber(contextStoreNumberOfSelectedRecords)} selected`}
         </StyledSelectedRecordsCount>
       </StyledTitleWithSelectedRecords>
     ) : (
-      label
+      (headerTitle ?? metadataLabel)
     );
 
   const contextStoreCurrentViewId = useAtomComponentStateValue(
@@ -78,9 +90,12 @@ export const RecordIndexPageHeader = () => {
       }
       title={pageHeaderTitle}
       actionButton={
-        isDefined(contextStoreCurrentViewId) ? (
+        !embeddedSurfaceOptions && isDefined(contextStoreCurrentViewId) ? (
           <>
-            <MyahCreatorBulkActions />
+            {headerActionButton}
+            <MyahCreatorBulkActions
+              contextStoreInstanceId={contextStoreInstanceId}
+            />
             <RecordIndexCommandMenu />
             {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
           </>

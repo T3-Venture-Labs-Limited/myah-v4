@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 
-import { plainToClass } from 'class-transformer';
+import { plainToClass, Transform } from 'class-transformer';
 import {
   IsDateString,
   IsDefined,
@@ -8,6 +8,7 @@ import {
   IsInt,
   IsNotEmpty,
   IsOptional,
+  IsObject,
   IsString,
   IsUrl,
   Matches,
@@ -15,6 +16,8 @@ import {
   Max,
   ValidateIf,
   IsUUID,
+  ArrayNotEmpty,
+  IsArray,
   type ValidationError,
   validateSync,
 } from 'class-validator';
@@ -49,6 +52,12 @@ import { IsDuration } from 'src/engine/core-modules/twenty-config/decorators/is-
 import { IsOptionalOrEmptyString } from 'src/engine/core-modules/twenty-config/decorators/is-optional-or-empty-string.decorator';
 import { IsStrictlyLowerThan } from 'src/engine/core-modules/twenty-config/decorators/is-strictly-lower-than.decorator';
 import { IsTwentySemVer } from 'src/engine/core-modules/twenty-config/decorators/is-twenty-semver.decorator';
+import {
+  IsManagedEmailExecutionModeSafe,
+  IsManagedEmailMetronomeEnvironmentSafe,
+  IsManagedEmailProviderUrlSafe,
+  IsManagedEmailStripeKeySafe,
+} from 'src/engine/core-modules/twenty-config/decorators/is-managed-email-runtime-safe.decorator';
 import { ConfigVariableType } from 'src/engine/core-modules/twenty-config/enums/config-variable-type.enum';
 import { ConfigVariablesGroup } from 'src/engine/core-modules/twenty-config/enums/config-variables-group.enum';
 import {
@@ -63,7 +72,186 @@ import {
   DEFAULT_SMART_MODELS,
 } from 'src/engine/metadata-modules/ai/ai-models/utils/load-default-model-preferences.util';
 
+import { type ManagedEmailCatalog } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 export class ConfigVariables {
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Enable managed email services',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  MANAGED_EMAIL_ENABLED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Managed email execution mode (PRODUCTION or SANDBOX)',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @IsManagedEmailExecutionModeSafe()
+  @IsEnum(['PRODUCTION', 'SANDBOX'])
+  MANAGED_EMAIL_EXECUTION_MODE: 'PRODUCTION' | 'SANDBOX' = 'PRODUCTION';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Metronome environment for managed email billing (PRODUCTION or SANDBOX)',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsDefined()
+  @IsEnum(['PRODUCTION', 'SANDBOX'])
+  MANAGED_EMAIL_METRONOME_ENVIRONMENT: 'PRODUCTION' | 'SANDBOX' = 'PRODUCTION';
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Typed managed email catalog JSON',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    isRequired: true,
+    type: ConfigVariableType.JSON,
+  })
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsDefined()
+  @IsObject()
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  })
+  MANAGED_EMAIL_CATALOG: ManagedEmailCatalog | undefined = undefined;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Managed email provider configuration key',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  MANAGED_EMAIL_PROVIDER_CONFIGURATION_KEY = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Icemail API base URL',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsManagedEmailProviderUrlSafe()
+  @IsUrl({ require_protocol: true, require_tld: false })
+  ICEMAIL_API_BASE_URL = 'https://app.icemail.ai/api/v1';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Icemail API key',
+    isSensitive: true,
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  ICEMAIL_API_KEY = '';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsManagedEmailProviderUrlSafe()
+  @IsUrl({ require_protocol: true, require_tld: false })
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Warmup Inbox API base URL',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  WARMUP_INBOX_API_BASE_URL = 'https://api.warmupinbox.com';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Warmup Inbox API key',
+    isSensitive: true,
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  WARMUP_INBOX_API_KEY = '';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Managed email Metronome rate-card alias',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS = '';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsUUID()
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Metronome Stripe billing-provider configuration ID used for direct invoice delivery',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID = '';
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : value,
+  )
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Managed email workspace allowlist',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.ARRAY,
+  })
+  MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS: string[] = [];
+
+  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Managed email readiness policy version',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  MANAGED_EMAIL_READINESS_POLICY_VERSION = '';
+
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,
     description: 'Enable or disable password authentication for users',
@@ -124,13 +312,46 @@ export class ConfigVariables {
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Root URL for the Metronome API environment',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf(
+    (env) =>
+      env.METRONOME_ENABLED === true || env.MANAGED_EMAIL_ENABLED === true,
+  )
+  @IsManagedEmailMetronomeEnvironmentSafe()
+  @IsUrl({ require_protocol: true, require_tld: false })
+  METRONOME_BASE_URL = 'https://api.metronome.com';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Explicit Metronome API URL identity (PRODUCTION or SANDBOX)',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf(
+    (env, value) => env.MANAGED_EMAIL_ENABLED === true || value !== undefined,
+  )
+  @IsDefined()
+  @IsEnum(['PRODUCTION', 'SANDBOX'])
+  METRONOME_BASE_URL_ENVIRONMENT: 'PRODUCTION' | 'SANDBOX' | undefined =
+    undefined;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
     isSensitive: true,
     description: 'API key for Myah managed-provider billing through Metronome',
     isEnvOnly: true,
     isHiddenInAdminPanel: true,
     type: ConfigVariableType.STRING,
   })
-  @ValidateIf((env) => env.METRONOME_ENABLED === true)
+  @ValidateIf(
+    (env) =>
+      env.METRONOME_ENABLED === true || env.MANAGED_EMAIL_ENABLED === true,
+  )
   @IsString()
   @IsNotEmpty()
   @Matches(/\S/)
@@ -1104,8 +1325,16 @@ export class ConfigVariables {
     description: 'Stripe API key for billing',
     type: ConfigVariableType.STRING,
   })
-  @ValidateIf((env) => env.IS_BILLING_ENABLED === true)
-  BILLING_STRIPE_API_KEY: string;
+  @ValidateIf(
+    (env) =>
+      env.IS_BILLING_ENABLED === true || env.MANAGED_EMAIL_ENABLED === true,
+  )
+  @IsDefined()
+  @IsManagedEmailStripeKeySafe('secret')
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  BILLING_STRIPE_API_KEY = '';
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.BILLING_CONFIG,
@@ -1122,8 +1351,16 @@ export class ConfigVariables {
       'Stripe publishable key for billing, exposed to the frontend to mount Stripe Elements',
     type: ConfigVariableType.STRING,
   })
-  @ValidateIf((env) => env.IS_BILLING_ENABLED === true)
-  BILLING_STRIPE_PUBLISHABLE_KEY: string;
+  @ValidateIf(
+    (env) =>
+      env.IS_BILLING_ENABLED === true || env.MANAGED_EMAIL_ENABLED === true,
+  )
+  @IsDefined()
+  @IsManagedEmailStripeKeySafe('publishable')
+  @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
+  BILLING_STRIPE_PUBLISHABLE_KEY = '';
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.BILLING_CONFIG,

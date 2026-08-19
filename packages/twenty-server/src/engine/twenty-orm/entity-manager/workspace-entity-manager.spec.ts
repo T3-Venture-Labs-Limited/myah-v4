@@ -2,7 +2,7 @@ import {
   type FieldMetadataType,
   type ObjectsPermissions,
 } from 'twenty-shared/types';
-import { EntityManager } from 'typeorm';
+import { EntityManager, type QueryRunner } from 'typeorm';
 import { EntityPersistExecutor } from 'typeorm/persistence/EntityPersistExecutor';
 import { PlainObjectToDatabaseEntityTransformer } from 'typeorm/query-builder/transformer/PlainObjectToDatabaseEntityTransformer';
 
@@ -443,6 +443,32 @@ describe('WorkspaceEntityManager', () => {
     });
   });
 
+  describe('Transaction query builders', () => {
+    it('inherits the active query runner when no runner is passed', async () => {
+      const activeQueryRunner = {} as QueryRunner;
+      const transactionManager = new WorkspaceEntityManager(
+        entityManager.connection,
+        activeQueryRunner,
+      );
+
+      await withWorkspaceContext(mockWorkspaceContext, () => {
+        transactionManager.createQueryBuilder('test-entity', 'test');
+        transactionManager.createQueryBuilder();
+      });
+
+      expect(
+        entityManager.connection.createQueryBuilder,
+      ).toHaveBeenNthCalledWith(1, 'test-entity', 'test', activeQueryRunner, {
+        calledByWorkspaceEntityManager: true,
+      });
+      expect(
+        entityManager.connection.createQueryBuilder,
+      ).toHaveBeenNthCalledWith(2, activeQueryRunner, {
+        calledByWorkspaceEntityManager: true,
+      });
+    });
+  });
+
   describe('Save Methods', () => {
     it('should call validatePermissions and validateOperationIsPermittedOrThrow for save', async () => {
       await withWorkspaceContext(mockWorkspaceContext, () =>
@@ -494,6 +520,94 @@ describe('WorkspaceEntityManager', () => {
     });
   });
 
+  describe('Insert Methods', () => {
+    it('should keep an insert on its transaction query runner', async () => {
+      const transactionQueryRunner = {} as QueryRunner;
+      const transactionManager = new WorkspaceEntityManager(
+        mockDataSource,
+        transactionQueryRunner,
+      );
+      const insertQueryBuilder = {
+        insert: jest.fn().mockReturnThis(),
+        setWorkspaceAuthContext: jest.fn().mockReturnThis(),
+        values: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({
+          affected: 1,
+          raw: [],
+          generatedMaps: [],
+        }),
+      };
+
+      Object.defineProperty(transactionManager, 'connection', {
+        get: () => entityManager.connection,
+      });
+      jest
+        .spyOn(transactionManager, 'createQueryBuilder')
+        .mockReturnValue(insertQueryBuilder as never);
+
+      await withWorkspaceContext(mockWorkspaceContext, () =>
+        transactionManager.insert(
+          'test-entity',
+          {},
+          '*',
+          mockPermissionOptions,
+        ),
+      );
+
+      expect(transactionManager.createQueryBuilder).toHaveBeenCalledWith(
+        'test-entity',
+        undefined,
+        transactionQueryRunner,
+        mockPermissionOptions,
+      );
+    });
+  });
+
+  describe('Update Methods with a transaction', () => {
+    it('should keep an update on its transaction query runner', async () => {
+      const transactionQueryRunner = {} as QueryRunner;
+      const transactionManager = new WorkspaceEntityManager(
+        mockDataSource,
+        transactionQueryRunner,
+      );
+      const updateQueryBuilder = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        whereInIds: jest.fn().mockReturnThis(),
+        returning: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({
+          affected: 1,
+          raw: [],
+          generatedMaps: [],
+        }),
+      };
+
+      Object.defineProperty(transactionManager, 'connection', {
+        get: () => entityManager.connection,
+      });
+      jest
+        .spyOn(transactionManager, 'createQueryBuilder')
+        .mockReturnValue(updateQueryBuilder as never);
+
+      await withWorkspaceContext(mockWorkspaceContext, () =>
+        transactionManager.update(
+          'test-entity',
+          'record-id',
+          {},
+          undefined,
+          mockPermissionOptions,
+        ),
+      );
+
+      expect(transactionManager.createQueryBuilder).toHaveBeenCalledWith(
+        'test-entity',
+        undefined,
+        transactionQueryRunner,
+        mockPermissionOptions,
+      );
+    });
+  });
   describe('Other Methods', () => {
     it('should call validatePermissions and validateOperationIsPermittedOrThrow for clear', async () => {
       await withWorkspaceContext(mockWorkspaceContext, () =>

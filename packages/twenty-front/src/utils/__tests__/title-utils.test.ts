@@ -16,42 +16,10 @@ describe('title-utils', () => {
       'Create Workspace',
     );
     expect(getPageTitleFromPath('/create/profile')).toBe('Create Profile');
-    expect(getPageTitleFromPath('/settings/objects/opportunities')).toBe(
-      'Data model - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/profile')).toBe(
-      'Profile - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/experience')).toBe(
-      'Experience - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/accounts')).toBe(
-      'Account - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/accounts/new')).toBe(
-      'Account - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/accounts/calendars')).toBe(
-      'Account - Settings',
-    );
-    expect(
-      getPageTitleFromPath('/settings/accounts/calendars/:accountUuid'),
-    ).toBe('Account - Settings');
-    expect(getPageTitleFromPath('/settings/accounts/emails')).toBe(
-      'Account - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/accounts/emails/:accountUuid')).toBe(
-      'Account - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/billing/plans')).toBe(
-      'Billing - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/members')).toBe(
-      'Members - Settings',
-    );
-    expect(getPageTitleFromPath('/settings/general')).toBe(
-      'General - Settings',
-    );
+    expect(getPageTitleFromPath('/myah/inbox')).toBe('Myah');
+    expect(getPageTitleFromPath('/settings/profile')).toBe('Myah');
+    expect(getPageTitleFromPath('/settings/email')).toBe('Myah');
+    expect(getPageTitleFromPath('/objects/creators')).toBe('Myah');
     expect(getPageTitleFromPath('/')).toBe('Myah');
     expect(getPageTitleFromPath('/random')).toBe('Myah');
   });

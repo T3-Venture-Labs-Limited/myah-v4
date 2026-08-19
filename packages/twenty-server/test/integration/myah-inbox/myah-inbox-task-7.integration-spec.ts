@@ -21,6 +21,7 @@ const inboxThreadsQuery = gql`
     $campaignId: String
     $states: [MyahInboxState!]
     $search: String
+    $threadId: String
   ) {
     myahInboxThreads(
       first: $first
@@ -29,6 +30,7 @@ const inboxThreadsQuery = gql`
       campaignId: $campaignId
       states: $states
       search: $search
+      threadId: $threadId
     ) {
       edges {
         cursor
@@ -98,6 +100,7 @@ type InboxNode = {
   lastActivityAt: string;
   subject: string | null;
   lastMessagePreview: string | null;
+  lastMessageSender: string | null;
   state: string;
   creator: { id: string; name: string | null } | null;
   campaign: { id: string; name: string | null } | null;
@@ -280,6 +283,65 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     );
   });
 
+  it('searches readable senders by email and participant display name', async () => {
+    const firstPage = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      search: fixture.markers.senderEmail,
+    });
+    const repeatedFirstPage = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      search: fixture.markers.senderEmail,
+    });
+    const secondPage = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      after: firstPage.pageInfo.endCursor,
+      search: fixture.markers.senderEmail,
+    });
+    const caseOnlyEmail = await fetchInbox(operatorAccessToken, {
+      first: 20,
+      search: fixture.markers.senderEmail.toUpperCase(),
+    });
+    const displayName = await fetchInbox(operatorAccessToken, {
+      first: 20,
+      search: fixture.markers.senderDisplayName,
+    });
+    const subjectSender = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      search: fixture.markers.subjectSenderEmail,
+    });
+    const metadataSender = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      search: fixture.markers.metadataSenderEmail,
+    });
+
+    expect(firstPage.pageInfo.hasNextPage).toBe(true);
+    expect(repeatedFirstPage).toEqual(firstPage);
+    expect(
+      [firstPage.edges[0].node.id, secondPage.edges[0].node.id].sort(),
+    ).toEqual(
+      [fixture.threadIds.tiedLinked, fixture.threadIds.tiedUnlinked].sort(),
+    );
+    expect(secondPage.pageInfo.hasNextPage).toBe(false);
+    expect(caseOnlyEmail.edges.map(({ node }) => node.id).sort()).toEqual(
+      [fixture.threadIds.tiedLinked, fixture.threadIds.tiedUnlinked].sort(),
+    );
+    expect(displayName.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.tiedLinked,
+    ]);
+    expect(displayName.edges[0].node).toMatchObject({
+      lastMessageSender: fixture.markers.senderEmail,
+      creator: { id: fixture.creatorId, name: 'Task 7 Creator' },
+    });
+    expect(subjectSender.edges[0].node).toMatchObject({
+      id: fixture.threadIds.subject,
+      lastMessageSender: fixture.markers.subjectSenderEmail,
+    });
+    expect(metadataSender.edges[0].node).toMatchObject({
+      id: fixture.threadIds.metadata,
+      lastMessageSender: fixture.markers.metadataSenderEmail,
+    });
+  });
+
   it('keeps the unlinked readable thread selectable and links it only to the existing Creator', async () => {
     const unlinked = await fetchInbox(operatorAccessToken, {
       first: 20,
@@ -314,6 +376,32 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       id: fixture.threadIds.tiedUnlinked,
       creator: { id: fixture.creatorId },
       campaign: { id: fixture.campaignId },
+    });
+  });
+
+  it('returns a selected readable thread only when its filters match', async () => {
+    const selected = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      threadId: fixture.threadIds.tiedUnlinked,
+      campaignId: fixture.campaignId,
+      search: fixture.markers.senderEmail,
+    });
+    const selectedClosed = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      threadId: fixture.threadIds.tiedUnlinked,
+      states: ['CLOSED'],
+    });
+
+    expect(selected.edges.map(({ node }) => node.id)).toEqual([
+      fixture.threadIds.tiedUnlinked,
+    ]);
+    expect(selected.pageInfo).toEqual({
+      hasNextPage: false,
+      endCursor: selected.edges[0].cursor,
+    });
+    expect(selectedClosed).toEqual({
+      edges: [],
+      pageInfo: { hasNextPage: false, endCursor: null },
     });
   });
 
@@ -401,6 +489,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       fixture.markers.hiddenSubject,
       fixture.markers.hiddenBody,
       fixture.markers.hiddenOnly,
+      fixture.markers.hiddenSenderEmail,
     ]) {
       const result = await fetchInbox(operatorAccessToken, {
         first: 20,
@@ -410,6 +499,26 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       expect(result.edges).toEqual([]);
       expect(result.pageInfo).toEqual({ hasNextPage: false, endCursor: null });
     }
+
+    const hiddenSelection = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      threadId: fixture.threadIds.hiddenOnly,
+    });
+    const invalidSelection = await makeGraphqlAPIRequest(
+      {
+        query: inboxThreadsQuery,
+        variables: { first: 1, threadId: 'myah245-invalid-thread-id' },
+      },
+      operatorAccessToken,
+    );
+
+    expect(hiddenSelection).toEqual({
+      edges: [],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    });
+    expect(invalidSelection.status).toBe(200);
+    expect(invalidSelection.body.errors).toBeDefined();
+    expect(invalidSelection.body.data?.myahInboxThreads).toBeUndefined();
 
     const visibleFallback = sharedThread.edges[0].node;
 

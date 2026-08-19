@@ -1,6 +1,7 @@
 import { type ActorMetadata } from 'twenty-shared/types';
 
 import { BaseWorkspaceEntity } from 'src/engine/twenty-orm/base.workspace-entity';
+import { type CustomWorkspaceEntity } from 'src/engine/twenty-orm/custom.workspace-entity';
 import { type EntityRelation } from 'src/engine/workspace-manager/workspace-migration/types/entity-relation.interface';
 import { type AttachmentWorkspaceEntity } from 'src/modules/attachment/standard-objects/attachment.workspace-entity';
 import { type TimelineActivityWorkspaceEntity } from 'src/modules/timeline/standard-objects/timeline-activity.workspace-entity';
@@ -18,6 +19,8 @@ export class WorkflowWorkspaceEntity extends BaseWorkspaceEntity {
   name: string | null;
   lastPublishedVersionId: string | null;
   statuses: WorkflowStatus[] | null;
+  outreachCampaign: EntityRelation<CustomWorkspaceEntity> | null;
+  outreachCampaignId: string | null;
   position: number;
   searchVector: string;
   versions: EntityRelation<WorkflowVersionWorkspaceEntity[]>;

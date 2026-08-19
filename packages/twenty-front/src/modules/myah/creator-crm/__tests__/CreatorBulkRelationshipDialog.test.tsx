@@ -6,6 +6,7 @@ const mockUseCreatorBulkRelationshipPreview = jest.fn();
 const mockApplyCreatorBulkRelationship = jest.fn();
 const mockRemoveCreatorListMembers = jest.fn();
 const mockCloseModal = jest.fn();
+const mockUseQuery = jest.fn();
 
 jest.mock('@/myah/creator-crm/hooks/useCreatorBulkRelationshipPreview', () => ({
   useCreatorBulkRelationshipPreview: (...args: unknown[]) =>
@@ -17,6 +18,10 @@ jest.mock('@/myah/creator-crm/hooks/useApplyCreatorBulkRelationship', () => ({
     applyCreatorBulkRelationship: mockApplyCreatorBulkRelationship,
     removeCreatorListMembers: mockRemoveCreatorListMembers,
   }),
+}));
+
+jest.mock('@apollo/client/react', () => ({
+  useQuery: (...args: unknown[]) => mockUseQuery(...args),
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
@@ -101,6 +106,7 @@ const readyPreview = {
 describe('CreatorBulkRelationshipDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseQuery.mockReturnValue({ data: undefined, loading: false });
   });
 
   it('does not dismiss or mutate when Enter is pressed while confirmation is disabled', () => {
@@ -254,12 +260,65 @@ describe('CreatorBulkRelationshipDialog', () => {
       /^Will be added1 creator$/,
     );
   });
+  it('admits new campaign creators without mailbox assignment', () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue(readyPreview);
 
-  it('reports an all-existing selection without mutating', () => {
+    render(
+      <CreatorBulkRelationshipDialog
+        action={campaignAction}
+        selectedCreatorIds={['creator-a', 'creator-b']}
+      />,
+    );
+
+    expect(screen.queryByText('Sending mailbox')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Clear mailbox assignment' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Add to campaign' }),
+    ).toBeEnabled();
+  });
+
+  it('disables campaign confirmation for an empty or unavailable preview', () => {
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      ...readyPreview,
+      selectedCreatorIds: [],
+      unlinkedCreatorIds: [],
+    });
+
+    const { rerender } = render(
+      <CreatorBulkRelationshipDialog
+        action={campaignAction}
+        selectedCreatorIds={[]}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Add to campaign' }),
+    ).toBeDisabled();
+
+    mockUseCreatorBulkRelationshipPreview.mockReturnValue({
+      ...readyPreview,
+      isPreviewUnavailable: true,
+    });
+    rerender(
+      <CreatorBulkRelationshipDialog
+        action={campaignAction}
+        selectedCreatorIds={['creator-a', 'creator-b']}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Add to campaign' }),
+    ).toBeDisabled();
+  });
+
+  it('shows no changes and does not mutate repeat campaign selections', () => {
     mockUseCreatorBulkRelationshipPreview.mockReturnValue({
       ...readyPreview,
       linkedCreatorIds: ['creator-a', 'creator-b'],
       unlinkedCreatorIds: [],
+      relationshipRecordIds: ['campaign-creator-a', 'campaign-creator-b'],
     });
 
     render(
@@ -269,13 +328,13 @@ describe('CreatorBulkRelationshipDialog', () => {
       />,
     );
 
-    expect(screen.getByText(/No changes will be made/)).toBeVisible();
-    expect(screen.getByText('Target').parentElement).toHaveTextContent(
-      'TargetSpring campaign',
-    );
+    expect(screen.getByText('No changes will be made.')).toBeVisible();
     expect(
-      screen.getByRole('button', { name: /^Add to campaign/ }),
+      screen.getByRole('button', { name: 'Add to campaign' }),
     ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to campaign' }));
+
     expect(mockApplyCreatorBulkRelationship).not.toHaveBeenCalled();
   });
 });

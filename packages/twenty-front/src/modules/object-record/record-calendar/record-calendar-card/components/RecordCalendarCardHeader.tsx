@@ -15,6 +15,7 @@ import { ChipVariant } from 'twenty-ui/data-display';
 import { Checkbox, CheckboxVariant } from 'twenty-ui/input';
 import { isRecordCalendarCardSelectedComponentFamilyState } from '@/object-record/record-calendar/record-calendar-card/states/isRecordCalendarCardSelectedComponentFamilyState';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { type MouseEvent } from 'react';
 
 const StyledCheckboxContainer = styled.div`
   margin-left: auto;
@@ -52,11 +53,15 @@ export const RecordCalendarCardHeader = ({
       recordId,
     );
 
-  const handleChipClick = () => {
+  const handleChipClick = (event: MouseEvent<HTMLElement>) => {
     if (isDraggingRecord) {
       return;
     }
-    openRecordFromIndexView({ recordId });
+    openRecordFromIndexView({
+      activationElement: event.currentTarget,
+      recordId,
+      source: 'record-chip',
+    });
   };
 
   if (!isDefined(recordStore)) {

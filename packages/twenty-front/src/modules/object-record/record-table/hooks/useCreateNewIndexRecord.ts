@@ -1,7 +1,10 @@
+import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
+import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { getLabelIdentifierFieldMetadataItem } from '@/object-metadata/utils/getLabelIdentifierFieldMetadataItem';
 import { useBuildRecordInputFromRLSPredicates } from '@/object-record/hooks/useBuildRecordInputFromRLSPredicates';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
+import { useOptionalRecordIndexContext } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { recordGroupDefinitionsComponentSelector } from '@/object-record/record-group/states/selectors/recordGroupDefinitionsComponentSelector';
 import { getFieldMetadataItemGqlFieldName } from '@/object-metadata/utils/getFieldMetadataItemGqlFieldName';
 import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
@@ -16,8 +19,9 @@ import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { useAtomComponentFamilyStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateCallbackState';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { useStore } from 'jotai';
-import { useCallback } from 'react';
+import { useCallback, useContext } from 'react';
 import { AppPath } from 'twenty-shared/types';
 import { findByProperty, isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
@@ -39,6 +43,8 @@ export const useCreateNewIndexRecord = ({
   );
 
   const store = useStore();
+  const contextStoreInstance = useContext(ContextStoreComponentInstanceContext);
+  const { currentView } = useGetCurrentViewOnly();
   const recordIndexRecordIdsByGroupCallbackState =
     useAtomComponentFamilyStateCallbackState(
       recordIndexRecordIdsByGroupComponentFamilyState,
@@ -72,6 +78,7 @@ export const useCreateNewIndexRecord = ({
     useBuildRecordInputFromRLSPredicates({
       objectMetadataItem,
     });
+  const onRecordCreated = useOptionalRecordIndexContext()?.onRecordCreated;
 
   const createNewIndexRecord = useCallback(
     async (recordInput?: Partial<ObjectRecord>) => {
@@ -85,14 +92,18 @@ export const useCreateNewIndexRecord = ({
         ...recordInput,
       };
 
-      const recordIndexOpenRecordIn = store.get(
-        recordIndexOpenRecordInState.atom,
-      );
+      const recordIndexOpenRecordIn =
+        contextStoreInstance?.instanceId &&
+        contextStoreInstance.instanceId !== MAIN_CONTEXT_STORE_INSTANCE_ID
+          ? (currentView?.openRecordIn ?? ViewOpenRecordIn.SIDE_PANEL)
+          : store.get(recordIndexOpenRecordInState.atom);
 
       const createdRecord = await createOneRecord({
         id: recordId,
         ...mergedRecordInput,
       });
+
+      await onRecordCreated?.(createdRecord);
 
       if (
         recordIndexOpenRecordIn === ViewOpenRecordIn.SIDE_PANEL &&
@@ -177,6 +188,9 @@ export const useCreateNewIndexRecord = ({
       recordIndexRecordIdsByGroupCallbackState,
       upsertRecordsInStore,
       closeSidePanelMenu,
+      currentView?.openRecordIn,
+      onRecordCreated,
+      contextStoreInstance?.instanceId,
     ],
   );
 

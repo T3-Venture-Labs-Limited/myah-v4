@@ -97,6 +97,8 @@ type NarrowedExpectedResult = {
   relationType: RelationType;
   onDelete?: RelationOnDeleteAction | undefined;
   joinColumnName?: string | null | undefined;
+  emptyStateLabel?: string | undefined;
+  emptyStateWhenBooleanFieldIsFalse?: string | undefined;
   junctionTargetFieldUniversalIdentifier?:
     | SerializedRelation
     | null
@@ -113,6 +115,8 @@ type SettingsExpectedResult =
       relationType: RelationType;
       onDelete?: RelationOnDeleteAction | undefined;
       joinColumnName?: string | null | undefined;
+      emptyStateLabel?: string | undefined;
+      emptyStateWhenBooleanFieldIsFalse?: string | undefined;
       junctionTargetFieldUniversalIdentifier?:
         | SerializedRelation
         | null

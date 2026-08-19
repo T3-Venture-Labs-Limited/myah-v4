@@ -198,14 +198,14 @@ export const CreatorBulkRelationshipDialog = ({
   onSuccess?: () => void;
   onClose?: () => void;
 }) => {
-  const preview = useCreatorBulkRelationshipPreview({
-    target: action.target,
-    selectedCreatorIds,
-  });
   const { applyCreatorBulkRelationship, removeCreatorListMembers } =
     useApplyCreatorBulkRelationship();
   const { closeModal } = useModal();
   const [isApplying, setIsApplying] = useState(false);
+  const preview = useCreatorBulkRelationshipPreview({
+    target: action.target,
+    selectedCreatorIds,
+  });
   const modalInstanceId = getCreatorBulkRelationshipDialogId(action);
   const isRemoval = action.operation === 'remove';
   const actionableCount = isRemoval
@@ -216,7 +216,8 @@ export const CreatorBulkRelationshipDialog = ({
     preview.isPreviewUnavailable ||
     isApplying ||
     preview.selectedCreatorIds.length === 0 ||
-    actionableCount === 0;
+    actionableCount === 0 ||
+    (isRemoval && preview.relationshipRecordIds.length !== 1);
 
   const handleConfirm = async () => {
     if (isConfirmationDisabled) {

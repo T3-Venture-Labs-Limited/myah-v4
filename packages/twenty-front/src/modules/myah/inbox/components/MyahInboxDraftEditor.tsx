@@ -1,10 +1,13 @@
 import { FormAdvancedTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput';
 import { styled } from '@linaria/react';
-import { useCallback, useState } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
-import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
+import {
+  type MyahInboxDraftAutosaveEntry,
+  type MyahInboxRichText,
+} from '@/myah/inbox/types/MyahInboxDraftAutosave';
 
 const StyledDraftEditor = styled.section`
   display: flex;
@@ -18,22 +21,6 @@ const StyledActions = styled.div`
   flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[2]};
   justify-content: flex-end;
-`;
-
-const StyledHint = styled.div`
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.xs};
-`;
-
-const StyledActionFeedback = styled.div`
-  flex: 1 1 180px;
-  min-width: 0;
-`;
-
-const StyledActionButtons = styled.div`
-  display: flex;
-  flex: none;
-  gap: ${themeCssVariables.spacing[2]};
 `;
 
 const StyledStatus = styled.div`
@@ -59,180 +46,75 @@ const StyledConflict = styled.div`
   white-space: pre-wrap;
 `;
 
-export type MyahInboxRichText = {
-  markdown: string;
-  blocknote: string | null;
-};
-
 type MyahInboxDraftEditorProps = {
-  threadId: string;
-  initialBody: MyahInboxRichText | null;
-  initialRevision: number;
-  canEdit: boolean;
-  readOnlyReason?: string;
+  entry: MyahInboxDraftAutosaveEntry;
+  onDraftChange: (body: MyahInboxRichText) => void;
+  onRetry: () => void;
+  onReloadConflict: () => void;
+  proposalAction: ReactNode;
 };
-
-type DraftConflict = {
-  revision: number;
-  body: MyahInboxRichText | null;
-};
-
-const EMPTY_DRAFT: MyahInboxRichText = { markdown: '', blocknote: null };
-
-const normalizeRichText = (
-  body: { markdown: string; blocknote?: string | null } | null | undefined,
-): MyahInboxRichText | null =>
-  body ? { markdown: body.markdown, blocknote: body.blocknote ?? null } : null;
 
 export const MyahInboxDraftEditor = ({
-  threadId,
-  initialBody,
-  initialRevision,
-  canEdit,
-  readOnlyReason,
+  entry,
+  onDraftChange,
+  onRetry,
+  onReloadConflict,
+  proposalAction,
 }: MyahInboxDraftEditorProps) => {
-  const { generateProposal, saveDraft } = useMyahInboxThreadMutations();
-  const [draftBody, setDraftBody] = useState(initialBody ?? EMPTY_DRAFT);
-  const [confirmedRevision, setConfirmedRevision] = useState(initialRevision);
-  const [editorVersion, setEditorVersion] = useState(0);
-  const [conflict, setConflict] = useState<DraftConflict | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const conflictPanelRef = useRef<HTMLDivElement>(null);
 
-  const persistDraft = useCallback(
-    async (submittedBody: MyahInboxRichText) => {
-      setIsSaving(true);
-      setError(null);
-      setStatus(null);
-
-      try {
-        const result = await saveDraft({
-          threadId,
-          expectedRevision: confirmedRevision,
-          body: submittedBody,
-        });
-        const savedBody = normalizeRichText(result.body);
-
-        if (result.status === 'CONFLICT') {
-          setConflict({ revision: result.revision, body: savedBody });
-
-          return;
-        }
-
-        setConfirmedRevision(result.revision);
-        setDraftBody((currentBody) =>
-          currentBody.markdown === submittedBody.markdown &&
-          currentBody.blocknote === submittedBody.blocknote
-            ? (savedBody ?? EMPTY_DRAFT)
-            : currentBody,
-        );
-        setConflict(null);
-        setStatus(`Draft saved at revision ${result.revision}`);
-        setEditorVersion((version) => version + 1);
-      } catch {
-        setError('Could not save the draft. Your changes are still here.');
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [confirmedRevision, saveDraft, threadId],
-  );
-
-  const handleGenerateProposal = async () => {
-    setIsGenerating(true);
-    setConflict(null);
-    setError(null);
-    setStatus(null);
-
-    try {
-      const proposal = await generateProposal({
-        threadId,
-        operatorInstructions: 'Draft a concise reply to this conversation.',
-      });
-
-      setDraftBody({
-        markdown: proposal.body.markdown,
-        blocknote: proposal.body.blocknote ?? null,
-      });
-      setEditorVersion((version) => version + 1);
-      setStatus('Proposal generated. Review and save the draft when ready.');
-    } catch {
-      setError('Could not generate a proposal. Try again.');
-    } finally {
-      setIsGenerating(false);
+  useEffect(() => {
+    if (entry.status === 'conflict') {
+      conflictPanelRef.current?.focus();
     }
-  };
-
-  const handleReloadConflict = () => {
-    if (!conflict) {
-      return;
-    }
-
-    setDraftBody(conflict.body ?? EMPTY_DRAFT);
-    setConfirmedRevision(conflict.revision);
-    setConflict(null);
-    setError(null);
-    setStatus(`Reloaded saved revision ${conflict.revision}`);
-    setEditorVersion((version) => version + 1);
-  };
+  }, [entry.status]);
 
   return (
     <StyledDraftEditor aria-label="Shared reply draft editor">
       <FormAdvancedTextFieldInput
-        key={`${threadId}-${editorVersion}-${canEdit ? 'editable' : 'readonly'}`}
+        key={entry.editorVersion}
         label="Shared reply draft"
-        defaultValue={draftBody.markdown}
+        defaultValue={entry.localBody.markdown}
         placeholder="Write a reply draft"
-        readonly={!canEdit}
+        readonly={false}
         onChange={(markdown) => {
-          setDraftBody({ markdown, blocknote: null });
-          setStatus(null);
+          onDraftChange({ markdown, blocknote: null });
         }}
         minHeight={120}
         maxWidth={600}
         contentType="markdown"
         enableFullScreen={false}
       />
-      {readOnlyReason && <StyledHint>{readOnlyReason}</StyledHint>}
-      <StyledActions aria-label="Draft actions">
-        <StyledActionFeedback aria-label="Draft action feedback">
-          {status && <StyledStatus role="status">{status}</StyledStatus>}
-          {error && <StyledError role="alert">{error}</StyledError>}
-        </StyledActionFeedback>
-        <StyledActionButtons aria-label="Draft action buttons">
+      <StyledActions aria-label="Draft actions">{proposalAction}</StyledActions>
+      {entry.status === 'saving' && (
+        <StyledStatus role="status">Saving</StyledStatus>
+      )}
+      {entry.status === 'error' && (
+        <StyledError role="alert">
+          {entry.error}
           <Button
-            title={isSaving ? 'Saving draft' : 'Save draft'}
-            variant="primary"
-            size="small"
-            disabled={!canEdit || isSaving || isGenerating || conflict !== null}
-            onClick={() => void persistDraft(draftBody)}
-          />
-          <Button
-            title={isGenerating ? 'Generating proposal' : 'Generate proposal'}
+            title="Retry save"
             variant="secondary"
             size="small"
-            disabled={!canEdit || isSaving || isGenerating || conflict !== null}
-            onClick={() => void handleGenerateProposal()}
+            onClick={onRetry}
           />
-        </StyledActionButtons>
-      </StyledActions>
-      {conflict && (
-        <StyledConflict role="alert">
-          <strong>Draft conflict at revision {conflict.revision}</strong>
+        </StyledError>
+      )}
+      {entry.status === 'conflict' && entry.conflict && (
+        <StyledConflict ref={conflictPanelRef} role="alert" tabIndex={-1}>
+          <strong>Draft conflict at revision {entry.conflict.revision}</strong>
           <span>
             The current saved draft changed after you started editing.
           </span>
           <div aria-label="Current saved draft">
-            {conflict.body?.markdown || 'The saved draft is empty.'}
+            {entry.conflict.body?.markdown || 'The saved draft is empty.'}
           </div>
           <StyledActions>
             <Button
-              title="Reload and discard local changes"
+              title="Reload saved draft and discard local changes"
               variant="secondary"
               size="small"
-              onClick={handleReloadConflict}
+              onClick={onReloadConflict}
             />
           </StyledActions>
         </StyledConflict>

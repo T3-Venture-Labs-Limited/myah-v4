@@ -22,6 +22,8 @@ export type IconButtonProps = {
   focus?: boolean;
   dataTestId?: string;
   ariaLabel?: string;
+  ariaHidden?: boolean;
+  tabIndex?: number;
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   to?: string;
   children?: React.ReactNode;
@@ -38,6 +40,8 @@ export const IconButton = ({
   focus = false,
   dataTestId,
   ariaLabel,
+  ariaHidden = false,
+  tabIndex,
   onClick,
   to,
   children,
@@ -55,7 +59,9 @@ export const IconButton = ({
       data-focus={focus || undefined}
       disabled={disabled}
       onClick={onClick}
+      aria-hidden={ariaHidden}
       aria-label={ariaLabel}
+      tabIndex={tabIndex}
       // The legacy Linaria button never navigated: `to` was simply forwarded
       // to the DOM as an inert attribute. Keep forwarding it for DOM parity.
       {...{ to }}

@@ -8,7 +8,15 @@ import { useStore } from 'jotai';
 import { isDefined } from 'twenty-shared/utils';
 import { AllMetadataName } from '~/generated-metadata/graphql';
 
-export const RecordIndexViewFieldsSSESyncEffect = () => {
+type RecordIndexViewFieldsSSESyncEffectProps = {
+  recordIndexId?: string;
+  skipGlobalIndexStates?: boolean;
+};
+
+export const RecordIndexViewFieldsSSESyncEffect = ({
+  recordIndexId,
+  skipGlobalIndexStates,
+}: RecordIndexViewFieldsSSESyncEffectProps) => {
   const store = useStore();
 
   const { syncRecordIndexViewFields } = useLoadRecordIndexStates();
@@ -35,7 +43,10 @@ export const RecordIndexViewFieldsSSESyncEffect = () => {
         return;
       }
 
-      syncRecordIndexViewFields(currentView, objectMetadataItem);
+      syncRecordIndexViewFields(currentView, objectMetadataItem, {
+        recordIndexId,
+        skipGlobalIndexStates,
+      });
     },
   });
 

@@ -1,5 +1,8 @@
+import { useLayoutEffect, useRef } from 'react';
+
 import { isUndefined } from '@sniptt/guards';
 import { Key } from 'ts-key-enum';
+import { isDefined } from 'twenty-shared/utils';
 
 import { SelectableList } from '@/ui/layout/selectable-list/components/SelectableList';
 import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
@@ -16,6 +19,7 @@ import { getSingleRecordPickerSelectableListId } from '@/object-record/record-pi
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { isSelectedItemIdComponentFamilyState } from '@/ui/layout/selectable-list/states/isSelectedItemIdComponentFamilyState';
+import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentState';
@@ -31,6 +35,8 @@ export type SingleRecordPickerMenuItemsProps = {
   onCancel?: () => void;
   onMorphItemSelected: (morphItem?: RecordPickerPickableMorphItem) => void;
   focusId: string;
+  getOptionId: (recordId: string) => string;
+  shouldShowNoRecordFound?: boolean;
 };
 
 export const SingleRecordPickerMenuItems = ({
@@ -39,7 +45,9 @@ export const SingleRecordPickerMenuItems = ({
   pickableMorphItems,
   onCancel,
   onMorphItemSelected,
+  getOptionId,
   focusId,
+  shouldShowNoRecordFound = true,
 }: SingleRecordPickerMenuItemsProps) => {
   const recordPickerComponentInstanceId =
     useAvailableComponentInstanceIdOrThrow(
@@ -48,6 +56,15 @@ export const SingleRecordPickerMenuItems = ({
 
   const selectableListComponentInstanceId =
     getSingleRecordPickerSelectableListId(recordPickerComponentInstanceId);
+
+  const noRecordOptionContainerRef = useRef<HTMLDivElement>(null);
+  const noRecordOptionId = getOptionId('select-none');
+
+  useLayoutEffect(() => {
+    noRecordOptionContainerRef.current
+      ?.querySelector('[role="option"]')
+      ?.setAttribute('id', noRecordOptionId);
+  }, [noRecordOptionId]);
 
   const { resetSelectedItem } = useSelectableList(
     selectableListComponentInstanceId,
@@ -69,9 +86,12 @@ export const SingleRecordPickerMenuItems = ({
     dependencies: [onCancel, resetSelectedItem],
   });
 
+  const itemsMatchingSearchFilter = pickableMorphItems.filter(
+    (morphItem) => morphItem.isMatchingSearchFilter,
+  );
   const selectableItemIds = [
     ...(emptyLabel ? ['select-none'] : []),
-    ...pickableMorphItems.map((morphItem) => morphItem.recordId),
+    ...itemsMatchingSearchFilter.map((morphItem) => morphItem.recordId),
   ];
   const [singleRecordPickerSelectedId, setSingleRecordPickerSelectedId] =
     useAtomComponentState(singleRecordPickerSelectedIdComponentState);
@@ -84,11 +104,45 @@ export const SingleRecordPickerMenuItems = ({
     singleRecordPickerShouldShowInitialLoadingComponentState,
   );
 
-  const itemsMatchingSearchFilter = pickableMorphItems.filter(
-    (morphItem) => morphItem.isMatchingSearchFilter,
-  );
-
   const searchHasNoResults = itemsMatchingSearchFilter.length === 0;
+
+  const selectedItemId = useAtomComponentStateValue(
+    selectedItemIdComponentState,
+    selectableListComponentInstanceId,
+  );
+  const activeMorphItem = itemsMatchingSearchFilter.find(
+    (morphItem) => morphItem.recordId === selectedItemId,
+  );
+  const canSelectActiveItem =
+    (selectedItemId === 'select-none' && Boolean(emptyLabel)) ||
+    isDefined(activeMorphItem);
+
+  useHotkeysOnFocusedElement({
+    keys: ['space'],
+    callback: () => {
+      if (!canSelectActiveItem) {
+        return;
+      }
+
+      if (selectedItemId === 'select-none') {
+        setSingleRecordPickerSelectedId(undefined);
+        onMorphItemSelected();
+
+        return;
+      }
+
+      onMorphItemSelected(activeMorphItem);
+    },
+    focusId,
+    dependencies: [
+      canSelectActiveItem,
+      activeMorphItem,
+      onMorphItemSelected,
+      selectedItemId,
+      setSingleRecordPickerSelectedId,
+    ],
+    options: { preventDefault: canSelectActiveItem },
+  });
 
   return (
     <SelectableList
@@ -97,25 +151,27 @@ export const SingleRecordPickerMenuItems = ({
       focusId={focusId}
     >
       {emptyLabel && (
-        <SelectableListItem
-          key="select-none"
-          itemId="select-none"
-          onEnter={() => {
-            setSingleRecordPickerSelectedId(undefined);
-            onMorphItemSelected();
-          }}
-        >
-          <MenuItemSelect
-            onClick={() => {
+        <div ref={noRecordOptionContainerRef}>
+          <SelectableListItem
+            key="select-none"
+            itemId="select-none"
+            onEnter={() => {
               setSingleRecordPickerSelectedId(undefined);
               onMorphItemSelected();
             }}
-            LeftIcon={EmptyIcon}
-            text={emptyLabel}
-            selected={isUndefined(singleRecordPickerSelectedId)}
-            focused={isSelectedItemId}
-          />
-        </SelectableListItem>
+          >
+            <MenuItemSelect
+              onClick={() => {
+                setSingleRecordPickerSelectedId(undefined);
+                onMorphItemSelected();
+              }}
+              LeftIcon={EmptyIcon}
+              text={emptyLabel}
+              selected={isUndefined(singleRecordPickerSelectedId)}
+              focused={isSelectedItemId}
+            />
+          </SelectableListItem>
+        </div>
       )}
       {singleRecordPickerShouldShowInitialLoading ? (
         <RecordPickerInitialLoadingEmptyContainer />
@@ -125,6 +181,7 @@ export const SingleRecordPickerMenuItems = ({
         itemsMatchingSearchFilter.map((morphItem) => (
           <SingleRecordPickerMenuItem
             key={morphItem.recordId}
+            getOptionId={getOptionId}
             morphItem={morphItem}
             onMorphItemSelected={onMorphItemSelected}
             isRecordSelected={
@@ -133,7 +190,9 @@ export const SingleRecordPickerMenuItems = ({
           />
         ))
       )}
-      {searchHasNoResults && <RecordPickerNoRecordFoundMenuItem />}
+      {shouldShowNoRecordFound && searchHasNoResults && (
+        <RecordPickerNoRecordFoundMenuItem />
+      )}
     </SelectableList>
   );
 };

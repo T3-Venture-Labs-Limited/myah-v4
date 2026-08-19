@@ -9,6 +9,8 @@ import { buildCalendarChannelEventAssociationStandardFlatIndexMetadatas } from '
 import { buildCalendarEventParticipantStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-calendar-event-participant-standard-flat-index-metadata.util';
 import { buildCallRecordingStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-call-recording-standard-flat-index-metadata.util';
 import { buildCampaignCreatorStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-campaign-creator-standard-flat-index-metadata.util';
+import { buildCampaignCreatorListStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-campaign-creator-list-standard-flat-index-metadata.util';
+import { buildCampaignCreatorListSourceStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-campaign-creator-list-source-standard-flat-index-metadata.util';
 import { buildCompanyStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-company-standard-flat-index-metadata.util';
 import { buildCreatorListMemberStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-creator-list-member-standard-flat-index-metadata.util';
 import { buildDashboardStandardFlatIndexMetadatas } from 'src/engine/workspace-manager/twenty-standard-application/utils/index/compute-dashboard-standard-flat-index-metadata.util';
@@ -46,6 +48,9 @@ const STANDARD_FLAT_INDEX_METADATA_BUILDERS_BY_OBJECT_NAME = {
   calendarEventParticipant:
     buildCalendarEventParticipantStandardFlatIndexMetadatas,
   callRecording: buildCallRecordingStandardFlatIndexMetadatas,
+  campaignCreatorList: buildCampaignCreatorListStandardFlatIndexMetadatas,
+  campaignCreatorListSource:
+    buildCampaignCreatorListSourceStandardFlatIndexMetadatas,
   campaignCreator: buildCampaignCreatorStandardFlatIndexMetadatas,
   company: buildCompanyStandardFlatIndexMetadatas,
   creatorListMember: buildCreatorListMemberStandardFlatIndexMetadatas,

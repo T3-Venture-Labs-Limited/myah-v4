@@ -2,7 +2,7 @@ import { useLabelIdentifierFieldMetadataItem } from '@/object-metadata/hooks/use
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { getLabelIdentifierFieldValue } from '@/object-metadata/utils/getLabelIdentifierFieldValue';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
-import { PageTitle } from '@/ui/utilities/page-title/components/PageTitle';
+import { PageTitleEffect } from '@/ui/utilities/page-title/components/PageTitleEffect';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { isDefined } from 'twenty-shared/utils';
 
@@ -34,5 +34,5 @@ export const RecordShowPageTitle = ({
     ? `${pageName} - ${objectMetadataItem.labelSingular}`
     : objectMetadataItem.labelSingular;
 
-  return <PageTitle title={pageTitle} />;
+  return <PageTitleEffect title={pageTitle} />;
 };

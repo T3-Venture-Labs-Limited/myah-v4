@@ -31,10 +31,16 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
     SynchronizeMyahCreatorCrmSearchMetadataCommand as unknown as new (
       ...constructorArgs: unknown[]
     ) => SynchronizeMyahCreatorCrmSearchMetadataCommand;
-  const createCommand = (flatSearchFieldMetadataMaps: unknown) => {
+  const createCommand = (
+    flatSearchFieldMetadataMaps: unknown,
+    workspaceSchemaExists = true,
+  ) => {
     const validateBuildAndRunWorkspaceMigration = jest
       .fn()
       .mockResolvedValue({ status: 'success' });
+    const checkWorkspaceSchema = jest
+      .fn()
+      .mockResolvedValue(workspaceSchemaExists);
     const command = new Command(
       {} as WorkspaceIteratorService,
       applicationService,
@@ -44,9 +50,14 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
           flatSearchFieldMetadataMaps,
         }),
       },
+      { workspaceSchemaExists: checkWorkspaceSchema },
     );
 
-    return { command, validateBuildAndRunWorkspaceMigration };
+    return {
+      command,
+      validateBuildAndRunWorkspaceMigration,
+      checkWorkspaceSchema,
+    };
   };
   const buildExistingSearchFieldMetadataMaps = (
     fieldMetadataUniversalIdentifiers: readonly string[],
@@ -78,6 +89,22 @@ describe('SynchronizeMyahCreatorCrmSearchMetadataCommand', () => {
       ),
     };
   };
+
+  it('skips workspaces without a physical database schema', async () => {
+    const {
+      command,
+      validateBuildAndRunWorkspaceMigration,
+      checkWorkspaceSchema,
+    } = createCommand(
+      createEmptyAllFlatEntityMaps().flatSearchFieldMetadataMaps,
+      false,
+    );
+
+    await command.runOnWorkspace(args);
+
+    expect(checkWorkspaceSchema).toHaveBeenCalledWith(args.workspaceId);
+    expect(validateBuildAndRunWorkspaceMigration).not.toHaveBeenCalled();
+  });
 
   it('persists the four missing Creator CRM search-field metadata rows', async () => {
     const { command, validateBuildAndRunWorkspaceMigration } = createCommand(

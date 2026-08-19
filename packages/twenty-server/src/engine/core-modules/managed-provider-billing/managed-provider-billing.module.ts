@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { MessageQueueModule } from 'src/engine/core-modules/message-queue/message-queue.module';
@@ -23,6 +24,7 @@ import { ManagedProviderFundingJournalService } from './services/managed-provide
 import { ManagedProviderPoolService } from './services/managed-provider-pool.service';
 
 import { MetronomeWorkspaceCustomerService } from './services/metronome-workspace-customer.service';
+import { ManagedProviderStripeService } from './stripe/managed-provider-stripe.service';
 
 @Module({
   imports: [
@@ -46,10 +48,20 @@ import { MetronomeWorkspaceCustomerService } from './services/metronome-workspac
     ManagedProviderBillingStatusService,
     ManagedProviderBillingRecoveryCronJob,
     ManagedProviderBillingRecoveryCronCommand,
-    MetronomeClientService,
+    {
+      provide: MetronomeClientService,
+      inject: [TwentyConfigService],
+      useFactory: (twentyConfigService: TwentyConfigService) =>
+        new MetronomeClientService(
+          twentyConfigService,
+          twentyConfigService.get('METRONOME_BASE_URL'),
+        ),
+    },
     provideWorkspaceScopedRepository(MyahWorkspaceInstallationEntity),
     provideWorkspaceScopedRepository(ManagedProviderOperationEntity),
     provideWorkspaceScopedRepository(ManagedProviderFundingActionEntity),
+    { provide: 'MANAGED_PROVIDER_STRIPE_CLIENT', useValue: undefined },
+    ManagedProviderStripeService,
     ManagedProviderFundingJournalService,
     MetronomeWorkspaceCustomerService,
   ],
@@ -60,6 +72,7 @@ import { MetronomeWorkspaceCustomerService } from './services/metronome-workspac
     ManagedProviderBillingStatusService,
     MetronomeClientService,
     MetronomeWorkspaceCustomerService,
+    ManagedProviderStripeService,
     ManagedProviderFundingJournalService,
     ManagedProviderBillingRecoveryCronCommand,
   ],
