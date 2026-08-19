@@ -342,7 +342,6 @@ const MYAH_STANDARD_METADATA_CONTRACT = {
   ],
   flatRolePermissionFlagMaps: [],
   flatPermissionFlagMaps: [],
-  flatRolePermissionFlagMaps: [],
   flatFieldPermissionMaps: [],
   flatObjectPermissionMaps: [],
   flatAgentMaps: [],
