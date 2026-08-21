@@ -2,11 +2,14 @@ import {
   MYAH_INBOX_FIELD_UNIVERSAL_IDENTIFIERS,
   MYAH_STANDARD_OBJECTS,
 } from 'twenty-shared/metadata';
+import { FieldDisplayMode } from 'src/engine/metadata-modules/page-layout-widget/enums/field-display-mode.enum';
+import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
 
 import type { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
+import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 
 const WORKSPACE_ID = '20202020-0000-0000-0000-000000000001';
@@ -504,6 +507,137 @@ describe('SynchronizeSourceControlledMyahMetadataService', () => {
     });
   });
 
+  it('repairs a stale Campaign Influencers widget through the selected metadata sync', async () => {
+    const { allFlatEntityMaps } =
+      computeTwentyStandardApplicationAllFlatEntityMaps({
+        now: '2026-08-21T00:00:00.000Z',
+        workspaceId: WORKSPACE_ID,
+        twentyStandardApplicationId: STANDARD_APPLICATION_ID,
+      });
+    const staleMetadata = structuredClone(allFlatEntityMaps);
+    const campaignCreatorsField =
+      staleMetadata.flatFieldMetadataMaps.byUniversalIdentifier[
+        MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators
+          .universalIdentifier
+      ];
+    const influencersWidgetUniversalIdentifier =
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.influencers.widgets
+        .influencers.universalIdentifier;
+    const staleInfluencersWidget =
+      staleMetadata.flatPageLayoutWidgetMaps.byUniversalIdentifier[
+        influencersWidgetUniversalIdentifier
+      ];
+    const campaignInfluencersViewUniversalIdentifier =
+      MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+        .universalIdentifier;
+
+    const campaignInfluencersView =
+      staleMetadata.flatViewMaps.byUniversalIdentifier[
+        campaignInfluencersViewUniversalIdentifier
+      ];
+
+    if (
+      !campaignCreatorsField ||
+      !staleInfluencersWidget ||
+      !campaignInfluencersView
+    ) {
+      throw new Error('Campaign Influencers fixture is required');
+    }
+
+    staleInfluencersWidget.configuration = {
+      configurationType: WidgetConfigurationType.FIELD,
+      fieldMetadataId: campaignCreatorsField.id,
+      fieldDisplayMode: FieldDisplayMode.CARD,
+    };
+    staleInfluencersWidget.universalConfiguration = {
+      configurationType: WidgetConfigurationType.FIELD,
+      fieldMetadataId:
+        MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreators
+          .universalIdentifier,
+      fieldDisplayMode: FieldDisplayMode.CARD,
+    };
+    const { service, validateBuildAndRunWorkspaceMigrationFromTo } =
+      createService({
+        ...staleMetadata,
+        featureFlagsMap: {},
+      });
+
+    await service.synchronizeWorkspace(
+      createArgs(),
+      {
+        view: new Set([
+          MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+            .universalIdentifier,
+        ]),
+        viewField: new Set([
+          MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+            .viewFields.creator.universalIdentifier,
+          MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+            .viewFields.stage.universalIdentifier,
+          MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+            .viewFields.isDirectlyAdded.universalIdentifier,
+          MYAH_STANDARD_OBJECTS.campaignCreator.views.campaignInfluencers
+            .viewFields.campaignCreatorListSources.universalIdentifier,
+        ]),
+        pageLayout: new Set([
+          MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.universalIdentifier,
+        ]),
+        pageLayoutTab: new Set([
+          MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.influencers
+            .universalIdentifier,
+        ]),
+        pageLayoutWidget: new Set([influencersWidgetUniversalIdentifier]),
+      },
+      { synchronizeExistingSelectedMetadata: true },
+    );
+
+    const migrationInput =
+      validateBuildAndRunWorkspaceMigrationFromTo.mock.calls[0][0];
+    const desiredCampaignInfluencersView =
+      migrationInput.fromToAllFlatEntityMaps.flatViewMaps.to
+        .byUniversalIdentifier[campaignInfluencersViewUniversalIdentifier];
+    const widgetMaps =
+      migrationInput.fromToAllFlatEntityMaps.flatPageLayoutWidgetMaps;
+
+    expect(
+      widgetMaps.from.byUniversalIdentifier[
+        influencersWidgetUniversalIdentifier
+      ]?.configuration,
+    ).toMatchObject({
+      configurationType: WidgetConfigurationType.FIELD,
+      fieldDisplayMode: FieldDisplayMode.CARD,
+    });
+    expect(
+      widgetMaps.from.byUniversalIdentifier[
+        influencersWidgetUniversalIdentifier
+      ]?.universalConfiguration,
+    ).toMatchObject({
+      configurationType: WidgetConfigurationType.FIELD,
+      fieldDisplayMode: FieldDisplayMode.CARD,
+    });
+    expect(
+      widgetMaps.to.byUniversalIdentifier[
+        influencersWidgetUniversalIdentifier
+      ]?.configuration,
+    ).toMatchObject({
+      configurationType: WidgetConfigurationType.FIELD,
+      fieldDisplayMode: FieldDisplayMode.TABLE,
+      viewId: desiredCampaignInfluencersView?.id,
+    });
+    expect(
+      widgetMaps.to.byUniversalIdentifier[
+        influencersWidgetUniversalIdentifier
+      ]?.universalConfiguration,
+    ).toMatchObject({
+      configurationType: WidgetConfigurationType.FIELD,
+      fieldDisplayMode: FieldDisplayMode.TABLE,
+      viewId: campaignInfluencersViewUniversalIdentifier,
+    });
+    expect(Object.keys(widgetMaps.to.byUniversalIdentifier)).toEqual([
+      influencersWidgetUniversalIdentifier,
+    ]);
+  });
+
   it('deletes only the selected legacy Campaign readiness widget', async () => {
     const { allFlatEntityMaps } =
       computeTwentyStandardApplicationAllFlatEntityMaps({
@@ -519,7 +653,6 @@ describe('SynchronizeSourceControlledMyahMetadataService', () => {
     if (!overviewFieldsWidget) {
       throw new Error('Campaign Overview fields widget is required by the test fixture');
     }
-
     metadataWithLegacyReadinessWidget.flatPageLayoutWidgetMaps.byUniversalIdentifier[
       LEGACY_CAMPAIGN_READINESS_WIDGET_UNIVERSAL_IDENTIFIER
     ] = {

@@ -464,6 +464,18 @@ describe('CampaignInfluencerIndex', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('renders an unavailable state instead of mounting an index without a view ID', () => {
+    render(<CampaignInfluencerIndex campaignId="campaign-a" viewId={null} />);
+
+    expect(
+      screen.getByText('Campaign Influencers are unavailable.'),
+    ).toBeVisible();
+    expect(
+      screen.queryByTestId('record-index-surface'),
+    ).not.toBeInTheDocument();
+    expect(mockRecordIndexSurface).not.toHaveBeenCalled();
+  });
+
   it.each([
     {
       description: 'CampaignCreator metadata is unavailable',
