@@ -107,7 +107,9 @@ jest.mock(
 );
 jest.mock(
   '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchableObjectMetadataItemsComponentState',
-  () => ({ multipleRecordPickerSearchableObjectMetadataItemsComponentState: {} }),
+  () => ({
+    multipleRecordPickerSearchableObjectMetadataItemsComponentState: {},
+  }),
 );
 jest.mock('@/ui/layout/dropdown/components/Dropdown', () => ({
   Dropdown: ({
@@ -192,11 +194,7 @@ jest.mock('twenty-ui/input', () => ({
       type="checkbox"
     />
   ),
-  LightIconButton: ({
-    'aria-label': ariaLabel,
-  }: {
-    'aria-label': string;
-  }) => (
+  LightIconButton: ({ 'aria-label': ariaLabel }: { 'aria-label': string }) => (
     <button
       aria-label={ariaLabel}
       data-testid="creator-list-picker-open"
