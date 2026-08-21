@@ -84,12 +84,12 @@ export const PageLayoutLeftPanel = ({
           defaultEnableXScroll={false}
           defaultEnableYScroll={true}
         >
+          <PageLayoutContent />
           {shouldRenderCampaignAudienceControls ? (
             <MyahCampaignAudienceControls
               campaignId={targetRecordIdentifier.id}
             />
           ) : null}
-          <PageLayoutContent />
         </ScrollWrapper>
       </PageLayoutContentProvider>
     </StyledContainer>

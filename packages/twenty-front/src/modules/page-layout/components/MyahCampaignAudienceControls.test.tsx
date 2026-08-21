@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { MyahCampaignAudienceControls } from './MyahCampaignAudienceControls';
 
 const mockUseQuery = jest.fn();
@@ -8,8 +14,12 @@ const mockOpenModal = jest.fn();
 const mockCloseModal = jest.fn();
 const mockPicker = jest.fn();
 const mockUseFindManyRecords = jest.fn();
+const mockUseObjectMetadataItem = jest.fn();
+const mockOpenMultipleRecordPicker = jest.fn();
+const mockMultipleRecordPickerPerformSearch = jest.fn();
+const mockSetMultipleRecordPickerState = jest.fn();
+const mockCloseDropdown = jest.fn();
 const mockAttach = jest.fn();
-const mockAddDirect = jest.fn();
 const mockApprove = jest.fn();
 const mockDetach = jest.fn();
 const mockRefetchQueries = jest.fn();
@@ -30,6 +40,10 @@ jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
     refetchQueries: mockRefetchQueries,
   }),
 }));
+jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => ({
+  useObjectMetadataItem: (...args: unknown[]) =>
+    mockUseObjectMetadataItem(...args),
+}));
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
   useModal: () => ({ openModal: mockOpenModal, closeModal: mockCloseModal }),
 }));
@@ -39,24 +53,115 @@ jest.mock('@/ui/layout/modal/components/ModalStatefulWrapper', () => ({
   ),
 }));
 jest.mock(
-  '@/object-record/record-picker/single-record-picker/components/SingleRecordPicker',
+  '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker',
   () => ({
-    SingleRecordPicker: (props: {
-      onMorphItemSelected: (item: { recordId: string }) => void;
+    MultipleRecordPicker: (props: {
+      onChange: (item: {
+        recordId: string;
+        objectMetadataId: string;
+        isSelected: boolean;
+        isMatchingSearchFilter: boolean;
+      }) => void;
     }) => {
       mockPicker(props);
       return (
         <button
           onClick={() =>
-            props.onMorphItemSelected({ recordId: 'list-selected' })
+            props.onChange({
+              recordId: 'list-selected',
+              objectMetadataId: 'creator-list-metadata-id',
+              isMatchingSearchFilter: true,
+              isSelected: true,
+            })
           }
         >
-          Select native record
+          Select creator list
         </button>
       );
     },
   }),
 );
+jest.mock(
+  '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerOpen',
+  () => ({
+    useMultipleRecordPickerOpen: () => ({
+      openMultipleRecordPicker: mockOpenMultipleRecordPicker,
+    }),
+  }),
+);
+jest.mock(
+  '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch',
+  () => ({
+    useMultipleRecordPickerPerformSearch: () => ({
+      performSearch: mockMultipleRecordPickerPerformSearch,
+    }),
+  }),
+);
+jest.mock(
+  '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState',
+  () => ({ multipleRecordPickerPickableMorphItemsComponentState: {} }),
+);
+jest.mock(
+  '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState',
+  () => ({ multipleRecordPickerSearchFilterComponentState: {} }),
+);
+jest.mock(
+  '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchableObjectMetadataItemsComponentState',
+  () => ({ multipleRecordPickerSearchableObjectMetadataItemsComponentState: {} }),
+);
+jest.mock('@/ui/layout/dropdown/components/Dropdown', () => ({
+  Dropdown: ({
+    children,
+    clickableComponent,
+    dropdownComponents,
+    onOpen,
+  }: {
+    children?: ReactNode;
+    clickableComponent: ReactNode;
+    dropdownComponents: ReactNode;
+    onOpen?: () => void;
+  }) => (
+    <>
+      <div onClick={onOpen}>{clickableComponent}</div>
+      {dropdownComponents}
+      {children}
+    </>
+  ),
+}));
+jest.mock('@/ui/layout/dropdown/hooks/useCloseDropdown', () => ({
+  useCloseDropdown: () => ({ closeDropdown: mockCloseDropdown }),
+}));
+jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomComponentState', () => ({
+  useSetAtomComponentState: () => mockSetMultipleRecordPickerState,
+}));
+jest.mock(
+  '@/object-record/record-field-list/record-detail-section/components/RecordDetailSectionContainer',
+  () => ({
+    RecordDetailSectionContainer: ({
+      children,
+      dataTestId,
+      link,
+      rightAdornment,
+      title,
+    }: {
+      children: ReactNode;
+      dataTestId?: string;
+      link?: { label: string; to: string };
+      rightAdornment?: ReactNode;
+      title: string;
+    }) => (
+      <section data-testid={dataTestId}>
+        <header>
+          <span>{title}</span>
+          {link ? <a href={link.to}>{link.label}</a> : null}
+          {rightAdornment}
+        </header>
+        {children}
+      </section>
+    ),
+  }),
+);
+jest.mock('twenty-ui/icon', () => ({ IconPlus: () => null }));
 jest.mock('twenty-ui/input', () => ({
   Button: ({
     title,
@@ -87,8 +192,14 @@ jest.mock('twenty-ui/input', () => ({
       type="checkbox"
     />
   ),
+  LightIconButton: ({ ariaLabel }: { ariaLabel: string }) => (
+    <button
+      aria-label={ariaLabel}
+      data-testid="creator-list-picker-open"
+      type="button"
+    />
+  ),
 }));
-
 type CampaignInfluencerSnapshotData = {
   campaignInfluencerSnapshot: { campaignCreatorLists: CampaignCreatorList[] };
 };
@@ -174,12 +285,15 @@ describe('MyahCampaignAudienceControls', () => {
     mockRefetchQueries.mockResolvedValue(undefined);
     mockApolloQueries();
     mockRecords();
+    mockUseObjectMetadataItem.mockReturnValue({
+      objectMetadataItem: {
+        id: 'creator-list-metadata-id',
+        nameSingular: 'creatorList',
+      },
+    });
     mockUseMutation.mockImplementation((mutation: string) => {
       if (mutation.includes('AttachCampaignCreatorLists')) {
         return [mockAttach];
-      }
-      if (mutation.includes('AddDirectCampaignCreators')) {
-        return [mockAddDirect];
       }
       if (mutation.includes('ApproveCampaignCreatorListAdditions')) {
         return [mockApprove];
@@ -192,20 +306,39 @@ describe('MyahCampaignAudienceControls', () => {
     });
   });
 
-  it('uses the native picker record id as the guarded attach intent input', async () => {
+  it('uses the Creator Lists picker to attach through the guarded mutation', async () => {
     mockAttach.mockResolvedValue(undefined);
+    mockApolloQueries({ snapshotData: snapshot(['list-1']) });
+    mockRecords({
+      creatorLists: [{ id: 'list-1', name: 'VIP Creators' }],
+    });
+
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Attach Creator List' }),
+    const section = screen.getByTestId('creator-lists-section');
+    expect(within(section).getByText('VIP Creators')).toBeVisible();
+    expect(
+      within(section).queryByRole('button', { name: 'Attach Creator List' }),
+    ).not.toBeInTheDocument();
+    expect(within(section).queryByRole('link')).not.toBeInTheDocument();
+
+    expect(
+      screen.getByRole('button', { name: 'Add Creator List' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByTestId('creator-list-picker-open'));
+    expect(mockOpenMultipleRecordPicker).toHaveBeenCalledWith(
+      'campaign-creator-lists-picker-campaign-1',
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Select native record' }),
-    );
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Attach selected Creator List',
+    expect(mockMultipleRecordPickerPerformSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        forceSearchableObjectMetadataItems: [
+          expect.objectContaining({ nameSingular: 'creatorList' }),
+        ],
       }),
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select creator list' }),
     );
 
     await waitFor(() =>
@@ -218,8 +351,6 @@ describe('MyahCampaignAudienceControls', () => {
         },
       }),
     );
-    expect(mockOpenModal).toHaveBeenCalledWith('campaign-list-picker');
-    expect(mockCloseModal).toHaveBeenCalledWith('campaign-list-picker');
     await waitFor(() =>
       expect(mockRefetchQueries).toHaveBeenCalledWith({
         include: ['active', 'inactive', 'FindManyCampaignCreators'],
@@ -252,8 +383,12 @@ describe('MyahCampaignAudienceControls', () => {
 
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Review 2 additions' }));
-    expect(screen.getByRole('checkbox', { name: 'Ada' })).toBeChecked();
+    const creatorListsSection = screen.getByTestId('creator-lists-section');
+    fireEvent.click(
+      within(creatorListsSection).getByRole('button', {
+        name: 'Review 2 additions',
+      }),
+    );
     expect(screen.getByRole('checkbox', { name: 'Zoe' })).toBeChecked();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Zoe' }));
     fireEvent.click(
@@ -481,8 +616,12 @@ describe('MyahCampaignAudienceControls', () => {
     mockDetach.mockResolvedValue(undefined);
 
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+
+    const creatorListsSection = screen.getByTestId('creator-lists-section');
     fireEvent.click(
-      screen.getByRole('button', { name: 'Remove Creator List' }),
+      within(creatorListsSection).getByRole('button', {
+        name: 'Remove Creator List',
+      }),
     );
 
     expect(screen.getByText('Detach VIP Creators?')).toBeVisible();
