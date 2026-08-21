@@ -27,10 +27,9 @@ describe('MYAH Campaign page layout', () => {
     );
   });
 
-  it('keeps Creator Lists in Campaign Home', () => {
+  it('does not include Creator Lists in Campaign Home', () => {
     expect(
-      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.home.widgets.creatorLists
-        .title,
-    ).toBe('Creator Lists');
+      MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.home.widgets,
+    ).not.toHaveProperty('creatorLists');
   });
 });

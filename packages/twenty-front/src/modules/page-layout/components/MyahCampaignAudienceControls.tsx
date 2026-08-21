@@ -481,7 +481,7 @@ export const MyahCampaignAudienceControls = ({
             onOpen={openPicker}
             clickableComponent={
               <LightIconButton
-                ariaLabel="Add Creator List"
+                aria-label="Add Creator List"
                 Icon={IconPlus}
                 accent="tertiary"
               />

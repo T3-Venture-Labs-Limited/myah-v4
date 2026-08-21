@@ -192,7 +192,11 @@ jest.mock('twenty-ui/input', () => ({
       type="checkbox"
     />
   ),
-  LightIconButton: ({ ariaLabel }: { ariaLabel: string }) => (
+  LightIconButton: ({
+    'aria-label': ariaLabel,
+  }: {
+    'aria-label': string;
+  }) => (
     <button
       aria-label={ariaLabel}
       data-testid="creator-list-picker-open"
