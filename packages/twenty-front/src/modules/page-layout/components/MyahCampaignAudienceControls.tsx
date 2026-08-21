@@ -327,6 +327,8 @@ export const MyahCampaignAudienceControls = ({
   campaignId,
   onAudienceChanged,
 }: MyahCampaignAudienceControlsProps) => {
+  const [attachError, setAttachError] = useState<string>();
+  const [isAttachingList, setIsAttachingList] = useState(false);
   const [detachingListId, setDetachingListId] = useState<string | null>(null);
   const { closeModal, openModal } = useModal();
   const pickerInstanceId = `campaign-creator-lists-picker-${campaignId}`;
@@ -450,7 +452,10 @@ export const MyahCampaignAudienceControls = ({
   const handleCreatorListSelection = async (
     morphItem: RecordPickerPickableMorphItem,
   ) => {
-    if (attachedListIds.includes(morphItem.recordId) === morphItem.isSelected) {
+    if (
+      isAttachingList ||
+      attachedListIds.includes(morphItem.recordId) === morphItem.isSelected
+    ) {
       return;
     }
 
@@ -460,12 +465,32 @@ export const MyahCampaignAudienceControls = ({
       return;
     }
 
-    await attach({
-      variables: {
-        input: { campaignId, creatorListIds: [morphItem.recordId] },
-      },
-    });
-    await refresh();
+    setAttachError(undefined);
+    setIsAttachingList(true);
+    closePicker();
+
+    try {
+      await attach({
+        variables: {
+          input: { campaignId, creatorListIds: [morphItem.recordId] },
+        },
+      });
+    } catch {
+      setAttachError('Could not attach Creator List. Try again.');
+      openPicker();
+      setIsAttachingList(false);
+      return;
+    }
+
+    try {
+      await refresh();
+    } catch {
+      setAttachError(
+        'Creator List was attached, but the view could not refresh.',
+      );
+    } finally {
+      setIsAttachingList(false);
+    }
   };
 
   return (
@@ -475,6 +500,7 @@ export const MyahCampaignAudienceControls = ({
         link={undefined}
         rightAdornment={
           <Dropdown
+            disableClickForClickableComponent={isAttachingList}
             dropdownId={pickerInstanceId}
             dropdownPlacement="left-start"
             onClose={() => setMultipleRecordPickerSearchFilter('')}
@@ -484,6 +510,7 @@ export const MyahCampaignAudienceControls = ({
                 aria-label="Add Creator List"
                 Icon={IconPlus}
                 accent="tertiary"
+                disabled={isAttachingList}
               />
             }
             dropdownComponents={
@@ -511,6 +538,7 @@ export const MyahCampaignAudienceControls = ({
             onDetach={openDetach}
           />
         ))}
+        {attachError ? <p role="alert">{attachError}</p> : null}
       </RecordDetailSectionContainer>
       {detachingListId ? (
         <ModalStatefulWrapper

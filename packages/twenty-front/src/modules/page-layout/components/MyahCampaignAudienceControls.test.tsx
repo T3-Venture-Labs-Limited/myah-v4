@@ -194,10 +194,17 @@ jest.mock('twenty-ui/input', () => ({
       type="checkbox"
     />
   ),
-  LightIconButton: ({ 'aria-label': ariaLabel }: { 'aria-label': string }) => (
+  LightIconButton: ({
+    'aria-label': ariaLabel,
+    disabled,
+  }: {
+    'aria-label': string;
+    disabled?: boolean;
+  }) => (
     <button
       aria-label={ariaLabel}
       data-testid="creator-list-picker-open"
+      disabled={disabled}
       type="button"
     />
   ),
@@ -357,6 +364,57 @@ describe('MyahCampaignAudienceControls', () => {
       expect(mockRefetchQueries).toHaveBeenCalledWith({
         include: ['active', 'inactive', 'FindManyCampaignCreators'],
         updateCache: expect.any(Function),
+      }),
+    );
+  });
+
+  it('closes and disables the picker while an attachment is pending', async () => {
+    mockAttach.mockImplementation(
+      () => new Promise<void>(() => undefined),
+    );
+
+    render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+    fireEvent.click(screen.getByTestId('creator-list-picker-open'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select creator list' }),
+    );
+
+    await waitFor(() => expect(mockAttach).toHaveBeenCalledTimes(1));
+    expect(mockCloseDropdown).toHaveBeenCalledWith(
+      'campaign-creator-lists-picker-campaign-1',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Add Creator List' }),
+    ).toBeDisabled();
+  });
+
+  it('resets the picker selection and reports a rejected attachment', async () => {
+    mockApolloQueries({ snapshotData: snapshot(['list-1']) });
+    mockRecords({
+      creatorLists: [{ id: 'list-1', name: 'VIP Creators' }],
+    });
+    mockAttach.mockRejectedValue(new Error('attach failed'));
+
+    render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+    fireEvent.click(screen.getByTestId('creator-list-picker-open'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select creator list' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Could not attach Creator List. Try again.',
+      ),
+    );
+    expect(mockOpenMultipleRecordPicker).toHaveBeenCalledTimes(2);
+    expect(mockMultipleRecordPickerPerformSearch).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        forcePickableMorphItems: [
+          expect.objectContaining({
+            isSelected: true,
+            recordId: 'list-1',
+          }),
+        ],
       }),
     );
   });
