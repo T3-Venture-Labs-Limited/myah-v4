@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import { type MouseEvent } from 'react';
+import { type AriaRole, type MouseEvent } from 'react';
 
 import { handleClickableElementKeyDown } from '@ui/accessibility/utils/handleClickableElementKeyDown';
 import { type IconComponent } from '@ui/icon';
@@ -18,6 +18,7 @@ export type MenuItemSuggestionProps = {
   selected?: boolean;
   className?: string;
   onClick?: (event: MouseEvent<HTMLLIElement>) => void;
+  role?: AriaRole;
 };
 
 export const MenuItemSuggestion = ({
@@ -29,6 +30,7 @@ export const MenuItemSuggestion = ({
   className,
   selected,
   onClick,
+  role,
 }: MenuItemSuggestionProps) => {
   const handleMenuItemClick = (event: MouseEvent<HTMLLIElement>) => {
     if (!onClick) return;
@@ -42,7 +44,8 @@ export const MenuItemSuggestion = ({
     <li
       className={clsx(styles.suggestionMenuItem, className)}
       data-selected={selected || undefined}
-      role={isDefined(onClick) ? 'button' : undefined}
+      role={role ?? (isDefined(onClick) ? 'button' : undefined)}
+      aria-selected={role === 'option' ? selected : undefined}
       tabIndex={isDefined(onClick) ? 0 : undefined}
       onClick={handleMenuItemClick}
       onKeyDown={handleClickableElementKeyDown}

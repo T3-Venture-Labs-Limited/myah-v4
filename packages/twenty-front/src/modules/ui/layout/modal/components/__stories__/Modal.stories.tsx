@@ -6,6 +6,7 @@ import {
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
+import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
 import { focusStackState } from '@/ui/utilities/focus/states/focusStackState';
 import { FocusComponentType } from '@/ui/utilities/focus/types/FocusComponentType';
@@ -52,6 +53,26 @@ type Story = StoryObj<typeof ModalStatefulWrapper>;
 
 const closeMock = fn();
 
+const OmittedModalDismissal = () => {
+  const { openModal } = useModal();
+
+  return (
+    <>
+      <button type="button" onClick={() => openModal('modal-id')}>
+        Reopen omitted modal
+      </button>
+      <ModalStatefulWrapper
+        modalInstanceId="modal-id"
+        isClosable
+        onClose={closeMock}
+      >
+        <ModalHeader>Omitted modal dismissal test</ModalHeader>
+        <ModalContent>This modal uses the legacy dismissal path.</ModalContent>
+      </ModalStatefulWrapper>
+    </>
+  );
+};
+
 export const Default: Story = {
   args: {
     modalInstanceId: 'modal-id',
@@ -70,6 +91,47 @@ export const Default: Story = {
         </ModalFooter>
       </>
     ),
+  },
+};
+
+export const TrapFocus: Story = {
+  args: {
+    modalInstanceId: 'modal-id',
+    modal: 'trap-focus',
+    ariaLabel: 'Trap focus dialog',
+    ariaModal: false,
+    children: (
+      <>
+        <ModalHeader>Trap focus test</ModalHeader>
+        <ModalContent>
+          <button type="button">First trapped action</button>
+          <button type="button">Second trapped action</button>
+        </ModalContent>
+      </>
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    const dialog = await body.findByRole('dialog', {
+      name: 'Trap focus dialog',
+    });
+    const firstAction = body.getByRole('button', {
+      name: 'First trapped action',
+    });
+    const secondAction = body.getByRole('button', {
+      name: 'Second trapped action',
+    });
+
+    expect(dialog).toHaveAttribute('aria-modal', 'false');
+
+    firstAction.focus();
+    await userEvent.tab();
+    expect(secondAction).toHaveFocus();
+
+    await userEvent.tab();
+    await waitFor(() => {
+      expect(firstAction).toHaveFocus();
+    });
   },
 };
 
@@ -129,6 +191,40 @@ export const CloseClosableModalOnEscape: Story = {
 
     await waitFor(() => {
       expect(closeMock).toHaveBeenCalledTimes(1);
+    });
+  },
+};
+
+export const OmittedModalUsesLegacyDismissal: Story = {
+  render: () => <OmittedModalDismissal />,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    closeMock.mockClear();
+
+    await body.findByText('Omitted modal dismissal test');
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => {
+      expect(closeMock).toHaveBeenCalledTimes(1);
+      expect(
+        body.queryByText('Omitted modal dismissal test'),
+      ).not.toBeInTheDocument();
+    });
+
+    closeMock.mockClear();
+
+    await userEvent.click(
+      body.getByRole('button', { name: 'Reopen omitted modal' }),
+    );
+    await body.findByText('Omitted modal dismissal test');
+    await userEvent.click(await body.findByTestId('modal-backdrop'));
+
+    await waitFor(() => {
+      expect(closeMock).toHaveBeenCalledTimes(1);
+      expect(
+        body.queryByText('Omitted modal dismissal test'),
+      ).not.toBeInTheDocument();
     });
   },
 };

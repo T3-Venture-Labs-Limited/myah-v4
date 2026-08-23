@@ -1,37 +1,60 @@
-import React from 'react';
-
+import {
+  RadioGroup as RadioGroupPrimitive,
+  type RadioGroupProps as BaseRadioGroupProps,
+} from '@base-ui/react/radio-group';
+import * as React from 'react';
+import { flushSync } from 'react-dom';
 import { themeCssVariables } from '@ui/theme-constants';
-import { type RadioProps } from '@ui/input/Radio/Radio';
 
-type RadioGroupProps = React.PropsWithChildren & {
-  value?: string;
+export const RadioGroupContext = React.createContext(false);
+
+export type RadioGroupProps<Value = string> = Omit<
+  BaseRadioGroupProps<Value>,
+  'onChange'
+> & {
   onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onValueChange?: (value: string) => void;
 };
 
-export const RadioGroup = ({
-  value,
+export function RadioGroup<Value = string>({
+  children,
   onChange,
   onValueChange,
-  children,
-}: RadioGroupProps) => {
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    onChange?.(event);
-    onValueChange?.(event.target.value);
-  };
-
+  onKeyDownCapture,
+  render,
+  style,
+  ...props
+}: RadioGroupProps<Value>) {
   return (
-    <>
-      {React.Children.map(children, (child) => {
-        if (React.isValidElement<RadioProps>(child)) {
-          return React.cloneElement(child, {
-            style: { marginBottom: themeCssVariables.spacing[2] },
-            checked: child.props.value === value,
-            onChange: handleChange,
-          });
-        }
-        return child;
-      })}
-    </>
+    <RadioGroupContext.Provider value>
+      <RadioGroupPrimitive<Value>
+        // oxlint-disable-next-line react/jsx-props-no-spreading
+        {...props}
+        render={render}
+        style={(state) => ({
+          ...(render === undefined
+            ? { display: 'flex', flexDirection: 'column' }
+            : {}),
+          gap: themeCssVariables.spacing[2],
+          ...(typeof style === 'function' ? style(state) : style),
+        })}
+        onKeyDownCapture={(event) => {
+          onKeyDownCapture?.(event);
+
+          if (event.key.startsWith('Arrow')) {
+            queueMicrotask(() => {
+              flushSync(() => undefined);
+            });
+          }
+        }}
+        onValueChange={(newValue, eventDetails) => {
+          onChange?.(
+            eventDetails.event as unknown as React.ChangeEvent<HTMLInputElement>,
+          );
+          onValueChange?.(newValue, eventDetails);
+        }}
+      >
+        {children}
+      </RadioGroupPrimitive>
+    </RadioGroupContext.Provider>
   );
-};
+}

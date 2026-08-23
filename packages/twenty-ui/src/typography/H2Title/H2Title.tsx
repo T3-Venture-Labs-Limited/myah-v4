@@ -24,13 +24,14 @@ export const H2Title = ({
         {adornment}
       </div>
       {description && (
-        <h3 className={styles.description}>
+        <p className={styles.description}>
           <OverflowingTextWithTooltip
+            as="span"
             text={description}
             displayedMaxRows={5}
             isTooltipMultiline={true}
           />
-        </h3>
+        </p>
       )}
     </div>
   );

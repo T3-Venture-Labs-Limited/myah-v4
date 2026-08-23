@@ -174,6 +174,18 @@ export const WithPreselectedValues: Story = {
 
       expect(checkboxes).toHaveLength(2);
     });
+    const listbox = canvas.getByRole('listbox');
+    expect(canvas.queryAllByRole('listbox')).toHaveLength(1);
+    expect(listbox).toHaveAttribute('aria-multiselectable', 'true');
+    expect(within(listbox).getAllByRole('option')).toHaveLength(
+      sampleOptions.length,
+    );
+    expect(
+      within(listbox).getAllByRole('option', { selected: true }),
+    ).toHaveLength(2);
+    expect(
+      within(listbox).getAllByRole('option', { selected: false }),
+    ).toHaveLength(sampleOptions.length - 2);
 
     for (const option of sampleOptions) {
       expect(canvas.getByText(option.label)).toBeVisible();

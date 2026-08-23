@@ -6,10 +6,13 @@ import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { MOBILE_VIEWPORT } from 'twenty-ui/theme-constants';
 import { Step, type StepProps } from './Step';
 
-const StyledContainer = styled.div`
+const StyledContainer = styled.ol`
   display: flex;
   flex: 1;
   justify-content: space-between;
+  list-style: none;
+  margin: 0;
+  padding: 0;
   @media (max-width: ${MOBILE_VIEWPORT}px) {
     align-items: center;
     justify-content: center;
@@ -17,39 +20,39 @@ const StyledContainer = styled.div`
 `;
 
 export type StepBarProps = React.PropsWithChildren &
-  React.ComponentProps<'div'> & {
+  React.ComponentProps<'ol'> & {
     activeStep: number;
   };
 
-export const StepBar = ({ activeStep, children }: StepBarProps) => {
+export const StepBar = ({ activeStep, children, ...props }: StepBarProps) => {
   const isMobile = useIsMobile();
+  const stepCount = React.Children.toArray(children).filter(
+    (child) => React.isValidElement(child) && child.type === Step,
+  ).length;
+  let stepIndex = 0;
 
   return (
-    <StyledContainer>
-      {React.Children.map(children, (child, index) => {
-        if (!React.isValidElement(child)) {
-          return null;
-        }
-
-        // If the child is not a Step, return it as-is
-        // oxlint-disable-next-line typescript/ban-ts-comment
-        // @ts-expect-error
-        if (child.type?.displayName !== Step.displayName) {
+    <StyledContainer
+      // oxlint-disable-next-line react/jsx-props-no-spreading
+      {...props}
+    >
+      {React.Children.map(children, (child) => {
+        if (!React.isValidElement<StepProps>(child) || child.type !== Step) {
           return child;
         }
 
-        // We should only render the active step, and if activeStep is -1, we should only render the first step only when it's mobile device
-        if (
-          isMobile &&
-          (activeStep === -1 ? index !== 0 : index !== activeStep)
-        ) {
-          return null;
-        }
+        const currentStepIndex = stepIndex++;
 
-        return React.cloneElement<StepProps>(child as any, {
-          index,
-          isLast: index === React.Children.count(children) - 1,
+        return React.cloneElement(child, {
           activeStep,
+          index: currentStepIndex,
+          isLast: currentStepIndex === stepCount - 1,
+          isVisuallyHidden:
+            isMobile &&
+            (activeStep === -1
+              ? currentStepIndex !== 0
+              : activeStep !== currentStepIndex),
+          totalSteps: stepCount,
         });
       })}
     </StyledContainer>

@@ -59,12 +59,18 @@ export const DashboardColorSelectionMenu = ({
   const { theme } = useContext(ThemeContext);
   return (
     <DropdownContent>
-      <DropdownMenuItemsContainer hasMaxHeight>
+      <DropdownMenuItemsContainer
+        hasMaxHeight
+        role="listbox"
+        aria-multiselectable
+      >
         <DropdownMenuSectionLabel label={t`Text Colors`} />
 
         {BLOCKNOTE_COLORS.map((colorName) => (
           <StyledColorMenuItem
             key={`text-${colorName}`}
+            role="option"
+            aria-selected={currentTextColor === colorName}
             onClick={() => onTextColorSelect(colorName)}
           >
             <DashboardColorIcon textColor={colorName} />
@@ -85,6 +91,8 @@ export const DashboardColorSelectionMenu = ({
         {BLOCKNOTE_COLORS.map((colorName) => (
           <StyledColorMenuItem
             key={`bg-${colorName}`}
+            role="option"
+            aria-selected={currentBackgroundColor === colorName}
             onClick={() => onBackgroundColorSelect(colorName)}
           >
             <DashboardColorIcon backgroundColor={colorName} />

@@ -10,6 +10,7 @@ import { AppTooltip, TooltipDelay } from '@ui/surfaces/AppTooltip/AppTooltip';
 import styles from './OverflowingTextWithTooltip.module.scss';
 
 type OverflowingTextWithTooltipProps = {
+  as?: 'div' | 'span';
   size?: 'large' | 'small';
   isTooltipMultiline?: boolean;
   displayedMaxRows?: number;
@@ -27,6 +28,7 @@ type OverflowingTextWithTooltipProps = {
 );
 
 export const OverflowingTextWithTooltip = ({
+  as = 'div',
   size = 'small',
   text,
   isTooltipMultiline,
@@ -37,10 +39,15 @@ export const OverflowingTextWithTooltip = ({
 }: OverflowingTextWithTooltipProps) => {
   const textElementId = `title-id-${+new Date()}`;
 
-  const textRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement | HTMLSpanElement | null>(null);
 
   const [isTitleOverflowing, setIsTitleOverflowing] = useState(false);
   const [shouldRenderTooltip, setShouldRenderTooltip] = useState(false);
+  const TextElement = as;
+
+  const setTextRef = (element: HTMLDivElement | HTMLSpanElement | null) => {
+    textRef.current = element;
+  };
 
   const handleMouseEnter = () => {
     const isOverflowing = textRef.current
@@ -71,7 +78,7 @@ export const OverflowingTextWithTooltip = ({
   return (
     <>
       {isDefined(displayedMaxRows) ? (
-        <div
+        <TextElement
           data-testid="tooltip"
           data-content-overflowing={isTitleOverflowing ? '' : undefined}
           className={clsx(
@@ -85,28 +92,29 @@ export const OverflowingTextWithTooltip = ({
                 : '1',
             } as CSSProperties
           }
-          ref={textRef}
+          ref={setTextRef}
           id={textElementId}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           {isNonEmptyString(text) ? <LinkifiedText text={text} /> : text}
-        </div>
+        </TextElement>
       ) : (
-        <div
+        <TextElement
           data-testid="tooltip"
           data-content-overflowing={isTitleOverflowing ? '' : undefined}
           className={clsx(
             styles.overflowingText,
             size === 'large' && styles.large,
           )}
-          ref={textRef}
+          style={as === 'span' ? { display: 'inline-block' } : undefined}
+          ref={setTextRef}
           id={textElementId}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           {isNonEmptyString(text) ? <LinkifiedText text={text} /> : text}
-        </div>
+        </TextElement>
       )}
 
       {shouldRenderTooltip &&

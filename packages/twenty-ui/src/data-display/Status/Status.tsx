@@ -27,23 +27,41 @@ export const Status = ({
   weight = 'regular',
 }: StatusProps) => {
   const parsedColor = parseThemeColor(color);
+  const statusClassName = clsx(styles.status, styles[weight], className);
+  const statusStyle = {
+    '--status-background': themeCssVariables.tag.background[parsedColor],
+    '--status-text-color': themeCssVariables.tag.text[parsedColor],
+  } as React.CSSProperties;
+  const statusContent = (
+    <>
+      <span className={styles.content}>{text}</span>
+      {isLoaderVisible ? <Loader color={color} /> : null}
+    </>
+  );
+
+  if (isDefined(onClick)) {
+    return (
+      <div
+        className={statusClassName}
+        role="button"
+        onClick={onClick}
+        tabIndex={0}
+        onKeyDown={handleClickableElementKeyDown}
+        data-loader-visible={isLoaderVisible || undefined}
+        style={statusStyle}
+      >
+        {statusContent}
+      </div>
+    );
+  }
 
   return (
     <h3
-      className={clsx(styles.status, styles[weight], className)}
-      onClick={onClick}
-      tabIndex={isDefined(onClick) ? 0 : undefined}
-      onKeyDown={handleClickableElementKeyDown}
+      className={statusClassName}
       data-loader-visible={isLoaderVisible || undefined}
-      style={
-        {
-          '--status-background': themeCssVariables.tag.background[parsedColor],
-          '--status-text-color': themeCssVariables.tag.text[parsedColor],
-        } as React.CSSProperties
-      }
+      style={statusStyle}
     >
-      <span className={styles.content}>{text}</span>
-      {isLoaderVisible ? <Loader color={color} /> : null}
+      {statusContent}
     </h3>
   );
 };

@@ -1,7 +1,7 @@
 import { DROPDOWN_MENU_ITEMS_CONTAINER_MAX_HEIGHT } from '@/ui/layout/dropdown/constants/DropdownMenuItemsContainerMaxHeight';
 import { styled } from '@linaria/react';
+import { type AriaRole, type ReactNode } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-
 const StyledExternalContainer = styled.div<{
   maxHeight?: number;
 }>`
@@ -77,25 +77,35 @@ export const DropdownMenuItemsContainer = ({
   hasMaxHeight,
   scrollable = true,
   className,
+  role,
+  'aria-multiselectable': ariaMultiselectable,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   hasMaxHeight?: boolean;
   scrollable?: boolean;
   className?: string;
+  role?: AriaRole;
+  'aria-multiselectable'?: boolean;
 }) => {
   return scrollable === true ? (
     <StyledScrollableContainer
       className={className}
+      role={role}
+      aria-multiselectable={ariaMultiselectable}
       maxHeight={
         hasMaxHeight ? DROPDOWN_MENU_ITEMS_CONTAINER_MAX_HEIGHT : undefined
       }
     >
-      <StyledExternalContainer role="listbox">
+      <StyledExternalContainer>
         <StyledInternalContainer>{children}</StyledInternalContainer>
       </StyledExternalContainer>
     </StyledScrollableContainer>
   ) : (
-    <StyledExternalContainer role="listbox" className={className}>
+    <StyledExternalContainer
+      className={className}
+      role={role}
+      aria-multiselectable={ariaMultiselectable}
+    >
       <StyledInternalContainer>{children}</StyledInternalContainer>
     </StyledExternalContainer>
   );

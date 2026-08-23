@@ -1,5 +1,6 @@
 import { type Meta, type StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { IconX } from '@ui/icon';
 import { H1Title, H1TitleFontColor, H2Title } from '@ui/typography';
 import { Button, IconButton } from '@ui/input';
@@ -7,6 +8,7 @@ import { Section, SectionAlignment, SectionFontColor } from '@ui/layout';
 import { A11Y_DEFER_COLOR_CONTRAST, ComponentDecorator } from '@ui/testing';
 
 import { Modal } from '@ui/surfaces/Modal/Modal';
+import { type ModalProps } from '@ui/surfaces/Modal/types/ModalProps';
 import { ModalContent } from '@ui/surfaces/ModalContent/ModalContent';
 import { ModalFooter } from '@ui/surfaces/ModalFooter/ModalFooter';
 import { ModalHeader } from '@ui/surfaces/ModalHeader/ModalHeader';
@@ -35,6 +37,58 @@ const meta: Meta<typeof Modal> = {
 
 export default meta;
 type Story = StoryObj<typeof Modal>;
+
+const modalOpenChangeMock = fn();
+
+const AccessibleModal = ({
+  onOpenChange,
+  useExplicitFocus = true,
+}: {
+  onOpenChange?: ModalProps['onOpenChange'];
+  useExplicitFocus?: boolean;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <>
+      <Button title="Background action" variant="secondary" />
+      <Button
+        ref={openerRef}
+        title="Open accessible modal"
+        variant="primary"
+        accent="brand"
+        onClick={() => setIsOpen(true)}
+      />
+      <Modal
+        isOpen={isOpen}
+        modal
+        ariaLabelledBy="accessible-modal-title"
+        ariaDescribedBy="accessible-modal-description"
+        initialFocus={useExplicitFocus ? cancelButtonRef : undefined}
+        finalFocus={useExplicitFocus ? openerRef : undefined}
+        onOpenChange={(open, eventDetails) => {
+          onOpenChange?.(open, eventDetails);
+          setIsOpen(open);
+        }}
+      >
+        <h2 id="accessible-modal-title">Accessible modal title</h2>
+        <p id="accessible-modal-description">Accessible modal description</p>
+        <Button
+          ref={cancelButtonRef}
+          title="Cancel accessible modal"
+          variant="secondary"
+        />
+        <Button
+          title="Confirm accessible modal"
+          variant="primary"
+          accent="brand"
+        />
+      </Modal>
+    </>
+  );
+};
 
 export const Default: Story = {
   parameters: { a11y: A11Y_DEFER_COLOR_CONTRAST },
@@ -257,4 +311,144 @@ const InteractiveModal = () => {
 
 export const Interactive: Story = {
   render: () => <InteractiveModal />,
+};
+
+export const AccessibleModalSemantics: Story = {
+  args: {
+    onOpenChange: modalOpenChangeMock,
+  },
+  render: ({ onOpenChange }) => <AccessibleModal onOpenChange={onOpenChange} />,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    const opener = body.getByRole('button', {
+      name: 'Open accessible modal',
+    });
+
+    await userEvent.click(opener);
+
+    const dialog = await body.findByRole('dialog', {
+      name: 'Accessible modal title',
+    });
+    const cancelButton = body.getByRole('button', {
+      name: 'Cancel accessible modal',
+    });
+    const confirmButton = body.getByRole('button', {
+      name: 'Confirm accessible modal',
+    });
+    const backgroundAction = body.getByRole('button', {
+      name: 'Background action',
+      hidden: true,
+    });
+
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'accessible-modal-title');
+    expect(dialog).toHaveAttribute(
+      'aria-describedby',
+      'accessible-modal-description',
+    );
+    expect(dialog).toHaveAccessibleDescription('Accessible modal description');
+    await waitFor(() => {
+      expect(backgroundAction.closest('[aria-hidden="true"]')).not.toBeNull();
+    });
+
+    await waitFor(() => {
+      expect(cancelButton).toHaveFocus();
+    });
+
+    await userEvent.tab();
+    expect(confirmButton).toHaveFocus();
+
+    await userEvent.tab();
+    await waitFor(() => {
+      expect(cancelButton).toHaveFocus();
+    });
+
+    await userEvent.tab({ shift: true });
+    await waitFor(() => {
+      expect(confirmButton).toHaveFocus();
+    });
+
+    modalOpenChangeMock.mockClear();
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => {
+      expect(modalOpenChangeMock).toHaveBeenCalledTimes(1);
+      expect(
+        body.queryByRole('dialog', { name: 'Accessible modal title' }),
+      ).not.toBeInTheDocument();
+      expect(opener).toHaveFocus();
+    });
+
+    await userEvent.click(opener);
+
+    const reopenedCancelButton = await body.findByRole('button', {
+      name: 'Cancel accessible modal',
+    });
+
+    await waitFor(() => {
+      expect(reopenedCancelButton).toHaveFocus();
+    });
+    modalOpenChangeMock.mockClear();
+
+    const backdrop = await body.findByTestId('modal-backdrop');
+
+    await userEvent.click(backdrop);
+
+    await waitFor(() => {
+      expect(modalOpenChangeMock).toHaveBeenCalledTimes(1);
+      expect(
+        body.queryByRole('dialog', { name: 'Accessible modal title' }),
+      ).not.toBeInTheDocument();
+    });
+  },
+};
+
+export const AccessibleModalDefaultFocus: Story = {
+  render: () => <AccessibleModal useExplicitFocus={false} />,
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    const opener = body.getByRole('button', {
+      name: 'Open accessible modal',
+    });
+
+    await userEvent.click(opener);
+
+    const dialog = await body.findByRole('dialog', {
+      name: 'Accessible modal title',
+    });
+    const cancelButton = body.getByRole('button', {
+      name: 'Cancel accessible modal',
+    });
+    const confirmButton = body.getByRole('button', {
+      name: 'Confirm accessible modal',
+    });
+
+    await waitFor(() => {
+      expect(dialog).toContainElement(cancelButton);
+      expect(cancelButton).toHaveFocus();
+    });
+
+    await userEvent.tab();
+    expect(confirmButton).toHaveFocus();
+
+    await userEvent.tab();
+    await waitFor(() => {
+      expect(cancelButton).toHaveFocus();
+    });
+
+    await userEvent.tab({ shift: true });
+    await waitFor(() => {
+      expect(confirmButton).toHaveFocus();
+    });
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => {
+      expect(
+        body.queryByRole('dialog', { name: 'Accessible modal title' }),
+      ).not.toBeInTheDocument();
+      expect(opener).toHaveFocus();
+    });
+  },
 };

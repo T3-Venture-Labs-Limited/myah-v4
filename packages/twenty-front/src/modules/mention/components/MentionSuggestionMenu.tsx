@@ -27,6 +27,7 @@ const renderItem = (
     text={item.label}
     contextualText={item.objectLabelSingular}
     selected={isSelected}
+    role="option"
     onClick={() => {
       onSelect(item);
     }}

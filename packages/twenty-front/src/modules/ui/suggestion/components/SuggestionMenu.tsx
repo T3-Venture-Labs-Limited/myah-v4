@@ -152,7 +152,7 @@ const SuggestionMenuInner = <TItem,>(
         }}
       >
         <DropdownContent ref={listContainerRef}>
-          <DropdownMenuItemsContainer hasMaxHeight>
+          <DropdownMenuItemsContainer hasMaxHeight role="listbox">
             {items.map((item, index) => {
               const isSelected = index === clampedSelectedIndex;
 

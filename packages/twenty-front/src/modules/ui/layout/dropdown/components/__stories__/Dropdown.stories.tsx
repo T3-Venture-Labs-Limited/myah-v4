@@ -4,10 +4,9 @@ import {
   type Meta,
   type StoryObj,
 } from '@storybook/react-vite';
+import { createRef } from 'react';
 import { type PlayFunction } from 'storybook/internal/types';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
-// TEMP_DISABLED_TEST: Commented out unused import
-// import { useState } from 'react';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { DropdownMenuSkeletonItem } from '@/ui/input/relation-picker/components/skeletons/DropdownMenuSkeletonItem';
 
@@ -24,7 +23,7 @@ import { DropdownMenuSearchInput } from '@/ui/layout/dropdown/components/Dropdow
 import { DropdownMenuSeparator } from '@/ui/layout/dropdown/components/DropdownMenuSeparator';
 import { StyledDropdownMenuSubheader } from '@/ui/layout/dropdown/components/StyledDropdownMenuSubheader';
 import { IconChevronLeft } from 'twenty-ui/icon';
-import { Button } from 'twenty-ui/input';
+import { Button, LightIconButton } from 'twenty-ui/input';
 import { MenuItem } from 'twenty-ui/navigation';
 import { ComponentDecorator } from 'twenty-ui/testing';
 
@@ -44,8 +43,15 @@ const meta: Meta<typeof Dropdown> = {
   },
 };
 
+const onSearchChange = fn();
+const onInputChange = fn();
+
 export default meta;
 type Story = StoryObj<typeof Dropdown>;
+
+const actualChildTriggerRef = createRef<HTMLButtonElement>();
+const onActualChildTriggerClick = fn();
+const onActualChildTriggerKeyDown = fn();
 
 const StyledContainer = styled.div`
   height: 600px;
@@ -264,7 +270,11 @@ export const SearchWithLoadingMenu: Story = {
   args: {
     dropdownComponents: (
       <DropdownContent>
-        <DropdownMenuSearchInput value="query" autoFocus />
+        <DropdownMenuSearchInput
+          value="query"
+          onChange={onSearchChange}
+          autoFocus
+        />
         <DropdownMenuSeparator />
         <DropdownMenuItemsContainer hasMaxHeight>
           <DropdownMenuSkeletonItem />
@@ -299,6 +309,7 @@ export const WithInput: Story = {
         <DropdownMenuInput
           instanceId="dropdown-menu-input"
           value="Lorem ipsum"
+          onChange={onInputChange}
           autoFocus
         />
         <DropdownMenuSeparator />
@@ -413,3 +424,134 @@ export const WithInput: Story = {
 //     expect(dropdownContent).toBeVisible();
 //   },
 // };
+
+const onSelectVerifiedDomain = fn();
+const onSelectUnavailableDomain = fn();
+
+export const ListboxOptions: Story = {
+  render: () => (
+    <Dropdown
+      clickableComponent={<Button title="Open domain options" />}
+      dropdownComponents={
+        <DropdownContent>
+          <DropdownMenuItemsContainer>
+            <MenuItem
+              role="option"
+              text="Use verified domain"
+              selected
+              onClick={onSelectVerifiedDomain}
+            />
+            <MenuItem
+              role="option"
+              text="Use unavailable domain"
+              disabled
+              onClick={onSelectUnavailableDomain}
+            />
+          </DropdownMenuItemsContainer>
+        </DropdownContent>
+      }
+      dropdownId="listbox-options-dropdown"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getAllByRole('button', {
+      name: /Open domain options/,
+    })[0];
+
+    await userEvent.click(trigger);
+
+    const listboxes = await canvas.findAllByRole('listbox');
+
+    expect(listboxes).toHaveLength(1);
+
+    const listbox = listboxes[0];
+    const option = within(listbox).getByRole('option', {
+      name: 'Use verified domain',
+    });
+    const unavailableOption = within(listbox).getByRole('option', {
+      name: 'Use unavailable domain',
+    });
+
+    expect(option).toHaveAttribute('aria-selected', 'true');
+    expect(unavailableOption).toHaveAttribute('aria-disabled', 'true');
+    expect(option.tabIndex).toBe(0);
+    expect(unavailableOption.tabIndex).toBe(-1);
+    expect(canvas.queryByRole('menuitem')).not.toBeInTheDocument();
+
+    option.focus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('[Space]');
+    await userEvent.click(unavailableOption);
+    unavailableOption.focus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('[Space]');
+
+    expect(onSelectVerifiedDomain).toHaveBeenCalledTimes(2);
+    expect(onSelectUnavailableDomain).not.toHaveBeenCalled();
+  },
+};
+
+export const ActualChildTrigger: Story = {
+  render: () => (
+    <Dropdown
+      clickableComponent={
+        <LightIconButton
+          ref={actualChildTriggerRef}
+          aria-label="Mailbox actions"
+          aria-expanded={false}
+          Icon={IconChevronLeft}
+          onClick={onActualChildTriggerClick}
+          onKeyDown={onActualChildTriggerKeyDown}
+        />
+      }
+      containerType="neutral"
+      dropdownComponents={
+        <DropdownContent>
+          <MenuItem role="button" text="Archive mailbox" />
+        </DropdownContent>
+      }
+      dropdownId="mailbox-actions-dropdown"
+      renderClickableComponentAsChild
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+    const triggers = canvas.getAllByRole('button', {
+      name: 'Mailbox actions',
+    });
+
+    expect(triggers).toHaveLength(1);
+
+    const trigger = triggers[0];
+
+    expect(trigger.tagName).toBe('BUTTON');
+    expect(actualChildTriggerRef.current).toBe(trigger);
+    expect(trigger.tabIndex).toBe(0);
+    expect(trigger.parentElement?.closest('[role=\"button\"]')).toBeNull();
+    expect(trigger).toHaveAttribute(
+      'aria-controls',
+      'mailbox-actions-dropdown-options',
+    );
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(trigger);
+
+    expect(onActualChildTriggerClick).toHaveBeenCalledTimes(1);
+    expect(canvas.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(canvas.queryByRole('menuitem')).not.toBeInTheDocument();
+    expect(
+      canvas.getByRole('button', { name: 'Archive mailbox' }),
+    ).toBeVisible();
+    expect(
+      canvas.getByRole('button', { name: 'Mailbox actions' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      canvas.getByRole('button', { name: 'Mailbox actions' }),
+    ).toHaveAttribute('aria-controls', 'mailbox-actions-dropdown-options');
+
+    await userEvent.keyboard('{ArrowDown}');
+
+    expect(onActualChildTriggerKeyDown).toHaveBeenCalledTimes(1);
+  },
+};

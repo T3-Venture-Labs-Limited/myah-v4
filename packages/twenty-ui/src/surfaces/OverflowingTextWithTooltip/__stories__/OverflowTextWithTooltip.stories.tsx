@@ -1,5 +1,5 @@
 import { type Meta, type StoryObj } from '@storybook/react-vite';
-import { userEvent, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 
 import { ComponentDecorator } from '@ui/testing';
 
@@ -15,6 +15,24 @@ const meta: Meta<typeof OverflowingTextWithTooltip> = {
 
 export default meta;
 type Story = StoryObj<typeof OverflowingTextWithTooltip>;
+
+export const Inline: Story = {
+  args: {
+    text: 'An inline description',
+    displayedMaxRows: 2,
+  },
+  decorators: [ComponentDecorator],
+  render: (args) => (
+    // oxlint-disable-next-line react/jsx-props-no-spreading
+    <OverflowingTextWithTooltip {...args} as="span" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const tooltip = canvas.getByTestId('tooltip');
+
+    expect(tooltip.tagName).toBe('SPAN');
+  },
+};
 
 export const SingleLineOverflowing: Story = {
   args: {

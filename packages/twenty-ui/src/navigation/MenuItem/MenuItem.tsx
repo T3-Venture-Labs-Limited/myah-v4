@@ -3,10 +3,12 @@ import { type LightIconButtonProps } from '@ui/input/LightIconButton/LightIconBu
 import { LightIconButtonGroup } from '@ui/input/LightIconButtonGroup/LightIconButtonGroup';
 import {
   type FunctionComponent,
+  type KeyboardEvent,
   type MouseEvent,
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { handleClickableElementKeyDown } from '@ui/accessibility/utils/handleClickableElementKeyDown';
 
 import { MenuItemHotKeys } from '@ui/navigation/MenuItemHotKeys/MenuItemHotKeys';
 import { type ThemeColor } from '@ui/theme';
@@ -57,6 +59,7 @@ export type MenuItemProps = {
   RightIcon?: IconComponent | null;
   RightComponent?: ReactNode;
   onClick?: (event: MouseEvent<HTMLDivElement>) => void;
+  role?: 'button' | 'option';
   onMouseEnter?: (event: MouseEvent<HTMLDivElement>) => void;
   onMouseLeave?: (event: MouseEvent<HTMLDivElement>) => void;
   testId?: string;
@@ -84,6 +87,7 @@ export const MenuItem = ({
   RightIcon,
   RightComponent,
   onClick,
+  role,
   onMouseEnter,
   onMouseLeave,
   testId,
@@ -108,10 +112,21 @@ export const MenuItem = ({
     onClick?.(event);
   };
 
+  const handleMenuItemKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+
+    handleClickableElementKeyDown(event);
+  };
+
   return (
     <StyledHoverableMenuItemBase
       data-testid={testId ?? undefined}
       onClick={disabled ? undefined : handleMenuItemClick}
+      role={role}
+      tabIndex={role ? (disabled ? -1 : 0) : undefined}
+      aria-disabled={role && disabled ? true : undefined}
+      aria-selected={role === 'option' ? selected : undefined}
+      onKeyDown={role && !disabled ? handleMenuItemKeyDown : undefined}
       disabled={disabled}
       className={className}
       accent={accent}

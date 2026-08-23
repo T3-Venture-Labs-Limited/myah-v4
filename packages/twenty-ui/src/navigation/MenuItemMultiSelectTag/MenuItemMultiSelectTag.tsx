@@ -1,3 +1,5 @@
+import { type AriaRole } from 'react';
+
 import { Tag } from '@ui/data-display';
 import { type IconComponent } from '@ui/icon';
 import { Checkbox, CheckboxShape, CheckboxSize } from '@ui/input';
@@ -15,6 +17,7 @@ type MenuItemMultiSelectTagProps = {
   color: ThemeColor | 'transparent';
   text: string;
   Icon?: IconComponent;
+  role?: AriaRole;
 };
 
 export const MenuItemMultiSelectTag = ({
@@ -25,12 +28,15 @@ export const MenuItemMultiSelectTag = ({
   isKeySelected,
   text,
   Icon,
+  role,
 }: MenuItemMultiSelectTagProps) => {
   return (
     <StyledMenuItemBase
       isKeySelected={isKeySelected}
       onClick={onClick}
       className={className}
+      role={role}
+      aria-selected={role === 'option' ? selected : undefined}
     >
       <StyledMenuItemLeftContent>
         <Checkbox

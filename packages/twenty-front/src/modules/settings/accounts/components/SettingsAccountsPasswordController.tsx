@@ -6,7 +6,6 @@ import { type AccountType } from 'twenty-shared/constants';
 
 import { type ConnectionFormData } from '@/settings/accounts/hooks/useImapSmtpCaldavConnectionForm';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
-import { ClickToActionLink } from 'twenty-ui/navigation';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledPasswordFieldContainer = styled.div`
@@ -15,8 +14,21 @@ const StyledPasswordFieldContainer = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledChangePasswordLink = styled(ClickToActionLink)`
+const StyledChangePasswordButton = styled.button`
   align-self: flex-end;
+  background: none;
+  border: 0;
+  color: ${themeCssVariables.font.color.light};
+  cursor: pointer;
+  font-family: inherit;
+  font-size: ${themeCssVariables.font.size.sm};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  padding: 0 ${themeCssVariables.spacing[1]};
+  white-space: nowrap;
+
+  &:hover {
+    color: ${themeCssVariables.font.color.tertiary};
+  }
 `;
 
 const MASKED_PASSWORD_PLACEHOLDER = '••••••••';
@@ -43,19 +55,22 @@ export const SettingsAccountsPasswordController = ({
       render={({ field, fieldState }) => (
         <StyledPasswordFieldContainer>
           <SettingsTextInput
+            ref={field.ref}
             instanceId={`${protocol.toLowerCase()}-password-connection-form`}
             label={label}
             placeholder={disabled ? MASKED_PASSWORD_PLACEHOLDER : ''}
             type={disabled ? 'text' : 'password'}
+            name={field.name}
             value={field.value || ''}
             onChange={field.onChange}
+            onBlur={field.onBlur}
             error={fieldState.error?.message}
             disabled={disabled}
           />
           {disabled && (
-            <StyledChangePasswordLink onClick={onUnlock}>
+            <StyledChangePasswordButton type="button" onClick={onUnlock}>
               <Trans>Change password</Trans>
-            </StyledChangePasswordLink>
+            </StyledChangePasswordButton>
           )}
         </StyledPasswordFieldContainer>
       )}
