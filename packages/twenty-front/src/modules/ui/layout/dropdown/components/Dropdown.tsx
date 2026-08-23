@@ -306,6 +306,13 @@ export const Dropdown = ({
     [clickableComponentElement, handleClickableComponentClick],
   );
 
+  const popupRole =
+    dropdownRole === 'dialog'
+      ? 'dialog'
+      : containerType === 'listbox'
+        ? 'listbox'
+        : undefined;
+
   return (
     <DropdownComponentInstanceContext.Provider
       value={{ instanceId: dropdownId }}
@@ -316,7 +323,7 @@ export const Dropdown = ({
           onClick: handleClickableComponentAsChildClick,
           'aria-controls': `${dropdownId}-options`,
           'aria-expanded': isDropdownOpen,
-          'aria-haspopup': containerType === 'listbox' ? 'listbox' : undefined,
+          'aria-haspopup': popupRole,
         })
       ) : isDefined(clickableComponent) ? (
         <StyledClickableComponent
@@ -325,13 +332,7 @@ export const Dropdown = ({
           onKeyDown={handleClickableComponentKeyDown}
           aria-controls={`${dropdownId}-options`}
           aria-expanded={isDropdownOpen}
-          aria-haspopup={
-            containerType === 'listbox'
-              ? 'listbox'
-              : dropdownRole === 'dialog'
-                ? 'dialog'
-                : true
-          }
+          aria-haspopup={popupRole}
           aria-label={clickableComponentAriaLabel}
           role="button"
           tabIndex={isClickableComponentKeyboardAccessible ? 0 : undefined}

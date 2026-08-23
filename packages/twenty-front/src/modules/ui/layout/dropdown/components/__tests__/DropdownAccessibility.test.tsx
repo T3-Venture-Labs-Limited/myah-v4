@@ -159,7 +159,49 @@ describe('Dropdown accessibility semantics', () => {
 
     expect(screen.getByRole('listbox')).toBeInTheDocument();
   });
+  it('keeps neutral as-child actions free of listbox semantics', () => {
+    render(
+      <Dropdown
+        clickableComponent={<button type="button">Actions</button>}
+        containerType="neutral"
+        dropdownComponents={<button type="button">Archive</button>}
+        dropdownId="neutral-actions-dropdown"
+        renderClickableComponentAsChild
+      />,
+    );
 
+    expect(screen.getByRole('button', { name: 'Actions' })).not.toHaveAttribute(
+      'aria-haspopup',
+    );
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('lets a neutral shell expose one controlled results listbox', () => {
+    render(
+      <Dropdown
+        clickableComponent={<button type="button">Choose record</button>}
+        containerType="neutral"
+        dropdownComponents={
+          <DropdownMenuItemsContainer
+            ariaLabel="Record results"
+            id="record-results"
+            role="listbox"
+          >
+            <div role="option">Ada Lovelace</div>
+          </DropdownMenuItemsContainer>
+        }
+        dropdownId="neutral-record-picker"
+        renderClickableComponentAsChild
+      />,
+    );
+
+    const listboxes = screen.getAllByRole('listbox', {
+      name: 'Record results',
+    });
+
+    expect(listboxes).toHaveLength(1);
+    expect(listboxes[0]).toHaveAttribute('id', 'record-results');
+  });
   it('forwards ARIA attributes to the search input', () => {
     render(
       <I18nProvider i18n={i18n}>
@@ -195,6 +237,7 @@ describe('Dropdown accessibility semantics', () => {
       <DropdownMenuItemsContainer
         ariaLabel="Creator results"
         id="creator-results"
+        role="listbox"
       >
         <div>Creator result</div>
       </DropdownMenuItemsContainer>,

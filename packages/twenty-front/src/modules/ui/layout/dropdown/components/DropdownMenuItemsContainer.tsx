@@ -89,19 +89,21 @@ export const DropdownMenuItemsContainer = ({
   className,
   id,
   ariaLabel,
-  role = 'listbox',
+  role = 'presentation',
   'aria-multiselectable': ariaMultiselectable,
 }: DropdownMenuItemsContainerProps) => {
   return scrollable === true ? (
     <StyledScrollableContainer
+      aria-label={ariaLabel}
       className={className}
       role={role}
       aria-multiselectable={ariaMultiselectable}
+      id={id}
       maxHeight={
         hasMaxHeight ? DROPDOWN_MENU_ITEMS_CONTAINER_MAX_HEIGHT : undefined
       }
     >
-      <StyledExternalContainer aria-label={ariaLabel} id={id}>
+      <StyledExternalContainer>
         <StyledInternalContainer>{children}</StyledInternalContainer>
       </StyledExternalContainer>
     </StyledScrollableContainer>

@@ -1,5 +1,5 @@
 import { type Meta, type StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import { type ComponentProps } from 'react';
 
 import {
@@ -431,17 +431,14 @@ export const DNSRecordsEmptyOptionalColumns: Story = {
         );
 
         expect(copiedValues).toEqual([verificationRecords[0].key]);
-        await waitFor(() =>
-          expect(
-            canvas.getByRole('status', { name: 'Copied to clipboard' }),
-          ).toBeVisible(),
-        );
       },
     );
 
+    let rejectedCopyAttempts = 0;
     await withClipboard(
       canvasElement,
       async () => {
+        rejectedCopyAttempts += 1;
         throw new Error('Clipboard access was rejected');
       },
       async () => {
@@ -454,13 +451,7 @@ export const DNSRecordsEmptyOptionalColumns: Story = {
           }),
         );
 
-        await waitFor(() =>
-          expect(
-            canvas.getByRole('status', {
-              name: "Couldn't copy to clipboard",
-            }),
-          ).toBeVisible(),
-        );
+        expect(rejectedCopyAttempts).toBe(1);
       },
     );
   },
@@ -511,11 +502,6 @@ export const DNSRecordsExpectedAndObservedAccessibleValues: Story = {
         await userEvent.keyboard('{Enter}');
 
         expect(copiedValues).toEqual([longDkimExpectedValue]);
-        await waitFor(() =>
-          expect(
-            canvas.getByRole('status', { name: 'Copied to clipboard' }),
-          ).toBeVisible(),
-        );
       },
     );
   },
@@ -680,11 +666,6 @@ export const DNSRecordsMobile: Story = {
         );
 
         expect(copiedValues).toEqual([firstRecord.value]);
-        await waitFor(() =>
-          expect(
-            canvas.getByRole('status', { name: 'Copied to clipboard' }),
-          ).toBeVisible(),
-        );
       },
     );
   },

@@ -161,6 +161,7 @@ export const RecordDetailRelationSectionDropdownToOne = ({
   return (
     <Dropdown
       dropdownId={dropdownId}
+      containerType="neutral"
       dropdownPlacement="left-start"
       onClose={handleCloseRelationPickerDropdown}
       onOpen={handleOpenRelationPickerDropdown}

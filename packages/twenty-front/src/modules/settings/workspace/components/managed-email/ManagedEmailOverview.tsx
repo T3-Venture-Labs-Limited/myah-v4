@@ -11,7 +11,7 @@ import {
   type ManagedEmailPaymentSetup as ManagedEmailPaymentSetupData,
 } from '@/settings/workspace/components/managed-email/ManagedEmailPaymentSetup';
 import { ManagedEmailReview } from '@/settings/workspace/components/managed-email/ManagedEmailReview';
-import { ManagedMailboxTable } from '@/settings/workspace/components/managed-email/ManagedMailboxTable';
+import { ManagedEmailDashboard } from '@/settings/workspace/components/managed-email/ManagedEmailDashboard';
 import {
   CANCEL_MANAGED_EMAIL_DOMAIN_RENEWAL,
   CANCEL_MANAGED_EMAIL_WARMUP,
@@ -38,7 +38,6 @@ import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
-import { Status } from 'twenty-ui/data-display';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { H2Title } from 'twenty-ui/typography';
@@ -685,55 +684,16 @@ const ManagedEmailOverviewForWorkspace = ({
     return <p>{t`Managed mailbox status is unavailable right now.`}</p>;
   }
 
-  const overview = data.managedEmailOverview;
-  const overviewStatus =
-    overview.status === 'READY'
-      ? { color: 'green' as const, text: t`Ready` }
-      : overview.status === 'WARMING'
-        ? { color: 'yellow' as const, text: t`Warming` }
-        : overview.status === 'EMPTY'
-          ? { color: 'gray' as const, text: t`No managed mailboxes` }
-          : { color: 'red' as const, text: t`Action required` };
-
   return (
     <>
-      <Section>
-        <H2Title
-          title={t`Managed mailboxes`}
-          description={t`Managed sending identities, readiness, and campaign availability.`}
-        />
-        <Status color={overviewStatus.color} text={overviewStatus.text} />
-        <p>
-          <span>
-            {overview.mailboxCount === 1
-              ? t`1 mailbox`
-              : t`${overview.mailboxCount} mailboxes`}
-          </span>
-          {' · '}
-          <span>{t`${overview.warmingCount} warming`}</span>
-          {' · '}
-          <span>{t`${overview.actionRequiredCount} action required`}</span>
-        </p>
-        <Button
-          title={t`Add mailboxes`}
-          variant="primary"
-          onClick={() => setFlow('CHOOSER')}
-        />
-        {!overview.acquisitionAvailable && (
-          <p>{t`Managed mailbox acquisition is not available right now.`}</p>
-        )}
-      </Section>
-      <Section>
-        <H2Title
-          title={t`Mailbox inventory`}
-          description={t`Customer-safe mailbox and readiness status.`}
-        />
-        {data.managedEmailMailboxes.length === 0 ? (
-          <p>{t`No managed mailboxes yet.`}</p>
-        ) : (
-          <ManagedMailboxTable mailboxes={data.managedEmailMailboxes} />
-        )}
-      </Section>
+      <ManagedEmailDashboard
+        domains={data.managedEmailDomains}
+        mailboxes={data.managedEmailMailboxes}
+        onConnectExistingMailbox={() => navigate(SettingsPath.NewAccount)}
+        onBrowsePrewarmedInventory={() => void beginPrewarmedFlow()}
+        onSetUpManagedEmail={() => setFlow('ORDINARY')}
+        overview={data.managedEmailOverview}
+      />
       {(data.managedEmailMailboxes.length > 0 ||
         data.managedEmailDomains.length > 0) && (
         <ManagedEmailDetails

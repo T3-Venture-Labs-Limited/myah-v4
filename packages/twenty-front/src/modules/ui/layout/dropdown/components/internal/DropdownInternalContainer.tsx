@@ -166,7 +166,13 @@ export const DropdownInternalContainer = ({
         <StyledDropdownContentContainer
           ref={floatingUiRefs.setFloating}
           style={dropdownMenuStyles}
-          role={containerType === 'listbox' ? 'listbox' : dropdownRole}
+          role={
+            dropdownRole === 'dialog'
+              ? 'dialog'
+              : containerType === 'listbox'
+                ? 'listbox'
+                : undefined
+          }
           aria-label={dropdownAriaLabel}
           id={`${dropdownId}-options`}
           data-click-outside-id={excludedClickOutsideId}

@@ -168,6 +168,7 @@ export const SingleRecordPickerMenuItemsWithSearch = ({
             ariaLabel={resultsAriaLabel}
             hasMaxHeight
             id={resultsId}
+            role="listbox"
           >
             <SingleRecordPickerMenuItems
               getOptionId={getOptionId}
@@ -208,6 +209,7 @@ export const SingleRecordPickerMenuItemsWithSearch = ({
             ariaLabel={resultsAriaLabel}
             hasMaxHeight
             id={resultsId}
+            role="listbox"
           >
             <SingleRecordPickerMenuItems
               getOptionId={getOptionId}
