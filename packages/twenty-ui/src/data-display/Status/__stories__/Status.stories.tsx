@@ -25,16 +25,34 @@ type Story = StoryObj<typeof Status>;
 export const Default: Story = {
   args: {
     color: 'red',
+  },
+  decorators: [ComponentDecorator],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(
+      canvas.getByRole('heading', { level: 3, name: 'Urgent' }),
+    ).toBeVisible();
+  },
+};
+
+export const Clickable: Story = {
+  args: {
+    color: 'red',
     onClick: fn(),
   },
   decorators: [ComponentDecorator],
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const status = canvas.getByRole('button', { name: 'Urgent' });
 
-    const status = canvas.getByRole('heading', { level: 3 });
+    await userEvent.tab();
+    expect(status).toHaveFocus();
 
-    await userEvent.click(status);
-    expect(args.onClick).toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('[Space]');
+
+    expect(args.onClick).toHaveBeenCalledTimes(2);
   },
 };
 

@@ -43,6 +43,8 @@ const StyledDropdownInsideContainer = styled.div`
   width: 100%;
 `;
 
+export type DropdownContainerType = 'neutral' | 'listbox';
+
 export type DropdownInternalContainerProps = {
   dropdownId: string;
   dropdownPlacement: Placement;
@@ -59,6 +61,7 @@ export type DropdownInternalContainerProps = {
   parentDropdownId?: string;
   excludedClickOutsideIds?: string[];
   isDropdownInModal?: boolean;
+  containerType: DropdownContainerType;
 };
 
 export const DropdownInternalContainer = ({
@@ -74,6 +77,7 @@ export const DropdownInternalContainer = ({
   dropdownComponents,
   excludedClickOutsideIds,
   isDropdownInModal = false,
+  containerType,
 }: DropdownInternalContainerProps) => {
   const isDropdownOpen = useAtomComponentStateValue(
     isDropdownOpenComponentState,
@@ -162,7 +166,7 @@ export const DropdownInternalContainer = ({
         <StyledDropdownContentContainer
           ref={floatingUiRefs.setFloating}
           style={dropdownMenuStyles}
-          role={dropdownRole}
+          role={containerType === 'listbox' ? 'listbox' : dropdownRole}
           aria-label={dropdownAriaLabel}
           id={`${dropdownId}-options`}
           data-click-outside-id={excludedClickOutsideId}

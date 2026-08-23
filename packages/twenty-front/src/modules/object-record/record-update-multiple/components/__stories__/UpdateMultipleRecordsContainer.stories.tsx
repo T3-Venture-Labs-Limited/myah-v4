@@ -111,6 +111,7 @@ type Story = StoryObj<typeof UpdateMultipleRecordsContainer>;
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
 
     const nameLabel = await canvas.findByText('Name', {}, { timeout: 10000 });
     const nameInput = within(nameLabel.parentElement!).getByRole('textbox');
@@ -122,7 +123,7 @@ export const Default: Story = {
 
     await userEvent.click(applyButton);
 
-    const cancelButton = await canvas.findByRole('button', { name: /Cancel/i });
+    const cancelButton = await body.findByRole('button', { name: /Cancel/i });
     expect(cancelButton).toBeEnabled();
 
     await userEvent.click(cancelButton);

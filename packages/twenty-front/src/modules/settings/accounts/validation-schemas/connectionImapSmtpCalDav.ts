@@ -1,4 +1,4 @@
-import { ACCOUNT_TYPES } from 'twenty-shared/constants';
+import { ACCOUNT_TYPES, type AccountType } from 'twenty-shared/constants';
 import { z } from 'zod';
 import { type ConnectionParametersInput } from '~/generated-metadata/graphql';
 
@@ -50,24 +50,42 @@ export const connectionImapSmtpCalDav = z
     },
   );
 
-export const connectionImapSmtpCalDavUpdate = z
-  .object({
-    handle: z.email('Invalid email address'),
-    IMAP: connectionParameters.optional(),
-    SMTP: connectionParameters.optional(),
-    CALDAV: connectionParameters.optional(),
-  })
-  .refine(
-    (data) => {
-      return ACCOUNT_TYPES.some((protocol) =>
+const connectionImapSmtpCalDavUpdateShape = z.object({
+  handle: z.email('Invalid email address'),
+  IMAP: connectionParameters.optional(),
+  SMTP: connectionParameters.optional(),
+  CALDAV: connectionParameters.optional(),
+});
+
+export const createConnectionImapSmtpCalDavUpdateSchema = ({
+  editedProtocol,
+  incompleteConfigurationMessage = 'At least one account type (IMAP, SMTP, or CalDAV) must be completely configured',
+}: {
+  editedProtocol?: AccountType;
+  incompleteConfigurationMessage?: string;
+} = {}) =>
+  connectionImapSmtpCalDavUpdateShape.superRefine((data, context) => {
+    const protocolsToValidate =
+      editedProtocol === undefined ? ACCOUNT_TYPES : [editedProtocol];
+    if (
+      protocolsToValidate.some((protocol) =>
         isProtocolConfiguredForUpdate(
           data[protocol] as ConnectionParametersInput,
         ),
-      );
-    },
-    {
-      path: ['handle'],
-      error:
-        'At least one account type (IMAP, SMTP, or CalDAV) must be completely configured',
-    },
-  );
+      )
+    ) {
+      return;
+    }
+
+    const issueProtocol =
+      editedProtocol ??
+      ACCOUNT_TYPES.find((protocol) => data[protocol] !== undefined);
+    context.addIssue({
+      code: 'custom',
+      path: issueProtocol === undefined ? ['handle'] : [issueProtocol, 'host'],
+      message: incompleteConfigurationMessage,
+    });
+  });
+
+export const connectionImapSmtpCalDavUpdate =
+  createConnectionImapSmtpCalDavUpdateSchema();

@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react';
-import { type ReactNode, useState } from 'react';
+import { forwardRef, type ReactNode, useRef, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
@@ -11,7 +11,7 @@ import { useLingui } from '@lingui/react/macro';
 import { H1Title, H1TitleFontColor } from 'twenty-ui/typography';
 import { Button, type ButtonAccent } from 'twenty-ui/input';
 import { Section, SectionAlignment, SectionFontColor } from 'twenty-ui/layout';
-import { type ModalOverlay } from 'twenty-ui/surfaces';
+import { type ModalOverlay, type ModalProps } from 'twenty-ui/surfaces';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 export type ConfirmationModalProps = {
@@ -27,6 +27,7 @@ export type ConfirmationModalProps = {
   confirmButtonAccent?: ButtonAccent;
   AdditionalButtons?: React.ReactNode;
   overlay?: ModalOverlay;
+  finalFocus?: ModalProps['finalFocus'];
 };
 
 const StyledCenteredButtonContainer = styled.div`
@@ -34,14 +35,16 @@ const StyledCenteredButtonContainer = styled.div`
   margin-top: ${themeCssVariables.spacing[2]};
 `;
 
-export const StyledCenteredButton = (
-  props: React.ComponentProps<typeof Button>,
-) => (
+export const StyledCenteredButton = forwardRef<
+  HTMLButtonElement,
+  React.ComponentPropsWithoutRef<typeof Button>
+>((props, ref) => (
   <StyledCenteredButtonContainer>
     {/* oxlint-disable-next-line react/jsx-props-no-spreading */}
-    <Button {...props} />
+    <Button ref={ref} {...props} />
   </StyledCenteredButtonContainer>
-);
+));
+StyledCenteredButton.displayName = 'StyledCenteredButton';
 
 const StyledCenteredTitle = styled.div`
   text-align: center;
@@ -90,6 +93,7 @@ export const ConfirmationModal = ({
   confirmButtonAccent = 'danger',
   AdditionalButtons,
   overlay = 'dark',
+  finalFocus,
 }: ConfirmationModalProps) => {
   const { i18n, t } = useLingui();
   const translatedConfirmButtonText =
@@ -97,6 +101,11 @@ export const ConfirmationModal = ({
   const [inputConfirmationValue, setInputConfirmationValue] =
     useState<string>('');
   const [isValidValue, setIsValidValue] = useState(!confirmationValue);
+
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmationInputContainerRef = useRef<HTMLDivElement>(null);
+  const titleId = `${modalInstanceId}-title`;
+  const descriptionId = `${modalInstanceId}-description`;
 
   const handleInputConfimrationValueChange = (value: string) => {
     setInputConfirmationValue(value);
@@ -113,8 +122,8 @@ export const ConfirmationModal = ({
   const { closeModal } = useModal();
 
   const handleConfirmClick = () => {
-    closeModal(modalInstanceId);
     onConfirmClick();
+    closeModal(modalInstanceId);
   };
 
   const handleCancelClick = () => {
@@ -131,6 +140,20 @@ export const ConfirmationModal = ({
   return (
     <ModalStatefulWrapper
       modalInstanceId={modalInstanceId}
+      modal
+      ariaLabelledBy={titleId}
+      ariaDescribedBy={descriptionId}
+      initialFocus={
+        confirmationValue
+          ? () =>
+              confirmationInputContainerRef.current?.querySelector<HTMLInputElement>(
+                'input',
+              ) ??
+              cancelButtonRef.current ??
+              false
+          : cancelButtonRef
+      }
+      finalFocus={finalFocus}
       onClose={() => {
         onClose?.();
       }}
@@ -144,10 +167,10 @@ export const ConfirmationModal = ({
       narrowWidth
       autoHeight
     >
-      <StyledCenteredTitle>
+      <StyledCenteredTitle id={titleId}>
         <H1Title title={title} fontColor={H1TitleFontColor.Primary} />
       </StyledCenteredTitle>
-      <StyledSectionContainer>
+      <StyledSectionContainer id={descriptionId}>
         <Section
           alignment={SectionAlignment.Center}
           fontColor={SectionFontColor.Primary}
@@ -157,19 +180,22 @@ export const ConfirmationModal = ({
       </StyledSectionContainer>
       {confirmationValue && (
         <Section>
-          <SettingsTextInput
-            instanceId="confirmation-modal-input"
-            dataTestId="confirmation-modal-input"
-            value={inputConfirmationValue}
-            onChange={handleInputConfimrationValueChange}
-            placeholder={confirmationPlaceholder}
-            fullWidth
-            disableHotkeys
-            key={'input-' + confirmationValue}
-          />
+          <div ref={confirmationInputContainerRef}>
+            <SettingsTextInput
+              instanceId="confirmation-modal-input"
+              dataTestId="confirmation-modal-input"
+              value={inputConfirmationValue}
+              onChange={handleInputConfimrationValueChange}
+              placeholder={confirmationPlaceholder}
+              fullWidth
+              disableHotkeys
+              key={'input-' + confirmationValue}
+            />
+          </div>
         </Section>
       )}
       <StyledCenteredButton
+        ref={cancelButtonRef}
         onClick={handleCancelClick}
         variant="secondary"
         title={t`Cancel`}

@@ -75,7 +75,7 @@ export const CustomSlashMenu = ({
               data-click-outside-id={SLASH_MENU_DROPDOWN_CLICK_OUTSIDE_ID}
             >
               <DropdownContent>
-                <DropdownMenuItemsContainer hasMaxHeight>
+                <DropdownMenuItemsContainer hasMaxHeight role="listbox">
                   <SelectableList
                     focusId={SLASH_MENU_DROPDOWN_CLICK_OUTSIDE_ID}
                     selectableListInstanceId={SLASH_MENU_LIST_ID}

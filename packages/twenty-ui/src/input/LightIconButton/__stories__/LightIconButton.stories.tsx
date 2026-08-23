@@ -1,4 +1,7 @@
 import { type Meta, type StoryObj } from '@storybook/react-vite';
+import { createRef } from 'react';
+import { expect, fn, userEvent, within } from 'storybook/test';
+
 import { IconSearch } from '@ui/icon';
 import {
   A11Y_DEFER_COLOR_CONTRAST,
@@ -19,6 +22,11 @@ const meta: Meta<typeof LightIconButton> = {
 
 export default meta;
 type Story = StoryObj<typeof LightIconButton>;
+
+const lightIconButtonRef = createRef<HTMLButtonElement>();
+
+const onLightIconButtonClick = fn();
+const onLightIconButtonKeyDown = fn();
 
 export const Default: Story = {
   args: {
@@ -96,4 +104,34 @@ export const Catalog: CatalogStory<Story, typeof LightIconButton> = {
     },
   },
   decorators: [CatalogDecorator],
+};
+
+export const NativeTriggerProps: Story = {
+  decorators: [ComponentDecorator],
+  render: () => (
+    <LightIconButton
+      ref={lightIconButtonRef}
+      Icon={IconSearch}
+      aria-label="Mailbox actions"
+      aria-controls="mailbox-actions"
+      aria-expanded={false}
+      onClick={onLightIconButtonClick}
+      onKeyDown={onLightIconButtonKeyDown}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole('button', { name: 'Mailbox actions' });
+
+    expect(button.tagName).toBe('BUTTON');
+    expect(lightIconButtonRef.current).toBe(button);
+    expect(button).toHaveAttribute('aria-controls', 'mailbox-actions');
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(button);
+    await userEvent.keyboard('{ArrowDown}');
+
+    expect(onLightIconButtonClick).toHaveBeenCalledTimes(1);
+    expect(onLightIconButtonKeyDown).toHaveBeenCalledTimes(1);
+  },
 };

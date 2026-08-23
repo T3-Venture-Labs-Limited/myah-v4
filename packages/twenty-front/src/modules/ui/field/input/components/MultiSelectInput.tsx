@@ -129,7 +129,11 @@ export const MultiSelectInput = ({
           autoFocus
         />
         <DropdownMenuSeparator />
-        <DropdownMenuItemsContainer hasMaxHeight>
+        <DropdownMenuItemsContainer
+          hasMaxHeight
+          role="listbox"
+          aria-multiselectable
+        >
           {filteredOptionsInDropDown.length === 0 ? (
             <MenuItem text={t`No option found`} />
           ) : (
@@ -145,6 +149,7 @@ export const MultiSelectInput = ({
                   <MenuItemMultiSelectTag
                     key={option.value}
                     selected={values?.includes(option.value) || false}
+                    role="option"
                     text={option.label}
                     color={option.color ?? 'transparent'}
                     Icon={option.Icon ?? undefined}

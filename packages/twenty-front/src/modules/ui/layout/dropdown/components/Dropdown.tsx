@@ -1,5 +1,8 @@
 import { DropdownOnToggleEffect } from '@/ui/layout/dropdown/components/DropdownOnToggleEffect';
-import { DropdownInternalContainer } from '@/ui/layout/dropdown/components/internal/DropdownInternalContainer';
+import {
+  DropdownInternalContainer,
+  type DropdownContainerType,
+} from '@/ui/layout/dropdown/components/internal/DropdownInternalContainer';
 import { DROPDOWN_BOUNDARY_BOTTOM_PADDING_DESKTOP } from '@/ui/layout/dropdown/constants/DropdownBoundaryBottomPaddingDesktop';
 import { DROPDOWN_BOUNDARY_BOTTOM_PADDING_MOBILE } from '@/ui/layout/dropdown/constants/DropdownBoundaryBottomPaddingMobile';
 import { DROPDOWN_BOUNDARY_HORIZONTAL_PADDING } from '@/ui/layout/dropdown/constants/DropdownBoundaryHorizontalPadding';
@@ -25,6 +28,9 @@ import {
 } from '@floating-ui/react';
 import { styled } from '@linaria/react';
 import {
+  cloneElement,
+  isValidElement,
+  type ComponentPropsWithRef,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -38,6 +44,11 @@ import { isDefined } from 'twenty-shared/utils';
 import { useIsMobile } from 'twenty-ui/utilities';
 
 type Width = `${string}px` | `${number}%` | 'auto' | number;
+
+type ClickableComponentProps = Pick<
+  ComponentPropsWithRef<'button'>,
+  'aria-controls' | 'aria-expanded' | 'aria-haspopup' | 'onClick' | 'ref'
+>;
 const StyledDropdownFallbackAnchor = styled.div`
   left: 0;
   position: fixed;
@@ -54,6 +65,8 @@ const StyledClickableComponent = styled.div<{
 export type DropdownProps = {
   clickableComponent?: ReactNode;
   clickableComponentWidth?: Width;
+  containerType?: DropdownContainerType;
+  renderClickableComponentAsChild?: boolean;
   dropdownComponents: ReactNode;
   hotkey?: {
     key: Keys;
@@ -102,6 +115,8 @@ export const Dropdown = ({
   onClose,
   onOpen,
   clickableComponentWidth = 'auto',
+  containerType = 'listbox',
+  renderClickableComponentAsChild = false,
   excludedClickOutsideIds,
   isDropdownInModal = false,
   disableClickForClickableComponent = false,
@@ -191,15 +206,35 @@ export const Dropdown = ({
     strategy: dropdownStrategy,
   });
 
-  const clickableComponentRef = useRef<HTMLDivElement>(null);
+  const clickableComponentElement =
+    renderClickableComponentAsChild &&
+    isValidElement<ClickableComponentProps>(clickableComponent)
+      ? clickableComponent
+      : null;
+  const clickableComponentRef = useRef<HTMLElement>(null);
 
   const setClickableComponentReference = useCallback(
-    (element: HTMLDivElement | null) => {
-      clickableComponentRef.current = element;
-      refs.setReference(element);
-      onClickableComponentRef?.(element);
+    (node: HTMLButtonElement | HTMLDivElement | null) => {
+      clickableComponentRef.current = node;
+      refs.setReference(node);
+
+      if (clickableComponentElement === null) {
+        onClickableComponentRef?.(node as HTMLDivElement | null);
+      }
+
+      const forwardedRef = clickableComponentElement?.props.ref;
+
+      if (typeof forwardedRef === 'function') {
+        const cleanup = forwardedRef(node as HTMLButtonElement | null);
+
+        if (typeof cleanup === 'function') {
+          return cleanup;
+        }
+      } else if (forwardedRef) {
+        forwardedRef.current = node as HTMLButtonElement | null;
+      }
     },
-    [onClickableComponentRef, refs],
+    [clickableComponentElement, onClickableComponentRef, refs],
   );
 
   useEffect(() => {
@@ -227,45 +262,76 @@ export const Dropdown = ({
     ],
   );
 
-  const handleClickableComponentClick = (event: MouseEvent) => {
-    if (
-      event.target instanceof HTMLElement &&
-      event.target.closest('a') !== null
-    ) {
-      return;
-    }
+  const handleClickableComponentClick = useCallback(
+    (event: MouseEvent) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('a') !== null
+      ) {
+        return;
+      }
 
-    handleClickableComponentToggle(event);
-  };
-
-  const handleClickableComponentKeyDown = (event: KeyboardEvent) => {
-    if (
-      event.target instanceof HTMLElement &&
-      event.target.closest('a') !== null
-    ) {
-      return;
-    }
-
-    if (
-      isClickableComponentKeyboardAccessible &&
-      (event.key === 'Enter' || event.key === ' ')
-    ) {
       handleClickableComponentToggle(event);
-    }
-  };
+    },
+    [handleClickableComponentToggle],
+  );
+
+  const handleClickableComponentKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('a') !== null
+      ) {
+        return;
+      }
+
+      if (
+        isClickableComponentKeyboardAccessible &&
+        (event.key === 'Enter' || event.key === ' ')
+      ) {
+        handleClickableComponentToggle(event);
+      }
+    },
+    [handleClickableComponentToggle, isClickableComponentKeyboardAccessible],
+  );
+
+  const handleClickableComponentAsChildClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      clickableComponentElement?.props.onClick?.(event);
+
+      if (!event.defaultPrevented) {
+        handleClickableComponentClick(event);
+      }
+    },
+    [clickableComponentElement, handleClickableComponentClick],
+  );
 
   return (
     <DropdownComponentInstanceContext.Provider
       value={{ instanceId: dropdownId }}
     >
-      {isDefined(clickableComponent) ? (
+      {clickableComponentElement ? (
+        cloneElement(clickableComponentElement, {
+          ref: setClickableComponentReference,
+          onClick: handleClickableComponentAsChildClick,
+          'aria-controls': `${dropdownId}-options`,
+          'aria-expanded': isDropdownOpen,
+          'aria-haspopup': containerType === 'listbox' ? 'listbox' : undefined,
+        })
+      ) : isDefined(clickableComponent) ? (
         <StyledClickableComponent
           ref={setClickableComponentReference}
           onClick={handleClickableComponentClick}
           onKeyDown={handleClickableComponentKeyDown}
           aria-controls={`${dropdownId}-options`}
           aria-expanded={isDropdownOpen}
-          aria-haspopup={dropdownRole === 'dialog' ? 'dialog' : true}
+          aria-haspopup={
+            containerType === 'listbox'
+              ? 'listbox'
+              : dropdownRole === 'dialog'
+                ? 'dialog'
+                : true
+          }
           aria-label={clickableComponentAriaLabel}
           role="button"
           tabIndex={isClickableComponentKeyboardAccessible ? 0 : undefined}
@@ -283,6 +349,7 @@ export const Dropdown = ({
           floatingStyles={floatingStyles}
           dropdownComponents={dropdownComponents}
           dropdownId={dropdownId}
+          containerType={containerType}
           dropdownPlacement={placement}
           floatingUiRefs={refs}
           hotkey={hotkey}

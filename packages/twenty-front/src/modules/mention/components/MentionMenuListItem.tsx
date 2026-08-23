@@ -32,6 +32,7 @@ export const MentionMenuListItem = ({
 
   return (
     <MenuItemSuggestion
+      role="option"
       selected={isSelected}
       onClick={handleClick}
       text={label}

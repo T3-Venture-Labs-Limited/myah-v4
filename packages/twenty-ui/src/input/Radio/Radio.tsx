@@ -4,7 +4,7 @@ import { clsx } from 'clsx';
 import * as React from 'react';
 
 import styles from './Radio.module.scss';
-import { RadioGroup } from '@ui/input/RadioGroup/RadioGroup';
+import { RadioGroup, RadioGroupContext } from '@ui/input/RadioGroup/RadioGroup';
 
 export enum RadioSize {
   Large = 'large',
@@ -40,31 +40,21 @@ export const Radio = ({
   onChange,
   onCheckedChange,
   size = RadioSize.Small,
+  style,
   value,
 }: RadioProps) => {
+  const isWithinRadioGroup = React.useContext(RadioGroupContext);
   const optionId = React.useId();
 
   // 'on' mimics the native input value default when neither value nor label is set.
-  const radioValue = value || label || 'on';
-
-  return (
-    <RadioGroupPrimitive
-      className={clsx(
-        styles.container,
-        labelPosition === LabelPosition.Left && styles.containerLabelLeft,
-        className,
-      )}
-      name={name}
-      value={checked === undefined ? undefined : checked ? radioValue : ''}
-      onValueChange={(_newValue, eventDetails) => {
-        const inputElement = eventDetails.event
-          .target as HTMLInputElement | null;
-        onChange?.(
-          eventDetails.event as unknown as React.ChangeEvent<HTMLInputElement>,
-        );
-        onCheckedChange?.(inputElement?.checked ?? true);
-      }}
-    >
+  const radioValue = value ?? label ?? 'on';
+  const containerClassName = clsx(
+    styles.container,
+    labelPosition === LabelPosition.Left && styles.containerLabelLeft,
+    className,
+  );
+  const radioContent = (
+    <>
       <RadioPrimitive.Root
         id={optionId}
         value={radioValue}
@@ -86,6 +76,33 @@ export const Radio = ({
           {label}
         </label>
       )}
+    </>
+  );
+
+  if (isWithinRadioGroup) {
+    return (
+      <div className={containerClassName} style={style}>
+        {radioContent}
+      </div>
+    );
+  }
+
+  return (
+    <RadioGroupPrimitive
+      className={containerClassName}
+      name={name}
+      style={style}
+      value={checked === undefined ? undefined : checked ? radioValue : ''}
+      onValueChange={(_newValue, eventDetails) => {
+        const inputElement = eventDetails.event
+          .target as HTMLInputElement | null;
+        onChange?.(
+          eventDetails.event as unknown as React.ChangeEvent<HTMLInputElement>,
+        );
+        onCheckedChange?.(inputElement?.checked ?? true);
+      }}
+    >
+      {radioContent}
     </RadioGroupPrimitive>
   );
 };

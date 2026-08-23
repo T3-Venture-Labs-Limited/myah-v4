@@ -37,101 +37,136 @@ export type ButtonProps = {
   to?: string;
   target?: string;
   dataTestId?: string;
+  'data-testid'?: string;
   hotkeys?: string[];
   ariaLabel?: string;
   isLoading?: boolean;
-} & Pick<React.ComponentProps<'button'>, 'type'> &
+} & Omit<
+  React.ComponentPropsWithoutRef<'button'>,
+  'children' | 'dangerouslySetInnerHTML'
+> &
   ClickOutsideAttributes;
 
-export const Button = ({
-  className,
-  Icon,
-  title,
-  id,
-  fullWidth = false,
-  variant = 'primary',
-  inverted = false,
-  size = 'medium',
-  accent = 'default',
-  position = 'standalone',
-  soon = false,
-  disabled = false,
-  justify = 'flex-start',
-  focus: propFocus = false,
-  onClick,
-  to,
-  target,
-  dataTestId,
-  dataClickOutsideId,
-  dataGloballyPreventClickOutside,
-  hotkeys,
-  ariaLabel,
-  type,
-  isLoading = false,
-}: ButtonProps) => {
-  const isMobile = useIsMobile();
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      className,
+      Icon,
+      title,
+      id,
+      fullWidth = false,
+      variant = 'primary',
+      inverted = false,
+      size = 'medium',
+      accent = 'default',
+      position = 'standalone',
+      soon = false,
+      disabled = false,
+      justify = 'flex-start',
+      focus: propFocus = false,
+      onClick,
+      to,
+      target,
+      dataTestId,
+      'data-testid': nativeDataTestId,
+      dataClickOutsideId,
+      dataGloballyPreventClickOutside,
+      hotkeys,
+      ariaLabel,
+      'aria-label': nativeAriaLabel,
+      'aria-busy': ariaBusy,
+      type,
+      isLoading = false,
+      onFocus,
+      onBlur,
+      style,
+      ...buttonProps
+    }: ButtonProps,
+    ref,
+  ) => {
+    const isMobile = useIsMobile();
 
-  const [isFocused, setIsFocused] = useState(propFocus);
-  const isDisabled = soon || disabled;
+    const [isFocused, setIsFocused] = useState(propFocus);
+    const isDisabled = soon || disabled;
+    const handleFocus = (event: React.FocusEvent<HTMLButtonElement>) => {
+      setIsFocused(true);
+      onFocus?.(event);
+    };
 
-  // Replaces the legacy Linaria `as` polymorphism: react-router Link when a
-  // `to` is provided, a native button otherwise. Typed as any to forward all
-  // props untyped, exactly like the legacy `as` prop did.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ButtonComponent: any = to ? Link : 'button';
+    const handleBlur = (event: React.FocusEvent<HTMLButtonElement>) => {
+      setIsFocused(false);
+      onBlur?.(event);
+    };
 
-  return (
-    <div
-      className={clsx(
-        styles.wrapper,
-        isLoading && styles.wrapperLoading,
-        fullWidth && styles.fullWidth,
-      )}
-    >
-      <ButtonComponent
-        id={id}
+    // Replaces the legacy Linaria `as` polymorphism: react-router Link when a
+    // `to` is provided, a native button otherwise. Typed as any to forward all
+    // props untyped, exactly like the legacy `as` prop did.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ButtonComponent: any = to ? Link : 'button';
+
+    return (
+      <div
         className={clsx(
-          styles.button,
-          styles[size],
+          styles.wrapper,
+          isLoading && styles.wrapperLoading,
           fullWidth && styles.fullWidth,
-          className,
         )}
-        data-variant={variant}
-        data-accent={accent}
-        data-position={position}
-        data-inverted={inverted || undefined}
-        data-disabled={isDisabled || undefined}
-        data-focus={isFocused || undefined}
-        disabled={isDisabled}
-        onClick={onClick}
-        to={to}
-        target={target}
-        data-testid={dataTestId}
-        data-click-outside-id={dataClickOutsideId}
-        data-globally-prevent-click-outside={dataGloballyPreventClickOutside}
-        aria-label={ariaLabel}
-        type={type}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        style={{ '--btn-justify': justify } as React.CSSProperties}
       >
-        {(isLoading || Icon) && (
-          <ButtonIcon Icon={Icon} isLoading={!!isLoading} />
-        )}
-        {isDefined(title) && (
-          <ButtonText hasIcon={!!Icon} title={title} isLoading={isLoading} />
-        )}
-        {hotkeys && !isMobile && (
-          <ButtonHotkeys
-            hotkeys={hotkeys}
-            variant={variant}
-            accent={accent}
-            size={size}
-            inverted={inverted}
-          />
-        )}
-        {soon && <ButtonSoon />}
-      </ButtonComponent>
-    </div>
-  );
-};
+        <ButtonComponent
+          ref={to ? undefined : ref}
+          // oxlint-disable-next-line react/jsx-props-no-spreading
+          {...buttonProps}
+          id={id}
+          className={clsx(
+            styles.button,
+            styles[size],
+            fullWidth && styles.fullWidth,
+            className,
+          )}
+          data-variant={variant}
+          data-accent={accent}
+          data-position={position}
+          data-inverted={inverted || undefined}
+          data-disabled={isDisabled || undefined}
+          data-focus={isFocused || undefined}
+          disabled={isDisabled}
+          onClick={onClick}
+          to={to}
+          target={target}
+          data-testid={dataTestId ?? nativeDataTestId}
+          data-click-outside-id={dataClickOutsideId}
+          data-globally-prevent-click-outside={dataGloballyPreventClickOutside}
+          aria-label={ariaLabel ?? nativeAriaLabel}
+          aria-busy={isLoading || ariaBusy}
+          type={type}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          style={
+            {
+              ...style,
+              '--btn-justify': justify,
+            } as React.CSSProperties
+          }
+        >
+          {(isLoading || Icon) && (
+            <ButtonIcon Icon={Icon} isLoading={!!isLoading} />
+          )}
+          {isDefined(title) && (
+            <ButtonText hasIcon={!!Icon} title={title} isLoading={isLoading} />
+          )}
+          {hotkeys && !isMobile && (
+            <ButtonHotkeys
+              hotkeys={hotkeys}
+              variant={variant}
+              accent={accent}
+              size={size}
+              inverted={inverted}
+            />
+          )}
+          {soon && <ButtonSoon />}
+        </ButtonComponent>
+      </div>
+    );
+  },
+);
+Button.displayName = 'Button';

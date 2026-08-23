@@ -1,4 +1,7 @@
 import { type Meta, type StoryObj } from '@storybook/react-vite';
+import { createRef } from 'react';
+import { expect, within } from 'storybook/test';
+
 import { IconReload, IconSearch } from '@ui/icon';
 import {
   A11Y_DEFER_COLOR_CONTRAST,
@@ -21,6 +24,8 @@ const meta: Meta<typeof Button> = {
 
 export default meta;
 type Story = StoryObj<typeof Button>;
+
+const saveMailboxButtonRef = createRef<HTMLButtonElement>();
 
 export const Default: Story = {
   parameters: { a11y: A11Y_DEFER_COLOR_CONTRAST },
@@ -361,4 +366,33 @@ export const LoadingButton: Story = {
     },
   },
   decorators: [ComponentDecorator],
+};
+
+export const AccessibleLoadingAndRef: Story = {
+  decorators: [ComponentDecorator],
+  render: () => (
+    <div>
+      <Button
+        ref={saveMailboxButtonRef}
+        title="Save mailbox"
+        dataTestId="save-mailbox-button"
+      />
+      <Button
+        title="Save mailbox"
+        isLoading
+        dataTestId="loading-save-mailbox-button"
+      />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const saveMailboxButton = canvas.getByTestId('save-mailbox-button');
+    const loadingButton = canvas.getByTestId('loading-save-mailbox-button');
+
+    expect(saveMailboxButton).toHaveAccessibleName('Save mailbox');
+    expect(saveMailboxButton.tagName).toBe('BUTTON');
+    expect(saveMailboxButtonRef.current).toBe(saveMailboxButton);
+    expect(loadingButton).toHaveAccessibleName('Save mailbox');
+    expect(loadingButton).toHaveAttribute('aria-busy', 'true');
+  },
 };
