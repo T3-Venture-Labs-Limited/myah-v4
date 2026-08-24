@@ -89,12 +89,17 @@ describe('PageLayoutLeftPanel', () => {
     ];
   });
 
-  it('mounts Creator List controls only in persistent Campaign information', () => {
+  it('mounts Creator List controls after Campaign information', () => {
     render(<PageLayoutLeftPanel pinnedLeftTabId="campaign-information" />);
 
+    const campaignInformation = screen.getByText('Campaign information');
+    const campaignAudienceControls = screen.getByText(
+      'Campaign audience controls:campaign-1',
+    );
+
     expect(
-      screen.getByText('Campaign audience controls:campaign-1'),
-    ).toBeVisible();
+      campaignInformation.compareDocumentPosition(campaignAudienceControls),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('does not mount Creator List controls when Campaign updates are denied', () => {

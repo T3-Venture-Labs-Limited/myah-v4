@@ -1,15 +1,36 @@
 import { gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
-import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
-import { SingleRecordPicker } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPicker';
+import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { RecordDetailRecordsListItemContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer';
+import { RecordDetailSectionContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailSectionContainer';
+import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
+import { useMultipleRecordPickerOpen } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerOpen';
+import { useMultipleRecordPickerPerformSearch } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch';
+import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
+import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState';
+import { multipleRecordPickerSearchableObjectMetadataItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchableObjectMetadataItemsComponentState';
+import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
+import { styled } from '@linaria/react';
 import { useState } from 'react';
-import { Button, Checkbox } from 'twenty-ui/input';
+import { IconPlus, IconX } from 'twenty-ui/icon';
+import { Button, Checkbox, LightIconButton } from 'twenty-ui/input';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const APPROVAL_BATCH_SIZE = 500;
+
+const StyledCreatorListActions = styled.div`
+  align-items: center;
+  display: flex;
+  gap: ${themeCssVariables.spacing[2]};
+`;
 
 const SNAPSHOT = gql`
   query CampaignInfluencerSnapshot($input: CampaignInfluencerCampaignInput!) {
@@ -227,33 +248,30 @@ const CreatorListAttachment = ({
   };
 
   return (
-    <div
-      style={{
-        alignItems: 'center',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 8,
-      }}
-    >
-      <span>{creatorListName}</span>
-      {refreshError ? <p role="alert">{refreshError}</p> : null}
-      {candidateIds.length > 0 ? (
-        <Button
-          disabled={areCandidateLabelsLoading}
-          ariaLabel={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
-          onClick={openReview}
-          title={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
-          type="button"
-          variant="secondary"
-        />
-      ) : null}
-      <Button
-        ariaLabel="Remove Creator List"
-        onClick={() => onDetach(creatorListId)}
-        title="Remove Creator List"
-        type="button"
-        variant="secondary"
-      />
+    <>
+      <RecordDetailRecordsListItemContainer>
+        <span>{creatorListName}</span>
+        <StyledCreatorListActions>
+          {refreshError ? <p role="alert">{refreshError}</p> : null}
+          {candidateIds.length > 0 ? (
+            <Button
+              disabled={areCandidateLabelsLoading}
+              ariaLabel={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
+              onClick={openReview}
+              title={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
+              type="button"
+              variant="secondary"
+            />
+          ) : null}
+          <LightIconButton
+            accent="tertiary"
+            aria-label="Remove Creator List"
+            Icon={IconX}
+            onClick={() => onDetach(creatorListId)}
+            title="Remove Creator List"
+          />
+        </StyledCreatorListActions>
+      </RecordDetailRecordsListItemContainer>
       {isReviewOpen ? (
         <ModalStatefulWrapper
           isClosable
@@ -302,7 +320,7 @@ const CreatorListAttachment = ({
           />
         </ModalStatefulWrapper>
       ) : null}
-    </div>
+    </>
   );
 };
 
@@ -315,11 +333,11 @@ export const MyahCampaignAudienceControls = ({
   campaignId,
   onAudienceChanged,
 }: MyahCampaignAudienceControlsProps) => {
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [attachError, setAttachError] = useState<string>();
+  const [isAttachingList, setIsAttachingList] = useState(false);
   const [detachingListId, setDetachingListId] = useState<string | null>(null);
   const { closeModal, openModal } = useModal();
-  const pickerModalInstanceId = 'campaign-list-picker';
+  const pickerInstanceId = `campaign-creator-lists-picker-${campaignId}`;
   const detachModalInstanceId = `campaign-list-detach-${campaignId}`;
   const { data, refetch } = useQuery<
     CampaignInfluencerSnapshotData,
@@ -331,6 +349,27 @@ export const MyahCampaignAudienceControls = ({
     DetachCampaignCreatorListVariables
   >(DETACH);
   const apolloCoreClient = useApolloCoreClient();
+  const { objectMetadataItem: creatorListObjectMetadataItem } =
+    useObjectMetadataItem({
+      objectNameSingular: 'creatorList',
+    });
+  const { closeDropdown } = useCloseDropdown();
+  const setMultipleRecordPickerSearchFilter = useSetAtomComponentState(
+    multipleRecordPickerSearchFilterComponentState,
+    pickerInstanceId,
+  );
+  const setMultipleRecordPickerPickableMorphItems = useSetAtomComponentState(
+    multipleRecordPickerPickableMorphItemsComponentState,
+    pickerInstanceId,
+  );
+  const setMultipleRecordPickerSearchableObjectMetadataItems =
+    useSetAtomComponentState(
+      multipleRecordPickerSearchableObjectMetadataItemsComponentState,
+      pickerInstanceId,
+    );
+  const { performSearch: multipleRecordPickerPerformSearch } =
+    useMultipleRecordPickerPerformSearch();
+  const { openMultipleRecordPicker } = useMultipleRecordPickerOpen();
   const attachedLists =
     data?.campaignInfluencerSnapshot.campaignCreatorLists ?? [];
   const attachedListIds = attachedLists.map((list) => list.creatorListId);
@@ -367,18 +406,6 @@ export const MyahCampaignAudienceControls = ({
     await onAudienceChanged?.();
   };
 
-  const submitList = async () => {
-    if (!selectedListId) {
-      return;
-    }
-
-    await attach({
-      variables: { input: { campaignId, creatorListIds: [selectedListId] } },
-    });
-    setSelectedListId(null);
-    await refresh();
-  };
-
   const openDetach = (creatorListId: string) => {
     setDetachingListId(creatorListId);
     openModal(detachModalInstanceId);
@@ -401,59 +428,124 @@ export const MyahCampaignAudienceControls = ({
     await refresh();
   };
 
+  const openPicker = () => {
+    const pickableMorphItems: RecordPickerPickableMorphItem[] =
+      attachedListIds.map((recordId) => ({
+        objectMetadataId: creatorListObjectMetadataItem.id,
+        recordId,
+        isSelected: true,
+        isMatchingSearchFilter: true,
+      }));
+
+    setMultipleRecordPickerSearchableObjectMetadataItems([
+      creatorListObjectMetadataItem,
+    ]);
+    setMultipleRecordPickerSearchFilter('');
+    setMultipleRecordPickerPickableMorphItems(pickableMorphItems);
+    openMultipleRecordPicker(pickerInstanceId);
+    multipleRecordPickerPerformSearch({
+      multipleRecordPickerInstanceId: pickerInstanceId,
+      forceSearchFilter: '',
+      forceSearchableObjectMetadataItems: [creatorListObjectMetadataItem],
+      forcePickableMorphItems: pickableMorphItems,
+    });
+  };
+
+  const closePicker = () => {
+    closeDropdown(pickerInstanceId);
+  };
+
+  const handleCreatorListSelection = async (
+    morphItem: RecordPickerPickableMorphItem,
+  ) => {
+    if (
+      isAttachingList ||
+      attachedListIds.includes(morphItem.recordId) === morphItem.isSelected
+    ) {
+      return;
+    }
+
+    if (!morphItem.isSelected) {
+      closePicker();
+      openDetach(morphItem.recordId);
+      return;
+    }
+
+    setAttachError(undefined);
+    setIsAttachingList(true);
+    closePicker();
+
+    try {
+      await attach({
+        variables: {
+          input: { campaignId, creatorListIds: [morphItem.recordId] },
+        },
+      });
+    } catch {
+      setAttachError('Could not attach Creator List. Try again.');
+      openPicker();
+      setIsAttachingList(false);
+      return;
+    }
+
+    try {
+      await refresh();
+    } catch {
+      setAttachError(
+        'Creator List was attached, but the view could not refresh.',
+      );
+    } finally {
+      setIsAttachingList(false);
+    }
+  };
+
   return (
     <>
-      <Button
-        ariaLabel="Attach Creator List"
-        onClick={() => {
-          setIsPickerOpen(true);
-          openModal(pickerModalInstanceId);
-        }}
-        title="Attach Creator List"
-        type="button"
-        variant="secondary"
-      />
-      {attachedLists.map((list) => (
-        <CreatorListAttachment
-          campaignId={campaignId}
-          creatorListId={list.creatorListId}
-          creatorListName={
-            creatorListNames.get(list.creatorListId) ?? 'Creator List'
-          }
-          key={list.id}
-          onChanged={refresh}
-          onDetach={openDetach}
-        />
-      ))}
-      {isPickerOpen ? (
-        <ModalStatefulWrapper
-          isClosable
-          modalInstanceId={pickerModalInstanceId}
-          onClose={() => setIsPickerOpen(false)}
-        >
-          <SingleRecordPicker
-            componentInstanceId={pickerModalInstanceId}
-            focusId={pickerModalInstanceId}
-            objectNameSingulars={['creatorList']}
-            onCancel={() => setIsPickerOpen(false)}
-            onMorphItemSelected={(item) => {
-              setSelectedListId(item?.recordId ?? null);
-              closeModal(pickerModalInstanceId);
-              setIsPickerOpen(false);
-            }}
-            recordPickerInstanceId={pickerModalInstanceId}
+      <RecordDetailSectionContainer
+        dataTestId="creator-lists-section"
+        link={undefined}
+        rightAdornment={
+          <Dropdown
+            disableClickForClickableComponent={isAttachingList}
+            dropdownId={pickerInstanceId}
+            dropdownPlacement="left-start"
+            onClose={() => setMultipleRecordPickerSearchFilter('')}
+            onOpen={openPicker}
+            clickableComponent={
+              <LightIconButton
+                aria-label="Add Creator List"
+                Icon={IconPlus}
+                accent="tertiary"
+                disabled={isAttachingList}
+              />
+            }
+            dropdownComponents={
+              <MultipleRecordPicker
+                componentInstanceId={pickerInstanceId}
+                focusId={pickerInstanceId}
+                onChange={handleCreatorListSelection}
+                onSubmit={closePicker}
+                onClickOutside={closePicker}
+              />
+            }
           />
-        </ModalStatefulWrapper>
-      ) : null}
-      {selectedListId ? (
-        <Button
-          ariaLabel="Attach selected Creator List"
-          onClick={() => void submitList()}
-          title="Attach selected Creator List"
-          type="button"
-          variant="primary"
-        />
-      ) : null}
+        }
+        title="Creator Lists"
+      >
+        {attachedLists.map((list) => (
+          <CreatorListAttachment
+            campaignId={campaignId}
+            creatorListId={list.creatorListId}
+            creatorListName={
+              creatorListNames.get(list.creatorListId) ?? 'Creator List'
+            }
+            key={list.id}
+            onChanged={refresh}
+            onDetach={openDetach}
+          />
+        ))}
+        {attachError ? <p role="alert">{attachError}</p> : null}
+      </RecordDetailSectionContainer>
       {detachingListId ? (
         <ModalStatefulWrapper
           isClosable

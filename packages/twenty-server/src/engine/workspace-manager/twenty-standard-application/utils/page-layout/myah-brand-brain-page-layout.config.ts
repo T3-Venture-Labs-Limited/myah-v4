@@ -301,23 +301,7 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
 export const MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG = {
   ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
   tabs: {
-    home: {
-      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
-      widgets: {
-        ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home.widgets,
-        creatorLists: {
-          universalIdentifier: 'a4f1aa45-0be4-4c75-bd2a-0f3a1d75d46c',
-          title: 'Creator Lists',
-          type: WidgetType.FIELD,
-          gridPosition: GRID_POSITIONS.FULL_WIDTH,
-          position: VERTICAL_LIST_LAYOUT_POSITIONS.SECOND,
-          fieldUniversalIdentifier:
-            MYAH_STANDARD_OBJECTS.campaign.fields.campaignCreatorLists
-              .universalIdentifier,
-          viewUniversalIdentifier: 'b8f5e34d-2a1a-4cd3-8b8f-22c8f4c8f4a1',
-        },
-      },
-    },
+    home: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
     outreach: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.outreach,
     tasks: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.tasks,
     influencers: {
