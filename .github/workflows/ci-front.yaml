@@ -56,6 +56,11 @@ jobs:
           cache-node-modules: false
       - name: Diagnostic disk space issue
         run: df -h || true
+      - name: Front / Verify Lingui catalog outputs
+        run: |
+          npx nx run twenty-front:lingui:extract
+          npx nx run twenty-front:lingui:compile
+          git diff --exit-code -- packages/twenty-front/src/locales
       - name: Front / Write .env
         run: npx nx reset:env twenty-front
       - name: Front / Build storybook

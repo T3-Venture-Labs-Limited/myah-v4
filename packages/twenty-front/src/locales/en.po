@@ -168,6 +168,14 @@ msgstr "{0, plural, one {{1} job could not be deleted} other {{2} jobs could not
 msgid "{0, plural, one {{1} job could not be retried} other {{2} jobs could not be retried}}"
 msgstr "{0, plural, one {{1} job could not be retried} other {{2} jobs could not be retried}}"
 
+#. js-lingui-id: k1H+PU
+#. placeholder {0}: viewModel.settledOperationCount
+#. placeholder {1}: viewModel.settledOperationCount
+#. placeholder {2}: viewModel.settledOperationCount
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "{0, plural, one {{1} managed operation} other {{2} managed operations}}"
+msgstr "{0, plural, one {{1} managed operation} other {{2} managed operations}}"
+
 #. js-lingui-id: 0LMb5P
 #. placeholder {0}: Math.abs(days)
 #: src/utils/date-utils.ts
@@ -199,6 +207,19 @@ msgstr "{0, plural, one {# workspace failed or behind} other {# workspaces faile
 msgid "{0, plural, one {You do not have permission to access the {fieldsList} field} other {You do not have permission to access the {fieldsList} fields}}"
 msgstr "{0, plural, one {You do not have permission to access the {fieldsList} field} other {You do not have permission to access the {fieldsList} fields}}"
 
+#. js-lingui-id: 2UOALe
+#. placeholder {0}: entry.member
+#. placeholder {1}: getUsageStatus(entry.status).label
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "{0} · {1}"
+msgstr "{0} · {1}"
+
+#. js-lingui-id: d7ToI6
+#. placeholder {0}: overview.actionRequiredCount
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "{0} action required"
+msgstr "{0} action required"
+
 #. js-lingui-id: dNIJYp
 #. placeholder {0}: formatNumber(nextCreditsByPeriod, { decimals: 2, })
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
@@ -216,6 +237,12 @@ msgstr "{0} days"
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 msgid "{0} duplicate"
 msgstr "{0} duplicate"
+
+#. js-lingui-id: 6n6dJW
+#. placeholder {0}: selectedMailbox.policySafeDailyCapacity
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "{0} emails per day"
+msgstr "{0} emails per day"
 
 #. js-lingui-id: stCODw
 #. placeholder {0}: appObject.fields.length
@@ -248,6 +275,12 @@ msgstr "{0} layout"
 msgid "{0} layout edition"
 msgstr "{0} layout edition"
 
+#. js-lingui-id: 4UwGWL
+#. placeholder {0}: overview.mailboxCount
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "{0} mailboxes"
+msgstr "{0} mailboxes"
+
 #. js-lingui-id: uLS8YU
 #. placeholder {0}: provider.displayName
 #: src/pages/settings/applications/tabs/SettingsApplicationConnectionsSection.tsx
@@ -267,6 +300,18 @@ msgstr "{0} of {1}"
 msgid "{0} opted out of this topic"
 msgstr "{0} opted out of this topic"
 
+#. js-lingui-id: dPloSB
+#. placeholder {0}: formatUsdCents(viewModel.purchasedBalanceCents)
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "{0} purchased"
+msgstr "{0} purchased"
+
+#. js-lingui-id: w6mYqz
+#. placeholder {0}: searchResultItems.length
+#: src/modules/side-panel/pages/search/components/SidePanelSearchRecordsPage.tsx
+msgid "{0} results found"
+msgstr "{0} results found"
+
 #. js-lingui-id: fvImQM
 #. placeholder {0}: formatNumber(contextStoreNumberOfSelectedRecords)
 #. placeholder {0}: formatNumber(totalCount ?? 0)
@@ -285,6 +330,12 @@ msgstr "{0} selected"
 msgid "{0} shown"
 msgstr "{0} shown"
 
+#. js-lingui-id: QHs74d
+#. placeholder {0}: formatUsdCents(viewModel.sponsoredBalanceCents)
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "{0} sponsored"
+msgstr "{0} sponsored"
+
 #. js-lingui-id: nZUq+6
 #. placeholder {0}: preview.globallyUnsubscribed
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
@@ -302,6 +353,12 @@ msgstr "{0} used"
 #: src/modules/settings/applications/hooks/useComputeApplicationContentForLayoutAndLogic.ts
 msgid "{0} view"
 msgstr "{0} view"
+
+#. js-lingui-id: 3I3wmu
+#. placeholder {0}: overview.warmingCount
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "{0} warming"
+msgstr "{0} warming"
 
 #. js-lingui-id: /ZFL82
 #. placeholder {0}: widgets.length
@@ -371,6 +428,11 @@ msgstr "{behindCount, plural, one {# workspace behind} other {# workspaces behin
 #: src/modules/ai/components/internal/AiChatContextUsageButton.tsx
 msgid "{cachedPercent}% cached"
 msgstr "{cachedPercent}% cached"
+
+#. js-lingui-id: YbPPO/
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "{count, plural, one {{count} creator} other {{count} creators}}"
+msgstr "{count, plural, one {{count} creator} other {{count} creators}}"
 
 #. js-lingui-id: 8SynPU
 #. placeholder {0}: (type === 'percentage' ? 99 : 1000).toFixed(count)
@@ -500,6 +562,12 @@ msgstr "{jobCount, plural, one {This will retry the selected job. It will be re-
 msgid "{label} list"
 msgstr "{label} list"
 
+#. js-lingui-id: wqEdb6
+#. placeholder {0}: matchingResultsCount === 1 ? '' : 's'
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+msgid "{matchingResultsCount} {objectLabelSingular} result{0}"
+msgstr "{matchingResultsCount} {objectLabelSingular} result{0}"
+
 #. js-lingui-id: 1DrH/j
 #: src/modules/settings/roles/role-settings/components/SettingsRoleSettingsDeleteRoleConfirmationModalSubtitle.tsx
 msgid "{memberCount, plural, one {{memberCount} member} other {{memberCount} members}}"
@@ -525,6 +593,11 @@ msgstr "{num, selectordinal, one {{num}st} two {{num}nd} few {{num}rd} other {{n
 #: src/modules/object-record/object-filter-dropdown/components/ObjectFilterDropdownActorSelect.tsx
 msgid "{numberOfSelectedItems} workspace members"
 msgstr "{numberOfSelectedItems} workspace members"
+
+#. js-lingui-id: 7PtNsv
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+msgid "{objectLabelSingular} results"
+msgstr "{objectLabelSingular} results"
 
 #. js-lingui-id: FaQB54
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/hooks/useWorkflowAiAgentPermissionActions.ts
@@ -606,6 +679,11 @@ msgstr "{stepNumber}. Calendar"
 #: src/modules/settings/applications/hooks/useComputeApplicationContentForLayoutAndLogic.ts
 msgid "{tabCount} tabs"
 msgstr "{tabCount} tabs"
+
+#. js-lingui-id: 269MzK
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
+msgid "{targetLabel} name"
+msgstr "{targetLabel} name"
 
 #. js-lingui-id: XdG+hI
 #: src/modules/side-panel/pages/page-layout/components/record-page/SidePanelRecordPageFieldsSettings.tsx
@@ -734,6 +812,11 @@ msgstr "0"
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerCronForm.tsx
 msgid "0 */1 * * *"
 msgstr "0 */1 * * *"
+
+#. js-lingui-id: 1MkBeI
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "1 mailbox"
+msgstr "1 mailbox"
 
 #. js-lingui-id: 4pzLrc
 #: src/modules/settings/data-model/object-details/components/SettingsObjectRelationItemTableRow.tsx
@@ -882,6 +965,11 @@ msgstr "A role must be selected for the API key"
 msgid "A verification email has been sent to"
 msgstr "A verification email has been sent to"
 
+#. js-lingui-id: Zng+sJ
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+msgid "A workspace billing admin must purchase managed mailboxes."
+msgstr "A workspace billing admin must purchase managed mailboxes."
+
 #. js-lingui-id: DqlQy+
 #: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldMaxValuesForm.tsx
 msgid "Ability to add more than one email address"
@@ -950,11 +1038,6 @@ msgstr "About this workspace"
 msgid "About your app"
 msgstr "About your app"
 
-#. js-lingui-id: nJJAYH
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-msgid "Accepted and signed DPAs for this workspace, with their template version and date."
-msgstr "Accepted and signed DPAs for this workspace, with their template version and date."
-
 #. js-lingui-id: LuXP9q
 #: src/pages/settings/applications/tabs/SettingsApplicationsDeveloperTab.tsx
 msgid "Access"
@@ -986,11 +1069,6 @@ msgstr "Access your workspace data from your favorite MCP client like Claude, Co
 msgid "Account"
 msgstr "Account"
 
-#. js-lingui-id: 9o6rjW
-#: src/utils/title-utils.ts
-msgid "Account - Settings"
-msgstr "Account - Settings"
-
 #. js-lingui-id: gW0DoU
 #: src/pages/settings/accounts/SettingsAccountsConfiguration.tsx
 msgid "Account added successfully. Sync started."
@@ -1012,11 +1090,6 @@ msgstr "Account Deletion"
 #: src/pages/settings/accounts/SettingsNewAccount.tsx
 msgid "Accounts"
 msgstr "Accounts"
-
-#. js-lingui-id: BXMLsb
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Acme GmbH"
-msgstr "Acme GmbH"
 
 #. js-lingui-id: X5unbK
 #: src/modules/settings/security/components/SSO/SettingsSSOSAMLForm.tsx
@@ -1040,6 +1113,14 @@ msgstr "Action"
 #: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldOnClickActionForm.tsx
 msgid "Action on click"
 msgstr "Action on click"
+
+#. js-lingui-id: hN6TJn
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "Action required"
+msgstr "Action required"
 
 #. js-lingui-id: 7L01XJ
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableHeader.tsx
@@ -1096,6 +1177,7 @@ msgstr "Activating..."
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
 #: src/modules/settings/admin-panel/signing-keys/components/SettingsAdminSigningKeysTable.tsx
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/domains/components/SettingsWorkspaceDomainCard.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -1117,6 +1199,11 @@ msgstr "Active installs"
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminHealthAccountSyncCountersTable.tsx
 msgid "Active Sync"
 msgstr "Active Sync"
+
+#. js-lingui-id: XJOV1Y
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Activity"
+msgstr "Activity"
 
 #. js-lingui-id: m16xKo
 #: src/pages/settings/ai/components/SettingsAgentEvalsTab.tsx
@@ -1144,6 +1231,11 @@ msgstr "Add a Group"
 #: src/modules/ai/components/suggested-prompts/default-suggested-prompts.ts
 msgid "Add a new company we're in touch with (e.g. name, website, industry). Details: "
 msgstr "Add a new company we're in touch with (e.g. name, website, industry). Details: "
+
+#. js-lingui-id: BcKlYM
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Add a payment method before enabling automatic top-up."
+msgstr "Add a payment method before enabling automatic top-up."
 
 #. js-lingui-id: nGv1DN
 #: src/modules/side-panel/utils/getSidePanelSubPageTitle.ts
@@ -1212,6 +1304,16 @@ msgstr "Add conferencing"
 msgid "Add connection"
 msgstr "Add connection"
 
+#. js-lingui-id: 3nLYf4
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog.tsx
+msgid "Add creators to a campaign"
+msgstr "Add creators to a campaign"
+
+#. js-lingui-id: i7SOVQ
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog.tsx
+msgid "Add creators to a list"
+msgstr "Add creators to a list"
+
 #. js-lingui-id: 3AphJD
 #: src/modules/settings/billing/components/AddPaymentMethodForm.tsx
 #: src/modules/settings/billing/components/StartSubscriptionConfirmationModal.tsx
@@ -1275,6 +1377,14 @@ msgstr "Add filter rule"
 msgid "Add first filter"
 msgstr "Add first filter"
 
+#. js-lingui-id: BSj/hz
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Add funds"
+msgstr "Add funds"
+
 #. js-lingui-id: 7K4Hxr
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "Add In-Reply-To"
@@ -1285,6 +1395,12 @@ msgstr "Add In-Reply-To"
 #: src/modules/settings/data-model/object-details/components/tabs/SettingsObjectIndexesSection.tsx
 msgid "Add Index"
 msgstr "Add Index"
+
+#. js-lingui-id: Htjybb
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "Add Influencers"
+msgstr "Add Influencers"
 
 #. js-lingui-id: 7XzAKI
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
@@ -1305,6 +1421,12 @@ msgstr "Add Item"
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelNavigationMenuItemEditPage.tsx
 msgid "Add item to folder"
 msgstr "Add item to folder"
+
+#. js-lingui-id: KRywqv
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Add mailboxes"
+msgstr "Add mailboxes"
 
 #. js-lingui-id: gaZXkv
 #: src/modules/navigation-menu-item/display/folder/components/NavigationMenuItemFolderDnd.tsx
@@ -1385,6 +1507,11 @@ msgstr "Add or remove users"
 msgid "Add Output Field"
 msgstr "Add Output Field"
 
+#. js-lingui-id: lRpmgk
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Add payment method"
+msgstr "Add payment method"
+
 #. js-lingui-id: aYtHO6
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowAiAgentPermissionsTab.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowEditActionAiAgent.tsx
@@ -1425,6 +1552,12 @@ msgstr "Add rule"
 #: src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterAddFilterRuleSelect.tsx
 msgid "Add rule group"
 msgstr "Add rule group"
+
+#. js-lingui-id: +s/iyE
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "Add selected influencers"
+msgstr "Add selected influencers"
 
 #. js-lingui-id: TdZwYb
 #: src/modules/side-panel/pages/page-layout/components/record-table-settings/RecordTableSettingsSortsContent.tsx
@@ -1480,10 +1613,30 @@ msgstr "Add the Myah MCP server to your LibreChat configuration file."
 msgid "Add the Myah remote server with LM Studio's install link."
 msgstr "Add the Myah remote server with LM Studio's install link."
 
+#. js-lingui-id: wVg7Nz
+#: src/modules/myah/creator-crm/components/MyahCreatorBulkActions.tsx
+msgid "Add to"
+msgstr "Add to"
+
+#. js-lingui-id: qaHbCb
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Add to {targetLabel}"
+msgstr "Add to {targetLabel}"
+
 #. js-lingui-id: 5+ttxv
 #: src/modules/settings/accounts/components/SettingsAccountsBlocklistInput.tsx
 msgid "Add to blocklist"
 msgstr "Add to blocklist"
+
+#. js-lingui-id: kJu05M
+#: src/modules/myah/creator-crm/components/MyahCreatorBulkActions.tsx
+msgid "Add to Campaign"
+msgstr "Add to Campaign"
+
+#. js-lingui-id: zNi43b
+#: src/modules/myah/creator-crm/components/MyahCreatorBulkActions.tsx
+msgid "Add to Creator List"
+msgstr "Add to Creator List"
 
 #. js-lingui-id: yVOmgE
 #: src/modules/views/view-picker/components/ViewPickerOptionDropdown.tsx
@@ -1559,6 +1712,11 @@ msgstr "Added {beautifyPastDateRelative}"
 msgid "Added to blocklist"
 msgstr "Added to blocklist"
 
+#. js-lingui-id: 1yHVE+
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Adding"
+msgstr "Adding"
+
 #. js-lingui-id: hW/fMg
 #: src/modules/object-metadata/hooks/useSortSubFieldChoicesForField.ts
 #: src/modules/object-record/record-field/ui/form-types/components/FormAddressFieldInput.tsx
@@ -1574,6 +1732,11 @@ msgstr "Address 1"
 #: src/modules/ui/field/input/components/AddressInput.tsx
 msgid "Address 2"
 msgstr "Address 2"
+
+#. js-lingui-id: xek+6t
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Adjustment"
+msgstr "Adjustment"
 
 #. js-lingui-id: U3pytU
 #: src/modules/settings/members/components/MemberInfosTab.tsx
@@ -1841,6 +2004,12 @@ msgstr "AI usage analytics requires ClickHouse. Contact your administrator."
 msgid "AI usage analytics will appear here once you start using AI features."
 msgstr "AI usage analytics will appear here once you start using AI features."
 
+#. js-lingui-id: Tg/YZp
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "AI usage and balance are tracked separately from managed email."
+msgstr "AI usage and balance are tracked separately from managed email."
+
 #. js-lingui-id: SknniY
 #: src/pages/settings/ai/components/SettingsAiUsageTab.tsx
 #: src/pages/settings/ai/SettingsAiUsageUserDetail.tsx
@@ -2102,10 +2271,20 @@ msgstr "Allowed redirect URIs for OAuth flows"
 msgid "alphabetical"
 msgstr "alphabetical"
 
+#. js-lingui-id: TJVeYy
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Already absent"
+msgstr "Already absent"
+
 #. js-lingui-id: eO7HSp
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelObjectMenuItem.tsx
 msgid "Already in navbar"
 msgstr "Already in navbar"
+
+#. js-lingui-id: 5IJKT3
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Already present"
+msgstr "Already present"
 
 #. js-lingui-id: Fc64QW
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -2116,6 +2295,12 @@ msgstr "Amazon Q Developer CLI"
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
 msgid "Amber"
 msgstr "Amber"
+
+#. js-lingui-id: hehnjM
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Amount"
+msgstr "Amount"
 
 #. js-lingui-id: s46CyD
 #: src/modules/object-record/record-field/ui/form-types/components/FormCurrencyFieldInput.tsx
@@ -2211,7 +2396,6 @@ msgid "An object with this name already exists"
 msgstr "An object with this name already exists"
 
 #. js-lingui-id: HZFm5R
-#: src/modules/auth/sign-in-up/components/FooterNote.tsx
 #: src/modules/settings/roles/role-settings/components/SettingsRoleSettingsDeleteRoleConfirmationModalSubtitle.tsx
 #: src/utils/date-utils.ts
 msgid "and"
@@ -2224,6 +2408,8 @@ msgstr "And"
 
 #. js-lingui-id: YkfDoz
 #: src/modules/settings/billing/components/internal/SettingsBillingPlanComparisonTable.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
 msgid "Annual"
 msgstr "Annual"
 
@@ -2451,12 +2637,18 @@ msgstr "Apply"
 msgid "Apply{progressText}"
 msgstr "Apply{progressText}"
 
+#. js-lingui-id: KuQswK
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
+msgid "Approval resolved"
+msgstr "Approval resolved"
+
 #. js-lingui-id: Z7ZXbT
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "Approve"
 msgstr "Approve"
 
 #. js-lingui-id: 7kb4LU
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
 #: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
 msgid "Approved"
 msgstr "Approved"
@@ -2834,11 +3026,6 @@ msgstr "Authorization failed. Please try again."
 msgid "Authorize"
 msgstr "Authorize"
 
-#. js-lingui-id: 3yzHpm
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Authorized signatory name"
-msgstr "Authorized signatory name"
-
 #. js-lingui-id: wTBNbL
 #: src/modules/settings/security/components/SSO/SettingsSSOOIDCForm.tsx
 msgid "Authorized URI"
@@ -2863,6 +3050,12 @@ msgstr "Auto-creation"
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/hooks/useWorkflowAiAgentPermissionActions.ts
 msgid "Auto-generated role for {agentDisplayName}"
 msgstr "Auto-generated role for {agentDisplayName}"
+
+#. js-lingui-id: vUbP+p
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Automatic top-up"
+msgstr "Automatic top-up"
 
 #. js-lingui-id: YRT7ZW
 #: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
@@ -2900,6 +3093,12 @@ msgstr "Availability"
 msgid "Available"
 msgstr "Available"
 
+#. js-lingui-id: 9Kl6Ee
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Available balance"
+msgstr "Available balance"
+
 #. js-lingui-id: STA+22
 #: src/pages/settings/ai/components/SettingsAiModelsTab.tsx
 msgid "Available models"
@@ -2928,6 +3127,11 @@ msgstr "Axis name"
 
 #. js-lingui-id: iH8pgl
 #: src/modules/auth/sign-in-up/components/internal/SignInUpTwoFactorAuthenticationVerification.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
 #: src/modules/side-panel/components/SidePanelBackButton.tsx
 #: src/modules/spreadsheet-import/components/StepNavigationButton.tsx
 #: src/pages/onboarding/BookCall.tsx
@@ -2943,6 +3147,11 @@ msgstr "Back to {text}"
 #: src/pages/not-found/NotFound.tsx
 msgid "Back to content"
 msgstr "Back to content"
+
+#. js-lingui-id: kuRsej
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+msgid "Back to Creator Lists"
+msgstr "Back to Creator Lists"
 
 #. js-lingui-id: 9aZHfH
 #: src/modules/marketplace/components/SettingsApplicationInstallPermissionValidationModal.tsx
@@ -2974,10 +3183,21 @@ msgstr "Background"
 msgid "Background Colors"
 msgstr "Background Colors"
 
+#. js-lingui-id: fsBGk0
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Balance"
+msgstr "Balance"
+
 #. js-lingui-id: uayqnb
 #: src/modules/workflow/workflow-steps/workflow-actions/pick-record-action/components/WorkflowEditActionPickRecord.tsx
 msgid "Balance by"
 msgstr "Balance by"
+
+#. js-lingui-id: CKhG7Z
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Balance threshold"
+msgstr "Balance threshold"
 
 #. js-lingui-id: b2ghLW
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
@@ -3022,6 +3242,11 @@ msgstr "Because this workflow is not using a manual trigger, the form will not o
 #: src/modules/object-record/record-calendar/month/hooks/useRecordCalendarQueryDateRangeFilter.tsx
 msgid "Before"
 msgstr "Before"
+
+#. js-lingui-id: Gt4tN1
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "Before purchase, Stripe may ask you to complete a SetupIntent to save a payment method for the recurring services in this quote."
+msgstr "Before purchase, Stripe may ask you to complete a SetupIntent to save a payment method for the recurring services in this quote."
 
 #. js-lingui-id: +MqoSu
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminWorkspacesStatusSummaryCard.tsx
@@ -3071,21 +3296,37 @@ msgstr "Billed monthly"
 #: src/modules/settings/billing/components/SettingsBillingTabBar.tsx
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useSettingsRolePermissionFlagConfig.ts
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
 #: src/pages/settings/admin-panel/SettingsAdminWorkspaceDetail.tsx
+#: src/pages/settings/billing/SettingsBilling.tsx
+#: src/pages/settings/billing/SettingsBilling.tsx
 #: src/pages/settings/billing/SettingsUsage.tsx
 #: src/pages/settings/billing/SettingsUsageUserDetail.tsx
 msgid "Billing"
 msgstr "Billing"
 
-#. js-lingui-id: H9tDlj
-#: src/utils/title-utils.ts
-msgid "Billing - Settings"
-msgstr "Billing - Settings"
-
 #. js-lingui-id: dSjFxR
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Billing history"
 msgstr "Billing history"
+
+#. js-lingui-id: i6YpbP
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Billing history views"
+msgstr "Billing history views"
+
+#. js-lingui-id: rYqnJ3
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Billing history will appear here when billing data is connected."
+msgstr "Billing history will appear here when billing data is connected."
+
+#. js-lingui-id: 0czN77
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Billing information is temporarily unavailable."
+msgstr "Billing information is temporarily unavailable."
 
 #. js-lingui-id: nJGwRf
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
@@ -3236,11 +3477,6 @@ msgstr "Bundled with {applicationName}"
 msgid "by {author}"
 msgstr "by {author}"
 
-#. js-lingui-id: 8Pfllj
-#: src/modules/auth/sign-in-up/components/FooterNote.tsx
-msgid "By using Twenty, you agree to the"
-msgstr "By using Twenty, you agree to the"
-
 #. js-lingui-id: Yx41df
 #: src/modules/auth/sign-in-up/components/FooterNote.tsx
 msgid "Bypass SSO"
@@ -3360,6 +3596,19 @@ msgstr "Call recorder"
 msgid "Calling Code"
 msgstr "Calling Code"
 
+#. js-lingui-id: BV8zL4
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog.tsx
+msgid "campaign"
+msgstr "campaign"
+
+#. js-lingui-id: su0ybc
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "Campaign Influencers are unavailable."
+msgstr "Campaign Influencers are unavailable."
+
 #. js-lingui-id: 06mPlO
 #: src/modules/activities/emails/hooks/useSendMessageCampaign.ts
 msgid "Campaign queued to {queuedCount} recipient(s)"
@@ -3369,6 +3618,12 @@ msgstr "Campaign queued to {queuedCount} recipient(s)"
 #: src/modules/activities/emails/hooks/useSendMessageCampaign.ts
 msgid "Campaign queued to {queuedCount} recipient(s), {skippedCount} skipped"
 msgstr "Campaign queued to {queuedCount} recipient(s), {skippedCount} skipped"
+
+#. js-lingui-id: oRJtCM
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "Campaigns"
+msgstr "Campaigns"
 
 #. js-lingui-id: msssZq
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
@@ -3382,6 +3637,8 @@ msgstr "Can't scan? Copy the"
 
 #. js-lingui-id: dEgA5A
 #: src/modules/applications/components/AuthorizeActionButtons.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
 #: src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter.tsx
 #: src/modules/settings/billing/components/AddCreditCardModal.tsx
 #: src/modules/settings/billing/components/internal/ResourceCreditPackagePickerModal.tsx
@@ -3421,6 +3678,17 @@ msgstr "Cancel interval switching"
 msgid "Cancel interval switching?"
 msgstr "Cancel interval switching?"
 
+#. js-lingui-id: 2liE9V
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Cancel mailbox service renewal"
+msgstr "Cancel mailbox service renewal"
+
+#. js-lingui-id: Z2Z8XC
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Cancel mailbox service renewal?"
+msgstr "Cancel mailbox service renewal?"
+
 #. js-lingui-id: rRK/Lf
 #: src/modules/settings/billing/components/SettingsBillingContent.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -3441,6 +3709,17 @@ msgstr "Cancel plan switching?"
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
 msgid "Cancel reply"
 msgstr "Cancel reply"
+
+#. js-lingui-id: 2LY/Gj
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Cancel warmup renewal"
+msgstr "Cancel warmup renewal"
+
+#. js-lingui-id: cOltMb
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Cancel warmup renewal?"
+msgstr "Cancel warmup renewal?"
 
 #. js-lingui-id: N6gPiD
 #: src/modules/settings/billing/components/SettingsBillingContent.tsx
@@ -3471,6 +3750,7 @@ msgstr "Cancels at"
 
 #. js-lingui-id: 2CAby/
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "Cancels at period end"
 msgstr "Cancels at period end"
 
@@ -3516,6 +3796,11 @@ msgstr "Captcha (anti-bot check) is still loading, try again"
 msgid "Card"
 msgstr "Card"
 
+#. js-lingui-id: Z93S+U
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
+msgid "Card payment is currently unavailable. Please retry or contact your workspace admin."
+msgstr "Card payment is currently unavailable. Please retry or contact your workspace admin."
+
 #. js-lingui-id: TbCWB7
 #: src/modules/settings/billing/components/AddPaymentMethodForm.tsx
 #: src/pages/onboarding/UpgradeFreeTrial.tsx
@@ -3559,6 +3844,11 @@ msgstr "Change Color"
 #: src/modules/auth/sign-in-up/components/EmailVerificationSent.tsx
 msgid "Change email"
 msgstr "Change email"
+
+#. js-lingui-id: mKCQ+g
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Change mailbox count"
+msgstr "Change mailbox count"
 
 #. js-lingui-id: Vf6hT6
 #: src/modules/workflow/workflow-steps/components/WorkflowStepFooter.tsx
@@ -3607,6 +3897,7 @@ msgid "Change visibility?"
 msgstr "Change visibility?"
 
 #. js-lingui-id: f6suyZ
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
 #: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
 msgid "Changes requested"
 msgstr "Changes requested"
@@ -3682,6 +3973,11 @@ msgstr "Check your inbox to verify your new email address."
 msgid "Checking status"
 msgstr "Checking status"
 
+#. js-lingui-id: RLe7Vk
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Checking…"
+msgstr "Checking…"
+
 #. js-lingui-id: RiLCZf
 #: src/modules/settings/billing/hooks/useHandleCheckoutSession.ts
 #: src/modules/settings/billing/hooks/useHandleCheckoutSession.ts
@@ -3703,6 +3999,11 @@ msgstr "Chinese — Traditional"
 msgid "Choose {intervalAdjective} credits"
 msgstr "Choose {intervalAdjective} credits"
 
+#. js-lingui-id: /6ZrPF
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
+msgid "Choose a complete domain bundle. Mailbox identities in a bundle are fixed."
+msgstr "Choose a complete domain bundle. Mailbox identities in a bundle are fixed."
+
 #. js-lingui-id: NFfUic
 #: src/pages/auth/SignInUp.tsx
 msgid "Choose a Workspace"
@@ -3717,6 +4018,11 @@ msgstr "Choose between OIDC and SAML protocols"
 #: src/modules/settings/data-model/fields/forms/currency/components/SettingsDataModelFieldCurrencyForm.tsx
 msgid "Choose between Short and Full"
 msgstr "Choose between Short and Full"
+
+#. js-lingui-id: 1NCsNf
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+msgid "Choose managed mailboxes or connect mailboxes your workspace already owns."
+msgstr "Choose managed mailboxes or connect mailboxes your workspace already owns."
 
 #. js-lingui-id: 5EMoSo
 #: src/modules/settings/billing/components/internal/SettingsBillingPlansWithoutSubscription.tsx
@@ -3834,11 +4140,6 @@ msgstr "Click to see data"
 #: src/modules/ui/input/components/IconPicker.tsx
 msgid "Click to select icon {iconAriaLabel}"
 msgstr "Click to select icon {iconAriaLabel}"
-
-#. js-lingui-id: ss6vFU
-#: src/modules/settings/legal/components/SettingsDpaAgreementRow.tsx
-msgid "Click-through acceptance"
-msgstr "Click-through acceptance"
 
 #. js-lingui-id: ZwIUeU
 #: src/modules/settings/security/components/SettingsSecuritySettings.tsx
@@ -3989,6 +4290,11 @@ msgstr "Columns not matched:"
 msgid "Columns shown in this view, in display order"
 msgstr "Columns shown in this view, in display order"
 
+#. js-lingui-id: AUYALh
+#: src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerItem.tsx
+msgid "Coming soon"
+msgstr "Coming soon"
+
 #. js-lingui-id: pOJNDA
 #: src/pages/settings/applications/SettingsAvailableApplicationDetails.tsx
 msgid "command"
@@ -4070,11 +4376,6 @@ msgstr "Comment"
 #: src/pages/settings/community/SettingsCommunity.tsx
 msgid "Community"
 msgstr "Community"
-
-#. js-lingui-id: myLjjN
-#: src/utils/title-utils.ts
-msgid "Community - Settings"
-msgstr "Community - Settings"
 
 #. js-lingui-id: NM9bMd
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
@@ -4289,6 +4590,16 @@ msgstr "Configured"
 msgid "Confirm"
 msgstr "Confirm"
 
+#. js-lingui-id: cmMXC/
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Confirm addition"
+msgstr "Confirm addition"
+
+#. js-lingui-id: uCdbAd
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "Confirm and pay {dueToday}"
+msgstr "Confirm and pay {dueToday}"
+
 #. js-lingui-id: Gdj3Sa
 #: src/modules/settings/billing/components/internal/ResourceCreditPriceSelector.tsx
 msgid "Confirm changing to {selectedCreditAmountDisplay} credits for ${selectedPriceDisplay} per {intervalLabel}."
@@ -4314,10 +4625,30 @@ msgstr "Confirm deletion of {roleName} role? This cannot be undone. {reassignSub
 msgid "Confirm downgrade"
 msgstr "Confirm downgrade"
 
+#. js-lingui-id: FHJE6e
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "Confirm managed email purchase"
+msgstr "Confirm managed email purchase"
+
+#. js-lingui-id: bN2uHr
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "Confirm purchase"
+msgstr "Confirm purchase"
+
+#. js-lingui-id: V/fO0d
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Confirm removal"
+msgstr "Confirm removal"
+
 #. js-lingui-id: 28b8wO
 #: src/modules/settings/members/components/MemberPermissionsTab.tsx
 msgid "Confirm role update"
 msgstr "Confirm role update"
+
+#. js-lingui-id: ZtMHFh
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "Confirm the proposed identities, service periods, and recurring charges."
+msgstr "Confirm the proposed identities, service periods, and recurring charges."
 
 #. js-lingui-id: DDbn3x
 #: src/modules/settings/billing/components/internal/ResourceCreditPriceSelector.tsx
@@ -4354,11 +4685,6 @@ msgstr "Connect a Shopify store so Myah can read brand and product context."
 msgid "Connect a store so Myah can read brand and product context."
 msgstr "Connect a store so Myah can read brand and product context."
 
-#. js-lingui-id: tBOZWW
-#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-msgid "Connect a workspace Instagram Business or Creator account for approved message reads and replies."
-msgstr "Connect a workspace Instagram Business or Creator account for approved message reads and replies."
-
 #. js-lingui-id: CMrq4R
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 msgid "Connect additional MCP clients using install links or client docs."
@@ -4368,6 +4694,11 @@ msgstr "Connect additional MCP clients using install links or client docs."
 #: src/pages/settings/ai/components/SettingsAiOverviewTab.tsx
 msgid "Connect AI assistants like Claude or Cursor to your workspace via the Model Context Protocol"
 msgstr "Connect AI assistants like Claude or Cursor to your workspace via the Model Context Protocol"
+
+#. js-lingui-id: Yq71Vn
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+msgid "Connect existing mailboxes"
+msgstr "Connect existing mailboxes"
 
 #. js-lingui-id: V640pB
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -4383,6 +4714,11 @@ msgstr "Connect Instagram messaging for your workspace."
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "Connect Shopify"
 msgstr "Connect Shopify"
+
+#. js-lingui-id: 56wt4g
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Connect the Instagram account you use for your business. You can review conversations and approve each reply before it is sent."
+msgstr "Connect the Instagram account you use for your business. You can review conversations and approve each reply before it is sent."
 
 #. js-lingui-id: YLx3sC
 #: src/modules/settings/accounts/components/SettingsAccountsListEmptyStateCard.tsx
@@ -4403,6 +4739,11 @@ msgstr "Connect with Microsoft"
 #: src/pages/onboarding/ImportContacts.tsx
 msgid "Connect your email and calendar to see your entire network instantly. Takes only 30 seconds."
 msgstr "Connect your email and calendar to see your entire network instantly. Takes only 30 seconds."
+
+#. js-lingui-id: TsSTc2
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Connect your Instagram Business or Creator account to read conversations and reply with your approval."
+msgstr "Connect your Instagram Business or Creator account to read conversations and reply with your approval."
 
 #. js-lingui-id: QHcLEN
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -4532,6 +4873,7 @@ msgstr "Context window"
 #. js-lingui-id: xGVfLh
 #: src/modules/auth/sign-in-up/components/internal/SignInUpWithCredentials.tsx
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
 #: src/modules/spreadsheet-import/components/StepNavigationButton.tsx
 #: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/MatchColumnsStep.tsx
 #: src/modules/spreadsheet-import/steps/components/SelectHeaderStep/SelectHeaderStep.tsx
@@ -4727,16 +5069,6 @@ msgstr "Could not delete approved access domain"
 msgid "Could not disconnect Shopify."
 msgstr "Could not disconnect Shopify."
 
-#. js-lingui-id: E5v5TK
-#: src/modules/settings/legal/components/SettingsDpaAgreementsTable.tsx
-msgid "Could not download the document."
-msgstr "Could not download the document."
-
-#. js-lingui-id: NonvA5
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Could not generate the signed DPA. Please try again."
-msgstr "Could not generate the signed DPA. Please try again."
-
 #. js-lingui-id: O5XFg7
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Could not load Instagram connection status."
@@ -4870,6 +5202,12 @@ msgstr "create"
 msgid "Create"
 msgstr "Create"
 
+#. js-lingui-id: 7by+ri
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
+msgid "Create {targetLabel}"
+msgstr "Create {targetLabel}"
+
 #. js-lingui-id: fQFALn
 #: src/modules/ai/components/suggested-prompts/default-suggested-prompts.ts
 msgid "Create a new contact and link them to a company. Details: "
@@ -4910,6 +5248,13 @@ msgstr "Create an application"
 msgid "Create and configure AI agents"
 msgstr "Create and configure AI agents"
 
+#. js-lingui-id: NGi8Lf
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
+msgid "Create and warm new mailboxes"
+msgstr "Create and warm new mailboxes"
+
 #. js-lingui-id: uXGLuq
 #: src/pages/settings/api-webhooks/SettingsApiWebhooks.tsx
 msgid "Create API key"
@@ -4934,6 +5279,13 @@ msgstr "Create custom view"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCalendarFieldsContent.tsx
 msgid "Create date field"
 msgstr "Create date field"
+
+#. js-lingui-id: 5lQoJJ
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog.tsx
+msgid "Create new {targetLabel}"
+msgstr "Create new {targetLabel}"
 
 #. js-lingui-id: vY2Gfm
 #: src/modules/views/view-picker/components/ViewPickerCreateButton.tsx
@@ -5056,6 +5408,12 @@ msgstr "Creating your data model..."
 #: src/modules/auth/sign-in-up/constants/WorkspaceActivationMessages.ts
 msgid "Creating your workspace..."
 msgstr "Creating your workspace..."
+
+#. js-lingui-id: zj5RMo
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+msgid "Creator List is unavailable."
+msgstr "Creator List is unavailable."
 
 #. js-lingui-id: HAzhV7
 #: src/pages/settings/admin-panel/SettingsAdminAiProviderDetail.tsx
@@ -5339,6 +5697,11 @@ msgstr "Custom views"
 msgid "Customer"
 msgstr "Customer"
 
+#. js-lingui-id: pGEKQT
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Customer-safe mailbox and readiness status."
+msgstr "Customer-safe mailbox and readiness status."
+
 #. js-lingui-id: MNGIVW
 #: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
 msgid "Customise the fields available in the {objectLabelSingular} views and their display order in the {objectLabelSingular} detail view and menus."
@@ -5419,6 +5782,16 @@ msgstr "Czech"
 #: src/pages/settings/ai/SettingsAiUsageUserDetail.tsx
 msgid "Daily AI Usage"
 msgstr "Daily AI Usage"
+
+#. js-lingui-id: fZ6V0i
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Daily campaign cap"
+msgstr "Daily campaign cap"
+
+#. js-lingui-id: twfbfW
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Daily campaign capacity"
+msgstr "Daily campaign capacity"
 
 #. js-lingui-id: KXQkvT
 #: src/modules/settings/usage/components/SettingsUsageAnalyticsSection.tsx
@@ -5507,11 +5880,6 @@ msgstr "Data model"
 msgid "Data Model"
 msgstr "Data Model"
 
-#. js-lingui-id: zAfYtx
-#: src/utils/title-utils.ts
-msgid "Data model - Settings"
-msgstr "Data model - Settings"
-
 #. js-lingui-id: fM466x
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
@@ -5519,13 +5887,6 @@ msgstr "Data model - Settings"
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
 msgid "Data on display"
 msgstr "Data on display"
-
-#. js-lingui-id: /qrjU8
-#: src/modules/auth/sign-in-up/components/FooterNote.tsx
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-msgid "Data Processing Agreement"
-msgstr "Data Processing Agreement"
 
 #. js-lingui-id: Ix/CMz
 #: src/modules/settings/ai/components/SettingsAiModelHoverCard.tsx
@@ -5563,7 +5924,8 @@ msgstr "Database event"
 #: src/modules/object-record/record-board/record-board-column/components/RecordBoardColumnHeaderAggregateDropdownMenuContent.tsx
 #: src/modules/object-record/record-table/record-table-footer/components/RecordTableColumnAggregateFooterDropdownContent.tsx
 #: src/modules/object-record/record-table/record-table-footer/components/RecordTableColumnAggregateFooterMenuContent.tsx
-#: src/modules/settings/legal/components/SettingsDpaAgreementsTable.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/ai/components/SettingsAgentLogsTab.tsx
 #: src/pages/settings/ai/components/SettingsAgentLogsTab.tsx
 #: src/pages/settings/ai/SettingsAgentTurnDetail.tsx
@@ -6189,6 +6551,12 @@ msgstr "Details"
 msgid "Detected application version running on this instance"
 msgstr "Detected application version running on this instance"
 
+#. js-lingui-id: sDkRwC
+#. placeholder {0}: headerProfile.label
+#: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/MatchColumnsStep.tsx
+msgid "Detected format: {0}"
+msgstr "Detected format: {0}"
+
 #. js-lingui-id: QYXe1O
 #: src/pages/settings/applications/SettingsApplications.tsx
 msgid "Develop"
@@ -6213,6 +6581,17 @@ msgstr "Developers links"
 #: src/pages/settings/layout/SettingsLayoutViewDetail.tsx
 msgid "Direction"
 msgstr "Direction"
+
+#. js-lingui-id: iXMwBc
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Disable domain renewal"
+msgstr "Disable domain renewal"
+
+#. js-lingui-id: AlEwuJ
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Disable domain renewal?"
+msgstr "Disable domain renewal?"
 
 #. js-lingui-id: XDeNvP
 #: src/modules/settings/admin-panel/components/SettingsAdminServerAdminAccess.tsx
@@ -6275,6 +6654,11 @@ msgstr "Display as a plain number or a percentage"
 msgid "Display Format"
 msgstr "Display Format"
 
+#. js-lingui-id: E3bMu7
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Display name {position}"
+msgstr "Display name {position}"
+
 #. js-lingui-id: 7sBzvW
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
 msgid "Display name for the model"
@@ -6318,7 +6702,7 @@ msgid "Docs"
 msgstr "Docs"
 
 #. js-lingui-id: 7Zdnlq
-#: src/modules/settings/legal/components/SettingsDpaAgreementsTable.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "Document"
 msgstr "Document"
 
@@ -6335,6 +6719,8 @@ msgid "Doesn't contain"
 msgstr "Doesn't contain"
 
 #. js-lingui-id: EoKe5U
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
 #: src/modules/settings/workspace/components/SettingsWorkspaceEmailGroupSection.tsx
 #: src/pages/settings/security/SettingsSecurityApprovedAccessDomain.tsx
 msgid "Domain"
@@ -6350,10 +6736,25 @@ msgstr "Domain already taken"
 msgid "Domain Setup"
 msgstr "Domain Setup"
 
+#. js-lingui-id: iV0AlT
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Domain, mailbox, and warmup renewals will appear here after purchase."
+msgstr "Domain, mailbox, and warmup renewals will appear here after purchase."
+
+#. js-lingui-id: AZ4xlc
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Domains"
+msgstr "Domains"
+
 #. js-lingui-id: 7kVRe6
 #: src/pages/settings/security/SettingsSecurityApprovedAccessDomain.tsx
 msgid "Domains have to be smaller than 256 characters, cannot contain spaces and cannot contain any special characters."
 msgstr "Domains have to be smaller than 256 characters, cannot contain spaces and cannot contain any special characters."
+
+#. js-lingui-id: vADny9
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Domains, mailboxes, and warmup renewals"
+msgstr "Domains, mailboxes, and warmup renewals"
 
 #. js-lingui-id: KUxVkp
 #: src/modules/settings/accounts/components/SettingsAccountsMessageAutoCreationCard.tsx
@@ -6394,7 +6795,6 @@ msgstr "Downgrade to monthly"
 #. js-lingui-id: mzI/c+
 #: src/modules/activities/files/components/AttachmentDropdown.tsx
 #: src/modules/activities/files/components/DocumentViewer.tsx
-#: src/modules/settings/legal/components/SettingsDpaAgreementRow.tsx
 #: src/pages/settings/applications/components/SettingsApplicationRegistrationGeneralInfo.tsx
 msgid "Download"
 msgstr "Download"
@@ -6468,6 +6868,11 @@ msgstr "Drop fields here"
 #: src/modules/spreadsheet-import/steps/components/UploadStep/components/DropZone.tsx
 msgid "Drop file here..."
 msgstr "Drop file here..."
+
+#. js-lingui-id: 1iShX0
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "Due today"
+msgstr "Due today"
 
 #. js-lingui-id: euc6Ns
 #: src/modules/side-panel/pages/page-layout/components/RegularTabSettingsContent.tsx
@@ -7022,6 +7427,14 @@ msgstr "Ending"
 msgid "Endpoint URL"
 msgstr "Endpoint URL"
 
+#. js-lingui-id: E5dBY5
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "Ends after paid period"
+msgstr "Ends after paid period"
+
 #. js-lingui-id: fPOajI
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionCreateCalendarEvent.tsx
 msgid "Ends at"
@@ -7083,6 +7496,21 @@ msgstr "Enter a Shopify store domain first."
 #: src/modules/object-record/record-field/ui/form-types/components/FormUuidFieldInput.tsx
 msgid "Enter a UUID"
 msgstr "Enter a UUID"
+
+#. js-lingui-id: /auHxp
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Enter a valid balance threshold."
+msgstr "Enter a valid balance threshold."
+
+#. js-lingui-id: /sReX7
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Enter a valid monthly limit."
+msgstr "Enter a valid monthly limit."
+
+#. js-lingui-id: BA4rcf
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Enter a valid top-up amount."
+msgstr "Enter a valid top-up amount."
 
 #. js-lingui-id: oiVP/+
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx
@@ -7543,6 +7971,7 @@ msgid "Evaluations"
 msgstr "Evaluations"
 
 #. js-lingui-id: 0pC/y6
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/event-logs/utils/getColumnsForEventLogTable.tsx
 msgid "Event"
 msgstr "Event"
@@ -7645,6 +8074,11 @@ msgstr "Everyone"
 msgid "Everything"
 msgstr "Everything"
 
+#. js-lingui-id: UMk7hx
+#: src/modules/ai/components/AiChatActionApprovalEvidence.tsx
+msgid "Evidence unavailable"
+msgstr "Evidence unavailable"
+
 #. js-lingui-id: QQlMid
 #: src/modules/settings/accounts/components/SettingsAccountsMessageChannelDetails.tsx
 msgid "Exclude group emails"
@@ -7665,10 +8099,10 @@ msgstr "Exclude the following people and domains from my email sync."
 msgid "Exclude the following people and domains from my email sync. Internal conversations will not be imported"
 msgstr "Exclude the following people and domains from my email sync. Internal conversations will not be imported"
 
-#. js-lingui-id: g3jaWB
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-msgid "Executed copies"
-msgstr "Executed copies"
+#. js-lingui-id: v0QGYG
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
+msgid "Exclusive to your workspace"
+msgstr "Exclusive to your workspace"
 
 #. js-lingui-id: B0clc7
 #: src/modules/settings/event-logs/utils/getColumnsForEventLogTable.tsx
@@ -7741,11 +8175,6 @@ msgstr "Expected Response Body"
 msgid "Experience"
 msgstr "Experience"
 
-#. js-lingui-id: 8TiwZn
-#: src/utils/title-utils.ts
-msgid "Experience - Settings"
-msgstr "Experience - Settings"
-
 #. js-lingui-id: LxRNPw
 #: src/modules/settings/developers/components/SettingsApiKeysTable.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
@@ -7758,6 +8187,7 @@ msgid "Expiration Date"
 msgstr "Expiration Date"
 
 #. js-lingui-id: M1RnFv
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
 #: src/modules/settings/developers/utils/formatExpiration.ts
 #: src/pages/settings/members/tabs/SettingsWorkspaceMembersInviteTab.tsx
 msgid "Expired"
@@ -7767,6 +8197,13 @@ msgstr "Expired"
 #: src/modules/settings/roles/role-assignment/components/SettingsRoleAssignmentTable.tsx
 msgid "Expires"
 msgstr "Expires"
+
+#. js-lingui-id: H/strO
+#. placeholder {0}: String(paymentSettings.defaultPaymentMethod.expiryMonth).padStart(2, '0')
+#. placeholder {1}: String(paymentSettings.defaultPaymentMethod.expiryYear).slice(-2)
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Expires {0}/{1}"
+msgstr "Expires {0}/{1}"
 
 #. js-lingui-id: i9qiyR
 #: src/pages/settings/members/tabs/SettingsWorkspaceMembersInviteTab.tsx
@@ -7855,6 +8292,11 @@ msgstr "Failed to activate enterprise license. Please check your key or contact 
 #: src/pages/settings/ai/components/SettingsAgentSkillsTab.tsx
 msgid "Failed to activate skill"
 msgstr "Failed to activate skill"
+
+#. js-lingui-id: yoWPnJ
+#: src/modules/myah/creator-crm/hooks/useApplyCreatorBulkRelationship.ts
+msgid "Failed to add creators to the selected relationship."
+msgstr "Failed to add creators to the selected relationship."
 
 #. js-lingui-id: ZWX/Lk
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
@@ -7961,12 +8403,22 @@ msgstr "Failed to merge records. Please try again."
 msgid "Failed to parse context: {contextValue}"
 msgstr "Failed to parse context: {contextValue}"
 
+#. js-lingui-id: l1KBxz
+#: src/modules/myah/creator-crm/hooks/useApplyCreatorBulkRelationship.ts
+msgid "Failed to refresh creator relationships."
+msgstr "Failed to refresh creator relationships."
+
 #. js-lingui-id: 3m7+J/
 #: src/pages/settings/admin-panel/SettingsAdminInferredVersion.tsx
 #: src/pages/settings/admin-panel/SettingsAdminInstanceStatus.tsx
 #: src/pages/settings/admin-panel/SettingsAdminWorkspacesStatus.tsx
 msgid "Failed to refresh upgrade status"
 msgstr "Failed to refresh upgrade status"
+
+#. js-lingui-id: eTjk7p
+#: src/modules/myah/creator-crm/hooks/useApplyCreatorBulkRelationship.ts
+msgid "Failed to remove creators from this list."
+msgstr "Failed to remove creators from this list."
 
 #. js-lingui-id: 3YA1cX
 #: src/pages/settings/admin-panel/SettingsAdminAiProviderDetail.tsx
@@ -8620,6 +9072,7 @@ msgstr "French"
 #. js-lingui-id: ejVYRQ
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "From"
 msgstr "From"
 
@@ -8699,10 +9152,10 @@ msgstr "Function name"
 msgid "Function run"
 msgstr "Function run"
 
-#. js-lingui-id: tkr79G
-#: src/utils/title-utils.ts
-msgid "Functions - Settings"
-msgstr "Functions - Settings"
+#. js-lingui-id: 6w/wSq
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Funding events will appear here when funds are added or adjusted."
+msgstr "Funding events will appear here when funds are added or adjusted."
 
 #. js-lingui-id: e4FdDl
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -8725,22 +9178,6 @@ msgstr "Gemini CLI"
 #: src/pages/settings/general/SettingsGeneral.tsx
 msgid "General"
 msgstr "General"
-
-#. js-lingui-id: p+rXSW
-#: src/utils/title-utils.ts
-msgid "General - Settings"
-msgstr "General - Settings"
-
-#. js-lingui-id: ziAjHi
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Generate"
-msgstr "Generate"
-
-#. js-lingui-id: H3rta9
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Generate DPA"
-msgstr "Generate DPA"
 
 #. js-lingui-id: CjKOAP
 #: src/modules/workflow/workflow-steps/workflow-actions/code-action/components/WorkflowEditActionCode.tsx
@@ -8788,6 +9225,11 @@ msgstr "Get last contact date with relations"
 #: src/modules/information-banner/components/billing/InformationBannerNoMoreCredits.tsx
 msgid "Get more credits"
 msgstr "Get more credits"
+
+#. js-lingui-id: dMHr1R
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+msgid "Get prewarmed mailboxes"
+msgstr "Get prewarmed mailboxes"
 
 #. js-lingui-id: wwPywk
 #: src/pages/onboarding/InstallAppsContent.tsx
@@ -8991,11 +9433,6 @@ msgstr "h3"
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 msgid "Handle"
 msgstr "Handle"
-
-#. js-lingui-id: Gpb1xF
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Head of Legal"
-msgstr "Head of Legal"
 
 #. js-lingui-id: w3CVxK
 #: src/pages/onboarding/CreateProfile.tsx
@@ -9486,6 +9923,12 @@ msgstr "Import"
 msgid "Import all emails"
 msgstr "Import all emails"
 
+#. js-lingui-id: 1UywNZ
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+msgid "Import blocked"
+msgstr "Import blocked"
+
 #. js-lingui-id: 2CeOI3
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
 msgid "Import CSV"
@@ -9505,6 +9948,12 @@ msgstr "Import or add the MCP configuration from JetBrains settings."
 #: src/pages/onboarding/ImportContacts.tsx
 msgid "Import your contacts"
 msgstr "Import your contacts"
+
+#. js-lingui-id: j2Dqq6
+#. placeholder {0}: createInputs.length
+#: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
+msgid "Imported {0} creators. {existing} already existed, {conflicts} conflicted, and {invalid} had validation errors."
+msgstr "Imported {0} creators. {existing} already existed, {conflicts} conflicted, and {invalid} had validation errors."
 
 #. js-lingui-id: wsKZ+v
 #: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/components/ColumnGrid.tsx
@@ -9640,6 +10089,11 @@ msgstr "Information about the current user (auto-generated and included in each 
 msgid "Infos"
 msgstr "Infos"
 
+#. js-lingui-id: Mo77P4
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Infrastructure"
+msgstr "Infrastructure"
+
 #. js-lingui-id: XU5AOg
 #: src/modules/ai/components/ThinkingStepsDisplay.tsx
 #: src/modules/ai/components/ToolStepRenderer.tsx
@@ -9715,6 +10169,11 @@ msgstr "Instagram authorization opened in a new tab."
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 msgid "Instagram messaging"
 msgstr "Instagram messaging"
+
+#. js-lingui-id: mopxc6
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Instagram reply unavailable"
+msgstr "Instagram reply unavailable"
 
 #. js-lingui-id: TKQ7K+
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -9819,15 +10278,15 @@ msgstr "Instructions"
 msgid "Instructions Editor"
 msgstr "Instructions Editor"
 
-#. js-lingui-id: RGm66q
-#: src/utils/title-utils.ts
-msgid "Integrations - Settings"
-msgstr "Integrations - Settings"
-
 #. js-lingui-id: a+PGuG
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 msgid "Internet accounts per user"
 msgstr "Internet accounts per user"
+
+#. js-lingui-id: 0Xa99f
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Interval"
+msgstr "Interval"
 
 #. js-lingui-id: jyjroS
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
@@ -10133,11 +10592,6 @@ msgstr "Items to iterate over"
 msgid "Jade"
 msgstr "Jade"
 
-#. js-lingui-id: A1CyH/
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Jane Doe"
-msgstr "Jane Doe"
-
 #. js-lingui-id: dFtidv
 #: src/pages/settings/profile/appearance/components/LocalePicker.tsx
 msgid "Japanese"
@@ -10329,6 +10783,7 @@ msgid "Last 24 Hours (oldest → newest)"
 msgstr "Last 24 Hours (oldest → newest)"
 
 #. js-lingui-id: uq2BmQ
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/usage/utils/getPeriodOptions.ts
 msgid "Last 30 days"
 msgstr "Last 30 days"
@@ -10344,6 +10799,7 @@ msgid "Last 4 Hours (oldest → newest)"
 msgstr "Last 4 Hours (oldest → newest)"
 
 #. js-lingui-id: ct2SYD
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/usage/utils/getPeriodOptions.ts
 msgid "Last 7 days"
 msgstr "Last 7 days"
@@ -10354,6 +10810,7 @@ msgid "Last 7 Days (oldest → newest)"
 msgstr "Last 7 Days (oldest → newest)"
 
 #. js-lingui-id: XgOuA7
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/usage/utils/getPeriodOptions.ts
 msgid "Last 90 days"
 msgstr "Last 90 days"
@@ -10579,17 +11036,6 @@ msgstr "Legacy (HS256)"
 msgid "Legacy HS256 verifications across all tokens"
 msgstr "Legacy HS256 verifications across all tokens"
 
-#. js-lingui-id: vifyyw
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Legal"
-msgstr "Legal"
-
-#. js-lingui-id: nc/jNe
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Legal entity name"
-msgstr "Legal entity name"
-
 #. js-lingui-id: MP1v+1
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
 msgid "Legend"
@@ -10710,6 +11156,9 @@ msgstr "linked an email with"
 #. js-lingui-id: 82kQhK
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetNameDialog.tsx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog.tsx
 msgid "list"
 msgstr "list"
 
@@ -10733,6 +11182,11 @@ msgstr "Listing"
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
 msgid "Listings"
 msgstr "Listings"
+
+#. js-lingui-id: kgbWXw
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Live billing information has not been connected yet."
+msgstr "Live billing information has not been connected yet."
 
 #. js-lingui-id: C5bVie
 #: src/modules/settings/logic-functions/components/triggers/SettingsLogicFunctionHttpTriggerSection.tsx
@@ -10770,10 +11224,25 @@ msgstr "Loaded skills"
 msgid "Loading {formattedNames}"
 msgstr "Loading {formattedNames}"
 
+#. js-lingui-id: Inkp/U
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+msgid "Loading {objectLabelSingular} results"
+msgstr "Loading {objectLabelSingular} results"
+
 #. js-lingui-id: fS/QXs
 #: src/pages/settings/applications/tabs/SettingsApplicationsAvailableTab.tsx
 msgid "Loading applications..."
 msgstr "Loading applications..."
+
+#. js-lingui-id: +auT/L
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+msgid "Loading Creator List…"
+msgstr "Loading Creator List…"
+
+#. js-lingui-id: ytLnp/
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+msgid "Loading Creator view…"
+msgstr "Loading Creator view…"
 
 #. js-lingui-id: Nx262D
 #: src/modules/activities/files/components/DocumentViewer.tsx
@@ -10796,6 +11265,11 @@ msgstr "Loading emails"
 msgid "Loading jobs..."
 msgstr "Loading jobs..."
 
+#. js-lingui-id: Nlv+g5
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Loading managed mailboxes…"
+msgstr "Loading managed mailboxes…"
+
 #. js-lingui-id: s1MstR
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminWorkerMetricsGraph.tsx
 msgid "Loading metrics data..."
@@ -10809,10 +11283,30 @@ msgstr "Loading metrics data..."
 msgid "Loading more..."
 msgstr "Loading more..."
 
+#. js-lingui-id: FRBnaT
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Loading prewarmed inventory…"
+msgstr "Loading prewarmed inventory…"
+
+#. js-lingui-id: jjZLW1
+#: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordPicker.tsx
+msgid "Loading record"
+msgstr "Loading record"
+
 #. js-lingui-id: nDnbEe
 #: src/pages/settings/admin-panel/SettingsAdminQueueDetail.tsx
 msgid "Loading retention configuration..."
 msgstr "Loading retention configuration..."
+
+#. js-lingui-id: RqCznU
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Loading saved order…"
+msgstr "Loading saved order…"
+
+#. js-lingui-id: 62RVVP
+#: src/modules/side-panel/pages/search/components/SidePanelSearchRecordsPage.tsx
+msgid "Loading search results"
+msgstr "Loading search results"
 
 #. js-lingui-id: dJl485
 #: src/modules/ai/utils/tool-display/get-tool-display-message.ts
@@ -10929,10 +11423,82 @@ msgstr "Longitude"
 msgid "loop"
 msgstr "loop"
 
+#. js-lingui-id: anIJz7
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Low balance"
+msgstr "Low balance"
+
 #. js-lingui-id: MsaCqr
 #: src/modules/settings/accounts/components/SettingsAccountsConnectionForm.tsx
 msgid "Mail Account"
 msgstr "Mail Account"
+
+#. js-lingui-id: UCxRMK
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "Mailbox"
+msgstr "Mailbox"
+
+#. js-lingui-id: 1OkNiY
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Mailbox {position}"
+msgstr "Mailbox {position}"
+
+#. js-lingui-id: rcVq6D
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Mailbox count"
+msgstr "Mailbox count"
+
+#. js-lingui-id: 7F90Jn
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Mailbox inventory"
+msgstr "Mailbox inventory"
+
+#. js-lingui-id: YcnnUI
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Mailbox service paid through"
+msgstr "Mailbox service paid through"
+
+#. js-lingui-id: E/rE68
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Mailbox service renewal"
+msgstr "Mailbox service renewal"
+
+#. js-lingui-id: DwRgoK
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Mailbox setup"
+msgstr "Mailbox setup"
+
+#. js-lingui-id: 7OCYiO
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Mailbox setup is being reconciled."
+msgstr "Mailbox setup is being reconciled."
+
+#. js-lingui-id: WblSH3
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Mailbox setup is complete."
+msgstr "Mailbox setup is complete."
+
+#. js-lingui-id: l9psE7
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Mailbox setup needs attention."
+msgstr "Mailbox setup needs attention."
+
+#. js-lingui-id: LrJMJF
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Mailbox setup partially completed and needs attention."
+msgstr "Mailbox setup partially completed and needs attention."
+
+#. js-lingui-id: dnYv20
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
+msgid "mailboxes"
+msgstr "mailboxes"
+
+#. js-lingui-id: swG21n
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Mailboxes"
+msgstr "Mailboxes"
 
 #. js-lingui-id: HRha/x
 #: src/modules/navigation/components/MobileNavigationBar.tsx
@@ -10960,6 +11526,8 @@ msgid "Make private"
 msgstr "Make private"
 
 #. js-lingui-id: wckWOP
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/side-panel/pages/page-layout/components/CanvasTabSettingsContent.tsx
 #: src/modules/side-panel/pages/page-layout/components/WidgetSettingsManageSection.tsx
 msgid "Manage"
@@ -11011,6 +11579,11 @@ msgstr "Manage Members"
 msgid "Manage objects, fields and relationships"
 msgstr "Manage objects, fields and relationships"
 
+#. js-lingui-id: Ibxanu
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Manage payment method"
+msgstr "Manage payment method"
+
 #. js-lingui-id: eGGH1l
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useSettingsRolePermissionFlagConfig.ts
 msgid "Manage security policies"
@@ -11055,6 +11628,68 @@ msgstr "Manage your internet accounts."
 #: src/pages/settings/ai/components/SettingsAgentToolsTab.tsx
 msgid "Managed"
 msgstr "Managed"
+
+#. js-lingui-id: wvBTfc
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Managed email subscription information is temporarily unavailable."
+msgstr "Managed email subscription information is temporarily unavailable."
+
+#. js-lingui-id: oeNLVU
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Managed email subscriptions"
+msgstr "Managed email subscriptions"
+
+#. js-lingui-id: d55sHm
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Managed email subscriptions renew separately and do not use your AI balance."
+msgstr "Managed email subscriptions renew separately and do not use your AI balance."
+
+#. js-lingui-id: wQHatQ
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Managed mailbox acquisition is not available right now."
+msgstr "Managed mailbox acquisition is not available right now."
+
+#. js-lingui-id: c1hpDv
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Managed mailbox details"
+msgstr "Managed mailbox details"
+
+#. js-lingui-id: x9WpuP
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Managed mailbox setup"
+msgstr "Managed mailbox setup"
+
+#. js-lingui-id: jFONen
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Managed mailbox status is unavailable right now."
+msgstr "Managed mailbox status is unavailable right now."
+
+#. js-lingui-id: nH3lt4
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Managed mailboxes"
+msgstr "Managed mailboxes"
+
+#. js-lingui-id: Phjul7
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Managed sending domain"
+msgstr "Managed sending domain"
+
+#. js-lingui-id: uUwRnf
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Managed sending identities, readiness, and campaign availability."
+msgstr "Managed sending identities, readiness, and campaign availability."
+
+#. js-lingui-id: b/6ruH
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Managed service activity will appear here when your workspace starts using it."
+msgstr "Managed service activity will appear here when your workspace starts using it."
+
+#. js-lingui-id: 1STcee
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Managed services may pause soon."
+msgstr "Managed services may pause soon."
 
 #. js-lingui-id: BWTzAb
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -11162,11 +11797,6 @@ msgstr "MCP"
 msgid "MCP & APIs"
 msgstr "MCP & APIs"
 
-#. js-lingui-id: wudSjY
-#: src/utils/title-utils.ts
-msgid "MCP & APIs - Settings"
-msgstr "MCP & APIs - Settings"
-
 #. js-lingui-id: KFatQ9
 #: src/modules/settings/mcp-and-apis/components/SettingsMcpSetup.tsx
 #: src/modules/settings/mcp-and-apis/components/SettingsMcpSetup.tsx
@@ -11201,6 +11831,11 @@ msgstr "Me (User ID)"
 msgid "Medium section heading"
 msgstr "Medium section heading"
 
+#. js-lingui-id: OvoEq7
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Member"
+msgstr "Member"
+
 #. js-lingui-id: Sma10A
 #: src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/components/WorkspacesForSignIn.tsx
 msgid "Member of"
@@ -11226,11 +11861,6 @@ msgstr "Member removed from workspace"
 #: src/pages/settings/security/SettingsSecurityApprovedAccessDomain.tsx
 msgid "Members"
 msgstr "Members"
-
-#. js-lingui-id: Max/je
-#: src/utils/title-utils.ts
-msgid "Members - Settings"
-msgstr "Members - Settings"
 
 #. js-lingui-id: q8ka1X
 #: src/modules/settings/security/components/SettingsSecurityAuthProvidersOptionsList.tsx
@@ -11445,6 +12075,12 @@ msgstr "Month"
 msgid "Month of the year"
 msgstr "Month of the year"
 
+#. js-lingui-id: ptY9WG
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Month-to-date spend"
+msgstr "Month-to-date spend"
+
 #. js-lingui-id: rdfE9o
 #: src/modules/settings/billing/hooks/useBillingWording.ts
 msgid "monthly"
@@ -11453,9 +12089,21 @@ msgstr "monthly"
 #. js-lingui-id: +8Nek/
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
 #: src/modules/settings/billing/components/internal/SettingsBillingPlanComparisonTable.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
 msgid "Monthly"
 msgstr "Monthly"
+
+#. js-lingui-id: AFHmxG
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Monthly automatic top-up limit (optional)"
+msgstr "Monthly automatic top-up limit (optional)"
+
+#. js-lingui-id: LJL0nj
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Monthly limit must be at least the top-up amount."
+msgstr "Monthly limit must be at least the top-up amount."
 
 #. js-lingui-id: 6jefe3
 #: src/modules/side-panel/pages/page-layout/utils/getDateGranularityPluralLabel.ts
@@ -11943,6 +12591,16 @@ msgstr "New Tab"
 msgid "New task"
 msgstr "New task"
 
+#. js-lingui-id: vWxAlr
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "New threads are currently blocked."
+msgstr "New threads are currently blocked."
+
+#. js-lingui-id: IXQi+6
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "New threads blocked"
+msgstr "New threads blocked"
+
 #. js-lingui-id: IQ+GEj
 #: src/pages/settings/ai/SettingsAI.tsx
 msgid "New Tool"
@@ -12032,6 +12690,16 @@ msgstr "No {label}"
 msgid "No {objectLabelSingular} found"
 msgstr "No {objectLabelSingular} found"
 
+#. js-lingui-id: G7mJ8y
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+msgid "No {objectLabelSingular} results"
+msgstr "No {objectLabelSingular} results"
+
+#. js-lingui-id: Kodty0
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipTargetPickerDialog.tsx
+msgid "No {targetLabel}"
+msgstr "No {targetLabel}"
+
 #. js-lingui-id: oPoLg+
 #: src/modules/settings/admin-panel/components/SettingsAdminServerAdminAccess.tsx
 msgid "No access"
@@ -12118,6 +12786,11 @@ msgstr "No available tabs"
 msgid "No billing data is available for this workspace."
 msgstr "No billing data is available for this workspace."
 
+#. js-lingui-id: XY66HQ
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "No billing events yet"
+msgstr "No billing events yet"
+
 #. js-lingui-id: V/RzSE
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/BodyInput.tsx
@@ -12128,6 +12801,11 @@ msgstr "No body"
 #: src/modules/object-record/record-field/ui/form-types/components/FormCallingCodeSelectInput.tsx
 msgid "No calling code"
 msgstr "No calling code"
+
+#. js-lingui-id: NO8H4i
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "No changes will be made."
+msgstr "No changes will be made."
 
 #. js-lingui-id: GgZThR
 #: src/pages/onboarding/UpgradeFreeTrial.tsx
@@ -12163,11 +12841,6 @@ msgstr "No config variables match your current filters. Try adjusting your filte
 #: src/modules/ai/components/RoutingDebugDisplay.tsx
 msgid "No context was provided for this request"
 msgstr "No context was provided for this request"
-
-#. js-lingui-id: Zpgvun
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-msgid "No copy has been generated yet. This is the agreement that applies to your deployment — generate a signed copy from the top-right."
-msgstr "No copy has been generated yet. This is the agreement that applies to your deployment — generate a signed copy from the top-right."
 
 #. js-lingui-id: 4BSfjK
 #: src/modules/object-record/record-field/ui/form-types/components/FormCountrySelectInput.tsx
@@ -12387,6 +13060,21 @@ msgstr "No logs were recorded for this step."
 msgid "No logs yet"
 msgstr "No logs yet"
 
+#. js-lingui-id: Xhs6Cl
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "No managed email subscriptions yet"
+msgstr "No managed email subscriptions yet"
+
+#. js-lingui-id: 23oUia
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "No managed mailboxes"
+msgstr "No managed mailboxes"
+
+#. js-lingui-id: ynGTXb
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "No managed mailboxes yet."
+msgstr "No managed mailboxes yet."
+
 #. js-lingui-id: UwvrGq
 #: src/pages/settings/members/tabs/SettingsWorkspaceMembersTeamTab.tsx
 msgid "No members"
@@ -12422,6 +13110,11 @@ msgstr "No metrics data available"
 #: src/pages/settings/ai/forms/components/SettingsAiAgentForm.tsx
 msgid "No models available. Please configure AI models in your workspace settings."
 msgstr "No models available. Please configure AI models in your workspace settings."
+
+#. js-lingui-id: e4+R/P
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "No monthly limit allows repeated automatic charges."
+msgstr "No monthly limit allows repeated automatic charges."
 
 #. js-lingui-id: 9VrTfZ
 #: src/modules/activities/notes/components/NotesCard.tsx
@@ -12465,6 +13158,11 @@ msgstr "No parameters"
 msgid "No payment method found. Please update your billing details."
 msgstr "No payment method found. Please update your billing details."
 
+#. js-lingui-id: PKCQsb
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "No payment method on file."
+msgstr "No payment method on file."
+
 #. js-lingui-id: orE/ux
 #: src/pages/settings/applications/SettingsApplicationDetails.tsx
 msgid "No permission defined for this application"
@@ -12480,6 +13178,11 @@ msgstr "No permissions configured for this application."
 msgid "No permissions have been set for individual objects."
 msgstr "No permissions have been set for individual objects."
 
+#. js-lingui-id: 2OqAJf
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
+msgid "No prewarmed bundles are available right now."
+msgstr "No prewarmed bundles are available right now."
+
 #. js-lingui-id: 5sv+ia
 #: src/modules/activities/emails/hooks/useSendMessageCampaign.ts
 msgid "No recipients to send to ({skippedCount} skipped)"
@@ -12488,6 +13191,7 @@ msgstr "No recipients to send to ({skippedCount} skipped)"
 #. js-lingui-id: V/+aTW
 #: src/modules/object-record/record-field/ui/form-types/components/FormMorphRelationToOneFieldInput.tsx
 #: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordFieldChip.tsx
+#: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordPicker.tsx
 #: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordPicker.tsx
 msgid "No record"
 msgstr "No record"
@@ -12561,6 +13265,7 @@ msgstr "No Results"
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelObjectPickerSubView.tsx
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelSystemObjectPickerSubView.tsx
 #: src/modules/side-panel/components/SidePanelList.tsx
+#: src/modules/side-panel/pages/search/components/SidePanelSearchRecordsPage.tsx
 msgid "No results found"
 msgstr "No results found"
 
@@ -12641,10 +13346,20 @@ msgstr "No usage data is available for this workspace."
 msgid "No usage data yet"
 msgstr "No usage data yet"
 
+#. js-lingui-id: i8pl7N
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "No usage yet"
+msgstr "No usage yet"
+
 #. js-lingui-id: EsP4NW
 #: src/modules/settings/admin-panel/components/SettingsAdminGeneral.tsx
 msgid "No users found matching your search criteria."
 msgstr "No users found matching your search criteria."
+
+#. js-lingui-id: nTtAYd
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+msgid "No valid rows remain to import."
+msgstr "No valid rows remain to import."
 
 #. js-lingui-id: wJwIUq
 #: src/modules/object-record/record-field/ui/form-types/components/FormSelectFieldInput.tsx
@@ -12714,6 +13429,11 @@ msgstr "No workspaces found matching your search criteria."
 msgid "Node"
 msgstr "Node"
 
+#. js-lingui-id: bqrst1
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "Non-production sandbox: this checkout uses test-only services and cannot provision production mailboxes."
+msgstr "Non-production sandbox: this checkout uses test-only services and cannot provision production mailboxes."
+
 #. js-lingui-id: EdQY6l
 #: src/modules/ai/constants/AgentChatThreadGroupByLabels.ts
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownRecordGroupFieldsContent.tsx
@@ -12753,6 +13473,11 @@ msgstr "Not available for default view"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 msgid "Not available on Default View"
 msgstr "Not available on Default View"
+
+#. js-lingui-id: yBm5U3
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Not charged"
+msgstr "Not charged"
 
 #. js-lingui-id: S33tz3
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -13121,6 +13846,12 @@ msgstr "Onboarding Packs"
 msgid "One or more filters reference deactivated or deleted fields and will be automatically removed on save."
 msgstr "One or more filters reference deactivated or deleted fields and will be automatically removed on save."
 
+#. js-lingui-id: 1m8ynK
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Online top-ups coming soon"
+msgstr "Online top-ups coming soon"
+
 #. js-lingui-id: oFTo3P
 #: src/modules/settings/event-logs/components/SettingsLogs.tsx
 msgid "Only application logs are available on your current plan. Other log types require an Enterprise subscription."
@@ -13258,6 +13989,11 @@ msgstr "Operand"
 msgid "Operational"
 msgstr "Operational"
 
+#. js-lingui-id: B1MDds
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Operations"
+msgstr "Operations"
+
 #. js-lingui-id: lVa1Xn
 #: src/modules/settings/data-model/fields/forms/select/hooks/useSelectSettingsFormInitialValues.ts
 msgid "Option 1"
@@ -13310,6 +14046,11 @@ msgstr "Orange"
 #: src/pages/settings/layout/SettingsLayoutViewDetail.tsx
 msgid "Order in which records are displayed"
 msgstr "Order in which records are displayed"
+
+#. js-lingui-id: 1Oj1sI
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Order saved"
+msgstr "Order saved"
 
 #. js-lingui-id: VWupWc
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
@@ -13525,6 +14266,12 @@ msgstr "Page Views"
 msgid "Pages"
 msgstr "Pages"
 
+#. js-lingui-id: VUgoZi
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Paid through"
+msgstr "Paid through"
+
 #. js-lingui-id: ijBN4V
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
 msgid "paragraph"
@@ -13599,15 +14346,54 @@ msgstr "Path"
 msgid "Pause"
 msgstr "Pause"
 
+#. js-lingui-id: sl1+j0
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Pause warmup"
+msgstr "Pause warmup"
+
+#. js-lingui-id: wWXrvA
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Pause warmup immediately?"
+msgstr "Pause warmup immediately?"
+
 #. js-lingui-id: URAE3q
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
 msgid "Paused"
 msgstr "Paused"
+
+#. js-lingui-id: 621rYf
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Payment"
+msgstr "Payment"
 
 #. js-lingui-id: QmXBEc
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Payment issue"
 msgstr "Payment issue"
+
+#. js-lingui-id: ENEPLY
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Payment method"
+msgstr "Payment method"
+
+#. js-lingui-id: lyt3eP
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Payment method and automatic top-up"
+msgstr "Payment method and automatic top-up"
+
+#. js-lingui-id: +kTlqg
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Payment settings"
+msgstr "Payment settings"
+
+#. js-lingui-id: gYrq2N
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Payment settings will appear when billing is connected."
+msgstr "Payment settings will appear when billing is connected."
 
 #. js-lingui-id: CcK+Ft
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
@@ -13615,6 +14401,7 @@ msgid "PDF"
 msgstr "PDF"
 
 #. js-lingui-id: UbRKMZ
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/domains/components/SettingsPublicDomainsListCard.tsx
 #: src/modules/settings/security/components/approvedAccessDomains/SettingsApprovedAccessDomainsListCard.tsx
 #: src/pages/settings/emailing-domains/utils/getEmailingDomainStatusText.ts
@@ -13671,6 +14458,7 @@ msgid "Perform administrative actions or permanently delete this user"
 msgstr "Perform administrative actions or permanently delete this user"
 
 #. js-lingui-id: NtQvjo
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/event-logs/components/EventLogFilters.tsx
 msgid "Period"
 msgstr "Period"
@@ -13963,6 +14751,11 @@ msgstr "Pre-install on new workspaces"
 msgid "Pre-installed only"
 msgstr "Pre-installed only"
 
+#. js-lingui-id: spr5n6
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Preferred address {position}"
+msgstr "Preferred address {position}"
+
 #. js-lingui-id: /v6Rp9
 #: src/modules/auth/sign-in-up/constants/WorkspaceActivationMessages.ts
 msgid "Prefilling your workspace data..."
@@ -13989,7 +14782,6 @@ msgstr "Prevent from assigning the same value to different records"
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectSettingsFormCard.tsx
 #: src/modules/settings/unsubscribe-topics/components/SettingsWorkspaceUnsubscribeTopicSection.tsx
 #: src/pages/settings/applications/SettingsApplicationFrontComponentDetail.tsx
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
 msgid "Preview"
 msgstr "Preview"
 
@@ -14007,6 +14799,21 @@ msgstr "Previous"
 #: src/modules/ai/utils/groupThreadsByDate.ts
 msgid "Previous 7 days"
 msgstr "Previous 7 days"
+
+#. js-lingui-id: IthawL
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "Prewarmed"
+msgstr "Prewarmed"
+
+#. js-lingui-id: 5u9xlg
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Prewarmed inventory is unavailable right now."
+msgstr "Prewarmed inventory is unavailable right now."
+
+#. js-lingui-id: U3o3Ne
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
+msgid "Prewarmed mailboxes"
+msgstr "Prewarmed mailboxes"
 
 #. js-lingui-id: aHCEmh
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
@@ -14046,12 +14853,6 @@ msgstr "Priority"
 msgid "Priority support"
 msgstr "Priority support"
 
-#. js-lingui-id: LcET2C
-#: src/modules/auth/sign-in-up/components/FooterNote.tsx
-#: src/modules/auth/sign-in-up/components/FooterNote.tsx
-msgid "Privacy Policy"
-msgstr "Privacy Policy"
-
 #. js-lingui-id: zwBp5t
 #: src/modules/settings/unsubscribe-topics/components/SettingsWorkspaceUnsubscribeTopicSection.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationRegistrationDistributionTab.tsx
@@ -14078,6 +14879,11 @@ msgstr "pro plan"
 msgid "Pro plan"
 msgstr "Pro plan"
 
+#. js-lingui-id: vrnnn9
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Processing"
+msgstr "Processing"
+
 #. js-lingui-id: k1ifdL
 #: src/modules/spreadsheet-import/steps/components/UploadStep/components/DropZone.tsx
 #: src/modules/workflow/components/WorkflowStepExecutionResult.tsx
@@ -14092,15 +14898,15 @@ msgstr "Processing..."
 msgid "Profile"
 msgstr "Profile"
 
-#. js-lingui-id: 6Fs5Ks
-#: src/utils/title-utils.ts
-msgid "Profile - Settings"
-msgstr "Profile - Settings"
-
 #. js-lingui-id: Szskbr
 #: src/modules/settings/security/components/SettingsSecurityEditableProfileFields.tsx
 msgid "Profile Picture"
 msgstr "Profile Picture"
+
+#. js-lingui-id: PxwQXr
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Projected message"
+msgstr "Projected message"
 
 #. js-lingui-id: W9uQXX
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowEditActionAiAgent.tsx
@@ -14216,6 +15022,16 @@ msgstr "Public URL"
 msgid "Publish your app to the marketplace so others can install it"
 msgstr "Publish your app to the marketplace so others can install it"
 
+#. js-lingui-id: dsFmM+
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Purchased"
+msgstr "Purchased"
+
+#. js-lingui-id: LXYzps
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Purchased top-up"
+msgstr "Purchased top-up"
+
 #. js-lingui-id: mF9LxA
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
 msgid "Purple"
@@ -14225,6 +15041,11 @@ msgstr "Purple"
 #: src/modules/ai/components/CodeExecutionDisplay.tsx
 msgid "Python Code Execution"
 msgstr "Python Code Execution"
+
+#. js-lingui-id: VbWX2u
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Quantity"
+msgstr "Quantity"
 
 #. js-lingui-id: 2vudsu
 #: src/modules/side-panel/pages/page-layout/utils/getDateGranularityLabel.ts
@@ -14331,6 +15152,11 @@ msgstr "Read the system prompts to understand how the AI works"
 msgid "Read the system prompts to understand how the AI works (~{0} tokens)"
 msgstr "Read the system prompts to understand how the AI works (~{0} tokens)"
 
+#. js-lingui-id: a+k+94
+#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
+msgid "Read your existing Instagram conversations and reply when you're ready. Myah will always ask for your approval before sending a reply."
+msgstr "Read your existing Instagram conversations and reply when you're ready. Myah will always ask for your approval before sending a reply."
+
 #. js-lingui-id: afMuDE
 #: src/pages/auth/Authorize.tsx
 msgid "Read your profile"
@@ -14352,6 +15178,24 @@ msgstr "Read-only {entityTypeLabel} definition shipped by this app"
 msgid "Read/Edit/Delete permissions"
 msgstr "Read/Edit/Delete permissions"
 
+#. js-lingui-id: o5r25C
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Readiness will appear here after mailbox setup."
+msgstr "Readiness will appear here after mailbox setup."
+
+#. js-lingui-id: ckH3fT
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "Ready"
+msgstr "Ready"
+
+#. js-lingui-id: EuJjwO
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Ready for new threads"
+msgstr "Ready for new threads"
+
 #. js-lingui-id: wUf2OL
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsAiAgentDetail.tsx
 msgid "Reasoning"
@@ -14362,6 +15206,11 @@ msgstr "Reasoning"
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "Reauthorize"
 msgstr "Reauthorize"
+
+#. js-lingui-id: B5YOTn
+#: src/modules/ai/components/AiChatActionApprovalEvidence.tsx
+msgid "Receipt updated"
+msgstr "Receipt updated"
 
 #. js-lingui-id: BT7pY+
 #: src/modules/settings/profile/components/SetOrChangePassword.tsx
@@ -14383,6 +15232,11 @@ msgstr "Recent Events (oldest → newest)"
 msgid "Recent Users"
 msgstr "Recent Users"
 
+#. js-lingui-id: V/IO7g
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Recent workspace usage"
+msgstr "Recent workspace usage"
+
 #. js-lingui-id: AQbgLJ
 #: src/modules/ai/components/AiChatThreadsList.tsx
 #: src/modules/ai/components/NavigationDrawerAiChatContent.tsx
@@ -14397,6 +15251,7 @@ msgstr "Recipients"
 
 #. js-lingui-id: WEYdDv
 #: src/modules/ai/components/AiChatQuestionCard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
 msgid "Recommended"
 msgstr "Recommended"
 
@@ -14443,6 +15298,9 @@ msgstr "record"
 #. js-lingui-id: w80YWM
 #: src/modules/navigation-menu-item/display/object/components/NavigationDrawerItemForObjectMetadataItem.tsx
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelNewSidebarItemMainMenu.tsx
+#: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordPicker.tsx
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
 #: src/modules/settings/applications/hooks/useComputeApplicationContentForLayoutAndLogic.ts
 #: src/modules/settings/applications/hooks/useComputeApplicationContentForLayoutAndLogic.ts
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionDeleteRecord.tsx
@@ -14495,6 +15353,11 @@ msgstr "Record page"
 msgid "Record Page"
 msgstr "Record Page"
 
+#. js-lingui-id: ss8Njr
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+msgid "Record results"
+msgstr "Record results"
+
 #. js-lingui-id: NxW0+c
 #: src/modules/side-panel/pages/page-layout/utils/getPageLayoutPageTitle.ts
 msgid "Record Table Settings"
@@ -14530,6 +15393,11 @@ msgstr "Record(s) selected"
 msgid "Records"
 msgstr "Records"
 
+#. js-lingui-id: wuhHPE
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Recurring"
+msgstr "Recurring"
+
 #. js-lingui-id: wRTiSD
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
 msgid "Red"
@@ -14562,6 +15430,11 @@ msgstr "Redirection URI"
 #: src/pages/settings/admin-panel/SettingsAdminWorkspacesStatus.tsx
 msgid "Refresh status"
 msgstr "Refresh status"
+
+#. js-lingui-id: J0LAHU
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Refund"
+msgstr "Refund"
 
 #. js-lingui-id: vpZcGd
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
@@ -14601,6 +15474,7 @@ msgid "Reject"
 msgstr "Reject"
 
 #. js-lingui-id: ekCRTP
+#: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
 #: src/modules/ai/components/AiChatApprovalStatusRenderer.tsx
 msgid "Rejected"
 msgstr "Rejected"
@@ -14716,6 +15590,12 @@ msgstr "Remove field"
 msgid "Remove filter"
 msgstr "Remove filter"
 
+#. js-lingui-id: nrF9rx
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+#: src/modules/myah/creator-crm/components/MyahCreatorBulkActions.tsx
+msgid "Remove from list"
+msgstr "Remove from list"
+
 #. js-lingui-id: 9VZ6f0
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelEditOrganizeActions.tsx
 msgid "Remove from sidebar"
@@ -14789,6 +15669,11 @@ msgstr "Remove this provider and disconnect all its models"
 msgid "Remove variable"
 msgstr "Remove variable"
 
+#. js-lingui-id: 0+31GV
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Removing"
+msgstr "Removing"
+
 #. js-lingui-id: 2wxgft
 #: src/modules/activities/files/components/AttachmentDropdown.tsx
 #: src/modules/ai/components/AiChatThreadItemMenu.tsx
@@ -14802,10 +15687,22 @@ msgstr "Rename"
 msgid "Rename chat"
 msgstr "Rename chat"
 
+#. js-lingui-id: TBZOgu
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Renewal"
+msgstr "Renewal"
+
 #. js-lingui-id: oQjB9l
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
 msgid "Renewal date"
 msgstr "Renewal date"
+
+#. js-lingui-id: 24uhBS
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Renews automatically"
+msgstr "Renews automatically"
 
 #. js-lingui-id: Ee8JBW
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
@@ -15025,8 +15922,15 @@ msgstr "Results"
 msgid "Resume"
 msgstr "Resume"
 
+#. js-lingui-id: iye/p5
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Resume warmup"
+msgstr "Resume warmup"
+
 #. js-lingui-id: 6gRgw8
 #: src/modules/ai/components/AiChatErrorMessage.tsx
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobRowDropdownMenu.tsx
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminRetryJobsConfirmationModal.tsx
 #: src/pages/onboarding/PaymentSuccess.tsx
@@ -15039,6 +15943,19 @@ msgstr "Retry"
 msgid "Retry All Failed"
 msgstr "Retry All Failed"
 
+#. js-lingui-id: vUOn9d
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+msgid "Return"
+msgstr "Return"
+
+#. js-lingui-id: 7pmT4G
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Return to mailbox overview"
+msgstr "Return to mailbox overview"
+
 #. js-lingui-id: ZbpKL+
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminJobDetailsExpandable.tsx
 msgid "Return Value"
@@ -15049,6 +15966,26 @@ msgstr "Return Value"
 #: src/modules/side-panel/pages/page-layout/utils/getSortLabelSuffixForFieldType.ts
 msgid "reverse alphabetical"
 msgstr "reverse alphabetical"
+
+#. js-lingui-id: BXm/6/
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review Instagram reply"
+msgstr "Review Instagram reply"
+
+#. js-lingui-id: iw9dFx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "Review managed mailboxes"
+msgstr "Review managed mailboxes"
+
+#. js-lingui-id: yDxwD9
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Review proposal"
+msgstr "Review proposal"
+
+#. js-lingui-id: EIzxzn
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived Instagram reply before it is sent."
+msgstr "Review the exact server-derived Instagram reply before it is sent."
 
 #. js-lingui-id: GXsAby
 #: src/modules/settings/admin-panel/signing-keys/components/SettingsAdminRevokeSigningKeyConfirmationModal.tsx
@@ -15108,6 +16045,7 @@ msgstr "role"
 #. js-lingui-id: GDvlUT
 #: src/modules/settings/developers/components/SettingsApiKeysTable.tsx
 #: src/modules/settings/members/components/MemberPermissionsTab.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 #: src/pages/settings/ai/components/SettingsAgentRoleTab.tsx
 #: src/pages/settings/ai/SettingsAgentForm.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
@@ -15141,6 +16079,11 @@ msgstr "role permission flag"
 #: src/modules/metadata-error-handler/hooks/useMetadataErrorHandler.ts
 msgid "role target"
 msgstr "role target"
+
+#. js-lingui-id: jfbNTV
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Role title {position}"
+msgstr "Role title {position}"
 
 #. js-lingui-id: M9SCiK
 #: src/modules/settings/members/components/MemberPermissionsTab.tsx
@@ -15297,10 +16240,26 @@ msgstr "Save 25% when billed yearly"
 msgid "Save as new view"
 msgstr "Save as new view"
 
+#. js-lingui-id: y3aU20
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Save changes"
+msgstr "Save changes"
+
 #. js-lingui-id: 7byqGp
 #: src/modules/layout-customization/hooks/useEnterLayoutCustomizationMode.ts
 msgid "Save or cancel dashboard changes before editing the layout."
 msgstr "Save or cancel dashboard changes before editing the layout."
+
+#. js-lingui-id: 3LQxeL
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
+msgid "Save payment method"
+msgstr "Save payment method"
+
+#. js-lingui-id: 1TUp4/
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "Saved order recovery paused"
+msgstr "Saved order recovery paused"
 
 #. js-lingui-id: gmB6oO
 #: src/modules/workflow/workflow-trigger/components/CronExpressionHelper.tsx
@@ -15371,6 +16330,11 @@ msgstr "SDK"
 #: src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerHeader.tsx
 msgid "Search"
 msgstr "Search"
+
+#. js-lingui-id: iFp2jU
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+msgid "Search {objectLabelSingular}"
+msgstr "Search {objectLabelSingular}"
 
 #. js-lingui-id: g2dQp/
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionMeValueSelect.tsx
@@ -15597,6 +16561,11 @@ msgstr "Search operations"
 msgid "Search options"
 msgstr "Search options"
 
+#. js-lingui-id: IMeaSJ
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+msgid "Search records"
+msgstr "Search records"
+
 #. js-lingui-id: rRklUH
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelNewSidebarItemRecordSubPage.tsx
 msgid "Search records..."
@@ -15606,6 +16575,11 @@ msgstr "Search records..."
 #: src/modules/settings/admin-panel/apps/components/SettingsAdminApps.tsx
 msgid "Search registrations..."
 msgstr "Search registrations..."
+
+#. js-lingui-id: 5WYZKZ
+#: src/modules/side-panel/pages/search/components/SidePanelSearchRecordsPage.tsx
+msgid "Search results"
+msgstr "Search results"
 
 #. js-lingui-id: YIix5Y
 #: src/modules/settings/developers/components/WebhookEntitySelect.tsx
@@ -15854,6 +16828,11 @@ msgstr "Select a known model or add a custom one"
 msgid "Select a known provider or create a custom one"
 msgstr "Select a known provider or create a custom one"
 
+#. js-lingui-id: lzL6Ou
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Select a mailbox or domain to review its independent service, renewal, and campaign status."
+msgstr "Select a mailbox or domain to review its independent service, renewal, and campaign status."
+
 #. js-lingui-id: dtAvBz
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelNavigationMenuItemEditPage.tsx
 msgid "Select a navigation item to edit"
@@ -15944,6 +16923,11 @@ msgstr "Select matching field"
 msgid "Select month and year"
 msgstr "Select month and year"
 
+#. js-lingui-id: v8Wtjr
+#: src/modules/myah/creator-crm/hooks/useApplyCreatorBulkRelationship.ts
+msgid "Select one creator at a time."
+msgstr "Select one creator at a time."
+
 #. js-lingui-id: 8eJcRS
 #: src/modules/settings/data-model/new-object/components/SettingsAvailableStandardObjectsSection.tsx
 msgid "Select one or several standard objects to activate below"
@@ -16011,10 +16995,20 @@ msgstr "Select value"
 msgid "Select which models appear as recommended in the workspace model picker"
 msgstr "Select which models appear as recommended in the workspace model picker"
 
+#. js-lingui-id: Hkoctj
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
+msgid "Select whole bundle"
+msgstr "Select whole bundle"
+
 #. js-lingui-id: AXTJAW
 #: src/pages/settings/profile/appearance/components/SettingsExperience.tsx
 msgid "Select your preferred language"
 msgstr "Select your preferred language"
+
+#. js-lingui-id: ylXj1N
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Selected"
+msgstr "Selected"
 
 #. js-lingui-id: JlFcis
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
@@ -16064,6 +17058,7 @@ msgid "Send invitations"
 msgstr "Send invitations"
 
 #. js-lingui-id: ULtHaJ
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/email/SettingsWorkspaceEmailGroupChannelDetail.tsx
 msgid "Sending domain"
 msgstr "Sending domain"
@@ -16124,6 +17119,11 @@ msgstr "Server Variables"
 #: src/pages/settings/applications/tabs/SettingsApplicationRegistrationConfigTab.tsx
 msgid "Server variables are applied to all workspace installations."
 msgstr "Server variables are applied to all workspace installations."
+
+#. js-lingui-id: T3bXxK
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Service"
+msgstr "Service"
 
 #. js-lingui-id: LUc0oL
 #: src/modules/settings/security/components/SSO/SettingsSSOSAMLForm.tsx
@@ -16211,6 +17211,11 @@ msgstr "Set up forwarding from the source address to this destination."
 msgid "Set up MCP"
 msgstr "Set up MCP"
 
+#. js-lingui-id: lk7aGT
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
+msgid "Set up payment"
+msgstr "Set up payment"
+
 #. js-lingui-id: 9HNKkV
 #: src/pages/settings/applications/tabs/SettingsApplicationDetailEnvironmentVariablesTable.tsx
 msgid "Set your application configuration variables"
@@ -16254,6 +17259,16 @@ msgstr "Settings All Access"
 msgid "Settings permissions"
 msgstr "Settings permissions"
 
+#. js-lingui-id: KWsCqG
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Settled"
+msgstr "Settled"
+
+#. js-lingui-id: QFTHLq
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Settled operations"
+msgstr "Settled operations"
+
 #. js-lingui-id: Ue7X/E
 #: src/modules/settings/accounts/components/SettingsAccountsConnectedAccountsRowRightContainer.tsx
 msgid "Setup incomplete"
@@ -16269,6 +17284,16 @@ msgstr "setup key"
 #: src/pages/settings/profile/SettingsTwoFactorAuthenticationMethod.tsx
 msgid "Setup key copied to clipboard"
 msgstr "Setup key copied to clipboard"
+
+#. js-lingui-id: hdRvrT
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Setup starts only after payment is confirmed."
+msgstr "Setup starts only after payment is confirmed."
+
+#. js-lingui-id: ExaW2H
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Setup will continue from the saved operation."
+msgstr "Setup will continue from the saved operation."
 
 #. js-lingui-id: NQNJjc
 #: src/pages/auth/SignInUp.tsx
@@ -16432,20 +17457,10 @@ msgstr "Sign up"
 msgid "Sign-up is temporarily unavailable during maintenance."
 msgstr "Sign-up is temporarily unavailable during maintenance."
 
-#. js-lingui-id: a6TaW9
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Signatory title"
-msgstr "Signatory title"
-
-#. js-lingui-id: Lz4j8Q
-#: src/modules/settings/legal/components/SettingsDpaAgreementRow.tsx
-msgid "Signed copy"
-msgstr "Signed copy"
-
-#. js-lingui-id: Z2Wg9g
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Signed DPA generated and downloaded"
-msgstr "Signed DPA generated and downloaded"
+#. js-lingui-id: jvfA2L
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Signature {position}"
+msgstr "Signature {position}"
 
 #. js-lingui-id: X1zsRT
 #: src/modules/settings/admin-panel/signing-keys/hooks/useRevokeSigningKey.ts
@@ -16618,6 +17633,11 @@ msgstr "smtp.example.com"
 msgid "Some"
 msgstr "Some"
 
+#. js-lingui-id: p+7y+p
+#: src/modules/myah/creator-crm/hooks/useApplyCreatorBulkRelationship.ts
+msgid "Some creators were already absent from this list."
+msgstr "Some creators were already absent from this list."
+
 #. js-lingui-id: RwCYVZ
 #: src/modules/settings/accounts/components/SettingsAccountsMessageFolderCard.tsx
 msgid "Some folders"
@@ -16745,6 +17765,16 @@ msgstr "Speed up reads on the fields you filter or sort by most. Each index also
 msgid "Split multiple values"
 msgstr "Split multiple values"
 
+#. js-lingui-id: UQNoq2
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Sponsored"
+msgstr "Sponsored"
+
+#. js-lingui-id: 14+Tx0
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Sponsored grant"
+msgstr "Sponsored grant"
+
 #. js-lingui-id: vnS6Rf
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 #: src/modules/settings/security/components/SettingsSecuritySettings.tsx
@@ -16805,6 +17835,11 @@ msgstr "Start a new enterprise subscription."
 msgid "Start date"
 msgstr "Start date"
 
+#. js-lingui-id: +fIRiz
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Start with the mailbox count, then review the proposed identities before purchase."
+msgstr "Start with the mailbox count, then review the proposed identities before purchase."
+
 #. js-lingui-id: s+K73L
 #: src/modules/settings/billing/components/internal/SettingsBillingSubscriptionInfoModals.tsx
 #: src/modules/settings/billing/components/StartSubscriptionConfirmationModal.tsx
@@ -16844,6 +17879,8 @@ msgstr "State"
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
 #: src/modules/settings/admin-panel/signing-keys/components/SettingsAdminSigningKeysTable.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/components/SettingsDnsRecordsTable.tsx
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
 #: src/pages/settings/admin-panel/SettingsAdminIndicatorHealthStatus.tsx
@@ -16873,6 +17910,16 @@ msgstr "Step filter group options"
 #: src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterOptionsDropdown.tsx
 msgid "Step filter options"
 msgstr "Step filter options"
+
+#. js-lingui-id: Ca1c1r
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Stop {activeDependentMailboxCount} dependent mailbox services before disabling domain renewal."
+msgstr "Stop {activeDependentMailboxCount} dependent mailbox services before disabling domain renewal."
+
+#. js-lingui-id: VpsnnC
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Stop 1 dependent mailbox service before disabling domain renewal."
+msgstr "Stop 1 dependent mailbox service before disabling domain renewal."
 
 #. js-lingui-id: I8EmDx
 #: src/modules/information-banner/components/impersonate/InformationBannerIsImpersonating.tsx
@@ -17284,6 +18331,11 @@ msgstr "Table widget"
 msgid "Table, Kanban, Calendar"
 msgstr "Table, Kanban, Calendar"
 
+#. js-lingui-id: Yrrg+y
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Target"
+msgstr "Target"
+
 #. js-lingui-id: sceIIK
 #: src/modules/settings/data-model/fields/forms/morph-relation/components/SettingsDataModelFieldRelationJunctionForm.tsx
 msgid "Target relation on Junction Object"
@@ -17310,11 +18362,6 @@ msgstr "Task Title"
 msgid "Team"
 msgstr "Team"
 
-#. js-lingui-id: lOmSVO
-#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-msgid "Team members and future agents will use this workspace connection without authorizing their own Instagram account."
-msgstr "Team members and future agents will use this workspace connection without authorizing their own Instagram account."
-
 #. js-lingui-id: lKXcJz
 #: src/pages/settings/emailing-domains/utils/getEmailingDomainStatusText.ts
 msgid "Temporary Failure"
@@ -17324,12 +18371,6 @@ msgstr "Temporary Failure"
 #: src/modules/settings/applications/components/SettingsApplicationAboutSidebar.tsx
 msgid "Terms / Privacy"
 msgstr "Terms / Privacy"
-
-#. js-lingui-id: xowcRf
-#: src/modules/auth/sign-in-up/components/FooterNote.tsx
-#: src/modules/auth/sign-in-up/components/FooterNote.tsx
-msgid "Terms of Service"
-msgstr "Terms of Service"
 
 #. js-lingui-id: NnH3pK
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionCodeEditorTab.tsx
@@ -17460,11 +18501,6 @@ msgstr ""
 "\n"
 ""
 
-#. js-lingui-id: /kfzmx
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-msgid "The Data Processing Agreement could not be loaded. Please try again."
-msgstr "The Data Processing Agreement could not be loaded. Please try again."
-
 #. js-lingui-id: n+CCXl
 #: src/pages/settings/ai/components/SettingsAiModelsTab.tsx
 msgid "The default AI model used for chats, agents, and workflows"
@@ -17495,15 +18531,20 @@ msgstr "The email associated to this account"
 msgid "The email associated to your account"
 msgstr "The email associated to your account"
 
-#. js-lingui-id: 21Xjwu
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "The full agreement with fields resolved for your deployment."
-msgstr "The full agreement with fields resolved for your deployment."
+#. js-lingui-id: 2iMFiI
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The exact server-derived Instagram reply is unavailable."
+msgstr "The exact server-derived Instagram reply is unavailable."
 
 #. js-lingui-id: diO3fm
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx
 msgid "The icon your workflow trigger will display in the command menu"
 msgstr "The icon your workflow trigger will display in the command menu"
+
+#. js-lingui-id: xhsoGs
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+msgid "The import could not be refreshed. Please try again."
+msgstr "The import could not be refreshed. Please try again."
 
 #. js-lingui-id: HiI1Lo
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
@@ -17537,10 +18578,15 @@ msgstr "The name recipients see for this topic."
 msgid "The page you're seeking is either gone or never was. Let's get you back on track"
 msgstr "The page you're seeking is either gone or never was. Let's get you back on track"
 
-#. js-lingui-id: Ya1wb4
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "The PDF is pre-signed by Twenty and executed with your legal entity and authorized signatory."
-msgstr "The PDF is pre-signed by Twenty and executed with your legal entity and authorized signatory."
+#. js-lingui-id: JAbrJR
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The reply cannot be approved until its source is available."
+msgstr "The reply cannot be approved until its source is available."
+
+#. js-lingui-id: c82Ji/
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The reply will be sent to the existing conversation."
+msgstr "The reply will be sent to the existing conversation."
 
 #. js-lingui-id: wxyrqd
 #: src/modules/workflow/workflow-steps/workflow-actions/pick-record-action/components/WorkflowEditActionPickRecord.tsx
@@ -17728,6 +18774,21 @@ msgstr "This address is already taken"
 msgid "This app is not fully configured. Users won't be able to install it until all required server variables are set, and — for apps exposing a server route — until the app is claimed and installed on its owner workspace."
 msgstr "This app is not fully configured. Users won't be able to install it until all required server variables are set, and — for apps exposing a server route — until the app is claimed and installed on its owner workspace."
 
+#. js-lingui-id: Lbrpv9
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "This cancels mailbox service renewal at the end of the paid period. The mailbox remains active until then."
+msgstr "This cancels mailbox service renewal at the end of the paid period. The mailbox remains active until then."
+
+#. js-lingui-id: 2EEcbf
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "This cancels renewal at the end of the paid period. The domain remains available until then."
+msgstr "This cancels renewal at the end of the paid period. The domain remains available until then."
+
+#. js-lingui-id: 9eqZgt
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "This cancels warmup renewal at the end of the paid period. It does not pause warmup now."
+msgstr "This cancels warmup renewal at the end of the paid period. It does not pause warmup now."
+
 #. js-lingui-id: WCa/7U
 #: src/pages/settings/applications/tabs/SettingsApplicationFrontComponentPreviewTab.tsx
 msgid "This component runs without a UI and renders nothing here."
@@ -17738,15 +18799,15 @@ msgstr "This component runs without a UI and renders nothing here."
 msgid "This connection does not exist or is not available for this application."
 msgstr "This connection does not exist or is not available for this application."
 
-#. js-lingui-id: 2uRIxZ
-#: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
-msgid "This connection supports manual reads of existing Instagram conversations. Reply delivery requires a server-owned, user-approved action and the Send Instagram Reply role permission. It does not enable polling, cold first-contact DMs, bulk messaging, or auto-replies."
-msgstr "This connection supports manual reads of existing Instagram conversations. Reply delivery requires a server-owned, user-approved action and the Send Instagram Reply role permission. It does not enable polling, cold first-contact DMs, bulk messaging, or auto-replies."
-
 #. js-lingui-id: SLIRqz
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableHelpText.tsx
 msgid "This database value overrides environment settings. "
 msgstr "This database value overrides environment settings. "
+
+#. js-lingui-id: tz7SfI
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "This domain needs attention. Review the available actions or contact support if the issue continues."
+msgstr "This domain needs attention. Review the available actions or contact support if the issue continues."
 
 #. js-lingui-id: 8IRnd6
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
@@ -17793,15 +18854,35 @@ msgstr "This is the current signing key. Revoking it will invalidate every JWT s
 msgid "This key should be set through body input"
 msgstr "This key should be set through body input"
 
+#. js-lingui-id: I0pgNc
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "This mailbox needs attention. Review the available actions or contact support if the issue continues."
+msgstr "This mailbox needs attention. Review the available actions or contact support if the issue continues."
+
 #. js-lingui-id: Wuvfgw
 #: src/pages/settings/admin-panel/SettingsAdminAiProviderDetail.tsx
 msgid "This model will be removed from the provider. You can re-add it later."
 msgstr "This model will be removed from the provider. You can re-add it later."
 
+#. js-lingui-id: xiY1DB
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "This order is saved. You can leave this page and return without losing progress."
+msgstr "This order is saved. You can leave this page and return without losing progress."
+
 #. js-lingui-id: NCA55L
 #: src/modules/page-layout/widgets/components/StandaloneWidgetPlaceholder.tsx
 msgid "This page has no content"
 msgstr "This page has no content"
+
+#. js-lingui-id: orh4Gn
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "This pauses warmup now. It does not cancel your warmup renewal."
+msgstr "This pauses warmup now. It does not cancel your warmup renewal."
+
+#. js-lingui-id: kbaG3R
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "This pauses warmup now. The existing renewal cancellation remains scheduled for the end of the paid period."
+msgstr "This pauses warmup now. The existing renewal cancellation remains scheduled for the end of the paid period."
 
 #. js-lingui-id: R/PuIn
 #: src/pages/settings/admin-panel/SettingsAdminNewAiProvider.tsx
@@ -18010,6 +19091,7 @@ msgstr "Title"
 #. js-lingui-id: /jQctM
 #: src/modules/activities/emails/components/CampaignComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
+#: src/modules/ai/components/AiChatApprovalCard.tsx
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "To"
@@ -18135,6 +19217,11 @@ msgstr "Top 10 workspaces by number of users"
 #: src/modules/settings/admin-panel/components/SettingsAdminGeneral.tsx
 msgid "Top Workspaces"
 msgstr "Top Workspaces"
+
+#. js-lingui-id: A26u8p
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Top-up amount"
+msgstr "Top-up amount"
 
 #. js-lingui-id: 72c5Qo
 #: src/modules/page-layout/widgets/graph/graph-widget-pie-chart/hooks/usePieChartCenterMetricData.ts
@@ -18366,6 +19453,7 @@ msgid "Two-factor authentication setup completed successfully!"
 msgstr "Two-factor authentication setup completed successfully!"
 
 #. js-lingui-id: +zy2Nq
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/components/SettingsDnsRecordsTable.tsx
 #: src/modules/settings/data-model/indexes/forms/components/SettingsObjectIndexOptionsForm.tsx
 #: src/modules/settings/data-model/object-details/components/SettingsObjectRelationsTable.tsx
@@ -18426,20 +19514,45 @@ msgstr "Ukrainian"
 msgid "ul"
 msgstr "ul"
 
+#. js-lingui-id: RhUpAT
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "Unable to add influencers."
+msgstr "Unable to add influencers."
+
 #. js-lingui-id: N/XI5S
 #: src/pages/settings/members/SettingsWorkspaceMember.tsx
 msgid "Unable to delete member right now"
 msgstr "Unable to delete member right now"
+
+#. js-lingui-id: PpKcV3
+#: src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch.tsx
+msgid "Unable to load {objectLabelSingular} results"
+msgstr "Unable to load {objectLabelSingular} results"
 
 #. js-lingui-id: HSLWzn
 #: src/pages/auth/Authorize.tsx
 msgid "Unable to load application details. Please try again later."
 msgstr "Unable to load application details. Please try again later."
 
+#. js-lingui-id: ifAJf+
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+msgid "Unable to load Creator List."
+msgstr "Unable to load Creator List."
+
 #. js-lingui-id: l+ALBd
 #: src/modules/client-config/components/ClientConfigProvider.tsx
 msgid "Unable to Reach Back-end"
 msgstr "Unable to Reach Back-end"
+
+#. js-lingui-id: N1p5yf
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+msgid "Unable to validate import"
+msgstr "Unable to validate import"
+
+#. js-lingui-id: cVEIR0
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Unable to verify existing relationships. Try again."
+msgstr "Unable to verify existing relationships. Try again."
 
 #. js-lingui-id: 5JOLV9
 #: src/modules/ai/components/AiChatThreadItemMenu.tsx
@@ -18447,7 +19560,9 @@ msgid "Unarchive"
 msgstr "Unarchive"
 
 #. js-lingui-id: jqzUyM
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
 #: src/modules/settings/billing/hooks/useBillingPlanActions.ts
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
 msgid "Unavailable"
 msgstr "Unavailable"
 
@@ -18455,6 +19570,11 @@ msgstr "Unavailable"
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx
 msgid "Undefined"
 msgstr "Undefined"
+
+#. js-lingui-id: SS66p5
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Under review"
+msgstr "Under review"
 
 #. js-lingui-id: o23uCL
 #: src/modules/side-panel/pages/page-layout/utils/getChartLimitMessage.ts
@@ -18514,6 +19634,11 @@ msgstr "Unique fields"
 #: src/modules/side-panel/pages/page-layout/constants/settings/SuffixSetting.ts
 msgid "unit"
 msgstr "unit"
+
+#. js-lingui-id: phPGy4
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Unit price"
+msgstr "Unit price"
 
 #. js-lingui-id: fMyWEp
 #: src/pages/settings/applications/components/SettingsApplicationRegistrationGeneralInfo.tsx
@@ -18658,6 +19783,7 @@ msgstr "Unsubscribe Topics"
 #: src/modules/mention/components/MentionRecordChip.tsx
 #: src/modules/object-record/components/RecordChip.tsx
 #: src/modules/object-record/components/RecordChip.tsx
+#: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordPicker.tsx
 #: src/modules/object-record/record-title-cell/components/RecordTitleCellTextFieldDisplay.tsx
 #: src/modules/object-record/record-title-cell/components/RecordTitleFullNameFieldDisplay.tsx
 #: src/modules/page-layout/hooks/usePageLayoutAddTabStrategy.ts
@@ -18745,6 +19871,11 @@ msgstr "Update"
 #: src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsContainer.tsx
 msgid "Update {contextStoreNumberOfSelectedRecords} records"
 msgstr "Update {contextStoreNumberOfSelectedRecords} records"
+
+#. js-lingui-id: 5ATlEw
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Update campaign cap"
+msgstr "Update campaign cap"
 
 #. js-lingui-id: XeFxgX
 #: src/modules/information-banner/components/billing/InformationBannerFailPaymentInfo.tsx
@@ -19016,6 +20147,7 @@ msgstr "us-east-1"
 #. js-lingui-id: 7FaY4u
 #: src/modules/settings/admin-panel/ai/components/SettingsAdminAI.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/usage/components/UsageByUserTableSection.tsx
 #: src/pages/settings/ai/SettingsAI.tsx
 #: src/pages/settings/billing/SettingsUsage.tsx
@@ -19056,13 +20188,25 @@ msgstr "Usage by Type"
 msgid "Usage by User"
 msgstr "Usage by User"
 
+#. js-lingui-id: OWQoe/
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Usage details will appear here when billing data is connected."
+msgstr "Usage details will appear here when billing data is connected."
+
 #. js-lingui-id: CedRjP
 #: src/modules/settings/event-logs/components/EventLogTableSelector.tsx
 msgid "Usage Events"
 msgstr "Usage Events"
 
+#. js-lingui-id: qfYN4h
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Usage history"
+msgstr "Usage history"
+
 #. js-lingui-id: 6SbZqO
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "Usage period"
 msgstr "Usage period"
 
@@ -19085,6 +20229,11 @@ msgstr "Use filter to see existing skills or create your own"
 #: src/pages/settings/ai/components/SettingsAgentToolsTab.tsx
 msgid "Use filter to see existing tools or create your own"
 msgstr "Use filter to see existing tools or create your own"
+
+#. js-lingui-id: i6KJFC
+#: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/MatchColumnsStep.tsx
+msgid "Use generic mapping"
+msgstr "Use generic mapping"
 
 #. js-lingui-id: 1Y7Unr
 #: src/pages/settings/data-model/new-index/SettingsObjectNewIndex.tsx
@@ -19110,6 +20259,11 @@ msgstr "Use our API or add your first {objectLabel} manually"
 #: src/pages/settings/accounts/SettingsAccountsShopify.tsx
 msgid "Use our own Shopify app for OAuth first. We can fall back to Composio if the first-party flow blocks the spike."
 msgstr "Use our own Shopify app for OAuth first. We can fall back to Composio if the first-party flow blocks the spike."
+
+#. js-lingui-id: D3O8h7
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Use policy capacity"
+msgstr "Use policy capacity"
 
 #. js-lingui-id: z1f4Op
 #: src/modules/workflow/workflow-variables/utils/getWorkflowVariableSpecialItems.ts
@@ -19317,11 +20471,6 @@ msgstr "Verifying your email"
 #: src/modules/onboarding/constants/OnboardingActivationMessages.ts
 msgid "Verifying your login token"
 msgstr "Verifying your login token"
-
-#. js-lingui-id: eE0JZ4
-#: src/modules/settings/legal/components/SettingsDpaAgreementsTable.tsx
-msgid "Version"
-msgstr "Version"
 
 #. js-lingui-id: J709SW
 #: src/pages/settings/applications/components/SettingsApplicationRegistrationInstalledWorkspaces.tsx
@@ -19574,6 +20723,30 @@ msgstr "Waiting for approval..."
 msgid "Waiting for output..."
 msgstr "Waiting for output..."
 
+#. js-lingui-id: daodFI
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "Warming"
+msgstr "Warming"
+
+#. js-lingui-id: 88xw6M
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
+msgid "Warmup"
+msgstr "Warmup"
+
+#. js-lingui-id: mUHYll
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Warmup paid through"
+msgstr "Warmup paid through"
+
+#. js-lingui-id: O7Asl+
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Warmup renewal"
+msgstr "Warmup renewal"
+
 #. js-lingui-id: r6y+jM
 #: src/modules/ui/feedback/snack-bar-manager/components/SnackBar.tsx
 msgid "Warning"
@@ -19633,6 +20806,52 @@ msgstr "Watch demo"
 #: src/pages/settings/members/SettingsWorkspaceMembers.tsx
 msgid "Watch members demo"
 msgstr "Watch members demo"
+
+#. js-lingui-id: R5Y8Ao
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "We could not confirm this purchase. Your saved order is safe; please try again."
+msgstr "We could not confirm this purchase. Your saved order is safe; please try again."
+
+#. js-lingui-id: JRFCJo
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
+msgid "We could not confirm your payment method. Please retry."
+msgstr "We could not confirm your payment method. Please retry."
+
+#. js-lingui-id: yqCazc
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "We could not prepare card payment. Please try again."
+msgstr "We could not prepare card payment. Please try again."
+
+#. js-lingui-id: NkAfPG
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "We could not prepare this managed mailbox order. Please try again."
+msgstr "We could not prepare this managed mailbox order. Please try again."
+
+#. js-lingui-id: RdtqQr
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "We could not prepare this prewarmed mailbox order. Please try again."
+msgstr "We could not prepare this prewarmed mailbox order. Please try again."
+
+#. js-lingui-id: 3A4ME8
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "We could not recover this saved order. Refresh to try again."
+msgstr "We could not recover this saved order. Refresh to try again."
+
+#. js-lingui-id: k/UXLk
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "We could not recover this saved order. Refresh to try the same order identity again."
+msgstr "We could not recover this saved order. Refresh to try the same order identity again."
+
+#. js-lingui-id: Yo5bxw
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
+msgid "We could not save your payment method. Please retry."
+msgstr "We could not save your payment method. Please retry."
+
+#. js-lingui-id: UFAdTZ
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailOverview.tsx
+msgid "We could not update this managed email service. Please try again."
+msgstr "We could not update this managed email service. Please try again."
 
 #. js-lingui-id: h4KC4F
 #: src/modules/settings/billing/components/AddPaymentMethodForm.tsx
@@ -19879,6 +21098,16 @@ msgstr "widgets"
 msgid "Widgets"
 msgstr "Widgets"
 
+#. js-lingui-id: 54pAAB
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Will be added"
+msgstr "Will be added"
+
+#. js-lingui-id: nHGIvQ
+#: src/modules/myah/creator-crm/components/CreatorBulkRelationshipDialog.tsx
+msgid "Will be removed"
+msgstr "Will be removed"
+
 #. js-lingui-id: j6ncOZ
 #: src/modules/workflow/workflow-steps/workflow-actions/iterator-action/components/WorkflowEditActionIterator.tsx
 msgid "Will continue to the next iteration even if the current one fails"
@@ -19970,6 +21199,7 @@ msgstr "Workflows"
 #: src/pages/settings/applications/SettingsApplicationRegistrationDetails.tsx
 #: src/pages/settings/applications/SettingsApplications.tsx
 #: src/pages/settings/applications/SettingsAvailableApplicationDetails.tsx
+#: src/pages/settings/billing/SettingsBilling.tsx
 #: src/pages/settings/billing/SettingsUsage.tsx
 #: src/pages/settings/billing/SettingsUsageUserDetail.tsx
 #: src/pages/settings/data-model/new-field/SettingsObjectNewFieldConfigure.tsx
@@ -19993,8 +21223,6 @@ msgstr "Workflows"
 #: src/pages/settings/general/SettingsGeneral.tsx
 #: src/pages/settings/layout/components/SettingsLayoutDetailScaffold.tsx
 #: src/pages/settings/layout/SettingsLayout.tsx
-#: src/pages/settings/legal/SettingsLegalDpa.tsx
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
 #: src/pages/settings/logic-functions/SettingsLogicFunctionDetail.tsx
 #: src/pages/settings/logic-functions/SettingsLogicFunctionDetail.tsx
 #: src/pages/settings/members/roles/SettingsRoleAddObjectLevel.tsx
@@ -20005,6 +21233,17 @@ msgstr "Workflows"
 #: src/pages/settings/security/SettingsSecuritySSOIdentifyProvider.tsx
 msgid "Workspace"
 msgstr "Workspace"
+
+#. js-lingui-id: DBCACX
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Workspace billing activity"
+msgstr "Workspace billing activity"
+
+#. js-lingui-id: prpYVh
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Workspace billing summary"
+msgstr "Workspace billing summary"
 
 #. js-lingui-id: fQ8teq
 #: src/modules/auth/sign-in-up/hooks/useSignUpInNewWorkspace.ts
@@ -20223,6 +21462,11 @@ msgstr "You already belong to the workspace {workspaceDisplayName}"
 msgid "You already belong to this workspace"
 msgstr "You already belong to this workspace"
 
+#. js-lingui-id: ycoyxS
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
+msgid "You are confirming the due-today amount and the recurring annual and monthly services shown in this quote."
+msgstr "You are confirming the due-today amount and the recurring annual and monthly services shown in this quote."
+
 #. js-lingui-id: MFDARJ
 #: src/modules/object-record/record-table/empty-state/components/RecordTableEmptyStateReadOnly.tsx
 msgid "You are not allowed to create records for this object"
@@ -20263,6 +21507,21 @@ msgstr "You cannot impersonate your own account"
 #: src/modules/page-layout/widgets/components/PageLayoutWidgetForbiddenDisplay.tsx
 msgid "You do not have permission to access the {objectName} object"
 msgstr "You do not have permission to access the {objectName} object"
+
+#. js-lingui-id: XmZwK/
+#: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
+msgid "You do not have permission to view Campaign Influencers."
+msgstr "You do not have permission to view Campaign Influencers."
+
+#. js-lingui-id: xx93Sv
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+msgid "You do not have permission to view Creator Lists."
+msgstr "You do not have permission to view Creator Lists."
+
+#. js-lingui-id: rbmWkN
+#: src/modules/myah/creator-crm/components/CreatorListScopedCreatorIndex.tsx
+msgid "You do not have permission to view Creators."
+msgstr "You do not have permission to view Creators."
 
 #. js-lingui-id: D0mU8n
 #: src/modules/page-layout/widgets/components/PageLayoutWidgetForbiddenDisplay.tsx
@@ -20352,6 +21611,11 @@ msgstr "You've hit your usage limit. Subscribe for more usage."
 msgid "Your app version is out of date. Please refresh the page."
 msgstr "Your app version is out of date. Please refresh the page."
 
+#. js-lingui-id: Ee1KPJ
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Your balance is empty. Managed services are paused until funds are added."
+msgstr "Your balance is empty. Managed services are paused until funds are added."
+
 #. js-lingui-id: dtOZU/
 #: src/modules/settings/billing/hooks/useBillingWording.ts
 msgid "Your billing interval will switch to monthly immediately and your trial will continue. When it ends, you will be charged ${monthlyPrice} per user per month billed monthly."
@@ -20362,10 +21626,10 @@ msgstr "Your billing interval will switch to monthly immediately and your trial 
 msgid "Your billing interval will switch to yearly immediately and your trial will continue. When it ends, you will be charged ${yearlyPrice} per user per year billed annually."
 msgstr "Your billing interval will switch to yearly immediately and your trial will continue. When it ends, you will be charged ${yearlyPrice} per user per year billed annually."
 
-#. js-lingui-id: mmGBWT
-#: src/pages/settings/legal/SettingsLegalDpaNew.tsx
-msgid "Your details"
-msgstr "Your details"
+#. js-lingui-id: 0L4hpS
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
+msgid "Your card is saved securely by Stripe for this managed mailbox service. Your order will not be submitted until setup is complete."
+msgstr "Your card is saved securely by Stripe for this managed mailbox service. Your order will not be submitted until setup is complete."
 
 #. js-lingui-id: ahEwS4
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -20420,6 +21684,7 @@ msgstr "Your name as it will be displayed"
 #. js-lingui-id: 8mfOAZ
 #: src/modules/settings/billing/components/AddPaymentMethodForm.tsx
 #: src/modules/settings/billing/hooks/useSubmitSubscriptionPayment.ts
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
 msgid "Your payment details are incomplete. Please review and retry."
 msgstr "Your payment details are incomplete. Please review and retry."
 
@@ -20437,6 +21702,11 @@ msgstr "Your plan will switch to Pro immediately and your trial will continue. W
 #: src/pages/settings/admin-panel/SettingsAdminNewAiProvider.tsx
 msgid "Your provider API key for authentication"
 msgstr "Your provider API key for authentication"
+
+#. js-lingui-id: xfhFiy
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
+msgid "Your quote and order identity are stored."
+msgstr "Your quote and order identity are stored."
 
 #. js-lingui-id: 319YPG
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
