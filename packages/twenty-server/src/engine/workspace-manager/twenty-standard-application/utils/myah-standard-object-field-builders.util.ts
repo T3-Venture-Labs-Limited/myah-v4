@@ -3022,6 +3022,24 @@ export const buildMyahStandardFlatFieldMetadatas = ({
           twentyStandardApplicationId: args.twentyStandardApplicationId,
           now: args.now,
         }),
+        emailSignature: createMyahStandardFieldFlatMetadata({
+          objectName: 'campaign',
+          workspaceId: args.workspaceId,
+          context: {
+            fieldName: 'emailSignature',
+            type: FieldMetadataType.RICH_TEXT,
+            label: 'Email signature',
+            description:
+              'Complete closing block appended to generated replies. Include your preferred sign-off, name, title, company, and contact details.',
+            icon: 'IconSignature',
+            isNullable: true,
+          },
+          standardObjectMetadataRelatedEntityIds:
+            args.standardObjectMetadataRelatedEntityIds,
+          dependencyFlatEntityMaps: args.dependencyFlatEntityMaps,
+          twentyStandardApplicationId: args.twentyStandardApplicationId,
+          now: args.now,
+        }),
         outreachWorkflows: createStandardRelationFieldFlatMetadata({
           objectName: 'campaign',
           workspaceId: args.workspaceId,

@@ -723,6 +723,9 @@ export const MYAH_STANDARD_OBJECTS = {
       additionalNotes: {
         universalIdentifier: '9342db95-0df0-460d-8611-2bbddfb0bc1c',
       },
+      emailSignature: {
+        universalIdentifier: '4e3ea786-9fc4-4c29-95a4-364eb0b1bd9b',
+      },
       campaignCreators: {
         universalIdentifier: '894c80f2-a478-5680-8c20-c7a86aa24fde',
       },
@@ -828,6 +831,9 @@ export const MYAH_STANDARD_OBJECTS = {
         viewFields: {
           lifecycleStatus: {
             universalIdentifier: 'e2b2e0e1-1b50-456d-9576-cd0fbcce7593',
+          },
+          emailSignature: {
+            universalIdentifier: '959081c0-5f7f-4a2c-9519-5cdc57f75a31',
           },
         },
       },
