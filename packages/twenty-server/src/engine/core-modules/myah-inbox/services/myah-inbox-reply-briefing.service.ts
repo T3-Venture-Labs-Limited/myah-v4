@@ -77,6 +77,10 @@ export type MyahInboxReplyBriefing = {
   creator: MyahInboxCreatorReplyContext | null;
 };
 
+export type MyahInboxReplyGenerationContext = MyahInboxReplyBriefing & {
+  campaignEmailSignatureMarkdown: string | null;
+};
+
 type MyahInboxThreadProposalHistoryRaw = Omit<
   MyahInboxThreadProposalHistoryEntry,
   'receivedAt' | 'sender'
@@ -98,6 +102,7 @@ type MyahInboxReplyBriefingCampaignRecord = ObjectLiteral & {
   replyRules: MyahInboxReplyBriefingRichText;
   escalationBoundaries: MyahInboxReplyBriefingRichText;
   additionalNotes: MyahInboxReplyBriefingRichText;
+  emailSignature: MyahInboxReplyBriefingRichText;
 };
 
 type MyahInboxReplyBriefingCampaignCreatorRecord = ObjectLiteral & {
@@ -140,7 +145,10 @@ type MyahInboxReplyBriefingRepositories = {
   person: WorkspaceRepository<MyahInboxReplyBriefingPersonRecord>;
 };
 
-type MyahInboxReplyBriefingContext = Omit<MyahInboxReplyBriefing, 'thread'>;
+type MyahInboxReplyBriefingContext = Omit<
+  MyahInboxReplyGenerationContext,
+  'thread'
+>;
 
 const MYAH_INBOX_REPLY_BRIEFING_TRUNCATION_MARKER = '[…truncated]';
 const MYAH_INBOX_REPLY_BRIEFING_MAX_AGENT_RICH_TEXT_LENGTH = 2_000;
@@ -153,6 +161,7 @@ const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_FIELDS = [
   'replyRules',
   'escalationBoundaries',
   'additionalNotes',
+  'emailSignature',
 ] as const satisfies readonly (keyof MyahInboxReplyBriefingCampaignRecord)[];
 const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_CREATOR_FIELDS = [
   'stage',
@@ -238,7 +247,7 @@ export class MyahInboxReplyBriefingService {
 
   async loadReplyBriefing(
     input: Omit<MyahInboxListThreadsInput, 'threadId'> & { threadId: string },
-  ): Promise<MyahInboxReplyBriefing> {
+  ): Promise<MyahInboxReplyGenerationContext> {
     const thread = await this.myahInboxQueryService.getThreadSummary(input);
     const context = await this.loadThreadProposalHistory(input, thread);
 
@@ -508,6 +517,11 @@ export class MyahInboxReplyBriefingService {
         return {
           history,
           replyRecipient,
+          campaignEmailSignatureMarkdown:
+            typeof campaignRecord?.emailSignature?.markdown === 'string' &&
+            campaignRecord.emailSignature.markdown.trim().length > 0
+              ? campaignRecord.emailSignature.markdown
+              : null,
           campaign: campaignRecord
             ? {
                 objective: truncateReplyBriefingValue(

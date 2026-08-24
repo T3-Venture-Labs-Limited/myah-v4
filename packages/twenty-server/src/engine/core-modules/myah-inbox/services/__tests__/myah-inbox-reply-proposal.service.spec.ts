@@ -1,4 +1,5 @@
 import { type LanguageModel, type ToolSet } from 'ai';
+import { MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { MyahInboxState } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 import {
@@ -185,7 +186,12 @@ const createFakeModel = (modelOutput: unknown) => {
   };
 };
 
-const createService = (modelOutput: unknown) => {
+const createService = (
+  modelOutput: unknown,
+  {
+    campaignEmailSignatureMarkdown = null,
+  }: { campaignEmailSignatureMarkdown?: string | null } = {},
+) => {
   const fakeModel = createFakeModel(modelOutput);
   const draftRepositoryUpdate = jest.fn();
   const messageRepositoryInsert = jest.fn();
@@ -232,6 +238,10 @@ const createService = (modelOutput: unknown) => {
           markdown: briefing.campaign?.agent.escalationBoundaries,
         },
         additionalNotes: { markdown: briefing.campaign?.agent.additionalNotes },
+        emailSignature:
+          campaignEmailSignatureMarkdown === null
+            ? null
+            : { markdown: campaignEmailSignatureMarkdown },
       }),
       update: businessRecordMutation,
       save: businessRecordMutation,
@@ -481,6 +491,9 @@ describe('MyahInboxReplyProposalService', () => {
     expect(modelRequest).toContain('Reference data — Campaign relationship');
     expect(modelRequest).toContain('Reference data — Creator profile');
     expect(modelRequest).not.toContain('PRIVATE_EMAIL_MUST_NOT_LEAK');
+    expect(modelRequest).not.toContain(
+      'A Campaign email signature will be appended after your response.',
+    );
 
     const campaignAgentFieldOrder = [
       'Campaign brief: Invite creators to the new hydration launch.',
@@ -511,6 +524,61 @@ describe('MyahInboxReplyProposalService', () => {
     expect(setup.messageRepositoryInsert).not.toHaveBeenCalled();
     expect(setup.businessRecordMutation).not.toHaveBeenCalled();
     expect(Object.keys(result)).toEqual(['body']);
+  });
+
+  it('keeps the signature out of model context and appends it exactly once', async () => {
+    const signature = 'Regards,\n\nZac\nMyah';
+    const setup = createService(
+      {
+        body: {
+          markdown: 'Tuesday works for us.   \n',
+          blocknote: 'MODEL_BLOCKNOTE_WITHOUT_SIGNATURE',
+        },
+      },
+      { campaignEmailSignatureMarkdown: signature },
+    );
+
+    const result = await setup.service.generateReplyProposal(request);
+    const publicBriefing = await setup.service.getReplyBriefing(request);
+    const modelRequest = JSON.stringify(setup.fakeModel.doGenerate.mock.calls);
+
+    expect(result).toEqual({
+      body: {
+        markdown: `Tuesday works for us.\n\n${signature}`,
+        blocknote: null,
+      },
+    });
+    expect(modelRequest).toContain(
+      'A Campaign email signature will be appended after your response.',
+    );
+    expect(modelRequest).toContain('End after the final substantive sentence.');
+    expect(modelRequest).not.toContain(signature);
+    expect(JSON.stringify(publicBriefing)).not.toContain(
+      'campaignEmailSignatureMarkdown',
+    );
+    expect(JSON.stringify(publicBriefing)).not.toContain(signature);
+    expect(result.body.markdown.match(/Regards,/g)).toHaveLength(1);
+    expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
+    expect(setup.messageRepositoryInsert).not.toHaveBeenCalled();
+    expect(setup.businessRecordMutation).not.toHaveBeenCalled();
+  });
+
+  it('rejects a signature that would exceed the existing draft limit', async () => {
+    const setup = createService(
+      {
+        body: {
+          markdown: 'a'.repeat(MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH),
+          blocknote: null,
+        },
+      },
+      { campaignEmailSignatureMarkdown: 'Regards,\nZac' },
+    );
+
+    await expect(
+      setup.service.generateReplyProposal(request),
+    ).rejects.toThrow();
+    expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
+    expect(setup.messageRepositoryInsert).not.toHaveBeenCalled();
   });
 
   it('normalizes a string reply body from a text-only model response', async () => {

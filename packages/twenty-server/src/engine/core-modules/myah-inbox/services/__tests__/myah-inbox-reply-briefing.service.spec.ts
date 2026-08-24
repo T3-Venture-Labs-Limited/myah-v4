@@ -80,6 +80,10 @@ const allowedCampaign = {
     markdown: 'Use the approved product name.',
     blocknote: null,
   },
+  emailSignature: {
+    markdown: 'Regards,\n\nZac\nMyah',
+    blocknote: null,
+  },
   status: 'PRIVATE_CAMPAIGN_STATUS_MUST_NOT_LEAK',
 };
 
@@ -304,6 +308,7 @@ describe('MyahInboxReplyBriefingService', () => {
           text: 'Can we launch Tuesday?',
         },
       ],
+      campaignEmailSignatureMarkdown: 'Regards,\n\nZac\nMyah',
       campaign: {
         objective: 'Recruit trusted skincare reviewers',
         icpGoal: 'Reach dry-skin shoppers',
@@ -412,6 +417,7 @@ describe('MyahInboxReplyBriefingService', () => {
         replyRules: true,
         escalationBoundaries: true,
         additionalNotes: true,
+        emailSignature: true,
       },
     });
     expect(repositories.creator.findOne).toHaveBeenCalledWith({
@@ -485,6 +491,80 @@ describe('MyahInboxReplyBriefingService', () => {
           additionalNotes: null,
         },
       },
+    });
+  });
+
+  it.each([
+    [
+      'is not provisioned',
+      new EntityPropertyNotFoundError('emailSignature', {
+        targetName: 'campaign',
+      } as never),
+    ],
+    [
+      'is unreadable',
+      new PermissionsException(
+        'Campaign email signature is unreadable',
+        PermissionsExceptionCode.PERMISSION_DENIED,
+      ),
+    ],
+  ])(
+    'keeps readable Campaign context when the email signature %s',
+    async (_label, unavailableEmailSignature) => {
+      const { repositories, service } = createService();
+
+      repositories.campaign.findOne.mockImplementation(
+        ({ select }: { select: Record<string, boolean> }) => {
+          const fields = Object.keys(select);
+
+          if (fields.includes('emailSignature')) {
+            return Promise.reject(unavailableEmailSignature);
+          }
+
+          return Promise.resolve(
+            Object.fromEntries(
+              fields.map((field) => [
+                field,
+                allowedCampaign[field as keyof typeof allowedCampaign],
+              ]),
+            ),
+          );
+        },
+      );
+
+      await expect(
+        service.loadReplyBriefing({ ...listInput(), threadId }),
+      ).resolves.toMatchObject({
+        campaignEmailSignatureMarkdown: null,
+        campaign: {
+          objective: allowedCampaign.objective,
+          icpGoal: allowedCampaign.icpGoal,
+          agent: {
+            campaignBrief: allowedCampaign.campaignBrief.markdown,
+            communicationGuidelines:
+              allowedCampaign.communicationGuidelines.markdown,
+            replyRules: allowedCampaign.replyRules.markdown,
+            escalationBoundaries:
+              allowedCampaign.escalationBoundaries.markdown,
+            additionalNotes: allowedCampaign.additionalNotes.markdown,
+          },
+        },
+      });
+    },
+  );
+
+  it('treats a whitespace-only Campaign email signature as absent', async () => {
+    const { service } = createService({
+      campaign: {
+        ...allowedCampaign,
+        emailSignature: { markdown: ' \n ', blocknote: null },
+      },
+    });
+
+    await expect(
+      service.loadReplyBriefing({ ...listInput(), threadId }),
+    ).resolves.toMatchObject({
+      campaignEmailSignatureMarkdown: null,
     });
   });
 
