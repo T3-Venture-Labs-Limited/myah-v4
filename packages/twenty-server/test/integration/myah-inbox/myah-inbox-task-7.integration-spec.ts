@@ -330,7 +330,7 @@ describe('Myah Inbox Task 7 isolated integration', () => {
     ]);
     expect(displayName.edges[0].node).toMatchObject({
       lastMessageSender: fixture.markers.senderEmail,
-      creator: { id: fixture.creatorId, name: 'Task 7 Creator' },
+      creator: { id: fixture.creatorId, name: fixture.markers.creatorName },
     });
     expect(subjectSender.edges[0].node).toMatchObject({
       id: fixture.threadIds.subject,
@@ -340,6 +340,52 @@ describe('Myah Inbox Task 7 isolated integration', () => {
       id: fixture.threadIds.metadata,
       lastMessageSender: fixture.markers.metadataSenderEmail,
     });
+  });
+
+  it('searches linked Creator names case-insensitively with stable cursors', async () => {
+    const lower = await fetchInbox(operatorAccessToken, {
+      first: 20,
+      search: 'nadine',
+    });
+    const upper = await fetchInbox(operatorAccessToken, {
+      first: 20,
+      search: 'NADINE',
+    });
+    const firstPage = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      search: fixture.markers.creatorName,
+    });
+    const repeatedFirstPage = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      search: fixture.markers.creatorName,
+    });
+    const secondPage = await fetchInbox(operatorAccessToken, {
+      first: 1,
+      after: firstPage.pageInfo.endCursor,
+      search: fixture.markers.creatorName,
+    });
+    const filtered = await fetchInbox(operatorAccessToken, {
+      first: 20,
+      campaignId: fixture.campaignId,
+      states: ['NEEDS_REPLY'],
+      search: 'nadine',
+    });
+
+    expect(lower.edges.map(({ node }) => node.id)).toEqual(
+      upper.edges.map(({ node }) => node.id),
+    );
+    expect(lower.edges).not.toHaveLength(0);
+    expect(
+      lower.edges.every(({ node }) => node.creator?.id === fixture.creatorId),
+    ).toBe(true);
+    expect(repeatedFirstPage).toEqual(firstPage);
+    expect(secondPage.edges[0].node.id).not.toBe(firstPage.edges[0].node.id);
+    expect(filtered.edges.map(({ node }) => node.id)).toContain(
+      fixture.threadIds.tiedLinked,
+    );
+    expect(filtered.edges.map(({ node }) => node.id)).not.toContain(
+      fixture.threadIds.tiedUnlinked,
+    );
   });
 
   it('keeps the unlinked readable thread selectable and links it only to the existing Creator', async () => {
