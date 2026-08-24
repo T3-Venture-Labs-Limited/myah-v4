@@ -2,13 +2,15 @@ import { render, screen } from '@testing-library/react';
 
 import { PageLayoutMainContent } from '@/page-layout/PageLayoutMainContent';
 
+const mockGetWidgetConfigurationViewId = jest.fn();
+
 jest.mock('@/myah/creator-crm/components/CampaignInfluencerIndex', () => ({
   CampaignInfluencerIndex: ({
     campaignId,
     viewId,
   }: {
     campaignId: string;
-    viewId?: string;
+    viewId: string | null;
   }) => (
     <div>{`Campaign Influencers integration:${campaignId}:${viewId ?? 'default'}`}</div>
   ),
@@ -74,7 +76,8 @@ jest.mock('@/ui/layout/contexts/LayoutRenderingContext', () => ({
   useLayoutRenderingContext: () => ({ targetRecordIdentifier }),
 }));
 jest.mock('@/page-layout/utils/getWidgetConfigurationViewId', () => ({
-  getWidgetConfigurationViewId: () => 'campaign-influencers-view',
+  getWidgetConfigurationViewId: (...args: unknown[]) =>
+    mockGetWidgetConfigurationViewId(...args),
 }));
 
 describe('PageLayoutMainContent', () => {
@@ -92,6 +95,10 @@ describe('PageLayoutMainContent', () => {
       id: 'campaign-1',
       targetObjectNameSingular: 'campaign',
     };
+    mockGetWidgetConfigurationViewId.mockReturnValue(
+      'campaign-influencers-view',
+    );
+    mockGetWidgetConfigurationViewId.mockClear();
   });
 
   it('mounts Campaign Home with native page layout content', () => {
@@ -117,6 +124,43 @@ describe('PageLayoutMainContent', () => {
       screen.getByText(
         'Campaign Influencers integration:campaign-1:campaign-influencers-view',
       ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Native page layout content'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not fall through to generic content when Influencers has no view ID', () => {
+    mockGetWidgetConfigurationViewId.mockReturnValueOnce(null);
+    activeTab = {
+      ...activeTab,
+      title: 'Influencers',
+      widgets: [{}],
+      universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+    };
+
+    render(<PageLayoutMainContent tabId="influencers-tab-id" />);
+
+    expect(
+      screen.getByText('Campaign Influencers integration:campaign-1:default'),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Native page layout content'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not select an arbitrary Influencers widget view', () => {
+    activeTab = {
+      ...activeTab,
+      title: 'Influencers',
+      widgets: [{}, {}],
+      universalIdentifier: '04ec5c8f-11b5-40ac-8f64-bf3f3f4f7596',
+    };
+
+    render(<PageLayoutMainContent tabId="influencers-tab-id" />);
+
+    expect(
+      screen.getByText('Campaign Influencers integration:campaign-1:default'),
     ).toBeVisible();
     expect(
       screen.queryByText('Native page layout content'),

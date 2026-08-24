@@ -176,7 +176,7 @@ const AddCampaignInfluencersButton = ({
 
 type CampaignInfluencerIndexProps = {
   campaignId: string;
-  viewId: string;
+  viewId: string | null;
 };
 
 export const CampaignInfluencerIndex = ({
@@ -238,7 +238,7 @@ export const CampaignInfluencerIndex = ({
           objectNameSingular: 'campaignCreator',
           objectRecordId: campaignCreatorId,
         },
-        { viewId: selectedCampaignViewId },
+        { viewId: selectedCampaignViewId ?? undefined },
       ),
     [selectedCampaignViewId],
   );
@@ -248,6 +248,12 @@ export const CampaignInfluencerIndex = ({
     },
     [campaignId],
   );
+
+  if (!campaignInfluencersViewId || !selectedCampaignViewId) {
+    return (
+      <StyledScopeState>{t`Campaign Influencers are unavailable.`}</StyledScopeState>
+    );
+  }
 
   if (
     !campaignCreatorObjectMetadataItem ||
