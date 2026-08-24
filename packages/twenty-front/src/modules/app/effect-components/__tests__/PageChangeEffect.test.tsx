@@ -117,9 +117,7 @@ describe('PageChangeEffect', () => {
     navigate.mockReset();
     store.get.mockClear();
     store.set.mockClear();
-    jest
-      .mocked(usePageChangeEffectNavigateLocation)
-      .mockReturnValue(todayDestinationByState.pending);
+    jest.mocked(usePageChangeEffectNavigateLocation).mockReturnValue(undefined);
   });
 
   const renderEffect = () =>
@@ -133,12 +131,6 @@ describe('PageChangeEffect', () => {
       </MemoryRouter>,
     );
 
-  const todayDestinationByState = {
-    forbidden: '/myah/today',
-    missing: undefined,
-    pending: undefined,
-    ready: '/myah/today',
-  } as const;
   const RouteTransitionEffect = ({ destination }: { destination?: string }) => {
     const navigateToDestination = useActualNavigate();
     // Keep the test transition guard synchronous with its navigation call.
@@ -160,30 +152,14 @@ describe('PageChangeEffect', () => {
     return null;
   };
 
-  const expectTodayRedirectAfterResolution = async (
-    resolvedState: 'ready' | 'forbidden',
-  ) => {
+  const expectInboxRedirectAfterDestinationAppears = async () => {
     const view = renderEffect();
 
     await waitFor(() => expect(navigate).not.toHaveBeenCalled());
 
     jest
       .mocked(usePageChangeEffectNavigateLocation)
-      .mockReturnValue(todayDestinationByState.missing);
-    view.rerender(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-        initialEntries={['/myah']}
-      >
-        <RouteTransitionEffect />
-        <PageChangeEffect />
-      </MemoryRouter>,
-    );
-    await waitFor(() => expect(navigate).not.toHaveBeenCalled());
-
-    jest
-      .mocked(usePageChangeEffectNavigateLocation)
-      .mockReturnValue(todayDestinationByState[resolvedState]);
+      .mockReturnValue('/myah/inbox');
     view.rerender(
       <MemoryRouter
         future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
@@ -195,7 +171,7 @@ describe('PageChangeEffect', () => {
     );
 
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
-    expect(navigate).toHaveBeenLastCalledWith('/myah/today');
+    expect(navigate).toHaveBeenLastCalledWith('/myah/inbox');
 
     view.rerender(
       <MemoryRouter
@@ -209,16 +185,12 @@ describe('PageChangeEffect', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
   };
 
-  it('navigates to Today exactly once when Today becomes ready', async () => {
-    await expectTodayRedirectAfterResolution('ready');
-  });
-
-  it('navigates to Today exactly once when Today is forbidden', async () => {
-    await expectTodayRedirectAfterResolution('forbidden');
+  it('navigates to Inbox exactly once when the destination appears', async () => {
+    await expectInboxRedirectAfterDestinationAppears();
   });
 
   it('navigates again when the route moves away while the target is unchanged', async () => {
-    const target = '/myah/today?tab=tasks#priority';
+    const target = '/myah/inbox?tab=tasks#priority';
     jest.mocked(usePageChangeEffectNavigateLocation).mockReturnValue(target);
 
     const view = render(

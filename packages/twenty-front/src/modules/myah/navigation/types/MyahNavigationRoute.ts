@@ -3,7 +3,6 @@ import { type CoreObjectNameSingular } from 'twenty-shared/types';
 import { type IconComponent } from 'twenty-ui/icon';
 
 export type MyahNavigationPageId =
-  | 'today'
   | 'inbox'
   | 'creators'
   | 'creator-lists'

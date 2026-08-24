@@ -53,7 +53,7 @@ describe('isMyahNavigationRouteActive', () => {
   it('matches a resolved standalone page-layout pathname', () => {
     const resolvedPageLayoutRoute: ResolvedMyahNavigationRoute = {
       status: 'ready',
-      route: getMyahNavigationRoute('today'),
+      route: getMyahNavigationRoute('tasks'),
       destination: {
         kind: 'native',
         path: '/page/workspace-page-layout-id',

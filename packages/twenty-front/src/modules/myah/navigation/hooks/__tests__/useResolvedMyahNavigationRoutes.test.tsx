@@ -351,11 +351,11 @@ describe('resolveMyahNavigationRoutes', () => {
 
   it('waits for all page-layout relations before resolving a standalone page', () => {
     const pageLayoutRoute: MyahNavigationRoute = {
-      id: 'today',
+      id: 'tasks',
       label: 'Standalone page',
       Icon: IconCircle,
       group: null,
-      entryPath: '/myah/today',
+      entryPath: '/myah/tasks',
       availability: 'available',
       destination: {
         kind: 'native-page-layout',
