@@ -116,7 +116,7 @@ const renderEditor = ({
       onDraftChange={onDraftChange}
       onRetry={retry}
       onReloadConflict={reloadConflict}
-      proposalAction={<button>Generate proposal</button>}
+      proposalAction={<button>Generate Reply</button>}
     />,
   );
 
@@ -135,7 +135,7 @@ describe('MyahInboxDraftEditor', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Saving');
     expect(
-      screen.getByRole('button', { name: 'Generate proposal' }),
+      screen.getByRole('button', { name: 'Generate Reply' }),
     ).toBeVisible();
   });
 
@@ -226,12 +226,12 @@ describe('MyahInboxDraftEditor', () => {
     });
   });
 
-  it('keeps Generate proposal as the only normal action-row button', () => {
+  it('keeps Generate Reply as the only normal action-row button', () => {
     renderEditor();
 
     const actions = screen.getByLabelText('Draft actions');
     expect(
-      within(actions).getByRole('button', { name: 'Generate proposal' }),
+      within(actions).getByRole('button', { name: 'Generate Reply' }),
     ).toBeVisible();
     expect(
       within(actions).queryByRole('button', { name: 'Save draft' }),

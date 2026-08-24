@@ -118,7 +118,7 @@ jest.mock('@/myah/inbox/components/MyahInboxProposalPreview', () => ({
   }) => (
     <>
       {renderGenerateAction(
-        <button disabled={disabled}>Generate proposal</button>,
+        <button disabled={disabled}>Generate Reply</button>,
       )}
       <div aria-label="Fixture proposal">Proposal remains visible</div>
       <button
@@ -274,7 +274,7 @@ describe('MyahInboxReplyWorkspace', () => {
     );
     expect(
       within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate proposal',
+        name: 'Generate Reply',
       }),
     ).toBeVisible();
   });

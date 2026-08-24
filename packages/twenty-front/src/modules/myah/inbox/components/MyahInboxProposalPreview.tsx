@@ -73,7 +73,7 @@ export const MyahInboxProposalPreview = ({
         blocknote: generatedProposal.body.blocknote ?? null,
       });
     } catch {
-      setError('Could not generate a proposal. Try again.');
+      setError('Could not generate a reply. Try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -81,7 +81,7 @@ export const MyahInboxProposalPreview = ({
 
   const generateAction = (
     <Button
-      title={isGenerating ? 'Generating proposal' : 'Generate proposal'}
+      title={isGenerating ? 'Generating reply' : 'Generate Reply'}
       variant="secondary"
       size="small"
       disabled={disabled || isGenerating}
@@ -90,20 +90,20 @@ export const MyahInboxProposalPreview = ({
   );
 
   return (
-    <StyledProposal aria-label="AI proposal">
+    <StyledProposal aria-label="AI reply">
       {renderGenerateAction ? (
         renderGenerateAction(generateAction)
       ) : (
         <StyledActions>{generateAction}</StyledActions>
       )}
       {isGenerating && (
-        <StyledStatus role="status">Generating proposal</StyledStatus>
+        <StyledStatus role="status">Generating reply</StyledStatus>
       )}
       {error && <StyledError role="alert">{error}</StyledError>}
       {proposal && (
         <>
-          <StyledPreview aria-label="Proposal preview">
-            <strong>Reply proposal</strong>
+          <StyledPreview aria-label="Reply preview">
+            <strong>Generated reply</strong>
             <span>{proposal.markdown}</span>
           </StyledPreview>
           <StyledActions>
