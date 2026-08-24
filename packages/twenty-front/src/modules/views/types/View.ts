@@ -15,6 +15,7 @@ import { type ViewSort } from '@/views/types/ViewSort';
 
 export type View = {
   id: string;
+  universalIdentifier?: string;
   name: string;
   type: ViewType;
   key?: ViewKey | null;

@@ -36,6 +36,9 @@ export class ViewDTO {
   @IDField(() => UUIDScalarType)
   id: string;
 
+  @Field(() => UUIDScalarType, { nullable: false })
+  universalIdentifier: string;
+
   @Field({ nullable: false })
   name: string;
 

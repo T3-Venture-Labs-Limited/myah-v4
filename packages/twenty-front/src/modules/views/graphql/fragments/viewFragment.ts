@@ -16,6 +16,7 @@ export const VIEW_FRAGMENT = gql`
 
   fragment ViewFragment on View {
     id
+    universalIdentifier
     name
     objectMetadataId
     type

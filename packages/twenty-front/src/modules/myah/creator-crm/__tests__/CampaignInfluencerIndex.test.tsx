@@ -5,10 +5,23 @@ import { CampaignInfluencerIndex } from '@/myah/creator-crm/components/CampaignI
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { RecordFilterValueDependenciesContext } from '@/object-record/record-filter/contexts/RecordFilterValueDependenciesContext';
 import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState';
-import { FieldMetadataType, ViewFilterOperand } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  ViewFilterOperand,
+  ViewType,
+} from 'twenty-shared/types';
 const campaignInfluencersViewId = 'campaign-influencers-view';
+const campaignInfluencersUniversalIdentifier =
+  'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b';
 
 const mockApplyCreatorBulkRelationship = jest.fn();
+let mockViews: Array<{
+  id: string;
+  universalIdentifier: string;
+  objectMetadataId: string;
+  type: ViewType;
+  isActive: boolean;
+}> = [];
 
 let mockPickerItems: Array<{ isSelected: boolean; recordId: string }> = [];
 const mockPickerItemSubscribers = new Set<() => void>();
@@ -253,6 +266,10 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue', () => {
   };
 });
 
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
+  useAtomStateValue: () => mockViews,
+}));
+
 jest.mock('@/ui/utilities/state/jotai/hooks/useSetAtomComponentState', () => ({
   useSetAtomComponentState: (atom: unknown) =>
     atom === multipleRecordPickerSearchFilterComponentState
@@ -331,6 +348,7 @@ describe('CampaignInfluencerIndex', () => {
     mockSetPickerItems([]);
     mockPickerSearchFilter = '';
     mockPickerKeyboardSelection = null;
+    mockViews = [];
     setCampaignMetadata();
     mockApplyCreatorBulkRelationship.mockResolvedValue(undefined);
     (useObjectPermissionsForObject as jest.Mock).mockReturnValue({
@@ -462,6 +480,51 @@ describe('CampaignInfluencerIndex', () => {
     expect(
       screen.queryByRole('button', { name: 'Add Influencers' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('resolves the source-controlled Campaign Influencers view when widget metadata is stale', () => {
+    mockViews = [
+      {
+        id: 'campaign-influencers-runtime-view',
+        universalIdentifier: campaignInfluencersUniversalIdentifier,
+        objectMetadataId: 'campaign-creator-object',
+        type: ViewType.TABLE_WIDGET,
+        isActive: true,
+      },
+    ];
+
+    render(<CampaignInfluencerIndex campaignId="campaign-a" viewId={null} />);
+
+    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+      objectNameSingular: 'campaignCreator',
+      viewId: 'campaign-influencers-runtime-view',
+    });
+    expect(
+      screen.queryByText('Campaign Influencers are unavailable.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('prefers a persisted widget view ID over the source-controlled fallback', () => {
+    mockViews = [
+      {
+        id: 'campaign-influencers-runtime-view',
+        universalIdentifier: campaignInfluencersUniversalIdentifier,
+        objectMetadataId: 'campaign-creator-object',
+        type: ViewType.TABLE_WIDGET,
+        isActive: true,
+      },
+    ];
+
+    render(
+      <CampaignInfluencerIndex
+        campaignId="campaign-a"
+        viewId={campaignInfluencersViewId}
+      />,
+    );
+
+    expect(mockRecordIndexSurface.mock.calls.at(-1)?.[0]).toMatchObject({
+      viewId: campaignInfluencersViewId,
+    });
   });
 
   it('renders an unavailable state instead of mounting an index without a view ID', () => {
