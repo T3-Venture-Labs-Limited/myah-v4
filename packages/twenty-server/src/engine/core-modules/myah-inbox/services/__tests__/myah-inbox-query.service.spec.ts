@@ -484,6 +484,65 @@ describe('MyahInboxQueryService', () => {
     },
   );
 
+  it('matches readable linked Creator names before pagination', async () => {
+    const linkedCreatorId = '20202020-f7c5-4e2f-a44a-240b2d3a9d02';
+    const { service, calls } = createService({
+      creatorFind: async (options) => {
+        if (
+          !options ||
+          typeof options !== 'object' ||
+          !('where' in options) ||
+          !options.where ||
+          typeof options.where !== 'object'
+        ) {
+          return [];
+        }
+
+        return 'name' in options.where ? [{ id: linkedCreatorId }] : [];
+      },
+    });
+
+    await service.listThreads(listInput({ first: 10, search: 'nadine' }));
+
+    expect(allWhereSql(calls)).toContain(
+      'message_thread."creatorId" = ANY(:searchCreatorIds)',
+    );
+    expect(calls.where).toContainEqual([
+      expect.stringContaining(
+        'message_thread."creatorId" = ANY(:searchCreatorIds)',
+      ),
+      {
+        search: '%nadine%',
+        searchCreatorIds: [linkedCreatorId],
+      },
+    ]);
+    expect(calls.operations.lastIndexOf('where')).toBeLessThan(
+      calls.operations.indexOf('limit'),
+    );
+  });
+
+  it('keeps message search usable when Creator names are unreadable', async () => {
+    const creatorNameDenied = new PermissionsException(
+      'Creator name is unreadable',
+      PermissionsExceptionCode.PERMISSION_DENIED,
+    );
+    const { service, calls } = createService({
+      creatorFindError: creatorNameDenied,
+    });
+
+    await expect(
+      service.listThreads(listInput({ search: 'nadine' })),
+    ).resolves.toEqual({
+      edges: [],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    });
+
+    expect(calls.where).toContainEqual([
+      expect.stringContaining('latest_message.subject ILIKE :search'),
+      { search: '%nadine%', searchCreatorIds: [] },
+    ]);
+  });
+
   it('applies owner, Campaign, state, and policy-aware search filters before limit without a Creator gate', async () => {
     const campaignId = '20202020-f7c5-4e2f-a44a-240b2d3a9d02';
     const { service, calls } = createService({
@@ -539,7 +598,10 @@ describe('MyahInboxQueryService', () => {
     expect(whereSql).toContain('search_sender.handle ILIKE :search');
     expect(calls.where).toContainEqual([
       expect.stringContaining('search_sender."displayName" ILIKE :search'),
-      { search: '%private phrase%' },
+      {
+        search: '%private phrase%',
+        searchCreatorIds: [],
+      },
     ]);
     expect(calls.parameters).toMatchObject({
       fromParticipantRole: MessageParticipantRole.FROM,

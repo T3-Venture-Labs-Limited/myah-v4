@@ -4,6 +4,8 @@ import {
   Injectable,
 } from '@nestjs/common';
 
+import { ILike, IsNull } from 'typeorm';
+
 import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
 import {
   MessageChannelType,
@@ -25,6 +27,10 @@ import {
   type MyahInboxThreadsInput,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-filter.input';
 import { type MyahInboxThreadSummary } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-thread-summary.dto';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/metadata-modules/permissions/permissions.exception';
 
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -49,6 +55,12 @@ export type MyahInboxListThreadsInput = MyahInboxThreadsInput & {
 type ContextRecord = {
   id: string;
   name?: string | { firstName?: string; lastName?: string } | null;
+};
+
+type CreatorContextRecord = {
+  id: string;
+  name: string | null;
+  deletedAt: Date | null;
 };
 
 const MYAH_INBOX_EMAIL_CHANNEL_TYPES = [
@@ -120,7 +132,7 @@ export class MyahInboxQueryService {
             'messageThread',
             rolePermissionConfig,
           ),
-          this.globalWorkspaceOrmManager.getRepository<ContextRecord>(
+          this.globalWorkspaceOrmManager.getRepository<CreatorContextRecord>(
             input.workspace.id,
             'creator',
             rolePermissionConfig,
@@ -309,6 +321,29 @@ export class MyahInboxQueryService {
         const search = input.search?.trim();
 
         if (search) {
+          let searchCreatorIds: string[] = [];
+
+          try {
+            searchCreatorIds = (
+              await creatorRepository.find({
+                where: {
+                  name: ILike(`%${search}%`),
+                  deletedAt: IsNull(),
+                },
+                select: { id: true },
+              })
+            ).map(({ id }) => id);
+          } catch (error) {
+            if (
+              !(
+                error instanceof PermissionsException &&
+                error.code === PermissionsExceptionCode.PERMISSION_DENIED
+              )
+            ) {
+              throw error;
+            }
+          }
+
           queryBuilder.andWhere(
             `(
             (${latestMessageVisibility.expression} IN (:messageVisibilityFull, :messageVisibilitySubject)
@@ -321,10 +356,17 @@ export class MyahInboxQueryService {
               WHERE search_sender."messageId" = latest_message.id
                 AND search_sender."deletedAt" IS NULL
                 AND search_sender.role = :fromParticipantRole
-                AND (search_sender."displayName" ILIKE :search OR search_sender.handle ILIKE :search)
+                AND (
+                  search_sender."displayName" ILIKE :search
+                  OR search_sender.handle ILIKE :search
+                )
             )
+            OR message_thread."creatorId" = ANY(:searchCreatorIds)
           )`,
-            { search: `%${search}%` },
+            {
+              search: `%${search}%`,
+              searchCreatorIds,
+            },
           );
         }
 

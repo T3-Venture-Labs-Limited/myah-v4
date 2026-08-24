@@ -35,6 +35,7 @@ const fixtureMarker = 'MYAH212-INTEGRATION-TASK7';
 const campaignName = 'MYAH-212 UAT · Summer Creator Launch';
 
 const markers = {
+  creatorName: 'MYAH267 Nadine Linked Creator',
   senderEmail: 'myah245.sender@creator.test',
   senderDisplayName: 'MYAH245 Sender Display',
   subjectSenderEmail: 'myah245.subject-sender@creator.test',
@@ -907,7 +908,10 @@ export const seedMyahInboxTask7Fixture = async ({
     objectName: 'creator',
     gqlFields: 'id name email',
     id: creatorId,
-    data: { name: 'Task 7 Creator', email: 'task7-creator@example.test' },
+    data: {
+      name: markers.creatorName,
+      email: 'task7-creator@example.test',
+    },
     token: operatorAccessToken,
   });
   await ensureRecord({
