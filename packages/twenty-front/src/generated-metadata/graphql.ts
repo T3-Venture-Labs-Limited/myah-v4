@@ -2876,6 +2876,7 @@ export type MinimalView = {
   key?: Maybe<ViewKey>;
   objectMetadataId: Scalars['UUID']['output'];
   type: ViewType;
+  universalIdentifier: Scalars['UUID']['output'];
 };
 
 export enum ModelFamily {

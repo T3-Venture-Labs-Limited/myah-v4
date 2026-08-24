@@ -8,6 +8,7 @@ import { type FlatObjectMetadataItem } from '@/metadata-store/types/FlatObjectMe
 import { type FlatView } from '@/metadata-store/types/FlatView';
 import { type FindMinimalMetadataQuery } from '@/metadata-store/types/MinimalMetadata';
 import { mapAllMetadataNameToEntityKey } from '@/metadata-store/utils/mapAllMetadataNameToEntityKey';
+import { mergeMinimalViewUniversalIdentifiers } from '@/metadata-store/utils/mergeMinimalViewUniversalIdentifiers';
 import { useApolloClient } from '@apollo/client/react';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
@@ -93,8 +94,15 @@ export const useLoadMinimalMetadata = () => {
         currentCollectionHash: prev.draftCollectionHash,
         draftCollectionHash: undefined,
       }));
+    } else {
+      store.set(metadataStoreState.atomFamily('views'), (prev) => ({
+        ...prev,
+        current: mergeMinimalViewUniversalIdentifiers({
+          currentViews: prev.current as FlatView[],
+          minimalViews: views,
+        }),
+      }));
     }
-
     return { staleEntityKeys };
   }, [client, store]);
 
