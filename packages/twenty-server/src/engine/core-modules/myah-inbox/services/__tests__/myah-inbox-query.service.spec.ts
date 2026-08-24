@@ -526,8 +526,26 @@ describe('MyahInboxQueryService', () => {
       'Creator name is unreadable',
       PermissionsExceptionCode.PERMISSION_DENIED,
     );
-    const { service, calls } = createService({
-      creatorFindError: creatorNameDenied,
+    const normalCreatorRecords = [
+      { id: '20202020-f7c5-4e2f-a44a-240b2d3a9d02', name: 'Nadine' },
+    ];
+    const { service, calls, creatorRepository } = createService({
+      creatorRecords: normalCreatorRecords,
+      creatorFind: async (options) => {
+        if (
+          options &&
+          typeof options === 'object' &&
+          'select' in options &&
+          options.select &&
+          typeof options.select === 'object' &&
+          'name' in options.select &&
+          options.select.name === true
+        ) {
+          throw creatorNameDenied;
+        }
+
+        return normalCreatorRecords;
+      },
     });
 
     await expect(
@@ -537,6 +555,9 @@ describe('MyahInboxQueryService', () => {
       pageInfo: { hasNextPage: false, endCursor: null },
     });
 
+    expect(creatorRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({ select: { id: true, name: true } }),
+    );
     expect(calls.where).toContainEqual([
       expect.stringContaining('latest_message.subject ILIKE :search'),
       { search: '%nadine%', searchCreatorIds: [] },

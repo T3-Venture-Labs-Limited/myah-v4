@@ -330,7 +330,7 @@ export class MyahInboxQueryService {
                   name: ILike(`%${search}%`),
                   deletedAt: IsNull(),
                 },
-                select: { id: true },
+                select: { id: true, name: true },
               })
             ).map(({ id }) => id);
           } catch (error) {
