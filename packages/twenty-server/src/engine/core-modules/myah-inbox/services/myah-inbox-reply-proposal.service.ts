@@ -201,10 +201,7 @@ export class MyahInboxReplyProposalService {
 
     return MyahInboxReplyProposalSchema.parse({
       body: {
-        markdown:
-          unsignedMarkdown.length === 0
-            ? campaignEmailSignatureMarkdown
-            : `${unsignedMarkdown}\n\n${campaignEmailSignatureMarkdown}`,
+        markdown: `${unsignedMarkdown}\n\n${campaignEmailSignatureMarkdown}`,
         blocknote: null,
       },
     });

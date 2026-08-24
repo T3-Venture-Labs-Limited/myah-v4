@@ -563,6 +563,28 @@ describe('MyahInboxReplyProposalService', () => {
     expect(setup.businessRecordMutation).not.toHaveBeenCalled();
   });
 
+  it('keeps the required separator when the model body is empty', async () => {
+    const signature = 'Regards,\nZac';
+    const setup = createService(
+      {
+        body: {
+          markdown: ' \n',
+          blocknote: null,
+        },
+      },
+      { campaignEmailSignatureMarkdown: signature },
+    );
+
+    await expect(setup.service.generateReplyProposal(request)).resolves.toEqual(
+      {
+        body: {
+          markdown: `\n\n${signature}`,
+          blocknote: null,
+        },
+      },
+    );
+  });
+
   it('rejects a signature that would exceed the existing draft limit', async () => {
     const setup = createService(
       {
@@ -615,6 +637,7 @@ describe('MyahInboxReplyProposalService', () => {
       },
       history,
       replyRecipient: null,
+      campaignEmailSignatureMarkdown: null,
       campaign: null,
       campaignCreator: null,
       creator: null,
