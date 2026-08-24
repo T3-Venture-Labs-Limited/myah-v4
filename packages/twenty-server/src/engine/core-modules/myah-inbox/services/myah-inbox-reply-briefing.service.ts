@@ -163,6 +163,16 @@ const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_FIELDS = [
   'additionalNotes',
   'emailSignature',
 ] as const satisfies readonly (keyof MyahInboxReplyBriefingCampaignRecord)[];
+const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_MARKDOWN_COLUMN_BY_FIELD: Partial<
+  Record<keyof MyahInboxReplyBriefingCampaignRecord, string>
+> = {
+  campaignBrief: 'campaignBriefMarkdown',
+  communicationGuidelines: 'communicationGuidelinesMarkdown',
+  replyRules: 'replyRulesMarkdown',
+  escalationBoundaries: 'escalationBoundariesMarkdown',
+  additionalNotes: 'additionalNotesMarkdown',
+  emailSignature: 'emailSignatureMarkdown',
+};
 const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_CREATOR_FIELDS = [
   'stage',
   'selectedContactMethod',
@@ -189,6 +199,17 @@ const getReplyBriefingSelect = <T extends ObjectLiteral>(
   Object.fromEntries(
     fields.map((field) => [field, true]),
   ) as FindOptionsSelect<T>;
+
+const getCampaignReplyBriefingSelect = (
+  fields: readonly (keyof MyahInboxReplyBriefingCampaignRecord)[],
+): FindOptionsSelect<MyahInboxReplyBriefingCampaignRecord> =>
+  Object.fromEntries(
+    fields.map((field) => [
+      MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_MARKDOWN_COLUMN_BY_FIELD[field] ??
+        field,
+      true,
+    ]),
+  ) as FindOptionsSelect<MyahInboxReplyBriefingCampaignRecord>;
 
 const normalizeCreatorReplyBriefingText = (value: unknown): string[] => {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -455,10 +476,10 @@ export class MyahInboxReplyBriefingService {
                 (fields) =>
                   repositories.campaign.findOne({
                     where: { id: campaignId },
-                    select:
-                      getReplyBriefingSelect<MyahInboxReplyBriefingCampaignRecord>(
-                        fields,
-                      ),
+                    select: {
+                      id: true,
+                      ...getCampaignReplyBriefingSelect(fields),
+                    },
                   }),
               )
             : null,

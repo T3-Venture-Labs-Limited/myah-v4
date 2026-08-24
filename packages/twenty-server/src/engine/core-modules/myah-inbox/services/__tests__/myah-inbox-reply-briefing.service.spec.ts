@@ -87,6 +87,32 @@ const allowedCampaign = {
   status: 'PRIVATE_CAMPAIGN_STATUS_MUST_NOT_LEAK',
 };
 
+const SELECTED_CAMPAIGN_ENTRY_BY_COLUMN: Record<
+  string,
+  readonly [string, unknown]
+> = {
+  id: ['id', allowedCampaign.id],
+  objective: ['objective', allowedCampaign.objective],
+  icpGoal: ['icpGoal', allowedCampaign.icpGoal],
+  campaignBriefMarkdown: ['campaignBrief', allowedCampaign.campaignBrief],
+  communicationGuidelinesMarkdown: [
+    'communicationGuidelines',
+    allowedCampaign.communicationGuidelines,
+  ],
+  replyRulesMarkdown: ['replyRules', allowedCampaign.replyRules],
+  escalationBoundariesMarkdown: [
+    'escalationBoundaries',
+    allowedCampaign.escalationBoundaries,
+  ],
+  additionalNotesMarkdown: ['additionalNotes', allowedCampaign.additionalNotes],
+  emailSignatureMarkdown: ['emailSignature', allowedCampaign.emailSignature],
+};
+
+const selectAllowedCampaignFields = (fields: string[]) =>
+  Object.fromEntries(
+    fields.map((field) => SELECTED_CAMPAIGN_ENTRY_BY_COLUMN[field]),
+  );
+
 const allowedCreator = {
   id: creatorId,
   name: 'Amina Skincare',
@@ -410,14 +436,15 @@ describe('MyahInboxReplyBriefingService', () => {
     expect(repositories.campaign.findOne).toHaveBeenCalledWith({
       where: { id: campaignId },
       select: {
+        id: true,
         objective: true,
         icpGoal: true,
-        campaignBrief: true,
-        communicationGuidelines: true,
-        replyRules: true,
-        escalationBoundaries: true,
-        additionalNotes: true,
-        emailSignature: true,
+        campaignBriefMarkdown: true,
+        communicationGuidelinesMarkdown: true,
+        replyRulesMarkdown: true,
+        escalationBoundariesMarkdown: true,
+        additionalNotesMarkdown: true,
+        emailSignatureMarkdown: true,
       },
     });
     expect(repositories.creator.findOne).toHaveBeenCalledWith({
@@ -450,15 +477,15 @@ describe('MyahInboxReplyBriefingService', () => {
     );
 
     repositories.campaign.findOne.mockImplementation(
-      ({ select }: { select: Record<string, boolean> }) => {
+      ({ select }: { select: Record<string, unknown> }) => {
         const fields = Object.keys(select);
         const hasInstructionsField = fields.some((field) =>
           [
-            'campaignBrief',
-            'communicationGuidelines',
-            'replyRules',
-            'escalationBoundaries',
-            'additionalNotes',
+            'campaignBriefMarkdown',
+            'communicationGuidelinesMarkdown',
+            'replyRulesMarkdown',
+            'escalationBoundariesMarkdown',
+            'additionalNotesMarkdown',
           ].includes(field),
         );
 
@@ -466,14 +493,7 @@ describe('MyahInboxReplyBriefingService', () => {
           return Promise.reject(unavailableInstructionsField);
         }
 
-        return Promise.resolve(
-          Object.fromEntries(
-            fields.map((field) => [
-              field,
-              allowedCampaign[field as keyof typeof allowedCampaign],
-            ]),
-          ),
-        );
+        return Promise.resolve(selectAllowedCampaignFields(fields));
       },
     );
 
@@ -514,21 +534,14 @@ describe('MyahInboxReplyBriefingService', () => {
       const { repositories, service } = createService();
 
       repositories.campaign.findOne.mockImplementation(
-        ({ select }: { select: Record<string, boolean> }) => {
+        ({ select }: { select: Record<string, unknown> }) => {
           const fields = Object.keys(select);
 
-          if (fields.includes('emailSignature')) {
+          if (fields.includes('emailSignatureMarkdown')) {
             return Promise.reject(unavailableEmailSignature);
           }
 
-          return Promise.resolve(
-            Object.fromEntries(
-              fields.map((field) => [
-                field,
-                allowedCampaign[field as keyof typeof allowedCampaign],
-              ]),
-            ),
-          );
+          return Promise.resolve(selectAllowedCampaignFields(fields));
         },
       );
 
