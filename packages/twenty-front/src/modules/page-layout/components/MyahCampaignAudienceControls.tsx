@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { RecordDetailRecordsListItemContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer';
 import { RecordDetailSectionContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailSectionContainer';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
 import { useMultipleRecordPickerOpen } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerOpen';
@@ -25,13 +26,10 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const APPROVAL_BATCH_SIZE = 500;
 
-const StyledCreatorListAttachment = styled.div`
+const StyledCreatorListActions = styled.div`
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[2]};
-  padding-left: ${themeCssVariables.spacing[3]};
-  padding-right: ${themeCssVariables.spacing[2]};
 `;
 
 const SNAPSHOT = gql`
@@ -250,26 +248,30 @@ const CreatorListAttachment = ({
   };
 
   return (
-    <StyledCreatorListAttachment>
-      <span>{creatorListName}</span>
-      {refreshError ? <p role="alert">{refreshError}</p> : null}
-      {candidateIds.length > 0 ? (
-        <Button
-          disabled={areCandidateLabelsLoading}
-          ariaLabel={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
-          onClick={openReview}
-          title={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
-          type="button"
-          variant="secondary"
-        />
-      ) : null}
-      <LightIconButton
-        accent="tertiary"
-        aria-label="Remove Creator List"
-        Icon={IconX}
-        onClick={() => onDetach(creatorListId)}
-        title="Remove Creator List"
-      />
+    <>
+      <RecordDetailRecordsListItemContainer>
+        <span>{creatorListName}</span>
+        <StyledCreatorListActions>
+          {refreshError ? <p role="alert">{refreshError}</p> : null}
+          {candidateIds.length > 0 ? (
+            <Button
+              disabled={areCandidateLabelsLoading}
+              ariaLabel={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
+              onClick={openReview}
+              title={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
+              type="button"
+              variant="secondary"
+            />
+          ) : null}
+          <LightIconButton
+            accent="tertiary"
+            aria-label="Remove Creator List"
+            Icon={IconX}
+            onClick={() => onDetach(creatorListId)}
+            title="Remove Creator List"
+          />
+        </StyledCreatorListActions>
+      </RecordDetailRecordsListItemContainer>
       {isReviewOpen ? (
         <ModalStatefulWrapper
           isClosable
@@ -318,7 +320,7 @@ const CreatorListAttachment = ({
           />
         </ModalStatefulWrapper>
       ) : null}
-    </StyledCreatorListAttachment>
+    </>
   );
 };
 

@@ -163,6 +163,16 @@ jest.mock(
     ),
   }),
 );
+jest.mock(
+  '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer',
+  () => ({
+    RecordDetailRecordsListItemContainer: ({
+      children,
+    }: {
+      children: ReactNode;
+    }) => <div data-testid="creator-list-row">{children}</div>,
+  }),
+);
 jest.mock('twenty-ui/icon', () => ({
   IconPlus: () => null,
   IconX: () => null,
@@ -686,6 +696,9 @@ describe('MyahCampaignAudienceControls', () => {
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
 
     const creatorListsSection = screen.getByTestId('creator-lists-section');
+    expect(
+      within(creatorListsSection).getByTestId('creator-list-row'),
+    ).toHaveTextContent('VIP Creators');
     const removeButton = within(creatorListsSection).getByRole('button', {
       name: 'Remove Creator List',
     });

@@ -301,12 +301,7 @@ export const MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG = {
 export const MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG = {
   ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
   tabs: {
-    home: {
-      ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
-      widgets: {
-        ...MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home.widgets,
-      },
-    },
+    home: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
     outreach: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.outreach,
     tasks: MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.tasks,
     influencers: {

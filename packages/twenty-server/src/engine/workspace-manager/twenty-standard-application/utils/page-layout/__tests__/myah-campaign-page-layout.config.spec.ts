@@ -1,4 +1,7 @@
-import { MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG } from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
+import {
+  MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG,
+  MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/page-layout/myah-brand-brain-page-layout.config';
 import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
@@ -31,5 +34,11 @@ describe('MYAH Campaign page layout', () => {
     expect(
       MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.home.widgets,
     ).not.toHaveProperty('creatorLists');
+  });
+
+  it('reuses Campaign Home without an empty audience override', () => {
+    expect(MYAH_CAMPAIGN_AUDIENCE_PAGE_LAYOUT_CONFIG.tabs.home).toBe(
+      MYAH_CAMPAIGN_PAGE_LAYOUT_CONFIG.tabs.home,
+    );
   });
 });
