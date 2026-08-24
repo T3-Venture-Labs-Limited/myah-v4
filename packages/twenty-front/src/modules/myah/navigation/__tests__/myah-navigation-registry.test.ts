@@ -26,7 +26,6 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
         availability,
       })),
     ).toEqual([
-      { id: 'today', group: null, availability: 'available' },
       { id: 'inbox', group: null, availability: 'available' },
       { id: 'creators', group: 'creator-crm', availability: 'available' },
       {
@@ -93,9 +92,9 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
     expect(
       MYAH_NAVIGATION_ROUTES.filter(({ group }) => group === null),
     ).toEqual([
-      expect.objectContaining({ id: 'today', entryPath: '/myah/today' }),
       expect.objectContaining({ id: 'inbox', entryPath: '/myah/inbox' }),
     ]);
+    expect(MYAH_NAVIGATION_ROUTES.map(({ id }) => id)).not.toContain('today');
     expect(MYAH_NAVIGATION_ROUTES.map(({ id }) => id)).not.toContain(
       'settings',
     );
@@ -128,13 +127,6 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
   });
 
   it('assigns actual native targets only to available routes', () => {
-    expect(getMyahNavigationRoute('today').destination).toEqual({
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.Dashboard,
-      },
-    });
     expect(getMyahNavigationRoute('inbox').destination).toMatchObject({
       kind: 'myah-page',
       Component: MyahInboxPage,

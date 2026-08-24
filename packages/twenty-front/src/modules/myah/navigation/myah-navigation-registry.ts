@@ -13,7 +13,6 @@ import {
   IconFileText,
   IconHistory,
   IconInbox,
-  IconLayoutDashboard,
   IconList,
   IconPlug,
   IconSearch,
@@ -34,21 +33,6 @@ const BRAND_BRAIN_PAGE_OBJECT_UNIVERSAL_IDENTIFIER =
   '6a8289d7-8034-4f70-b3fa-47bc0e52828f';
 
 export const MYAH_NAVIGATION_ROUTES = [
-  {
-    id: 'today',
-    label: 'Today',
-    Icon: IconLayoutDashboard,
-    group: null,
-    entryPath: '/myah/today',
-    availability: 'available',
-    destination: {
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.Dashboard,
-      },
-    },
-  },
   {
     id: 'inbox',
     label: 'Inbox',

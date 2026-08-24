@@ -20,8 +20,8 @@ const mockedUseResolvedMyahNavigationRoutes = jest.mocked(
 const resolvedRoutes: ResolvedMyahNavigationRoute[] = [
   {
     status: 'ready',
-    route: getMyahNavigationRoute('today'),
-    destination: { kind: 'native', path: '/objects/dashboards' },
+    route: getMyahNavigationRoute('inbox'),
+    destination: { kind: 'myah-page', Component: () => null },
   },
   {
     status: 'ready',
@@ -96,10 +96,11 @@ describe('MyahNavigationDrawerSection', () => {
   it('renders Myah entry links, active routes, and non-interactive Soon entries', () => {
     renderSection();
 
-    expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Inbox' })).toHaveAttribute(
       'href',
-      '/myah/today',
+      '/myah/inbox',
     );
+    expect(screen.queryByText('Today')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Creator CRM' }),
     ).not.toHaveAttribute('href');

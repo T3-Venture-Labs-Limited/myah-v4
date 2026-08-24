@@ -25,14 +25,14 @@ const mockedUseResolvedMyahNavigationRoutes = jest.mocked(
   useResolvedMyahNavigationRoutes,
 );
 
-const NativeDashboard = () => {
+const NativeTasks = () => {
   const navigate = useNavigate();
 
   const navigateBack = () => navigate(-1);
 
   return (
     <>
-      <div>Native Dashboard</div>
+      <div>Native Tasks</div>
       <RecordIndexEmptyStateNotShared />
       <button onClick={navigateBack}>Back</button>
     </>
@@ -41,7 +41,7 @@ const NativeDashboard = () => {
 
 const renderDispatcher = (
   routes: ResolvedMyahNavigationRoute[],
-  initialEntry = '/myah/today',
+  initialEntry = '/myah/tasks',
 ) => {
   mockedUseResolvedMyahNavigationRoutes.mockReturnValue(routes);
 
@@ -53,7 +53,7 @@ const renderDispatcher = (
           element={<MyahNavigationRouteDispatcher />}
         />
         <Route path="/previous" element={<div>Previous Page</div>} />
-        <Route path="/objects/dashboards" element={<NativeDashboard />} />
+        <Route path="/objects/tasks" element={<NativeTasks />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -64,12 +64,12 @@ describe('MyahNavigationRouteDispatcher', () => {
     renderDispatcher([
       {
         status: 'ready',
-        route: getMyahNavigationRoute('today'),
-        destination: { kind: 'native', path: '/objects/dashboards' },
+        route: getMyahNavigationRoute('tasks'),
+        destination: { kind: 'native', path: '/objects/tasks' },
       },
     ]);
 
-    expect(await screen.findByText('Native Dashboard')).toBeVisible();
+    expect(await screen.findByText('Native Tasks')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 
@@ -80,8 +80,8 @@ describe('MyahNavigationRouteDispatcher', () => {
     renderDispatcher([
       {
         status: 'forbidden',
-        route: getMyahNavigationRoute('today'),
-        destination: { kind: 'native', path: '/objects/dashboards' },
+        route: getMyahNavigationRoute('tasks'),
+        destination: { kind: 'native', path: '/objects/tasks' },
       },
     ]);
 
@@ -95,21 +95,25 @@ describe('MyahNavigationRouteDispatcher', () => {
   it('renders a resolved Myah page body', () => {
     const MyahPage = () => <div>Myah Page</div>;
 
-    renderDispatcher([
-      {
-        status: 'ready',
-        route: getMyahNavigationRoute('today'),
-        destination: { kind: 'myah-page', Component: MyahPage },
-      },
-    ]);
+    renderDispatcher(
+      [
+        {
+          status: 'ready',
+          route: getMyahNavigationRoute('inbox'),
+          destination: { kind: 'myah-page', Component: MyahPage },
+        },
+      ],
+      '/myah/inbox',
+    );
 
     expect(screen.getByText('Myah Page')).toBeVisible();
   });
 
   it('renders loading while an available route is pending', () => {
-    renderDispatcher([
-      { status: 'pending', route: getMyahNavigationRoute('today') },
-    ]);
+    renderDispatcher(
+      [{ status: 'pending', route: getMyahNavigationRoute('inbox') }],
+      '/myah/inbox',
+    );
 
     expect(screen.getByText('Loading')).toBeVisible();
     expect(screen.queryByText('Not Found')).not.toBeInTheDocument();
@@ -117,11 +121,16 @@ describe('MyahNavigationRouteDispatcher', () => {
 
   it.each<{
     routes: ResolvedMyahNavigationRoute[];
-    initialEntry: '/myah/today' | '/myah/segments' | '/myah/creator-discovery';
+    initialEntry:
+      | '/myah/brand-brain'
+      | '/myah/segments'
+      | '/myah/creator-discovery';
   }>([
     {
-      initialEntry: '/myah/today',
-      routes: [{ status: 'missing', route: getMyahNavigationRoute('today') }],
+      initialEntry: '/myah/brand-brain',
+      routes: [
+        { status: 'missing', route: getMyahNavigationRoute('brand-brain') },
+      ],
     },
     {
       initialEntry: '/myah/segments',
