@@ -10,6 +10,9 @@ export class MinimalViewDTO {
   @IDField(() => UUIDScalarType)
   id: string;
 
+  @Field(() => UUIDScalarType)
+  universalIdentifier: string;
+
   @Field(() => ViewType)
   type: ViewType;
 

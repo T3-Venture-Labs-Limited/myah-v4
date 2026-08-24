@@ -16,6 +16,7 @@ export const FIND_MINIMAL_METADATA = gql`
       }
       views {
         id
+        universalIdentifier
         type
         key
         objectMetadataId
