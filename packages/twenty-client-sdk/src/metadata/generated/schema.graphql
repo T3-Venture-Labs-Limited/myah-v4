@@ -823,6 +823,7 @@ type ViewFieldGroup {
 
 type View {
   id: UUID!
+  universalIdentifier: UUID!
   name: String!
   objectMetadataId: UUID!
   type: ViewType!
@@ -3314,6 +3315,7 @@ type MinimalObjectMetadata {
 
 type MinimalView {
   id: UUID!
+  universalIdentifier: UUID!
   type: ViewType!
   key: ViewKey
   objectMetadataId: UUID!

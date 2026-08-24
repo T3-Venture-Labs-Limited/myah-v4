@@ -127,6 +127,7 @@ export class MinimalMetadataService {
       )
       .map((flatView) => ({
         id: flatView.id,
+        universalIdentifier: flatView.universalIdentifier,
         type: flatView.type,
         key: flatView.key,
         objectMetadataId: flatView.objectMetadataId,

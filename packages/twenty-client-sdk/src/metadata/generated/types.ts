@@ -1592,6 +1592,9 @@ export default {
             "id": [
                 3
             ],
+            "universalIdentifier": [
+                3
+            ],
             "name": [
                 1
             ],
@@ -6708,6 +6711,9 @@ export default {
         },
         "MinimalView": {
             "id": [
+                3
+            ],
+            "universalIdentifier": [
                 3
             ],
             "type": [

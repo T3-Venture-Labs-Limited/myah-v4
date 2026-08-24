@@ -15,15 +15,19 @@ import { StyledHeaderDropdownButton } from '@/ui/layout/dropdown/components/Styl
 import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { viewsSelector } from '@/views/states/selectors/viewsSelector';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
 import { useCallback, useMemo, useState } from 'react';
-import { AppPath, ViewFilterOperand } from 'twenty-shared/types';
+import { AppPath, ViewFilterOperand, ViewType } from 'twenty-shared/types';
 import { getAppPath } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const CAMPAIGN_INFLUENCERS_FILTER_ID = 'a03b0867-2a0d-49ee-afd3-8a91de66462e';
+const CAMPAIGN_INFLUENCERS_VIEW_UNIVERSAL_IDENTIFIER =
+  'b37e3e8f-2cc5-493b-9ef4-1c37d3066e6b';
 
 const StyledScopeState = styled.div`
   align-items: center;
@@ -188,6 +192,15 @@ export const CampaignInfluencerIndex = ({
     (objectMetadataItem) =>
       objectMetadataItem.nameSingular === 'campaignCreator',
   );
+  const views = useAtomStateValue(viewsSelector);
+  const campaignInfluencersRuntimeView = views.find(
+    (view) =>
+      view.universalIdentifier ===
+        CAMPAIGN_INFLUENCERS_VIEW_UNIVERSAL_IDENTIFIER &&
+      view.objectMetadataId === campaignCreatorObjectMetadataItem?.id &&
+      view.type === ViewType.TABLE_WIDGET &&
+      view.isActive,
+  );
   const campaignCreatorPermissions = useObjectPermissionsForObject(
     campaignCreatorObjectMetadataItem?.id ?? '',
   );
@@ -212,7 +225,7 @@ export const CampaignInfluencerIndex = ({
   const selectedCampaignViewId =
     selectedCampaignView?.campaignId === campaignId
       ? selectedCampaignView.viewId
-      : campaignInfluencersViewId;
+      : (campaignInfluencersViewId ?? campaignInfluencersRuntimeView?.id);
   const campaignFilter = useMemo<RecordFilter | undefined>(() => {
     if (!campaignFieldMetadataItem || !campaignIdFieldMetadataItem) {
       return undefined;
@@ -249,7 +262,7 @@ export const CampaignInfluencerIndex = ({
     [campaignId],
   );
 
-  if (!campaignInfluencersViewId || !selectedCampaignViewId) {
+  if (!selectedCampaignViewId) {
     return (
       <StyledScopeState>{t`Campaign Influencers are unavailable.`}</StyledScopeState>
     );

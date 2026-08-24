@@ -565,6 +565,7 @@ export interface ViewFieldGroup {
 
 export interface View {
     id: Scalars['UUID']
+    universalIdentifier: Scalars['UUID']
     name: Scalars['String']
     objectMetadataId: Scalars['UUID']
     type: ViewType
@@ -2980,6 +2981,7 @@ export interface MinimalObjectMetadata {
 
 export interface MinimalView {
     id: Scalars['UUID']
+    universalIdentifier: Scalars['UUID']
     type: ViewType
     key?: ViewKey
     objectMetadataId: Scalars['UUID']
@@ -3979,6 +3981,7 @@ export interface ViewFieldGroupGenqlSelection{
 
 export interface ViewGenqlSelection{
     id?: boolean | number
+    universalIdentifier?: boolean | number
     name?: boolean | number
     objectMetadataId?: boolean | number
     type?: boolean | number
@@ -6538,6 +6541,7 @@ export interface MinimalObjectMetadataGenqlSelection{
 
 export interface MinimalViewGenqlSelection{
     id?: boolean | number
+    universalIdentifier?: boolean | number
     type?: boolean | number
     key?: boolean | number
     objectMetadataId?: boolean | number
