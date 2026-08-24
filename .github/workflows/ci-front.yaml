@@ -60,7 +60,7 @@ jobs:
         run: |
           npx nx run twenty-front:lingui:extract
           npx nx run twenty-front:lingui:compile
-          git diff --exit-code -- packages/twenty-front/src/locales
+          test -z "$(git status --porcelain --untracked-files=all -- packages/twenty-front/src/locales)"
       - name: Front / Write .env
         run: npx nx reset:env twenty-front
       - name: Front / Build storybook
