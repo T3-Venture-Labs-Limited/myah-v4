@@ -71,9 +71,7 @@ describe('MyahInboxProposalPreview', () => {
       screen.queryByLabelText('Proposal instructions'),
     ).not.toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Generate Reply' }),
-      );
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' }));
     });
 
     expect(mockGenerateProposal).toHaveBeenCalledWith({
@@ -144,9 +142,7 @@ describe('MyahInboxProposalPreview', () => {
     );
 
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Generate Reply' }),
-      );
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' }));
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent(

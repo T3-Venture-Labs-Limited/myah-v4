@@ -544,8 +544,7 @@ describe('MyahInboxReplyBriefingService', () => {
             communicationGuidelines:
               allowedCampaign.communicationGuidelines.markdown,
             replyRules: allowedCampaign.replyRules.markdown,
-            escalationBoundaries:
-              allowedCampaign.escalationBoundaries.markdown,
+            escalationBoundaries: allowedCampaign.escalationBoundaries.markdown,
             additionalNotes: allowedCampaign.additionalNotes.markdown,
           },
         },
