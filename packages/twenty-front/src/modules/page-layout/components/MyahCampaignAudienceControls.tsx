@@ -17,11 +17,22 @@ import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
+import { styled } from '@linaria/react';
 import { useState } from 'react';
-import { IconPlus } from 'twenty-ui/icon';
+import { IconPlus, IconX } from 'twenty-ui/icon';
 import { Button, Checkbox, LightIconButton } from 'twenty-ui/input';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const APPROVAL_BATCH_SIZE = 500;
+
+const StyledCreatorListAttachment = styled.div`
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[2]};
+  padding-left: ${themeCssVariables.spacing[3]};
+  padding-right: ${themeCssVariables.spacing[2]};
+`;
 
 const SNAPSHOT = gql`
   query CampaignInfluencerSnapshot($input: CampaignInfluencerCampaignInput!) {
@@ -239,14 +250,7 @@ const CreatorListAttachment = ({
   };
 
   return (
-    <div
-      style={{
-        alignItems: 'center',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 8,
-      }}
-    >
+    <StyledCreatorListAttachment>
       <span>{creatorListName}</span>
       {refreshError ? <p role="alert">{refreshError}</p> : null}
       {candidateIds.length > 0 ? (
@@ -259,12 +263,12 @@ const CreatorListAttachment = ({
           variant="secondary"
         />
       ) : null}
-      <Button
-        ariaLabel="Remove Creator List"
+      <LightIconButton
+        accent="tertiary"
+        aria-label="Remove Creator List"
+        Icon={IconX}
         onClick={() => onDetach(creatorListId)}
         title="Remove Creator List"
-        type="button"
-        variant="secondary"
       />
       {isReviewOpen ? (
         <ModalStatefulWrapper
@@ -314,7 +318,7 @@ const CreatorListAttachment = ({
           />
         </ModalStatefulWrapper>
       ) : null}
-    </div>
+    </StyledCreatorListAttachment>
   );
 };
 

@@ -163,7 +163,10 @@ jest.mock(
     ),
   }),
 );
-jest.mock('twenty-ui/icon', () => ({ IconPlus: () => null }));
+jest.mock('twenty-ui/icon', () => ({
+  IconPlus: () => null,
+  IconX: () => null,
+}));
 jest.mock('twenty-ui/input', () => ({
   Button: ({
     title,
@@ -197,14 +200,21 @@ jest.mock('twenty-ui/input', () => ({
   LightIconButton: ({
     'aria-label': ariaLabel,
     disabled,
+    onClick,
   }: {
     'aria-label': string;
     disabled?: boolean;
+    onClick?: () => void;
   }) => (
     <button
       aria-label={ariaLabel}
-      data-testid="creator-list-picker-open"
+      data-testid={
+        ariaLabel === 'Add Creator List'
+          ? 'creator-list-picker-open'
+          : undefined
+      }
       disabled={disabled}
+      onClick={onClick}
       type="button"
     />
   ),
@@ -369,9 +379,7 @@ describe('MyahCampaignAudienceControls', () => {
   });
 
   it('closes and disables the picker while an attachment is pending', async () => {
-    mockAttach.mockImplementation(
-      () => new Promise<void>(() => undefined),
-    );
+    mockAttach.mockImplementation(() => new Promise<void>(() => undefined));
 
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
     fireEvent.click(screen.getByTestId('creator-list-picker-open'));
@@ -678,11 +686,12 @@ describe('MyahCampaignAudienceControls', () => {
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
 
     const creatorListsSection = screen.getByTestId('creator-lists-section');
-    fireEvent.click(
-      within(creatorListsSection).getByRole('button', {
-        name: 'Remove Creator List',
-      }),
-    );
+    const removeButton = within(creatorListsSection).getByRole('button', {
+      name: 'Remove Creator List',
+    });
+
+    expect(removeButton).toBeEmptyDOMElement();
+    fireEvent.click(removeButton);
 
     expect(screen.getByText('Detach VIP Creators?')).toBeVisible();
     expect(
