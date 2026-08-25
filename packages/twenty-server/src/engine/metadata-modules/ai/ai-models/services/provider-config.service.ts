@@ -87,7 +87,6 @@ export class ProviderConfigService {
         }),
       };
 
-
       return {
         ...catalog,
         ...rest,
