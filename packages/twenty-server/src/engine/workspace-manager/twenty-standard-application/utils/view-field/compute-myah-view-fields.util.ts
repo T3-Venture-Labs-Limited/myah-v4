@@ -383,6 +383,14 @@ const campaignOperationsFields = [
     isVisible: true,
     size: 160,
   },
+  {
+    viewName: 'view9c4f90c5',
+    viewFieldName: 'emailSignature',
+    fieldName: 'emailSignature',
+    position: 1,
+    isVisible: true,
+    size: 320,
+  },
 ] satisfies readonly Spec<'campaign', 'view9c4f90c5'>[];
 const campaignInstructionsFields = [
   {

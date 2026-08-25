@@ -115,22 +115,17 @@ jest.mock('@/myah/inbox/components/MyahInboxProposalPreview', () => ({
     renderGenerateAction: (
       generateAction: ReactType.ReactNode,
     ) => ReactType.ReactNode;
-  }) => (
-    <>
-      {renderGenerateAction(
-        <button disabled={disabled}>Generate proposal</button>,
-      )}
-      <div aria-label="Fixture proposal">Proposal remains visible</div>
+  }) =>
+    renderGenerateAction(
       <button
         disabled={disabled}
         onClick={() =>
-          onApply({ markdown: 'proposal copied explicitly', blocknote: null })
+          onApply({ markdown: 'generated reply', blocknote: null })
         }
       >
-        Apply fixture proposal
-      </button>
-    </>
-  ),
+        Generate Reply
+      </button>,
+    ),
 }));
 const thread = {
   id: 'thread-1',
@@ -235,7 +230,7 @@ describe('MyahInboxReplyWorkspace', () => {
     expect(mockController.reloadConflict).toHaveBeenCalledWith(key);
   });
 
-  it('serializes proposal application through the controller and keeps failed proposals visible', async () => {
+  it('serializes direct generated replies through the autosave controller', async () => {
     const application = createDeferred<boolean>();
     mockController.applyProposal.mockReturnValue(application.promise);
 
@@ -245,7 +240,9 @@ describe('MyahInboxReplyWorkspace', () => {
       screen.getByRole('button', { name: 'Make pending local edit' }),
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Apply fixture proposal' }),
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Generate Reply',
+      }),
     );
 
     expect(mockController.updateDraft).toHaveBeenCalledWith({
@@ -255,10 +252,12 @@ describe('MyahInboxReplyWorkspace', () => {
     expect(mockController.applyProposal).toHaveBeenCalledTimes(1);
     expect(mockController.applyProposal).toHaveBeenCalledWith({
       key: { workspaceId: 'workspace-1', threadId: 'thread-1' },
-      body: { markdown: 'proposal copied explicitly', blocknote: null },
+      body: { markdown: 'generated reply', blocknote: null },
     });
     expect(
-      screen.getByRole('button', { name: 'Apply fixture proposal' }),
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Generate Reply',
+      }),
     ).toBeDisabled();
 
     await act(async () => {
@@ -267,36 +266,46 @@ describe('MyahInboxReplyWorkspace', () => {
     });
 
     expect(
-      screen.getByRole('button', { name: 'Apply fixture proposal' }),
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Generate Reply',
+      }),
     ).toBeEnabled();
-    expect(screen.getByLabelText('Fixture proposal')).toHaveTextContent(
-      'Proposal remains visible',
-    );
     expect(
       within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate proposal',
+        name: 'Generate Reply',
       }),
     ).toBeVisible();
   });
 
-  it('disables proposal controls while the controller reports saving', () => {
-    mockDraftEntry = {
-      localBody: { markdown: 'Saved draft', blocknote: null },
-      confirmedBody: { markdown: 'Saved draft', blocknote: null },
-      confirmedRevision: 3,
-      dirty: false,
-      status: 'saving',
-      error: null,
-      conflict: null,
-      debounceVersion: 0,
-      pendingDebounceVersion: null,
-      editorVersion: 0,
-    };
+  it.each(['saving', 'error', 'conflict'] as const)(
+    'disables generation while the draft controller reports %s',
+    (status) => {
+      mockDraftEntry = {
+        localBody: { markdown: 'Saved draft', blocknote: null },
+        confirmedBody: { markdown: 'Saved draft', blocknote: null },
+        confirmedRevision: 3,
+        dirty: false,
+        status,
+        error: status === 'error' ? 'Draft save failed' : null,
+        conflict:
+          status === 'conflict'
+            ? {
+                revision: 4,
+                body: { markdown: 'Newer saved draft', blocknote: null },
+              }
+            : null,
+        debounceVersion: 0,
+        pendingDebounceVersion: null,
+        editorVersion: 0,
+      };
 
-    render(<MyahInboxReplyWorkspace thread={thread} />);
+      render(<MyahInboxReplyWorkspace thread={thread} />);
 
-    expect(
-      screen.getByRole('button', { name: 'Apply fixture proposal' }),
-    ).toBeDisabled();
-  });
+      expect(
+        within(screen.getByLabelText('Draft actions')).getByRole('button', {
+          name: 'Generate Reply',
+        }),
+      ).toBeDisabled();
+    },
+  );
 });

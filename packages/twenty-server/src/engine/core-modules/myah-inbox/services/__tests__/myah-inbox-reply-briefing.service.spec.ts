@@ -80,8 +80,38 @@ const allowedCampaign = {
     markdown: 'Use the approved product name.',
     blocknote: null,
   },
+  emailSignature: {
+    markdown: 'Regards,\n\nZac\nMyah',
+    blocknote: null,
+  },
   status: 'PRIVATE_CAMPAIGN_STATUS_MUST_NOT_LEAK',
 };
+
+const SELECTED_CAMPAIGN_ENTRY_BY_COLUMN: Record<
+  string,
+  readonly [string, unknown]
+> = {
+  id: ['id', allowedCampaign.id],
+  objective: ['objective', allowedCampaign.objective],
+  icpGoal: ['icpGoal', allowedCampaign.icpGoal],
+  campaignBriefMarkdown: ['campaignBrief', allowedCampaign.campaignBrief],
+  communicationGuidelinesMarkdown: [
+    'communicationGuidelines',
+    allowedCampaign.communicationGuidelines,
+  ],
+  replyRulesMarkdown: ['replyRules', allowedCampaign.replyRules],
+  escalationBoundariesMarkdown: [
+    'escalationBoundaries',
+    allowedCampaign.escalationBoundaries,
+  ],
+  additionalNotesMarkdown: ['additionalNotes', allowedCampaign.additionalNotes],
+  emailSignatureMarkdown: ['emailSignature', allowedCampaign.emailSignature],
+};
+
+const selectAllowedCampaignFields = (fields: string[]) =>
+  Object.fromEntries(
+    fields.map((field) => SELECTED_CAMPAIGN_ENTRY_BY_COLUMN[field]),
+  );
 
 const allowedCreator = {
   id: creatorId,
@@ -190,6 +220,7 @@ const createService = ({
   campaign = allowedCampaign,
   creator = allowedCreator,
   campaignCreator = allowedCampaignCreator,
+  persistedCampaignId = campaignId,
   historyRows,
   senderParticipants = [
     senderParticipant,
@@ -202,10 +233,13 @@ const createService = ({
   personRecords = [senderPerson],
   personFindError,
 }: {
-  thread?: typeof linkedThread;
+  thread?:
+    | typeof linkedThread
+    | (Omit<typeof linkedThread, 'campaign'> & { campaign: null });
   campaign?: typeof allowedCampaign | null;
   creator?: typeof allowedCreator | null;
   campaignCreator?: typeof allowedCampaignCreator | null;
+  persistedCampaignId?: string | null;
   historyRows?: {
     id: string;
     receivedAt: string;
@@ -220,6 +254,12 @@ const createService = ({
 } = {}) => {
   const historyQueryBuilder = createHistoryQueryBuilder(historyRows);
   const repositories = {
+    messageThread: {
+      findOne: jest.fn().mockResolvedValue({
+        id: threadId,
+        myahCampaignId: persistedCampaignId,
+      }),
+    },
     person: {
       find: personFindError
         ? jest.fn().mockRejectedValue(personFindError)
@@ -304,6 +344,8 @@ describe('MyahInboxReplyBriefingService', () => {
           text: 'Can we launch Tuesday?',
         },
       ],
+      campaignEmailSignatureMarkdown: 'Regards,\n\nZac\nMyah',
+      hasCampaignLink: true,
       campaign: {
         objective: 'Recruit trusted skincare reviewers',
         icpGoal: 'Reach dry-skin shoppers',
@@ -405,13 +447,15 @@ describe('MyahInboxReplyBriefingService', () => {
     expect(repositories.campaign.findOne).toHaveBeenCalledWith({
       where: { id: campaignId },
       select: {
+        id: true,
         objective: true,
         icpGoal: true,
-        campaignBrief: true,
-        communicationGuidelines: true,
-        replyRules: true,
-        escalationBoundaries: true,
-        additionalNotes: true,
+        campaignBriefMarkdown: true,
+        communicationGuidelinesMarkdown: true,
+        replyRulesMarkdown: true,
+        escalationBoundariesMarkdown: true,
+        additionalNotesMarkdown: true,
+        emailSignatureMarkdown: true,
       },
     });
     expect(repositories.creator.findOne).toHaveBeenCalledWith({
@@ -444,15 +488,15 @@ describe('MyahInboxReplyBriefingService', () => {
     );
 
     repositories.campaign.findOne.mockImplementation(
-      ({ select }: { select: Record<string, boolean> }) => {
+      ({ select }: { select: Record<string, unknown> }) => {
         const fields = Object.keys(select);
         const hasInstructionsField = fields.some((field) =>
           [
-            'campaignBrief',
-            'communicationGuidelines',
-            'replyRules',
-            'escalationBoundaries',
-            'additionalNotes',
+            'campaignBriefMarkdown',
+            'communicationGuidelinesMarkdown',
+            'replyRulesMarkdown',
+            'escalationBoundariesMarkdown',
+            'additionalNotesMarkdown',
           ].includes(field),
         );
 
@@ -460,14 +504,7 @@ describe('MyahInboxReplyBriefingService', () => {
           return Promise.reject(unavailableInstructionsField);
         }
 
-        return Promise.resolve(
-          Object.fromEntries(
-            fields.map((field) => [
-              field,
-              allowedCampaign[field as keyof typeof allowedCampaign],
-            ]),
-          ),
-        );
+        return Promise.resolve(selectAllowedCampaignFields(fields));
       },
     );
 
@@ -485,6 +522,91 @@ describe('MyahInboxReplyBriefingService', () => {
           additionalNotes: null,
         },
       },
+    });
+  });
+
+  it.each([
+    [
+      'is not provisioned',
+      new EntityPropertyNotFoundError('emailSignature', {
+        targetName: 'campaign',
+      } as never),
+    ],
+    [
+      'is unreadable',
+      new PermissionsException(
+        'Campaign email signature is unreadable',
+        PermissionsExceptionCode.PERMISSION_DENIED,
+      ),
+    ],
+  ])(
+    'keeps readable Campaign context when the email signature %s',
+    async (_label, unavailableEmailSignature) => {
+      const { repositories, service } = createService();
+
+      repositories.campaign.findOne.mockImplementation(
+        ({ select }: { select: Record<string, unknown> }) => {
+          const fields = Object.keys(select);
+
+          if (fields.includes('emailSignatureMarkdown')) {
+            return Promise.reject(unavailableEmailSignature);
+          }
+
+          return Promise.resolve(selectAllowedCampaignFields(fields));
+        },
+      );
+
+      await expect(
+        service.loadReplyBriefing({ ...listInput(), threadId }),
+      ).resolves.toMatchObject({
+        campaignEmailSignatureMarkdown: null,
+        campaign: {
+          objective: allowedCampaign.objective,
+          icpGoal: allowedCampaign.icpGoal,
+          agent: {
+            campaignBrief: allowedCampaign.campaignBrief.markdown,
+            communicationGuidelines:
+              allowedCampaign.communicationGuidelines.markdown,
+            replyRules: allowedCampaign.replyRules.markdown,
+            escalationBoundaries: allowedCampaign.escalationBoundaries.markdown,
+            additionalNotes: allowedCampaign.additionalNotes.markdown,
+          },
+        },
+      });
+    },
+  );
+
+  it('treats a whitespace-only Campaign email signature as absent', async () => {
+    const { service } = createService({
+      campaign: {
+        ...allowedCampaign,
+        emailSignature: { markdown: ' \n ', blocknote: null },
+      },
+    });
+
+    await expect(
+      service.loadReplyBriefing({ ...listInput(), threadId }),
+    ).resolves.toMatchObject({
+      campaignEmailSignatureMarkdown: null,
+    });
+  });
+
+  it('preserves a private Campaign-link marker when Campaign context is unavailable', async () => {
+    const { service } = createService({
+      thread: {
+        ...linkedThread,
+        campaign: null,
+      },
+      campaign: null,
+      persistedCampaignId: campaignId,
+    });
+
+    await expect(
+      service.loadReplyBriefing({ ...listInput(), threadId }),
+    ).resolves.toMatchObject({
+      hasCampaignLink: true,
+      campaignEmailSignatureMarkdown: null,
+      campaign: null,
     });
   });
 
@@ -540,6 +662,27 @@ describe('MyahInboxReplyBriefingService', () => {
       threadId,
     });
     expect(briefing.history[0]?.sender).toBe('Creator display name');
+  });
+
+  it('omits generated Person-number display names from reply recipients', async () => {
+    const { service } = createService({
+      senderParticipants: [
+        {
+          ...senderParticipant,
+          displayName: 'Person 922',
+          handle: 'person922@example.com',
+        },
+      ],
+      personRecords: [],
+    });
+
+    const briefing = await service.loadReplyBriefing({
+      ...listInput(),
+      threadId,
+    });
+
+    expect(briefing.history[0]?.sender).toBeNull();
+    expect(briefing.replyRecipient).toBeNull();
   });
 
   it('keeps readable native Person name components when another component is denied', async () => {

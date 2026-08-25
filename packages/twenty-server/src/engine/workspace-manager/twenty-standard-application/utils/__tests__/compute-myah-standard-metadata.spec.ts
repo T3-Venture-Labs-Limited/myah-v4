@@ -524,6 +524,12 @@ describe('Myah standard metadata contract', () => {
           MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
         field.name === 'lifecycleStatus',
     );
+    const campaignEmailSignature = fields.find(
+      (field) =>
+        field.objectMetadataUniversalIdentifier ===
+          MYAH_STANDARD_OBJECTS.campaign.universalIdentifier &&
+        field.name === 'emailSignature',
+    );
     const campaignOwner = fields.find(
       (field) =>
         field.objectMetadataUniversalIdentifier ===
@@ -586,6 +592,15 @@ describe('Myah standard metadata contract', () => {
       ]),
     });
     expect(campaignLifecycleStatus?.options).toHaveLength(4);
+    expect(campaignEmailSignature).toMatchObject({
+      universalIdentifier: '4e3ea786-9fc4-4c29-95a4-364eb0b1bd9b',
+      type: FieldMetadataType.RICH_TEXT,
+      label: 'Email signature',
+      description:
+        'Complete closing block appended to generated replies. Include your preferred sign-off, name, title, company, and contact details.',
+      icon: 'IconSignature',
+      isNullable: true,
+    });
     expect(campaignOwner).toMatchObject({
       universalIdentifier: '12d7812a-3d11-4704-8e59-d1468ee3026b',
       relationTargetFieldMetadataUniversalIdentifier:
@@ -980,6 +995,13 @@ describe('Myah standard metadata contract', () => {
             MYAH_STANDARD_OBJECTS.campaign.fields.lifecycleStatus
               .universalIdentifier,
           position: 0,
+        },
+        {
+          universalIdentifier: '959081c0-5f7f-4a2c-9519-5cdc57f75a31',
+          fieldMetadataUniversalIdentifier:
+            MYAH_STANDARD_OBJECTS.campaign.fields.emailSignature
+              .universalIdentifier,
+          position: 1,
         },
       ]);
     }

@@ -205,6 +205,26 @@ const createService = ({
     createQueryBuilder(historyRows);
   const messageThreadRepository = {
     createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+    findOne: jest
+      .fn()
+      .mockImplementation(({ where }: { where: { id: string } }) => {
+        const persistedThread = rows.find(
+          (candidate) =>
+            typeof candidate === 'object' &&
+            candidate !== null &&
+            'id' in candidate &&
+            candidate.id === where.id,
+        ) as { id: string; campaignId?: string | null } | undefined;
+
+        return Promise.resolve(
+          persistedThread
+            ? {
+                id: persistedThread.id,
+                myahCampaignId: persistedThread.campaignId ?? null,
+              }
+            : null,
+        );
+      }),
   };
   const messageRepository = {
     createQueryBuilder: jest.fn().mockReturnValue(historyQueryBuilder),

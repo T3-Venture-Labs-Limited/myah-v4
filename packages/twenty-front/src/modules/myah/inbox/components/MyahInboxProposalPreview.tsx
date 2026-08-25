@@ -1,6 +1,8 @@
 import { styled } from '@linaria/react';
 import { useState, type ReactNode } from 'react';
+import { IconLoader, type IconComponent } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
+import { AnimatedCircleLoading } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
@@ -17,27 +19,30 @@ const StyledActions = styled.div`
   justify-content: flex-end;
 `;
 
-const StyledPreview = styled.div`
-  background: ${themeCssVariables.background.transparent.lighter};
-  border: 1px solid ${themeCssVariables.border.color.light};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  color: ${themeCssVariables.font.color.secondary};
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
-  padding: ${themeCssVariables.spacing[3]};
-  white-space: pre-wrap;
-`;
-
-const StyledStatus = styled.div`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.xs};
-`;
-
 const StyledError = styled.div`
   color: ${themeCssVariables.font.color.danger};
   font-size: ${themeCssVariables.font.size.xs};
 `;
+
+const GenerateReplyLoadingIcon: IconComponent = ({
+  className,
+  style,
+  size,
+  stroke,
+  color,
+  'aria-hidden': ariaHidden,
+}) => (
+  <AnimatedCircleLoading>
+    <IconLoader
+      className={className}
+      style={style}
+      size={size}
+      stroke={stroke}
+      color={color}
+      aria-hidden={ariaHidden}
+    />
+  </AnimatedCircleLoading>
+);
 
 type ProposalBody = { markdown: string; blocknote: string | null };
 
@@ -55,7 +60,6 @@ export const MyahInboxProposalPreview = ({
   renderGenerateAction,
 }: MyahInboxProposalPreviewProps) => {
   const { generateProposal } = useMyahInboxThreadMutations();
-  const [proposal, setProposal] = useState<ProposalBody | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,12 +72,12 @@ export const MyahInboxProposalPreview = ({
         threadId,
         operatorInstructions: 'Draft a concise reply to this conversation.',
       });
-      setProposal({
+      onApply({
         markdown: generatedProposal.body.markdown,
         blocknote: generatedProposal.body.blocknote ?? null,
       });
     } catch {
-      setError('Could not generate a proposal. Try again.');
+      setError('Could not generate a reply. Try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -81,42 +85,24 @@ export const MyahInboxProposalPreview = ({
 
   const generateAction = (
     <Button
-      title={isGenerating ? 'Generating proposal' : 'Generate proposal'}
+      title="Generate Reply"
+      ariaLabel={isGenerating ? 'Generating reply' : 'Generate Reply'}
       variant="secondary"
       size="small"
+      Icon={isGenerating ? GenerateReplyLoadingIcon : undefined}
       disabled={disabled || isGenerating}
       onClick={handleGenerate}
     />
   );
 
   return (
-    <StyledProposal aria-label="AI proposal">
+    <StyledProposal aria-label="AI reply">
       {renderGenerateAction ? (
         renderGenerateAction(generateAction)
       ) : (
         <StyledActions>{generateAction}</StyledActions>
       )}
-      {isGenerating && (
-        <StyledStatus role="status">Generating proposal</StyledStatus>
-      )}
       {error && <StyledError role="alert">{error}</StyledError>}
-      {proposal && (
-        <>
-          <StyledPreview aria-label="Proposal preview">
-            <strong>Reply proposal</strong>
-            <span>{proposal.markdown}</span>
-          </StyledPreview>
-          <StyledActions>
-            <Button
-              title="Apply to draft"
-              variant="secondary"
-              size="small"
-              disabled={disabled}
-              onClick={() => onApply(proposal)}
-            />
-          </StyledActions>
-        </>
-      )}
     </StyledProposal>
   );
 };

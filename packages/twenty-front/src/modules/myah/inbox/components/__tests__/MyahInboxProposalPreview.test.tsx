@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { type ComponentType } from 'react';
 
 import { MyahInboxProposalPreview } from '@/myah/inbox/components/MyahInboxProposalPreview';
 
@@ -36,12 +37,21 @@ jest.mock('twenty-ui/input', () => ({
     title,
     onClick,
     disabled,
+    Icon,
+    ariaLabel,
   }: {
     title: string;
     onClick: () => void;
     disabled?: boolean;
+    Icon?: ComponentType;
+    ariaLabel?: string;
   }) => (
-    <button disabled={disabled} onClick={onClick}>
+    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
+      {Icon && (
+        <span data-testid="generate-reply-spinner">
+          <Icon />
+        </span>
+      )}
       {title}
     </button>
   ),
@@ -52,7 +62,7 @@ describe('MyahInboxProposalPreview', () => {
     jest.clearAllMocks();
   });
 
-  it('keeps a generated proposal separate until Apply is explicitly clicked', async () => {
+  it('writes a generated reply directly into the shared draft', async () => {
     const onApply = jest.fn();
     const proposal = {
       body: { markdown: 'Thanks for the update.', blocknote: null },
@@ -71,29 +81,25 @@ describe('MyahInboxProposalPreview', () => {
       screen.queryByLabelText('Proposal instructions'),
     ).not.toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Generate proposal' }),
-      );
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' }));
     });
 
     expect(mockGenerateProposal).toHaveBeenCalledWith({
       threadId: 'thread-1',
       operatorInstructions: 'Draft a concise reply to this conversation.',
     });
-    expect(screen.getByText('Reply proposal')).toBeVisible();
-    expect(screen.getByLabelText('Proposal preview')).toHaveTextContent(
-      'Thanks for the update.',
-    );
-    expect(onApply).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply to draft' }));
     expect(onApply).toHaveBeenCalledWith(proposal.body);
+    expect(screen.queryByText('Generated reply')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Reply preview')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Apply to draft' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /send/i }),
     ).not.toBeInTheDocument();
   });
 
-  it('renders Generate proposal as the only normal draft action', () => {
+  it('renders Generate Reply as the only normal draft action', () => {
     render(
       <MyahInboxProposalPreview
         threadId="thread-1"
@@ -106,11 +112,32 @@ describe('MyahInboxProposalPreview', () => {
     );
 
     expect(screen.getByLabelText('Draft actions')).toContainElement(
-      screen.getByRole('button', { name: 'Generate proposal' }),
+      screen.getByRole('button', { name: 'Generate Reply' }),
     );
     expect(
       screen.queryByRole('button', { name: 'Save draft' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows a spinner inside Generate Reply without a separate status line', () => {
+    mockGenerateProposal.mockReturnValue(Promise.race([]));
+
+    render(
+      <MyahInboxProposalPreview
+        threadId="thread-1"
+        disabled={false}
+        onApply={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' }));
+
+    expect(
+      screen.getByRole('button', { name: 'Generating reply' }),
+    ).toBeDisabled();
+    expect(screen.getByTestId('generate-reply-spinner')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Generating reply')).not.toBeInTheDocument();
   });
 
   it('shows a retryable proposal error', async () => {
@@ -125,13 +152,11 @@ describe('MyahInboxProposalPreview', () => {
     );
 
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Generate proposal' }),
-      );
+      fireEvent.click(screen.getByRole('button', { name: 'Generate Reply' }));
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Could not generate a proposal. Try again.',
+      'Could not generate a reply. Try again.',
     );
   });
 
@@ -145,7 +170,7 @@ describe('MyahInboxProposalPreview', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: 'Generate proposal' }),
+      screen.getByRole('button', { name: 'Generate Reply' }),
     ).toBeDisabled();
     expect(mockGenerateProposal).not.toHaveBeenCalled();
   });

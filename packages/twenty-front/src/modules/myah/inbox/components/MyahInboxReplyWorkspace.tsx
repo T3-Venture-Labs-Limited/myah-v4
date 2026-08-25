@@ -112,7 +112,12 @@ const MyahInboxReplyWorkspaceContent = ({
   return (
     <MyahInboxProposalPreview
       threadId={thread.id}
-      disabled={isApplyingProposal || draftEntry.status === 'saving'}
+      disabled={
+        isApplyingProposal ||
+        draftEntry.status === 'saving' ||
+        draftEntry.status === 'error' ||
+        draftEntry.status === 'conflict'
+      }
       onApply={handleApplyProposal}
       renderGenerateAction={(generateAction) => (
         <MyahInboxDraftEditor

@@ -77,6 +77,11 @@ export type MyahInboxReplyBriefing = {
   creator: MyahInboxCreatorReplyContext | null;
 };
 
+export type MyahInboxReplyGenerationContext = MyahInboxReplyBriefing & {
+  campaignEmailSignatureMarkdown: string | null;
+  hasCampaignLink: boolean;
+};
+
 type MyahInboxThreadProposalHistoryRaw = Omit<
   MyahInboxThreadProposalHistoryEntry,
   'receivedAt' | 'sender'
@@ -89,6 +94,11 @@ type MyahInboxReplyBriefingRichText = {
   markdown?: string | null;
 } | null;
 
+type MyahInboxReplyBriefingMessageThreadRecord = ObjectLiteral & {
+  id: string;
+  myahCampaignId: string | null;
+};
+
 type MyahInboxReplyBriefingCampaignRecord = ObjectLiteral & {
   id: string;
   objective: string | null;
@@ -98,6 +108,7 @@ type MyahInboxReplyBriefingCampaignRecord = ObjectLiteral & {
   replyRules: MyahInboxReplyBriefingRichText;
   escalationBoundaries: MyahInboxReplyBriefingRichText;
   additionalNotes: MyahInboxReplyBriefingRichText;
+  emailSignature: MyahInboxReplyBriefingRichText;
 };
 
 type MyahInboxReplyBriefingCampaignCreatorRecord = ObjectLiteral & {
@@ -140,7 +151,10 @@ type MyahInboxReplyBriefingRepositories = {
   person: WorkspaceRepository<MyahInboxReplyBriefingPersonRecord>;
 };
 
-type MyahInboxReplyBriefingContext = Omit<MyahInboxReplyBriefing, 'thread'>;
+type MyahInboxReplyBriefingContext = Omit<
+  MyahInboxReplyGenerationContext,
+  'thread'
+>;
 
 const MYAH_INBOX_REPLY_BRIEFING_TRUNCATION_MARKER = '[…truncated]';
 const MYAH_INBOX_REPLY_BRIEFING_MAX_AGENT_RICH_TEXT_LENGTH = 2_000;
@@ -153,7 +167,18 @@ const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_FIELDS = [
   'replyRules',
   'escalationBoundaries',
   'additionalNotes',
+  'emailSignature',
 ] as const satisfies readonly (keyof MyahInboxReplyBriefingCampaignRecord)[];
+const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_MARKDOWN_COLUMN_BY_FIELD: Partial<
+  Record<keyof MyahInboxReplyBriefingCampaignRecord, string>
+> = {
+  campaignBrief: 'campaignBriefMarkdown',
+  communicationGuidelines: 'communicationGuidelinesMarkdown',
+  replyRules: 'replyRulesMarkdown',
+  escalationBoundaries: 'escalationBoundariesMarkdown',
+  additionalNotes: 'additionalNotesMarkdown',
+  emailSignature: 'emailSignatureMarkdown',
+};
 const MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_CREATOR_FIELDS = [
   'stage',
   'selectedContactMethod',
@@ -181,6 +206,17 @@ const getReplyBriefingSelect = <T extends ObjectLiteral>(
     fields.map((field) => [field, true]),
   ) as FindOptionsSelect<T>;
 
+const getCampaignReplyBriefingSelect = (
+  fields: readonly (keyof MyahInboxReplyBriefingCampaignRecord)[],
+): FindOptionsSelect<MyahInboxReplyBriefingCampaignRecord> =>
+  Object.fromEntries(
+    fields.map((field) => [
+      MYAH_INBOX_REPLY_BRIEFING_CAMPAIGN_MARKDOWN_COLUMN_BY_FIELD[field] ??
+        field,
+      true,
+    ]),
+  ) as FindOptionsSelect<MyahInboxReplyBriefingCampaignRecord>;
+
 const normalizeCreatorReplyBriefingText = (value: unknown): string[] => {
   if (typeof value !== 'string' || value.trim().length === 0) {
     return [];
@@ -203,14 +239,20 @@ const formatReplyBriefingSender = (
       (value): value is string =>
         typeof value === 'string' && value.trim().length > 0,
     )
+    .map((value) => value.trim())
     .join(' ');
+  const displayName = participant.displayName?.trim();
+  const handle = participant.handle?.trim();
 
-  return (
-    personName ||
-    participant.displayName?.trim() ||
-    participant.handle?.trim() ||
-    null
-  );
+  if (personName) {
+    return personName;
+  }
+
+  if (displayName) {
+    return /^Person \d+$/i.test(displayName) ? null : displayName;
+  }
+
+  return handle || null;
 };
 
 function truncateReplyBriefingValue(
@@ -238,7 +280,7 @@ export class MyahInboxReplyBriefingService {
 
   async loadReplyBriefing(
     input: Omit<MyahInboxListThreadsInput, 'threadId'> & { threadId: string },
-  ): Promise<MyahInboxReplyBriefing> {
+  ): Promise<MyahInboxReplyGenerationContext> {
     const thread = await this.myahInboxQueryService.getThreadSummary(input);
     const context = await this.loadThreadProposalHistory(input, thread);
 
@@ -277,6 +319,7 @@ export class MyahInboxReplyBriefingService {
         }
 
         const [
+          messageThread,
           message,
           messageParticipant,
           person,
@@ -284,6 +327,11 @@ export class MyahInboxReplyBriefingService {
           campaign,
           campaignCreator,
         ] = await Promise.all([
+          this.globalWorkspaceOrmManager.getRepository<MyahInboxReplyBriefingMessageThreadRecord>(
+            input.workspace.id,
+            'messageThread',
+            rolePermissionConfig,
+          ),
           this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
             input.workspace.id,
             'message',
@@ -315,6 +363,18 @@ export class MyahInboxReplyBriefingService {
             rolePermissionConfig,
           ),
         ]);
+        const persistedThread = await messageThread.findOne({
+          where: { id: input.threadId },
+          select: {
+            id: true,
+            myahCampaignId: true,
+          },
+        });
+
+        if (!persistedThread) {
+          throw new ForbiddenException('Inbox thread is not readable');
+        }
+
         const repositories: MyahInboxReplyBriefingRepositories = {
           message,
           messageParticipant,
@@ -446,10 +506,10 @@ export class MyahInboxReplyBriefingService {
                 (fields) =>
                   repositories.campaign.findOne({
                     where: { id: campaignId },
-                    select:
-                      getReplyBriefingSelect<MyahInboxReplyBriefingCampaignRecord>(
-                        fields,
-                      ),
+                    select: {
+                      id: true,
+                      ...getCampaignReplyBriefingSelect(fields),
+                    },
                   }),
               )
             : null,
@@ -508,6 +568,12 @@ export class MyahInboxReplyBriefingService {
         return {
           history,
           replyRecipient,
+          hasCampaignLink: persistedThread.myahCampaignId !== null,
+          campaignEmailSignatureMarkdown:
+            typeof campaignRecord?.emailSignature?.markdown === 'string' &&
+            campaignRecord.emailSignature.markdown.trim().length > 0
+              ? campaignRecord.emailSignature.markdown
+              : null,
           campaign: campaignRecord
             ? {
                 objective: truncateReplyBriefingValue(
