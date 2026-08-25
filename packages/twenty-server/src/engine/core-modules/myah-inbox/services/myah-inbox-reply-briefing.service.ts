@@ -143,7 +143,6 @@ type MyahInboxReplyBriefingPersonRecord = ObjectLiteral & {
 };
 
 type MyahInboxReplyBriefingRepositories = {
-  messageThread: WorkspaceRepository<MyahInboxReplyBriefingMessageThreadRecord>;
   campaign: WorkspaceRepository<MyahInboxReplyBriefingCampaignRecord>;
   campaignCreator: WorkspaceRepository<MyahInboxReplyBriefingCampaignCreatorRecord>;
   creator: WorkspaceRepository<MyahInboxReplyBriefingCreatorRecord>;
@@ -377,7 +376,6 @@ export class MyahInboxReplyBriefingService {
         }
 
         const repositories: MyahInboxReplyBriefingRepositories = {
-          messageThread,
           message,
           messageParticipant,
           person,

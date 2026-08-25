@@ -277,26 +277,35 @@ describe('MyahInboxReplyWorkspace', () => {
     ).toBeVisible();
   });
 
-  it('disables proposal controls while the controller reports saving', () => {
-    mockDraftEntry = {
-      localBody: { markdown: 'Saved draft', blocknote: null },
-      confirmedBody: { markdown: 'Saved draft', blocknote: null },
-      confirmedRevision: 3,
-      dirty: false,
-      status: 'saving',
-      error: null,
-      conflict: null,
-      debounceVersion: 0,
-      pendingDebounceVersion: null,
-      editorVersion: 0,
-    };
+  it.each(['saving', 'error', 'conflict'] as const)(
+    'disables generation while the draft controller reports %s',
+    (status) => {
+      mockDraftEntry = {
+        localBody: { markdown: 'Saved draft', blocknote: null },
+        confirmedBody: { markdown: 'Saved draft', blocknote: null },
+        confirmedRevision: 3,
+        dirty: false,
+        status,
+        error: status === 'error' ? 'Draft save failed' : null,
+        conflict:
+          status === 'conflict'
+            ? {
+                revision: 4,
+                body: { markdown: 'Newer saved draft', blocknote: null },
+              }
+            : null,
+        debounceVersion: 0,
+        pendingDebounceVersion: null,
+        editorVersion: 0,
+      };
 
-    render(<MyahInboxReplyWorkspace thread={thread} />);
+      render(<MyahInboxReplyWorkspace thread={thread} />);
 
-    expect(
-      within(screen.getByLabelText('Draft actions')).getByRole('button', {
-        name: 'Generate Reply',
-      }),
-    ).toBeDisabled();
-  });
+      expect(
+        within(screen.getByLabelText('Draft actions')).getByRole('button', {
+          name: 'Generate Reply',
+        }),
+      ).toBeDisabled();
+    },
+  );
 });
