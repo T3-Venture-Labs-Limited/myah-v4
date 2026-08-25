@@ -41,7 +41,14 @@ const OVERLAY_CLASS_NAMES: Record<ModalOverlay, string | undefined> = {
 
 export const Modal = ({
   isOpen,
+  modal = false,
   ariaLabel,
+  ariaLabelledBy,
+  ariaDescribedBy,
+  ariaModal,
+  onOpenChange,
+  initialFocus,
+  finalFocus,
   children,
   size = 'medium',
   padding = 'medium',
@@ -75,11 +82,17 @@ export const Modal = ({
     onBackdropMouseDown?.(e);
   };
 
-  // modal={false} and disablePointerDismissal keep Base UI from trapping
-  // focus, locking scroll or closing on outside press: like the deprecated
-  // Modal, open/close is fully controlled by the isOpen prop
+  const isModal = modal !== false;
+
+  // Default to the deprecated controlled behavior. Callers opt into Base UI's
+  // modal dismissal and focus management with the modal/focus props.
   return (
-    <Dialog.Root open={isOpen} modal={false} disablePointerDismissal>
+    <Dialog.Root
+      open={isOpen}
+      modal={modal}
+      disablePointerDismissal={!isModal}
+      onOpenChange={onOpenChange}
+    >
       <Dialog.Portal container={resolvedContainer}>
         <ModalBackdrop
           data-testid={backdropTestId}
@@ -90,8 +103,12 @@ export const Modal = ({
           isInContainer={isInContainer}
         >
           <Dialog.Popup
-            initialFocus={false}
-            finalFocus={false}
+            aria-label={ariaLabelledBy === undefined ? ariaLabel : undefined}
+            aria-labelledby={ariaLabelledBy}
+            aria-describedby={ariaDescribedBy}
+            aria-modal={modal === true ? true : ariaModal}
+            initialFocus={isModal ? initialFocus : false}
+            finalFocus={isModal ? finalFocus : false}
             onKeyDown={(event) => {
               if (KEYDOWN_EVENTS_TO_PROPAGATE.has(event.key)) {
                 event.preventBaseUIHandler();
@@ -100,7 +117,6 @@ export const Modal = ({
             render={
               <div
                 ref={resolvedRef}
-                aria-label={ariaLabel}
                 className={clsx(
                   styles.modal,
                   styles[size],

@@ -53,6 +53,7 @@ export const SlashCommandMenu = forwardRef<unknown, SlashCommandMenuProps>(
           LeftIcon={item.icon}
           text={item.title}
           selected={isSelected}
+          role="option"
           onClick={() => {
             onSelect(item);
           }}

@@ -1,4 +1,6 @@
 import { type Meta, type StoryObj } from '@storybook/react-vite';
+import { expect, fn, userEvent, within } from 'storybook/test';
+
 import { action } from 'storybook/actions';
 
 import { IconBell } from '@ui/icon';
@@ -19,6 +21,9 @@ const meta: Meta<typeof MenuItem> = {
 export default meta;
 
 type Story = StoryObj<typeof MenuItem>;
+
+const onArchiveMailbox = fn();
+const onDisabledArchiveMailbox = fn();
 
 export const Default: Story = {
   parameters: { a11y: A11Y_DEFER_COLOR_CONTRAST },
@@ -321,4 +326,46 @@ export const SubMenuCatalog: CatalogStory<Story, typeof MenuItem> = {
     },
   },
   decorators: [CatalogDecorator],
+};
+
+export const StandaloneAction: Story = {
+  decorators: [ComponentDecorator],
+  render: () => (
+    <div>
+      <MenuItem
+        role="button"
+        text="Archive mailbox"
+        onClick={onArchiveMailbox}
+      />
+      <MenuItem
+        role="button"
+        text="Archive mailbox (unavailable)"
+        disabled
+        onClick={onDisabledArchiveMailbox}
+      />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const archive = canvas.getByRole('button', { name: 'Archive mailbox' });
+    const unavailable = canvas.getByRole('button', {
+      name: 'Archive mailbox (unavailable)',
+    });
+
+    expect(canvas.queryByRole('menuitem')).not.toBeInTheDocument();
+    expect(archive).toHaveAttribute('tabindex', '0');
+    expect(unavailable).toHaveAttribute('aria-disabled', 'true');
+    expect(unavailable).toHaveAttribute('tabindex', '-1');
+
+    archive.focus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('[Space]');
+    await userEvent.click(unavailable);
+    unavailable.focus();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('[Space]');
+
+    expect(onArchiveMailbox).toHaveBeenCalledTimes(2);
+    expect(onDisabledArchiveMailbox).not.toHaveBeenCalled();
+  },
 };

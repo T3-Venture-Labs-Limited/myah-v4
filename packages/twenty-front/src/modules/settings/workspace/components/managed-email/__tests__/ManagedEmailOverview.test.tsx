@@ -142,17 +142,179 @@ describe('ManagedEmailOverview', () => {
     });
   });
 
-  it('loads customer-safe counts and mailbox inventory without leaking failure details', async () => {
+  it('renders the resource dashboard from customer-safe overview data', async () => {
     renderOverview();
 
-    expect(await screen.findByText('Managed mailboxes')).toBeVisible();
-    expect(screen.getByText('1 mailbox')).toBeVisible();
-    expect(screen.getByText('1 warming')).toBeVisible();
-    expect(screen.getByText('1 action required')).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Email infrastructure' }),
+    ).toBeVisible();
+    expect(
+      screen.getAllByRole('heading', { name: 'Domains' })[0],
+    ).toBeVisible();
+    expect(
+      screen.getAllByRole('heading', { name: 'Mailboxes' })[0],
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Managed warmup' }),
+    ).toBeVisible();
     expect(screen.getByText('maya@creator-network.com')).toBeVisible();
     expect(screen.getByText('Maya Chen')).toBeVisible();
     expect(
       screen.queryByText('INTERNAL_PROVIDER_DETAIL_MUST_NOT_RENDER'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables composable actions that do not have production APIs', async () => {
+    renderOverview();
+
+    expect(
+      await screen.findByRole('button', { name: 'Add domain' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add mailbox' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Start managed warmup' }),
+    ).toBeDisabled();
+  });
+  it('renders warming overview state as warming instead of ready', async () => {
+    renderOverview([
+      {
+        request: { query: GET_MANAGED_EMAIL_OVERVIEW },
+        result: {
+          data: {
+            ...overviewResult,
+            managedEmailOverview: {
+              ...overviewResult.managedEmailOverview,
+              actionRequiredCount: 0,
+              readyCount: 0,
+              status: 'WARMING',
+              warmingCount: 0,
+            },
+            managedEmailMailboxes: [
+              {
+                ...overviewResult.managedEmailMailboxes[0],
+                warmupState: 'CONNECTING',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(
+      (await screen.findAllByRole('heading', { name: 'Warming' }))[0],
+    ).toBeVisible();
+    expect(screen.getByText('1 mailbox warming')).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: '0 ready' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('preserves action-required precedence over locally ready warmup state', async () => {
+    renderOverview([
+      {
+        request: { query: GET_MANAGED_EMAIL_OVERVIEW },
+        result: {
+          data: {
+            ...overviewResult,
+            managedEmailMailboxes: [
+              {
+                ...overviewResult.managedEmailMailboxes[0],
+                warmupState: 'MAINTENANCE',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(
+      (
+        await screen.findAllByRole('heading', {
+          name: 'Action required',
+        })
+      )[0],
+    ).toBeVisible();
+  });
+
+  it('does not treat a blocked ordinary NOT_APPLICABLE mailbox as ready', async () => {
+    renderOverview([
+      {
+        request: { query: GET_MANAGED_EMAIL_OVERVIEW },
+        result: {
+          data: {
+            ...overviewResult,
+            managedEmailOverview: {
+              ...overviewResult.managedEmailOverview,
+              actionRequiredCount: 0,
+              status: 'WARMING',
+            },
+            managedEmailMailboxes: [
+              {
+                ...overviewResult.managedEmailMailboxes[0],
+                campaignEligibility: 'BLOCKED',
+                safeFailureCode: null,
+                warmupState: 'NOT_APPLICABLE',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(
+      (await screen.findAllByRole('heading', { name: 'Warming' }))[0],
+    ).toBeVisible();
+  });
+
+  it('renders shutdown states as neutral lifecycle progress', async () => {
+    renderOverview([
+      {
+        request: { query: GET_MANAGED_EMAIL_OVERVIEW },
+        result: {
+          data: {
+            managedEmailOverview: {
+              ...overviewResult.managedEmailOverview,
+              actionRequiredCount: 0,
+              readyCount: 0,
+              status: 'WARMING',
+              warmingCount: 0,
+            },
+            managedEmailDomains: [
+              {
+                ...overviewResult.managedEmailDomains[0],
+                infrastructureState: 'INACTIVE',
+              },
+            ],
+            managedEmailMailboxes: [
+              {
+                ...overviewResult.managedEmailMailboxes[0],
+                id: 'mailbox-deactivating',
+                infrastructureState: 'DEACTIVATING',
+                safeFailureCode: null,
+                warmupState: 'DELETED',
+              },
+              {
+                ...overviewResult.managedEmailMailboxes[0],
+                address: 'retired@creator-network.com',
+                id: 'mailbox-inactive',
+                infrastructureState: 'INACTIVE',
+                safeFailureCode: null,
+                warmupState: 'DELETED',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(
+      (await screen.findAllByRole('heading', { name: 'Stopping' }))[0],
+    ).toBeVisible();
+    expect(
+      (await screen.findAllByRole('heading', { name: 'Inactive' }))[0],
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Warming' }),
     ).not.toBeInTheDocument();
   });
 
@@ -179,7 +341,9 @@ describe('ManagedEmailOverview', () => {
       },
     ]);
 
-    expect(await screen.findByText('Managed mailboxes')).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Email infrastructure' }),
+    ).toBeVisible();
     expect(
       window.localStorage.getItem('managed-email-purchase-intent:workspace-a'),
     ).toBeNull();
@@ -227,7 +391,9 @@ describe('ManagedEmailOverview', () => {
       'workspace-b',
     );
 
-    expect(await screen.findByText('Managed mailboxes')).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Email infrastructure' }),
+    ).toBeVisible();
     await waitFor(() =>
       expect(
         window.localStorage.getItem(
@@ -352,7 +518,6 @@ describe('ManagedEmailOverview', () => {
   });
 
   it('keeps Connect existing available when managed acquisition is disabled', async () => {
-    const user = userEvent.setup();
     renderOverview([
       {
         request: { query: GET_MANAGED_EMAIL_OVERVIEW },
@@ -368,22 +533,14 @@ describe('ManagedEmailOverview', () => {
       },
     ]);
 
-    await user.click(
-      await screen.findByRole('button', { name: /^Add mailboxes/ }),
-    );
-
     expect(
-      screen.getByText(
-        'Managed mailbox acquisition is not available right now.',
-      ),
-    ).toBeVisible();
+      await screen.findByRole('button', { name: 'Set up managed email' }),
+    ).toBeDisabled();
     expect(
-      screen.queryByRole('button', {
-        name: /^Create and warm new mailboxes/,
-      }),
-    ).not.toBeInTheDocument();
+      screen.getByRole('button', { name: 'Browse prewarmed inventory' }),
+    ).toBeDisabled();
     expect(
-      screen.getByRole('button', { name: /^Connect existing mailboxes/ }),
+      screen.getByRole('button', { name: 'Connect existing mailbox' }),
     ).toBeEnabled();
   });
 
@@ -403,6 +560,7 @@ describe('ManagedEmailOverview', () => {
               status: 'EMPTY',
               warmingCount: 0,
             },
+            managedEmailDomains: [],
             managedEmailMailboxes: [],
           },
         },
@@ -411,7 +569,7 @@ describe('ManagedEmailOverview', () => {
 
     expect(await screen.findByText('No managed mailboxes yet.')).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'No managed mailboxes' }),
+      screen.getAllByRole('heading', { name: 'No managed mailboxes' })[0],
     ).toBeVisible();
     expect(
       screen.queryByRole('heading', { name: 'Action required' }),
@@ -467,7 +625,9 @@ describe('ManagedEmailOverview', () => {
       screen.getByRole('button', { name: /^Return to mailbox overview/ }),
     );
 
-    expect(await screen.findByText('Managed mailboxes')).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Email infrastructure' }),
+    ).toBeVisible();
     expect(
       window.localStorage.getItem('managed-email-purchase-intent:workspace-a'),
     ).toBeNull();
@@ -512,7 +672,9 @@ describe('ManagedEmailOverview', () => {
       overviewMock,
     ]);
 
-    expect(await screen.findByText('Managed mailboxes')).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Email infrastructure' }),
+    ).toBeVisible();
     expect(
       window.localStorage.getItem('managed-email-purchase-intent:workspace-a'),
     ).toBeNull();
@@ -562,10 +724,9 @@ describe('ManagedEmailOverview', () => {
     ]);
 
     await user.click(
-      await screen.findByRole('button', { name: /^Add mailboxes/ }),
-    );
-    await user.click(
-      screen.getByRole('button', { name: /^Get prewarmed mailboxes/ }),
+      await screen.findByRole('button', {
+        name: 'Browse prewarmed inventory',
+      }),
     );
 
     expect(
@@ -587,10 +748,9 @@ describe('ManagedEmailOverview', () => {
     ]);
 
     await user.click(
-      await screen.findByRole('button', { name: /^Add mailboxes/ }),
-    );
-    await user.click(
-      screen.getByRole('button', { name: /^Get prewarmed mailboxes/ }),
+      await screen.findByRole('button', {
+        name: 'Browse prewarmed inventory',
+      }),
     );
 
     expect(
@@ -753,10 +913,9 @@ describe('ManagedEmailOverview', () => {
     ]);
 
     await user.click(
-      await screen.findByRole('button', { name: /^Add mailboxes/ }),
-    );
-    await user.click(
-      screen.getByRole('button', { name: /^Get prewarmed mailboxes/ }),
+      await screen.findByRole('button', {
+        name: 'Browse prewarmed inventory',
+      }),
     );
     await user.click(
       await screen.findByRole('button', { name: /^Select whole bundle/ }),
@@ -914,12 +1073,7 @@ describe('ManagedEmailOverview', () => {
     ]);
 
     await user.click(
-      await screen.findByRole('button', { name: /^Add mailboxes/ }),
-    );
-    await user.click(
-      screen.getByRole('button', {
-        name: /^Create and warm new mailboxes/,
-      }),
+      await screen.findByRole('button', { name: 'Set up managed email' }),
     );
     fireEvent.change(screen.getByLabelText('Mailbox count'), {
       target: { value: '1' },

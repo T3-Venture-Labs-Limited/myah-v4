@@ -120,6 +120,7 @@ export const RecordDetailMorphRelationSectionDropdownManyToOne = ({
   return (
     <Dropdown
       dropdownId={dropdownId}
+      containerType="neutral"
       dropdownPlacement="left-start"
       onClose={handleCloseRelationPickerDropdown}
       onOpen={handleOpenRelationPickerDropdown}

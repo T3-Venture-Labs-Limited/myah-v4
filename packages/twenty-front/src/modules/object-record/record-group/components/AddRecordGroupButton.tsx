@@ -55,6 +55,7 @@ export const AddRecordGroupButton = ({
   return (
     <Dropdown
       dropdownId={dropdownId}
+      containerType="neutral"
       dropdownPlacement="bottom-start"
       dropdownOffset={dropdownOffset}
       clickableComponent={

@@ -65,7 +65,7 @@ export const CustomMentionMenu = ({
               data-click-outside-id={MENTION_MENU_DROPDOWN_CLICK_OUTSIDE_ID}
             >
               <DropdownContent widthInPixels={MenuPixelWidth}>
-                <DropdownMenuItemsContainer hasMaxHeight>
+                <DropdownMenuItemsContainer hasMaxHeight role="listbox">
                   {filteredItems.map((item, index) => (
                     <MentionMenuListItem
                       key={item.recordId!}

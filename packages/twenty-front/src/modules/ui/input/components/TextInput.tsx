@@ -4,6 +4,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { InputLabel } from '@/ui/input/components/InputLabel';
 import { css } from '@linaria/core';
 import { styled } from '@linaria/react';
+import { useLingui } from '@lingui/react/macro';
 import React, {
   forwardRef,
   type ChangeEvent,
@@ -92,7 +93,9 @@ const StyledInput = styled.input<
     | 'autoGrow'
     | 'rightAdornment'
     | 'leftAdornment'
-  >
+  > & {
+    $hasPasswordVisibilityButton: boolean;
+  }
 >`
   background-color: ${themeCssVariables.background.transparent.lighter};
   border: 1px solid
@@ -139,12 +142,14 @@ const StyledInput = styled.input<
       : LeftIcon
         ? `calc(${themeCssVariables.spacing[3]} + 16px)`
         : themeCssVariables.spacing[2]};
-  padding-right: ${({ RightIcon, autoGrow }) =>
-    autoGrow
-      ? themeCssVariables.spacing[1]
-      : RightIcon
-        ? `calc(${themeCssVariables.spacing[3]} + 16px)`
-        : themeCssVariables.spacing[2]};
+  padding-right: ${({ RightIcon, autoGrow, $hasPasswordVisibilityButton }) =>
+    $hasPasswordVisibilityButton
+      ? `calc(${themeCssVariables.spacing[3]} + 16px)`
+      : autoGrow
+        ? themeCssVariables.spacing[1]
+        : RightIcon
+          ? `calc(${themeCssVariables.spacing[3]} + 16px)`
+          : themeCssVariables.spacing[2]};
   text-overflow: ellipsis;
   width: ${({ width }) =>
     isDefined(width)
@@ -217,6 +222,23 @@ const StyledTrailingIcon = styled.div<{
   justify-content: center;
 `;
 
+const StyledPasswordVisibilityButton = styled.button<{
+  isFocused?: boolean;
+}>`
+  align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: ${({ isFocused }) =>
+    isFocused
+      ? themeCssVariables.font.color.secondary
+      : themeCssVariables.font.color.light};
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+`;
+
 const INPUT_TYPE_PASSWORD = 'password';
 
 export type TextInputSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -283,10 +305,16 @@ const TextInputComponent = forwardRef<
       rightAdornment,
       leftAdornment,
       textClickOutsideId,
+      id,
+      'aria-describedby': ariaDescribedBy,
+      'aria-errormessage': ariaErrorMessage,
+      'aria-invalid': ariaInvalid,
+      ...inputProps
     },
     ref,
   ) => {
     const { theme } = useContext(ThemeContext);
+    const { t } = useLingui();
     const inputRef = useRef<HTMLInputElement>(null);
     const combinedRef = useCombinedRefs(ref, inputRef);
 
@@ -294,7 +322,7 @@ const TextInputComponent = forwardRef<
     const [isFocused, setIsFocused] = useState(false);
 
     const handleTogglePasswordVisibility = () => {
-      setPasswordVisible(!passwordVisible);
+      setPasswordVisible((isVisible) => !isVisible);
     };
 
     const handleFocus: FocusEventHandler<HTMLInputElement> = (event) => {
@@ -309,6 +337,27 @@ const TextInputComponent = forwardRef<
 
     const instanceId = useId();
 
+    const inputId = id ?? instanceId;
+    const errorId = `${inputId}-error`;
+    const hasError = Boolean(error);
+    const shouldRenderErrorHelper = hasError && !noErrorHelper;
+    const describedBy = shouldRenderErrorHelper
+      ? [ariaDescribedBy, errorId].filter(Boolean).join(' ')
+      : ariaDescribedBy;
+    const passwordFieldLabel = (
+      inputProps['aria-label'] ??
+      label ??
+      inputProps.name ??
+      ''
+    ).trim();
+    const passwordVisibilityLabel = passwordVisible
+      ? passwordFieldLabel
+        ? t`Hide ${passwordFieldLabel}`
+        : t`Hide password`
+      : passwordFieldLabel
+        ? t`Show ${passwordFieldLabel}`
+        : t`Show password`;
+
     return (
       <StyledContainer
         className={className}
@@ -316,7 +365,7 @@ const TextInputComponent = forwardRef<
         data-click-outside-id={textClickOutsideId}
       >
         {label && (
-          <InputLabel htmlFor={instanceId}>
+          <InputLabel htmlFor={inputId}>
             {label + (required ? '*' : '')}
           </InputLabel>
         )}
@@ -336,8 +385,9 @@ const TextInputComponent = forwardRef<
           )}
 
           <StyledInput
-            id={instanceId}
+            id={inputId}
             width={width}
+            $hasPasswordVisibilityButton={type === INPUT_TYPE_PASSWORD}
             data-testid={dataTestId}
             autoComplete={autoComplete ?? 'off'}
             ref={combinedRef}
@@ -351,6 +401,11 @@ const TextInputComponent = forwardRef<
               );
             }}
             onKeyDown={onKeyDown}
+            aria-describedby={describedBy}
+            aria-errormessage={
+              shouldRenderErrorHelper ? errorId : ariaErrorMessage
+            }
+            aria-invalid={hasError ? true : ariaInvalid}
             {...{
               autoFocus,
               disabled,
@@ -368,6 +423,8 @@ const TextInputComponent = forwardRef<
               leftAdornment,
               rightAdornment,
             }}
+            // oxlint-disable-next-line react/jsx-props-no-spreading
+            {...inputProps}
           />
           {rightAdornment && (
             <StyledAdornmentContainer
@@ -378,17 +435,22 @@ const TextInputComponent = forwardRef<
             </StyledAdornmentContainer>
           )}
           <StyledTrailingIconContainer {...{ error }}>
-            {!error && type === INPUT_TYPE_PASSWORD && (
-              <StyledTrailingIcon
+            {type === INPUT_TYPE_PASSWORD && (
+              <StyledPasswordVisibilityButton
+                type="button"
+                disabled={disabled}
+                aria-label={passwordVisibilityLabel}
+                aria-pressed={passwordVisible}
                 onClick={handleTogglePasswordVisibility}
                 data-testid="reveal-password-button"
+                isFocused={isFocused}
               >
                 {passwordVisible ? (
                   <IconEyeOff size={theme.icon.size.md} />
                 ) : (
                   <IconEye size={theme.icon.size.md} />
                 )}
-              </StyledTrailingIcon>
+              </StyledPasswordVisibilityButton>
             )}
             {!error && type !== INPUT_TYPE_PASSWORD && !!RightIcon && (
               <StyledTrailingIcon
@@ -399,8 +461,8 @@ const TextInputComponent = forwardRef<
             )}
           </StyledTrailingIconContainer>
         </StyledInputContainer>
-        {!noErrorHelper && error && (
-          <InputErrorHelper>{error}</InputErrorHelper>
+        {shouldRenderErrorHelper && (
+          <InputErrorHelper id={errorId}>{error}</InputErrorHelper>
         )}
       </StyledContainer>
     );

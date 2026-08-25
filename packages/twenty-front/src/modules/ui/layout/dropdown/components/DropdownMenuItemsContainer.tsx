@@ -1,7 +1,6 @@
 import { DROPDOWN_MENU_ITEMS_CONTAINER_MAX_HEIGHT } from '@/ui/layout/dropdown/constants/DropdownMenuItemsContainerMaxHeight';
 import { styled } from '@linaria/react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-
 const StyledExternalContainer = styled.div<{
   maxHeight?: number;
 }>`
@@ -80,6 +79,7 @@ export type DropdownMenuItemsContainerProps = {
   id?: string;
   ariaLabel?: string;
   role?: 'listbox' | 'presentation';
+  'aria-multiselectable'?: boolean;
 };
 
 export const DropdownMenuItemsContainer = ({
@@ -89,22 +89,28 @@ export const DropdownMenuItemsContainer = ({
   className,
   id,
   ariaLabel,
-  role = 'listbox',
+  role = 'presentation',
+  'aria-multiselectable': ariaMultiselectable,
 }: DropdownMenuItemsContainerProps) => {
   return scrollable === true ? (
     <StyledScrollableContainer
+      aria-label={ariaLabel}
       className={className}
+      role={role}
+      aria-multiselectable={ariaMultiselectable}
+      id={id}
       maxHeight={
         hasMaxHeight ? DROPDOWN_MENU_ITEMS_CONTAINER_MAX_HEIGHT : undefined
       }
     >
-      <StyledExternalContainer aria-label={ariaLabel} id={id} role={role}>
+      <StyledExternalContainer>
         <StyledInternalContainer>{children}</StyledInternalContainer>
       </StyledExternalContainer>
     </StyledScrollableContainer>
   ) : (
     <StyledExternalContainer
       aria-label={ariaLabel}
+      aria-multiselectable={ariaMultiselectable}
       className={className}
       id={id}
       role={role}

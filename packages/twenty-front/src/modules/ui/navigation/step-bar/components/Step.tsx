@@ -1,4 +1,5 @@
 import { styled } from '@linaria/react';
+import { useLingui } from '@lingui/react/macro';
 import { motion } from 'framer-motion';
 import { useContext } from 'react';
 
@@ -10,12 +11,25 @@ import {
   themeCssVariables,
 } from 'twenty-ui/theme-constants';
 
-const StyledContainer = styled.div<{ isLast: boolean }>`
+const StyledContainer = styled.li<{ isLast: boolean }>`
   align-items: center;
   display: flex;
   flex-grow: ${({ isLast }) => (isLast ? '0' : '1')};
   @media (max-width: ${MOBILE_VIEWPORT}px) {
     flex-grow: 0;
+
+    &[data-visually-hidden='true'] {
+      border: 0;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      white-space: nowrap;
+      width: 1px;
+    }
   }
 `;
 
@@ -72,22 +86,28 @@ const StyledStepLineBase = styled.div`
 const StyledStepLine = motion.create(StyledStepLineBase);
 
 export type StepProps = React.PropsWithChildren &
-  React.ComponentProps<'div'> & {
+  React.ComponentProps<'li'> & {
     isLast?: boolean;
     index?: number;
+    isVisuallyHidden?: boolean;
     label: string;
     activeStep?: number;
+    totalSteps?: number;
   };
 
 export const Step = ({
   isLast = false,
   index = 0,
+  isVisuallyHidden = false,
   label,
   children,
   activeStep = 0,
+  totalSteps = 1,
+  ...props
 }: StepProps) => {
   const isMobile = useIsMobile();
   const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
 
   const variantsLine = {
     previous: {
@@ -120,7 +140,20 @@ export const Step = ({
   const isInNextSteps = activeStep < index;
 
   return (
-    <StyledContainer isLast={isLast}>
+    <StyledContainer
+      // oxlint-disable-next-line react/jsx-props-no-spreading
+      {...props}
+      aria-current={isCurrentStep ? 'step' : undefined}
+      aria-label={
+        isInPreviousSteps
+          ? t`Step ${index + 1} of ${totalSteps} ${label} completed`
+          : isCurrentStep
+            ? t`Step ${index + 1} of ${totalSteps} ${label} current`
+            : t`Step ${index + 1} of ${totalSteps} ${label}`
+      }
+      data-visually-hidden={isVisuallyHidden || undefined}
+      isLast={isLast}
+    >
       <StyledStepCircle
         variants={variantsCircle}
         animate={
@@ -147,7 +180,7 @@ export const Step = ({
           animate={isInPreviousSteps ? 'previous' : 'next'}
         />
       )}
-      {(isInPreviousSteps || isCurrentStep) && children}
+      {(isCurrentStep || (!isMobile && isInPreviousSteps)) && children}
     </StyledContainer>
   );
 };

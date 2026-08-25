@@ -28,6 +28,7 @@ export const CustomSlashMenuListItem = ({
   return (
     <SelectableListItem itemId={item.title} onEnter={handleClick}>
       <MenuItemSuggestion
+        role="option"
         selected={isSelectedItemId}
         onClick={handleClick}
         LeftIcon={item.Icon}

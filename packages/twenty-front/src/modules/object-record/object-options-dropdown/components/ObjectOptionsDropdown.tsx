@@ -50,6 +50,9 @@ export const ObjectOptionsDropdown = ({
     <>
       <Dropdown
         dropdownId={objectOptionsDropdownId}
+        containerType={
+          currentContentId === 'addRecordGroup' ? 'neutral' : 'listbox'
+        }
         dropdownOffset={{ y: DROPDOWN_OFFSET_Y }}
         clickableComponent={
           <StyledHeaderDropdownButton isUnfolded={isDropdownOpen}>

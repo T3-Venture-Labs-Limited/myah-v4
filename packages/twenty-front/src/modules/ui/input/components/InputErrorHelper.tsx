@@ -10,14 +10,15 @@ const StyledInputErrorHelper = styled.div`
   position: absolute;
 `;
 
-export const InputErrorHelper = ({
-  children,
-}: {
+type InputErrorHelperProps = {
   children?: React.ReactNode;
-}) => (
+  id?: string;
+};
+
+export const InputErrorHelper = ({ children, id }: InputErrorHelperProps) => (
   <div>
     {isDefined(children) && (
-      <StyledInputErrorHelper aria-live="polite">
+      <StyledInputErrorHelper id={id} aria-live="polite">
         {children}
       </StyledInputErrorHelper>
     )}
