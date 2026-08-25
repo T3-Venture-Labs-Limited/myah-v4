@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { type ComponentType } from 'react';
 
 import { MyahInboxProposalPreview } from '@/myah/inbox/components/MyahInboxProposalPreview';
 
@@ -36,12 +37,21 @@ jest.mock('twenty-ui/input', () => ({
     title,
     onClick,
     disabled,
+    Icon,
+    ariaLabel,
   }: {
     title: string;
     onClick: () => void;
     disabled?: boolean;
+    Icon?: ComponentType;
+    ariaLabel?: string;
   }) => (
-    <button disabled={disabled} onClick={onClick}>
+    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
+      {Icon && (
+        <span data-testid="generate-reply-spinner">
+          <Icon />
+        </span>
+      )}
       {title}
     </button>
   ),
@@ -109,7 +119,7 @@ describe('MyahInboxProposalPreview', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('announces reply generation while the request is pending', () => {
+  it('shows a spinner inside Generate Reply without a separate status line', () => {
     mockGenerateProposal.mockReturnValue(Promise.race([]));
 
     render(
@@ -125,7 +135,9 @@ describe('MyahInboxProposalPreview', () => {
     expect(
       screen.getByRole('button', { name: 'Generating reply' }),
     ).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent('Generating reply');
+    expect(screen.getByTestId('generate-reply-spinner')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Generating reply')).not.toBeInTheDocument();
   });
 
   it('shows a retryable proposal error', async () => {

@@ -7,9 +7,15 @@ import {
   MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH,
 } from 'src/engine/core-modules/myah-inbox/constants/myah-inbox.constants';
 
+const MYAH_INBOX_REPLY_MARKDOWN_DESCRIPTION =
+  'Final send-ready email reply in plain Markdown only. Exclude analysis, explanations, citations, footnotes, internal placeholders, and discussion of instructions or reference data.';
+
 const MyahInboxReplyProposalBodySchema = z
   .object({
-    markdown: z.string().max(MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH),
+    markdown: z
+      .string()
+      .max(MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH)
+      .describe(MYAH_INBOX_REPLY_MARKDOWN_DESCRIPTION),
     blocknote: z.string().max(MYAH_INBOX_MAX_DRAFT_BLOCKNOTE_LENGTH).nullable(),
   })
   .strict();
@@ -24,7 +30,10 @@ export const MyahInboxReplyProposalModelOutputSchema = z
   .object({
     body: z.union([
       MyahInboxReplyProposalBodySchema,
-      z.string().max(MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH),
+      z
+        .string()
+        .max(MYAH_INBOX_MAX_DRAFT_MARKDOWN_LENGTH)
+        .describe(MYAH_INBOX_REPLY_MARKDOWN_DESCRIPTION),
     ]),
   })
   .strict();

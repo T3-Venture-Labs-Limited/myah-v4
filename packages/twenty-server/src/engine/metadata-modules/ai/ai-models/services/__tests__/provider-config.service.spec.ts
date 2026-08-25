@@ -1,7 +1,7 @@
 import { ProviderConfigService } from '../provider-config.service';
 
 describe('ProviderConfigService', () => {
-  it('names a custom OpenRouter config separately from the managed catalog', () => {
+  it('normalizes a custom OpenRouter config separately from the managed catalog', () => {
     const service = new ProviderConfigService(
       {
         get: jest.fn().mockReturnValue({
@@ -42,6 +42,7 @@ describe('ProviderConfigService', () => {
       }),
       'openrouter-custom': {
         apiKey: 'custom',
+        name: 'openrouter',
         models: [
           {
             label: 'Legacy manual',

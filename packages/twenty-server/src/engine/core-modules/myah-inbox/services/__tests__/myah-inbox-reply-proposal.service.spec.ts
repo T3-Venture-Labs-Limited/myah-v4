@@ -192,10 +192,12 @@ const createService = (
     actorFirstName = 'Operator',
     actorLastName = 'User',
     campaignEmailSignatureMarkdown = null,
+    modelsDevName = 'fake',
   }: {
     actorFirstName?: string;
     actorLastName?: string;
     campaignEmailSignatureMarkdown?: string | null;
+    modelsDevName?: string;
   } = {},
 ) => {
   const fakeModel = createFakeModel(modelOutput);
@@ -349,6 +351,7 @@ const createService = (
       model: fakeModel.model,
       providerName: 'fake',
       sdkPackage: 'fake',
+      modelsDevName,
     }),
     getEffectiveModelConfig: jest.fn().mockReturnValue({
       modelId: 'fake/reply-model',
@@ -543,6 +546,32 @@ describe('MyahInboxReplyProposalService', () => {
     expect(setup.messageRepositoryInsert).not.toHaveBeenCalled();
     expect(setup.businessRecordMutation).not.toHaveBeenCalled();
     expect(Object.keys(result)).toEqual(['body']);
+  });
+
+  it('requires OpenRouter structured-output routing and disables reply reasoning', async () => {
+    const setup = createService(
+      {
+        body: {
+          markdown: 'Tuesday works for us.',
+          blocknote: null,
+        },
+      },
+      { modelsDevName: 'openrouter' },
+    );
+
+    await setup.service.generateReplyProposal(request);
+
+    const [modelRequest] = setup.fakeModel.doGenerate.mock.calls[0];
+
+    expect(modelRequest.providerOptions).toMatchObject({
+      openrouter: {
+        provider: { require_parameters: true },
+        reasoning: { effort: 'none', exclude: true },
+      },
+    });
+    expect(JSON.stringify(modelRequest.responseFormat)).toContain(
+      'Final send-ready email reply in plain Markdown only',
+    );
   });
 
   it('keeps the signature out of model context and appends it exactly once', async () => {

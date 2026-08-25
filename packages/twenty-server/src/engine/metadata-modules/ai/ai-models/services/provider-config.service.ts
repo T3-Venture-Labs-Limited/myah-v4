@@ -77,6 +77,7 @@ export class ProviderConfigService {
         custom;
       const normalizedCustomOpenRouter = {
         ...customOpenRouter,
+        name: customOpenRouter.name ?? MANAGED_OPENROUTER_PROVIDER_NAME,
         ...(customOpenRouter.models && {
           models: customOpenRouter.models.map((model) =>
             model.source === 'manual' &&

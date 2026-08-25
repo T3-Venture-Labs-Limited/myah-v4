@@ -240,14 +240,20 @@ const formatReplyBriefingSender = (
       (value): value is string =>
         typeof value === 'string' && value.trim().length > 0,
     )
+    .map((value) => value.trim())
     .join(' ');
+  const displayName = participant.displayName?.trim();
+  const handle = participant.handle?.trim();
 
-  return (
-    personName ||
-    participant.displayName?.trim() ||
-    participant.handle?.trim() ||
-    null
-  );
+  if (personName) {
+    return personName;
+  }
+
+  if (displayName) {
+    return /^Person \d+$/i.test(displayName) ? null : displayName;
+  }
+
+  return handle || null;
 };
 
 function truncateReplyBriefingValue(

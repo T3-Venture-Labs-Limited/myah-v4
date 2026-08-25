@@ -26,6 +26,7 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-actor-context.service';
 import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/services/ai-billing.service';
 import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
+import { MANAGED_OPENROUTER_PROVIDER_NAME } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import {
   AI_TELEMETRY_CONFIG,
   MANAGED_AI_TELEMETRY_CONFIG,
@@ -182,6 +183,15 @@ export class MyahInboxReplyProposalService {
               ]
             : []),
       ].join(' '),
+      providerOptions:
+        registeredModel.modelsDevName === MANAGED_OPENROUTER_PROVIDER_NAME
+          ? {
+              openrouter: {
+                provider: { require_parameters: true },
+                reasoning: { effort: 'none', exclude: true },
+              },
+            }
+          : undefined,
       prompt: [
         `Operator request:\n${parsedInput.operatorInstructions}`,
         this.formatReplyBriefingForPrompt(

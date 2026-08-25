@@ -1,6 +1,8 @@
 import { styled } from '@linaria/react';
 import { useState, type ReactNode } from 'react';
+import { IconLoader, type IconComponent } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
+import { AnimatedCircleLoading } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
@@ -17,15 +19,30 @@ const StyledActions = styled.div`
   justify-content: flex-end;
 `;
 
-const StyledStatus = styled.div`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.xs};
-`;
-
 const StyledError = styled.div`
   color: ${themeCssVariables.font.color.danger};
   font-size: ${themeCssVariables.font.size.xs};
 `;
+
+const GenerateReplyLoadingIcon: IconComponent = ({
+  className,
+  style,
+  size,
+  stroke,
+  color,
+  'aria-hidden': ariaHidden,
+}) => (
+  <AnimatedCircleLoading>
+    <IconLoader
+      className={className}
+      style={style}
+      size={size}
+      stroke={stroke}
+      color={color}
+      aria-hidden={ariaHidden}
+    />
+  </AnimatedCircleLoading>
+);
 
 type ProposalBody = { markdown: string; blocknote: string | null };
 
@@ -68,9 +85,11 @@ export const MyahInboxProposalPreview = ({
 
   const generateAction = (
     <Button
-      title={isGenerating ? 'Generating reply' : 'Generate Reply'}
+      title="Generate Reply"
+      ariaLabel={isGenerating ? 'Generating reply' : 'Generate Reply'}
       variant="secondary"
       size="small"
+      Icon={isGenerating ? GenerateReplyLoadingIcon : undefined}
       disabled={disabled || isGenerating}
       onClick={handleGenerate}
     />
@@ -82,9 +101,6 @@ export const MyahInboxProposalPreview = ({
         renderGenerateAction(generateAction)
       ) : (
         <StyledActions>{generateAction}</StyledActions>
-      )}
-      {isGenerating && (
-        <StyledStatus role="status">Generating reply</StyledStatus>
       )}
       {error && <StyledError role="alert">{error}</StyledError>}
     </StyledProposal>

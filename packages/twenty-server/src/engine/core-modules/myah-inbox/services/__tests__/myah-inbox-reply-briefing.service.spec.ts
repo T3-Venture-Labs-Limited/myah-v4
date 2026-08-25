@@ -664,6 +664,27 @@ describe('MyahInboxReplyBriefingService', () => {
     expect(briefing.history[0]?.sender).toBe('Creator display name');
   });
 
+  it('omits generated Person-number display names from reply recipients', async () => {
+    const { service } = createService({
+      senderParticipants: [
+        {
+          ...senderParticipant,
+          displayName: 'Person 922',
+          handle: 'person922@example.com',
+        },
+      ],
+      personRecords: [],
+    });
+
+    const briefing = await service.loadReplyBriefing({
+      ...listInput(),
+      threadId,
+    });
+
+    expect(briefing.history[0]?.sender).toBeNull();
+    expect(briefing.replyRecipient).toBeNull();
+  });
+
   it('keeps readable native Person name components when another component is denied', async () => {
     const { repositories, service } = createService();
     const fieldPermissionDenied = new PermissionsException(

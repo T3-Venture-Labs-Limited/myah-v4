@@ -23,11 +23,6 @@ const StyledActions = styled.div`
   justify-content: flex-end;
 `;
 
-const StyledStatus = styled.div`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.xs};
-`;
-
 const StyledError = styled.div`
   color: ${themeCssVariables.font.color.danger};
   font-size: ${themeCssVariables.font.size.xs};
@@ -86,9 +81,6 @@ export const MyahInboxDraftEditor = ({
         enableFullScreen={false}
       />
       <StyledActions aria-label="Draft actions">{proposalAction}</StyledActions>
-      {entry.status === 'saving' && (
-        <StyledStatus role="status">Saving</StyledStatus>
-      )}
       {entry.status === 'error' && (
         <StyledError role="alert">
           {entry.error}
