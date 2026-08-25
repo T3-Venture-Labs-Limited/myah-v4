@@ -592,12 +592,13 @@ export class AdminPanelResolver {
     if (!/^[a-zA-Z0-9_-]+$/.test(providerName)) {
       throw new UserInputError('Invalid provider name');
     }
+    const storedProviderName = resolveCustomProviderName(providerName);
 
     const customProviders = {
       ...this.twentyConfigService.get('AI_PROVIDERS'),
     };
 
-    customProviders[providerName] = providerConfig;
+    customProviders[storedProviderName] = providerConfig;
     await this.twentyConfigService.set('AI_PROVIDERS', customProviders);
 
     return true;

@@ -75,11 +75,24 @@ export class ProviderConfigService {
     ) {
       const { [MANAGED_OPENROUTER_PROVIDER_NAME]: customOpenRouter, ...rest } =
         custom;
+      const normalizedCustomOpenRouter = {
+        ...customOpenRouter,
+        ...(customOpenRouter.models && {
+          models: customOpenRouter.models.map((model) =>
+            model.source === 'manual' &&
+            model.supportsStructuredOutputs === undefined
+              ? { ...model, supportsStructuredOutputs: true }
+              : model,
+          ),
+        }),
+      };
+
 
       return {
         ...catalog,
         ...rest,
-        [`${MANAGED_OPENROUTER_PROVIDER_NAME}-custom`]: customOpenRouter,
+        [`${MANAGED_OPENROUTER_PROVIDER_NAME}-custom`]:
+          normalizedCustomOpenRouter,
       };
     }
 

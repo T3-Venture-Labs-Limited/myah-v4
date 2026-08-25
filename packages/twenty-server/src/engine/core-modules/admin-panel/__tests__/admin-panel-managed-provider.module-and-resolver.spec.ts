@@ -28,6 +28,7 @@ type TestableProviderMutationResolver = {
     get: jest.Mock;
     set: jest.Mock;
   };
+  addAiProvider: AdminPanelResolver['addAiProvider'];
   addModelToProvider: AdminPanelResolver['addModelToProvider'];
   removeAiProvider: AdminPanelResolver['removeAiProvider'];
   removeModelFromProvider: AdminPanelResolver['removeModelFromProvider'];
@@ -210,6 +211,23 @@ describe('AdminPanelResolver custom OpenRouter mutations', () => {
 
     return resolver;
   };
+
+  it('stores a displayed openrouter-custom provider under its canonical key', async () => {
+    const resolver = createResolver({});
+    const providerConfig = {
+      apiKey: 'secret',
+      models: [],
+      npm: '@ai-sdk/openai-compatible',
+    };
+
+    await expect(
+      resolver.addAiProvider('openrouter-custom', providerConfig as never),
+    ).resolves.toBe(true);
+    expect(resolver.twentyConfigService.set).toHaveBeenCalledWith(
+      'AI_PROVIDERS',
+      { openrouter: providerConfig },
+    );
+  });
 
   it('adds a structured-output model through the displayed openrouter-custom alias', async () => {
     const openrouter = {
