@@ -141,6 +141,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
             campaignCreatorId,
             creatorId,
             campaignId,
+            assignedManagedMailboxId: null,
             connectedAccountId: 'connected-account-id',
             messageChannelId,
             senderEmail: 'sender@example.com',
@@ -223,6 +224,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       ),
       sendingAccountFingerprint: computeActionContentDigest(
         JSON.stringify([
+          null,
           'connected-account-id',
           messageChannelId,
           'sender@example.com',
@@ -230,7 +232,12 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         ]),
       ),
       actionContextFingerprint: computeActionContentDigest(
-        JSON.stringify([null, null, providerThreadExternalId]),
+        JSON.stringify([
+          'provider-draft-id',
+          null,
+          null,
+          providerThreadExternalId,
+        ]),
       ),
       evidenceLinks: [
         {
@@ -265,6 +272,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         sql.includes('FOR UPDATE'),
     );
     expect(actionSelect?.[0]).toContain('FOR UPDATE');
+    expect(actionSelect?.[0]).toContain(
+      'campaign_creator."assignedManagedMailboxId"',
+    );
     expect(actionSelect?.[0]).not.toContain('"_outreachAction"');
     const messageSelect = query.mock.calls.find(
       ([sql]) => sql.includes('"message"') && sql.includes('"headerMessageId"'),
@@ -350,6 +360,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         return [
           {
             subject,
+            assignedManagedMailboxId: null,
             body: changedContent ? 'Changed body' : body,
             recipientEmail: 'creator@example.com',
             campaignCreatorId: 'campaign-creator-id',
@@ -415,6 +426,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         ),
         sendingAccountFingerprint: computeActionContentDigest(
           JSON.stringify([
+            null,
             'connected-account-id',
             'message-channel-id',
             'sender@example.com',
@@ -422,7 +434,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
           ]),
         ),
         actionContextFingerprint: computeActionContentDigest(
-          JSON.stringify([null, null, null]),
+          JSON.stringify(['provider-draft-id', null, null, null]),
         ),
         evidenceLinks: [
           {

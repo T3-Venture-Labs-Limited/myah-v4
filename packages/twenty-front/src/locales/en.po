@@ -1122,6 +1122,11 @@ msgstr "Action on click"
 msgid "Action required"
 msgstr "Action required"
 
+#. js-lingui-id: a+rqJV
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Action unavailable"
+msgstr "Action unavailable"
+
 #. js-lingui-id: 7L01XJ
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableHeader.tsx
 #: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsTableHeader.tsx
@@ -10170,11 +10175,6 @@ msgstr "Instagram authorization opened in a new tab."
 msgid "Instagram messaging"
 msgstr "Instagram messaging"
 
-#. js-lingui-id: mopxc6
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "Instagram reply unavailable"
-msgstr "Instagram reply unavailable"
-
 #. js-lingui-id: TKQ7K+
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -15977,10 +15977,20 @@ msgstr "Review Instagram reply"
 msgid "Review managed mailboxes"
 msgstr "Review managed mailboxes"
 
+#. js-lingui-id: +5UXOF
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review outreach email"
+msgstr "Review outreach email"
+
 #. js-lingui-id: yDxwD9
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
 msgid "Review proposal"
 msgstr "Review proposal"
+
+#. js-lingui-id: e+S/gB
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived email before it is sent."
+msgstr "Review the exact server-derived email before it is sent."
 
 #. js-lingui-id: EIzxzn
 #: src/modules/ai/components/AiChatApprovalCard.tsx
@@ -18416,6 +18426,11 @@ msgstr "Text copied to clipboard"
 msgid "Text Editor"
 msgstr "Text Editor"
 
+#. js-lingui-id: ss995V
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The action cannot be approved until its source is available."
+msgstr "The action cannot be approved until its source is available."
+
 #. js-lingui-id: KJjmr/
 #: src/pages/settings/email/SettingsWorkspaceEmailGroupChannelDetail.tsx
 msgid "The address your workspace sends and receives email from."
@@ -18531,10 +18546,10 @@ msgstr "The email associated to this account"
 msgid "The email associated to your account"
 msgstr "The email associated to your account"
 
-#. js-lingui-id: 2iMFiI
+#. js-lingui-id: f1P1mM
 #: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The exact server-derived Instagram reply is unavailable."
-msgstr "The exact server-derived Instagram reply is unavailable."
+msgid "The exact server-derived action is unavailable."
+msgstr "The exact server-derived action is unavailable."
 
 #. js-lingui-id: diO3fm
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx
@@ -18577,11 +18592,6 @@ msgstr "The name recipients see for this topic."
 #: src/pages/not-found/NotFound.tsx
 msgid "The page you're seeking is either gone or never was. Let's get you back on track"
 msgstr "The page you're seeking is either gone or never was. Let's get you back on track"
-
-#. js-lingui-id: JAbrJR
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The reply cannot be approved until its source is available."
-msgstr "The reply cannot be approved until its source is available."
 
 #. js-lingui-id: c82Ji/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
@@ -18808,6 +18818,12 @@ msgstr "This database value overrides environment settings. "
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 msgid "This domain needs attention. Review the available actions or contact support if the issue continues."
 msgstr "This domain needs attention. Review the available actions or contact support if the issue continues."
+
+#. js-lingui-id: WWK4nx
+#. placeholder {0}: exactProposal.senderEmail
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "This email will be sent from {0}."
+msgstr "This email will be sent from {0}."
 
 #. js-lingui-id: 8IRnd6
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx

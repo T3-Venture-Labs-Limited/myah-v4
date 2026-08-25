@@ -23,6 +23,7 @@ type OutreachActionProjectionRow = {
   campaignCreatorId: string | null;
   creatorId: string | null;
   campaignId: string | null;
+  assignedManagedMailboxId: string | null;
   connectedAccountId: string | null;
   messageChannelId: string | null;
   senderEmail: string | null;
@@ -164,6 +165,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
           outreach_action."campaignCreatorId",
           campaign_creator."creatorId",
           campaign_creator."campaignId",
+          campaign_creator."assignedManagedMailboxId",
           outreach_action."connectedAccountId",
           outreach_action."messageChannelId",
           outreach_action."senderEmail",
@@ -320,6 +322,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         outreach_action."campaignCreatorId",
         campaign_creator."creatorId",
         campaign_creator."campaignId",
+        campaign_creator."assignedManagedMailboxId",
         outreach_action."connectedAccountId",
         outreach_action."messageChannelId",
         outreach_action."senderEmail",
@@ -462,6 +465,17 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       (evidenceLink) => evidenceLink.role === 'thread_parent',
     );
     const senderDisplayName = action.senderDisplayName?.trim() || null;
+    const assignedManagedMailboxId =
+      action.assignedManagedMailboxId === null
+        ? null
+        : action.assignedManagedMailboxId?.trim();
+
+    if (
+      action.assignedManagedMailboxId !== null &&
+      !isNonEmptyString(assignedManagedMailboxId)
+    ) {
+      return false;
+    }
 
     return (
       computeActionContentDigest(
@@ -471,6 +485,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         input.recipientFingerprint &&
       computeActionContentDigest(
         JSON.stringify([
+          assignedManagedMailboxId,
           action.connectedAccountId,
           action.messageChannelId,
           action.senderEmail,
@@ -479,6 +494,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       ) === input.sendingAccountFingerprint &&
       computeActionContentDigest(
         JSON.stringify([
+          action.providerDraftExternalId,
           action.inReplyTo,
           action.messageThreadId,
           action.providerThreadExternalId,

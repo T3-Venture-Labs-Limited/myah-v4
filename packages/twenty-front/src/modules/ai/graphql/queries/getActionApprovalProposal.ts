@@ -6,8 +6,11 @@ export const GET_ACTION_APPROVAL_PROPOSAL = gql`
       action
       actionVersion
       body
+      subject
       recipientLabel
+      recipientEmail
       sendingAccountLabel
+      senderEmail
       state
       expiresAt
       occurredAt

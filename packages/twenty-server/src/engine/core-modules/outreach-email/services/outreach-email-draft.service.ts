@@ -264,14 +264,6 @@ export class OutreachEmailDraftService {
           );
         }
 
-        if (
-          !isNonEmptyString(campaignCreator.assignedManagedMailboxId?.trim())
-        ) {
-          throw new Error(
-            'Campaign Creator does not have an assigned managed mailbox',
-          );
-        }
-
         const [creator, campaign] = await Promise.all([
           creatorRepository.findOne({
             where: { id: campaignCreator.creatorId },
@@ -340,13 +332,33 @@ export class OutreachEmailDraftService {
           associationRepository,
         });
 
-        await this.managedEmailCampaignEligibilityService.assertEligible({
-          workspaceId: input.workspaceId,
-          managedMailboxId: campaignCreator.assignedManagedMailboxId.trim(),
-          connectedAccountId: connectedAccount.id,
-          messageChannelId: messageChannel.id,
-          isFollowUp: threadContext.inReplyTo !== null,
-        });
+        const assignedManagedMailboxId =
+          campaignCreator.assignedManagedMailboxId;
+
+        if (assignedManagedMailboxId === null) {
+          await this.managedEmailCampaignEligibilityService.assertCustomerLinked(
+            {
+              workspaceId: input.workspaceId,
+              connectedAccountId: connectedAccount.id,
+            },
+          );
+        } else {
+          const managedMailboxId = assignedManagedMailboxId?.trim();
+
+          if (!isNonEmptyString(managedMailboxId)) {
+            throw new Error(
+              'Campaign Creator has an invalid assigned managed mailbox',
+            );
+          }
+
+          await this.managedEmailCampaignEligibilityService.assertEligible({
+            workspaceId: input.workspaceId,
+            managedMailboxId,
+            connectedAccountId: connectedAccount.id,
+            messageChannelId: messageChannel.id,
+            isFollowUp: threadContext.inReplyTo !== null,
+          });
+        }
         const recipientLabel = isNonEmptyString(creator.name?.trim())
           ? creator.name.trim()
           : creator.id;

@@ -11,6 +11,7 @@ import {
   toActionExecutionReceiptDTO,
 } from 'src/engine/core-modules/action-approval/dtos/action-approval-evidence.dto';
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
+import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { ActionApprovalBindingState } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
@@ -27,6 +28,7 @@ export class ActionApprovalResolver {
     private readonly dataSource: DataSource,
     private readonly actionApprovalService: ActionApprovalService,
     private readonly instagramReplyActionDefinition: InstagramReplyActionDefinition,
+    private readonly outreachEmailActionDefinition: OutreachEmailActionDefinition,
   ) {}
 
   @Query(() => ActionApprovalProposalDTO)
@@ -42,10 +44,27 @@ export class ActionApprovalResolver {
     });
 
     try {
-      return await this.instagramReplyActionDefinition.getProposal({
-        workspaceId,
-        binding,
-      });
+      if (
+        binding.actionName === this.outreachEmailActionDefinition.actionName
+      ) {
+        return {
+          ...(await this.outreachEmailActionDefinition.getProposal({
+            workspaceId,
+            binding,
+          })),
+          sendingAccountLabel: null,
+        };
+      }
+
+      return {
+        ...(await this.instagramReplyActionDefinition.getProposal({
+          workspaceId,
+          binding,
+        })),
+        subject: null,
+        recipientEmail: null,
+        senderEmail: null,
+      };
     } catch (error) {
       if (binding.state === ActionApprovalBindingState.PENDING) {
         throw error;
@@ -57,6 +76,9 @@ export class ActionApprovalResolver {
         body: null,
         recipientLabel: null,
         sendingAccountLabel: null,
+        subject: null,
+        recipientEmail: null,
+        senderEmail: null,
         state: binding.state,
         expiresAt: binding.expiresAt,
         occurredAt: binding.decidedAt ?? binding.createdAt,

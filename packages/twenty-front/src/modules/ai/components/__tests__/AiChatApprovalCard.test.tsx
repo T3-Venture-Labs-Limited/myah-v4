@@ -1,7 +1,7 @@
 import { useQuery } from '@apollo/client/react';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { ThemeProvider } from 'twenty-ui/theme-constants';
 
 import { AiChatApprovalCard } from '@/ai/components/AiChatApprovalCard';
@@ -89,6 +89,19 @@ const serverDerivedProposal = {
   expiresAt: '2099-07-17T10:30:00.000Z',
 };
 
+const outreachEmailProposal = {
+  action: 'send_outreach_email',
+  actionVersion: 1,
+  subject: 'Partnership idea',
+  body: 'Would you like to collaborate?',
+  recipientLabel: 'Creator Name',
+  recipientEmail: 'creator@example.com',
+  senderEmail: 'sender@example.com',
+  sendingAccountLabel: null,
+  state: 'PENDING',
+  expiresAt: '2099-07-17T10:30:00.000Z',
+};
+
 const mockUseQuery = useQuery as unknown as jest.Mock;
 
 describe('AiChatApprovalCard', () => {
@@ -143,6 +156,59 @@ describe('AiChatApprovalCard', () => {
     ).toBeVisible();
   });
 
+  it('renders the exact guarded outreach email proposal', () => {
+    mockUseQuery.mockReturnValue({
+      data: { getActionApprovalProposal: outreachEmailProposal },
+      loading: false,
+      error: undefined,
+    });
+
+    renderApprovalCard(boundApproval);
+
+    expect(screen.getByText('Review outreach email')).toBeVisible();
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName.toLowerCase() === 'pre' &&
+          element.textContent ===
+            `From: ${outreachEmailProposal.senderEmail}\nTo: ${outreachEmailProposal.recipientLabel} <${outreachEmailProposal.recipientEmail}>\nSubject: ${outreachEmailProposal.subject}\n\n${outreachEmailProposal.body}`,
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('disables decisions when the guarded proposal expires while mounted', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-21T10:00:00.000Z'));
+    mockUseQuery.mockReturnValue({
+      data: {
+        getActionApprovalProposal: {
+          ...outreachEmailProposal,
+          expiresAt: '2026-08-21T10:00:01.000Z',
+        },
+      },
+      loading: false,
+      error: undefined,
+    });
+
+    try {
+      renderApprovalCard(boundApproval);
+
+      expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Request changes' }),
+      ).toBeDisabled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
   it('disables approval decisions when the guarded proposal is unavailable', () => {
     renderApprovalCard(boundApproval);
 
@@ -167,6 +233,19 @@ describe('AiChatApprovalCard', () => {
         data: { getActionApprovalProposal: serverDerivedProposal },
         loading: false,
         error: new Error('unavailable'),
+      },
+    ],
+    [
+      'the outreach proposal is malformed',
+      {
+        data: {
+          getActionApprovalProposal: {
+            ...outreachEmailProposal,
+            subject: '   ',
+            senderEmail: 'not-an-email',
+          },
+        },
+        loading: false,
       },
     ],
     [

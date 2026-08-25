@@ -109,8 +109,10 @@ describe('OutreachEmailDraftService', () => {
     deleteDraft,
   } as unknown as MessagingMessageOutboundService;
   const assertEligible = jest.fn();
+  const assertCustomerLinked = jest.fn();
   const campaignEligibilityService = {
     assertEligible,
+    assertCustomerLinked,
   } as unknown as ManagedEmailCampaignEligibilityService;
 
   let service: OutreachEmailDraftService;
@@ -138,6 +140,7 @@ describe('OutreachEmailDraftService', () => {
       messageChannelId: MESSAGE_CHANNEL_ID,
       effectiveDailyCap: 10,
     });
+    assertCustomerLinked.mockResolvedValue(undefined);
     createDraft.mockResolvedValue({
       headerMessageId: '<provider-draft@example.com>',
       draftExternalId: 'provider-draft-id',
@@ -273,16 +276,42 @@ describe('OutreachEmailDraftService', () => {
     expect(result).not.toHaveProperty('accessToken');
   });
 
-  it('rejects an unassigned or ineligible managed mailbox before provider draft creation', async () => {
-    campaignCreatorRepository.findOne.mockResolvedValueOnce({
+  it('accepts a linked mailbox without managed-email eligibility', async () => {
+    campaignCreatorRepository.findOne.mockResolvedValue({
       ...campaignCreator,
       assignedManagedMailboxId: null,
     });
 
-    await expect(resolveAuthority()).rejects.toThrow(
-      'Campaign Creator does not have an assigned managed mailbox',
-    );
+    await expect(resolveAuthority()).resolves.toMatchObject({
+      mailboxSelection: {
+        connectedAccountId: CONNECTED_ACCOUNT_ID,
+        messageChannelId: MESSAGE_CHANNEL_ID,
+      },
+    });
+    expect(assertEligible).not.toHaveBeenCalled();
+    expect(assertCustomerLinked).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+    });
+  });
 
+  it.each([undefined, '', '   '])(
+    'rejects malformed assigned managed mailbox value %p',
+    async (assignedManagedMailboxId) => {
+      campaignCreatorRepository.findOne.mockResolvedValue({
+        ...campaignCreator,
+        assignedManagedMailboxId,
+      });
+
+      await expect(resolveAuthority()).rejects.toThrow(
+        'Campaign Creator has an invalid assigned managed mailbox',
+      );
+      expect(assertEligible).not.toHaveBeenCalled();
+      expect(createDraft).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects an ineligible assigned managed mailbox before provider draft creation', async () => {
     assertEligible.mockRejectedValueOnce(
       new Error('Managed mailbox is not eligible for campaign sending'),
     );

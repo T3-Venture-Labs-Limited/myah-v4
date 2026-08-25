@@ -1912,8 +1912,11 @@ type ActionApprovalProposal {
   action: String!
   actionVersion: Int!
   body: String
+  subject: String
   recipientLabel: String
+  recipientEmail: String
   sendingAccountLabel: String
+  senderEmail: String
   state: String!
   expiresAt: DateTime!
   occurredAt: DateTime!

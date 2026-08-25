@@ -28,6 +28,11 @@ type AssertEligibleInput = Readonly<{
   isFollowUp: boolean;
 }>;
 
+type AssertCustomerLinkedInput = Readonly<{
+  workspaceId: string;
+  connectedAccountId: string;
+}>;
+
 @Injectable()
 export class ManagedEmailCampaignEligibilityService {
   constructor(
@@ -93,6 +98,19 @@ export class ManagedEmailCampaignEligibilityService {
       messageChannelId: mailbox.messageChannelId,
       effectiveDailyCap,
     };
+  }
+
+  async assertCustomerLinked(input: AssertCustomerLinkedInput): Promise<void> {
+    const managedMailbox = await this.mailboxRepository.findOneBy(
+      input.workspaceId,
+      {
+        connectedAccountId: input.connectedAccountId,
+      },
+    );
+
+    if (managedMailbox !== null) {
+      throw new Error('Selected outreach mailbox is unavailable');
+    }
   }
 
   private isAfter(value: Date | null | undefined, boundary: Date): boolean {

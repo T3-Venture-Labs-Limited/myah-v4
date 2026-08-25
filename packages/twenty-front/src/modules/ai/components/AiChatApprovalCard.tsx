@@ -1,13 +1,14 @@
 import { useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   type ApprovalActionKind,
   type ApprovalDecision,
   type ApprovalRiskLevel,
   type RequestApprovalToolInput,
 } from 'twenty-shared/ai';
+import { emailSchema } from 'twenty-shared/utils';
 import {
   IconAlertTriangle,
   IconCheck,
@@ -157,39 +158,76 @@ const APPROVAL_RISK_LEVEL_LABELS: Record<ApprovalRiskLevel, string> = {
   critical: 'Critical',
 };
 
+type ActionApprovalProposal =
+  GetActionApprovalProposalData['getActionApprovalProposal'];
+
 type GetActionApprovalProposalData = {
   getActionApprovalProposal: {
     action: string;
     actionVersion: number;
+    subject: string | null;
     body: string | null;
     recipientLabel: string | null;
+    recipientEmail: string | null;
     sendingAccountLabel: string | null;
+    senderEmail: string | null;
     state: string;
     expiresAt: string;
   };
 };
 
+type ExactInstagramReplyProposal = ActionApprovalProposal & {
+  action: 'send_instagram_reply';
+  actionVersion: 1;
+  body: string;
+  recipientLabel: string;
+  sendingAccountLabel: string;
+  state: 'PENDING';
+};
+
+type ExactOutreachEmailProposal = ActionApprovalProposal & {
+  action: 'send_outreach_email';
+  actionVersion: 1;
+  subject: string;
+  body: string;
+  recipientLabel: string;
+  recipientEmail: string;
+  senderEmail: string;
+  state: 'PENDING';
+};
+
 type ExactActionApprovalProposal =
-  GetActionApprovalProposalData['getActionApprovalProposal'] & {
-    action: 'send_instagram_reply';
-    actionVersion: 1;
-    body: string;
-    recipientLabel: string;
-    sendingAccountLabel: string;
-    state: 'PENDING';
-  };
+  | ExactInstagramReplyProposal
+  | ExactOutreachEmailProposal;
+
+const isNonEmptyProposalString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
 
 const isExactActionApprovalProposal = (
-  proposal:
-    | GetActionApprovalProposalData['getActionApprovalProposal']
-    | undefined,
-): proposal is ExactActionApprovalProposal =>
-  proposal?.action === 'send_instagram_reply' &&
-  proposal.actionVersion === 1 &&
-  proposal.state === 'PENDING' &&
-  typeof proposal.body === 'string' &&
-  typeof proposal.recipientLabel === 'string' &&
-  typeof proposal.sendingAccountLabel === 'string';
+  proposal: ActionApprovalProposal | undefined,
+): proposal is ExactActionApprovalProposal => {
+  if (
+    proposal?.actionVersion !== 1 ||
+    proposal.state !== 'PENDING' ||
+    !isNonEmptyProposalString(proposal.body) ||
+    !isNonEmptyProposalString(proposal.recipientLabel)
+  ) {
+    return false;
+  }
+
+  if (proposal.action === 'send_instagram_reply') {
+    return isNonEmptyProposalString(proposal.sendingAccountLabel);
+  }
+
+  return (
+    proposal.action === 'send_outreach_email' &&
+    isNonEmptyProposalString(proposal.subject) &&
+    isNonEmptyProposalString(proposal.recipientEmail) &&
+    emailSchema.safeParse(proposal.recipientEmail).success &&
+    isNonEmptyProposalString(proposal.senderEmail) &&
+    emailSchema.safeParse(proposal.senderEmail).success
+  );
+};
 
 export const AiChatApprovalCard = ({
   pendingApproval,
@@ -197,6 +235,7 @@ export const AiChatApprovalCard = ({
   const { t } = useLingui();
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expiryTick, setExpiryTick] = useState(0);
   const { submitDecision } = useSubmitApprovalDecision();
   const { messageId, toolCallId } = pendingApproval;
   const actionApprovalBindingId =
@@ -219,6 +258,24 @@ export const AiChatApprovalCard = ({
   const proposalExpiresAt = exactProposal
     ? Date.parse(exactProposal.expiresAt)
     : Number.NaN;
+  useEffect(() => {
+    if (!Number.isFinite(proposalExpiresAt)) {
+      return;
+    }
+
+    const delay = proposalExpiresAt - Date.now();
+
+    if (delay <= 0) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      () => setExpiryTick((value) => value + 1),
+      Math.min(delay, 2_147_483_647),
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [expiryTick, proposalExpiresAt]);
   const isActionApprovalProposalDecidable =
     actionApprovalBindingId !== undefined &&
     !isProposalLoading &&
@@ -234,28 +291,46 @@ export const AiChatApprovalCard = ({
     'request' in pendingApproval
       ? pendingApproval.request
       : isActionApprovalProposalDecidable && exactProposal !== undefined
-        ? {
-            title: t`Review Instagram reply`,
-            summary: t`Review the exact server-derived Instagram reply before it is sent.`,
-            actionKind: 'external_write',
-            riskLevel: 'medium',
-            consequences: [
-              t`The reply will be sent to the existing conversation.`,
-            ],
-            preview: { format: 'text', content: exactProposal.body },
-          }
+        ? exactProposal.action === 'send_outreach_email'
+          ? {
+              title: t`Review outreach email`,
+              summary: t`Review the exact server-derived email before it is sent.`,
+              actionKind: 'email_send',
+              riskLevel: 'high',
+              targetLabel: `${exactProposal.recipientLabel} <${exactProposal.recipientEmail}>`,
+              consequences: [
+                t`This email will be sent from ${exactProposal.senderEmail}.`,
+              ],
+              preview: {
+                format: 'text',
+                content: `From: ${exactProposal.senderEmail}\nTo: ${exactProposal.recipientLabel} <${exactProposal.recipientEmail}>\nSubject: ${exactProposal.subject}\n\n${exactProposal.body}`,
+              },
+            }
+          : {
+              title: t`Review Instagram reply`,
+              summary: t`Review the exact server-derived Instagram reply before it is sent.`,
+              actionKind: 'external_write',
+              riskLevel: 'medium',
+              consequences: [
+                t`The reply will be sent to the existing conversation.`,
+              ],
+              preview: { format: 'text', content: exactProposal.body },
+            }
         : {
-            title: t`Instagram reply unavailable`,
-            summary: t`The exact server-derived Instagram reply is unavailable.`,
-            actionKind: 'external_write',
+            title: t`Action unavailable`,
+            summary: t`The exact server-derived action is unavailable.`,
+            actionKind: 'other',
             riskLevel: 'medium',
             consequences: [
-              t`The reply cannot be approved until its source is available.`,
+              t`The action cannot be approved until its source is available.`,
             ],
           };
 
   const handleDecision = async (decision: ApprovalDecision) => {
-    if (isDecisionDisabled) {
+    if (
+      isDecisionDisabled ||
+      (Number.isFinite(proposalExpiresAt) && proposalExpiresAt <= Date.now())
+    ) {
       return;
     }
 
@@ -303,16 +378,17 @@ export const AiChatApprovalCard = ({
         </StyledSection>
       )}
 
-      {isActionApprovalProposalDecidable && exactProposal !== undefined && (
-        <StyledMeta>
-          <span>
-            {t`To`}: {exactProposal.recipientLabel}
-          </span>
-          <span>
-            {t`From`}: {exactProposal.sendingAccountLabel}
-          </span>
-        </StyledMeta>
-      )}
+      {isActionApprovalProposalDecidable &&
+        exactProposal?.action === 'send_instagram_reply' && (
+          <StyledMeta>
+            <span>
+              {t`To`}: {exactProposal.recipientLabel}
+            </span>
+            <span>
+              {t`From`}: {exactProposal.sendingAccountLabel}
+            </span>
+          </StyledMeta>
+        )}
 
       <StyledSection>
         <StyledSectionTitle>{t`Consequences`}</StyledSectionTitle>

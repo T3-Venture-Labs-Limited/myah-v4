@@ -110,7 +110,7 @@ type OutreachEmailExpectedActionBindingWithWorkspace =
   OutreachEmailExpectedActionBinding & { workspaceId: string };
 
 export type CanonicalOutreachEmailGraph = {
-  managedMailboxId: string;
+  managedMailboxId: string | null;
   outreachActionId: string;
   campaignCreatorId: string;
   creatorId: string;
@@ -242,13 +242,20 @@ export class OutreachEmailActionDefinition {
       binding.draftId,
       binding.initiatorUserWorkspaceId,
     );
-    await this.managedEmailCampaignEligibilityService.assertEligible({
-      workspaceId,
-      managedMailboxId: graph.managedMailboxId,
-      connectedAccountId: graph.connectedAccountId,
-      messageChannelId: graph.messageChannelId,
-      isFollowUp: graph.inReplyTo !== null,
-    });
+    if (graph.managedMailboxId === null) {
+      await this.managedEmailCampaignEligibilityService.assertCustomerLinked({
+        workspaceId,
+        connectedAccountId: graph.connectedAccountId,
+      });
+    } else {
+      await this.managedEmailCampaignEligibilityService.assertEligible({
+        workspaceId,
+        managedMailboxId: graph.managedMailboxId,
+        connectedAccountId: graph.connectedAccountId,
+        messageChannelId: graph.messageChannelId,
+        isFollowUp: graph.inReplyTo !== null,
+      });
+    }
     const evidenceObjectMetadataIds =
       await this.resolveEvidenceObjectMetadataIds(workspaceId);
     const expectedActionBinding = this.buildExpectedActionBinding({
@@ -463,6 +470,7 @@ export class OutreachEmailActionDefinition {
       ),
       actionContextFingerprint: computeActionContentDigest(
         JSON.stringify([
+          graph.providerDraftExternalId,
           graph.inReplyTo,
           graph.messageThreadId,
           graph.providerThreadExternalId,
@@ -700,8 +708,21 @@ export class OutreachEmailActionDefinition {
     const inReplyTo = graph.action.inReplyTo?.trim() || null;
     const recipientLabel = graph.creator.name?.trim();
     const campaignLabel = graph.campaign.name?.trim();
-    const managedMailboxId =
-      graph.campaignCreator.assignedManagedMailboxId?.trim();
+    const assignedManagedMailboxId =
+      graph.campaignCreator.assignedManagedMailboxId;
+    let managedMailboxId: string | null;
+
+    if (assignedManagedMailboxId === null) {
+      managedMailboxId = null;
+    } else {
+      const normalizedManagedMailboxId = assignedManagedMailboxId?.trim();
+
+      if (!isNonEmptyString(normalizedManagedMailboxId)) {
+        throw new Error(SOURCE_GRAPH_UNAVAILABLE);
+      }
+
+      managedMailboxId = normalizedManagedMailboxId;
+    }
     const expectedContentDigest =
       isNonEmptyString(subject) && isNonEmptyString(body)
         ? computeActionContentDigest(JSON.stringify([subject, body]))
@@ -722,7 +743,6 @@ export class OutreachEmailActionDefinition {
       !isNonEmptyString(providerDraftExternalId) ||
       !isNonEmptyString(recipientLabel) ||
       !isNonEmptyString(campaignLabel) ||
-      !isNonEmptyString(managedMailboxId) ||
       graph.action.executionReceiptId !== null ||
       graph.action.sentHeaderMessageId !== null ||
       graph.action.providerMessageExternalId !== null ||

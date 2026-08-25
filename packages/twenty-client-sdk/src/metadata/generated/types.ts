@@ -3688,10 +3688,19 @@ export default {
             "body": [
                 1
             ],
+            "subject": [
+                1
+            ],
             "recipientLabel": [
                 1
             ],
+            "recipientEmail": [
+                1
+            ],
             "sendingAccountLabel": [
+                1
+            ],
+            "senderEmail": [
                 1
             ],
             "state": [

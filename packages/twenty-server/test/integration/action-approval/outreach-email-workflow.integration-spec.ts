@@ -966,6 +966,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
   it('replays accepted Message persistence and projection without a provider send', async () => {
     const recoverySubject = 'Recovered partnership subject';
     const recoveryBody = 'Recovered partnership body';
+    const recoveryProviderDraftExternalId = 'provider-draft-recovery';
     const recoveryContentDigest = computeActionContentDigest(
       JSON.stringify([recoverySubject, recoveryBody]),
     );
@@ -980,7 +981,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       ) VALUES (
         $1, 'Recovery action', $2, 'EMAIL', 'PENDING',
         $3, $4, $5, $6, $7, $8, $9, 'Approved Sender',
-        'provider-draft-recovery', $10
+        $10, $11
       )`,
       [
         recoveryActionId,
@@ -992,6 +993,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         connectedAccountId,
         messageChannelId,
         senderEmail,
+        recoveryProviderDraftExternalId,
         providerThreadExternalId,
       ],
     );
@@ -1061,6 +1063,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       ),
       sendingAccountFingerprint: computeActionContentDigest(
         JSON.stringify([
+          managedMailboxId,
           connectedAccountId,
           messageChannelId,
           senderEmail,
@@ -1068,7 +1071,12 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         ]),
       ),
       actionContextFingerprint: computeActionContentDigest(
-        JSON.stringify([null, null, providerThreadExternalId]),
+        JSON.stringify([
+          recoveryProviderDraftExternalId,
+          null,
+          null,
+          providerThreadExternalId,
+        ]),
       ),
       evidenceLinks: [
         {

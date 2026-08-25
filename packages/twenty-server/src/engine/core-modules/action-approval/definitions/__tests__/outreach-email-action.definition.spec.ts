@@ -67,7 +67,7 @@ type FixtureState = {
     creatorId: string;
     campaignId: string;
     selectedContactMethod: string;
-    assignedManagedMailboxId: string;
+    assignedManagedMailboxId: string | null;
   };
   creator: { id: string; name: string; email: string };
   campaign: { id: string; name: string };
@@ -97,7 +97,7 @@ type FixtureState = {
   };
 };
 
-const createFixtureState = (reply = false) => {
+const createFixtureState = (reply = false): FixtureState => {
   const subject = 'Partnership opportunity';
   const body = 'Would you like to collaborate?';
 
@@ -256,6 +256,7 @@ const buildDefinition = ({
     messageChannelId,
     effectiveDailyCap: 10,
   });
+  const assertCustomerLinked = jest.fn().mockResolvedValue(undefined);
   const Definition = OutreachEmailActionDefinition as unknown as new (
     ...args: unknown[]
   ) => OutreachEmailActionDefinition;
@@ -268,6 +269,7 @@ const buildDefinition = ({
     connectedAccountRepository,
     messageChannelRepository,
     assertEligible,
+    assertCustomerLinked,
     definition: new Definition(
       workspaceRepository,
       globalWorkspaceOrmManager,
@@ -276,7 +278,7 @@ const buildDefinition = ({
       workspaceCacheService,
       connectedAccountRepository,
       messageChannelRepository,
-      { assertEligible },
+      { assertEligible, assertCustomerLinked },
     ),
   };
 };
@@ -348,7 +350,7 @@ describe('OutreachEmailActionDefinition', () => {
           ]),
         ),
         actionContextFingerprint: computeActionContentDigest(
-          JSON.stringify([null, null, null]),
+          JSON.stringify(['provider-draft-id', null, null, null]),
         ),
         threadId,
         initiatorUserWorkspaceId: userWorkspaceId,
@@ -403,6 +405,7 @@ describe('OutreachEmailActionDefinition', () => {
     expect(proposal.expectedActionBinding).toMatchObject({
       actionContextFingerprint: computeActionContentDigest(
         JSON.stringify([
+          'provider-draft-id',
           '<parent@example.com>',
           messageThreadId,
           'provider-thread-id',
@@ -498,6 +501,11 @@ describe('OutreachEmailActionDefinition', () => {
       (state) => (state.action.messageThreadId = messageThreadId),
     ],
     [
+      'provider draft',
+      (state) =>
+        (state.action.providerDraftExternalId = 'other-provider-draft-id'),
+    ],
+    [
       'provider thread',
       (state) => (state.action.providerThreadExternalId = 'other-thread-id'),
     ],
@@ -545,6 +553,56 @@ describe('OutreachEmailActionDefinition', () => {
         binding: proposal.expectedActionBinding,
       }),
     ).rejects.toThrow('Managed mailbox is not eligible for campaign sending');
+  });
+
+  it('revalidates a linked mailbox without managed-email eligibility', async () => {
+    const state = createFixtureState();
+
+    state.campaignCreator.assignedManagedMailboxId = null;
+
+    const { definition, assertEligible, assertCustomerLinked } =
+      buildDefinition({ state });
+    const proposal = await propose(definition);
+
+    expect(proposal.canonicalGraph.managedMailboxId).toBeNull();
+    expect(proposal.expectedActionBinding.sendingAccountFingerprint).toBe(
+      computeActionContentDigest(
+        JSON.stringify([
+          null,
+          connectedAccountId,
+          messageChannelId,
+          'sender@example.com',
+          'Sender Name',
+        ]),
+      ),
+    );
+
+    await expect(
+      definition.rebuildExecutionAuthority({
+        workspaceId,
+        binding: proposal.expectedActionBinding,
+      }),
+    ).resolves.toMatchObject({
+      canonicalGraph: { managedMailboxId: null },
+    });
+    expect(assertEligible).not.toHaveBeenCalled();
+    expect(assertCustomerLinked).toHaveBeenCalledWith({
+      workspaceId,
+      connectedAccountId,
+    });
+  });
+
+  it('rejects a malformed assigned managed mailbox', async () => {
+    const state = createFixtureState();
+
+    state.campaignCreator.assignedManagedMailboxId = '   ';
+
+    const { definition, assertEligible } = buildDefinition({ state });
+
+    await expect(propose(definition)).rejects.toThrow(
+      'Outreach email source graph is unavailable',
+    );
+    expect(assertEligible).not.toHaveBeenCalled();
   });
 
   it.each<[string, (state: FixtureState) => void]>([

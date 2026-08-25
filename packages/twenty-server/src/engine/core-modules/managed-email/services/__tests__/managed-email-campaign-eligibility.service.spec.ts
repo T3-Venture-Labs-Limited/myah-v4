@@ -69,6 +69,29 @@ describe('ManagedEmailCampaignEligibilityService', () => {
     });
   });
 
+  it('accepts a customer-linked account with no managed mailbox owner', async () => {
+    mailboxRepository.findOneBy.mockResolvedValue(null);
+
+    await expect(
+      service.assertCustomerLinked({
+        workspaceId: WORKSPACE_ID,
+        connectedAccountId: CONNECTED_ACCOUNT_ID,
+      }),
+    ).resolves.toBeUndefined();
+    expect(mailboxRepository.findOneBy).toHaveBeenCalledWith(WORKSPACE_ID, {
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+    });
+  });
+
+  it('rejects a managed mailbox account from the customer-linked path', async () => {
+    await expect(
+      service.assertCustomerLinked({
+        workspaceId: WORKSPACE_ID,
+        connectedAccountId: CONNECTED_ACCOUNT_ID,
+      }),
+    ).rejects.toThrow('Selected outreach mailbox is unavailable');
+  });
+
   it('never lets an admin cap raise the readiness-policy capacity', async () => {
     mailboxRepository.findOneBy.mockResolvedValue({
       ...eligibleMailbox,

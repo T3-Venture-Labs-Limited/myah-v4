@@ -27,10 +27,19 @@ export class ActionApprovalProposalDTO {
   body: string | null;
 
   @Field(() => String, { nullable: true })
+  subject: string | null;
+
+  @Field(() => String, { nullable: true })
   recipientLabel: string | null;
 
   @Field(() => String, { nullable: true })
+  recipientEmail: string | null;
+
+  @Field(() => String, { nullable: true })
   sendingAccountLabel: string | null;
+
+  @Field(() => String, { nullable: true })
+  senderEmail: string | null;
 
   @Field(() => String)
   state: string;

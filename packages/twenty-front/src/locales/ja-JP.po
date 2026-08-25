@@ -1127,6 +1127,11 @@ msgstr "クリック時の動作"
 msgid "Action required"
 msgstr ""
 
+#. js-lingui-id: a+rqJV
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Action unavailable"
+msgstr ""
+
 #. js-lingui-id: 7L01XJ
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableHeader.tsx
 #: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsTableHeader.tsx
@@ -10152,11 +10157,6 @@ msgstr ""
 msgid "Instagram messaging"
 msgstr ""
 
-#. js-lingui-id: mopxc6
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "Instagram reply unavailable"
-msgstr ""
-
 #. js-lingui-id: TKQ7K+
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -15959,9 +15959,19 @@ msgstr ""
 msgid "Review managed mailboxes"
 msgstr ""
 
+#. js-lingui-id: +5UXOF
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review outreach email"
+msgstr ""
+
 #. js-lingui-id: yDxwD9
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
 msgid "Review proposal"
+msgstr ""
+
+#. js-lingui-id: e+S/gB
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "Review the exact server-derived email before it is sent."
 msgstr ""
 
 #. js-lingui-id: EIzxzn
@@ -18398,6 +18408,11 @@ msgstr "テキストがクリップボードにコピーされました"
 msgid "Text Editor"
 msgstr "テキストエディタ"
 
+#. js-lingui-id: ss995V
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "The action cannot be approved until its source is available."
+msgstr ""
+
 #. js-lingui-id: KJjmr/
 #: src/pages/settings/email/SettingsWorkspaceEmailGroupChannelDetail.tsx
 msgid "The address your workspace sends and receives email from."
@@ -18483,9 +18498,9 @@ msgstr ""
 msgid "The email associated to your account"
 msgstr "アカウントに関連付けられたメール"
 
-#. js-lingui-id: 2iMFiI
+#. js-lingui-id: f1P1mM
 #: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The exact server-derived Instagram reply is unavailable."
+msgid "The exact server-derived action is unavailable."
 msgstr ""
 
 #. js-lingui-id: diO3fm
@@ -18529,11 +18544,6 @@ msgstr ""
 #: src/pages/not-found/NotFound.tsx
 msgid "The page you're seeking is either gone or never was. Let's get you back on track"
 msgstr "お探しのページは存在しないか、削除されました。元のページに戻りましょう"
-
-#. js-lingui-id: JAbrJR
-#: src/modules/ai/components/AiChatApprovalCard.tsx
-msgid "The reply cannot be approved until its source is available."
-msgstr ""
 
 #. js-lingui-id: c82Ji/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
@@ -18757,6 +18767,12 @@ msgstr "このデータベース値は環境設定を上書きします。"
 #. js-lingui-id: tz7SfI
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 msgid "This domain needs attention. Review the available actions or contact support if the issue continues."
+msgstr ""
+
+#. js-lingui-id: WWK4nx
+#. placeholder {0}: exactProposal.senderEmail
+#: src/modules/ai/components/AiChatApprovalCard.tsx
+msgid "This email will be sent from {0}."
 msgstr ""
 
 #. js-lingui-id: 8IRnd6

@@ -17,6 +17,12 @@ import { MyahCampaignLifecycleModule } from 'src/modules/myah-campaign/myah-camp
 import { MyahCampaignCreateManyPreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-create-many.pre-query.hook';
 import { MyahCampaignCreateOnePreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-create-one.pre-query.hook';
 import { MyahCampaignQueryHookModule } from 'src/modules/myah-campaign/query-hooks/myah-campaign-query-hook.module';
+import {
+  MyahOutreachActionCreateManyPreQueryHook,
+  MyahOutreachActionCreateOnePreQueryHook,
+  MyahOutreachActionUpdateManyPreQueryHook,
+  MyahOutreachActionUpdateOnePreQueryHook,
+} from 'src/modules/myah-campaign/query-hooks/myah-outreach-action-write.pre-query.hooks';
 import { MyahCampaignUpdateManyPreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-update-many.pre-query.hook';
 import { MyahCampaignUpdateOnePreQueryHook } from 'src/modules/myah-campaign/query-hooks/myah-campaign-update-one.pre-query.hook';
 import {
@@ -168,6 +174,32 @@ describe('Myah Campaign query hooks', () => {
     );
     expect(workspaceHookImports).toContain(MyahCampaignQueryHookModule);
   });
+
+  it.each([
+    [MyahOutreachActionCreateOnePreQueryHook, 'outreachAction.createOne'],
+    [MyahOutreachActionCreateManyPreQueryHook, 'outreachAction.createMany'],
+    [MyahOutreachActionUpdateOnePreQueryHook, 'outreachAction.updateOne'],
+    [MyahOutreachActionUpdateManyPreQueryHook, 'outreachAction.updateMany'],
+  ])(
+    'registers $name as a system-managed write guard',
+    async (HookClass, decoratorKey) => {
+      const providers = Reflect.getMetadata(
+        MODULE_METADATA.PROVIDERS,
+        MyahCampaignQueryHookModule,
+      ) as unknown[];
+
+      expect(providers).toContain(HookClass);
+      expect(
+        Reflect.getMetadata(WORKSPACE_QUERY_HOOK_METADATA, HookClass),
+      ).toEqual({
+        key: decoratorKey,
+        type: WorkspaceQueryHookType.PRE_HOOK,
+      });
+      await expect(
+        new HookClass().execute(authContext, 'outreachAction', {} as never),
+      ).rejects.toThrow('Outreach Actions are system-managed');
+    },
+  );
 
   it('uses normalized delete-one results to clean Campaign Outreach workflows', async () => {
     const campaignOutreachWorkflowLifecycleService = {

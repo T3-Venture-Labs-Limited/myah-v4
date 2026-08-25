@@ -50,8 +50,11 @@ const serverDerivedProposal = {
   action: 'send_instagram_reply',
   actionVersion: 1,
   body: 'Server-derived reply body',
+  subject: null,
   recipientLabel: '@recipient',
   sendingAccountLabel: '@myah_business',
+  recipientEmail: null,
+  senderEmail: null,
   state: binding.state,
   expiresAt: binding.expiresAt,
   occurredAt: binding.decidedAt,
@@ -62,6 +65,21 @@ const serverDerivedProposal = {
       role,
     }),
   ),
+};
+
+const outreachProposal = {
+  action: 'send_outreach_email',
+  actionVersion: 1,
+  subject: 'Partnership idea',
+  body: 'Would you like to collaborate?',
+  recipientLabel: 'Creator Name',
+  recipientEmail: 'creator@example.com',
+  senderEmail: 'sender@example.com',
+  state: 'PENDING',
+  expiresAt: binding.expiresAt,
+  sendingAccountLabel: null,
+  occurredAt: binding.createdAt,
+  evidenceLinks: [],
 };
 
 const createResolver = ({
@@ -81,7 +99,10 @@ const createResolver = ({
     userWorkspaceId: string;
   } | null;
   resolvedReceipt?: typeof receipt | null;
-  resolvedProposal?: typeof serverDerivedProposal | Error;
+  resolvedProposal?:
+    | typeof serverDerivedProposal
+    | typeof outreachProposal
+    | Error;
 } = {}) => {
   const bindingRepository = {
     findOne: jest.fn().mockResolvedValue(resolvedBinding),
@@ -118,7 +139,17 @@ const createResolver = ({
       return resolvedBinding;
     }),
   };
-  const actionDefinition = {
+  const instagramActionDefinition = {
+    actionName: 'send_instagram_reply',
+    getProposal: jest.fn().mockImplementation(async () => {
+      if (resolvedProposal instanceof Error) {
+        throw resolvedProposal;
+      }
+      return resolvedProposal;
+    }),
+  };
+  const outreachActionDefinition = {
+    actionName: 'send_outreach_email',
     getProposal: jest.fn().mockImplementation(async () => {
       if (resolvedProposal instanceof Error) {
         throw resolvedProposal;
@@ -131,9 +162,16 @@ const createResolver = ({
   ) => ActionApprovalResolver;
 
   return {
-    resolver: new Resolver(dataSource, actionApprovalService, actionDefinition),
+    resolver: new Resolver(
+      dataSource,
+      actionApprovalService,
+      instagramActionDefinition,
+      outreachActionDefinition,
+    ),
     actionApprovalService,
-    actionDefinition,
+    actionDefinition: instagramActionDefinition,
+    instagramActionDefinition,
+    outreachActionDefinition,
     bindingRepository,
     threadRepository,
     receiptRepository,
@@ -239,6 +277,32 @@ describe('ActionApprovalResolver', () => {
     }
   });
 
+  it('returns the exact guarded outreach email proposal', async () => {
+    const outreachBinding = {
+      ...binding,
+      actionName: 'send_outreach_email',
+      state: 'PENDING',
+    };
+    const { resolver, instagramActionDefinition, outreachActionDefinition } =
+      createResolver({
+        resolvedBinding: outreachBinding,
+        resolvedProposal: outreachProposal,
+      });
+
+    await expect(
+      resolver.getActionApprovalProposal(
+        bindingId,
+        { id: workspaceId } as never,
+        userWorkspaceId,
+      ),
+    ).resolves.toEqual(outreachProposal);
+    expect(outreachActionDefinition.getProposal).toHaveBeenCalledWith({
+      workspaceId,
+      binding: outreachBinding,
+    });
+    expect(instagramActionDefinition.getProposal).not.toHaveBeenCalled();
+  });
+
   it('rejects a mismatched graph instead of returning an approvable proposal', async () => {
     const { resolver } = createResolver({
       resolvedBinding: { ...binding, state: 'PENDING' },
@@ -280,8 +344,11 @@ describe('ActionApprovalResolver', () => {
       body: null,
       recipientLabel: null,
       sendingAccountLabel: null,
+      subject: null,
       state: 'CONSUMED',
       expiresAt: binding.expiresAt,
+      recipientEmail: null,
+      senderEmail: null,
       occurredAt: binding.decidedAt,
       evidenceLinks: [
         {
