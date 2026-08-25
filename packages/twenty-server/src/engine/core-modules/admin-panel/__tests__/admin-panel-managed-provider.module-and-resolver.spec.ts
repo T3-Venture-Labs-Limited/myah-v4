@@ -211,7 +211,7 @@ describe('AdminPanelResolver custom OpenRouter mutations', () => {
     return resolver;
   };
 
-  it('adds a model through the displayed openrouter-custom alias', async () => {
+  it('adds a structured-output model through the displayed openrouter-custom alias', async () => {
     const openrouter = {
       apiKey: 'secret',
       models: [],
@@ -227,7 +227,13 @@ describe('AdminPanelResolver custom OpenRouter mutations', () => {
       {
         openrouter: {
           ...openrouter,
-          models: [{ ...model, source: 'manual' }],
+          models: [
+            {
+              ...model,
+              source: 'manual',
+              supportsStructuredOutputs: true,
+            },
+          ],
         },
       },
     );
@@ -267,9 +273,9 @@ describe('AdminPanelResolver custom OpenRouter mutations', () => {
       },
     });
 
-    await expect(
-      resolver.removeAiProvider('openrouter-custom'),
-    ).resolves.toBe(true);
+    await expect(resolver.removeAiProvider('openrouter-custom')).resolves.toBe(
+      true,
+    );
     expect(resolver.twentyConfigService.set).toHaveBeenCalledWith(
       'AI_PROVIDERS',
       {},

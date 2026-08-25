@@ -660,10 +660,17 @@ export class AdminPanelResolver {
         `Model "${modelConfig.name}" already exists on provider "${providerName}"`,
       );
     }
+    const storedModelConfig = {
+      ...modelConfig,
+      ...(storedProviderName === MANAGED_OPENROUTER_PROVIDER_NAME && {
+        supportsStructuredOutputs: true,
+      }),
+      source: 'manual' as const,
+    };
 
     customProviders[storedProviderName] = {
       ...existing,
-      models: [...existingModels, { ...modelConfig, source: 'manual' }],
+      models: [...existingModels, storedModelConfig],
     };
 
     await this.twentyConfigService.set('AI_PROVIDERS', customProviders);

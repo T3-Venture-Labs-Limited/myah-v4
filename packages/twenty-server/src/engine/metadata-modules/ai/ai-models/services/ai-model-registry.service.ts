@@ -140,7 +140,7 @@ export class AiModelRegistryService {
           this.modelRegistry.set(compositeId, {
             modelId: compositeId,
             sdkPackage: config.npm,
-            model: sdkInstance.createModel(modelDef.name),
+            model: sdkInstance.createModel(modelDef.name, modelDef),
             supportsReasoning: modelDef.supportsReasoning,
             providerName: providerKey,
             modelsDevName: config.name,

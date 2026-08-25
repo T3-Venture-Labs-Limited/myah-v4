@@ -2,6 +2,10 @@ import { type LanguageModelV3 } from '@ai-sdk/provider';
 
 import { SdkProviderFactoryService } from '../sdk-provider-factory.service';
 
+type StructuredOutputLanguageModel = LanguageModelV3 & {
+  supportsStructuredOutputs: boolean;
+};
+
 describe('SdkProviderFactoryService managed OpenRouter transport', () => {
   const originalFetch = global.fetch;
 
@@ -81,5 +85,28 @@ describe('SdkProviderFactoryService managed OpenRouter transport', () => {
       }),
     );
     expect(init.headers.authorization).toBe('Bearer managed-key');
+  });
+
+  it('enables structured outputs per OpenAI-compatible model', () => {
+    const provider = new SdkProviderFactoryService().createProvider(
+      'openrouter-custom',
+      {
+        apiKey: 'custom-key',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        name: 'openrouter',
+        npm: '@ai-sdk/openai-compatible',
+      },
+    );
+
+    const structuredModel = provider.createModel(
+      'deepseek/deepseek-v4-flash',
+      { supportsStructuredOutputs: true },
+    ) as StructuredOutputLanguageModel;
+    const unstructuredModel = provider.createModel(
+      'unstructured-model',
+    ) as StructuredOutputLanguageModel;
+
+    expect(structuredModel.supportsStructuredOutputs).toBe(true);
+    expect(unstructuredModel.supportsStructuredOutputs).toBe(false);
   });
 });

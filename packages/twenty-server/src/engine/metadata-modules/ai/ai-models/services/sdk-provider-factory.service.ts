@@ -29,10 +29,14 @@ import {
 import { MANAGED_OPENROUTER_PROVIDER_LABEL } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { sanitizeGeminiToolResultRefsMiddleware } from 'src/engine/metadata-modules/ai/ai-models/middleware/sanitize-gemini-tool-result-refs.middleware';
 import { type AiProviderConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-provider-config.type';
+import { type AiProviderModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-provider-model-config.type';
 import { createManagedOpenRouterFetch } from 'src/engine/metadata-modules/ai/ai-models/utils/create-managed-openrouter-fetch.util';
 
 export type AiSdkProviderInstance = {
-  createModel: (modelId: string) => LanguageModel;
+  createModel: (
+    modelId: string,
+    modelConfig?: Pick<AiProviderModelConfig, 'supportsStructuredOutputs'>,
+  ) => LanguageModel;
   rawProvider: unknown;
   sdkPackage: AiSdkPackage;
 };
@@ -198,17 +202,25 @@ export class SdkProviderFactoryService {
       throw new Error('baseUrl is required for openai-compatible providers');
     }
 
-    const provider = createOpenAICompatible({
+    const providerOptions = {
       name: config.name ?? 'openai-compatible',
       baseURL: config.baseUrl,
       ...(config.apiKey && { apiKey: config.apiKey }),
       ...(config.label === MANAGED_OPENROUTER_PROVIDER_LABEL && {
         fetch: createManagedOpenRouterFetch(),
       }),
+    };
+    const provider = createOpenAICompatible(providerOptions);
+    const structuredOutputProvider = createOpenAICompatible({
+      ...providerOptions,
+      supportsStructuredOutputs: true,
     });
 
     return {
-      createModel: (modelId: string) => provider(modelId),
+      createModel: (modelId, modelConfig) =>
+        modelConfig?.supportsStructuredOutputs === true
+          ? structuredOutputProvider(modelId)
+          : provider(modelId),
       rawProvider: provider,
       sdkPackage: AI_SDK_OPENAI_COMPATIBLE,
     };
