@@ -98,10 +98,9 @@ describe('SdkProviderFactoryService managed OpenRouter transport', () => {
       },
     );
 
-    const structuredModel = provider.createModel(
-      'deepseek/deepseek-v4-flash',
-      { supportsStructuredOutputs: true },
-    ) as StructuredOutputLanguageModel;
+    const structuredModel = provider.createModel('deepseek/deepseek-v4-flash', {
+      supportsStructuredOutputs: true,
+    }) as StructuredOutputLanguageModel;
     const unstructuredModel = provider.createModel(
       'unstructured-model',
     ) as StructuredOutputLanguageModel;
