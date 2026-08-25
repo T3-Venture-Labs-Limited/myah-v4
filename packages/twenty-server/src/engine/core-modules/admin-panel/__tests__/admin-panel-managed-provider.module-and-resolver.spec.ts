@@ -23,6 +23,15 @@ type TestableFundingResolver = {
   grantManagedProviderCredit: AdminPanelResolver['grantManagedProviderCredit'];
   recordManagedProviderOfflineCommitment: AdminPanelResolver['recordManagedProviderOfflineCommitment'];
 };
+type TestableProviderMutationResolver = {
+  twentyConfigService: {
+    get: jest.Mock;
+    set: jest.Mock;
+  };
+  addModelToProvider: AdminPanelResolver['addModelToProvider'];
+  removeAiProvider: AdminPanelResolver['removeAiProvider'];
+  removeModelFromProvider: AdminPanelResolver['removeModelFromProvider'];
+};
 
 describe('managed provider module wiring', () => {
   it.each([
@@ -180,5 +189,90 @@ describe('AdminPanelResolver.getAiProviders', () => {
         source: 'catalog',
       },
     });
+  });
+});
+
+describe('AdminPanelResolver custom OpenRouter mutations', () => {
+  const model = {
+    name: 'deepseek/deepseek-v4-flash',
+    label: 'DeepSeek V4 Flash',
+  };
+
+  const createResolver = (providers: Record<string, unknown>) => {
+    const resolver = Object.create(
+      AdminPanelResolver.prototype,
+    ) as TestableProviderMutationResolver;
+
+    resolver.twentyConfigService = {
+      get: jest.fn().mockReturnValue(providers),
+      set: jest.fn().mockResolvedValue(undefined),
+    };
+
+    return resolver;
+  };
+
+  it('adds a model through the displayed openrouter-custom alias', async () => {
+    const openrouter = {
+      apiKey: 'secret',
+      models: [],
+      npm: '@ai-sdk/openai-compatible',
+    };
+    const resolver = createResolver({ openrouter });
+
+    await expect(
+      resolver.addModelToProvider('openrouter-custom', model as never),
+    ).resolves.toBe(true);
+    expect(resolver.twentyConfigService.set).toHaveBeenCalledWith(
+      'AI_PROVIDERS',
+      {
+        openrouter: {
+          ...openrouter,
+          models: [{ ...model, source: 'manual' }],
+        },
+      },
+    );
+  });
+
+  it('removes a model through the displayed openrouter-custom alias', async () => {
+    const openrouter = {
+      apiKey: 'secret',
+      models: [model],
+      npm: '@ai-sdk/openai-compatible',
+    };
+    const resolver = createResolver({ openrouter });
+
+    await expect(
+      resolver.removeModelFromProvider(
+        'openrouter-custom',
+        'deepseek/deepseek-v4-flash',
+      ),
+    ).resolves.toBe(true);
+    expect(resolver.twentyConfigService.set).toHaveBeenCalledWith(
+      'AI_PROVIDERS',
+      {
+        openrouter: {
+          ...openrouter,
+          models: [],
+        },
+      },
+    );
+  });
+
+  it('removes a provider through the displayed openrouter-custom alias', async () => {
+    const resolver = createResolver({
+      openrouter: {
+        apiKey: 'secret',
+        models: [],
+        npm: '@ai-sdk/openai-compatible',
+      },
+    });
+
+    await expect(
+      resolver.removeAiProvider('openrouter-custom'),
+    ).resolves.toBe(true);
+    expect(resolver.twentyConfigService.set).toHaveBeenCalledWith(
+      'AI_PROVIDERS',
+      {},
+    );
   });
 });

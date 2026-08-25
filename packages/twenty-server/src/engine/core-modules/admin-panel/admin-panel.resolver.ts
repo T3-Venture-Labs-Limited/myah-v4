@@ -90,6 +90,7 @@ import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { MODEL_FAMILY_LABELS } from 'src/engine/metadata-modules/ai/ai-models/constants/model-family-labels.const';
+import { MANAGED_OPENROUTER_PROVIDER_NAME } from 'src/engine/metadata-modules/ai/ai-models/constants/managed-openrouter.constants';
 import { AiModelPreferencesService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-preferences.service';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
 import { DefaultAiCatalogService } from 'src/engine/metadata-modules/ai/ai-models/services/default-ai-catalog.service';
@@ -107,6 +108,10 @@ import { QueueMetricsDataDTO } from './dtos/queue-metrics-data.dto';
 import { SetMaintenanceModeInput } from './dtos/set-maintenance-mode.input';
 
 const INSTALLED_WORKSPACES_PAGE_SIZE = 10;
+const resolveCustomProviderName = (providerName: string): string =>
+  providerName === `${MANAGED_OPENROUTER_PROVIDER_NAME}-custom`
+    ? MANAGED_OPENROUTER_PROVIDER_NAME
+    : providerName;
 
 @UsePipes(ResolverValidationPipe)
 @AdminResolver()
@@ -603,11 +608,12 @@ export class AdminPanelResolver {
     @Args('providerName', { type: () => String })
     providerName: string,
   ): Promise<boolean> {
+    const storedProviderName = resolveCustomProviderName(providerName);
     const customProviders = {
       ...this.twentyConfigService.get('AI_PROVIDERS'),
     };
 
-    delete customProviders[providerName];
+    delete customProviders[storedProviderName];
     await this.twentyConfigService.set('AI_PROVIDERS', customProviders);
 
     return true;
@@ -631,11 +637,12 @@ export class AdminPanelResolver {
     @Args('modelConfig', { type: () => GraphQLJSON })
     modelConfig: AiProviderModelConfig,
   ): Promise<boolean> {
+    const storedProviderName = resolveCustomProviderName(providerName);
     const customProviders = {
       ...this.twentyConfigService.get('AI_PROVIDERS'),
     };
 
-    const existing = customProviders[providerName];
+    const existing = customProviders[storedProviderName];
 
     if (!existing) {
       throw new UserInputError(
@@ -654,7 +661,7 @@ export class AdminPanelResolver {
       );
     }
 
-    customProviders[providerName] = {
+    customProviders[storedProviderName] = {
       ...existing,
       models: [...existingModels, { ...modelConfig, source: 'manual' }],
     };
@@ -669,11 +676,12 @@ export class AdminPanelResolver {
     @Args('providerName', { type: () => String }) providerName: string,
     @Args('modelName', { type: () => String }) modelName: string,
   ): Promise<boolean> {
+    const storedProviderName = resolveCustomProviderName(providerName);
     const customProviders = {
       ...this.twentyConfigService.get('AI_PROVIDERS'),
     };
 
-    const existing = customProviders[providerName];
+    const existing = customProviders[storedProviderName];
 
     if (!existing) {
       throw new UserInputError(
@@ -683,7 +691,7 @@ export class AdminPanelResolver {
 
     const existingModels = existing.models ?? [];
 
-    customProviders[providerName] = {
+    customProviders[storedProviderName] = {
       ...existing,
       models: existingModels.filter(
         (model: AiProviderModelConfig) => model.name !== modelName,
