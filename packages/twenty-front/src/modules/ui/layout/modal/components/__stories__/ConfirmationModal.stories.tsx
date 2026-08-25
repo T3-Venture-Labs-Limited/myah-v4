@@ -265,25 +265,31 @@ export const CloseOnClickOutside: Story = {
   },
 };
 
-export const ConfirmWithEnterKey: Story = {
+export const CancelWithEnterKey: Story = {
   args: {
     modalInstanceId: 'confirmation-modal',
     title: 'Enter Key Test',
-    subtitle: 'This modal should confirm when pressing the Enter key.',
+    subtitle: 'Enter should activate the focused Cancel button.',
     confirmButtonText: 'Confirm',
+    onClose: closeMock,
     onConfirmClick: confirmMock,
   },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
+    const cancelButton = await body.findByRole('button', { name: 'Cancel' });
 
-    await body.findByText('Enter Key Test');
     confirmMock.mockClear();
+    closeMock.mockClear();
 
+    await waitFor(() => {
+      expect(cancelButton).toHaveFocus();
+    });
     await userEvent.keyboard('{Enter}');
 
     await waitFor(() => {
-      expect(confirmMock).toHaveBeenCalledTimes(1);
+      expect(closeMock).toHaveBeenCalledTimes(1);
     });
+    expect(confirmMock).not.toHaveBeenCalled();
   },
 };
 

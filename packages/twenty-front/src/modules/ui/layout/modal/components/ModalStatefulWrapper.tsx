@@ -137,10 +137,12 @@ export const ModalStatefulWrapper = ({
       >
         {isModalOpened &&
           (isModal ? (
-            <ModalEnterHotkeyEffect
-              modalInstanceId={modalInstanceId}
-              onEnter={onEnter}
-            />
+            onEnter ? (
+              <ModalEnterHotkeyEffect
+                modalInstanceId={modalInstanceId}
+                onEnter={onEnter}
+              />
+            ) : null
           ) : (
             <ModalHotkeysAndClickOutsideEffect
               modalInstanceId={modalInstanceId}

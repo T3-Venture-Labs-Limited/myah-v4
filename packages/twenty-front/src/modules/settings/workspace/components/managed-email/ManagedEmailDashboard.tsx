@@ -164,14 +164,18 @@ export const ManagedEmailDashboard = ({
     query: `(max-width: ${COMPACT_LAYOUT_MAX_VIEWPORT}px)`,
   });
   const warmupStates = mailboxes.map(({ warmupState }) => warmupState);
-  const warmupNeedsAttention = warmupStates.some(
-    (state) =>
-      state === 'ACTION_REQUIRED' || state === 'RECONCILIATION_REQUIRED',
-  );
+  const warmupNeedsAttention =
+    overview.status === 'ACTION_REQUIRED' ||
+    overview.actionRequiredCount > 0 ||
+    warmupStates.some(
+      (state) =>
+        state === 'ACTION_REQUIRED' || state === 'RECONCILIATION_REQUIRED',
+    );
   const warmingMailboxCount = warmupStates.filter(
     (state) => state === 'CONNECTING' || state === 'WARMING',
   ).length;
-  const warmupIsProgressing = warmingMailboxCount > 0;
+  const warmupIsProgressing =
+    overview.status === 'WARMING' || warmingMailboxCount > 0;
   const allWarmupUnavailable =
     mailboxes.length > 0 &&
     warmupStates.every((state) => state === 'DELETING' || state === 'DELETED');
@@ -179,23 +183,24 @@ export const ManagedEmailDashboard = ({
     mailboxes.length > 0 && warmupStates.every((state) => state === 'PAUSED');
   const allWarmupReady =
     mailboxes.length > 0 &&
-    warmupStates.every(
-      (state) =>
-        state === 'MAINTENANCE' ||
-        state === 'NOT_APPLICABLE' ||
-        state === 'CANCEL_AT_PERIOD_END',
+    mailboxes.every(
+      ({ campaignEligibility, warmupState }) =>
+        warmupState === 'MAINTENANCE' ||
+        warmupState === 'CANCEL_AT_PERIOD_END' ||
+        (warmupState === 'NOT_APPLICABLE' &&
+          campaignEligibility === 'ELIGIBLE'),
     );
   const warmupStatus =
     mailboxes.length === 0 ? (
       <Status color="gray" text={t`No managed mailboxes`} />
     ) : warmupNeedsAttention ? (
       <Status color="red" text={t`Action required`} />
-    ) : warmupIsProgressing ? (
-      <Status color="yellow" text={t`Warming`} />
     ) : allWarmupUnavailable ? (
       <Status color="gray" text={t`Unavailable`} />
     ) : allWarmupPaused ? (
       <Status color="gray" text={t`Paused`} />
+    ) : warmupIsProgressing ? (
+      <Status color="yellow" text={t`Warming`} />
     ) : allWarmupReady ? (
       <Status color="green" text={t`Ready`} />
     ) : (

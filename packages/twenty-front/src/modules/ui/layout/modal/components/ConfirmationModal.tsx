@@ -157,7 +157,7 @@ export const ConfirmationModal = ({
       onClose={() => {
         onClose?.();
       }}
-      onEnter={handleEnter}
+      onEnter={confirmationValue ? handleEnter : undefined}
       isClosable={true}
       padding="large"
       overlay={overlay}

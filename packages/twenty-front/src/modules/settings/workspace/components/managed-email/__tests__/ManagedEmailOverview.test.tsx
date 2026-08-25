@@ -209,6 +209,63 @@ describe('ManagedEmailOverview', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('preserves action-required precedence over locally ready warmup state', async () => {
+    renderOverview([
+      {
+        request: { query: GET_MANAGED_EMAIL_OVERVIEW },
+        result: {
+          data: {
+            ...overviewResult,
+            managedEmailMailboxes: [
+              {
+                ...overviewResult.managedEmailMailboxes[0],
+                warmupState: 'MAINTENANCE',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(
+      (
+        await screen.findAllByRole('heading', {
+          name: 'Action required',
+        })
+      )[0],
+    ).toBeVisible();
+  });
+
+  it('does not treat a blocked ordinary NOT_APPLICABLE mailbox as ready', async () => {
+    renderOverview([
+      {
+        request: { query: GET_MANAGED_EMAIL_OVERVIEW },
+        result: {
+          data: {
+            ...overviewResult,
+            managedEmailOverview: {
+              ...overviewResult.managedEmailOverview,
+              actionRequiredCount: 0,
+              status: 'WARMING',
+            },
+            managedEmailMailboxes: [
+              {
+                ...overviewResult.managedEmailMailboxes[0],
+                campaignEligibility: 'BLOCKED',
+                safeFailureCode: null,
+                warmupState: 'NOT_APPLICABLE',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(
+      (await screen.findAllByRole('heading', { name: 'Warming' }))[0],
+    ).toBeVisible();
+  });
+
   it('renders shutdown states as neutral lifecycle progress', async () => {
     renderOverview([
       {
