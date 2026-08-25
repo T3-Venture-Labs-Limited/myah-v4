@@ -52,7 +52,7 @@ describe('MyahInboxProposalPreview', () => {
     jest.clearAllMocks();
   });
 
-  it('keeps a generated proposal separate until Apply is explicitly clicked', async () => {
+  it('writes a generated reply directly into the shared draft', async () => {
     const onApply = jest.fn();
     const proposal = {
       body: { markdown: 'Thanks for the update.', blocknote: null },
@@ -78,14 +78,12 @@ describe('MyahInboxProposalPreview', () => {
       threadId: 'thread-1',
       operatorInstructions: 'Draft a concise reply to this conversation.',
     });
-    expect(screen.getByText('Generated reply')).toBeVisible();
-    expect(screen.getByLabelText('Reply preview')).toHaveTextContent(
-      'Thanks for the update.',
-    );
-    expect(onApply).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply to draft' }));
     expect(onApply).toHaveBeenCalledWith(proposal.body);
+    expect(screen.queryByText('Generated reply')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Reply preview')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Apply to draft' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /send/i }),
     ).not.toBeInTheDocument();

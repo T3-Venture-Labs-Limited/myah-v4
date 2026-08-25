@@ -17,18 +17,6 @@ const StyledActions = styled.div`
   justify-content: flex-end;
 `;
 
-const StyledPreview = styled.div`
-  background: ${themeCssVariables.background.transparent.lighter};
-  border: 1px solid ${themeCssVariables.border.color.light};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  color: ${themeCssVariables.font.color.secondary};
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
-  padding: ${themeCssVariables.spacing[3]};
-  white-space: pre-wrap;
-`;
-
 const StyledStatus = styled.div`
   color: ${themeCssVariables.font.color.secondary};
   font-size: ${themeCssVariables.font.size.xs};
@@ -55,7 +43,6 @@ export const MyahInboxProposalPreview = ({
   renderGenerateAction,
 }: MyahInboxProposalPreviewProps) => {
   const { generateProposal } = useMyahInboxThreadMutations();
-  const [proposal, setProposal] = useState<ProposalBody | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +55,7 @@ export const MyahInboxProposalPreview = ({
         threadId,
         operatorInstructions: 'Draft a concise reply to this conversation.',
       });
-      setProposal({
+      onApply({
         markdown: generatedProposal.body.markdown,
         blocknote: generatedProposal.body.blocknote ?? null,
       });
@@ -100,23 +87,6 @@ export const MyahInboxProposalPreview = ({
         <StyledStatus role="status">Generating reply</StyledStatus>
       )}
       {error && <StyledError role="alert">{error}</StyledError>}
-      {proposal && (
-        <>
-          <StyledPreview aria-label="Reply preview">
-            <strong>Generated reply</strong>
-            <span>{proposal.markdown}</span>
-          </StyledPreview>
-          <StyledActions>
-            <Button
-              title="Apply to draft"
-              variant="secondary"
-              size="small"
-              disabled={disabled}
-              onClick={() => onApply(proposal)}
-            />
-          </StyledActions>
-        </>
-      )}
     </StyledProposal>
   );
 };

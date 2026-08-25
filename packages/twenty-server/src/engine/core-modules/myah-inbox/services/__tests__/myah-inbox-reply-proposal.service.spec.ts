@@ -189,8 +189,14 @@ const createFakeModel = (modelOutput: unknown) => {
 const createService = (
   modelOutput: unknown,
   {
+    actorFirstName = 'Operator',
+    actorLastName = 'User',
     campaignEmailSignatureMarkdown = null,
-  }: { campaignEmailSignatureMarkdown?: string | null } = {},
+  }: {
+    actorFirstName?: string;
+    actorLastName?: string;
+    campaignEmailSignatureMarkdown?: string | null;
+  } = {},
 ) => {
   const fakeModel = createFakeModel(modelOutput);
   const draftRepositoryUpdate = jest.fn();
@@ -316,8 +322,8 @@ const createService = (
       userWorkspaceId,
       authContext: userAuthContext,
       userContext: {
-        firstName: 'Operator',
-        lastName: 'User',
+        firstName: actorFirstName,
+        lastName: actorLastName,
         locale: 'en',
         timezone: null,
       },
@@ -494,6 +500,13 @@ describe('MyahInboxReplyProposalService', () => {
     expect(modelRequest).not.toContain(
       'A Campaign email signature will be appended after your response.',
     );
+    expect(modelRequest).toContain(
+      'Use plain Markdown and do not emit HTML tags.',
+    );
+    expect(modelRequest).not.toContain(
+      "The sender's registered name will be appended after your response.",
+    );
+    expect(result.body.markdown).not.toContain('Operator User');
 
     const campaignAgentFieldOrder = [
       'Campaign brief: Invite creators to the new hydration launch.',
@@ -561,6 +574,48 @@ describe('MyahInboxReplyProposalService', () => {
     expect(setup.draftRepositoryUpdate).not.toHaveBeenCalled();
     expect(setup.messageRepositoryInsert).not.toHaveBeenCalled();
     expect(setup.businessRecordMutation).not.toHaveBeenCalled();
+  });
+
+  it('lets the model choose an unlinked closing and appends the current user name', async () => {
+    const setup = createService(
+      {
+        body: {
+          markdown: 'Thank you for the update.\n\nKind regards,',
+          blocknote: 'MODEL_BLOCKNOTE_WITHOUT_NAME',
+        },
+      },
+      {
+        actorFirstName: 'Tim',
+        actorLastName: 'Apple',
+      },
+    );
+
+    setup.loadReplyBriefing.mockResolvedValue({
+      ...briefing,
+      thread: {
+        ...thread,
+        campaign: null,
+      },
+      campaign: null,
+      campaignEmailSignatureMarkdown: null,
+    });
+
+    const result = await setup.service.generateReplyProposal(request);
+    const modelRequest = JSON.stringify(setup.fakeModel.doGenerate.mock.calls);
+
+    expect(result).toEqual({
+      body: {
+        markdown: 'Thank you for the update.\n\nKind regards,\n\nTim Apple',
+        blocknote: null,
+      },
+    });
+    expect(modelRequest).toContain(
+      'Include an appropriate email valediction, but do not include the sender',
+    );
+    expect(modelRequest).toContain(
+      "The sender's registered name will be appended after your response.",
+    );
+    expect(modelRequest).not.toContain('Tim Apple');
   });
 
   it('keeps the required separator when the model body is empty', async () => {
