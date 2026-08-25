@@ -220,6 +220,7 @@ const createService = ({
   campaign = allowedCampaign,
   creator = allowedCreator,
   campaignCreator = allowedCampaignCreator,
+  persistedCampaignId = campaignId,
   historyRows,
   senderParticipants = [
     senderParticipant,
@@ -232,10 +233,13 @@ const createService = ({
   personRecords = [senderPerson],
   personFindError,
 }: {
-  thread?: typeof linkedThread;
+  thread?:
+    | typeof linkedThread
+    | (Omit<typeof linkedThread, 'campaign'> & { campaign: null });
   campaign?: typeof allowedCampaign | null;
   creator?: typeof allowedCreator | null;
   campaignCreator?: typeof allowedCampaignCreator | null;
+  persistedCampaignId?: string | null;
   historyRows?: {
     id: string;
     receivedAt: string;
@@ -250,6 +254,12 @@ const createService = ({
 } = {}) => {
   const historyQueryBuilder = createHistoryQueryBuilder(historyRows);
   const repositories = {
+    messageThread: {
+      findOne: jest.fn().mockResolvedValue({
+        id: threadId,
+        myahCampaignId: persistedCampaignId,
+      }),
+    },
     person: {
       find: personFindError
         ? jest.fn().mockRejectedValue(personFindError)
@@ -335,6 +345,7 @@ describe('MyahInboxReplyBriefingService', () => {
         },
       ],
       campaignEmailSignatureMarkdown: 'Regards,\n\nZac\nMyah',
+      hasCampaignLink: true,
       campaign: {
         objective: 'Recruit trusted skincare reviewers',
         icpGoal: 'Reach dry-skin shoppers',
@@ -577,6 +588,25 @@ describe('MyahInboxReplyBriefingService', () => {
       service.loadReplyBriefing({ ...listInput(), threadId }),
     ).resolves.toMatchObject({
       campaignEmailSignatureMarkdown: null,
+    });
+  });
+
+  it('preserves a private Campaign-link marker when Campaign context is unavailable', async () => {
+    const { service } = createService({
+      thread: {
+        ...linkedThread,
+        campaign: null,
+      },
+      campaign: null,
+      persistedCampaignId: campaignId,
+    });
+
+    await expect(
+      service.loadReplyBriefing({ ...listInput(), threadId }),
+    ).resolves.toMatchObject({
+      hasCampaignLink: true,
+      campaignEmailSignatureMarkdown: null,
+      campaign: null,
     });
   });
 

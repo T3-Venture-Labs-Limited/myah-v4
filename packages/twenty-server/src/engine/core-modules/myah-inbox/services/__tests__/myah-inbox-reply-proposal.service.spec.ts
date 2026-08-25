@@ -228,6 +228,12 @@ const createService = (
   }
 
   const repositories = {
+    messageThread: {
+      findOne: jest.fn().mockResolvedValue({
+        id: threadId,
+        myahCampaignId: thread.campaign?.id ?? null,
+      }),
+    },
     campaign: {
       findOne: jest.fn().mockResolvedValue({
         id: thread.campaign?.id,
@@ -598,6 +604,7 @@ describe('MyahInboxReplyProposalService', () => {
       },
       campaign: null,
       campaignEmailSignatureMarkdown: null,
+      hasCampaignLink: false,
     });
 
     const result = await setup.service.generateReplyProposal(request);
@@ -614,6 +621,83 @@ describe('MyahInboxReplyProposalService', () => {
     );
     expect(modelRequest).toContain(
       "The sender's registered name will be appended after your response.",
+    );
+    expect(modelRequest).not.toContain('Tim Apple');
+  });
+
+  it('still asks for an unlinked valediction when the profile name is empty', async () => {
+    const setup = createService(
+      {
+        body: {
+          markdown: 'Thank you for the update.\n\nBest,',
+          blocknote: null,
+        },
+      },
+      {
+        actorFirstName: ' ',
+        actorLastName: '',
+      },
+    );
+
+    setup.loadReplyBriefing.mockResolvedValue({
+      ...briefing,
+      thread: {
+        ...thread,
+        campaign: null,
+      },
+      campaign: null,
+      campaignEmailSignatureMarkdown: null,
+      hasCampaignLink: false,
+    });
+
+    const result = await setup.service.generateReplyProposal(request);
+    const modelRequest = JSON.stringify(setup.fakeModel.doGenerate.mock.calls);
+
+    expect(result.body.markdown).toBe('Thank you for the update.\n\nBest,');
+    expect(modelRequest).toContain(
+      'Include an appropriate email valediction, but do not include the sender',
+    );
+    expect(modelRequest).not.toContain(
+      "The sender's registered name will be appended after your response.",
+    );
+  });
+
+  it('does not apply the profile fallback when a linked Campaign is unavailable', async () => {
+    const setup = createService(
+      {
+        body: {
+          markdown: 'Thank you for the update.',
+          blocknote: 'MODEL_BLOCKNOTE',
+        },
+      },
+      {
+        actorFirstName: 'Tim',
+        actorLastName: 'Apple',
+      },
+    );
+
+    setup.loadReplyBriefing.mockResolvedValue({
+      ...briefing,
+      thread: {
+        ...thread,
+        campaign: null,
+      },
+      campaign: null,
+      campaignEmailSignatureMarkdown: null,
+      hasCampaignLink: true,
+    });
+
+    const result = await setup.service.generateReplyProposal(request);
+    const modelRequest = JSON.stringify(setup.fakeModel.doGenerate.mock.calls);
+
+    expect(result).toEqual({
+      body: {
+        markdown: 'Thank you for the update.',
+        blocknote: 'MODEL_BLOCKNOTE',
+      },
+    });
+    expect(modelRequest).not.toContain(
+      'Include an appropriate email valediction',
     );
     expect(modelRequest).not.toContain('Tim Apple');
   });
@@ -693,6 +777,7 @@ describe('MyahInboxReplyProposalService', () => {
       history,
       replyRecipient: null,
       campaignEmailSignatureMarkdown: null,
+      hasCampaignLink: true,
       campaign: null,
       campaignCreator: null,
       creator: null,

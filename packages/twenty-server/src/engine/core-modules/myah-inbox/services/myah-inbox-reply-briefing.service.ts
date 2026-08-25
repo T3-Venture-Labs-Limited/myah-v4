@@ -79,6 +79,7 @@ export type MyahInboxReplyBriefing = {
 
 export type MyahInboxReplyGenerationContext = MyahInboxReplyBriefing & {
   campaignEmailSignatureMarkdown: string | null;
+  hasCampaignLink: boolean;
 };
 
 type MyahInboxThreadProposalHistoryRaw = Omit<
@@ -92,6 +93,11 @@ type MyahInboxThreadProposalHistoryRaw = Omit<
 type MyahInboxReplyBriefingRichText = {
   markdown?: string | null;
 } | null;
+
+type MyahInboxReplyBriefingMessageThreadRecord = ObjectLiteral & {
+  id: string;
+  myahCampaignId: string | null;
+};
 
 type MyahInboxReplyBriefingCampaignRecord = ObjectLiteral & {
   id: string;
@@ -137,6 +143,7 @@ type MyahInboxReplyBriefingPersonRecord = ObjectLiteral & {
 };
 
 type MyahInboxReplyBriefingRepositories = {
+  messageThread: WorkspaceRepository<MyahInboxReplyBriefingMessageThreadRecord>;
   campaign: WorkspaceRepository<MyahInboxReplyBriefingCampaignRecord>;
   campaignCreator: WorkspaceRepository<MyahInboxReplyBriefingCampaignCreatorRecord>;
   creator: WorkspaceRepository<MyahInboxReplyBriefingCreatorRecord>;
@@ -307,6 +314,7 @@ export class MyahInboxReplyBriefingService {
         }
 
         const [
+          messageThread,
           message,
           messageParticipant,
           person,
@@ -314,6 +322,11 @@ export class MyahInboxReplyBriefingService {
           campaign,
           campaignCreator,
         ] = await Promise.all([
+          this.globalWorkspaceOrmManager.getRepository<MyahInboxReplyBriefingMessageThreadRecord>(
+            input.workspace.id,
+            'messageThread',
+            rolePermissionConfig,
+          ),
           this.globalWorkspaceOrmManager.getRepository<Record<string, unknown>>(
             input.workspace.id,
             'message',
@@ -345,7 +358,20 @@ export class MyahInboxReplyBriefingService {
             rolePermissionConfig,
           ),
         ]);
+        const persistedThread = await messageThread.findOne({
+          where: { id: input.threadId },
+          select: {
+            id: true,
+            myahCampaignId: true,
+          },
+        });
+
+        if (!persistedThread) {
+          throw new ForbiddenException('Inbox thread is not readable');
+        }
+
         const repositories: MyahInboxReplyBriefingRepositories = {
+          messageThread,
           message,
           messageParticipant,
           person,
@@ -538,6 +564,7 @@ export class MyahInboxReplyBriefingService {
         return {
           history,
           replyRecipient,
+          hasCampaignLink: persistedThread.myahCampaignId !== null,
           campaignEmailSignatureMarkdown:
             typeof campaignRecord?.emailSignature?.markdown === 'string' &&
             campaignRecord.emailSignature.markdown.trim().length > 0
