@@ -1,9 +1,11 @@
+import { ManagedEmailAcquisitionMode } from '../../enums/managed-email-acquisition-mode.enum';
 import { MANAGED_EMAIL_PRODUCT_DEFINITIONS } from '../../constants/managed-email-catalog.constant';
 import { type ManagedEmailProposal } from '../../types/managed-email-proposal.type';
 import { ManagedEmailCatalogService } from '../managed-email-catalog.service';
 
 const now = new Date('2026-08-06T12:00:00.000Z');
 const proposal = {
+  acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
   id: 'proposal-1',
   workspaceId: '123e4567-e89b-42d3-a456-426614174000',
   createdAt: new Date('2026-08-06T11:55:00.000Z'),

@@ -119,6 +119,8 @@ const DomainStatus = ({ domain }: { domain: ManagedEmailDomain }) => {
 
 const DomainCompactCard = ({ domain }: { domain: ManagedEmailDomain }) => {
   const { t } = useLingui();
+  const isCustomerOwnedDomain =
+    domain.acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT';
   const paidThrough = formatDate(domain.paidThrough);
 
   return (
@@ -127,7 +129,7 @@ const DomainCompactCard = ({ domain }: { domain: ManagedEmailDomain }) => {
       <CardContent>
         <StyledDetails>
           <div>
-            <dt>{t`Status`}</dt>
+            <dt>{isCustomerOwnedDomain ? t`DNS status` : t`Status`}</dt>
             <dd>
               <DomainStatus domain={domain} />
             </dd>
@@ -136,15 +138,34 @@ const DomainCompactCard = ({ domain }: { domain: ManagedEmailDomain }) => {
             <dt>{t`Mailboxes`}</dt>
             <dd>{t`${domain.dependentMailboxCount} mailboxes`}</dd>
           </div>
-          <div>
-            <dt>{t`Renewal`}</dt>
-            <dd>
-              {domain.cancelAtPeriodEnd || !domain.renewalEnabled
-                ? t`Ends after paid period`
-                : t`Renews automatically`}
-              {paidThrough === null ? '' : t` · Paid through ${paidThrough}`}
-            </dd>
-          </div>
+          {isCustomerOwnedDomain ? (
+            <>
+              <div>
+                <dt>{t`Domain ownership`}</dt>
+                <dd>{t`Customer-owned`}</dd>
+              </div>
+              <div>
+                <dt>{t`Nameservers`}</dt>
+                <dd>
+                  <ul>
+                    {domain.requiredNameservers.map((nameserver) => (
+                      <li key={nameserver}>{nameserver}</li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+            </>
+          ) : (
+            <div>
+              <dt>{t`Renewal`}</dt>
+              <dd>
+                {domain.cancelAtPeriodEnd || !domain.renewalEnabled
+                  ? t`Ends after paid period`
+                  : t`Renews automatically`}
+                {paidThrough === null ? '' : t` · Paid through ${paidThrough}`}
+              </dd>
+            </div>
+          )}
         </StyledDetails>
       </CardContent>
     </Card>
@@ -163,7 +184,19 @@ export const ManagedEmailDashboard = ({
   const isCompactLayout = useMediaQuery({
     query: `(max-width: ${COMPACT_LAYOUT_MAX_VIEWPORT}px)`,
   });
+  const hasAnyCustomerOwnedDomain = domains.some(
+    ({ acquisitionMode }) => acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+  );
+  const allDomainsCustomerOwned =
+    hasAnyCustomerOwnedDomain &&
+    domains.every(
+      ({ acquisitionMode }) =>
+        acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+    );
+  const hasMixedDomainOwnership =
+    hasAnyCustomerOwnedDomain && !allDomainsCustomerOwned;
   const warmupStates = mailboxes.map(({ warmupState }) => warmupState);
+
   const warmupNeedsAttention =
     overview.status === 'ACTION_REQUIRED' ||
     overview.actionRequiredCount > 0 ||
@@ -278,20 +311,34 @@ export const ManagedEmailDashboard = ({
                 gridTemplateColumns={DOMAIN_TABLE_GRID_TEMPLATE}
               >
                 <TableHeader role="columnheader">{t`Domain`}</TableHeader>
-                <TableHeader role="columnheader">{t`Status`}</TableHeader>
+                <TableHeader role="columnheader">
+                  {allDomainsCustomerOwned ? t`DNS status` : t`Status`}
+                </TableHeader>
                 <TableHeader role="columnheader">{t`Mailboxes`}</TableHeader>
-                <TableHeader role="columnheader">{t`Renewal`}</TableHeader>
+                <TableHeader role="columnheader">
+                  {allDomainsCustomerOwned
+                    ? t`Nameservers`
+                    : hasMixedDomainOwnership
+                      ? t`Domain details`
+                      : t`Renewal`}
+                </TableHeader>
               </TableRow>
               <TableBody>
                 {domains.map((domain) => {
                   const paidThrough = formatDate(domain.paidThrough);
+                  const isCustomerOwnedDomain =
+                    domain.acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT';
 
                   return (
                     <TableRow
                       key={domain.id}
                       role="row"
                       gridTemplateColumns={DOMAIN_TABLE_GRID_TEMPLATE}
-                      height={DESKTOP_INVENTORY_ROW_HEIGHT}
+                      height={
+                        isCustomerOwnedDomain
+                          ? 'auto'
+                          : DESKTOP_INVENTORY_ROW_HEIGHT
+                      }
                     >
                       <TableCell
                         height={DESKTOP_INVENTORY_ROW_HEIGHT}
@@ -316,22 +363,41 @@ export const ManagedEmailDashboard = ({
                         {t`${domain.dependentMailboxCount} mailboxes`}
                       </TableCell>
                       <TableCell
+                        aria-label={
+                          isCustomerOwnedDomain ? t`Nameservers` : t`Renewal`
+                        }
                         role="cell"
-                        height={DESKTOP_INVENTORY_ROW_HEIGHT}
+                        height={
+                          isCustomerOwnedDomain
+                            ? 'auto'
+                            : DESKTOP_INVENTORY_ROW_HEIGHT
+                        }
                         overflow="hidden"
                       >
-                        <StyledInventory>
-                          <span>
-                            {domain.cancelAtPeriodEnd || !domain.renewalEnabled
-                              ? t`Ends after paid period`
-                              : t`Renews automatically`}
-                          </span>
-                          {paidThrough !== null && (
-                            <StyledGuidance>
-                              {t`Paid through ${paidThrough}`}
-                            </StyledGuidance>
-                          )}
-                        </StyledInventory>
+                        {isCustomerOwnedDomain ? (
+                          <StyledInventory>
+                            <span>{t`Customer-owned`}</span>
+                            <ul>
+                              {domain.requiredNameservers.map((nameserver) => (
+                                <li key={nameserver}>{nameserver}</li>
+                              ))}
+                            </ul>
+                          </StyledInventory>
+                        ) : (
+                          <StyledInventory>
+                            <span>
+                              {domain.cancelAtPeriodEnd ||
+                              !domain.renewalEnabled
+                                ? t`Ends after paid period`
+                                : t`Renews automatically`}
+                            </span>
+                            {paidThrough !== null && (
+                              <StyledGuidance>
+                                {t`Paid through ${paidThrough}`}
+                              </StyledGuidance>
+                            )}
+                          </StyledInventory>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -351,7 +417,9 @@ export const ManagedEmailDashboard = ({
           <StyledActions>
             <Button title={t`Add mailbox`} variant="secondary" disabled />
             <StyledGuidance>
-              {t`Mailbox-only setup is not available yet.`}
+              {hasAnyCustomerOwnedDomain
+                ? t`You cannot add mailboxes later; choose the complete initial mailbox set during setup.`
+                : t`Mailbox-only setup is not available yet.`}
             </StyledGuidance>
           </StyledActions>
           {mailboxes.length === 0 ? (

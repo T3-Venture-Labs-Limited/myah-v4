@@ -2,6 +2,7 @@ import { PermissionFlagType } from 'twenty-shared/constants';
 import { ManagedEmailAcquisitionOperationEntity } from '../../entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from '../../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../../entities/managed-email-mailbox.entity';
+import { ManagedEmailAcquisitionMode } from '../../enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from '../../enums/managed-email-campaign-eligibility.enum';
 import { ManagedEmailInfrastructureState } from '../../enums/managed-email-infrastructure-state.enum';
 import { ManagedEmailLifecycleAction } from '../../enums/managed-email-lifecycle-action.enum';
@@ -185,8 +186,11 @@ const makeOperation = () =>
 const makeDomain = (overrides: Partial<ManagedEmailDomainEntity> = {}) =>
   ({
     acquisitionOperationId: operationId,
+    acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
     cancelAtPeriodEnd: false,
     id: domainId,
+    domain: 'sender.com',
+    normalizedDomain: 'sender.com',
     infrastructureState: ManagedEmailInfrastructureState.ACTIVE,
     metronomeSubscriptionId: domainSubscriptionId,
     nextPeriodBoundaryAt: null,
@@ -412,6 +416,39 @@ describe('ManagedEmailLifecycleService', () => {
 
     await test.service.reconcileSubscriptions({ operationId, workspaceId });
 
+    expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
+      nextMonthlyBoundary,
+    );
+    expect(test.mailboxes[0].warmupPaidThrough).toEqual(nextMonthlyBoundary);
+  });
+
+  it('keeps a customer-owned imported domain out of renewal projections', async () => {
+    const test = createHarness();
+
+    Object.assign(test.operations[0], {
+      acquisitionMode:
+        'CUSTOMER_OWNED_DOMAIN_IMPORT' as ManagedEmailAcquisitionMode,
+      expectedLineItems: expectedLineItems.slice(1),
+      metronomeSubscriptionIds: [mailboxSubscriptionId, warmupSubscriptionId],
+    });
+    Object.assign(test.domains[0], {
+      cancelAtPeriodEnd: false,
+      metronomeSubscriptionId: null,
+      paidThrough: null,
+      pendingLifecycleAction: null,
+      renewalEnabled: false,
+    });
+
+    await test.service.reconcileSubscriptions({ operationId, workspaceId });
+
+    expect(test.domains[0]).toMatchObject({
+      cancelAtPeriodEnd: false,
+      metronomeSubscriptionId: null,
+      paidThrough: null,
+      pendingLifecycleAction: null,
+      renewalEnabled: false,
+    });
+    expect(test.domainRepository.update).not.toHaveBeenCalled();
     expect(test.mailboxes[0].infrastructurePaidThrough).toEqual(
       nextMonthlyBoundary,
     );
@@ -1526,6 +1563,12 @@ describe('ManagedEmailLifecycleService', () => {
 
   it('reconciles uncertain Icemail deletion by read without blindly replaying it', async () => {
     const test = createHarness({
+      domain: {
+        acquisitionMode:
+          ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
+        domain: 'mail.creator.co.uk',
+        normalizedDomain: 'mail.creator.co.uk',
+      },
       mailbox: {
         infrastructureCancelAtPeriodEnd: true,
         nextPeriodBoundaryAt: monthlyBoundary,
@@ -1555,8 +1598,15 @@ describe('ManagedEmailLifecycleService', () => {
     await test.service.applyPeriodBoundary(data);
 
     expect(test.icemailClient.deleteDomainMailboxes).toHaveBeenCalledTimes(1);
-    expect(test.icemailClient.getMailbox).toHaveBeenCalledWith(
+    expect(test.icemailClient.getMailbox).toHaveBeenNthCalledWith(
+      1,
       'icemail-mailbox-1',
+      { customerOwnedDomain: 'mail.creator.co.uk' },
+    );
+    expect(test.icemailClient.getMailbox).toHaveBeenNthCalledWith(
+      2,
+      'icemail-mailbox-1',
+      { customerOwnedDomain: 'mail.creator.co.uk' },
     );
     expect(test.mailboxes[0]).toMatchObject({
       infrastructureState: ManagedEmailInfrastructureState.INACTIVE,

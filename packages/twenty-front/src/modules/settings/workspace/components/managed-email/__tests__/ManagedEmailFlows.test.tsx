@@ -1,4 +1,5 @@
 import { ManagedEmailAcquisitionChooser } from '@/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser';
+import { ManagedEmailDashboard } from '@/settings/workspace/components/managed-email/ManagedEmailDashboard';
 import { ManagedEmailCreateFlow } from '@/settings/workspace/components/managed-email/ManagedEmailCreateFlow';
 import { ManagedEmailPrewarmedFlow } from '@/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow';
 import { ManagedEmailProgress } from '@/settings/workspace/components/managed-email/ManagedEmailProgress';
@@ -6,20 +7,26 @@ import { ManagedEmailReview } from '@/settings/workspace/components/managed-emai
 import { ManagedMailboxTable } from '@/settings/workspace/components/managed-email/ManagedMailboxTable';
 import { I18nProvider } from '@lingui/react';
 import { i18n } from '@lingui/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
 import { messages } from '~/locales/generated/en';
 import {
   type ManagedEmailBundle,
+  type ManagedEmailDomain,
   type ManagedEmailOperation,
+  type ManagedEmailOverview,
   type ManagedEmailProposal,
   type ManagedEmailQuote,
 } from '~/generated-metadata/graphql';
 
 i18n.load({ [SOURCE_LOCALE]: messages });
 i18n.activate(SOURCE_LOCALE);
+
+jest.mock('react-responsive', () => ({
+  useMediaQuery: () => false,
+}));
 
 const renderWithI18n = (children: ReactNode) =>
   render(<I18nProvider i18n={i18n}>{children}</I18nProvider>);
@@ -108,8 +115,38 @@ const operation = (
   updatedAt: '2026-08-06T12:05:00.000Z',
 });
 
+const customerOwnedRequiredNameservers = [
+  'ns1.customer-owned.test',
+  'ns2.customer-owned.test',
+  'ns3.customer-owned.test',
+  'ns4.customer-owned.test',
+];
+
+const customerOwnedDomain = {
+  acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+  cancelAtPeriodEnd: false,
+  dependentMailboxCount: 2,
+  domain: 'creator-owned.test',
+  id: 'customer-owned-domain-1',
+  infrastructureState: 'DNS_PENDING',
+  paidThrough: null,
+  renewalEnabled: false,
+  requiredNameservers: customerOwnedRequiredNameservers,
+  safeFailureCode: null,
+} as ManagedEmailDomain;
+
+const customerOwnedOverview: ManagedEmailOverview = {
+  acquisitionAvailable: true,
+  actionRequiredCount: 0,
+  domainCount: 1,
+  mailboxCount: 2,
+  readyCount: 0,
+  status: 'WARMING',
+  warmingCount: 2,
+};
+
 describe('managed email acquisition flow components', () => {
-  it('offers three paths while keeping purchase paths unavailable to ordinary members', async () => {
+  it('offers four paths while keeping purchase paths unavailable to ordinary members', async () => {
     const user = userEvent.setup();
     const onPrewarmed = jest.fn();
     const onCreate = jest.fn();
@@ -130,11 +167,11 @@ describe('managed email acquisition flow components', () => {
     );
     await user.click(
       screen.getByRole('button', {
-        name: /^Create and warm new mailboxes/,
+        name: /^Buy domain/,
       }),
     );
     await user.click(
-      screen.getByRole('button', { name: /^Connect existing mailboxes/ }),
+      screen.getByRole('button', { name: /^Connect existing mailbox/ }),
     );
 
     expect(onPrewarmed).toHaveBeenCalledTimes(1);
@@ -158,7 +195,7 @@ describe('managed email acquisition flow components', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', {
-        name: /^Create and warm new mailboxes/,
+        name: /^Buy domain/,
       }),
     ).not.toBeInTheDocument();
     expect(
@@ -167,8 +204,125 @@ describe('managed email acquisition flow components', () => {
       ),
     ).toBeVisible();
     expect(
-      screen.getByRole('button', { name: /^Connect existing mailboxes/ }),
+      screen.getByRole('button', { name: /^Connect existing mailbox/ }),
     ).toBeEnabled();
+  });
+
+  it('distinguishes buying a domain, using an owned domain, and connecting an existing mailbox', () => {
+    renderWithI18n(
+      <ManagedEmailAcquisitionChooser
+        acquisitionAvailable
+        canPurchase
+        onChoosePrewarmed={jest.fn()}
+        onCreateManaged={jest.fn()}
+        onConnectExisting={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Buy domain' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Use a domain I own' }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Connect existing mailbox' }),
+    ).toBeEnabled();
+  });
+
+  it('renders all customer-owned nameservers without a fixed desktop row height', () => {
+    renderWithI18n(
+      <ManagedEmailDashboard
+        domains={[customerOwnedDomain]}
+        mailboxes={[]}
+        onBrowsePrewarmedInventory={jest.fn()}
+        onConnectExistingMailbox={jest.fn()}
+        onSetUpManagedEmail={jest.fn()}
+        overview={customerOwnedOverview}
+      />,
+    );
+
+    expect(screen.getByText('Customer-owned')).toBeVisible();
+    expect(screen.getByText('DNS status')).toBeVisible();
+    customerOwnedRequiredNameservers.forEach((nameserver) => {
+      expect(screen.getByText(nameserver)).toBeVisible();
+    });
+
+    const customerOwnedRow = screen.getByRole('row', {
+      name: /creator-owned\.test/,
+    });
+    const nameserversCell = within(customerOwnedRow).getAllByRole('cell')[3]!;
+    expect(customerOwnedRow).toHaveAttribute('height', 'auto');
+    expect(nameserversCell).toHaveAttribute('height', 'auto');
+    expect(screen.queryByText('Renewal')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Ends after paid period'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add mailbox' })).toBeDisabled();
+    expect(screen.getByText(/cannot add mailboxes later/i)).toBeVisible();
+  });
+
+  it('uses row-scoped setup labels and permanent mailbox guidance for a mixed owned and managed inventory', () => {
+    const managedDomain: ManagedEmailDomain = {
+      ...customerOwnedDomain,
+      acquisitionMode: 'NEW_MANAGED',
+      domain: 'managed-sending.test',
+      id: 'managed-domain-1',
+      infrastructureState: 'ACTIVE',
+      paidThrough: '2027-08-06T12:00:00.000Z',
+      renewalEnabled: true,
+      requiredNameservers: [],
+    };
+
+    renderWithI18n(
+      <ManagedEmailDashboard
+        domains={[
+          {
+            ...customerOwnedDomain,
+            infrastructureState: 'PROVISIONING_DOMAIN',
+          },
+          managedDomain,
+        ]}
+        mailboxes={[]}
+        onBrowsePrewarmedInventory={jest.fn()}
+        onConnectExistingMailbox={jest.fn()}
+        onSetUpManagedEmail={jest.fn()}
+        overview={{
+          ...customerOwnedOverview,
+          domainCount: 2,
+          mailboxCount: 3,
+        }}
+      />,
+    );
+
+    const domainsTable = screen.getByRole('table', {
+      name: 'Managed email domains',
+    });
+    const customerOwnedRow = within(domainsTable).getByRole('row', {
+      name: /creator-owned\.test/,
+    });
+    const managedRow = within(domainsTable).getByRole('row', {
+      name: /managed-sending\.test/,
+    });
+
+    expect(within(customerOwnedRow).getByText('Customer-owned')).toBeVisible();
+    expect(
+      within(customerOwnedRow).getByRole('heading', { name: 'Setting up' }),
+    ).toBeVisible();
+    const nameserversCell = within(customerOwnedRow).getByRole('cell', {
+      name: /Nameservers/i,
+    });
+    customerOwnedRequiredNameservers.forEach((nameserver) => {
+      expect(nameserversCell).toHaveTextContent(nameserver);
+    });
+
+    const renewalCell = within(managedRow).getByRole('cell', {
+      name: /Renewal/i,
+    });
+    expect(renewalCell).toHaveTextContent('Renews automatically');
+    expect(
+      screen.getByText(
+        'You cannot add mailboxes later; choose the complete initial mailbox set during setup.',
+      ),
+    ).toBeVisible();
   });
 
   it('recommends the ordinary flow when prewarmed stock is empty', async () => {
@@ -256,6 +410,71 @@ describe('managed email acquisition flow components', () => {
           localPartPreference: 'maya',
           roleTitle: 'Partnerships',
           signature: 'Thanks, Maya',
+        },
+      ],
+    });
+  });
+
+  it('requires an integer initial mailbox count for a customer-owned domain', async () => {
+    const user = userEvent.setup();
+    const onSubmit = jest.fn();
+
+    renderWithI18n(
+      <ManagedEmailCreateFlow
+        initialAcquisitionMode="CUSTOMER_OWNED_DOMAIN_IMPORT"
+        onBack={jest.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Customer-owned domain'), {
+      target: { value: 'creator.co.uk' },
+    });
+    fireEvent.change(screen.getByLabelText('Mailbox count'), {
+      target: { value: '1.5' },
+    });
+
+    expect(screen.getByRole('button', { name: /^Continue/ })).toBeDisabled();
+    expect(screen.queryByLabelText('Display name 1')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Mailbox count'), {
+      target: { value: '2' },
+    });
+
+    expect(screen.getByRole('button', { name: /^Continue/ })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: /^Continue/ }));
+
+    expect(screen.getByLabelText('Display name 1')).toBeVisible();
+    expect(screen.getByLabelText('Display name 2')).toBeVisible();
+
+    await user.type(screen.getByLabelText('Display name 1'), 'Ada Lovelace');
+    await user.type(screen.getByLabelText('Role title 1'), 'Engineer');
+    await user.type(screen.getByLabelText('Preferred address 1'), 'ada');
+    await user.type(screen.getByLabelText('Signature 1'), 'Thanks, Ada');
+    await user.type(screen.getByLabelText('Display name 2'), 'Grace Hopper');
+    await user.type(screen.getByLabelText('Role title 2'), 'Admiral');
+    await user.type(screen.getByLabelText('Preferred address 2'), 'grace');
+    await user.type(screen.getByLabelText('Signature 2'), 'Thanks, Grace');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: /^Review proposal/ }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+      customerOwnedDomain: 'creator.co.uk',
+      mailboxCount: 2,
+      personas: [
+        {
+          displayName: 'Ada Lovelace',
+          localPartPreference: 'ada',
+          roleTitle: 'Engineer',
+          signature: 'Thanks, Ada',
+        },
+        {
+          displayName: 'Grace Hopper',
+          localPartPreference: 'grace',
+          roleTitle: 'Admiral',
+          signature: 'Thanks, Grace',
         },
       ],
     });

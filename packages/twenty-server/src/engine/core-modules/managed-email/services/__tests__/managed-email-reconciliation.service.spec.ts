@@ -112,6 +112,72 @@ const mailboxes = [
   },
 ];
 
+const customerOwnedImportDomainName = 'mail.creator.co.uk';
+const customerOwnedImportDomain = {
+  ...domain,
+  domain: customerOwnedImportDomainName,
+  purchased: false,
+};
+const customerOwnedImportMailboxes = [
+  {
+    ...mailboxes[0],
+    address: `maya@${customerOwnedImportDomainName}`,
+    domain: customerOwnedImportDomainName,
+    domainId: customerOwnedImportDomain.id,
+  },
+  {
+    ...mailboxes[1],
+    address: `sam@${customerOwnedImportDomainName}`,
+    domain: customerOwnedImportDomainName,
+    domainId: customerOwnedImportDomain.id,
+  },
+];
+const createCustomerOwnedImportOperation = () => {
+  const operation = createOperation();
+
+  operation.acquisitionMode =
+    ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT;
+  operation.resourceSnapshot = {
+    domains: [
+      {
+        domain: customerOwnedImportDomainName,
+        mailboxes: customerOwnedImportMailboxes.map(({ address }) => address),
+      },
+    ],
+    personas: [
+      {
+        address: `maya@${customerOwnedImportDomainName}`,
+        createdByWorkspaceMemberId: '123e4567-e89b-42d3-a456-426614174001',
+        firstName: 'Maya',
+        lastName: 'Chen',
+        localPart: 'maya',
+        roleTitle: null,
+        signature: 'Maya',
+        version: 1,
+      },
+      {
+        address: `sam@${customerOwnedImportDomainName}`,
+        createdByWorkspaceMemberId: '123e4567-e89b-42d3-a456-426614174001',
+        firstName: 'Sam',
+        lastName: 'Lee',
+        localPart: 'sam',
+        roleTitle: 'Growth',
+        signature: 'Sam',
+        version: 1,
+      },
+    ],
+    proposal: {
+      acquisitionMode: ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
+      createdAt: '2026-08-05T11:00:00.000Z',
+      customerOwnedDomain: customerOwnedImportDomainName,
+      expiresAt: '2026-08-06T11:00:00.000Z',
+      policyVersion: 'proposal-v1',
+    },
+  };
+
+  return operation;
+};
+
 const createHarness = (operation = createOperation()) => {
   const events: string[] = [];
   const operationRepository = {
@@ -213,6 +279,161 @@ describe('ManagedEmailReconciliationService', () => {
       );
     }
   });
+
+  it('recovers a complete exact customer-owned import with persisted persona facts', async () => {
+    const harness = createHarness(createCustomerOwnedImportOperation());
+
+    harness.icemailClient.listAllDomains.mockResolvedValueOnce([
+      customerOwnedImportDomain,
+    ]);
+    harness.icemailClient.listAllMailboxes.mockResolvedValueOnce(
+      customerOwnedImportMailboxes,
+    );
+
+    const result = await harness.service.reconcile({
+      operationId,
+      workspaceId,
+    });
+
+    expect(result.state).toBe('PROVIDER_SUCCEEDED');
+    expect(result.providerOutcome).toBe('RECONCILED');
+    expect(result.providerReceipt).toEqual({
+      domains: [
+        {
+          mailboxes: [
+            {
+              normalizedAddress: `maya@${customerOwnedImportDomainName}`,
+              providerMailboxId: 'provider-mailbox-1',
+            },
+            {
+              normalizedAddress: `sam@${customerOwnedImportDomainName}`,
+              providerMailboxId: 'provider-mailbox-2',
+            },
+          ],
+          normalizedDomain: customerOwnedImportDomainName,
+          providerDomainId: 'provider-domain-1',
+          providerOrderId: null,
+        },
+      ],
+      failedInventoryIds: [],
+      orderIds: [],
+      schemaVersion: 1,
+      totalCostCents: null,
+    });
+  });
+
+  it.each([
+    [
+      'a purchased provider domain',
+      {
+        domains: [{ ...customerOwnedImportDomain, purchased: true }],
+        mailboxes: customerOwnedImportMailboxes,
+      },
+    ],
+    [
+      'a mismatched provider mailbox count',
+      {
+        domains: [{ ...customerOwnedImportDomain, mailboxCount: 1 }],
+        mailboxes: customerOwnedImportMailboxes,
+      },
+    ],
+    [
+      'an extra provider mailbox',
+      {
+        domains: [customerOwnedImportDomain],
+        mailboxes: [
+          ...customerOwnedImportMailboxes,
+          {
+            ...customerOwnedImportMailboxes[1],
+            address: `extra@${customerOwnedImportDomainName}`,
+            firstName: 'Extra',
+            id: 'provider-mailbox-extra',
+            lastName: 'Mailbox',
+          },
+        ],
+      },
+    ],
+    [
+      'a duplicate unrequested provider mailbox',
+      {
+        domains: [customerOwnedImportDomain],
+        mailboxes: [
+          ...customerOwnedImportMailboxes,
+          {
+            ...customerOwnedImportMailboxes[1],
+            address: `extra@${customerOwnedImportDomainName}`,
+            firstName: 'Extra',
+            id: 'provider-mailbox-extra-1',
+            lastName: 'Mailbox',
+          },
+          {
+            ...customerOwnedImportMailboxes[1],
+            address: `extra@${customerOwnedImportDomainName}`,
+            firstName: 'Extra',
+            id: 'provider-mailbox-extra-2',
+            lastName: 'Mailbox',
+          },
+        ],
+      },
+    ],
+    [
+      'a mismatched persisted persona first name',
+      {
+        domains: [customerOwnedImportDomain],
+        mailboxes: [
+          { ...customerOwnedImportMailboxes[0], firstName: 'Ada' },
+          customerOwnedImportMailboxes[1],
+        ],
+      },
+    ],
+    [
+      'a mismatched persisted persona last name',
+      {
+        domains: [customerOwnedImportDomain],
+        mailboxes: [
+          customerOwnedImportMailboxes[0],
+          { ...customerOwnedImportMailboxes[1], lastName: 'Byron' },
+        ],
+      },
+    ],
+    [
+      'a mismatched mailbox address',
+      {
+        domains: [customerOwnedImportDomain],
+        mailboxes: [
+          {
+            ...customerOwnedImportMailboxes[0],
+            address: `other@${customerOwnedImportDomainName}`,
+          },
+          customerOwnedImportMailboxes[1],
+        ],
+      },
+    ],
+  ])(
+    'does not recover a customer-owned import from %s',
+    async (_description, providerState) => {
+      const harness = createHarness(createCustomerOwnedImportOperation());
+
+      harness.icemailClient.listAllDomains.mockResolvedValueOnce(
+        providerState.domains,
+      );
+      harness.icemailClient.listAllMailboxes.mockResolvedValueOnce(
+        providerState.mailboxes,
+      );
+
+      const result = await harness.service.reconcile({
+        operationId,
+        workspaceId,
+      });
+
+      expect(result).toMatchObject({
+        providerReceipt: null,
+        state: 'RECONCILIATION_REQUIRED',
+      });
+      expect(harness.domainRepository.update).not.toHaveBeenCalled();
+      expect(harness.mailboxRepository.update).not.toHaveBeenCalled();
+    },
+  );
 
   it('projects only receipt-confirmed resources for a partial purchase', async () => {
     const operation = createOperation();

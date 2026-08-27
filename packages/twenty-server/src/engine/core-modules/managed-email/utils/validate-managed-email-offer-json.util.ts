@@ -1,5 +1,6 @@
 import { type ValueTransformer } from 'typeorm';
 
+import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
 import { type ManagedEmailProposal } from '../types/managed-email-proposal.type';
 import { type ManagedEmailQuote } from '../types/managed-email-quote.type';
 
@@ -31,6 +32,22 @@ const bounded = (v: unknown): unknown => {
   return v;
 };
 
+const NORMALIZED_DOMAIN_PATTERN =
+  /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+const normalizedDomain = (value: unknown): string => {
+  const domain = nonempty(value, 253);
+
+  if (
+    domain !== domain.trim().toLowerCase() ||
+    !NORMALIZED_DOMAIN_PATTERN.test(domain)
+  ) {
+    return fail();
+  }
+
+  return domain;
+};
+
 export const validateManagedEmailProposalSnapshot = (
   value: unknown,
 ): ManagedEmailProposal => {
@@ -40,16 +57,37 @@ export const validateManagedEmailProposalSnapshot = (
   instant(v.createdAt);
   instant(v.expiresAt);
   str(v.policyVersion, 256);
+  const acquisitionMode = v.acquisitionMode;
+
+  if (
+    acquisitionMode !== undefined &&
+    acquisitionMode !== ManagedEmailAcquisitionMode.NEW_MANAGED &&
+    acquisitionMode !== ManagedEmailAcquisitionMode.PREWARMED_INVENTORY &&
+    acquisitionMode !== ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+  ) {
+    return fail();
+  }
   if (
     !Number.isSafeInteger(v.mailboxCount) ||
     (v.mailboxCount as number) < 1 ||
     !Array.isArray(v.domains) ||
     !v.domains.length
-  )
+  ) {
     return fail();
+  }
+
+  const customerOwnedDomain =
+    acquisitionMode === ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+      ? normalizedDomain(v.customerOwnedDomain)
+      : undefined;
+
+  if (customerOwnedDomain !== undefined && v.domains.length !== 1) {
+    return fail();
+  }
+
   for (const d of v.domains) {
     const domain = record(d);
-    str(domain.domain, 253);
+    const domainName = str(domain.domain, 253);
     if (!Array.isArray(domain.mailboxes)) return fail();
     for (const m of domain.mailboxes) {
       const p = record(m);
@@ -62,14 +100,28 @@ export const validateManagedEmailProposalSnapshot = (
       if (p.roleTitle !== null) str(p.roleTitle, 128);
       if (!Number.isSafeInteger(p.version)) return fail();
     }
+
+    if (customerOwnedDomain !== undefined) {
+      if (
+        domainName !== customerOwnedDomain ||
+        'providerQuote' in domain ||
+        'providerInventoryId' in domain ||
+        'prewarmedProviderCosts' in domain
+      ) {
+        return fail();
+      }
+      continue;
+    }
+
     const q = record(domain.providerQuote);
     const amountMinorUnits = q.amountMinorUnits;
     if (
       typeof amountMinorUnits !== 'number' ||
       !Number.isSafeInteger(amountMinorUnits) ||
       amountMinorUnits < 0
-    )
+    ) {
       return fail();
+    }
     str(q.currency, 8);
     str(q.fingerprint, 256);
     instant(q.observedAt);
@@ -81,8 +133,9 @@ export const validateManagedEmailProposalSnapshot = (
       if (
         !Number.isSafeInteger(c.domainPriceCents) ||
         !Number.isSafeInteger(c.mailboxPriceCents)
-      )
+      ) {
         return fail();
+      }
     }
   }
   const disclosures = record(v.disclosures);
@@ -146,6 +199,57 @@ export const validateManagedEmailQuoteSnapshot = (
   nonempty(disclosures.managedServiceOwnership);
   nonempty(disclosures.prepaidBalance);
   bounded(v.resourceSnapshot);
+
+  if (
+    v.resourceSnapshot &&
+    typeof v.resourceSnapshot === 'object' &&
+    !Array.isArray(v.resourceSnapshot)
+  ) {
+    const resourceSnapshot = record(v.resourceSnapshot);
+    const proposal = resourceSnapshot.proposal;
+
+    if (proposal && typeof proposal === 'object' && !Array.isArray(proposal)) {
+      const resourceProposal = record(proposal);
+      const acquisitionMode = resourceProposal.acquisitionMode;
+
+      if (
+        acquisitionMode !== undefined &&
+        acquisitionMode !== ManagedEmailAcquisitionMode.NEW_MANAGED &&
+        acquisitionMode !== ManagedEmailAcquisitionMode.PREWARMED_INVENTORY &&
+        acquisitionMode !==
+          ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+      ) {
+        return fail();
+      }
+
+      if (
+        acquisitionMode ===
+        ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+      ) {
+        const customerOwnedDomain = normalizedDomain(
+          resourceProposal.customerOwnedDomain,
+        );
+
+        if (
+          !Array.isArray(resourceSnapshot.domains) ||
+          resourceSnapshot.domains.length !== 1
+        ) {
+          return fail();
+        }
+
+        const domain = record(resourceSnapshot.domains[0]);
+
+        if (
+          str(domain.domain, 253) !== customerOwnedDomain ||
+          'providerQuote' in domain ||
+          'providerInventoryId' in domain ||
+          'prewarmedProviderCosts' in domain
+        ) {
+          return fail();
+        }
+      }
+    }
+  }
 
   return value as ManagedEmailQuote;
 };

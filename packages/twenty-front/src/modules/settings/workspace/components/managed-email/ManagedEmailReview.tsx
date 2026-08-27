@@ -118,7 +118,7 @@ export const ManagedEmailReview = ({
       <ConfirmationModal
         modalInstanceId={CONFIRM_MANAGED_EMAIL_PURCHASE_MODAL_ID}
         title={t`Confirm managed email purchase`}
-        subtitle={t`You are confirming the due-today amount and the recurring annual and monthly services shown in this quote.`}
+        subtitle={t`You are confirming the due-today amount and the recurring services shown in this quote.`}
         confirmButtonText={t`Confirm purchase`}
         confirmButtonAccent="brand"
         loading={isConfirming}

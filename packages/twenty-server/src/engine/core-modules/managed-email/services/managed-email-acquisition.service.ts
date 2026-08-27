@@ -35,7 +35,10 @@ import {
   type ManagedEmailResourceSnapshot,
   type ManagedEmailSafeFacts,
 } from '../types/managed-email-persistence.type';
-import { assertManagedEmailProviderReceiptPartition } from '../utils/validate-managed-email-persistence-json.util';
+import {
+  assertManagedEmailProviderReceiptPartition,
+  hasExactManagedEmailExpectedLineSet,
+} from '../utils/validate-managed-email-persistence-json.util';
 
 import { ManagedEmailSubscriptionService } from './managed-email-subscription.service';
 
@@ -252,7 +255,9 @@ export class ManagedEmailAcquisitionService {
           providerDomainId: null,
           providerOrderId: null,
           providerType: ICEMAIL_PROVIDER_TYPE,
-          renewalEnabled: true,
+          renewalEnabled:
+            operation.acquisitionMode !==
+            ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
           safeFailureCode: null,
         });
       } else if (
@@ -350,6 +355,14 @@ export class ManagedEmailAcquisitionService {
     ) {
       return;
     }
+    if (
+      !hasExactManagedEmailExpectedLineSet(
+        operation.acquisitionMode,
+        operation.expectedLineItems,
+      )
+    ) {
+      throw new Error('Managed email subscription correlation is incomplete');
+    }
     const subscriptionByProduct = new Map(
       operation.expectedLineItems.map((line, index) => [
         line.productKey,
@@ -367,22 +380,26 @@ export class ManagedEmailAcquisitionService {
     );
 
     if (
-      domainSubscriptionId === undefined ||
       mailboxSubscriptionId === undefined ||
-      warmupSubscriptionId === undefined
+      warmupSubscriptionId === undefined ||
+      (operation.acquisitionMode !==
+        ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT &&
+        domainSubscriptionId === undefined)
     ) {
       throw new Error('Managed email subscription correlation is incomplete');
     }
 
     for (const domain of operation.resourceSnapshot.domains) {
-      await this.domainRepository.update(
-        operation.workspaceId,
-        {
-          metronomeSubscriptionId: IsNull(),
-          normalizedDomain: normalize(domain.domain),
-        },
-        { metronomeSubscriptionId: domainSubscriptionId },
-      );
+      if (domainSubscriptionId !== undefined) {
+        await this.domainRepository.update(
+          operation.workspaceId,
+          {
+            metronomeSubscriptionId: IsNull(),
+            normalizedDomain: normalize(domain.domain),
+          },
+          { metronomeSubscriptionId: domainSubscriptionId },
+        );
+      }
       for (const address of domain.mailboxes) {
         await this.mailboxRepository.update(
           operation.workspaceId,
@@ -440,6 +457,42 @@ export class ManagedEmailAcquisitionService {
         return await this.persistPrewarmedReceipt(operation, receipt);
       }
 
+      if (
+        operation.acquisitionMode ===
+        ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+      ) {
+        const [domain] = operation.resourceSnapshot.domains;
+
+        if (
+          domain === undefined ||
+          operation.resourceSnapshot.domains.length !== 1
+        ) {
+          throw new Error('Managed email resource snapshot is invalid');
+        }
+        const receipt =
+          await this.icemailClient.createCustomerOwnedDomainImportOrder({
+            customerOwnedDomain: domain.domain,
+            mailboxes: domain.mailboxes.map((address) => {
+              const persona = operation.resourceSnapshot.personas.find(
+                (candidate) => candidate.address === address,
+              );
+
+              if (persona === undefined) {
+                throw new Error('Managed email resource snapshot is invalid');
+              }
+
+              return {
+                address,
+                firstName: persona.firstName,
+                lastName: persona.lastName,
+                password: this.setupPasswordFactory(),
+              };
+            }),
+          });
+
+        return await this.persistOrdinaryReceipt(operation, receipt);
+      }
+
       await this.revalidateOrdinaryResources(operation.resourceSnapshot);
       const receipt = await this.icemailClient.createOrdinaryOrder({
         domains: operation.resourceSnapshot.domains.map((domain) => ({
@@ -493,6 +546,11 @@ export class ManagedEmailAcquisitionService {
     snapshot: ManagedEmailResourceSnapshot,
   ): Promise<void> {
     for (const domain of snapshot.domains) {
+      const providerQuote = domain.providerQuote;
+
+      if (providerQuote === undefined) {
+        throw new Error('Managed email provider stock changed');
+      }
       const availability = await this.icemailClient.checkDomainAvailability(
         domain.domain,
       );
@@ -507,18 +565,16 @@ export class ManagedEmailAcquisitionService {
       if (
         !availability.available ||
         availability.domain !== domain.domain ||
-        availability.price.amountCents !==
-          domain.providerQuote.amountMinorUnits ||
-        availability.price.currency !== domain.providerQuote.currency ||
-        availability.price.duration !== domain.providerQuote.termCount ||
-        availability.price.durationUnit !== domain.providerQuote.termUnit ||
-        fingerprint !== domain.providerQuote.fingerprint
+        availability.price.amountCents !== providerQuote.amountMinorUnits ||
+        availability.price.currency !== providerQuote.currency ||
+        availability.price.duration !== providerQuote.termCount ||
+        availability.price.durationUnit !== providerQuote.termUnit ||
+        fingerprint !== providerQuote.fingerprint
       ) {
         throw new Error('Managed email provider stock changed');
       }
     }
   }
-
   private async revalidatePrewarmedStock(
     operation: ManagedEmailAcquisitionOperationEntity,
   ): Promise<IcemailPrewarmedBundle[]> {
@@ -959,7 +1015,20 @@ export class ManagedEmailAcquisitionService {
       return new Date(paidThrough);
     };
 
-    const domainPaidThrough = paidThroughFor('managed_sending_domain_year');
+    if (
+      !hasExactManagedEmailExpectedLineSet(
+        operation.acquisitionMode,
+        operation.expectedLineItems,
+      )
+    ) {
+      throw new Error('Managed email payment correlation is incomplete');
+    }
+    const isCustomerOwnedDomainImport =
+      operation.acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT;
+    const domainPaidThrough = isCustomerOwnedDomainImport
+      ? null
+      : paidThroughFor('managed_sending_domain_year');
     const mailboxPaidThrough = paidThroughFor('managed_mailbox_month');
     const warmupPaidThrough = paidThroughFor('managed_warmup_month');
     const domains = await this.domainRepository.find(operation.workspaceId, {
@@ -973,12 +1042,14 @@ export class ManagedEmailAcquisitionService {
       throw new Error('Managed email paid resources are missing');
     }
 
-    for (const domain of domains) {
-      await this.domainRepository.update(
-        operation.workspaceId,
-        { id: domain.id },
-        { paidThrough: domainPaidThrough },
-      );
+    if (domainPaidThrough !== null) {
+      for (const domain of domains) {
+        await this.domainRepository.update(
+          operation.workspaceId,
+          { id: domain.id },
+          { paidThrough: domainPaidThrough },
+        );
+      }
     }
     for (const mailbox of mailboxes) {
       await this.mailboxRepository.update(
@@ -992,9 +1063,13 @@ export class ManagedEmailAcquisitionService {
     }
 
     const earliestPaidThrough = Math.min(
-      domainPaidThrough.getTime(),
-      mailboxPaidThrough.getTime(),
-      warmupPaidThrough.getTime(),
+      ...(domainPaidThrough === null
+        ? [mailboxPaidThrough.getTime(), warmupPaidThrough.getTime()]
+        : [
+            domainPaidThrough.getTime(),
+            mailboxPaidThrough.getTime(),
+            warmupPaidThrough.getTime(),
+          ]),
     );
     const nextSubscriptionReconciliationAt = new Date(
       earliestPaidThrough - SUBSCRIPTION_RECONCILIATION_LEAD_MS,
@@ -1023,10 +1098,23 @@ export class ManagedEmailAcquisitionService {
       operation.metronomeContractId === null ||
       operation.metronomeSubscriptionIds === null ||
       operation.correlatedSubscriptionLines === null ||
+      !hasExactManagedEmailExpectedLineSet(
+        operation.acquisitionMode,
+        operation.expectedLineItems,
+      ) ||
       operation.metronomeSubscriptionIds.length !==
         operation.expectedLineItems.length ||
       operation.correlatedSubscriptionLines.length !==
-        operation.expectedLineItems.length
+        operation.expectedLineItems.length ||
+      new Set(
+        operation.expectedLineItems.map((line) => line.metronomeProductId),
+      ).size !== operation.expectedLineItems.length ||
+      operation.expectedLineItems.some(
+        (expectedLine) =>
+          operation.correlatedSubscriptionLines?.filter(
+            ({ productId }) => productId === expectedLine.metronomeProductId,
+          ).length !== 1,
+      )
     ) {
       throw new Error('Managed email payment correlation is incomplete');
     }

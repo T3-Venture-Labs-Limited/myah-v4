@@ -6,7 +6,11 @@ import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspa
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceMailboxConnectionException } from 'src/engine/core-modules/myah/exceptions/workspace-mailbox-connection.exception';
 import { WorkspaceMailboxConnectionService } from 'src/engine/core-modules/myah/services/workspace-mailbox-connection.service';
+import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
+
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
+import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
+
 import { ManagedEmailCampaignEligibility } from '../enums/managed-email-campaign-eligibility.enum';
 import { ManagedEmailInfrastructureState } from '../enums/managed-email-infrastructure-state.enum';
 import { IcemailClient } from '../providers/icemail/icemail.client';
@@ -21,6 +25,8 @@ export class ManagedEmailMailboxActivationService {
   constructor(
     @Inject(getWorkspaceScopedRepositoryToken(ManagedEmailMailboxEntity))
     private readonly mailboxRepository: WorkspaceScopedRepository<ManagedEmailMailboxEntity>,
+    @Inject(getWorkspaceScopedRepositoryToken(ManagedEmailDomainEntity))
+    private readonly domainRepository: WorkspaceScopedRepository<ManagedEmailDomainEntity>,
     private readonly icemailClient: IcemailClient,
     private readonly connectionService: WorkspaceMailboxConnectionService,
     @Inject(MANAGED_EMAIL_MAILBOX_ACTIVATION_CLOCK)
@@ -40,8 +46,23 @@ export class ManagedEmailMailboxActivationService {
     if (mailbox === null) {
       throw new WorkspaceMailboxConnectionException('MAILBOX_NOT_FOUND');
     }
+    const domain = await this.domainRepository.findOneBy(workspaceId, {
+      id: mailbox.managedEmailDomainId,
+    });
+    const customerOwnedDomain =
+      domain?.acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+        ? domain.normalizedDomain
+        : undefined;
     const credential = mailbox.providerMailboxId
-      ? await this.icemailClient.getMailboxCredential(mailbox.providerMailboxId)
+      ? customerOwnedDomain === undefined
+        ? await this.icemailClient.getMailboxCredential(
+            mailbox.providerMailboxId,
+          )
+        : await this.icemailClient.getMailboxCredential(
+            mailbox.providerMailboxId,
+            { customerOwnedDomain },
+          )
       : null;
     if (
       credential === null ||

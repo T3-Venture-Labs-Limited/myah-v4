@@ -7,6 +7,7 @@ import { EmailConnectionSecurity } from 'src/engine/core-modules/imap-smtp-calda
 
 import { IsNull, type UpdateResult } from 'typeorm';
 
+import { ManagedEmailAcquisitionMode } from '../../enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from '../../enums/managed-email-campaign-eligibility.enum';
 import { ManagedEmailInfrastructureState } from '../../enums/managed-email-infrastructure-state.enum';
 import { ManagedEmailWarmupState } from '../../enums/managed-email-warmup-state.enum';
@@ -21,6 +22,7 @@ import { ManagedEmailWarmupService } from '../managed-email-warmup.service';
 const now = new Date('2026-08-06T12:00:00.000Z');
 const workspaceId = '123e4567-e89b-42d3-a456-426614174000';
 const mailboxId = '123e4567-e89b-42d3-a456-426614174001';
+const managedEmailDomainId = '123e4567-e89b-42d3-a456-426614174002';
 const address = 'ada@example.com';
 const credential = {
   appPassword: 'transient-secret',
@@ -63,6 +65,7 @@ const mailbox = (overrides: Record<string, unknown> = {}) => ({
   campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
   connectedAccountId: 'connected-account-1',
   id: mailboxId,
+  managedEmailDomainId,
   infrastructurePaidThrough: new Date('2026-09-06T00:00:00.000Z'),
   infrastructureState: ManagedEmailInfrastructureState.ACTIVE,
   messageChannelId: 'message-channel-1',
@@ -80,10 +83,21 @@ const mailbox = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const ordinaryDomain = {
+  acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+  domain: 'example.com',
+  id: managedEmailDomainId,
+  normalizedDomain: 'example.com',
+  workspaceId,
+};
+
 const setup = () => {
   const mailboxRepository = {
     findOneBy: jest.fn().mockResolvedValue(mailbox()),
     update: jest.fn().mockResolvedValue({ affected: 1 } as UpdateResult),
+  };
+  const domainRepository = {
+    findOneBy: jest.fn().mockResolvedValue(ordinaryDomain),
   };
   const warmupInboxClient = {
     createAdvanced: jest
@@ -165,6 +179,7 @@ const setup = () => {
   };
   const service = new ManagedEmailWarmupService(
     mailboxRepository as never,
+    domainRepository as never,
     warmupInboxClient as never,
     icemailClient as never,
     imapSmtpCaldavService as never,
@@ -180,6 +195,7 @@ const setup = () => {
     icemailClient,
     imapSmtpCaldavService,
     mailboxRepository,
+    domainRepository,
     readinessService,
     service,
     warmupInboxClient,
@@ -195,6 +211,7 @@ describe('ManagedEmailWarmupService', () => {
     );
     const unconfigured = new ManagedEmailWarmupService(
       first.mailboxRepository as never,
+      first.domainRepository as never,
       first.warmupInboxClient as never,
       first.icemailClient as never,
       first.imapSmtpCaldavService as never,
@@ -267,11 +284,66 @@ describe('ManagedEmailWarmupService', () => {
       senderFirstName: 'Ada',
       senderLastName: 'Lovelace',
     });
+    expect(test.icemailClient.getMailboxCredential).toHaveBeenNthCalledWith(
+      1,
+      'icemail-mailbox-1',
+    );
+    expect(test.icemailClient.getMailboxCredential).toHaveBeenNthCalledWith(
+      2,
+      'icemail-mailbox-1',
+    );
     const updateCalls = test.mailboxRepository.update.mock.calls;
     const persisted = updateCalls[updateCalls.length - 1]?.[2];
     expect(persisted).toMatchObject({ warmupEnrollmentId: 'warmup-1' });
     expect(persisted).not.toHaveProperty('providerMailboxId');
     expect(JSON.stringify(persisted)).not.toContain('transient-secret');
+  });
+
+  it('uses the imported domain name for both enrollment and evaluation credentials', async () => {
+    const test = setup();
+    const ownedAddress = 'ada@mail.creator.co.uk';
+    const ownedMailbox = mailbox({
+      address: ownedAddress,
+      normalizedAddress: ownedAddress,
+    });
+    const ownedCredential = { ...credential, username: ownedAddress };
+    test.mailboxRepository.findOneBy.mockResolvedValue(ownedMailbox);
+    test.domainRepository.findOneBy.mockResolvedValue({
+      ...ordinaryDomain,
+      acquisitionMode: ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
+      domain: 'mail.creator.co.uk',
+      normalizedDomain: 'mail.creator.co.uk',
+    });
+    test.icemailClient.getMailboxCredential.mockResolvedValue(ownedCredential);
+    test.warmupInboxClient.getInbox.mockResolvedValue({
+      address: ownedAddress,
+      health: { detectedBlacklists: 0, warmupDays: 7 },
+      id: 'warmup-1',
+      score: 100,
+      status: 'running',
+    });
+
+    await test.service.evaluateMailbox({ mailboxId, workspaceId });
+
+    expect(test.domainRepository.findOneBy).toHaveBeenCalledWith(workspaceId, {
+      id: ownedMailbox.managedEmailDomainId,
+    });
+    expect(test.icemailClient.getMailboxCredential).toHaveBeenNthCalledWith(
+      1,
+      ownedMailbox.providerMailboxId,
+      { customerOwnedDomain: 'mail.creator.co.uk' },
+    );
+    expect(test.icemailClient.getMailboxCredential).toHaveBeenNthCalledWith(
+      2,
+      ownedMailbox.providerMailboxId,
+      { customerOwnedDomain: 'mail.creator.co.uk' },
+    );
+    expect(test.warmupInboxClient.createAdvanced).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: ownedAddress,
+        credential: ownedCredential,
+      }),
+    );
   });
 
   it('persists reconciliation-required after an uncertain create and never performs a second create', async () => {
@@ -369,6 +441,7 @@ describe('ManagedEmailWarmupService', () => {
     );
     const service = new ManagedEmailWarmupService(
       test.mailboxRepository as never,
+      test.domainRepository as never,
       test.warmupInboxClient as never,
       test.icemailClient as never,
       test.imapSmtpCaldavService as never,

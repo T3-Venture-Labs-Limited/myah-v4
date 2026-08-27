@@ -17,6 +17,7 @@ import {
 } from 'src/engine/core-modules/managed-email/managed-email.dto';
 import { ManagedEmailProposalInput } from 'src/engine/core-modules/managed-email/managed-email.input';
 import { MANAGED_EMAIL_PRODUCT_KEYS } from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
+import { MANAGED_EMAIL_CUSTOMER_OWNED_DOMAIN_NAMESERVERS } from 'src/engine/core-modules/managed-email/constants/managed-email-customer-owned-domain.constant';
 import { ManagedEmailAcquisitionOperationEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-domain.entity';
 import { ManagedEmailCatalogService } from 'src/engine/core-modules/managed-email/services/managed-email-catalog.service';
@@ -31,6 +32,7 @@ import { ManagedEmailWarmupState } from 'src/engine/core-modules/managed-email/e
 import { ManagedEmailAcquisitionService } from 'src/engine/core-modules/managed-email/services/managed-email-acquisition.service';
 import { ManagedEmailLifecycleService } from 'src/engine/core-modules/managed-email/services/managed-email-lifecycle.service';
 import { ManagedEmailProposalService } from 'src/engine/core-modules/managed-email/services/managed-email-proposal.service';
+import { type CreateManagedEmailProposalInput } from 'src/engine/core-modules/managed-email/types/managed-email-proposal.type';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
@@ -123,6 +125,7 @@ export class ManagedEmailCustomerService {
     ]);
 
     return domains.map((domain) => ({
+      acquisitionMode: domain.acquisitionMode,
       cancelAtPeriodEnd: domain.cancelAtPeriodEnd,
       dependentMailboxCount: mailboxes.filter(
         ({ managedEmailDomainId }) => managedEmailDomainId === domain.id,
@@ -131,6 +134,11 @@ export class ManagedEmailCustomerService {
       id: domain.id,
       infrastructureState: domain.infrastructureState,
       paidThrough: domain.paidThrough,
+      requiredNameservers:
+        domain.acquisitionMode ===
+        ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+          ? [...MANAGED_EMAIL_CUSTOMER_OWNED_DOMAIN_NAMESERVERS]
+          : [],
       renewalEnabled: domain.renewalEnabled,
       safeFailureCode: domain.safeFailureCode,
     }));
@@ -453,20 +461,52 @@ export class ManagedEmailCustomerService {
     workspaceSlug: string;
   }): Promise<ManagedEmailProposalDTO> {
     this.assertAcquisitionAvailable(workspaceId);
-    const proposal = await this.proposalService.createProposal(
-      {
-        ...input,
-        personas: input.personas.map((persona) => ({
-          ...persona,
-          roleTitle: persona.roleTitle ?? null,
-        })),
-      },
-      {
-        actorWorkspaceMemberId: actorId,
-        workspaceId,
-        workspaceSlug,
-      },
-    );
+
+    const personas = input.personas.map((persona) => ({
+      ...persona,
+      roleTitle: persona.roleTitle ?? null,
+    }));
+    let proposalInput: CreateManagedEmailProposalInput;
+
+    if (
+      input.acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+    ) {
+      if (typeof input.customerOwnedDomain !== 'string') {
+        throw new Error('Managed email proposal input is invalid');
+      }
+
+      proposalInput = {
+        acquisitionMode:
+          ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
+        customerOwnedDomain: input.customerOwnedDomain,
+        mailboxCount: input.mailboxCount,
+        personas,
+      };
+    } else {
+      if (
+        input.acquisitionMode ===
+          ManagedEmailAcquisitionMode.PREWARMED_INVENTORY ||
+        (input.customerOwnedDomain !== null &&
+          input.customerOwnedDomain !== undefined)
+      ) {
+        throw new Error('Managed email proposal input is invalid');
+      }
+
+      proposalInput = {
+        ...(input.acquisitionMode === undefined
+          ? {}
+          : { acquisitionMode: input.acquisitionMode }),
+        mailboxCount: input.mailboxCount,
+        personas,
+      };
+    }
+
+    const proposal = await this.proposalService.createProposal(proposalInput, {
+      actorWorkspaceMemberId: actorId,
+      workspaceId,
+      workspaceSlug,
+    });
     return {
       disclosures: proposal.disclosures,
       domains: proposal.domains.map((domain) => ({
@@ -642,6 +682,7 @@ export class ManagedEmailCustomerService {
     });
     const reserved = await this.offerService.reserveQuoteForPurchase({
       actorWorkspaceMemberId: actorId,
+      acquisitionMode,
       idempotencyKey: input.idempotencyKey,
       operationId: randomUUID(),
       quoteFingerprint: input.quoteFingerprint,

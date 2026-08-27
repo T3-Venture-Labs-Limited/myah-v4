@@ -5,9 +5,11 @@ import { type AxiosInstance, type AxiosResponse, isAxiosError } from 'axios';
 import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
+import { normalizeCustomerOwnedDomainImport } from '../../utils/normalize-customer-owned-domain-import.util';
 import { IcemailException, IcemailExceptionCode } from './icemail.exception';
 import {
   mapIcemailCredentialSecret,
+  mapIcemailCustomerOwnedDomainImportOrderReceipt,
   mapIcemailDomainAvailability,
   mapIcemailDomainDetail,
   mapIcemailDomainPage,
@@ -23,8 +25,10 @@ import {
   type IcemailDomainAvailability,
   type IcemailDomainDetail,
   type IcemailDomainSummary,
+  type IcemailCustomerOwnedDomainImportOrderInput,
   type IcemailProviderCredentialSecret,
   type IcemailMailboxCredential,
+  type IcemailMailboxReadOptions,
   type IcemailMailboxDeletionInput,
   type IcemailMailboxDeletionReceipt,
   type IcemailMailboxDetail,
@@ -118,6 +122,38 @@ export class IcemailClient {
     );
   }
 
+  async createCustomerOwnedDomainImportOrder(
+    input: IcemailCustomerOwnedDomainImportOrderInput,
+  ): Promise<IcemailOrderReceipt> {
+    const { domain, mailboxes } =
+      this.validateCustomerOwnedDomainImportOrder(input);
+
+    return this.executeWrite(
+      (client) =>
+        client.post('/order', {
+          import: true,
+          data: [
+            {
+              domain_name: domain,
+              mailbox_type: 'GOOGLE',
+              mailboxes: mailboxes.map((mailbox) => ({
+                first_name: mailbox.firstName,
+                last_name: mailbox.lastName,
+                username: mailbox.address,
+                password: mailbox.password,
+              })),
+            },
+          ],
+        }),
+      (value) =>
+        mapIcemailCustomerOwnedDomainImportOrderReceipt(
+          value,
+          domain,
+          mailboxes,
+        ),
+    );
+  }
+
   async listDomains(page = 1): Promise<IcemailPage<IcemailDomainSummary>> {
     const validatedPage = this.validatePage(page);
 
@@ -130,7 +166,10 @@ export class IcemailClient {
     );
   }
 
-  async listMailboxes(page = 1): Promise<IcemailPage<IcemailMailboxSummary>> {
+  async listMailboxes(
+    page = 1,
+    importedDomains?: ReadonlyMap<string, string>,
+  ): Promise<IcemailPage<IcemailMailboxSummary>> {
     const validatedPage = this.validatePage(page);
 
     return this.executeRead(
@@ -138,7 +177,8 @@ export class IcemailClient {
         client.get('/mailbox', {
           params: { page: validatedPage, limit: ICEMAIL_FIRST_PAGE_LIMIT },
         }),
-      (value) => mapIcemailMailboxPage(value, this.domainPolicy()),
+      (value) =>
+        mapIcemailMailboxPage(value, this.domainPolicy(), importedDomains),
     );
   }
 
@@ -146,8 +186,12 @@ export class IcemailClient {
     return this.collectPages((page) => this.listDomains(page));
   }
 
-  async listAllMailboxes(): Promise<IcemailMailboxSummary[]> {
-    return this.collectPages((page) => this.listMailboxes(page));
+  async listAllMailboxes(
+    importedDomains?: ReadonlyMap<string, string>,
+  ): Promise<IcemailMailboxSummary[]> {
+    return this.collectPages((page) =>
+      this.listMailboxes(page, importedDomains),
+    );
   }
 
   async getDomain(domainId: string): Promise<IcemailDomainDetail | null> {
@@ -160,21 +204,35 @@ export class IcemailClient {
     );
   }
 
-  async getMailbox(mailboxId: string): Promise<IcemailMailboxDetail | null> {
+  async getMailbox(
+    mailboxId: string,
+    options?: IcemailMailboxReadOptions,
+  ): Promise<IcemailMailboxDetail | null> {
     const id = this.validateString(mailboxId);
+    const customerOwnedDomain =
+      this.normalizeMailboxReadCustomerOwnedDomain(options);
 
     return this.executeRead(
       (client) => client.get(`/mailbox/${encodeURIComponent(id)}`),
-      (value) => mapIcemailMailboxDetail(value, this.domainPolicy()),
+      (value) =>
+        mapIcemailMailboxDetail(
+          value,
+          this.domainPolicy(),
+          customerOwnedDomain,
+        ),
       true,
     );
   }
 
   async getMailboxCredential(
     mailboxId: string,
+    options?: IcemailMailboxReadOptions,
   ): Promise<IcemailMailboxCredential | null> {
     const id = this.validateString(mailboxId);
-    const mailbox = await this.getMailbox(id);
+    const mailbox =
+      options === undefined
+        ? await this.getMailbox(id)
+        : await this.getMailbox(id, options);
 
     if (mailbox === null) return null;
 
@@ -426,6 +484,72 @@ export class IcemailClient {
     }
 
     return domains;
+  }
+
+  private normalizeMailboxReadCustomerOwnedDomain(
+    options?: IcemailMailboxReadOptions,
+  ): string | undefined {
+    if (options === undefined) return undefined;
+
+    const domain = normalizeCustomerOwnedDomainImport(
+      typeof options === 'object' && options !== null
+        ? options.customerOwnedDomain
+        : undefined,
+    );
+
+    if (domain === null) {
+      throw new IcemailException(IcemailExceptionCode.INVALID_INPUT);
+    }
+
+    return domain;
+  }
+
+  private validateCustomerOwnedDomainImportOrder(
+    input: IcemailCustomerOwnedDomainImportOrderInput,
+  ) {
+    const domain = normalizeCustomerOwnedDomainImport(
+      input.customerOwnedDomain,
+    );
+
+    if (domain === null) {
+      throw new IcemailException(IcemailExceptionCode.INVALID_INPUT);
+    }
+
+    if (
+      !Array.isArray(input.mailboxes) ||
+      input.mailboxes.length === 0 ||
+      input.mailboxes.length > MAX_INPUT_COLLECTION_SIZE
+    ) {
+      throw new IcemailException(IcemailExceptionCode.INVALID_INPUT);
+    }
+
+    const mailboxes = input.mailboxes.map((mailbox) => {
+      const firstName = this.validateString(mailbox.firstName);
+      const lastName = this.validateString(mailbox.lastName);
+      const address = mailbox.address.trim().toLowerCase();
+      const password = mailbox.password;
+
+      if (
+        !address.endsWith(`@${domain}`) ||
+        address.slice(0, -(domain.length + 1)).length === 0 ||
+        typeof password !== 'string' ||
+        password.length < 8 ||
+        password.length > MAX_INPUT_STRING_LENGTH
+      ) {
+        throw new IcemailException(IcemailExceptionCode.INVALID_INPUT);
+      }
+
+      return { firstName, lastName, address, password };
+    });
+
+    if (
+      new Set(mailboxes.map((mailbox) => mailbox.address)).size !==
+      mailboxes.length
+    ) {
+      throw new IcemailException(IcemailExceptionCode.INVALID_INPUT);
+    }
+
+    return { domain, mailboxes };
   }
 
   private domainPolicy(): 'PRODUCTION' | 'SANDBOX' {

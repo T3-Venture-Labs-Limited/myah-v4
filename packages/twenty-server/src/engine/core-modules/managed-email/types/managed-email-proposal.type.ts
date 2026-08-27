@@ -1,4 +1,6 @@
-export type CreateManagedEmailProposalInput = {
+import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
+
+type ManagedEmailProposalPersonasInput = {
   mailboxCount: number;
   personas: Array<{
     displayName: string;
@@ -7,6 +9,16 @@ export type CreateManagedEmailProposalInput = {
     signature: string;
   }>;
 };
+
+export type CreateManagedEmailProposalInput =
+  | (ManagedEmailProposalPersonasInput & {
+      acquisitionMode?: ManagedEmailAcquisitionMode.NEW_MANAGED;
+      customerOwnedDomain?: never;
+    })
+  | (ManagedEmailProposalPersonasInput & {
+      acquisitionMode: ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT;
+      customerOwnedDomain: string;
+    });
 
 export type CreatePrewarmedManagedEmailProposalInput = {
   inventoryIds: string[];
@@ -45,7 +57,7 @@ export type ManagedEmailProposalDomain = Readonly<{
     domainPriceCents: number;
     mailboxPriceCents: number;
   }>;
-  providerQuote: Readonly<{
+  providerQuote?: Readonly<{
     amountMinorUnits: number;
     currency: 'USD';
     fingerprint: string;
@@ -62,7 +74,9 @@ export type ManagedEmailDisclosures = Readonly<{
 }>;
 
 export type ManagedEmailProposal = Readonly<{
+  acquisitionMode: ManagedEmailAcquisitionMode;
   createdAt: Date;
+  customerOwnedDomain?: string;
   disclosures: ManagedEmailDisclosures;
   domains: readonly ManagedEmailProposalDomain[];
   expiresAt: Date;

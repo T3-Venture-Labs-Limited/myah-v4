@@ -184,6 +184,111 @@ describe('ManagedEmailProposalService', () => {
     );
   });
 
+  it('normalizes one explicit customer-owned domain without candidate or provider-domain quote work', async () => {
+    const candidateDomains = jest.fn(() => ['must-not-be-used.test']);
+    const { icemailClient, service } = createService({
+      ...policy,
+      candidateDomains,
+    });
+
+    const proposal = await service.createProposal(
+      {
+        acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+        customerOwnedDomain: '  Creator-Owned.Test.  ',
+        mailboxCount: 2,
+        personas: personas.slice(0, 2),
+      } as never,
+      { actorWorkspaceMemberId, workspaceId, workspaceSlug: 'creator' },
+    );
+
+    expect(candidateDomains).not.toHaveBeenCalled();
+    expect(icemailClient.checkDomainAvailability).not.toHaveBeenCalled();
+    expect(proposal).toMatchObject({
+      acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+      customerOwnedDomain: 'creator-owned.test',
+      domains: [
+        expect.objectContaining({
+          domain: 'creator-owned.test',
+          mailboxes: [
+            expect.objectContaining({
+              address: 'maya.chen@creator-owned.test',
+            }),
+            expect.objectContaining({
+              address: 'alexgrowth@creator-owned.test',
+            }),
+          ],
+        }),
+      ],
+    });
+    expect(proposal.domains).toHaveLength(1);
+    expect(proposal.domains[0]).not.toHaveProperty('providerQuote');
+
+    await service.revalidateProposal(proposal);
+
+    expect(icemailClient.checkDomainAvailability).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['  MAIL.CREATOR.CO.UK.  ', 'mail.creator.co.uk'],
+    ['CREATOR.IO', 'creator.io'],
+  ])(
+    'accepts normalized customer-owned import domain %s as %s outside purchased-domain grammar',
+    async (customerOwnedDomain, normalizedDomain) => {
+      const { icemailClient, service } = createService();
+
+      const proposal = await service.createProposal(
+        {
+          acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+          customerOwnedDomain,
+          mailboxCount: 1,
+          personas: [personas[0]],
+        } as never,
+        { actorWorkspaceMemberId, workspaceId, workspaceSlug: 'creator' },
+      );
+
+      expect(proposal).toMatchObject({
+        acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+        customerOwnedDomain: normalizedDomain,
+        domains: [
+          expect.objectContaining({
+            domain: normalizedDomain,
+            mailboxes: [
+              expect.objectContaining({
+                address: `maya.chen@${normalizedDomain}`,
+              }),
+            ],
+          }),
+        ],
+      });
+      expect(icemailClient.checkDomainAvailability).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['missing', undefined],
+    ['blank', '  '],
+    ['invalid', 'not a domain'],
+    ['multiple', ['first.test', 'second.test']],
+  ])(
+    'fails closed when the customer-owned domain is %s',
+    async (_reason, customerOwnedDomain) => {
+      const { icemailClient, service } = createService();
+
+      await expect(
+        service.createProposal(
+          {
+            acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+            customerOwnedDomain,
+            mailboxCount: 1,
+            personas: [personas[0]],
+          } as never,
+          { actorWorkspaceMemberId, workspaceId, workspaceSlug: 'creator' },
+        ),
+      ).rejects.toThrow('Managed email proposal input is invalid');
+      expect(icemailClient.checkDomainAvailability).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects provider alternatives when the proposal policy requires the exact candidate', async () => {
     const { icemailClient, service } = createService({
       ...policy,

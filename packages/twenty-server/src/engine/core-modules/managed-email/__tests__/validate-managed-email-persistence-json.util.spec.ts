@@ -216,6 +216,25 @@ describe('managed email persistence JSON validation', () => {
     expect(Object.isFrozen(correlatedLines[0])).toBe(true);
   });
 
+  it('accepts only the closed mailbox and warmup set for a customer-owned import while retaining the managed three-line set', () => {
+    const legacyLines = expectedLineItems();
+    const [domainLine, mailboxLine, warmupLine] = expectedLineItems();
+    const customerOwnedLines = [warmupLine, mailboxLine];
+
+    expect(
+      managedEmailExpectedLineItemsTransformer.to(customerOwnedLines),
+    ).toBe(customerOwnedLines);
+    expect(managedEmailExpectedLineItemsTransformer.to(legacyLines)).toBe(
+      legacyLines,
+    );
+    expect(() =>
+      managedEmailExpectedLineItemsTransformer.to([mailboxLine]),
+    ).toThrow('Unsafe managed email persistence JSON');
+    expect(() =>
+      managedEmailExpectedLineItemsTransformer.to([domainLine, mailboxLine]),
+    ).toThrow('Unsafe managed email persistence JSON');
+  });
+
   it('deeply freezes validated children when the root is already frozen', () => {
     const resources = resourceSnapshot();
 
@@ -293,13 +312,13 @@ describe('managed email persistence JSON validation', () => {
     [
       'blank quote fingerprint',
       (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
-        snapshot.domains[0].providerQuote.fingerprint = ' ';
+        snapshot.domains[0].providerQuote!.fingerprint = ' ';
       },
     ],
     [
       'quote observed after proposal creation',
       (snapshot: DeepMutable<ManagedEmailResourceSnapshot>) => {
-        snapshot.domains[0].providerQuote.observedAt =
+        snapshot.domains[0].providerQuote!.observedAt =
           '2026-08-02T12:01:00.000Z';
       },
     ],

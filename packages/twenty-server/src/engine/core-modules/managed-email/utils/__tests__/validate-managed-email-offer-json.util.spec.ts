@@ -73,6 +73,73 @@ const quote = {
   resourceSnapshot: { proposalId: proposal.id },
 };
 
+const customerOwnedProposal = {
+  ...proposal,
+  acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+  customerOwnedDomain: 'creator-owned.test',
+  domains: [
+    {
+      domain: 'creator-owned.test',
+      mailboxes: [
+        {
+          ...proposal.domains[0].mailboxes[0],
+          address: 'maya@creator-owned.test',
+        },
+      ],
+    },
+  ],
+};
+
+const customerOwnedQuote = {
+  ...quote,
+  dueTodayCents: 4_720,
+  lines: [
+    {
+      amountCents: 650,
+      billingFrequency: 'MONTHLY',
+      endingBefore: '2026-09-06T12:00:00.000Z',
+      metronomeProductId: 'metronome-product-mailbox',
+      productKey: 'managed_mailbox_month',
+      productTag: 'myah-managed-mailbox-month',
+      quantity: 1,
+      startingAt: '2026-08-06T12:00:00.000Z',
+      unitPriceCents: 650,
+    },
+    {
+      amountCents: 4_070,
+      billingFrequency: 'MONTHLY',
+      endingBefore: '2026-09-06T12:00:00.000Z',
+      metronomeProductId: 'metronome-product-warmup',
+      productKey: 'managed_warmup_month',
+      productTag: 'myah-managed-warmup-month',
+      quantity: 1,
+      startingAt: '2026-08-06T12:00:00.000Z',
+      unitPriceCents: 4_070,
+    },
+  ],
+  resourceSnapshot: {
+    domains: [
+      {
+        domain: 'creator-owned.test',
+        mailboxes: ['maya@creator-owned.test'],
+      },
+    ],
+    personas: [
+      {
+        ...proposal.domains[0].mailboxes[0],
+        address: 'maya@creator-owned.test',
+      },
+    ],
+    proposal: {
+      acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+      createdAt: proposal.createdAt.toISOString(),
+      customerOwnedDomain: 'creator-owned.test',
+      expiresAt: proposal.expiresAt.toISOString(),
+      policyVersion: proposal.policyVersion,
+    },
+  },
+};
+
 const requiredQuoteFields = [
   'catalogVersion',
   'disclosures',
@@ -104,6 +171,35 @@ describe('managed email offer snapshot transformers', () => {
 
     expect(restored.expiresAt).toBeInstanceOf(Date);
     expect(restored.expiresAt.toISOString()).toBe('2026-08-06T12:15:00.000Z');
+  });
+
+  it('persists only a normalized mode-bound customer-owned import snapshot', () => {
+    const restored = managedEmailProposalSnapshotTransformer.from(
+      JSON.parse(JSON.stringify(customerOwnedProposal)),
+    );
+
+    expect(restored).toMatchObject({
+      acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+      customerOwnedDomain: 'creator-owned.test',
+      domains: [
+        expect.objectContaining({
+          domain: 'creator-owned.test',
+        }),
+      ],
+    });
+    expect(restored.domains[0]).not.toHaveProperty('providerQuote');
+    expect(() =>
+      managedEmailQuoteSnapshotTransformer.to({
+        ...customerOwnedQuote,
+        resourceSnapshot: {
+          ...customerOwnedQuote.resourceSnapshot,
+          proposal: {
+            ...customerOwnedQuote.resourceSnapshot.proposal,
+            customerOwnedDomain: undefined,
+          },
+        },
+      }),
+    ).toThrow('Unsafe managed email offer JSON');
   });
 
   it('preserves null snapshots for nullable offer columns', () => {

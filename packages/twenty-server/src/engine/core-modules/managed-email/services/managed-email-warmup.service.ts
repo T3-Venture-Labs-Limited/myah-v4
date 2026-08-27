@@ -12,12 +12,17 @@ import { ImapSmtpCaldavService } from 'src/engine/core-modules/imap-smtp-caldav-
 import { WorkspaceMailboxConnectionService } from 'src/engine/core-modules/myah/services/workspace-mailbox-connection.service';
 import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { MANAGED_EMAIL_READINESS_POLICY_RESOLVER } from '../constants/managed-email-readiness-policy.constant';
+import { ManagedEmailDomainEntity } from '../entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from '../entities/managed-email-mailbox.entity';
+import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from '../enums/managed-email-campaign-eligibility.enum';
 import { ManagedEmailInfrastructureState } from '../enums/managed-email-infrastructure-state.enum';
 import { ManagedEmailWarmupState } from '../enums/managed-email-warmup-state.enum';
 import { IcemailClient } from '../providers/icemail/icemail.client';
-import { type IcemailMailboxCredential } from '../providers/icemail/icemail.types';
+import {
+  type IcemailMailboxCredential,
+  type IcemailMailboxReadOptions,
+} from '../providers/icemail/icemail.types';
 import {
   WarmupInboxException,
   WarmupInboxExceptionCode,
@@ -68,6 +73,8 @@ export class ManagedEmailWarmupService {
   constructor(
     @InjectWorkspaceScopedRepository(ManagedEmailMailboxEntity)
     private readonly mailboxRepository: WorkspaceScopedRepository<ManagedEmailMailboxEntity>,
+    @InjectWorkspaceScopedRepository(ManagedEmailDomainEntity)
+    private readonly domainRepository: WorkspaceScopedRepository<ManagedEmailDomainEntity>,
     private readonly warmupInboxClient: WarmupInboxClient,
     private readonly icemailClient: IcemailClient,
     private readonly imapSmtpCaldavService: ImapSmtpCaldavService,
@@ -126,7 +133,15 @@ export class ManagedEmailWarmupService {
       });
     }
 
-    const enrollment = await this.ensureEnrollment(mailbox, policy);
+    const mailboxReadOptions =
+      mailbox.providerMailboxId === null
+        ? undefined
+        : await this.getIcemailMailboxReadOptions(mailbox);
+    const enrollment = await this.ensureEnrollment(
+      mailbox,
+      policy,
+      mailboxReadOptions,
+    );
 
     if ('safeFailureCode' in enrollment) {
       return this.persistBlocked(mailbox, evaluatedAt, {
@@ -187,9 +202,14 @@ export class ManagedEmailWarmupService {
     }
 
     const credential = mailbox.providerMailboxId
-      ? await this.icemailClient
-          .getMailboxCredential(mailbox.providerMailboxId)
-          .catch(() => null)
+      ? await (
+          mailboxReadOptions === undefined
+            ? this.icemailClient.getMailboxCredential(mailbox.providerMailboxId)
+            : this.icemailClient.getMailboxCredential(
+                mailbox.providerMailboxId,
+                mailboxReadOptions,
+              )
+        ).catch(() => null)
       : null;
     const domain = mailbox.normalizedAddress.split('@')[1] ?? '';
     const credentialReady =
@@ -280,6 +300,7 @@ export class ManagedEmailWarmupService {
   private async ensureEnrollment(
     mailbox: ManagedEmailMailboxEntity,
     policy: ManagedEmailReadinessPolicy,
+    mailboxReadOptions: IcemailMailboxReadOptions | undefined,
   ): Promise<ManagedEmailEnrollmentResult> {
     if (mailbox.warmupEnrollmentId !== null) {
       return { enrollmentId: mailbox.warmupEnrollmentId };
@@ -311,9 +332,14 @@ export class ManagedEmailWarmupService {
       };
     }
 
-    const credential = await this.icemailClient
-      .getMailboxCredential(mailbox.providerMailboxId)
-      .catch(() => null);
+    const credential = await (
+      mailboxReadOptions === undefined
+        ? this.icemailClient.getMailboxCredential(mailbox.providerMailboxId)
+        : this.icemailClient.getMailboxCredential(
+            mailbox.providerMailboxId,
+            mailboxReadOptions,
+          )
+    ).catch(() => null);
 
     if (
       credential === null ||
@@ -354,6 +380,19 @@ export class ManagedEmailWarmupService {
         warmupState: ManagedEmailWarmupState.ACTION_REQUIRED,
       };
     }
+  }
+
+  private async getIcemailMailboxReadOptions(
+    mailbox: ManagedEmailMailboxEntity,
+  ): Promise<IcemailMailboxReadOptions | undefined> {
+    const domain = await this.domainRepository.findOneBy(mailbox.workspaceId, {
+      id: mailbox.managedEmailDomainId,
+    });
+
+    return domain?.acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+      ? { customerOwnedDomain: domain.normalizedDomain }
+      : undefined;
   }
 
   private async ensureProviderPolicy(

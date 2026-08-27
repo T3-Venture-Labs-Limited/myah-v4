@@ -1,3 +1,5 @@
+import type { ManagedEmailProposalInput } from '../../managed-email.input';
+
 import { ManagedEmailAcquisitionMode } from '../../enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCustomerService } from '../managed-email-customer.service';
 import { ManagedEmailCatalogService } from '../managed-email-catalog.service';
@@ -100,6 +102,7 @@ const createHarness = () => {
         },
       ],
     }),
+    createProposal: jest.fn().mockResolvedValue(proposal),
     createPrewarmedProposal: jest.fn().mockResolvedValue(proposal),
   };
   const readinessService = {
@@ -285,6 +288,69 @@ describe('ManagedEmailCustomerService customer checkout contracts', () => {
     );
   });
 
+  it('treats GraphQL null customerOwnedDomain as absent for new managed proposals while requiring a string for owned imports', async () => {
+    const { service, proposalService } = createHarness();
+    const graphqlRuntimeInput = {
+      acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+      customerOwnedDomain: null,
+      mailboxCount: 1,
+      personas: [
+        {
+          displayName: 'Maya Chen',
+          localPartPreference: 'maya',
+          roleTitle: null,
+          signature: 'Maya',
+        },
+      ],
+    } as unknown as ManagedEmailProposalInput;
+
+    await expect(
+      service.newProposal({
+        actorId: actorWorkspaceMemberId,
+        input: graphqlRuntimeInput,
+        workspaceId,
+        workspaceSlug: workspaceId,
+      }),
+    ).resolves.toMatchObject({ id: proposalId });
+    expect(proposalService.createProposal).toHaveBeenCalledWith(
+      {
+        acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+        mailboxCount: 1,
+        personas: [
+          {
+            displayName: 'Maya Chen',
+            localPartPreference: 'maya',
+            roleTitle: null,
+            signature: 'Maya',
+          },
+        ],
+      },
+      {
+        actorWorkspaceMemberId,
+        workspaceId,
+        workspaceSlug: workspaceId,
+      },
+    );
+    expect(proposalService.createProposal.mock.calls[0][0]).not.toHaveProperty(
+      'customerOwnedDomain',
+    );
+
+    await expect(
+      service.newProposal({
+        actorId: actorWorkspaceMemberId,
+        input: {
+          ...graphqlRuntimeInput,
+          acquisitionMode:
+            'CUSTOMER_OWNED_DOMAIN_IMPORT' as ManagedEmailAcquisitionMode,
+          customerOwnedDomain: null,
+        } as unknown as ManagedEmailProposalInput,
+        workspaceId,
+        workspaceSlug: workspaceId,
+      }),
+    ).rejects.toThrow('Managed email proposal input is invalid');
+    expect(proposalService.createProposal).toHaveBeenCalledTimes(1);
+  });
+
   it('loads the persisted proposal, creates and persists a quote, and returns server-derived sandbox state', async () => {
     const { service, catalogService, offerService, config } = createHarness();
 
@@ -338,6 +404,7 @@ describe('ManagedEmailCustomerService customer checkout contracts', () => {
       }),
     ).resolves.toEqual({ accepted: true, operationId: 'operation-1' });
     expect(offerService.reserveQuoteForPurchase).toHaveBeenCalledWith({
+      acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
       actorWorkspaceMemberId,
       idempotencyKey: input.idempotencyKey,
       operationId: expect.any(String),
@@ -962,5 +1029,89 @@ describe('ManagedEmailCustomerService customer checkout contracts', () => {
         },
       ],
     );
+  });
+
+  it('projects only product-key-correlated mailbox and warmup subscriptions for a customer-owned import', async () => {
+    const {
+      service,
+      domainRepository,
+      mailboxRepository,
+      operationRepository,
+    } = createHarness();
+    const fixture = createMailboxSubscriptionProjectionFixture();
+    const warmupExpectedLine = {
+      ...fixture.expectedLine,
+      metronomeProductId: 'product-warmup',
+      productKey: 'managed_warmup_month',
+      totalCents: 1_000,
+      unitPriceCents: 1_000,
+    };
+    const warmupCorrelatedLine = {
+      ...fixture.correlatedLine,
+      productId: 'product-warmup',
+      subscriptionId: 'subscription-warmup',
+      total: 1_000,
+      unitPrice: 1_000,
+    };
+    const customerOwnedDomain = {
+      acquisitionOperationId: 'operation-1',
+      cancelAtPeriodEnd: false,
+      id: 'customer-owned-domain-1',
+      metronomeSubscriptionId: null,
+      normalizedDomain: 'customer-owned-partners.com',
+      paidThrough: null,
+      renewalEnabled: false,
+      workspaceId,
+    };
+
+    operationRepository.find.mockResolvedValue([
+      {
+        ...fixture.operation,
+        acquisitionMode:
+          'CUSTOMER_OWNED_DOMAIN_IMPORT' as ManagedEmailAcquisitionMode,
+        correlatedSubscriptionLines: [
+          warmupCorrelatedLine,
+          fixture.correlatedLine,
+        ],
+        expectedLineItems: [fixture.expectedLine, warmupExpectedLine],
+      },
+    ]);
+    domainRepository.find.mockResolvedValue([customerOwnedDomain]);
+    mailboxRepository.find.mockResolvedValue([
+      {
+        ...fixture.mailbox,
+        managedEmailDomainId: customerOwnedDomain.id,
+        metronomeWarmupSubscriptionId: 'subscription-warmup',
+        warmupCancelAtPeriodEnd: false,
+        warmupPaidThrough: fixture.paidThrough,
+        warmupState: 'MAINTENANCE',
+      },
+    ]);
+
+    const result = await service.subscriptions({ workspaceId });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        action: 'STOP_SERVICE',
+        paidThrough: fixture.paidThrough,
+        productKey: 'managed_mailbox_month',
+        status: 'ACTIVE',
+      }),
+      expect.objectContaining({
+        action: 'CANCEL_RENEWAL',
+        paidThrough: fixture.paidThrough,
+        productKey: 'managed_warmup_month',
+        status: 'ACTIVE',
+      }),
+    ]);
+    expect(result).not.toContainEqual(
+      expect.objectContaining({ resourceType: 'DOMAIN' }),
+    );
+    expect(customerOwnedDomain).toMatchObject({
+      cancelAtPeriodEnd: false,
+      metronomeSubscriptionId: null,
+      paidThrough: null,
+      renewalEnabled: false,
+    });
   });
 });

@@ -7,11 +7,14 @@ import { H2Title } from 'twenty-ui/typography';
 import { type ManagedEmailProposalInput } from '~/generated-metadata/graphql';
 
 type ManagedEmailCreateFlowProps = {
+  initialAcquisitionMode?: ManagedEmailCreationMode;
   onBack: () => void;
   onSubmit: (input: ManagedEmailProposalInput) => void;
 };
 
 type PersonaDraft = ManagedEmailProposalInput['personas'][number];
+
+type ManagedEmailCreationMode = 'NEW_MANAGED' | 'CUSTOMER_OWNED_DOMAIN_IMPORT';
 
 const emptyPersona = (): PersonaDraft => ({
   displayName: '',
@@ -21,18 +24,35 @@ const emptyPersona = (): PersonaDraft => ({
 });
 
 export const ManagedEmailCreateFlow = ({
+  initialAcquisitionMode = 'NEW_MANAGED',
   onBack,
   onSubmit,
 }: ManagedEmailCreateFlowProps) => {
   const { t } = useLingui();
   const [mailboxCount, setMailboxCount] = useState(1);
   const [personas, setPersonas] = useState<PersonaDraft[] | null>(null);
+  const [acquisitionMode, setAcquisitionMode] =
+    useState<ManagedEmailCreationMode>(initialAcquisitionMode);
+  const [customerOwnedDomain, setCustomerOwnedDomain] = useState('');
+  const [hasAcknowledgedNameserverChange, setHasAcknowledgedNameserverChange] =
+    useState(false);
+  const isCustomerOwnedDomain =
+    acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT';
+  const normalizedCustomerOwnedDomain = customerOwnedDomain
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, '');
+  const mailboxCountIsValid =
+    Number.isSafeInteger(mailboxCount) &&
+    mailboxCount >= 1 &&
+    mailboxCount <= 50;
 
   const beginPersonas = () => {
-    const safeCount = Math.min(50, Math.max(1, mailboxCount));
+    if (!mailboxCountIsValid) {
+      return;
+    }
 
-    setMailboxCount(safeCount);
-    setPersonas(Array.from({ length: safeCount }, emptyPersona));
+    setPersonas(Array.from({ length: mailboxCount }, emptyPersona));
   };
 
   const updatePersona = (
@@ -55,16 +75,50 @@ export const ManagedEmailCreateFlow = ({
         persona.displayName.trim() !== '' &&
         persona.localPartPreference.trim() !== '' &&
         persona.signature.trim() !== '',
-    );
-
+    ) &&
+    (!isCustomerOwnedDomain ||
+      (normalizedCustomerOwnedDomain !== '' &&
+        hasAcknowledgedNameserverChange));
   return (
     <Section>
       <H2Title
-        title={t`Create and warm new mailboxes`}
-        description={t`Start with the mailbox count, then review the proposed identities before purchase.`}
+        title={
+          isCustomerOwnedDomain
+            ? t`Use a domain I own`
+            : t`Create and warm new mailboxes`
+        }
+        description={
+          isCustomerOwnedDomain
+            ? t`Choose the complete initial mailbox set for a domain your workspace owns.`
+            : t`Start with the mailbox count, then review the proposed identities before purchase.`
+        }
       />
       {personas === null ? (
         <>
+          {isCustomerOwnedDomain ? (
+            <>
+              <SettingsTextInput
+                instanceId="managed-email-customer-owned-domain"
+                label={t`Customer-owned domain`}
+                value={customerOwnedDomain}
+                onChange={setCustomerOwnedDomain}
+              />
+              <Button
+                title={t`Buy domain`}
+                variant="secondary"
+                onClick={() => {
+                  setAcquisitionMode('NEW_MANAGED');
+                  setHasAcknowledgedNameserverChange(false);
+                }}
+              />
+            </>
+          ) : (
+            <Button
+              title={t`Use a domain I own`}
+              variant="secondary"
+              onClick={() => setAcquisitionMode('CUSTOMER_OWNED_DOMAIN_IMPORT')}
+            />
+          )}
           <SettingsTextInput
             instanceId="managed-email-mailbox-count"
             label={t`Mailbox count`}
@@ -77,6 +131,10 @@ export const ManagedEmailCreateFlow = ({
           <Button
             title={t`Continue`}
             variant="primary"
+            disabled={
+              !mailboxCountIsValid ||
+              (isCustomerOwnedDomain && normalizedCustomerOwnedDomain === '')
+            }
             onClick={beginPersonas}
           />
         </>
@@ -119,6 +177,25 @@ export const ManagedEmailCreateFlow = ({
               </fieldset>
             );
           })}
+          {isCustomerOwnedDomain && (
+            <>
+              <p>
+                {t`Include every mailbox you need now. You cannot add mailboxes later.`}
+              </p>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={hasAcknowledgedNameserverChange}
+                  onChange={() =>
+                    setHasAcknowledgedNameserverChange(
+                      (isAcknowledged) => !isAcknowledged,
+                    )
+                  }
+                />
+                {t` I understand that I must update my registrar nameservers after purchase.`}
+              </label>
+            </>
+          )}
           <Button
             title={t`Review proposal`}
             variant="primary"
@@ -127,6 +204,12 @@ export const ManagedEmailCreateFlow = ({
               onSubmit({
                 mailboxCount,
                 personas,
+                ...(isCustomerOwnedDomain
+                  ? {
+                      acquisitionMode,
+                      customerOwnedDomain: normalizedCustomerOwnedDomain,
+                    }
+                  : {}),
               })
             }
           />

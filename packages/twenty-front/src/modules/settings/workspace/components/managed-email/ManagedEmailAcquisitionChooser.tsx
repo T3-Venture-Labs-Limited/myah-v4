@@ -6,6 +6,7 @@ import { H2Title } from 'twenty-ui/typography';
 type ManagedEmailAcquisitionChooserProps = {
   acquisitionAvailable: boolean;
   canPurchase: boolean;
+  onChooseCustomerOwned?: () => void;
   onChoosePrewarmed: () => void;
   onCreateManaged: () => void;
   onConnectExisting: () => void;
@@ -14,6 +15,7 @@ type ManagedEmailAcquisitionChooserProps = {
 export const ManagedEmailAcquisitionChooser = ({
   acquisitionAvailable,
   canPurchase,
+  onChooseCustomerOwned,
   onChoosePrewarmed,
   onCreateManaged,
   onConnectExisting,
@@ -29,14 +31,19 @@ export const ManagedEmailAcquisitionChooser = ({
       {canPurchase && acquisitionAvailable ? (
         <>
           <Button
+            title={t`Buy domain`}
+            variant="secondary"
+            onClick={onCreateManaged}
+          />
+          <Button
+            title={t`Use a domain I own`}
+            variant="secondary"
+            onClick={onChooseCustomerOwned ?? onCreateManaged}
+          />
+          <Button
             title={t`Get prewarmed mailboxes`}
             variant="secondary"
             onClick={onChoosePrewarmed}
-          />
-          <Button
-            title={t`Create and warm new mailboxes`}
-            variant="secondary"
-            onClick={onCreateManaged}
           />
         </>
       ) : !canPurchase ? (
@@ -45,7 +52,7 @@ export const ManagedEmailAcquisitionChooser = ({
         <p>{t`Managed mailbox acquisition is not available right now.`}</p>
       )}
       <Button
-        title={t`Connect existing mailboxes`}
+        title={t`Connect existing mailbox`}
         variant="secondary"
         onClick={onConnectExisting}
       />

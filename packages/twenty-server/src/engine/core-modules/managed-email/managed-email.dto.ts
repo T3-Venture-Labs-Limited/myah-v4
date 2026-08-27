@@ -29,6 +29,9 @@ export class ManagedEmailDomainDTO {
   @Field(() => Boolean)
   cancelAtPeriodEnd: boolean;
 
+  @Field(() => String)
+  acquisitionMode: string;
+
   @Field(() => Int)
   dependentMailboxCount: number;
 
@@ -43,6 +46,9 @@ export class ManagedEmailDomainDTO {
 
   @Field(() => Date, { nullable: true })
   paidThrough: Date | null;
+
+  @Field(() => [String])
+  requiredNameservers: string[];
 
   @Field(() => Boolean)
   renewalEnabled: boolean;

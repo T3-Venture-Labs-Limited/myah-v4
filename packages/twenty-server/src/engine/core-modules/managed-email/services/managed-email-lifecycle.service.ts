@@ -6,6 +6,7 @@ import { DataSource, type EntityManager } from 'typeorm';
 import { ManagedEmailAcquisitionOperationEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-acquisition-operation.entity';
 import { ManagedEmailDomainEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-domain.entity';
 import { ManagedEmailMailboxEntity } from 'src/engine/core-modules/managed-email/entities/managed-email-mailbox.entity';
+import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from 'src/engine/core-modules/managed-email/enums/managed-email-campaign-eligibility.enum';
 import { ManagedEmailInfrastructureState } from 'src/engine/core-modules/managed-email/enums/managed-email-infrastructure-state.enum';
 import { ManagedEmailLifecycleAction } from 'src/engine/core-modules/managed-email/enums/managed-email-lifecycle-action.enum';
@@ -25,6 +26,7 @@ import {
   type ManagedEmailExpectedLineItem,
   type ManagedEmailRenewalProjection,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
+import { hasExactManagedEmailExpectedLineSet } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-persistence-json.util';
 import { METRONOME_USD_CREDIT_TYPE_NAME } from 'src/engine/core-modules/managed-provider-billing/constants/metronome-workspace-alias-prefix.constant';
 import { MetronomeClientService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-client.service';
 import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
@@ -530,11 +532,6 @@ export class ManagedEmailLifecycleService {
   async disableDomainRenewal(input: DomainActionInput): Promise<void> {
     await this.validateActionInput(input);
     const domain = await this.requireDomain(input.workspaceId, input.domainId);
-    this.requireFuturePaidThrough(domain.paidThrough, 'domain');
-    const subscriptionId = this.requireSubscriptionId(
-      domain.metronomeSubscriptionId,
-      'domain',
-    );
     const operation = await this.acquisitionOperationRepository.findOneBy(
       domain.workspaceId,
       { id: domain.acquisitionOperationId },
@@ -542,6 +539,19 @@ export class ManagedEmailLifecycleService {
     if (operation === null) {
       throw new Error('Managed email acquisition operation was not found');
     }
+    if (
+      operation.acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+    ) {
+      throw new Error(
+        'Managed email customer-owned domains do not have a renewal subscription',
+      );
+    }
+    this.requireFuturePaidThrough(domain.paidThrough, 'domain');
+    const subscriptionId = this.requireSubscriptionId(
+      domain.metronomeSubscriptionId,
+      'domain',
+    );
 
     const pendingDomain = await this.withSubscriptionLocks(
       domain.workspaceId,
@@ -639,6 +649,14 @@ export class ManagedEmailLifecycleService {
     mailboxes: ManagedEmailMailboxEntity[],
     now: Date,
   ): RenewalResource[] {
+    if (
+      !hasExactManagedEmailExpectedLineSet(
+        operation.acquisitionMode,
+        operation.expectedLineItems,
+      )
+    ) {
+      return [];
+    }
     const templates = new Map(
       operation.expectedLineItems.map((line) => [line.productKey, line]),
     );
@@ -646,6 +664,8 @@ export class ManagedEmailLifecycleService {
 
     for (const domain of domains) {
       if (
+        operation.acquisitionMode !==
+          ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT &&
         domain.renewalEnabled &&
         !domain.cancelAtPeriodEnd &&
         this.isDue(domain.paidThrough, now) &&
@@ -1588,7 +1608,7 @@ export class ManagedEmailLifecycleService {
             sibling.safeFailureCode === 'ICEMAIL_DELETE_PARTIAL')),
     );
     if (isIcemailDeletionRecovery) {
-      if (!(await this.areProviderMailboxesAbsent(siblings))) {
+      if (!(await this.areProviderMailboxesAbsent(siblings, providerDomain))) {
         await this.markStoppedSiblingsReconciliationRequired(
           siblings,
           'ICEMAIL_DELETE_UNCONFIRMED',
@@ -1632,7 +1652,7 @@ export class ManagedEmailLifecycleService {
         );
         return;
       }
-      if (!(await this.areProviderMailboxesAbsent(siblings))) {
+      if (!(await this.areProviderMailboxesAbsent(siblings, providerDomain))) {
         await this.markStoppedSiblingsReconciliationRequired(
           siblings,
           'ICEMAIL_DELETE_UNCONFIRMED',
@@ -1651,7 +1671,7 @@ export class ManagedEmailLifecycleService {
         );
         throw error;
       }
-      if (await this.areProviderMailboxesAbsent(siblings)) {
+      if (await this.areProviderMailboxesAbsent(siblings, providerDomain)) {
         await this.completeStoppedSiblings(siblings);
         return;
       }
@@ -1665,13 +1685,28 @@ export class ManagedEmailLifecycleService {
 
   private async areProviderMailboxesAbsent(
     siblings: ManagedEmailMailboxEntity[],
+    providerDomain: ManagedEmailDomainEntity,
   ): Promise<boolean> {
+    const mailboxReadOptions =
+      providerDomain.acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+        ? { customerOwnedDomain: providerDomain.normalizedDomain }
+        : undefined;
+
     for (const sibling of siblings) {
       const providerMailboxId = this.requireProviderId(
         sibling.providerMailboxId,
         'provider mailbox',
       );
-      if ((await this.icemailClient.getMailbox(providerMailboxId)) !== null) {
+      const providerMailbox =
+        mailboxReadOptions === undefined
+          ? await this.icemailClient.getMailbox(providerMailboxId)
+          : await this.icemailClient.getMailbox(
+              providerMailboxId,
+              mailboxReadOptions,
+            );
+
+      if (providerMailbox !== null) {
         return false;
       }
     }

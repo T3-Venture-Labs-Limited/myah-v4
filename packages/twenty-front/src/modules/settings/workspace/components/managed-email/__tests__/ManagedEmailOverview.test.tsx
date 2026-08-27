@@ -5,6 +5,7 @@ import {
 } from '@/auth/states/currentWorkspaceState';
 import {
   COMPLETE_MANAGED_EMAIL_PAYMENT_METHOD,
+  CONFIRM_MANAGED_EMAIL_CUSTOMER_OWNED_DOMAIN_IMPORT_PURCHASE,
   CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE,
   CONFIRM_MANAGED_EMAIL_PREWARMED_PURCHASE,
   PAUSE_MANAGED_EMAIL_WARMUP,
@@ -513,7 +514,7 @@ describe('ManagedEmailOverview', () => {
       }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /^Connect existing mailboxes/ }),
+      screen.getByRole('button', { name: /^Connect existing mailbox/ }),
     ).toBeEnabled();
   });
 
@@ -675,6 +676,106 @@ describe('ManagedEmailOverview', () => {
     expect(
       await screen.findByRole('heading', { name: 'Email infrastructure' }),
     ).toBeVisible();
+    expect(
+      window.localStorage.getItem('managed-email-purchase-intent:workspace-a'),
+    ).toBeNull();
+  });
+
+  it('recovers a customer-owned import and refetches server-provided nameserver instructions', async () => {
+    const requiredNameservers = [
+      'ns1.customer-owned.test',
+      'ns2.customer-owned.test',
+    ];
+
+    window.localStorage.setItem(
+      'managed-email-purchase-intent:workspace-a',
+      JSON.stringify({
+        acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+        idempotencyKey: 'owned-domain-confirmation-key',
+        operationId: null,
+        quoteFingerprint: 'owned-domain-fingerprint',
+        quoteId: 'owned-domain-quote',
+        quoteVersion: 'owned-domain-version',
+      }),
+    );
+
+    renderOverview([
+      overviewMock,
+      {
+        request: {
+          query: CONFIRM_MANAGED_EMAIL_CUSTOMER_OWNED_DOMAIN_IMPORT_PURCHASE,
+          variables: {
+            input: {
+              idempotencyKey: 'owned-domain-confirmation-key',
+              quoteFingerprint: 'owned-domain-fingerprint',
+              quoteId: 'owned-domain-quote',
+              quoteVersion: 'owned-domain-version',
+            },
+          },
+        },
+        result: {
+          data: {
+            confirmManagedEmailCustomerOwnedDomainImportPurchase: {
+              accepted: true,
+              operationId: 'owned-domain-operation',
+            },
+          },
+        },
+      },
+      {
+        request: {
+          query: GET_MANAGED_EMAIL_OPERATION,
+          variables: { input: { operationId: 'owned-domain-operation' } },
+        },
+        result: {
+          data: {
+            managedEmailOperation: {
+              acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+              amountCents: '29380',
+              createdAt: '2026-08-06T12:00:00.000Z',
+              currency: 'USD',
+              id: 'owned-domain-operation',
+              paymentStatus: 'PAID',
+              safeFailureCode: null,
+              state: 'PROVIDER_SUCCEEDED',
+              updatedAt: '2026-08-06T12:05:00.000Z',
+            },
+          },
+        },
+      },
+      {
+        request: { query: GET_MANAGED_EMAIL_OVERVIEW },
+        result: {
+          data: {
+            ...overviewResult,
+            managedEmailDomains: [
+              {
+                ...overviewResult.managedEmailDomains[0],
+                acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+                domain: 'creator-owned.test',
+                id: 'customer-owned-domain-1',
+                infrastructureState: 'DNS_PENDING',
+                paidThrough: null,
+                renewalEnabled: false,
+                requiredNameservers,
+              },
+            ],
+            managedEmailMailboxes: [
+              {
+                ...overviewResult.managedEmailMailboxes[0],
+                domain: 'creator-owned.test',
+                domainId: 'customer-owned-domain-1',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(await screen.findByText('Customer-owned')).toBeVisible();
+    requiredNameservers.forEach((nameserver) => {
+      expect(screen.getByText(nameserver)).toBeVisible();
+    });
     expect(
       window.localStorage.getItem('managed-email-purchase-intent:workspace-a'),
     ).toBeNull();
@@ -1124,5 +1225,175 @@ describe('ManagedEmailOverview', () => {
       quoteId: 'quote-1',
       quoteVersion: 'quote-v1',
     });
+  });
+  it('starts a customer-owned import directly, renders its quote, and preserves its selected mode on return', async () => {
+    const user = userEvent.setup();
+    const customerOwnedProposalInput = {
+      acquisitionMode: 'CUSTOMER_OWNED_DOMAIN_IMPORT',
+      customerOwnedDomain: 'creator-owned.test',
+      mailboxCount: 2,
+      personas: [
+        {
+          displayName: 'Maya Chen',
+          localPartPreference: 'maya',
+          roleTitle: 'Partnerships',
+          signature: 'Thanks, Maya',
+        },
+        {
+          displayName: 'Alex Smith',
+          localPartPreference: 'alex',
+          roleTitle: 'Growth',
+          signature: 'Thanks, Alex',
+        },
+      ],
+    };
+    const customerOwnedProposal = {
+      disclosures: {
+        cancellation:
+          'No annual domain charge. Customer-owned domains do not renew through Myah.',
+        managedServiceOwnership:
+          'You retain ownership of this domain and must update its registrar nameservers.',
+        prepaidBalance: 'Email services do not use your AI balance.',
+      },
+      domains: [
+        {
+          domain: 'creator-owned.test',
+          mailboxes: [
+            {
+              address: 'maya@creator-owned.test',
+              displayName: 'Maya Chen',
+              roleTitle: 'Partnerships',
+            },
+            {
+              address: 'alex@creator-owned.test',
+              displayName: 'Alex Smith',
+              roleTitle: 'Growth',
+            },
+          ],
+        },
+      ],
+      expiresAt: '2026-08-06T13:00:00.000Z',
+      id: 'customer-owned-proposal-1',
+      mailboxCount: 2,
+      policyVersion: 'policy-1',
+    };
+    const customerOwnedQuote = {
+      currency: 'USD',
+      disclosures: customerOwnedProposal.disclosures,
+      dueTodayCents: 29380,
+      isSandbox: false,
+      expiresAt: '2026-08-06T13:00:00.000Z',
+      id: 'customer-owned-quote-1',
+      lines: [
+        {
+          amountCents: 24690,
+          billingFrequency: 'MONTHLY',
+          endingBefore: '2026-09-06T12:00:00.000Z',
+          productKey: 'managed_mailbox_month',
+          quantity: 2,
+          startingAt: '2026-08-06T12:00:00.000Z',
+          unitPriceCents: 12345,
+        },
+        {
+          amountCents: 4690,
+          billingFrequency: 'MONTHLY',
+          endingBefore: '2026-09-06T12:00:00.000Z',
+          productKey: 'managed_warmup_month',
+          quantity: 2,
+          startingAt: '2026-08-06T12:00:00.000Z',
+          unitPriceCents: 2345,
+        },
+      ],
+      quoteFingerprint: 'customer-owned-fingerprint-1',
+      quoteVersion: 'quote-v1',
+    };
+
+    renderOverview([
+      overviewMock,
+      {
+        request: {
+          query: GET_MANAGED_EMAIL_PROPOSAL,
+          variables: { input: customerOwnedProposalInput },
+        },
+        result: { data: { managedEmailProposal: customerOwnedProposal } },
+      },
+      {
+        request: {
+          query: GET_MANAGED_EMAIL_QUOTE,
+          variables: { input: { proposalId: 'customer-owned-proposal-1' } },
+        },
+        result: { data: { managedEmailQuote: customerOwnedQuote } },
+      },
+    ]);
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Set up managed email' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Use a domain I own' }),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Use a domain I own' }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Customer-owned domain')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Use a domain I own' }),
+    ).not.toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText('Customer-owned domain'),
+      'creator-owned.test',
+    );
+    fireEvent.change(screen.getByLabelText('Mailbox count'), {
+      target: { value: '2' },
+    });
+    await user.click(screen.getByRole('button', { name: /^Continue/ }));
+
+    expect(screen.getByText(/complete initial mailbox set/i)).toBeVisible();
+    expect(screen.getByText(/registrar/i)).toBeVisible();
+    expect(screen.getByText(/nameserver/i)).toBeVisible();
+    expect(screen.getByText(/cannot add mailboxes later/i)).toBeVisible();
+
+    await user.type(screen.getByLabelText('Display name 1'), 'Maya Chen');
+    await user.type(screen.getByLabelText('Role title 1'), 'Partnerships');
+    await user.type(screen.getByLabelText('Preferred address 1'), 'maya');
+    await user.type(screen.getByLabelText('Signature 1'), 'Thanks, Maya');
+    await user.type(screen.getByLabelText('Display name 2'), 'Alex Smith');
+    await user.type(screen.getByLabelText('Role title 2'), 'Growth');
+    await user.type(screen.getByLabelText('Preferred address 2'), 'alex');
+    await user.type(screen.getByLabelText('Signature 2'), 'Thanks, Alex');
+
+    const reviewProposalButton = screen.getByRole('button', {
+      name: /^Review proposal/,
+    });
+    expect(reviewProposalButton).toBeDisabled();
+    await user.click(screen.getByRole('checkbox'));
+    expect(reviewProposalButton).toBeEnabled();
+    await user.click(reviewProposalButton);
+
+    expect(
+      await screen.findByText(
+        'No annual domain charge. Customer-owned domains do not renew through Myah.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByText(/Managed mailbox/)).toBeVisible();
+    expect(screen.getByText(/Managed warmup/)).toBeVisible();
+    expect(screen.getAllByText('Monthly')).toHaveLength(2);
+    expect(screen.queryByText('Annual')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Managed sending domain'),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Use a domain I own' }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Customer-owned domain')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Use a domain I own' }),
+    ).not.toBeInTheDocument();
   });
 });

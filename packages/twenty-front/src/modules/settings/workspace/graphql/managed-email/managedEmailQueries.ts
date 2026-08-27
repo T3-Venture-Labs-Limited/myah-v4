@@ -12,6 +12,7 @@ export const GET_MANAGED_EMAIL_OVERVIEW = gql`
       warmingCount
     }
     managedEmailDomains {
+      acquisitionMode
       cancelAtPeriodEnd
       dependentMailboxCount
       domain
@@ -19,6 +20,7 @@ export const GET_MANAGED_EMAIL_OVERVIEW = gql`
       infrastructureState
       paidThrough
       renewalEnabled
+      requiredNameservers
       safeFailureCode
     }
     managedEmailMailboxes {

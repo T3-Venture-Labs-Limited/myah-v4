@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { MANAGED_EMAIL_PRODUCT_KEYS } from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
+import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import {
   type ManagedEmailCatalog,
   type ManagedEmailCatalogProduct,
@@ -82,60 +83,82 @@ export class ManagedEmailQuoteService {
     const products = new Map(
       catalog.products.map((product) => [product.key, product]),
     );
-    const domainProduct = this.getProduct(
-      products,
-      MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR,
-    );
-    const domainProviderQuotes = proposal.domains.map(
-      ({ providerQuote }) => providerQuote,
-    );
+    const customerOwnedDomainImport =
+      proposal.acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT;
+    let domainLine: ManagedEmailQuoteLine | null = null;
 
-    if (
-      domainProviderQuotes.some(
-        (providerQuote) =>
-          !Number.isSafeInteger(providerQuote.amountMinorUnits) ||
-          providerQuote.amountMinorUnits <= 0 ||
-          providerQuote.currency !== 'USD' ||
-          providerQuote.termCount !== 1 ||
-          providerQuote.termUnit !== 'YEAR',
-      )
-    ) {
-      throw new Error('Managed email domain provider quote is invalid');
-    }
-
-    let domainProviderCost: number | undefined;
-
-    if (domainProduct.customerPrice.kind === 'PROVIDER_QUOTE_MARGIN') {
-      const domainQuoteAmounts = new Set(
-        domainProviderQuotes.map(({ amountMinorUnits }) => amountMinorUnits),
+    if (!customerOwnedDomainImport) {
+      const domainProduct = this.getProduct(
+        products,
+        MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR,
       );
-
-      if (domainQuoteAmounts.size !== 1) {
-        throw new Error(
-          'Managed email domain quotes cannot be represented exactly',
-        );
-      }
-
-      [domainProviderCost] = domainQuoteAmounts;
-    } else if (
-      domainProduct.customerPrice.kind === 'FIXED_PROVIDER_QUOTE_CEILING'
-    ) {
-      const maximumProviderQuoteMinorUnits =
-        domainProduct.customerPrice.maximumProviderQuoteMinorUnits;
+      const domainProviderQuotes = proposal.domains.map(
+        ({ providerQuote }) => providerQuote,
+      );
 
       if (
         domainProviderQuotes.some(
-          ({ amountMinorUnits }) =>
-            amountMinorUnits > maximumProviderQuoteMinorUnits,
+          (providerQuote) =>
+            providerQuote === undefined ||
+            !Number.isSafeInteger(providerQuote.amountMinorUnits) ||
+            providerQuote.amountMinorUnits <= 0 ||
+            providerQuote.currency !== 'USD' ||
+            providerQuote.termCount !== 1 ||
+            providerQuote.termUnit !== 'YEAR',
         )
       ) {
-        throw new Error(
-          'Managed email domain provider quote exceeds approved ceiling',
-        );
+        throw new Error('Managed email domain provider quote is invalid');
       }
-    } else {
-      throw new Error('Managed email catalog is invalid');
+
+      let domainProviderCost: number | undefined;
+
+      if (domainProduct.customerPrice.kind === 'PROVIDER_QUOTE_MARGIN') {
+        const domainQuoteAmounts = new Set(
+          domainProviderQuotes.map(
+            (providerQuote) => providerQuote?.amountMinorUnits ?? 0,
+          ),
+        );
+
+        if (domainQuoteAmounts.size !== 1) {
+          throw new Error(
+            'Managed email domain quotes cannot be represented exactly',
+          );
+        }
+
+        [domainProviderCost] = domainQuoteAmounts;
+      } else if (
+        domainProduct.customerPrice.kind === 'FIXED_PROVIDER_QUOTE_CEILING'
+      ) {
+        const maximumProviderQuoteMinorUnits =
+          domainProduct.customerPrice.maximumProviderQuoteMinorUnits;
+
+        if (
+          domainProviderQuotes.some(
+            (providerQuote) =>
+              (providerQuote?.amountMinorUnits ?? Infinity) >
+              maximumProviderQuoteMinorUnits,
+          )
+        ) {
+          throw new Error(
+            'Managed email domain provider quote exceeds approved ceiling',
+          );
+        }
+      } else {
+        throw new Error('Managed email catalog is invalid');
+      }
+
+      domainLine = this.createLine({
+        billingFrequency: 'ANNUAL',
+        metronomeProductId:
+          metronomeProducts[MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR],
+        product: domainProduct,
+        providerQuoteCost: domainProviderCost,
+        quantity: proposal.domains.length,
+        startingAt: new Date(now),
+      });
     }
+
     const mailboxProduct = this.getProduct(
       products,
       MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH,
@@ -162,15 +185,7 @@ export class ManagedEmailQuoteService {
     }
     const startingAt = new Date(now);
     const lines = [
-      this.createLine({
-        billingFrequency: 'ANNUAL',
-        metronomeProductId:
-          metronomeProducts[MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR],
-        product: domainProduct,
-        providerQuoteCost: domainProviderCost,
-        quantity: proposal.domains.length,
-        startingAt,
-      }),
+      ...(domainLine === null ? [] : [domainLine]),
       this.createLine({
         billingFrequency: 'MONTHLY',
         metronomeProductId:
@@ -302,7 +317,9 @@ export class ManagedEmailQuoteService {
         mailboxes: Object.freeze(
           domain.mailboxes.map(({ address }) => address),
         ),
-        providerQuote: Object.freeze({ ...domain.providerQuote }),
+        ...(domain.providerQuote === undefined
+          ? {}
+          : { providerQuote: Object.freeze({ ...domain.providerQuote }) }),
       });
     });
     const personas = proposal.domains.flatMap(({ mailboxes }) =>
@@ -313,7 +330,11 @@ export class ManagedEmailQuoteService {
       domains: Object.freeze(domains),
       personas: Object.freeze(personas),
       proposal: Object.freeze({
+        acquisitionMode: proposal.acquisitionMode,
         createdAt: proposal.createdAt.toISOString(),
+        ...(proposal.customerOwnedDomain === undefined
+          ? {}
+          : { customerOwnedDomain: proposal.customerOwnedDomain }),
         expiresAt: proposal.expiresAt.toISOString(),
         policyVersion: proposal.policyVersion,
       }),

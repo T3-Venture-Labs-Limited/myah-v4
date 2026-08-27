@@ -36,6 +36,33 @@ const request = async (
   return { response, body: await json(response) };
 };
 
+const advancedWarmupInput = (email: string) => ({
+  email,
+  sender_first: 'Ada',
+  sender_last: 'Lovelace',
+  smtp: {
+    username: email,
+    password: 'secret',
+    host: '127.0.0.1',
+    port: 3025,
+    tls: false,
+  },
+  imap: {
+    username: email,
+    password: 'secret',
+    host: '127.0.0.1',
+    port: 3143,
+    tls: false,
+  },
+  frequency: {
+    starting_baseline: 5,
+    increase_per_day: 2,
+    max_sends_per_day: 50,
+    reply_rate: 20,
+    strategy: 'progressive',
+  },
+});
+
 const acceptsConnections = async (baseUrl: string): Promise<boolean> => {
   const url = new URL(baseUrl);
 
@@ -126,6 +153,78 @@ describe('managed email provider sandbox contract', () => {
     const domains = await request(started.icemailBaseUrl, '/domain');
     expect(domains.response.status).toBe(200);
     expect(mapIcemailDomainPage(domains.body, 'SANDBOX').items).toHaveLength(1);
+  });
+
+  it('reloads a persisted imported broad domain with its matching warmup inbox', async () => {
+    const importedAddress = 'ada@mail.creator.co.uk';
+    const imported = await request(started.icemailBaseUrl, '/order', {
+      method: 'POST',
+      body: JSON.stringify({
+        import: true,
+        data: [
+          {
+            domain_name: 'mail.creator.co.uk',
+            mailbox_type: 'GOOGLE',
+            mailboxes: [
+              {
+                first_name: 'Ada',
+                last_name: 'Lovelace',
+                username: importedAddress,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    expect(imported.response.status).toBe(201);
+
+    const warmup = await request(
+      started.warmupBaseUrl,
+      '/v1/inboxes/advanced',
+      {
+        method: 'POST',
+        body: JSON.stringify(advancedWarmupInput(importedAddress)),
+      },
+    );
+    expect(warmup.response.status).toBe(201);
+
+    await sandbox.stop();
+    sandbox = await createManagedEmailProviderSandbox({
+      host: '127.0.0.1',
+      icemailPort: 0,
+      warmupPort: 0,
+      controlPort: 0,
+      statePath,
+      greenMail: { host: '127.0.0.1', smtpPort: 3025, imapPort: 3143 },
+    });
+    started = await sandbox.start();
+
+    expect(
+      (await request(started.icemailBaseUrl, '/domain')).body.data.domains,
+    ).toEqual([
+      expect.objectContaining({ domain: 'mail.creator.co.uk', import: true }),
+    ]);
+    expect(
+      (await request(started.warmupBaseUrl, '/v1/inboxes')).body.items,
+    ).toEqual([expect.objectContaining({ email: importedAddress })]);
+  });
+
+  it('rejects a broad standalone warmup inbox', async () => {
+    const rejected = await request(
+      started.warmupBaseUrl,
+      '/v1/inboxes/advanced',
+      {
+        method: 'POST',
+        body: JSON.stringify(
+          advancedWarmupInput('ada@unrecognized.creator.co.uk'),
+        ),
+      },
+    );
+
+    expect(rejected.response.status).toBe(422);
+    expect(
+      (await request(started.warmupBaseUrl, '/v1/inboxes')).body.items,
+    ).toEqual([]);
   });
 
   it('rejects ordinary orders and restored state outside test-only domains', async () => {

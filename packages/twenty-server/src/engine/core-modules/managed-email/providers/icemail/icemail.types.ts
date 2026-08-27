@@ -76,6 +76,10 @@ export type IcemailMailboxCredential = {
   imap: IcemailMailEndpoint;
 };
 
+export type IcemailMailboxReadOptions = {
+  customerOwnedDomain: string;
+};
+
 export type IcemailOrdinaryMailboxInput = {
   firstName: string;
   lastName: string;
@@ -88,6 +92,10 @@ export type IcemailOrdinaryOrderInput = {
     domain: string;
     mailboxes: IcemailOrdinaryMailboxInput[];
   }>;
+};
+export type IcemailCustomerOwnedDomainImportOrderInput = {
+  customerOwnedDomain: string;
+  mailboxes: IcemailOrdinaryMailboxInput[];
 };
 
 export type IcemailOrderReceipt = {

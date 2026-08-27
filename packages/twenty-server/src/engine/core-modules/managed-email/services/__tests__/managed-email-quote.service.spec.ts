@@ -2,6 +2,7 @@ import {
   MANAGED_EMAIL_PRODUCT_DEFINITIONS,
   MANAGED_EMAIL_PRODUCT_KEYS,
 } from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
+import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailQuoteService } from 'src/engine/core-modules/managed-email/services/managed-email-quote.service';
 import { type ManagedEmailCatalog } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 import { type ManagedEmailProposal } from 'src/engine/core-modules/managed-email/types/managed-email-proposal.type';
@@ -77,6 +78,7 @@ const catalog: ManagedEmailCatalog = {
 };
 
 const proposal: ManagedEmailProposal = {
+  acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
   createdAt: new Date('2026-08-05T10:00:00.000Z'),
   disclosures: {
     cancellation:
@@ -302,7 +304,7 @@ describe('ManagedEmailQuoteService', () => {
           domains: proposal.domains.map((domain, index) => ({
             ...domain,
             providerQuote: {
-              ...domain.providerQuote,
+              ...domain.providerQuote!,
               amountMinorUnits: index === 0 ? 1.5 : 1000,
             },
           })),
@@ -322,7 +324,7 @@ describe('ManagedEmailQuoteService', () => {
           domains: proposal.domains.map((domain, index) => ({
             ...domain,
             providerQuote: {
-              ...domain.providerQuote,
+              ...domain.providerQuote!,
               amountMinorUnits: 1000 + index,
             },
           })),

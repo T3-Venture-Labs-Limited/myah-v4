@@ -1,3 +1,4 @@
+import { normalizeCustomerOwnedDomainImport } from '../../utils/normalize-customer-owned-domain-import.util';
 import { IcemailException, IcemailExceptionCode } from './icemail.exception';
 import {
   type IcemailDomainAvailability,
@@ -8,6 +9,7 @@ import {
   type IcemailMailboxSummary,
   type IcemailProviderCredentialSecret,
   type IcemailOrderReceipt,
+  type IcemailOrdinaryMailboxInput,
   type IcemailPage,
   type IcemailPrewarmPurchaseReceipt,
   type IcemailPrewarmedBundlePage,
@@ -129,6 +131,14 @@ const asDomain = (
   return domain;
 };
 
+const asCustomerOwnedImportDomain = (value: unknown): string => {
+  const domain = normalizeCustomerOwnedDomainImport(value);
+
+  if (domain === null) return malformed();
+
+  return domain;
+};
+
 const asAddress = (
   value: unknown,
   expectedDomain?: string,
@@ -147,6 +157,25 @@ const asAddress = (
   }
 
   return address;
+};
+
+const asCustomerOwnedImportAddress = (
+  value: unknown,
+  expectedDomain: string,
+): string => {
+  const address = asString(value).trim().toLowerCase();
+  const parts = address.split('@');
+  const domain = asCustomerOwnedImportDomain(parts[1]);
+
+  if (
+    parts.length !== 2 ||
+    parts[0].length === 0 ||
+    domain !== expectedDomain
+  ) {
+    return malformed();
+  }
+
+  return `${parts[0]}@${domain}`;
 };
 
 const asGoogleProvider = (value: unknown): 'GOOGLE' => {
@@ -230,20 +259,24 @@ const mapDomain = (
 ): IcemailDomainSummary => {
   const domain = asRecord(value);
   const mailboxCount = asProviderCount(domain.mailbox_count);
+  const imported = asBoolean(domain.import);
   const provider =
     domain.workspace_type === null
       ? null
       : asGoogleProvider(domain.workspace_type);
 
   if (provider === null && mailboxCount !== 0) return malformed();
+  const normalizedDomain = imported
+    ? asCustomerOwnedImportDomain(domain.domain)
+    : asDomain(domain.domain, policy);
 
   return {
     id: asString(domain.domain_id),
-    domain: asDomain(domain.domain, policy),
+    domain: normalizedDomain,
     status: asString(domain.status),
     active: asBoolean(domain.active),
     provider,
-    purchased: !asBoolean(domain.import),
+    purchased: !imported,
     prewarmed: asBoolean(domain.prewarmed),
     blacklisted: asBoolean(domain.blacklisted),
     mailboxCount,
@@ -273,16 +306,37 @@ export const mapIcemailDomainDetail = (
 const mapMailbox = (
   value: unknown,
   policy: IcemailDomainPolicy,
+  importedDomains?: ReadonlyMap<string, string>,
+  customerOwnedDomain?: string,
 ): IcemailMailboxSummary => {
   const mailbox = asRecord(value);
   const domain = asRecord(mailbox.domains);
-  const normalizedDomain = asDomain(domain.domain, policy);
+  const domainId = asString(domain.domain_id);
+  const expectedImportedDomain =
+    customerOwnedDomain === undefined
+      ? importedDomains?.get(domainId)
+      : asCustomerOwnedImportDomain(customerOwnedDomain);
+  const normalizedDomain =
+    expectedImportedDomain === undefined
+      ? asDomain(domain.domain, policy)
+      : asCustomerOwnedImportDomain(domain.domain);
+
+  if (
+    expectedImportedDomain !== undefined &&
+    normalizedDomain !== expectedImportedDomain
+  ) {
+    return malformed();
+  }
+  const address =
+    expectedImportedDomain === undefined
+      ? asAddress(mailbox.username, normalizedDomain, policy)
+      : asCustomerOwnedImportAddress(mailbox.username, normalizedDomain);
 
   return {
     id: asString(mailbox.id),
-    domainId: asString(domain.domain_id),
+    domainId,
     domain: normalizedDomain,
-    address: asAddress(mailbox.username, normalizedDomain, policy),
+    address,
     firstName: asString(mailbox.first_name),
     lastName: asString(mailbox.last_name),
     provider: asGoogleProvider(mailbox.type),
@@ -296,12 +350,13 @@ const mapMailbox = (
 export const mapIcemailMailboxPage = (
   value: unknown,
   policy: IcemailDomainPolicy = 'PRODUCTION',
+  importedDomains?: ReadonlyMap<string, string>,
 ): IcemailPage<IcemailMailboxSummary> => {
   const data = asRecord(unwrapData(value));
 
   return {
     items: asArray(data.mailboxes, 50).map((mailbox) =>
-      mapMailbox(mailbox, policy),
+      mapMailbox(mailbox, policy, importedDomains),
     ),
     total: asNonNegativeInteger(data.total_count),
     page: asNonNegativeInteger(data.page),
@@ -312,7 +367,9 @@ export const mapIcemailMailboxPage = (
 export const mapIcemailMailboxDetail = (
   value: unknown,
   policy: IcemailDomainPolicy = 'PRODUCTION',
-): IcemailMailboxDetail => mapMailbox(unwrapData(value), policy);
+  customerOwnedDomain?: string,
+): IcemailMailboxDetail =>
+  mapMailbox(unwrapData(value), policy, undefined, customerOwnedDomain);
 
 export const mapIcemailCredentialSecret = (
   value: unknown,
@@ -366,6 +423,74 @@ export const mapIcemailOrderReceipt = (
     };
   }),
 });
+
+export const mapIcemailCustomerOwnedDomainImportOrderReceipt = (
+  value: unknown,
+  expectedDomain: string,
+  expectedMailboxes: ReadonlyArray<IcemailOrdinaryMailboxInput>,
+): IcemailOrderReceipt => {
+  const rawDomains = asArray(unwrapData(value));
+
+  if (rawDomains.length !== 1) return malformed();
+
+  const rawDomain = asRecord(rawDomains[0]);
+  const domain = normalizeCustomerOwnedDomainImport(rawDomain.domain_name);
+
+  if (
+    domain === null ||
+    rawDomain.import !== true ||
+    domain !== expectedDomain
+  ) {
+    return malformed();
+  }
+
+  asGoogleProvider(rawDomain.mailbox_type);
+
+  const expectedByAddress = new Map(
+    expectedMailboxes.map((mailbox) => [mailbox.address, mailbox]),
+  );
+
+  if (expectedByAddress.size !== expectedMailboxes.length) return malformed();
+
+  const mailboxIds = new Set<string>();
+  const mailboxAddresses = new Set<string>();
+  const mailboxes = asArray(rawDomain.mailboxes).map((rawMailbox) => {
+    const mailbox = asRecord(rawMailbox);
+    const id = asString(mailbox.mailbox_id);
+    const address = asCustomerOwnedImportAddress(mailbox.username, domain);
+    const firstName = asString(mailbox.first_name);
+    const lastName = asString(mailbox.last_name);
+    const expectedMailbox = expectedByAddress.get(address);
+
+    if (
+      expectedMailbox === undefined ||
+      expectedMailbox.firstName !== firstName ||
+      expectedMailbox.lastName !== lastName ||
+      mailboxIds.has(id) ||
+      mailboxAddresses.has(address)
+    ) {
+      return malformed();
+    }
+
+    mailboxIds.add(id);
+    mailboxAddresses.add(address);
+
+    return { id, address, firstName, lastName };
+  });
+
+  if (mailboxes.length !== expectedMailboxes.length) return malformed();
+
+  return {
+    domains: [
+      {
+        orderId: asString(rawDomain.order_id),
+        domainId: asString(rawDomain.domain_id),
+        domain,
+        mailboxes,
+      },
+    ],
+  };
+};
 
 const mapPrewarmedMailbox = (
   value: unknown,

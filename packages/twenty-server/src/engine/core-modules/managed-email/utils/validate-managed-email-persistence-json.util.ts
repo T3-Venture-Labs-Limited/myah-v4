@@ -4,6 +4,7 @@ import {
   MANAGED_EMAIL_PRODUCT_DEFINITIONS,
   MANAGED_EMAIL_PRODUCT_KEYS,
 } from 'src/engine/core-modules/managed-email/constants/managed-email-catalog.constant';
+import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import { type ManagedEmailProductKey } from 'src/engine/core-modules/managed-email/types/managed-email-catalog.type';
 import {
   type ManagedEmailCorrelatedSubscriptionLine,
@@ -32,6 +33,47 @@ const PRODUCT_KEYS: Record<string, true> = {
   [MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH]: true,
   [MANAGED_EMAIL_PRODUCT_KEYS.WARMUP_MONTH]: true,
 };
+
+const LEGACY_PRODUCT_KEYS = [
+  MANAGED_EMAIL_PRODUCT_KEYS.SENDING_DOMAIN_YEAR,
+  MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH,
+  MANAGED_EMAIL_PRODUCT_KEYS.WARMUP_MONTH,
+] as const satisfies readonly ManagedEmailProductKey[];
+const CUSTOMER_OWNED_DOMAIN_IMPORT_PRODUCT_KEYS = [
+  MANAGED_EMAIL_PRODUCT_KEYS.MAILBOX_MONTH,
+  MANAGED_EMAIL_PRODUCT_KEYS.WARMUP_MONTH,
+] as const satisfies readonly ManagedEmailProductKey[];
+
+const hasExactProductKeys = (
+  productKeys: ReadonlySet<string>,
+  expectedKeys: readonly ManagedEmailProductKey[],
+): boolean =>
+  productKeys.size === expectedKeys.length &&
+  expectedKeys.every((productKey) => productKeys.has(productKey));
+
+export const hasExactManagedEmailExpectedLineSet = (
+  acquisitionMode: ManagedEmailAcquisitionMode,
+  lines: readonly Pick<ManagedEmailExpectedLineItem, 'productKey'>[],
+): boolean => {
+  const expectedKeys =
+    acquisitionMode === ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+      ? CUSTOMER_OWNED_DOMAIN_IMPORT_PRODUCT_KEYS
+      : LEGACY_PRODUCT_KEYS;
+
+  return (
+    lines.length === expectedKeys.length &&
+    hasExactProductKeys(
+      new Set(lines.map((line) => line.productKey)),
+      expectedKeys,
+    )
+  );
+};
+
+const hasKnownManagedEmailExpectedLineSet = (
+  productKeys: ReadonlySet<string>,
+): boolean =>
+  hasExactProductKeys(productKeys, LEGACY_PRODUCT_KEYS) ||
+  hasExactProductKeys(productKeys, CUSTOMER_OWNED_DOMAIN_IMPORT_PRODUCT_KEYS);
 
 const fail = (): never => {
   throw new Error(PERSISTENCE_JSON_ERROR);
@@ -417,12 +459,48 @@ const validateResourceSnapshot = (
   value: unknown,
 ): ManagedEmailResourceSnapshot => {
   assertRecord(value, ['proposal', 'domains', 'personas']);
-  assertRecord(value.proposal, ['createdAt', 'expiresAt', 'policyVersion']);
-  assertDateRange(value.proposal.createdAt, value.proposal.expiresAt);
-  assertString(value.proposal.policyVersion, MAX_IDENTIFIER_LENGTH);
+  const proposal = isRecord(value.proposal) ? value.proposal : fail();
+  const hasAcquisitionMode = Object.prototype.hasOwnProperty.call(
+    proposal,
+    'acquisitionMode',
+  );
+  const isCustomerOwnedDomainImport =
+    proposal.acquisitionMode ===
+    ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT;
+  if (isCustomerOwnedDomainImport) {
+    assertRecord(proposal, [
+      'acquisitionMode',
+      'createdAt',
+      'customerOwnedDomain',
+      'expiresAt',
+      'policyVersion',
+    ]);
+    assertNormalizedDomain(proposal.customerOwnedDomain);
+  } else if (hasAcquisitionMode) {
+    assertRecord(proposal, [
+      'acquisitionMode',
+      'createdAt',
+      'expiresAt',
+      'policyVersion',
+    ]);
+    if (
+      proposal.acquisitionMode !== ManagedEmailAcquisitionMode.NEW_MANAGED &&
+      proposal.acquisitionMode !==
+        ManagedEmailAcquisitionMode.PREWARMED_INVENTORY
+    ) {
+      fail();
+    }
+  } else {
+    assertRecord(proposal, ['createdAt', 'expiresAt', 'policyVersion']);
+  }
+  assertDateRange(proposal.createdAt, proposal.expiresAt);
+  assertString(proposal.policyVersion, MAX_IDENTIFIER_LENGTH);
 
-  const proposalCreatedAt = parseInstant(value.proposal.createdAt);
-  const proposalExpiresAt = parseInstant(value.proposal.expiresAt);
+  const customerOwnedDomain = isCustomerOwnedDomainImport
+    ? (proposal.customerOwnedDomain as string)
+    : null;
+  const proposalCreatedAt = parseInstant(proposal.createdAt);
+  const proposalExpiresAt = parseInstant(proposal.expiresAt);
 
   assertArray(value.domains, MAX_COLLECTION_ITEMS);
   assertArray(value.personas, MAX_COLLECTION_ITEMS);
@@ -448,18 +526,24 @@ const validateResourceSnapshot = (
       'prewarmedProviderCosts',
     );
 
-    if (hasProviderInventoryId !== hasPrewarmedProviderCosts) {
+    if (
+      hasProviderInventoryId !== hasPrewarmedProviderCosts ||
+      (isCustomerOwnedDomainImport &&
+        (hasProviderInventoryId || hasPrewarmedProviderCosts))
+    ) {
       fail();
     }
-    const domainKeys = hasProviderInventoryId
-      ? [
-          'domain',
-          'providerInventoryId',
-          'prewarmedProviderCosts',
-          'mailboxes',
-          'providerQuote',
-        ]
-      : ['domain', 'mailboxes', 'providerQuote'];
+    const domainKeys = isCustomerOwnedDomainImport
+      ? ['domain', 'mailboxes']
+      : hasProviderInventoryId
+        ? [
+            'domain',
+            'providerInventoryId',
+            'prewarmedProviderCosts',
+            'mailboxes',
+            'providerQuote',
+          ]
+        : ['domain', 'mailboxes', 'providerQuote'];
 
     assertRecord(domain, domainKeys);
     assertNormalizedDomain(domain.domain);
@@ -504,6 +588,9 @@ const validateResourceSnapshot = (
       mailboxes.add(mailbox as string);
     }
 
+    if (isCustomerOwnedDomainImport) {
+      continue;
+    }
     assertRecord(domain.providerQuote, [
       'amountMinorUnits',
       'currency',
@@ -532,6 +619,13 @@ const validateResourceSnapshot = (
     ) {
       fail();
     }
+  }
+
+  if (
+    isCustomerOwnedDomainImport &&
+    (domains.size !== 1 || !domains.has(customerOwnedDomain!))
+  ) {
+    fail();
   }
 
   const personaAddresses = new Set<string>();
@@ -588,10 +682,6 @@ const validateExpectedLineItems = (
 ): readonly ManagedEmailExpectedLineItem[] => {
   assertArray(value, MANAGED_EMAIL_PRODUCT_DEFINITIONS.length);
 
-  if (value.length !== MANAGED_EMAIL_PRODUCT_DEFINITIONS.length) {
-    fail();
-  }
-
   const definitions = new Map(
     MANAGED_EMAIL_PRODUCT_DEFINITIONS.map((definition) => [
       definition.key,
@@ -639,6 +729,9 @@ const validateExpectedLineItems = (
       line.totalCents,
     );
     assertDateRange(line.periodStart, line.periodEnd);
+  }
+  if (!hasKnownManagedEmailExpectedLineSet(productKeys)) {
+    fail();
   }
 
   assertBoundedJson(value);

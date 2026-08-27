@@ -225,6 +225,20 @@ export class ManagedEmailResolver {
   }
 
   @Mutation(() => ManagedEmailActionResultDTO)
+  async confirmManagedEmailCustomerOwnedDomainImportPurchase(
+    @Args('input') input: ManagedEmailPurchaseInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthWorkspaceMemberId() actorId: string,
+  ): Promise<ManagedEmailActionResultDTO> {
+    return this.managedEmailCustomerService.purchase({
+      acquisitionMode: ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
+      actorId,
+      input,
+      workspaceId: workspace.id,
+    });
+  }
+
+  @Mutation(() => ManagedEmailActionResultDTO)
   async setManagedEmailCampaignCap(
     @Args('input') input: ManagedEmailCampaignCapInput,
     @AuthWorkspace() workspace: WorkspaceEntity,

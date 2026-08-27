@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 
+import { ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
+
 import { ManagedEmailOfferEntity } from '../entities/managed-email-offer.entity';
 import { type ManagedEmailProposal } from '../types/managed-email-proposal.type';
 import { type ManagedEmailQuote } from '../types/managed-email-quote.type';
@@ -16,6 +18,37 @@ const fingerprint = (value: unknown): string =>
   createHash('sha256').update(canonicalManagedEmailJson(value)).digest('hex');
 
 const BUNDLE_SELECTION_TTL_MS = 15 * 60 * 1000;
+const readQuotedAcquisitionMode = (
+  resourceSnapshot: unknown,
+): ManagedEmailAcquisitionMode | undefined => {
+  if (
+    resourceSnapshot === null ||
+    typeof resourceSnapshot !== 'object' ||
+    Array.isArray(resourceSnapshot) ||
+    !('proposal' in resourceSnapshot)
+  ) {
+    return undefined;
+  }
+
+  const proposal = resourceSnapshot.proposal;
+
+  if (
+    proposal === null ||
+    typeof proposal !== 'object' ||
+    Array.isArray(proposal) ||
+    !('acquisitionMode' in proposal)
+  ) {
+    return undefined;
+  }
+
+  const acquisitionMode = proposal.acquisitionMode;
+
+  return acquisitionMode === ManagedEmailAcquisitionMode.NEW_MANAGED ||
+    acquisitionMode === ManagedEmailAcquisitionMode.PREWARMED_INVENTORY ||
+    acquisitionMode === ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+    ? acquisitionMode
+    : undefined;
+};
 
 export const MANAGED_EMAIL_OFFER_CLOCK = Symbol('MANAGED_EMAIL_OFFER_CLOCK');
 
@@ -185,6 +218,7 @@ export class ManagedEmailOfferService {
   }
 
   async reserveQuoteForPurchase({
+    acquisitionMode,
     actorWorkspaceMemberId,
     idempotencyKey,
     now = this.clock(),
@@ -194,6 +228,7 @@ export class ManagedEmailOfferService {
     quoteVersion,
     workspaceId,
   }: {
+    acquisitionMode?: ManagedEmailAcquisitionMode;
     actorWorkspaceMemberId: string;
     idempotencyKey: string;
     now?: Date;
@@ -211,6 +246,7 @@ export class ManagedEmailOfferService {
       where: { quoteId, kind: 'QUOTE' },
     });
     const quote = this.validateQuoteReservation(row, {
+      acquisitionMode,
       actorWorkspaceMemberId,
       quoteFingerprint,
       quoteVersion,
@@ -250,6 +286,7 @@ export class ManagedEmailOfferService {
       where: { quoteId, kind: 'QUOTE' },
     });
     const winningQuote = this.validateQuoteReservation(winner, {
+      acquisitionMode,
       actorWorkspaceMemberId,
       quoteFingerprint,
       quoteVersion,
@@ -274,11 +311,13 @@ export class ManagedEmailOfferService {
   private validateQuoteReservation(
     row: ManagedEmailOfferEntity | null,
     {
+      acquisitionMode,
       actorWorkspaceMemberId,
       quoteFingerprint,
       quoteVersion,
       workspaceId,
     }: {
+      acquisitionMode?: ManagedEmailAcquisitionMode;
       actorWorkspaceMemberId: string;
       quoteFingerprint: string;
       quoteVersion: string;
@@ -302,6 +341,22 @@ export class ManagedEmailOfferService {
       snapshot.catalogVersion !== quoteVersion
     ) {
       throw new Error('Managed email quote offer is invalid');
+    }
+
+    const quotedMode = readQuotedAcquisitionMode(snapshot.resourceSnapshot);
+
+    if (
+      (acquisitionMode ===
+        ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT &&
+        quotedMode !==
+          ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT) ||
+      (acquisitionMode !== undefined &&
+        quotedMode !== undefined &&
+        quotedMode !== acquisitionMode)
+    ) {
+      throw new Error(
+        'Managed email purchase acquisition mode does not match quote',
+      );
     }
 
     return {

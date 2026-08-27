@@ -57,6 +57,7 @@ describe('managed email persistence entities', () => {
     expect(Object.values(ManagedEmailAcquisitionMode)).toEqual([
       'PREWARMED_INVENTORY',
       'NEW_MANAGED',
+      'CUSTOMER_OWNED_DOMAIN_IMPORT',
     ]);
     expect(Object.values(ManagedEmailInfrastructureState)).toEqual([
       'AWAITING_PAYMENT',

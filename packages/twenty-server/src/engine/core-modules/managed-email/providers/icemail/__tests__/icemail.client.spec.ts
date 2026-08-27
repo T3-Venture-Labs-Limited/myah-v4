@@ -10,6 +10,18 @@ import { IcemailExceptionCode } from '../icemail.exception';
 const providerSecret = 'not-a-real-provider-key';
 const mailboxSecret = 'not-a-real-mailbox-credential';
 
+type CustomerOwnedDomainImportApi = {
+  createCustomerOwnedDomainImportOrder(input: {
+    customerOwnedDomain: string;
+    mailboxes: Array<{
+      firstName: string;
+      lastName: string;
+      address: string;
+      password: string;
+    }>;
+  }): Promise<unknown>;
+};
+
 const domainFixture = {
   domain_id: 'domain-1',
   domain: 'sender.com',
@@ -78,7 +90,7 @@ const createClient = (
     client: new IcemailClient(
       twentyConfigService as TwentyConfigService,
       secureHttpClientService as SecureHttpClientService,
-    ),
+    ) as IcemailClient & CustomerOwnedDomainImportApi,
     httpClient,
     secureHttpClientService,
   };
@@ -504,6 +516,58 @@ describe('IcemailClient', () => {
       IcemailExceptionCode.MALFORMED_RESPONSE,
     );
   });
+  it.each(['creator.io', 'mail.creator.co.uk'])(
+    'maps %s mailbox details and credentials only with a customer-owned-domain hint',
+    async (domain) => {
+      const { client, httpClient } = createClient();
+      const address = `ada@${domain}`;
+      const ownedMailbox = {
+        ...mailboxFixture,
+        username: address,
+        domains: { ...mailboxFixture.domains, domain },
+      };
+      const customerOwnedDomain = { customerOwnedDomain: domain };
+
+      httpClient.get.mockResolvedValueOnce({
+        status: 200,
+        data: { success: true, data: ownedMailbox },
+        headers: {},
+      });
+      await expect(
+        client.getMailbox('mailbox-1', customerOwnedDomain),
+      ).resolves.toMatchObject({ address, domain });
+
+      httpClient.get
+        .mockResolvedValueOnce({
+          status: 200,
+          data: { success: true, data: ownedMailbox },
+          headers: {},
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: { success: true, data: { app_password: mailboxSecret } },
+          headers: {},
+        });
+      await expect(
+        client.getMailboxCredential('mailbox-1', customerOwnedDomain),
+      ).resolves.toEqual({
+        username: address,
+        appPassword: mailboxSecret,
+        smtp: { host: 'smtp.gmail.com', port: 465, secure: true },
+        imap: { host: 'imap.gmail.com', port: 993, secure: true },
+      });
+
+      httpClient.get.mockResolvedValueOnce({
+        status: 200,
+        data: { success: true, data: ownedMailbox },
+        headers: {},
+      });
+      await expectCode(
+        client.getMailboxCredential('mailbox-1'),
+        IcemailExceptionCode.MALFORMED_RESPONSE,
+      );
+    },
+  );
 
   it('projects a ready Google app password into fixed SMTP and IMAP settings', async () => {
     const { client, httpClient } = createClient();
@@ -689,6 +753,399 @@ describe('IcemailClient', () => {
     });
     expect(secureHttpClientService.getHttpClient).toHaveBeenCalledWith(
       expect.objectContaining({ retries: 0, timeout: 30_000 }),
+    );
+  });
+
+  it('creates one customer-owned domain import with its complete initial mailbox set and no Cloudflare credentials', async () => {
+    const { client, httpClient, secureHttpClientService } = createClient();
+
+    httpClient.post.mockResolvedValue({
+      status: 201,
+      data: {
+        success: true,
+        data: [
+          {
+            order_id: 'import-order-1',
+            import: true,
+            domain_id: 'import-domain-1',
+            domain_name: 'sender.com',
+            mailbox_type: 'GOOGLE',
+            mailboxes: [
+              {
+                mailbox_id: 'import-mailbox-1',
+                first_name: 'Ada',
+                last_name: 'Lovelace',
+                username: 'ada@sender.com',
+                password: mailboxSecret,
+              },
+              {
+                mailbox_id: 'import-mailbox-2',
+                first_name: 'Grace',
+                last_name: 'Hopper',
+                username: 'grace@sender.com',
+                password: 'another-not-a-real-mailbox-credential',
+              },
+            ],
+          },
+        ],
+      },
+      headers: {},
+    });
+
+    const receipt = await client.createCustomerOwnedDomainImportOrder({
+      customerOwnedDomain: 'sender.com',
+      mailboxes: [
+        {
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          address: 'ada@sender.com',
+          password: mailboxSecret,
+        },
+        {
+          firstName: 'Grace',
+          lastName: 'Hopper',
+          address: 'grace@sender.com',
+          password: 'another-not-a-real-mailbox-credential',
+        },
+      ],
+    });
+
+    expect(receipt).toEqual({
+      domains: [
+        {
+          orderId: 'import-order-1',
+          domainId: 'import-domain-1',
+          domain: 'sender.com',
+          mailboxes: [
+            {
+              id: 'import-mailbox-1',
+              address: 'ada@sender.com',
+              firstName: 'Ada',
+              lastName: 'Lovelace',
+            },
+            {
+              id: 'import-mailbox-2',
+              address: 'grace@sender.com',
+              firstName: 'Grace',
+              lastName: 'Hopper',
+            },
+          ],
+        },
+      ],
+    });
+    expect(JSON.stringify(receipt)).not.toContain(mailboxSecret);
+    expect(JSON.stringify(receipt)).not.toContain(
+      'another-not-a-real-mailbox-credential',
+    );
+    expect(JSON.stringify(receipt)).not.toContain('password');
+    expect(httpClient.post).toHaveBeenCalledWith('/order', {
+      import: true,
+      data: [
+        {
+          domain_name: 'sender.com',
+          mailbox_type: 'GOOGLE',
+          mailboxes: [
+            {
+              first_name: 'Ada',
+              last_name: 'Lovelace',
+              username: 'ada@sender.com',
+              password: mailboxSecret,
+            },
+            {
+              first_name: 'Grace',
+              last_name: 'Hopper',
+              username: 'grace@sender.com',
+              password: 'another-not-a-real-mailbox-credential',
+            },
+          ],
+        },
+      ],
+    });
+    expect(secureHttpClientService.getHttpClient).toHaveBeenCalledWith(
+      expect.objectContaining({ retries: 0, timeout: 30_000 }),
+    );
+  });
+
+  it.each([
+    ['PRODUCTION', 'mail.creator.co.uk'],
+    ['PRODUCTION', 'creator.io'],
+    ['SANDBOX', 'mail.creator.co.uk'],
+    ['SANDBOX', 'creator.io'],
+  ] as const)(
+    'maps a normalized %s customer-owned import request and receipt for %s',
+    async (mode, domain) => {
+      const { client, httpClient } = createClient(true, mode);
+      const address = `ada@${domain}`;
+
+      httpClient.post.mockResolvedValue({
+        status: 201,
+        data: {
+          success: true,
+          data: [
+            {
+              order_id: 'import-order-1',
+              import: true,
+              domain_id: 'import-domain-1',
+              domain_name: domain.toUpperCase(),
+              mailbox_type: 'GOOGLE',
+              mailboxes: [
+                {
+                  mailbox_id: 'import-mailbox-1',
+                  first_name: 'Ada',
+                  last_name: 'Lovelace',
+                  username: address.toUpperCase(),
+                  password: mailboxSecret,
+                },
+              ],
+            },
+          ],
+        },
+        headers: {},
+      });
+
+      await expect(
+        client.createCustomerOwnedDomainImportOrder({
+          customerOwnedDomain: `  ${domain.toUpperCase()}  `,
+          mailboxes: [
+            {
+              firstName: 'Ada',
+              lastName: 'Lovelace',
+              address,
+              password: mailboxSecret,
+            },
+          ],
+        }),
+      ).resolves.toEqual({
+        domains: [
+          {
+            orderId: 'import-order-1',
+            domainId: 'import-domain-1',
+            domain,
+            mailboxes: [
+              {
+                id: 'import-mailbox-1',
+                address,
+                firstName: 'Ada',
+                lastName: 'Lovelace',
+              },
+            ],
+          },
+        ],
+      });
+      expect(httpClient.post).toHaveBeenCalledWith('/order', {
+        import: true,
+        data: [
+          {
+            domain_name: domain,
+            mailbox_type: 'GOOGLE',
+            mailboxes: [
+              {
+                first_name: 'Ada',
+                last_name: 'Lovelace',
+                username: address,
+                password: mailboxSecret,
+              },
+            ],
+          },
+        ],
+      });
+    },
+  );
+
+  it.each([
+    ['PRODUCTION', 'mail.creator.co.uk'],
+    ['PRODUCTION', 'creator.io'],
+    ['SANDBOX', 'mail.creator.co.uk'],
+    ['SANDBOX', 'creator.io'],
+  ] as const)(
+    'keeps %s ordinary purchase validation narrow for %s',
+    async (mode, domain) => {
+      const { client, httpClient } = createClient(true, mode);
+
+      await expectCode(
+        client.createOrdinaryOrder({
+          domains: [
+            {
+              domain,
+              mailboxes: [
+                {
+                  firstName: 'Ada',
+                  lastName: 'Lovelace',
+                  address: `ada@${domain}`,
+                  password: mailboxSecret,
+                },
+              ],
+            },
+          ],
+        }),
+        IcemailExceptionCode.INVALID_INPUT,
+      );
+      expect(httpClient.post).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['is not marked as an import', false, 'sender.com', 'ada@sender.com'],
+    [
+      'does not exactly match the requested domain',
+      true,
+      'other.com',
+      'ada@other.com',
+    ],
+    [
+      'does not exactly match the requested mailbox address',
+      true,
+      'sender.com',
+      'other@sender.com',
+    ],
+  ])(
+    'treats a customer-owned domain receipt that %s as write-outcome uncertain',
+    async (_description, importOrder, domain, address) => {
+      const { client, httpClient } = createClient();
+
+      httpClient.post.mockResolvedValue({
+        status: 201,
+        data: {
+          success: true,
+          data: [
+            {
+              order_id: 'import-order-1',
+              import: importOrder,
+              domain_id: 'import-domain-1',
+              domain_name: domain,
+              mailbox_type: 'GOOGLE',
+              mailboxes: [
+                {
+                  mailbox_id: 'import-mailbox-1',
+                  first_name: 'Ada',
+                  last_name: 'Lovelace',
+                  username: address,
+                  password: mailboxSecret,
+                },
+              ],
+            },
+          ],
+        },
+        headers: {},
+      });
+
+      await expectCode(
+        client.createCustomerOwnedDomainImportOrder({
+          customerOwnedDomain: 'sender.com',
+          mailboxes: [
+            {
+              firstName: 'Ada',
+              lastName: 'Lovelace',
+              address: 'ada@sender.com',
+              password: mailboxSecret,
+            },
+          ],
+        }),
+        IcemailExceptionCode.WRITE_OUTCOME_UNCERTAIN,
+      );
+    },
+  );
+
+  it('treats an import receipt missing an initially requested mailbox as write-outcome uncertain', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.post.mockResolvedValue({
+      status: 201,
+      data: {
+        success: true,
+        data: [
+          {
+            order_id: 'import-order-1',
+            import: true,
+            domain_id: 'import-domain-1',
+            domain_name: 'sender.com',
+            mailbox_type: 'GOOGLE',
+            mailboxes: [
+              {
+                mailbox_id: 'import-mailbox-1',
+                first_name: 'Ada',
+                last_name: 'Lovelace',
+                username: 'ada@sender.com',
+                password: mailboxSecret,
+              },
+            ],
+          },
+        ],
+      },
+      headers: {},
+    });
+
+    await expectCode(
+      client.createCustomerOwnedDomainImportOrder({
+        customerOwnedDomain: 'sender.com',
+        mailboxes: [
+          {
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            address: 'ada@sender.com',
+            password: mailboxSecret,
+          },
+          {
+            firstName: 'Grace',
+            lastName: 'Hopper',
+            address: 'grace@sender.com',
+            password: 'another-not-a-real-mailbox-credential',
+          },
+        ],
+      }),
+      IcemailExceptionCode.WRITE_OUTCOME_UNCERTAIN,
+    );
+  });
+
+  it('treats an import receipt with an unrequested mailbox as write-outcome uncertain', async () => {
+    const { client, httpClient } = createClient();
+
+    httpClient.post.mockResolvedValue({
+      status: 201,
+      data: {
+        success: true,
+        data: [
+          {
+            order_id: 'import-order-1',
+            import: true,
+            domain_id: 'import-domain-1',
+            domain_name: 'sender.com',
+            mailbox_type: 'GOOGLE',
+            mailboxes: [
+              {
+                mailbox_id: 'import-mailbox-1',
+                first_name: 'Ada',
+                last_name: 'Lovelace',
+                username: 'ada@sender.com',
+                password: mailboxSecret,
+              },
+              {
+                mailbox_id: 'unexpected-import-mailbox',
+                first_name: 'Grace',
+                last_name: 'Hopper',
+                username: 'grace@sender.com',
+                password: 'another-not-a-real-mailbox-credential',
+              },
+            ],
+          },
+        ],
+      },
+      headers: {},
+    });
+
+    await expectCode(
+      client.createCustomerOwnedDomainImportOrder({
+        customerOwnedDomain: 'sender.com',
+        mailboxes: [
+          {
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            address: 'ada@sender.com',
+            password: mailboxSecret,
+          },
+        ],
+      }),
+      IcemailExceptionCode.WRITE_OUTCOME_UNCERTAIN,
     );
   });
 

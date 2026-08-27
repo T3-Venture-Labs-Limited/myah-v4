@@ -1,3 +1,4 @@
+import { type ManagedEmailAcquisitionMode } from '../enums/managed-email-acquisition-mode.enum';
 import { type ManagedEmailProductKey } from './managed-email-catalog.type';
 
 export type ManagedEmailSafeScalar = boolean | number | string;
@@ -30,7 +31,9 @@ export type ManagedEmailProviderReceipt = {
 
 export type ManagedEmailResourceSnapshot = {
   readonly proposal: {
+    readonly acquisitionMode?: ManagedEmailAcquisitionMode;
     readonly createdAt: string;
+    readonly customerOwnedDomain?: string;
     readonly expiresAt: string;
     readonly policyVersion: string;
   };
@@ -42,7 +45,7 @@ export type ManagedEmailResourceSnapshot = {
       readonly mailboxPriceCents: number;
     };
     readonly mailboxes: readonly string[];
-    readonly providerQuote: {
+    readonly providerQuote?: {
       readonly amountMinorUnits: number;
       readonly currency: 'USD';
       readonly fingerprint: string;

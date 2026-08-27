@@ -2115,11 +2115,13 @@ export interface ManagedEmailOverview {
 
 export interface ManagedEmailDomain {
     cancelAtPeriodEnd: Scalars['Boolean']
+    acquisitionMode: Scalars['String']
     dependentMailboxCount: Scalars['Int']
     domain: Scalars['String']
     id: Scalars['String']
     infrastructureState: Scalars['String']
     paidThrough?: Scalars['DateTime']
+    requiredNameservers: Scalars['String'][]
     renewalEnabled: Scalars['Boolean']
     safeFailureCode?: Scalars['String']
     __typename: 'ManagedEmailDomain'
@@ -3156,6 +3158,7 @@ export interface Mutation {
     completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus
     confirmManagedEmailPrewarmedPurchase: ManagedEmailActionResult
     confirmManagedEmailOrdinaryPurchase: ManagedEmailActionResult
+    confirmManagedEmailCustomerOwnedDomainImportPurchase: ManagedEmailActionResult
     setManagedEmailCampaignCap: ManagedEmailActionResult
     cancelManagedEmailWarmup: ManagedEmailActionResult
     pauseManagedEmailWarmup: ManagedEmailActionResult
@@ -5624,11 +5627,13 @@ export interface ManagedEmailOverviewGenqlSelection{
 
 export interface ManagedEmailDomainGenqlSelection{
     cancelAtPeriodEnd?: boolean | number
+    acquisitionMode?: boolean | number
     dependentMailboxCount?: boolean | number
     domain?: boolean | number
     id?: boolean | number
     infrastructureState?: boolean | number
     paidThrough?: boolean | number
+    requiredNameservers?: boolean | number
     renewalEnabled?: boolean | number
     safeFailureCode?: boolean | number
     __typename?: boolean | number
@@ -6705,7 +6710,7 @@ export interface QueryGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface ManagedEmailProposalInput {mailboxCount: Scalars['Int'],personas: ManagedEmailPersonaInput[]}
+export interface ManagedEmailProposalInput {acquisitionMode?: (Scalars['String'] | null),customerOwnedDomain?: (Scalars['String'] | null),mailboxCount: Scalars['Int'],personas: ManagedEmailPersonaInput[]}
 
 export interface ManagedEmailPersonaInput {displayName: Scalars['String'],localPartPreference: Scalars['String'],roleTitle?: (Scalars['String'] | null),signature: Scalars['String']}
 
@@ -6781,6 +6786,7 @@ export interface MutationGenqlSelection{
     completeManagedEmailPaymentMethod?: (ManagedEmailPaymentMethodStatusGenqlSelection & { __args: {input: ManagedEmailCompletePaymentMethodInput} })
     confirmManagedEmailPrewarmedPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
     confirmManagedEmailOrdinaryPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
+    confirmManagedEmailCustomerOwnedDomainImportPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
     setManagedEmailCampaignCap?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailCampaignCapInput} })
     cancelManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })
     pauseManagedEmailWarmup?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailMailboxActionInput} })

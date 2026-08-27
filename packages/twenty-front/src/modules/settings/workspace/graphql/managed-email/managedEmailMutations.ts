@@ -42,6 +42,17 @@ export const CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE = gql`
   }
 `;
 
+export const CONFIRM_MANAGED_EMAIL_CUSTOMER_OWNED_DOMAIN_IMPORT_PURCHASE = gql`
+  mutation ConfirmManagedEmailCustomerOwnedDomainImportPurchase(
+    $input: ManagedEmailPurchaseInput!
+  ) {
+    confirmManagedEmailCustomerOwnedDomainImportPurchase(input: $input) {
+      accepted
+      operationId
+    }
+  }
+`;
+
 export const SET_MANAGED_EMAIL_CAMPAIGN_CAP = gql`
   mutation SetManagedEmailCampaignCap($input: ManagedEmailCampaignCapInput!) {
     setManagedEmailCampaignCap(input: $input) {

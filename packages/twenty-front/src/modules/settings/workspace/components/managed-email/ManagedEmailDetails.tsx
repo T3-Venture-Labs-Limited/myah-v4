@@ -84,6 +84,12 @@ export const ManagedEmailDetails = ({
   );
   const selectedMailbox = mailboxes.find(({ id }) => id === selectedMailboxId);
   const selectedDomain = domains.find(({ id }) => id === selectedDomainId);
+  const selectedDomainIsCustomerOwned =
+    selectedDomain?.acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT';
+  const selectedDomainIsSettingUp =
+    selectedDomain?.infrastructureState === 'ORDERING' ||
+    selectedDomain?.infrastructureState === 'PROVISIONING_DOMAIN';
+
   const selectedMailboxWarmupStatus = selectedMailbox
     ? warmupStatus(selectedMailbox.warmupState)
     : null;
@@ -315,22 +321,34 @@ export const ManagedEmailDetails = ({
         <Section>
           <H2Title
             title={selectedDomain.domain}
-            description={t`Managed sending domain`}
+            description={
+              selectedDomainIsCustomerOwned
+                ? t`Customer-owned domain`
+                : t`Managed sending domain`
+            }
           />
           <dl>
             <div>
-              <dt>{t`Infrastructure`}</dt>
+              <dt>
+                {selectedDomainIsCustomerOwned
+                  ? t`DNS status`
+                  : t`Infrastructure`}
+              </dt>
               <dd>
                 <Status
                   color={
                     selectedDomain.infrastructureState === 'ACTIVE'
                       ? 'green'
-                      : 'red'
+                      : selectedDomainIsSettingUp
+                        ? 'yellow'
+                        : 'red'
                   }
                   text={
                     selectedDomain.infrastructureState === 'ACTIVE'
-                      ? t`Ready`
-                      : t`Action required`
+                      ? t`Active`
+                      : selectedDomainIsSettingUp
+                        ? t`Setting up`
+                        : t`Action required`
                   }
                 />
               </dd>
@@ -339,27 +357,48 @@ export const ManagedEmailDetails = ({
               <dt>{t`Mailboxes`}</dt>
               <dd>{selectedDomain.dependentMailboxCount}</dd>
             </div>
-            <div>
-              <dt>{t`Renewal`}</dt>
-              <dd>
-                {selectedDomain.cancelAtPeriodEnd ||
-                !selectedDomain.renewalEnabled
-                  ? t`Ends after paid period`
-                  : t`Renews automatically`}
-              </dd>
-            </div>
-            {formatDate(selectedDomain.paidThrough) && (
-              <div>
-                <dt>{t`Paid through`}</dt>
-                <dd>{formatDate(selectedDomain.paidThrough)}</dd>
-              </div>
+            {selectedDomainIsCustomerOwned ? (
+              <>
+                <div>
+                  <dt>{t`Domain ownership`}</dt>
+                  <dd>{t`Customer-owned`}</dd>
+                </div>
+                <div>
+                  <dt>{t`Nameservers`}</dt>
+                  <dd>
+                    <ul>
+                      {selectedDomain.requiredNameservers.map((nameserver) => (
+                        <li key={nameserver}>{nameserver}</li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <dt>{t`Renewal`}</dt>
+                  <dd>
+                    {selectedDomain.cancelAtPeriodEnd ||
+                    !selectedDomain.renewalEnabled
+                      ? t`Ends after paid period`
+                      : t`Renews automatically`}
+                  </dd>
+                </div>
+                {formatDate(selectedDomain.paidThrough) && (
+                  <div>
+                    <dt>{t`Paid through`}</dt>
+                    <dd>{formatDate(selectedDomain.paidThrough)}</dd>
+                  </div>
+                )}
+              </>
             )}
           </dl>
           {selectedDomain.safeFailureCode && (
             <p>{t`This domain needs attention. Review the available actions or contact support if the issue continues.`}</p>
           )}
-          {selectedDomain.renewalEnabled &&
-            !selectedDomain.cancelAtPeriodEnd &&
+          {!selectedDomainIsCustomerOwned &&
+            selectedDomain.renewalEnabled &&
             (activeDependentMailboxCount > 0 ? (
               <p>
                 {activeDependentMailboxCount === 1

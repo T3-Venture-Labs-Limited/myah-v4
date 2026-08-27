@@ -2422,11 +2422,13 @@ type ManagedEmailOverview {
 
 type ManagedEmailDomain {
   cancelAtPeriodEnd: Boolean!
+  acquisitionMode: String!
   dependentMailboxCount: Int!
   domain: String!
   id: String!
   infrastructureState: String!
   paidThrough: DateTime
+  requiredNameservers: [String!]!
   renewalEnabled: Boolean!
   safeFailureCode: String
 }
@@ -3483,6 +3485,8 @@ type Query {
 }
 
 input ManagedEmailProposalInput {
+  acquisitionMode: String
+  customerOwnedDomain: String
   mailboxCount: Int!
   personas: [ManagedEmailPersonaInput!]!
 }
@@ -3643,6 +3647,7 @@ type Mutation {
   completeManagedEmailPaymentMethod(input: ManagedEmailCompletePaymentMethodInput!): ManagedEmailPaymentMethodStatus!
   confirmManagedEmailPrewarmedPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
   confirmManagedEmailOrdinaryPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
+  confirmManagedEmailCustomerOwnedDomainImportPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
   setManagedEmailCampaignCap(input: ManagedEmailCampaignCapInput!): ManagedEmailActionResult!
   cancelManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!
   pauseManagedEmailWarmup(input: ManagedEmailMailboxActionInput!): ManagedEmailActionResult!

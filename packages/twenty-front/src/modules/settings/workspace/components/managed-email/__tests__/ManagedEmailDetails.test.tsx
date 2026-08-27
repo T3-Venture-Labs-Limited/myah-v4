@@ -35,6 +35,7 @@ const mailbox: ManagedEmailMailbox = {
 };
 
 const domain: ManagedEmailDomain = {
+  acquisitionMode: 'NEW_MANAGED',
   cancelAtPeriodEnd: false,
   dependentMailboxCount: 1,
   domain: 'creator-network.com',
@@ -43,6 +44,7 @@ const domain: ManagedEmailDomain = {
   paidThrough: '2027-08-06T12:00:00.000Z',
   renewalEnabled: true,
   safeFailureCode: null,
+  requiredNameservers: [],
 };
 
 const renderDetails = ({
@@ -95,6 +97,23 @@ describe('ManagedEmailDetails', () => {
       screen.queryByText('INTERNAL_PROVIDER_DETAIL_MUST_NOT_RENDER'),
     ).not.toBeInTheDocument();
   });
+
+  it.each(['ORDERING', 'PROVISIONING_DOMAIN'] as const)(
+    'renders %s domain setup as Setting up rather than Action required',
+    async (infrastructureState) => {
+      const user = userEvent.setup();
+
+      renderDetails({
+        domains: [{ ...domain, infrastructureState }],
+      });
+      await user.click(
+        screen.getByRole('button', { name: /^creator-network\.com$/ }),
+      );
+
+      expect(screen.getByText('Setting up')).toBeVisible();
+      expect(screen.queryByText('Action required')).not.toBeInTheDocument();
+    },
+  );
 
   it.each([0, 12])(
     'raises an admin cap from %s within the policy capacity',

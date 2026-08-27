@@ -16,6 +16,8 @@ import {
 } from 'class-validator';
 import { Field, InputType, Int } from '@nestjs/graphql';
 
+import { ManagedEmailAcquisitionMode } from './enums/managed-email-acquisition-mode.enum';
+
 const MAX_MAILBOX_COUNT = 50;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
 const MAX_OPAQUE_REFERENCE_LENGTH = 255;
@@ -49,6 +51,17 @@ export class ManagedEmailPersonaInput {
 
 @InputType('ManagedEmailProposalInput')
 export class ManagedEmailProposalInput {
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsIn(Object.values(ManagedEmailAcquisitionMode))
+  acquisitionMode?: ManagedEmailAcquisitionMode;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(253)
+  customerOwnedDomain?: string;
+
   @Field(() => Int)
   @IsInt()
   @Min(1)

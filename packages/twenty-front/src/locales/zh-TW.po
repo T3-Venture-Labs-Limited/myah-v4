@@ -31,6 +31,11 @@ msgstr ""
 msgid " billed annually"
 msgstr "每年結算"
 
+#. js-lingui-id: g21X3O
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid " I understand that I must update my registrar nameservers after purchase."
+msgstr ""
+
 #. js-lingui-id: /8h/VA
 #: src/modules/object-record/spreadsheet-import/utils/getSpreadSheetFieldValidationDefinitions.ts
 msgid " must be one of {ratingValues} values"
@@ -1573,6 +1578,7 @@ msgstr "啟用中..."
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/domains/components/SettingsWorkspaceDomainCard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -4058,6 +4064,12 @@ msgstr ""
 msgid "Buy a Myah-managed domain"
 msgstr ""
 
+#. js-lingui-id: XtfMh1
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Buy domain"
+msgstr ""
+
 #. js-lingui-id: 8ds4Hj
 #: src/pages/settings/applications/components/SettingsAvailableApplicationCard.tsx
 msgid "by {author}"
@@ -4794,6 +4806,11 @@ msgstr ""
 #. js-lingui-id: 5EMoSo
 #: src/modules/settings/billing/components/internal/SettingsBillingPlansWithoutSubscription.tsx
 msgid "Choose plan"
+msgstr ""
+
+#. js-lingui-id: W6DlEz
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Choose the complete initial mailbox set for a domain your workspace owns."
 msgstr ""
 
 #. js-lingui-id: YcrXB2
@@ -5593,13 +5610,9 @@ msgid "Connect an existing mailbox"
 msgstr ""
 
 #. js-lingui-id: wAw6x8
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 msgid "Connect existing mailbox"
-msgstr ""
-
-#. js-lingui-id: Yq71Vn
-#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
-msgid "Connect existing mailboxes"
 msgstr ""
 
 #. js-lingui-id: V640pB
@@ -6251,7 +6264,6 @@ msgid "Create and configure AI agents"
 msgstr "創建和配置 AI 代理"
 
 #. js-lingui-id: NGi8Lf
-#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailPrewarmedFlow.tsx
 msgid "Create and warm new mailboxes"
@@ -6710,11 +6722,16 @@ msgid "Customer"
 msgstr ""
 
 #. js-lingui-id: cNV0LZ
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "Customer-owned"
 msgstr ""
 
 #. js-lingui-id: uOSNy+
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Customer-owned domain"
 msgstr ""
@@ -7780,6 +7797,13 @@ msgstr ""
 msgid "DNS records for {normalizedDomain}"
 msgstr ""
 
+#. js-lingui-id: slvvB/
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "DNS status"
+msgstr ""
+
 #. js-lingui-id: knis60
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "DNS verification"
@@ -7875,6 +7899,17 @@ msgstr "域名已被佔用"
 #. js-lingui-id: diYiSS
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Domain dependency"
+msgstr ""
+
+#. js-lingui-id: ThG7S+
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+msgid "Domain details"
+msgstr ""
+
+#. js-lingui-id: 4bNsbQ
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Domain ownership"
 msgstr ""
 
 #. js-lingui-id: wx0832
@@ -11355,6 +11390,11 @@ msgstr "收件箱"
 msgid "Include emails where all participants share the same domain."
 msgstr ""
 
+#. js-lingui-id: lH/0bn
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Include every mailbox you need now. You cannot add mailboxes later."
+msgstr ""
+
 #. js-lingui-id: C4qYgu
 #: src/modules/settings/billing/components/internal/SettingsBillingPlanComparisonTableRow.tsx
 msgid "Included"
@@ -14053,6 +14093,14 @@ msgstr "API 密鑰名稱"
 #: src/pages/settings/general/SettingsGeneral.tsx
 msgid "Name of your workspace"
 msgstr "工作區名稱"
+
+#. js-lingui-id: SYj9aZ
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
+msgid "Nameservers"
+msgstr ""
 
 #. js-lingui-id: JxC/pi
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx
@@ -17324,7 +17372,6 @@ msgstr ""
 #. js-lingui-id: ckH3fT
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
-#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
@@ -17990,6 +18037,7 @@ msgid "Rename chat"
 msgstr ""
 
 #. js-lingui-id: TBZOgu
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
@@ -19925,6 +19973,7 @@ msgstr "設置您的應用配置變量"
 
 #. js-lingui-id: XYlJJT
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedMailboxTable.tsx
 msgid "Setting up"
 msgstr ""
@@ -23463,6 +23512,13 @@ msgstr ""
 msgid "Usage period"
 msgstr ""
 
+#. js-lingui-id: +uYR7H
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailAcquisitionChooser.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailCreateFlow.tsx
+msgid "Use a domain I own"
+msgstr ""
+
 #. js-lingui-id: lUQn8r
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Use a valid mailbox local part without @."
@@ -24987,9 +25043,9 @@ msgstr "您已經屬於工作區 {workspaceDisplayName}"
 msgid "You already belong to this workspace"
 msgstr "您已經屬於此工作區"
 
-#. js-lingui-id: ycoyxS
+#. js-lingui-id: HkNaLm
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
-msgid "You are confirming the due-today amount and the recurring annual and monthly services shown in this quote."
+msgid "You are confirming the due-today amount and the recurring services shown in this quote."
 msgstr ""
 
 #. js-lingui-id: MFDARJ
@@ -25020,6 +25076,11 @@ msgstr "您可以根據需要設置 IMAP（接收電子郵件）、SMTP（發送
 #. js-lingui-id: kv8vw3
 #: src/modules/settings/profile/components/EmailField.tsx
 msgid "You can't change your email because you belong to 2 or more workspaces."
+msgstr ""
+
+#. js-lingui-id: YInD0F
+#: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
+msgid "You cannot add mailboxes later; choose the complete initial mailbox set during setup."
 msgstr ""
 
 #. js-lingui-id: hiLxmN

@@ -112,6 +112,61 @@ const quote = {
   },
   workspaceId,
 } as unknown as ManagedEmailQuote;
+const CUSTOMER_OWNED_DOMAIN_IMPORT =
+  'CUSTOMER_OWNED_DOMAIN_IMPORT' as ManagedEmailAcquisitionMode;
+const customerOwnedDomain = 'customer-owned-partners.com';
+const customerOwnedQuote = {
+  ...quote,
+  dueTodayCents: quote.lines[1].amountCents + quote.lines[2].amountCents,
+  lines: [quote.lines[2], quote.lines[1]],
+  quoteHash: 'customer-owned-quote-hash',
+  resourceSnapshot: {
+    customerOwnedDomain,
+    domains: [
+      {
+        domain: customerOwnedDomain,
+        mailboxes: [
+          'maya@customer-owned-partners.com',
+          'sam@customer-owned-partners.com',
+        ],
+      },
+    ],
+    personas: [
+      {
+        address: 'maya@customer-owned-partners.com',
+        createdByWorkspaceMemberId: actorWorkspaceMemberId,
+        firstName: 'Maya',
+        lastName: 'Chen',
+        localPart: 'maya',
+        roleTitle: null,
+        signature: 'Maya',
+        version: 1,
+      },
+      {
+        address: 'sam@customer-owned-partners.com',
+        createdByWorkspaceMemberId: actorWorkspaceMemberId,
+        firstName: 'Sam',
+        lastName: 'Lee',
+        localPart: 'sam',
+        roleTitle: 'Growth',
+        signature: 'Sam',
+        version: 1,
+      },
+    ],
+    proposal: quote.resourceSnapshot.proposal,
+  },
+} as unknown as ManagedEmailQuote;
+
+const customerOwnedSubscriptionIdFor = (productKey: string) => {
+  switch (productKey) {
+    case 'managed_warmup_month':
+      return '123e4567-e89b-42d3-a456-426614174022';
+    case 'managed_mailbox_month':
+      return '123e4567-e89b-42d3-a456-426614174023';
+    default:
+      throw new Error('Unexpected customer-owned subscription product');
+  }
+};
 
 type MutableOperation = ManagedEmailAcquisitionOperationEntity & {
   [key: string]: unknown;
@@ -184,6 +239,48 @@ const createOperation = (
     workspaceId,
     ...overrides,
   }) as MutableOperation;
+
+const createCustomerOwnedOperation = (
+  overrides: Partial<ManagedEmailAcquisitionOperationEntity> = {},
+): MutableOperation =>
+  createOperation({
+    acquisitionMode: CUSTOMER_OWNED_DOMAIN_IMPORT,
+    correlatedSubscriptionLines: customerOwnedQuote.lines.map((line) => ({
+      endingBefore: line.endingBefore,
+      isProrated: false,
+      productId: line.metronomeProductId,
+      quantity: line.quantity,
+      startingAt: line.startingAt,
+      subscriptionId: customerOwnedSubscriptionIdFor(line.productKey),
+      total: line.amountCents,
+      unitPrice: line.unitPriceCents,
+    })),
+    expectedLineItems: customerOwnedQuote.lines.map((line) => ({
+      billingFrequency: line.billingFrequency,
+      currency: 'USD',
+      metronomeProductId: line.metronomeProductId,
+      periodEnd: line.endingBefore,
+      periodStart: line.startingAt,
+      productKey: line.productKey,
+      productTag: line.productTag,
+      quantity: line.quantity,
+      totalCents: line.amountCents,
+      unitPriceCents: line.unitPriceCents,
+    })),
+    metronomeSubscriptionIds: customerOwnedQuote.lines.map((line) =>
+      customerOwnedSubscriptionIdFor(line.productKey),
+    ),
+    paymentReceipts: [
+      {
+        externalInvoiceId: 'stripe-invoice-customer-owned',
+        externalPaymentId: 'stripe-payment-customer-owned',
+        metronomeInvoiceId: 'metronome-invoice-customer-owned',
+      },
+    ],
+    quoteHash: customerOwnedQuote.quoteHash,
+    resourceSnapshot: customerOwnedQuote.resourceSnapshot,
+    ...overrides,
+  });
 
 const matchesValue = (actual: unknown, expected: unknown): boolean => {
   if (!(expected instanceof FindOperator)) return actual === expected;
@@ -312,6 +409,29 @@ const createHarness = ({
             },
           ],
           orderId: 'provider-order-1',
+        },
+      ],
+    }),
+    createCustomerOwnedDomainImportOrder: jest.fn().mockResolvedValue({
+      domains: [
+        {
+          domain: customerOwnedDomain,
+          domainId: 'domain-provider-customer-owned',
+          mailboxes: [
+            {
+              address: 'maya@customer-owned-partners.com',
+              firstName: 'Maya',
+              id: 'mailbox-provider-customer-owned-1',
+              lastName: 'Chen',
+            },
+            {
+              address: 'sam@customer-owned-partners.com',
+              firstName: 'Sam',
+              id: 'mailbox-provider-customer-owned-2',
+              lastName: 'Lee',
+            },
+          ],
+          orderId: 'provider-order-customer-owned',
         },
       ],
     }),
@@ -486,6 +606,113 @@ describe('ManagedEmailAcquisitionService', () => {
 
     expect(harness.icemailClient.createOrdinaryOrder).not.toHaveBeenCalled();
     expect(harness.icemailClient.buyPrewarmedBundles).not.toHaveBeenCalled();
+  });
+
+  it('gates one customer-owned import on exact payment and never duplicates an uncertain import', async () => {
+    const harness = createHarness({
+      operation: createCustomerOwnedOperation({
+        paymentReceipts: null,
+        paymentStatus: null,
+        state: 'PAYMENT_PENDING',
+      }),
+    });
+
+    await harness.service.admit({
+      ...admissionInput,
+      acquisitionMode: CUSTOMER_OWNED_DOMAIN_IMPORT,
+      quote: customerOwnedQuote,
+    });
+
+    expect([...harness.domainRows.values()]).toEqual([
+      expect.objectContaining({
+        cancelAtPeriodEnd: false,
+        metronomeSubscriptionId: null,
+        paidThrough: null,
+        renewalEnabled: false,
+      }),
+    ]);
+    expect([...harness.mailboxRows.values()]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metronomeMailboxSubscriptionId: customerOwnedSubscriptionIdFor(
+            'managed_mailbox_month',
+          ),
+          metronomeWarmupSubscriptionId: customerOwnedSubscriptionIdFor(
+            'managed_warmup_month',
+          ),
+          normalizedAddress: 'maya@customer-owned-partners.com',
+        }),
+        expect.objectContaining({
+          metronomeMailboxSubscriptionId: customerOwnedSubscriptionIdFor(
+            'managed_mailbox_month',
+          ),
+          metronomeWarmupSubscriptionId: customerOwnedSubscriptionIdFor(
+            'managed_warmup_month',
+          ),
+          normalizedAddress: 'sam@customer-owned-partners.com',
+        }),
+      ]),
+    );
+
+    await harness.service.continue({
+      operationId: harness.operation.id,
+      workspaceId,
+    });
+    expect(
+      harness.icemailClient.createCustomerOwnedDomainImportOrder,
+    ).not.toHaveBeenCalled();
+    expect(harness.icemailClient.createOrdinaryOrder).not.toHaveBeenCalled();
+
+    harness.operation.paymentReceipts = [
+      {
+        externalInvoiceId: 'stripe-invoice-customer-owned',
+        externalPaymentId: 'stripe-payment-customer-owned',
+        metronomeInvoiceId: 'metronome-invoice-customer-owned',
+      },
+    ];
+    harness.operation.paymentStatus = 'PAID';
+    harness.operation.state = 'PAYMENT_PAID';
+    harness.icemailClient.createCustomerOwnedDomainImportOrder.mockRejectedValueOnce(
+      new IcemailException(IcemailExceptionCode.WRITE_OUTCOME_UNCERTAIN),
+    );
+
+    const first = await harness.service.continue({
+      operationId: harness.operation.id,
+      workspaceId,
+    });
+    const replay = await harness.service.continue({
+      operationId: harness.operation.id,
+      workspaceId,
+    });
+
+    expect(
+      harness.icemailClient.createCustomerOwnedDomainImportOrder,
+    ).toHaveBeenCalledWith({
+      customerOwnedDomain,
+      mailboxes: [
+        {
+          address: 'maya@customer-owned-partners.com',
+          firstName: 'Maya',
+          lastName: 'Chen',
+          password: 'temporary-setup-password',
+        },
+        {
+          address: 'sam@customer-owned-partners.com',
+          firstName: 'Sam',
+          lastName: 'Lee',
+          password: 'temporary-setup-password',
+        },
+      ],
+    });
+    expect(harness.icemailClient.createOrdinaryOrder).not.toHaveBeenCalled();
+    expect(
+      harness.icemailClient.checkDomainAvailability,
+    ).not.toHaveBeenCalled();
+    expect(first.state).toBe('RECONCILIATION_REQUIRED');
+    expect(replay.state).toBe('RECONCILIATION_REQUIRED');
+    expect(
+      harness.icemailClient.createCustomerOwnedDomainImportOrder,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it('projects exact paid periods before starting provider fulfillment', async () => {

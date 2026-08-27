@@ -113,7 +113,7 @@ describe('ManagedEmailResolver', () => {
       expect.arrayContaining([
         'confirmManagedEmailPrewarmedPurchase',
         'confirmManagedEmailOrdinaryPurchase',
-        'setManagedEmailCampaignCap',
+        'confirmManagedEmailCustomerOwnedDomainImportPurchase',
         'cancelManagedEmailWarmup',
         'pauseManagedEmailWarmup',
         'resumeManagedEmailWarmup',
@@ -393,6 +393,11 @@ describe('ManagedEmailResolver', () => {
       workspace as never,
       actorId,
     );
+    await resolver.confirmManagedEmailCustomerOwnedDomainImportPurchase(
+      purchaseInput,
+      workspace as never,
+      actorId,
+    );
 
     expect(customerService.setCampaignCap).toHaveBeenCalledWith({
       actorId,
@@ -428,6 +433,12 @@ describe('ManagedEmailResolver', () => {
     });
     expect(customerService.purchase).toHaveBeenNthCalledWith(2, {
       acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+      actorId,
+      input: purchaseInput,
+      workspaceId: workspace.id,
+    });
+    expect(customerService.purchase).toHaveBeenNthCalledWith(3, {
+      acquisitionMode: ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
       actorId,
       input: purchaseInput,
       workspaceId: workspace.id,

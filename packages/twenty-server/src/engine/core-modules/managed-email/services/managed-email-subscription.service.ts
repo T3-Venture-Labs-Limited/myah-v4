@@ -7,6 +7,7 @@ import {
   type ManagedEmailCorrelatedSubscriptionLine,
   type ManagedEmailExpectedLineItem,
 } from 'src/engine/core-modules/managed-email/types/managed-email-persistence.type';
+import { hasExactManagedEmailExpectedLineSet } from 'src/engine/core-modules/managed-email/utils/validate-managed-email-persistence-json.util';
 import { METRONOME_USD_CREDIT_TYPE_NAME } from 'src/engine/core-modules/managed-provider-billing/constants/metronome-workspace-alias-prefix.constant';
 import { MetronomeClientService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-client.service';
 import {
@@ -425,7 +426,10 @@ export class ManagedEmailSubscriptionService {
       !input.readinessPolicyVersion.trim() ||
       !input.quote.proposalHash.trim() ||
       !input.quote.quoteHash.trim() ||
-      input.quote.lines.length !== 3
+      !hasExactManagedEmailExpectedLineSet(
+        input.acquisitionMode,
+        input.quote.lines,
+      )
     ) {
       throw new Error('Managed email purchase input is invalid');
     }

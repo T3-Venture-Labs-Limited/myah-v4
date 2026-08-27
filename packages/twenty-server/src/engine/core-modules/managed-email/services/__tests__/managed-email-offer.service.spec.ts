@@ -1,3 +1,5 @@
+import { ManagedEmailAcquisitionMode } from '../../enums/managed-email-acquisition-mode.enum';
+
 import { ManagedEmailOfferService } from '../managed-email-offer.service';
 
 const workspaceId = '123e4567-e89b-42d3-a456-426614174000';
@@ -77,6 +79,17 @@ const quote = {
   proposalHash: 'proposal-fingerprint-1',
   quoteHash: 'quote-fingerprint-1',
   resourceSnapshot: { proposalId },
+};
+
+const customerOwnedDomainImportQuote = {
+  ...quote,
+  resourceSnapshot: {
+    domains: [{ domain: 'creator-partners.test' }],
+    proposal: {
+      acquisitionMode: ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
+      customerOwnedDomain: 'creator-partners.test',
+    },
+  },
 };
 
 type Row = Record<string, unknown>;
@@ -304,6 +317,83 @@ describe('ManagedEmailOfferService durable restart-safe contracts', () => {
       ).rejects.toThrow();
     },
   );
+
+  it.each([
+    ['legacy', quote],
+    [
+      'new managed',
+      {
+        ...quote,
+        resourceSnapshot: {
+          proposal: {
+            acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+          },
+        },
+      },
+    ],
+  ])(
+    'rejects a customer-owned domain import against a %s quote before it is consumed',
+    async (_mode, quoteSnapshot) => {
+      const { repository } = createRepository();
+      const service = new ManagedEmailOfferService(
+        repository as never,
+        () => now,
+      );
+      await service.persistQuote({
+        actorWorkspaceMemberId,
+        proposalId,
+        quote: quoteSnapshot as never,
+        workspaceId,
+      });
+
+      await expect(
+        service.reserveQuoteForPurchase({
+          acquisitionMode:
+            ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
+          actorWorkspaceMemberId,
+          idempotencyKey: 'purchase-1',
+          operationId,
+          quoteFingerprint: 'quote-fingerprint-1',
+          quoteId,
+          quoteVersion: 'test-catalog-v1',
+          workspaceId,
+        }),
+      ).rejects.toThrow(
+        'Managed email purchase acquisition mode does not match quote',
+      );
+      expect(repository.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects an ordinary purchase against an owned-domain quote before it is consumed', async () => {
+    const { repository } = createRepository();
+    const service = new ManagedEmailOfferService(
+      repository as never,
+      () => now,
+    );
+    await service.persistQuote({
+      actorWorkspaceMemberId,
+      proposalId,
+      quote: customerOwnedDomainImportQuote as never,
+      workspaceId,
+    });
+
+    await expect(
+      service.reserveQuoteForPurchase({
+        acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+        actorWorkspaceMemberId,
+        idempotencyKey: 'purchase-1',
+        operationId,
+        quoteFingerprint: 'quote-fingerprint-1',
+        quoteId,
+        quoteVersion: 'test-catalog-v1',
+        workspaceId,
+      }),
+    ).rejects.toThrow(
+      'Managed email purchase acquisition mode does not match quote',
+    );
+    expect(repository.update).not.toHaveBeenCalled();
+  });
 
   it('replays a consumed quote from durable storage after the service restarts', async () => {
     const { repository } = createRepository();

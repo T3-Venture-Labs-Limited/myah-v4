@@ -15,14 +15,15 @@ import { ManagedEmailDashboard } from '@/settings/workspace/components/managed-e
 import {
   CANCEL_MANAGED_EMAIL_DOMAIN_RENEWAL,
   CANCEL_MANAGED_EMAIL_WARMUP,
+  COMPLETE_MANAGED_EMAIL_PAYMENT_METHOD,
+  CONFIRM_MANAGED_EMAIL_CUSTOMER_OWNED_DOMAIN_IMPORT_PURCHASE,
   CONFIRM_MANAGED_EMAIL_ORDINARY_PURCHASE,
+  CONFIRM_MANAGED_EMAIL_PREWARMED_PURCHASE,
   PAUSE_MANAGED_EMAIL_WARMUP,
+  PREPARE_MANAGED_EMAIL_PAYMENT_METHOD,
   RESUME_MANAGED_EMAIL_WARMUP,
   SET_MANAGED_EMAIL_CAMPAIGN_CAP,
   STOP_MANAGED_EMAIL_MAILBOX,
-  COMPLETE_MANAGED_EMAIL_PAYMENT_METHOD,
-  CONFIRM_MANAGED_EMAIL_PREWARMED_PURCHASE,
-  PREPARE_MANAGED_EMAIL_PAYMENT_METHOD,
 } from '@/settings/workspace/graphql/managed-email/managedEmailMutations';
 import {
   GET_MANAGED_EMAIL_OPERATION,
@@ -57,7 +58,15 @@ import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
 const PURCHASE_INTENT_STORAGE_KEY_PREFIX = 'managed-email-purchase-intent';
 
-type ManagedEmailAcquisitionMode = 'NEW_MANAGED' | 'PREWARMED_INVENTORY';
+type ManagedEmailAcquisitionMode =
+  | 'CUSTOMER_OWNED_DOMAIN_IMPORT'
+  | 'NEW_MANAGED'
+  | 'PREWARMED_INVENTORY';
+
+type OrdinaryManagedEmailAcquisitionMode = Exclude<
+  ManagedEmailAcquisitionMode,
+  'PREWARMED_INVENTORY'
+>;
 
 type PersistedPurchaseIntent = ManagedEmailPurchaseInput & {
   acquisitionMode: ManagedEmailAcquisitionMode;
@@ -86,7 +95,8 @@ const readPersistedPurchaseIntent = (
       typeof candidate === 'string' && candidate.trim() !== '';
 
     if (
-      (value.acquisitionMode !== 'NEW_MANAGED' &&
+      (value.acquisitionMode !== 'CUSTOMER_OWNED_DOMAIN_IMPORT' &&
+        value.acquisitionMode !== 'NEW_MANAGED' &&
         value.acquisitionMode !== 'PREWARMED_INVENTORY') ||
       !isNonEmptyString(value.idempotencyKey) ||
       (value.operationId !== null && !isNonEmptyString(value.operationId)) ||
@@ -171,6 +181,10 @@ type OperationQueryData = {
 };
 
 type ConfirmPurchaseData = {
+  confirmManagedEmailCustomerOwnedDomainImportPurchase?: {
+    accepted: boolean;
+    operationId: string;
+  };
   confirmManagedEmailOrdinaryPurchase?: {
     accepted: boolean;
     operationId: string;
@@ -260,6 +274,12 @@ const ManagedEmailOverviewForWorkspace = ({
     GET_MANAGED_EMAIL_PREWARMED_PROPOSAL,
     { fetchPolicy: 'network-only' },
   );
+  const [
+    confirmCustomerOwnedDomainImportPurchase,
+    { loading: isConfirmingCustomerOwnedDomainImport },
+  ] = useMutation<ConfirmPurchaseData, ConfirmPurchaseVariables>(
+    CONFIRM_MANAGED_EMAIL_CUSTOMER_OWNED_DOMAIN_IMPORT_PURCHASE,
+  );
   const [confirmPurchase, { loading: isConfirming }] = useMutation<
     ConfirmPurchaseData,
     ConfirmPurchaseVariables
@@ -305,11 +325,15 @@ const ManagedEmailOverviewForWorkspace = ({
     const confirmation =
       purchaseIntent.acquisitionMode === 'PREWARMED_INVENTORY'
         ? confirmPrewarmedPurchase({ variables })
-        : confirmPurchase({ variables });
+        : purchaseIntent.acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT'
+          ? confirmCustomerOwnedDomainImportPurchase({ variables })
+          : confirmPurchase({ variables });
 
     void confirmation
       .then((result) => {
         const nextOperationId =
+          result.data?.confirmManagedEmailCustomerOwnedDomainImportPurchase
+            ?.operationId ??
           result.data?.confirmManagedEmailPrewarmedPurchase?.operationId ??
           result.data?.confirmManagedEmailOrdinaryPurchase?.operationId;
         if (!nextOperationId) {
@@ -333,6 +357,7 @@ const ManagedEmailOverviewForWorkspace = ({
       });
   }, [
     canPurchase,
+    confirmCustomerOwnedDomainImportPurchase,
     confirmPrewarmedPurchase,
     confirmPurchase,
     enqueueErrorSnackBar,
@@ -391,6 +416,11 @@ const ManagedEmailOverviewForWorkspace = ({
     setFlow('OVERVIEW');
   }, [operationData, refetch, stopOverviewPolling, stopPolling, workspaceId]);
 
+  const enterOrdinaryFlow = (mode: OrdinaryManagedEmailAcquisitionMode) => {
+    setAcquisitionMode(mode);
+    setFlow('ORDINARY');
+  };
+
   const beginPrewarmedFlow = async () => {
     setFlow('PREWARMED_LOADING');
 
@@ -424,7 +454,11 @@ const ManagedEmailOverviewForWorkspace = ({
         throw new Error('Missing managed email quote');
       }
 
-      setAcquisitionMode('NEW_MANAGED');
+      setAcquisitionMode(
+        input.acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT'
+          ? 'CUSTOMER_OWNED_DOMAIN_IMPORT'
+          : 'NEW_MANAGED',
+      );
       setConfirmationIdempotencyKey(crypto.randomUUID());
       setProposal(nextProposal);
       setQuote(nextQuote);
@@ -501,8 +535,12 @@ const ManagedEmailOverviewForWorkspace = ({
       const result =
         acquisitionMode === 'PREWARMED_INVENTORY'
           ? await confirmPrewarmedPurchase({ variables })
-          : await confirmPurchase({ variables });
+          : acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT'
+            ? await confirmCustomerOwnedDomainImportPurchase({ variables })
+            : await confirmPurchase({ variables });
       const nextOperationId =
+        result.data?.confirmManagedEmailCustomerOwnedDomainImportPurchase
+          ?.operationId ??
         result.data?.confirmManagedEmailPrewarmedPurchase?.operationId ??
         result.data?.confirmManagedEmailOrdinaryPurchase?.operationId;
       if (!nextOperationId) {
@@ -578,8 +616,11 @@ const ManagedEmailOverviewForWorkspace = ({
           data?.managedEmailOverview.acquisitionAvailable,
         )}
         canPurchase={canPurchase === true}
+        onChooseCustomerOwned={() =>
+          enterOrdinaryFlow('CUSTOMER_OWNED_DOMAIN_IMPORT')
+        }
         onChoosePrewarmed={() => void beginPrewarmedFlow()}
-        onCreateManaged={() => setFlow('ORDINARY')}
+        onCreateManaged={() => enterOrdinaryFlow('NEW_MANAGED')}
         onConnectExisting={() => navigate(SettingsPath.NewAccount)}
       />
     );
@@ -597,7 +638,7 @@ const ManagedEmailOverviewForWorkspace = ({
         onChooseBundle={(bundle) =>
           void createPrewarmedProposalAndQuote(bundle)
         }
-        onUseOrdinary={() => setFlow('ORDINARY')}
+        onUseOrdinary={() => enterOrdinaryFlow('NEW_MANAGED')}
       />
     );
   }
@@ -605,6 +646,11 @@ const ManagedEmailOverviewForWorkspace = ({
   if (flow === 'ORDINARY') {
     return (
       <ManagedEmailCreateFlow
+        initialAcquisitionMode={
+          acquisitionMode === 'CUSTOMER_OWNED_DOMAIN_IMPORT'
+            ? 'CUSTOMER_OWNED_DOMAIN_IMPORT'
+            : 'NEW_MANAGED'
+        }
         onBack={() => setFlow('CHOOSER')}
         onSubmit={createProposalAndQuote}
       />
@@ -614,7 +660,11 @@ const ManagedEmailOverviewForWorkspace = ({
   if (flow === 'REVIEW' && proposal && quote) {
     return (
       <ManagedEmailReview
-        isConfirming={isConfirming || isConfirmingPrewarmed}
+        isConfirming={
+          isConfirming ||
+          isConfirmingCustomerOwnedDomainImport ||
+          isConfirmingPrewarmed
+        }
         onBack={() =>
           setFlow(
             acquisitionMode === 'PREWARMED_INVENTORY'
@@ -691,7 +741,7 @@ const ManagedEmailOverviewForWorkspace = ({
         mailboxes={data.managedEmailMailboxes}
         onConnectExistingMailbox={() => navigate(SettingsPath.NewAccount)}
         onBrowsePrewarmedInventory={() => void beginPrewarmedFlow()}
-        onSetUpManagedEmail={() => setFlow('ORDINARY')}
+        onSetUpManagedEmail={() => enterOrdinaryFlow('NEW_MANAGED')}
         overview={data.managedEmailOverview}
       />
       {(data.managedEmailMailboxes.length > 0 ||

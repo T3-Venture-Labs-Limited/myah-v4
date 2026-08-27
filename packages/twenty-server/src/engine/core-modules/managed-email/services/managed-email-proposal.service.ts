@@ -9,6 +9,7 @@ import {
   type IcemailDomainAvailabilityItem,
   type IcemailPrewarmedBundle,
 } from 'src/engine/core-modules/managed-email/providers/icemail/icemail.types';
+import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import {
   type CreateManagedEmailProposalInput,
   type CreatePrewarmedManagedEmailProposalInput,
@@ -18,6 +19,7 @@ import {
   type ManagedEmailProposalPersona,
   type ManagedEmailProposalPolicy,
 } from 'src/engine/core-modules/managed-email/types/managed-email-proposal.type';
+import { normalizeCustomerOwnedDomainImport } from '../utils/normalize-customer-owned-domain-import.util';
 import { ManagedEmailOfferService } from './managed-email-offer.service';
 
 export const MANAGED_EMAIL_PROPOSAL_POLICY = Symbol(
@@ -42,6 +44,14 @@ const DISCLOSURES = Object.freeze({
     'Domain, mailbox, and warmup renewals can be stopped independently and remain active through their paid-through dates.',
   managedServiceOwnership:
     'Managed sending domains are service assets for exclusive workspace use. Registrar ownership or transfer is not included.',
+  prepaidBalance: 'Email services do not use your AI balance.',
+});
+
+const CUSTOMER_OWNED_DOMAIN_IMPORT_DISCLOSURES = Object.freeze({
+  cancellation:
+    'No annual domain charge. Customer-owned domains do not renew through Myah.',
+  managedServiceOwnership:
+    'You retain ownership of this domain and must update its registrar nameservers.',
   prepaidBalance: 'Email services do not use your AI balance.',
 });
 
@@ -88,7 +98,9 @@ const freezeDomain = (
   Object.freeze({
     ...domain,
     mailboxes: Object.freeze([...domain.mailboxes]),
-    providerQuote: Object.freeze(domain.providerQuote),
+    ...(domain.providerQuote === undefined
+      ? {}
+      : { providerQuote: Object.freeze(domain.providerQuote) }),
   });
 
 @Injectable()
@@ -135,70 +147,50 @@ export class ManagedEmailProposalService {
   ): Promise<ManagedEmailProposal> {
     this.validatePolicy();
     const personas = this.normalizePersonas(input, context);
-    const domainCount = Math.ceil(
-      input.mailboxCount / this.policy.maxMailboxesPerDomain,
-    );
-    const candidates = this.policy
-      .candidateDomains(context.workspaceSlug, domainCount)
-      .slice(0, domainCount);
+    const acquisitionMode =
+      input.acquisitionMode ?? ManagedEmailAcquisitionMode.NEW_MANAGED;
 
     if (
-      candidates.length < domainCount ||
-      new Set(candidates.map((candidate) => candidate.trim().toLowerCase()))
-        .size !== domainCount
+      acquisitionMode !== ManagedEmailAcquisitionMode.NEW_MANAGED &&
+      acquisitionMode !==
+        ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
     ) {
-      throw new Error('Managed email proposal policy is unavailable');
+      throw new Error('Managed email proposal input is invalid');
+    }
+
+    const customerOwnedDomain =
+      acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+        ? this.normalizeCustomerOwnedDomain(input.customerOwnedDomain)
+        : undefined;
+
+    if (
+      acquisitionMode === ManagedEmailAcquisitionMode.NEW_MANAGED &&
+      input.customerOwnedDomain !== undefined
+    ) {
+      throw new Error('Managed email proposal input is invalid');
     }
 
     const createdAt = this.now();
-    const selectedDomains: Array<{
-      domain: string;
-      quote: IcemailDomainAvailabilityItem;
-    }> = [];
-
-    for (const candidate of candidates) {
-      const availability =
-        await this.icemailClient.checkDomainAvailability(candidate);
-      const selected = availability.available
-        ? availability
-        : this.policy.allowProviderAlternatives
-          ? availability.alternatives.find(({ available }) => available)
-          : undefined;
-
-      if (
-        selected === undefined ||
-        selectedDomains.some(({ domain }) => domain === selected.domain)
-      ) {
-        throw new Error('Managed email domain availability is insufficient');
-      }
-      selectedDomains.push({ domain: selected.domain, quote: selected });
-    }
-
-    const domains = selectedDomains.map(({ domain, quote }, index) => {
-      const firstPersona = index * this.policy.maxMailboxesPerDomain;
-      const domainPersonas = personas
-        .slice(firstPersona, firstPersona + this.policy.maxMailboxesPerDomain)
-        .map((persona) =>
-          freezePersona({
-            ...persona,
-            address: `${persona.localPart}@${domain}`,
-          }),
-        );
-
-      return freezeDomain({
-        domain,
-        mailboxes: domainPersonas,
-        providerQuote: {
-          amountMinorUnits: quote.price.amountCents,
-          currency: 'USD',
-          fingerprint: quoteFingerprint(quote),
-          observedAt: createdAt.toISOString(),
-          termCount: 1,
-          termUnit: 'YEAR',
-        },
-      });
-    });
-
+    const domains =
+      customerOwnedDomain === undefined
+        ? await this.createManagedDomains({
+            context,
+            createdAt,
+            mailboxCount: input.mailboxCount,
+            personas,
+          })
+        : [
+            freezeDomain({
+              domain: customerOwnedDomain,
+              mailboxes: personas.map((persona) =>
+                freezePersona({
+                  ...persona,
+                  address: `${persona.localPart}@${customerOwnedDomain}`,
+                }),
+              ),
+            }),
+          ];
     const addresses = domains.flatMap(({ mailboxes }) =>
       mailboxes.map(({ address }) => address),
     );
@@ -208,8 +200,13 @@ export class ManagedEmailProposalService {
     }
 
     const proposal = Object.freeze({
+      acquisitionMode,
+      ...(customerOwnedDomain === undefined ? {} : { customerOwnedDomain }),
       createdAt: new Date(createdAt),
-      disclosures: DISCLOSURES,
+      disclosures:
+        customerOwnedDomain === undefined
+          ? DISCLOSURES
+          : CUSTOMER_OWNED_DOMAIN_IMPORT_DISCLOSURES,
       domains: Object.freeze(domains),
       expiresAt: new Date(createdAt.getTime() + this.policy.proposalTtlMs),
       id: this.idFactory(),
@@ -340,6 +337,7 @@ export class ManagedEmailProposalService {
       throw new Error('Managed email prewarmed inventory is invalid');
     }
     const proposal = Object.freeze({
+      acquisitionMode: ManagedEmailAcquisitionMode.PREWARMED_INVENTORY,
       createdAt: new Date(createdAt),
       disclosures: DISCLOSURES,
       domains: Object.freeze(domains),
@@ -377,6 +375,13 @@ export class ManagedEmailProposalService {
       throw new Error('Managed email proposal has expired');
     }
 
+    if (
+      proposal.acquisitionMode ===
+      ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT
+    ) {
+      return proposal;
+    }
+
     const domains: ManagedEmailProposalDomain[] = [];
 
     for (const proposedDomain of proposal.domains) {
@@ -411,6 +416,91 @@ export class ManagedEmailProposalService {
       domains: Object.freeze(domains),
     });
   }
+  private async createManagedDomains({
+    context,
+    createdAt,
+    mailboxCount,
+    personas,
+  }: {
+    context: ManagedEmailProposalContext;
+    createdAt: Date;
+    mailboxCount: number;
+    personas: ManagedEmailProposalPersona[];
+  }): Promise<ManagedEmailProposalDomain[]> {
+    const domainCount = Math.ceil(
+      mailboxCount / this.policy.maxMailboxesPerDomain,
+    );
+    const candidates = this.policy
+      .candidateDomains(context.workspaceSlug, domainCount)
+      .slice(0, domainCount);
+
+    if (
+      candidates.length < domainCount ||
+      new Set(candidates.map((candidate) => candidate.trim().toLowerCase()))
+        .size !== domainCount
+    ) {
+      throw new Error('Managed email proposal policy is unavailable');
+    }
+
+    const selectedDomains: Array<{
+      domain: string;
+      quote: IcemailDomainAvailabilityItem;
+    }> = [];
+
+    for (const candidate of candidates) {
+      const availability =
+        await this.icemailClient.checkDomainAvailability(candidate);
+      const selected = availability.available
+        ? availability
+        : this.policy.allowProviderAlternatives
+          ? availability.alternatives.find(({ available }) => available)
+          : undefined;
+
+      if (
+        selected === undefined ||
+        selectedDomains.some(({ domain }) => domain === selected.domain)
+      ) {
+        throw new Error('Managed email domain availability is insufficient');
+      }
+      selectedDomains.push({ domain: selected.domain, quote: selected });
+    }
+
+    return selectedDomains.map(({ domain, quote }, index) => {
+      const firstPersona = index * this.policy.maxMailboxesPerDomain;
+      const domainPersonas = personas
+        .slice(firstPersona, firstPersona + this.policy.maxMailboxesPerDomain)
+        .map((persona) =>
+          freezePersona({
+            ...persona,
+            address: `${persona.localPart}@${domain}`,
+          }),
+        );
+
+      return freezeDomain({
+        domain,
+        mailboxes: domainPersonas,
+        providerQuote: {
+          amountMinorUnits: quote.price.amountCents,
+          currency: 'USD',
+          fingerprint: quoteFingerprint(quote),
+          observedAt: createdAt.toISOString(),
+          termCount: 1,
+          termUnit: 'YEAR',
+        },
+      });
+    });
+  }
+
+  private normalizeCustomerOwnedDomain(value: unknown): string {
+    const domain = normalizeCustomerOwnedDomainImport(value);
+
+    if (domain === null) {
+      throw new Error('Managed email proposal input is invalid');
+    }
+
+    return domain;
+  }
+
   private validatePrewarmedBundle(bundle: IcemailPrewarmedBundle): void {
     const domain = bundle.domain.trim().toLowerCase();
     if (

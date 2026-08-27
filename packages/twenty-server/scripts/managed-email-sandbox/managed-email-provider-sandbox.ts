@@ -7,6 +7,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { dirname } from 'node:path';
+import { normalizeCustomerOwnedDomainImport } from 'src/engine/core-modules/managed-email/utils/normalize-customer-owned-domain-import.util';
 
 type SandboxOptions = {
   host?: string;
@@ -72,7 +73,7 @@ type IcemailOrderMailbox = {
 
 type IcemailOrderDomain = {
   domain_name: string;
-  import: false;
+  import: boolean;
   mailbox_type: 'GOOGLE';
   order_id: string;
   domain_id: string;
@@ -190,6 +191,18 @@ const requireSandboxDomain = (value: unknown): string => {
   return domain;
 };
 
+const requireCustomerOwnedDomainImport = (value: unknown): string => {
+  const domain = normalizeCustomerOwnedDomainImport(value);
+
+  if (domain === null) {
+    throw new Error(
+      'Managed email sandbox requires a customer-owned import domain',
+    );
+  }
+
+  return domain;
+};
+
 const requireSandboxAddress = (
   value: unknown,
   expectedDomain: string,
@@ -206,6 +219,59 @@ const requireSandboxAddress = (
   }
 
   return address;
+};
+
+const requireCustomerOwnedImportAddress = (
+  value: unknown,
+  expectedDomain: string,
+): string => {
+  const address = normalize(value);
+  const parts = address.split('@');
+
+  if (
+    parts.length !== 2 ||
+    parts[0].length === 0 ||
+    requireCustomerOwnedDomainImport(parts[1]) !== expectedDomain
+  ) {
+    throw new Error(
+      'Managed email sandbox requires a customer-owned import domain address',
+    );
+  }
+
+  return `${parts[0]}@${expectedDomain}`;
+};
+const requireKnownWarmupInboxAddress = (
+  value: unknown,
+  domains: IcemailDomain[],
+  mailboxes: IcemailMailbox[],
+): string => {
+  const address = normalize(value);
+  const importedMailbox = mailboxes.find(
+    (mailbox) =>
+      normalize(mailbox.username) === address &&
+      domains.some(
+        (domain) => domain.domain_id === mailbox.domain_id && domain.import,
+      ),
+  );
+
+  if (importedMailbox !== undefined) {
+    const importedDomain = domains.find(
+      (domain) => domain.domain_id === importedMailbox.domain_id,
+    );
+
+    if (importedDomain === undefined) {
+      throw new Error('Managed email sandbox mailbox domain is missing');
+    }
+
+    return requireCustomerOwnedImportAddress(
+      address,
+      requireCustomerOwnedDomainImport(importedDomain.domain),
+    );
+  }
+
+  const domain = address.split('@')[1];
+
+  return requireSandboxAddress(address, requireSandboxDomain(domain));
 };
 
 const SANDBOX_FAULTS = new Set<SandboxFault>([
@@ -236,20 +302,38 @@ const assertSandboxState = (value: SandboxState): SandboxState => {
     throw new Error('Managed email sandbox state is invalid');
   }
 
-  const domainsById = new Map(
+  const domainsById = new Map<
+    string,
+    {
+      domain: string;
+      imported: boolean;
+    }
+  >(
     value.domains.map((domain) => [
       domain.domain_id,
-      requireSandboxDomain(domain.domain),
+      {
+        domain: domain.import
+          ? requireCustomerOwnedDomainImport(domain.domain)
+          : requireSandboxDomain(domain.domain),
+        imported: domain.import,
+      },
     ]),
   );
 
   for (const mailbox of value.mailboxes) {
-    const domain = domainsById.get(mailbox.domain_id);
+    const providerDomain = domainsById.get(mailbox.domain_id);
 
-    if (domain === undefined) {
+    if (providerDomain === undefined) {
       throw new Error('Managed email sandbox mailbox domain is missing');
     }
-    requireSandboxAddress(mailbox.username, domain);
+    if (providerDomain.imported) {
+      requireCustomerOwnedImportAddress(
+        mailbox.username,
+        providerDomain.domain,
+      );
+    } else {
+      requireSandboxAddress(mailbox.username, providerDomain.domain);
+    }
   }
 
   for (const bundle of value.prewarm) {
@@ -261,17 +345,21 @@ const assertSandboxState = (value: SandboxState): SandboxState => {
   }
 
   for (const inbox of value.inboxes) {
-    const domain = normalize(inbox.email).split('@')[1];
-
-    requireSandboxAddress(inbox.email, requireSandboxDomain(domain));
+    requireKnownWarmupInboxAddress(inbox.email, value.domains, value.mailboxes);
   }
 
   for (const operation of Object.values(value.operations)) {
     for (const rawDomain of operation.data) {
-      const domain = requireSandboxDomain(rawDomain.domain_name);
+      const domain = rawDomain.import
+        ? requireCustomerOwnedDomainImport(rawDomain.domain_name)
+        : requireSandboxDomain(rawDomain.domain_name);
 
       for (const mailbox of rawDomain.mailboxes) {
-        requireSandboxAddress(mailbox.username, domain);
+        if (rawDomain.import) {
+          requireCustomerOwnedImportAddress(mailbox.username, domain);
+        } else {
+          requireSandboxAddress(mailbox.username, domain);
+        }
       }
     }
   }
@@ -379,13 +467,16 @@ export async function createManagedEmailProviderSandbox(
   const makeDomain = (
     domainValue: unknown,
     prewarmed: boolean,
+    imported = !prewarmed,
   ): IcemailDomain => ({
     domain_id: randomUUID(),
-    domain: requireSandboxDomain(domainValue),
+    domain: imported
+      ? requireCustomerOwnedDomainImport(domainValue)
+      : requireSandboxDomain(domainValue),
     status: 'active',
     active: true,
     workspace_type: 'GOOGLE',
-    import: !prewarmed,
+    import: imported,
     prewarmed,
     blacklisted: false,
     expires_at: new Date(Date.now() + 31_536_000_000).toISOString(),
@@ -403,7 +494,9 @@ export async function createManagedEmailProviderSandbox(
     return {
       id: randomUUID(),
       domain_id: domain.domain_id,
-      username: requireSandboxAddress(username, domain.domain),
+      username: domain.import
+        ? requireCustomerOwnedImportAddress(username, domain.domain)
+        : requireSandboxAddress(username, domain.domain),
       first_name: firstName,
       last_name: lastName,
       type: 'GOOGLE',
@@ -587,6 +680,7 @@ export async function createManagedEmailProviderSandbox(
 
     if (path === '/order' && method === 'POST') {
       const body = await readJson(request);
+      const importOrder = body.import === true;
       const operationKey = fingerprint(body);
       const existing = state.operations[operationKey];
 
@@ -605,14 +699,20 @@ export async function createManagedEmailProviderSandbox(
       try {
         validatedItems = orderItems.map((value) => {
           const item = asRecord(value);
-          const domain = requireSandboxDomain(item.domain_name);
+          const domain = importOrder
+            ? requireCustomerOwnedDomainImport(item.domain_name)
+            : requireSandboxDomain(item.domain_name);
           const mailboxes = Array.isArray(item.mailboxes)
             ? item.mailboxes.map(asRecord)
             : [];
 
           for (const mailbox of mailboxes) {
             if (asString(mailbox.username).length > 0) {
-              requireSandboxAddress(mailbox.username, domain);
+              if (importOrder) {
+                requireCustomerOwnedImportAddress(mailbox.username, domain);
+              } else {
+                requireSandboxAddress(mailbox.username, domain);
+              }
             }
           }
 
@@ -623,11 +723,26 @@ export async function createManagedEmailProviderSandbox(
         return;
       }
 
+      const importedDomains = new Set(
+        validatedItems.map(({ domain }) => domain),
+      );
+
+      if (
+        importOrder &&
+        (importedDomains.size !== validatedItems.length ||
+          validatedItems.some(({ domain }) =>
+            state.domains.some((candidate) => candidate.domain === domain),
+          ))
+      ) {
+        send(response, 409, { error: 'domain_already_exists' });
+        return;
+      }
+
       const responseLost = takeFault('icemail-order-response-lost-after-write');
 
       const receipt: IcemailOrderDomain[] = validatedItems.map(
         ({ domain: domainName, mailboxes: mailboxInputs }) => {
-          const domain = makeDomain(domainName, false);
+          const domain = makeDomain(domainName, false, importOrder);
           const mailboxes = mailboxInputs.map((mailbox) =>
             makeMailbox(domain, mailbox),
           );
@@ -636,7 +751,7 @@ export async function createManagedEmailProviderSandbox(
           state.mailboxes.push(...mailboxes);
           return {
             domain_name: domain.domain,
-            import: false,
+            import: importOrder,
             mailbox_type: 'GOOGLE',
             order_id: randomUUID(),
             domain_id: domain.domain_id,
@@ -854,6 +969,12 @@ export async function createManagedEmailProviderSandbox(
         imap !== null && typeof imap === 'object' && !Array.isArray(imap)
           ? asString((imap as JsonRecord).password)
           : '';
+      try {
+        requireKnownWarmupInboxAddress(email, state.domains, state.mailboxes);
+      } catch {
+        send(response, 422, { error: 'invalid_warmup_address' });
+        return;
+      }
 
       if (
         !hasExpectedMailEndpoint(smtp, email, greenMail.smtpPort) ||

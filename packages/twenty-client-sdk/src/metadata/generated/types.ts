@@ -4817,6 +4817,9 @@ export default {
             "cancelAtPeriodEnd": [
                 6
             ],
+            "acquisitionMode": [
+                1
+            ],
             "dependentMailboxCount": [
                 21
             ],
@@ -4831,6 +4834,9 @@ export default {
             ],
             "paidThrough": [
                 4
+            ],
+            "requiredNameservers": [
+                1
             ],
             "renewalEnabled": [
                 6
@@ -7666,6 +7672,12 @@ export default {
             ]
         },
         "ManagedEmailProposalInput": {
+            "acquisitionMode": [
+                1
+            ],
+            "customerOwnedDomain": [
+                1
+            ],
             "mailboxCount": [
                 21
             ],
@@ -8164,6 +8176,15 @@ export default {
                 }
             ],
             "confirmManagedEmailOrdinaryPurchase": [
+                279,
+                {
+                    "input": [
+                        409,
+                        "ManagedEmailPurchaseInput!"
+                    ]
+                }
+            ],
+            "confirmManagedEmailCustomerOwnedDomainImportPurchase": [
                 279,
                 {
                     "input": [

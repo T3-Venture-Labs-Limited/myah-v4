@@ -120,6 +120,40 @@ const quote: ManagedEmailQuote = {
   },
   workspaceId,
 };
+const CUSTOMER_OWNED_DOMAIN_IMPORT =
+  'CUSTOMER_OWNED_DOMAIN_IMPORT' as ManagedEmailAcquisitionMode;
+const customerOwnedDomain = 'founders.example.com';
+const customerOwnedQuote = {
+  ...quote,
+  dueTodayCents: quote.lines[1].amountCents + quote.lines[2].amountCents,
+  quoteHash: 'customer-owned-quote-hash',
+  lines: [quote.lines[2], quote.lines[1]],
+  resourceSnapshot: {
+    customerOwnedDomain,
+    domains: [
+      {
+        domain: customerOwnedDomain,
+        mailboxes: [
+          'sender1@founders.example.com',
+          'sender2@founders.example.com',
+          'sender3@founders.example.com',
+          'sender4@founders.example.com',
+        ],
+      },
+    ],
+    personas: [1, 2, 3, 4].map((index) => ({
+      address: `sender${index}@founders.example.com`,
+      createdByWorkspaceMemberId: actorWorkspaceMemberId,
+      firstName: 'Sender',
+      lastName: String(index),
+      localPart: `sender${index}`,
+      roleTitle: null,
+      signature: 'Sender',
+      version: 1,
+    })),
+    proposal: quote.resourceSnapshot.proposal,
+  },
+} as unknown as ManagedEmailQuote;
 
 describe('ManagedEmailSubscriptionService', () => {
   const createService = () => {
@@ -578,5 +612,160 @@ describe('ManagedEmailSubscriptionService', () => {
       stripeInvoiceId: 'in_consolidated',
       workspaceId,
     });
+  });
+
+  it('accepts the closed customer-owned mailbox and warmup subscriptions and verifies their exact payment proof', async () => {
+    const {
+      managedProviderStripeService,
+      metronomeClient,
+      persisted,
+      service,
+    } = createService();
+    const [warmupLine, mailboxLine] = customerOwnedQuote.lines;
+
+    metronomeClient.addSubscription
+      .mockReset()
+      .mockResolvedValueOnce({
+        metronomeEditId: '123e4567-e89b-42d3-a456-426614174030',
+        subscriptionId: '123e4567-e89b-42d3-a456-426614174040',
+      })
+      .mockResolvedValueOnce({
+        metronomeEditId: '123e4567-e89b-42d3-a456-426614174031',
+        subscriptionId: '123e4567-e89b-42d3-a456-426614174041',
+      });
+
+    await expect(
+      service.beginPurchase({
+        acquisitionMode: CUSTOMER_OWNED_DOMAIN_IMPORT,
+        actorWorkspaceMemberId,
+        idempotencyKey: 'customer-owned-purchase-1',
+        operationId,
+        providerConfigurationKey: 'icemail-production-v1',
+        quote: customerOwnedQuote,
+        readinessPolicyVersion: 'readiness-v1',
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({ id: operationId, state: 'PAYMENT_PENDING' });
+
+    expect(metronomeClient.assertRateCardLineItems).toHaveBeenCalledWith({
+      lines: customerOwnedQuote.lines.map((line) => ({
+        billingFrequency: line.billingFrequency,
+        productId: line.metronomeProductId,
+        startingAt: line.startingAt,
+        unitPriceCents: line.unitPriceCents,
+      })),
+      rateCardId: customerOwnedQuote.metronomeRateCardId,
+    });
+    expect(metronomeClient.addSubscription).toHaveBeenCalledTimes(2);
+    expect(metronomeClient.addSubscription).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        productId: warmupLine.metronomeProductId,
+        uniquenessKey: `${operationId}:${warmupLine.productKey}`,
+      }),
+    );
+    expect(metronomeClient.addSubscription).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        productId: mailboxLine.metronomeProductId,
+        uniquenessKey: `${operationId}:${mailboxLine.productKey}`,
+      }),
+    );
+    expect(metronomeClient.addSubscription).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: quote.lines[0].metronomeProductId,
+      }),
+    );
+
+    metronomeClient.listInvoicesFirstPage.mockResolvedValueOnce({
+      hasNextPage: false,
+      invoices: [
+        {
+          contractId: '123e4567-e89b-42d3-a456-426614174051',
+          creditType: {
+            id: '123e4567-e89b-42d3-a456-426614174060',
+            name: 'USD (cents)',
+          },
+          customerId: '123e4567-e89b-42d3-a456-426614174050',
+          endingBefore: monthlyEnd,
+          externalInvoice: {
+            billingProvider: 'stripe',
+            externalPaymentId: 'pi_customer_owned',
+            externalStatus: 'PAID',
+            invoiceId: 'in_customer_owned',
+            invoicedTotal: customerOwnedQuote.dueTodayCents,
+          },
+          id: 'metronome-invoice-customer-owned',
+          lines: [
+            {
+              endingBefore: mailboxLine.endingBefore,
+              hasAppliedCommitOrCredit: false,
+              isProrated: false,
+              productId: mailboxLine.metronomeProductId,
+              quantity: mailboxLine.quantity,
+              startingAt: mailboxLine.startingAt,
+              subscriptionId: '123e4567-e89b-42d3-a456-426614174041',
+              total: mailboxLine.amountCents,
+              type: 'subscription',
+              unitPrice: mailboxLine.unitPriceCents,
+            },
+            {
+              endingBefore: warmupLine.endingBefore,
+              hasAppliedCommitOrCredit: false,
+              isProrated: false,
+              productId: warmupLine.metronomeProductId,
+              quantity: warmupLine.quantity,
+              startingAt: warmupLine.startingAt,
+              subscriptionId: '123e4567-e89b-42d3-a456-426614174040',
+              total: warmupLine.amountCents,
+              type: 'subscription',
+              unitPrice: warmupLine.unitPriceCents,
+            },
+          ],
+          startingAt: periodStart,
+          status: 'FINALIZED',
+          total: customerOwnedQuote.dueTodayCents,
+        },
+      ],
+    });
+
+    await expect(
+      service.reconcilePayment({ operationId, workspaceId }),
+    ).resolves.toMatchObject({
+      paymentReceipts: [
+        {
+          externalInvoiceId: 'in_customer_owned',
+          externalPaymentId: 'pi_customer_owned',
+          metronomeInvoiceId: 'metronome-invoice-customer-owned',
+        },
+      ],
+      paymentStatus: 'PAID',
+      state: 'PAYMENT_PAID',
+    });
+    expect(
+      managedProviderStripeService.assertPaidExternalInvoice,
+    ).toHaveBeenCalledWith({
+      currency: 'USD',
+      expectedAmountCents: customerOwnedQuote.dueTodayCents,
+      expectedPaymentIntentId: 'pi_customer_owned',
+      metronomeInvoiceId: 'metronome-invoice-customer-owned',
+      stripeInvoiceId: 'in_customer_owned',
+      workspaceId,
+    });
+    expect(persisted.get(operationId)?.correlatedSubscriptionLines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productId: warmupLine.metronomeProductId,
+          subscriptionId: '123e4567-e89b-42d3-a456-426614174040',
+        }),
+        expect.objectContaining({
+          productId: mailboxLine.metronomeProductId,
+          subscriptionId: '123e4567-e89b-42d3-a456-426614174041',
+        }),
+      ]),
+    );
+    expect(
+      persisted.get(operationId)?.correlatedSubscriptionLines,
+    ).toHaveLength(2);
   });
 });

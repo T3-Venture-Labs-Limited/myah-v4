@@ -1,3 +1,4 @@
+import { ManagedEmailAcquisitionMode } from 'src/engine/core-modules/managed-email/enums/managed-email-acquisition-mode.enum';
 import { ManagedEmailCampaignEligibility } from 'src/engine/core-modules/managed-email/enums/managed-email-campaign-eligibility.enum';
 import { ManagedEmailInfrastructureState } from 'src/engine/core-modules/managed-email/enums/managed-email-infrastructure-state.enum';
 import { ManagedEmailMailboxActivationService } from 'src/engine/core-modules/managed-email/services/managed-email-mailbox-activation.service';
@@ -5,10 +6,12 @@ import { type IcemailClient } from 'src/engine/core-modules/managed-email/provid
 
 const workspaceId = '123e4567-e89b-42d3-a456-426614174000';
 const mailboxId = '123e4567-e89b-42d3-a456-426614174001';
+const managedEmailDomainId = '123e4567-e89b-42d3-a456-426614174002';
 const fakeAppPassword = 'fake-app-password-only-in-memory';
 
 const mailbox = {
   id: mailboxId,
+  managedEmailDomainId,
   workspaceId,
   address: 'maya@creator-partners.test',
   normalizedAddress: 'maya@creator-partners.test',
@@ -20,11 +23,22 @@ const mailbox = {
   nextReconciliationAt: null,
 } as any;
 
+const ordinaryDomain = {
+  id: managedEmailDomainId,
+  acquisitionMode: ManagedEmailAcquisitionMode.NEW_MANAGED,
+  domain: 'creator-partners.test',
+  normalizedDomain: 'creator-partners.test',
+  workspaceId,
+};
+
 describe('ManagedEmailMailboxActivationService', () => {
   it('keeps a mailbox waiting and schedules bounded recovery when Icemail has no app password', async () => {
     const mailboxRepository = {
       findOneBy: jest.fn().mockResolvedValue(mailbox),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const domainRepository = {
+      findOneBy: jest.fn().mockResolvedValue(ordinaryDomain),
     };
     const icemailClient = {
       getMailboxCredential: jest.fn().mockResolvedValue(null),
@@ -32,6 +46,7 @@ describe('ManagedEmailMailboxActivationService', () => {
     const connectionService = { connectManagedWorkspaceMailbox: jest.fn() };
     const service = new ManagedEmailMailboxActivationService(
       mailboxRepository as never,
+      domainRepository as never,
       icemailClient as unknown as IcemailClient,
       connectionService as never,
       () => new Date('2026-08-06T12:00:00.000Z'),
@@ -67,10 +82,14 @@ describe('ManagedEmailMailboxActivationService', () => {
         .mockResolvedValue({ ...mailbox, providerMailboxId: null }),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
     };
+    const domainRepository = {
+      findOneBy: jest.fn().mockResolvedValue(ordinaryDomain),
+    };
     const icemailClient = { getMailboxCredential: jest.fn() };
     const connectionService = { connectManagedWorkspaceMailbox: jest.fn() };
     const service = new ManagedEmailMailboxActivationService(
       mailboxRepository as never,
+      domainRepository as never,
       icemailClient as never,
       connectionService as never,
       () => new Date('2026-08-06T12:00:00.000Z'),
@@ -90,14 +109,28 @@ describe('ManagedEmailMailboxActivationService', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('passes the transient fake credential to the secure connection owner and leaves infrastructure active but campaign blocked', async () => {
+  it('activates a customer-owned imported mailbox with a transient credential and no persisted password', async () => {
+    const importedMailbox = {
+      ...mailbox,
+      address: 'maya@creator.io',
+      normalizedAddress: 'maya@creator.io',
+    };
     const mailboxRepository = {
-      findOneBy: jest.fn().mockResolvedValue(mailbox),
+      findOneBy: jest.fn().mockResolvedValue(importedMailbox),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    const domainRepository = {
+      findOneBy: jest.fn().mockResolvedValue({
+        ...ordinaryDomain,
+        acquisitionMode:
+          ManagedEmailAcquisitionMode.CUSTOMER_OWNED_DOMAIN_IMPORT,
+        domain: 'creator.io',
+        normalizedDomain: 'creator.io',
+      }),
     };
     const icemailClient = {
       getMailboxCredential: jest.fn().mockResolvedValue({
-        username: mailbox.address,
+        username: importedMailbox.address,
         appPassword: fakeAppPassword,
         imap: { host: 'imap.gmail.com', port: 993, secure: true },
         smtp: { host: 'smtp.gmail.com', port: 465, secure: true },
@@ -111,6 +144,7 @@ describe('ManagedEmailMailboxActivationService', () => {
     };
     const service = new ManagedEmailMailboxActivationService(
       mailboxRepository as never,
+      domainRepository as never,
       icemailClient as unknown as IcemailClient,
       connectionService as never,
       () => new Date('2026-08-06T12:00:00.000Z'),
@@ -118,12 +152,19 @@ describe('ManagedEmailMailboxActivationService', () => {
 
     const result = await service.activateMailbox({ mailboxId, workspaceId });
 
+    expect(domainRepository.findOneBy).toHaveBeenCalledWith(workspaceId, {
+      id: importedMailbox.managedEmailDomainId,
+    });
+    expect(icemailClient.getMailboxCredential).toHaveBeenCalledWith(
+      importedMailbox.providerMailboxId,
+      { customerOwnedDomain: 'creator.io' },
+    );
     expect(
       connectionService.connectManagedWorkspaceMailbox,
     ).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId,
-        handle: mailbox.address,
+        handle: importedMailbox.address,
         connectionParameters: expect.objectContaining({
           IMAP: expect.objectContaining({
             host: 'imap.gmail.com',
@@ -164,16 +205,19 @@ describe('ManagedEmailMailboxActivationService', () => {
       .catch((caughtError: unknown) => caughtError);
     expect(JSON.stringify(error)).not.toContain(fakeAppPassword);
   });
-
   it('rejects activation from another workspace and never requests credentials', async () => {
     const mailboxRepository = {
       findOneBy: jest.fn().mockResolvedValue(null),
       update: jest.fn(),
     };
+    const domainRepository = {
+      findOneBy: jest.fn().mockResolvedValue(ordinaryDomain),
+    };
     const icemailClient = { getMailboxCredential: jest.fn() };
     const connectionService = { connectManagedWorkspaceMailbox: jest.fn() };
     const service = new ManagedEmailMailboxActivationService(
       mailboxRepository as never,
+      domainRepository as never,
       icemailClient as never,
       connectionService as never,
     );
