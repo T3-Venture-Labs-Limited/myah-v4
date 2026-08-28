@@ -77,7 +77,8 @@ describe('ManagedProviderStripeService', () => {
     };
     const twentyConfigService = {
       get: jest.fn((key: string) => {
-        if (key === 'MANAGED_EMAIL_EXECUTION_MODE') return mode;
+        if (key === 'MANAGED_EMAIL_EXECUTION_MODE')
+          return managedEmailExecutionMode;
         if (key === 'BILLING_STRIPE_PUBLISHABLE_KEY') return 'pk_test_managed';
         throw new Error(`Unexpected config key: ${key}`);
       }),
