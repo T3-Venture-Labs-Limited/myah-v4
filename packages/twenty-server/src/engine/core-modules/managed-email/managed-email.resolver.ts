@@ -1,4 +1,4 @@
-import { Inject, Optional, UseGuards, UsePipes } from '@nestjs/common';
+import { Inject, UseGuards, UsePipes } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
@@ -51,9 +51,8 @@ import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-pr
 export class ManagedEmailResolver {
   constructor(
     private readonly managedEmailCustomerService: ManagedEmailCustomerService,
-    @Optional()
     @Inject(ManagedProviderStripeService)
-    private readonly managedProviderStripeService: ManagedProviderStripeService | undefined,
+    private readonly managedProviderStripeService: ManagedProviderStripeService,
     private readonly twentyConfigService: TwentyConfigService,
   ) {}
 

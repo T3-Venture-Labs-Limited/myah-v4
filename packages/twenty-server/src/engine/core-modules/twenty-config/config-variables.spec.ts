@@ -41,6 +41,18 @@ describe('managed provider billing configuration', () => {
       ]),
     );
   });
+  it('requires the shared Stripe delivery method when Metronome is enabled', () => {
+    const errors = validateSync(
+      Object.assign(new ConfigVariables(), {
+        METRONOME_ENABLED: true,
+      }),
+      { strictGroups: true },
+    );
+
+    expect(errors.map(({ property }) => property)).toContain(
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
+    );
+  });
 
   it('rejects blank Metronome API key and rate-card alias values when enabled', () => {
     const errors = validateSync(

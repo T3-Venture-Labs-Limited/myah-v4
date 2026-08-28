@@ -67,6 +67,7 @@ const createResolver = () => {
       },
     ]),
   };
+  const managedProviderStripeService = {} as ManagedProviderStripeService;
   const twentyConfigService = {
     get: jest.fn().mockReturnValue('SANDBOX'),
   };
@@ -75,7 +76,7 @@ const createResolver = () => {
     customerService,
     resolver: new ManagedEmailResolver(
       customerService as unknown as ManagedEmailCustomerService,
-      undefined,
+      managedProviderStripeService,
       twentyConfigService as unknown as TwentyConfigService,
     ),
   };

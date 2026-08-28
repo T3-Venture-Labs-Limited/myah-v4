@@ -206,7 +206,10 @@ export class ConfigVariables {
   })
   MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS = '';
 
-  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @ValidateIf(
+    (env) =>
+      env.METRONOME_ENABLED === true || env.MANAGED_EMAIL_ENABLED === true,
+  )
   @IsUUID()
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
