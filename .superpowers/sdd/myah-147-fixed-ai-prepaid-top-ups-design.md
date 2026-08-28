@@ -152,7 +152,7 @@ The AI contract must have one exact active Stripe direct-billing configuration o
 
 - billing provider `stripe`;
 - delivery method `direct_to_billing_provider`;
-- configured delivery-method ID from one explicit managed-provider setting;
+- configured delivery-method ID from shared `METRONOME_STRIPE_DELIVERY_METHOD_ID`;
 - the exact persisted Stripe customer;
 - `charge_automatically`;
 - the payment-gated commit product mapped to one Stripe Product through Metronome's documented `stripe_product_id` mapping.
@@ -212,9 +212,42 @@ Use Contracts and Contract Edits, never legacy Plans or Amendments.
 
 Pass this explicit environment identity into `ManagedProviderStripeService`; remove inference from `MANAGED_EMAIL_EXECUTION_MODE`. Any mismatch fails before a financial write or success transition.
 
-### 5.4 Stripe payment proof
+### 5.4 Shared Metronome and Stripe ownership and migration order
+
+Both launch workstreams share one workspace billing identity but not one commercial contract:
+
+- one `MyahWorkspaceInstallationEntity` per workspace;
+- one persisted Metronome customer ID per installation;
+- one Stripe Customer per Metronome customer/workspace;
+- one shared Metronome customer billing-provider configuration and `METRONOME_STRIPE_DELIVERY_METHOD_ID`;
+- a separate managed-AI contract using `METRONOME_RATE_CARD_ALIAS`;
+- a separate managed-email contract using `MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS`;
+- each contract has its own direct-billing schedule referencing the same customer billing configuration and Stripe Customer.
+
+The shared unit contract is:
+
+- Metronome fiat credit type name exactly `USD (cents)`;
+- the exact non-empty fiat credit type ID persisted/read from the applicable rate card;
+- all Metronome monetary values are integer cents;
+- Stripe currency is lowercase `usd`;
+- Stripe amounts are integer cents;
+- `METRONOME_BASE_URL_ENVIRONMENT` is passed explicitly into every shared Stripe proof call.
+
+The first implementation task must migrate the shared seam before either feature-specific path changes behavior:
+
+1. introduce `METRONOME_STRIPE_DELIVERY_METHOD_ID` on server and worker using the existing production delivery-method value;
+2. migrate managed email from `MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID`;
+3. make `MetronomeWorkspaceCustomerService` own the shared customer/Stripe configuration verification and separate contract schedule verification;
+4. require an explicit environment argument in every `ManagedProviderStripeService` caller;
+5. update all existing managed-email callers/tests and prove unchanged payment behavior;
+6. merge or otherwise make this reviewed shared commit the base of both feature lanes before AI top-up or prewarmed feature code proceeds.
+
+Do not merge the AI and managed-email contracts, catalogs, subscriptions, balances, or operation journals.
+
+### 5.5 Stripe payment proof
 
 Reuse `ManagedProviderStripeService` for:
+
 
 - Stripe Customer creation/recovery;
 - bounded billing-address and optional tax-ID update;
@@ -227,7 +260,7 @@ Refactor only the minimum shared environment/configuration and amount-breakdown 
 
 Do not create a separate direct PaymentIntent charge. Metronome must originate the invoice that Stripe collects.
 
-### 5.5 Balance and usage
+### 5.6 Balance and usage
 
 Wire the existing `managedProviderBillingStatus` query into Workspace Billing. Use Metronome's computed balance; do not sum local funding rows.
 
@@ -346,16 +379,18 @@ Launch does not add customer self-service refunds. It supports one operator-only
 
 The refund operation:
 
-1. acquires the workspace financial lock and atomically blocks new AI reservations for that workspace/funding action;
-2. proves the exact funding action, commitment, payment invoice, Stripe payment, original principal/tax/total, full remaining commitment balance, and zero usage-invoice applications;
-3. persists `REFUND_INTENT_RECORDED` before external writes;
-4. uses the documented Stripe credit-note/refund flow for the exact tax-inclusive invoice and records tax reversal evidence;
-5. voids the corresponding finalized Metronome commit-payment invoice;
-6. archives the exact commitment with `POST /v2/contracts/edit` using `archive_commits: [{ "id": "the persisted commitment UUID" }]` and a deterministic uniqueness/idempotency identity;
-7. proves the archived commit has null ledger and zero remaining balance;
-8. records terminal `REFUNDED` evidence and unblocks unrelated valid workspace funding.
+1. acquires the workspace financial lock and atomically blocks new AI reservations for the whole workspace;
+2. drains and reconciles every active or uncertain managed-provider reservation and pending usage delivery for the workspace;
+3. proves there are zero `RESERVED`, provider-unknown, delivery-pending, or otherwise later-settleable managed-provider operations before any refund write;
+4. proves the exact funding action, commitment, payment invoice, Stripe payment, original principal/tax/total, full remaining commitment balance, and zero usage-invoice applications;
+5. persists `REFUND_INTENT_RECORDED` before external writes;
+6. uses the documented Stripe credit-note/refund flow for the exact tax-inclusive invoice and records tax reversal evidence;
+7. voids the corresponding finalized Metronome commit-payment invoice;
+8. archives the exact commitment with `POST /v2/contracts/edit` using `archive_commits: [{ "id": "the persisted commitment UUID" }]` and a deterministic uniqueness/idempotency identity;
+9. proves the archived commit has null ledger and zero remaining balance;
+10. records terminal `REFUNDED` evidence and unblocks the workspace only after unrelated valid funding and every prior operation remain consistent.
 
-Metronome requires every finalized payment or usage invoice involving the commit to be voided before archive. Any one-leg success, timeout, externally initiated refund, dispute, or reversal moves to `REFUND_RECONCILIATION_REQUIRED`, keeps new reservations blocked, and is reconciled from Stripe and Metronome authoritative reads. It never replays a write whose outcome is unknown.
+The workspace reservation block remains in force from refund intent until terminal `REFUNDED` or a fully reconciled rollback to `SUCCEEDED`. If any active/unknown operation cannot be drained, no refund provider write occurs and the refund remains support-required. Any one-leg success, timeout, externally initiated refund, dispute, or reversal moves to `REFUND_RECONCILIATION_REQUIRED`, keeps new reservations blocked, and is reconciled from Stripe and Metronome authoritative reads. It never replays a write whose outcome is unknown.
 
 No database balance edit, manual Metronome ledger edit, or spent-value refund is an accepted fallback. The sandbox must prove the exact credit-note/refund, invoice-void, commit-archive, tax-reversal, and ambiguous-outcome sequence before customer funding is enabled.
 
@@ -441,6 +476,7 @@ Webhook signatures remain verified for existing generic billing webhooks. This d
 - ambiguous action-required deadline transitions atomically to reconciliation-required;
 - one principal-only balance activation after payment;
 - replay/concurrency does not duplicate funding;
+- refund quiescence requires zero active/unknown reservations and pending usage deliveries;
 - failed/action-required/expired payment and seven-day action deadline add no balance;
 - full-unspent refund, tax reversal, invoice void, and commit archive;
 - refund/dispute ambiguity blocks reservations and reconciles;
