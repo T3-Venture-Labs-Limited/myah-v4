@@ -7,6 +7,8 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
+export type MetronomeBaseUrlEnvironment = 'PRODUCTION' | 'SANDBOX';
+
 @Injectable()
 export class ManagedProviderStripeService {
   private stripeClient?: Stripe;
@@ -21,16 +23,21 @@ export class ManagedProviderStripeService {
   ) {}
 
   async prepareWorkspacePaymentMethod({
+    metronomeBaseUrlEnvironment,
     workspaceId,
   }: {
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment;
     workspaceId: string;
   }) {
-    const customerId = await this.ensureWorkspaceCustomer(workspaceId);
+    const customerId = await this.ensureWorkspaceCustomer(
+      workspaceId,
+      metronomeBaseUrlEnvironment,
+    );
     const intent = await this.stripe().setupIntents.create({
       customer: customerId,
       usage: 'off_session',
     });
-    if (intent.livemode !== this.expectedLivemode()) {
+    if (intent.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)) {
       throw new Error('Stripe SetupIntent mode is invalid');
     }
     if (!intent.client_secret)
@@ -45,11 +52,13 @@ export class ManagedProviderStripeService {
   }
 
   async completeWorkspacePaymentMethodSetup({
-    workspaceId,
+    metronomeBaseUrlEnvironment,
     setupIntentId,
+    workspaceId,
   }: {
-    workspaceId: string;
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment;
     setupIntentId: string;
+    workspaceId: string;
   }) {
     const customerId = await this.persistedCustomerId(workspaceId);
     const intent = await this.stripe().setupIntents.retrieve(setupIntentId);
@@ -61,7 +70,7 @@ export class ManagedProviderStripeService {
       intent.customer !== customerId ||
       intent.status !== 'succeeded' ||
       !paymentMethodId ||
-      intent.livemode !== this.expectedLivemode()
+      intent.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe SetupIntent proof is invalid');
     }
@@ -69,7 +78,7 @@ export class ManagedProviderStripeService {
     if (
       customer.deleted ||
       customer.id !== customerId ||
-      customer.livemode !== this.expectedLivemode()
+      customer.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe Customer proof is invalid');
     }
@@ -80,8 +89,10 @@ export class ManagedProviderStripeService {
   }
 
   async assertWorkspacePaymentMethodReady({
+    metronomeBaseUrlEnvironment,
     workspaceId,
   }: {
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment;
     workspaceId: string;
   }) {
     const customerId = await this.persistedCustomerId(workspaceId);
@@ -89,7 +100,7 @@ export class ManagedProviderStripeService {
     if (
       customer.deleted ||
       customer.id !== customerId ||
-      customer.livemode !== this.expectedLivemode()
+      customer.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe Customer proof is invalid');
     }
@@ -102,6 +113,7 @@ export class ManagedProviderStripeService {
   }
 
   async assertPaidExternalInvoice({
+    metronomeBaseUrlEnvironment,
     workspaceId,
     stripeInvoiceId,
     metronomeInvoiceId,
@@ -109,6 +121,7 @@ export class ManagedProviderStripeService {
     expectedAmountCents,
     currency,
   }: {
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment;
     workspaceId: string;
     stripeInvoiceId: string;
     metronomeInvoiceId: string;
@@ -127,7 +140,7 @@ export class ManagedProviderStripeService {
       expectedAmountCents <= 0 ||
       invoice.currency.toLowerCase() !== currency.toLowerCase() ||
       invoice.metadata?.metronome_id !== metronomeInvoiceId ||
-      invoice.livemode !== this.expectedLivemode()
+      invoice.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe invoice proof is invalid');
     }
@@ -169,7 +182,7 @@ export class ManagedProviderStripeService {
       invoicePaymentInvoiceId !== stripeInvoiceId ||
       invoicePayment.payment.type !== 'payment_intent' ||
       invoicePaymentIntentId !== paymentIntentId ||
-      invoicePayment.livemode !== this.expectedLivemode()
+      invoicePayment.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe external invoice proof is invalid');
     }
@@ -186,7 +199,7 @@ export class ManagedProviderStripeService {
       paymentIntent.amount_received !== expectedAmountCents ||
       paymentIntent.currency.toLowerCase() !== currency.toLowerCase() ||
       paymentIntentCustomerId !== customerId ||
-      paymentIntent.livemode !== this.expectedLivemode()
+      paymentIntent.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe external invoice proof is invalid');
     }
@@ -200,19 +213,16 @@ export class ManagedProviderStripeService {
     };
   }
 
-  private expectedLivemode(): boolean {
-    const mode = this.twentyConfigService?.get('MANAGED_EMAIL_EXECUTION_MODE');
-
-    if (mode === 'SANDBOX') {
-      return false;
-    }
-    if (mode === 'PRODUCTION') {
-      return true;
-    }
-    throw new Error('Managed email Stripe mode is not configured');
+  private expectedLivemode(
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment,
+  ): boolean {
+    return metronomeBaseUrlEnvironment === 'PRODUCTION';
   }
 
-  private async ensureWorkspaceCustomer(workspaceId: string): Promise<string> {
+  private async ensureWorkspaceCustomer(
+    workspaceId: string,
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment,
+  ): Promise<string> {
     const installation = await this.installationRepository.findOneBy(
       workspaceId,
       {},
@@ -225,7 +235,7 @@ export class ManagedProviderStripeService {
       if (
         customer.deleted ||
         customer.id !== installation.stripeCustomerId ||
-        customer.livemode !== this.expectedLivemode()
+        customer.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
       ) {
         throw new Error('Stripe Customer proof is invalid');
       }
@@ -237,7 +247,9 @@ export class ManagedProviderStripeService {
       },
       { idempotencyKey: `managed-provider-customer:${workspaceId}` },
     );
-    if (customer.livemode !== this.expectedLivemode()) {
+    if (
+      customer.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
+    ) {
       throw new Error('Stripe Customer proof is invalid');
     }
     const result = await this.installationRepository.update(
@@ -258,7 +270,8 @@ export class ManagedProviderStripeService {
     if (
       persistedCustomer.deleted ||
       persistedCustomer.id !== concurrent.stripeCustomerId ||
-      persistedCustomer.livemode !== this.expectedLivemode()
+      persistedCustomer.livemode !==
+        this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe Customer proof is invalid');
     }

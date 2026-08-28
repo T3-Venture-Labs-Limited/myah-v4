@@ -177,7 +177,7 @@ describe('managed email execution safety', () => {
     ICEMAIL_API_KEY: 'sandbox-icemail-key',
     WARMUP_INBOX_API_KEY: 'sandbox-warmup-key',
     MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS: 'sandbox-rate-card',
-    MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID:
+    METRONOME_STRIPE_DELIVERY_METHOD_ID:
       '123e4567-e89b-42d3-a456-426614174000',
     MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS: [
       '123e4567-e89b-42d3-a456-426614174000',
@@ -385,7 +385,7 @@ describe('managed email execution safety', () => {
       ICEMAIL_API_KEY: '',
       WARMUP_INBOX_API_KEY: '',
       MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS: '',
-      MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID: '',
+      METRONOME_STRIPE_DELIVERY_METHOD_ID: '',
       MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS: [],
       MANAGED_EMAIL_READINESS_POLICY_VERSION: '',
     });
@@ -395,7 +395,7 @@ describe('managed email execution safety', () => {
         'ICEMAIL_API_KEY',
         'WARMUP_INBOX_API_KEY',
         'MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS',
-        'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+        'METRONOME_STRIPE_DELIVERY_METHOD_ID',
         'MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS',
         'MANAGED_EMAIL_READINESS_POLICY_VERSION',
       ]),
@@ -419,6 +419,14 @@ describe('managed email configuration', () => {
       expect.arrayContaining(['ICEMAIL_API_KEY', 'WARMUP_INBOX_API_KEY']),
     );
   });
+  it('uses one shared Metronome Stripe delivery method configuration', () => {
+    const config = new ConfigVariables();
+
+    expect(config.METRONOME_STRIPE_DELIVERY_METHOD_ID).toBe('');
+    expect(config).not.toHaveProperty(
+      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+    );
+  });
   it('registers metadata for every managed email variable', () => {
     const metadata = TypedReflect.getMetadata(
       'config-variables',
@@ -430,7 +438,7 @@ describe('managed email configuration', () => {
       'WARMUP_INBOX_API_BASE_URL',
       'WARMUP_INBOX_API_KEY',
       'MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS',
-      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
       'MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS',
       'MANAGED_EMAIL_READINESS_POLICY_VERSION',
       'MANAGED_EMAIL_METRONOME_ENVIRONMENT',
@@ -467,7 +475,7 @@ describe('managed email configuration', () => {
         WARMUP_INBOX_API_BASE_URL: 'https://warm.example',
         WARMUP_INBOX_API_KEY: 'key',
         MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS: 'rate-card',
-        MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID:
+        METRONOME_STRIPE_DELIVERY_METHOD_ID:
           '123e4567-e89b-42d3-a456-426614174000',
         MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS: [
           '123e4567-e89b-42d3-a456-426614174000',
@@ -494,7 +502,7 @@ describe('managed email configuration', () => {
         'ICEMAIL_API_KEY',
         'WARMUP_INBOX_API_KEY',
         'MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS',
-        'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+        'METRONOME_STRIPE_DELIVERY_METHOD_ID',
         'MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS',
         'MANAGED_EMAIL_READINESS_POLICY_VERSION',
         'METRONOME_BASE_URL',

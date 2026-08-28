@@ -244,6 +244,9 @@ describe('ManagedEmailSubscriptionService', () => {
         'assertPaidExternalInvoice' | 'assertWorkspacePaymentMethodReady'
       >
     >;
+    const twentyConfigService = {
+      get: jest.fn().mockReturnValue('SANDBOX'),
+    };
 
     return {
       managedProviderStripeService,
@@ -255,6 +258,7 @@ describe('ManagedEmailSubscriptionService', () => {
         metronomeClient as unknown as MetronomeClientService,
         workspaceCustomerService as unknown as MetronomeWorkspaceCustomerService,
         managedProviderStripeService as unknown as ManagedProviderStripeService,
+        twentyConfigService as never,
       ),
       workspaceCustomerService,
     };
@@ -568,6 +572,7 @@ describe('ManagedEmailSubscriptionService', () => {
     expect(
       managedProviderStripeService.assertPaidExternalInvoice,
     ).toHaveBeenCalledWith({
+      metronomeBaseUrlEnvironment: 'SANDBOX',
       currency: 'USD',
       expectedAmountCents: quote.lines.reduce(
         (sum, line) => sum + line.amountCents,

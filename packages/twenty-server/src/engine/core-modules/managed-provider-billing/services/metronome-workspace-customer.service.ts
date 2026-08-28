@@ -51,7 +51,7 @@ export class MetronomeWorkspaceCustomerService {
       );
     }
     const expectedDeliveryMethodId = this.twentyConfigService.get(
-      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
     );
 
     return this.installationRepository.manager.transaction(async (manager) => {
@@ -249,7 +249,7 @@ export class MetronomeWorkspaceCustomerService {
     const contract = matchingContracts[0];
     const configuration = contract.activeBillingProviderConfiguration;
     const expectedDeliveryMethodId = this.twentyConfigService.get(
-      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
     );
 
     if (

@@ -101,7 +101,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.prepareWorkspacePaymentMethod({ workspaceId }),
+      service.prepareWorkspacePaymentMethod({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId }),
     ).resolves.toEqual({
       clientSecret: 'seti_secret',
       publishableKey: expect.any(String),
@@ -137,7 +137,10 @@ describe('ManagedProviderStripeService', () => {
     );
 
     await expect(
-      service.prepareWorkspacePaymentMethod({ workspaceId }),
+      service.prepareWorkspacePaymentMethod({
+        metronomeBaseUrlEnvironment: 'PRODUCTION',
+        workspaceId,
+      }),
     ).resolves.toEqual(
       expect.objectContaining({
         setupIntentId,
@@ -145,6 +148,43 @@ describe('ManagedProviderStripeService', () => {
       }),
     );
   });
+  it.each([
+    ['PRODUCTION', true, 'SANDBOX'],
+    ['SANDBOX', false, 'PRODUCTION'],
+  ] as const)(
+    'uses %s Metronome environment instead of managed email execution mode',
+    async (metronomeBaseUrlEnvironment, livemode, managedEmailExecutionMode) => {
+      const { service, stripe, twentyConfigService } = createService(
+        {
+          workspaceId,
+          stripeCustomerId,
+        },
+        managedEmailExecutionMode,
+      );
+      stripe.setupIntents.create.mockResolvedValue({
+        client_secret: 'seti_environment_secret',
+        customer: stripeCustomerId,
+        id: setupIntentId,
+        livemode,
+        status: 'requires_payment_method',
+      });
+
+      await expect(
+        service.prepareWorkspacePaymentMethod({
+          metronomeBaseUrlEnvironment,
+          workspaceId,
+        }),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          setupIntentId,
+          stripeCustomerId,
+        }),
+      );
+      expect(twentyConfigService.get).not.toHaveBeenCalledWith(
+        'MANAGED_EMAIL_EXECUTION_MODE',
+      );
+    },
+  );
 
   it('rejects a live SetupIntent before exposing it in sandbox mode', async () => {
     const { service, stripe } = createService({
@@ -160,7 +200,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.prepareWorkspacePaymentMethod({ workspaceId }),
+      service.prepareWorkspacePaymentMethod({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId }),
     ).rejects.toThrow('Stripe SetupIntent mode is invalid');
   });
 
@@ -176,7 +216,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.prepareWorkspacePaymentMethod({ workspaceId }),
+      service.prepareWorkspacePaymentMethod({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId }),
     ).rejects.toThrow('Stripe Customer proof is invalid');
     expect(stripe.setupIntents.create).not.toHaveBeenCalled();
   });
@@ -201,7 +241,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.prepareWorkspacePaymentMethod({ workspaceId }),
+      service.prepareWorkspacePaymentMethod({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId }),
     ).resolves.toEqual(
       expect.objectContaining({ stripeCustomerId: 'cus_winner' }),
     );
@@ -226,7 +266,7 @@ describe('ManagedProviderStripeService', () => {
       stripeCustomerId,
     });
 
-    await service.prepareWorkspacePaymentMethod({ workspaceId });
+    await service.prepareWorkspacePaymentMethod({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId });
 
     expect(stripe.customers.create).not.toHaveBeenCalled();
     expect(stripe.setupIntents.create).toHaveBeenCalledWith(
@@ -254,10 +294,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.completeWorkspacePaymentMethodSetup({
-        workspaceId,
-        setupIntentId,
-      }),
+      service.completeWorkspacePaymentMethodSetup({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId, setupIntentId }),
     ).rejects.toThrow();
     expect(stripe.customers.update).not.toHaveBeenCalled();
   });
@@ -274,10 +311,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.completeWorkspacePaymentMethodSetup({
-        workspaceId,
-        setupIntentId,
-      }),
+      service.completeWorkspacePaymentMethodSetup({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId, setupIntentId }),
     ).rejects.toThrow('Stripe Customer proof is invalid');
     expect(stripe.customers.update).not.toHaveBeenCalled();
   });
@@ -296,10 +330,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.completeWorkspacePaymentMethodSetup({
-        workspaceId,
-        setupIntentId,
-      }),
+      service.completeWorkspacePaymentMethodSetup({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId, setupIntentId }),
     ).rejects.toThrow();
   });
 
@@ -310,10 +341,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.completeWorkspacePaymentMethodSetup({
-        workspaceId,
-        setupIntentId,
-      }),
+      service.completeWorkspacePaymentMethodSetup({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId, setupIntentId }),
     ).resolves.toEqual({ stripeCustomerId, paymentMethodId });
     expect(stripe.customers.update).toHaveBeenCalledWith(stripeCustomerId, {
       invoice_settings: { default_payment_method: paymentMethodId },
@@ -332,7 +360,7 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.assertWorkspacePaymentMethodReady({ workspaceId }),
+      service.assertWorkspacePaymentMethodReady({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId }),
     ).rejects.toThrow('Stripe Customer proof is invalid');
   });
 
@@ -352,14 +380,12 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.assertPaidExternalInvoice({
-        workspaceId,
-        stripeInvoiceId: 'in_metronome',
-        metronomeInvoiceId: 'metronome-invoice-id',
-        expectedAmountCents: 3000,
-        expectedPaymentIntentId: stripePaymentIntentId,
-        currency: 'usd',
-      }),
+      service.assertPaidExternalInvoice({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId,
+      stripeInvoiceId: 'in_metronome',
+      metronomeInvoiceId: 'metronome-invoice-id',
+      expectedAmountCents: 3000,
+      expectedPaymentIntentId: stripePaymentIntentId,
+      currency: 'usd', }),
     ).resolves.toEqual({
       customerId: stripeCustomerId,
       invoiceId: 'in_metronome',
@@ -415,14 +441,12 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.assertPaidExternalInvoice({
-        currency: 'usd',
-        expectedAmountCents: 3000,
-        expectedPaymentIntentId: stripePaymentIntentId,
-        metronomeInvoiceId: 'metronome-invoice-id',
-        stripeInvoiceId: 'in_metronome',
-        workspaceId,
-      }),
+      service.assertPaidExternalInvoice({ metronomeBaseUrlEnvironment: 'SANDBOX', currency: 'usd',
+      expectedAmountCents: 3000,
+      expectedPaymentIntentId: stripePaymentIntentId,
+      metronomeInvoiceId: 'metronome-invoice-id',
+      stripeInvoiceId: 'in_metronome',
+      workspaceId, }),
     ).rejects.toThrow('Stripe external invoice proof is invalid');
     expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled();
   });
@@ -452,14 +476,12 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.assertPaidExternalInvoice({
-        workspaceId,
-        stripeInvoiceId: 'in_metronome',
-        metronomeInvoiceId: 'metronome-invoice-id',
-        expectedAmountCents: 3000,
-        expectedPaymentIntentId: stripePaymentIntentId,
-        currency: 'usd',
-      }),
+      service.assertPaidExternalInvoice({ metronomeBaseUrlEnvironment: 'SANDBOX', workspaceId,
+      stripeInvoiceId: 'in_metronome',
+      metronomeInvoiceId: 'metronome-invoice-id',
+      expectedAmountCents: 3000,
+      expectedPaymentIntentId: stripePaymentIntentId,
+      currency: 'usd', }),
     ).rejects.toThrow();
     expect(stripe.invoicePayments.list).not.toHaveBeenCalled();
   });
@@ -497,14 +519,12 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.assertPaidExternalInvoice({
-        currency: 'usd',
-        expectedAmountCents: 3000,
-        expectedPaymentIntentId: stripePaymentIntentId,
-        metronomeInvoiceId: 'metronome-invoice-id',
-        stripeInvoiceId: 'in_metronome',
-        workspaceId,
-      }),
+      service.assertPaidExternalInvoice({ metronomeBaseUrlEnvironment: 'SANDBOX', currency: 'usd',
+      expectedAmountCents: 3000,
+      expectedPaymentIntentId: stripePaymentIntentId,
+      metronomeInvoiceId: 'metronome-invoice-id',
+      stripeInvoiceId: 'in_metronome',
+      workspaceId, }),
     ).rejects.toThrow('Stripe external invoice proof is invalid');
     expect(stripe.paymentIntents.retrieve).not.toHaveBeenCalled();
   });
@@ -533,14 +553,12 @@ describe('ManagedProviderStripeService', () => {
     });
 
     await expect(
-      service.assertPaidExternalInvoice({
-        currency: 'usd',
-        expectedAmountCents: 3000,
-        expectedPaymentIntentId: stripePaymentIntentId,
-        metronomeInvoiceId: 'metronome-invoice-id',
-        stripeInvoiceId: 'in_metronome',
-        workspaceId,
-      }),
+      service.assertPaidExternalInvoice({ metronomeBaseUrlEnvironment: 'SANDBOX', currency: 'usd',
+      expectedAmountCents: 3000,
+      expectedPaymentIntentId: stripePaymentIntentId,
+      metronomeInvoiceId: 'metronome-invoice-id',
+      stripeInvoiceId: 'in_metronome',
+      workspaceId, }),
     ).rejects.toThrow('Stripe external invoice proof is invalid');
   });
 });

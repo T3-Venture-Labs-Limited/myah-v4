@@ -360,6 +360,9 @@ const createHarness = (options: HarnessOptions = {}) => {
       .fn()
       .mockResolvedValue(options.permitted ?? true),
   };
+  const twentyConfigService = {
+    get: jest.fn().mockReturnValue('SANDBOX'),
+  };
   const service = new ManagedEmailLifecycleService(
     mailboxRepository as never,
     domainRepository as never,
@@ -367,6 +370,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     dataSource as never,
     metronomeClient as never,
     managedProviderStripeService as never,
+    twentyConfigService as never,
     warmupInboxClient as never,
     icemailClient as never,
     permissionsService as never,
@@ -631,6 +635,7 @@ describe('ManagedEmailLifecycleService', () => {
     expect(
       test.managedProviderStripeService.assertPaidExternalInvoice,
     ).toHaveBeenCalledWith({
+      metronomeBaseUrlEnvironment: 'SANDBOX',
       currency: 'USD',
       expectedAmountCents: 5500,
       expectedPaymentIntentId: 'pi_managed_email_consolidated',

@@ -122,7 +122,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
         if (key === 'METRONOME_RATE_CARD_ALIAS') return 'managed-provider';
         if (key === 'MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS')
           return 'managed-email';
-        if (key === 'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID')
+        if (key === 'METRONOME_STRIPE_DELIVERY_METHOD_ID')
           return 'managed-email-delivery-method';
         throw new Error(`Unexpected config key: ${String(key)}`);
       }),
@@ -859,7 +859,7 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
     const config = {
       get: jest.fn((key: string) => {
         if (key === 'METRONOME_ENABLED') return true;
-        if (key === 'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID') {
+        if (key === 'METRONOME_STRIPE_DELIVERY_METHOD_ID') {
           return 'delivery-method-id';
         }
         throw new Error(`Unexpected config key: ${key}`);

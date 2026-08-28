@@ -29,6 +29,7 @@ import {
 import { ManagedEmailResolver } from 'src/engine/core-modules/managed-email/managed-email.resolver';
 import { ManagedEmailCustomerService } from 'src/engine/core-modules/managed-email/services/managed-email-customer.service';
 import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 
@@ -66,11 +67,16 @@ const createResolver = () => {
       },
     ]),
   };
+  const twentyConfigService = {
+    get: jest.fn().mockReturnValue('SANDBOX'),
+  };
 
   return {
     customerService,
     resolver: new ManagedEmailResolver(
       customerService as unknown as ManagedEmailCustomerService,
+      undefined,
+      twentyConfigService as unknown as TwentyConfigService,
     ),
   };
 };
@@ -89,6 +95,10 @@ describe('ManagedEmailResolver', () => {
         ManagedEmailResolver,
         { provide: ManagedEmailCustomerService, useValue: {} },
         { provide: ManagedProviderStripeService, useValue: {} },
+        {
+          provide: TwentyConfigService,
+          useValue: { get: jest.fn().mockReturnValue('SANDBOX') },
+        },
         { provide: PermissionsService, useValue: {} },
       ],
     }).compile();

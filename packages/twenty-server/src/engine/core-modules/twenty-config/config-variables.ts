@@ -216,7 +216,7 @@ export class ConfigVariables {
     isHiddenInAdminPanel: true,
     type: ConfigVariableType.STRING,
   })
-  MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID = '';
+  METRONOME_STRIPE_DELIVERY_METHOD_ID = '';
 
   @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
   @Transform(({ value }) =>

@@ -17,6 +17,7 @@ import { type MetronomeSubscriptionReceipt } from 'src/engine/core-modules/manag
 import { MetronomeWorkspaceCustomerService } from 'src/engine/core-modules/managed-provider-billing/services/metronome-workspace-customer.service';
 import { matchExactPaidMetronomeInvoices } from 'src/engine/core-modules/managed-provider-billing/utils/match-exact-paid-metronome-invoice.util';
 import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-provider-billing/stripe/managed-provider-stripe.service';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
@@ -40,6 +41,7 @@ export class ManagedEmailSubscriptionService {
     private readonly metronomeClientService: MetronomeClientService,
     private readonly metronomeWorkspaceCustomerService: MetronomeWorkspaceCustomerService,
     private readonly managedProviderStripeService: ManagedProviderStripeService,
+    private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
   async beginPurchase(
@@ -154,7 +156,12 @@ export class ManagedEmailSubscriptionService {
     }
     const paymentMethod =
       await this.managedProviderStripeService.assertWorkspacePaymentMethodReady(
-        { workspaceId },
+        {
+          metronomeBaseUrlEnvironment: this.twentyConfigService.get(
+            'METRONOME_BASE_URL_ENVIRONMENT',
+          )!,
+          workspaceId,
+        },
       );
     const customerId =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceCustomer(
@@ -387,6 +394,9 @@ export class ManagedEmailSubscriptionService {
         currency: operation.currency,
         expectedAmountCents: expectedInvoices[index].total,
         expectedPaymentIntentId: receipt.externalPaymentId,
+        metronomeBaseUrlEnvironment: this.twentyConfigService.get(
+          'METRONOME_BASE_URL_ENVIRONMENT',
+        )!,
         metronomeInvoiceId: receipt.invoiceId,
         stripeInvoiceId: receipt.externalInvoiceId,
         workspaceId,
