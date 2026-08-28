@@ -10,9 +10,10 @@ describe('ManagedProviderStripeService', () => {
 
   const createService = (
     installation: Record<string, unknown> | null = null,
-    mode: 'PRODUCTION' | 'SANDBOX' = 'SANDBOX',
+    stripeMode: 'PRODUCTION' | 'SANDBOX' = 'SANDBOX',
+    managedEmailExecutionMode: 'PRODUCTION' | 'SANDBOX' = stripeMode,
   ) => {
-    const livemode = mode === 'PRODUCTION';
+    const livemode = stripeMode === 'PRODUCTION';
     const stripe = {
       customers: {
         create: jest.fn().mockResolvedValue({ id: stripeCustomerId, livemode }),
@@ -159,6 +160,7 @@ describe('ManagedProviderStripeService', () => {
           workspaceId,
           stripeCustomerId,
         },
+        metronomeBaseUrlEnvironment,
         managedEmailExecutionMode,
       );
       stripe.setupIntents.create.mockResolvedValue({
