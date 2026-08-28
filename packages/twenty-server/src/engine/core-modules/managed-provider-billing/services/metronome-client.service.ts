@@ -66,6 +66,18 @@ export type MetronomeBillingConfiguration = Readonly<{
   stripeCustomerId: string;
 }>;
 
+export type MetronomeEnvironment = 'PRODUCTION' | 'SANDBOX';
+
+export type ExactStripeBillingContext = Readonly<{
+  deliveryMethodId: string;
+  environment: MetronomeEnvironment;
+  fiatCreditTypeId: string;
+  fiatCreditTypeName: 'USD (cents)';
+  metronomeContractId: string;
+  metronomeCustomerId: string;
+  stripeCustomerId: string;
+}>;
+
 export type MetronomeRateCard = {
   aliases: Array<{
     endingBefore: string | null;

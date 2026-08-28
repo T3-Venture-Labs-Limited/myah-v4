@@ -163,10 +163,6 @@ export class ManagedEmailSubscriptionService {
           workspaceId,
         },
       );
-    const customerId =
-      await this.metronomeWorkspaceCustomerService.ensureWorkspaceCustomer(
-        workspaceId,
-      );
     await this.metronomeWorkspaceCustomerService.ensureStripeBillingConfiguration(
       workspaceId,
       paymentMethod.stripeCustomerId,
@@ -174,6 +170,16 @@ export class ManagedEmailSubscriptionService {
     const contract =
       await this.metronomeWorkspaceCustomerService.ensureWorkspaceManagedEmailContract(
         workspaceId,
+      );
+    const { metronomeCustomerId: customerId } =
+      await this.metronomeWorkspaceCustomerService.ensureWorkspaceStripeBillingContext(
+        {
+          contractId: contract.contractId,
+          environment: this.twentyConfigService.get(
+            'METRONOME_BASE_URL_ENVIRONMENT',
+          )!,
+          workspaceId,
+        },
       );
     if (contract.rateCardId !== operation.metronomeRateCardId) {
       throw new Error('Managed email subscription rate card mismatch');

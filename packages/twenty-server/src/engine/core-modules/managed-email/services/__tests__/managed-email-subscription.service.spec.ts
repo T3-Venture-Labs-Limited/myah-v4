@@ -212,9 +212,9 @@ describe('ManagedEmailSubscriptionService', () => {
       >
     >;
     const workspaceCustomerService = {
-      ensureWorkspaceCustomer: jest
-        .fn()
-        .mockResolvedValue('123e4567-e89b-42d3-a456-426614174050'),
+      ensureWorkspaceStripeBillingContext: jest.fn().mockResolvedValue({
+        metronomeCustomerId: '123e4567-e89b-42d3-a456-426614174050',
+      }),
       ensureWorkspaceManagedEmailContract: jest.fn().mockResolvedValue({
         contractId: '123e4567-e89b-42d3-a456-426614174051',
         rateCardId: quote.metronomeRateCardId,
@@ -223,8 +223,8 @@ describe('ManagedEmailSubscriptionService', () => {
     } as unknown as jest.Mocked<
       Pick<
         MetronomeWorkspaceCustomerService,
+        | 'ensureWorkspaceStripeBillingContext'
         | 'ensureStripeBillingConfiguration'
-        | 'ensureWorkspaceCustomer'
         | 'ensureWorkspaceManagedEmailContract'
       >
     >;
@@ -313,6 +313,13 @@ describe('ManagedEmailSubscriptionService', () => {
       metronomeClient.addSubscription.mock.invocationCallOrder[0],
     );
     expect(metronomeClient.addSubscription).toHaveBeenCalledTimes(3);
+    expect(
+      workspaceCustomerService.ensureWorkspaceStripeBillingContext,
+    ).toHaveBeenCalledWith({
+      contractId: '123e4567-e89b-42d3-a456-426614174051',
+      environment: 'SANDBOX',
+      workspaceId,
+    });
     expect(metronomeClient.addSubscription).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
