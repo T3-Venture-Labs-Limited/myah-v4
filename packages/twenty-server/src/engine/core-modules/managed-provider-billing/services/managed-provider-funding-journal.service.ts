@@ -108,7 +108,7 @@ const toNonNegativeSafeIntegerCents = (
     throw new Error(`${fieldName} must be a non-negative safe integer`);
   }
 
-  return String(value);
+  return String(numericValue);
 };
 
 const stableSerialize = (value: unknown): string => {

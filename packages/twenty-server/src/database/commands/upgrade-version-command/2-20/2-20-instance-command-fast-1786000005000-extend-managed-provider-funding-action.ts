@@ -30,6 +30,12 @@ export class ExtendManagedProviderFundingActionFastInstanceCommand
        ADD COLUMN IF NOT EXISTS "reconciliationAttemptCount" integer NOT NULL DEFAULT 0`,
     );
     await queryRunner.query(
+      'ALTER TABLE "core"."managedProviderFundingAction" DROP CONSTRAINT IF EXISTS "CHK_MANAGED_PROVIDER_FUNDING_ACTION_STATE"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedProviderFundingAction" ADD CONSTRAINT "CHK_MANAGED_PROVIDER_FUNDING_ACTION_STATE" CHECK ("state" IN (\'PENDING\', \'METRONOME_EDIT_RECORDED\', \'PAYMENT_PENDING\', \'PAYMENT_ACTION_REQUIRED\', \'RECONCILIATION_REQUIRED\', \'SUCCEEDED\', \'FAILED_DEFINITIVE\', \'REFUND_INTENT_RECORDED\', \'REFUND_RECONCILIATION_REQUIRED\', \'REFUNDED\'))',
+    );
+    await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS "IDX_MANAGED_PROVIDER_FUNDING_ACTION_RECONCILIATION_DUE"
        ON "core"."managedProviderFundingAction" ("state", "nextReconciliationAt")`,
     );
@@ -38,6 +44,15 @@ export class ExtendManagedProviderFundingActionFastInstanceCommand
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       'DROP INDEX IF EXISTS "core"."IDX_MANAGED_PROVIDER_FUNDING_ACTION_RECONCILIATION_DUE"',
+    );
+    await queryRunner.query(
+      'UPDATE "core"."managedProviderFundingAction" SET "state" = \'RECONCILIATION_REQUIRED\' WHERE "state" NOT IN (\'PENDING\', \'SUCCEEDED\', \'RECONCILIATION_REQUIRED\', \'FAILED_DEFINITIVE\')',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedProviderFundingAction" DROP CONSTRAINT IF EXISTS "CHK_MANAGED_PROVIDER_FUNDING_ACTION_STATE"',
+    );
+    await queryRunner.query(
+      'ALTER TABLE "core"."managedProviderFundingAction" ADD CONSTRAINT "CHK_MANAGED_PROVIDER_FUNDING_ACTION_STATE" CHECK ("state" IN (\'PENDING\', \'SUCCEEDED\', \'RECONCILIATION_REQUIRED\', \'FAILED_DEFINITIVE\'))',
     );
     await queryRunner.query(
       `ALTER TABLE "core"."managedProviderFundingAction"

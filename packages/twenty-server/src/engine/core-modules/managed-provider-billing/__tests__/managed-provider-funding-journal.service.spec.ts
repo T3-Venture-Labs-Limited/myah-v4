@@ -131,6 +131,25 @@ describe('ManagedProviderFundingJournalService', () => {
     expect(repository.save).not.toHaveBeenCalled();
   });
 
+  it('canonicalizes accepted numeric strings before persistence', async () => {
+    const { repository, service } = createService();
+
+    await service.createPending({
+      ...intent,
+      amountCents: '05000',
+      prepaidPrincipalCents: '00025',
+      taxCents: '00003',
+      collectedTotalCents: 28,
+    });
+
+    expect(repository.save.mock.calls[0][0]).toMatchObject({
+      amountCents: '5000',
+      prepaidPrincipalCents: '25',
+      taxCents: '3',
+      collectedTotalCents: '28',
+    });
+  });
+
   it('serializes rate-limit count and intent creation under the operator lock', async () => {
     const transactionalRepository = {
       create: jest.fn((value) => value),
