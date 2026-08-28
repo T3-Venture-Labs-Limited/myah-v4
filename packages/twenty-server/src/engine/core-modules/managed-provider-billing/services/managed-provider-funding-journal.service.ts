@@ -11,7 +11,7 @@ import {
 
 export type CreateFundingIntent = {
   actionType: ManagedProviderFundingActionType;
-  amountCents: number;
+  amountCents: number | string;
   applicability?: Record<string, unknown> | null;
   applicableProductIds?: string[] | null;
   correctedOperationId?: string | null;
@@ -78,6 +78,60 @@ export type CompareAndSetFundingActionInput = {
 const RECONCILIATION_LOCK_KEY = 'myah:managed-provider-funding-reconciliation';
 const MAX_RECONCILIATION_ATTEMPTS = 10;
 const RECONCILIATION_BACKOFF_MS = 5 * 60 * 1000;
+const RECONCILIATION_CLAIM_LEASE_MS = 15 * 60 * 1000;
+
+const toNonNegativeSafeIntegerCents = (
+  value: number | string | null | undefined,
+  fieldName: string,
+  required = false,
+): string | null => {
+  if (value === null || value === undefined) {
+    if (required) {
+      throw new Error(`${fieldName} must be a non-negative safe integer`);
+    }
+
+    return null;
+  }
+
+  const numericValue =
+    typeof value === 'number'
+      ? value
+      : /^\d+$/.test(value)
+        ? Number(value)
+        : Number.NaN;
+
+  if (
+    !Number.isSafeInteger(numericValue) ||
+    numericValue < 0 ||
+    (typeof value === 'string' && !/^\d+$/.test(value))
+  ) {
+    throw new Error(`${fieldName} must be a non-negative safe integer`);
+  }
+
+  return String(value);
+};
+
+const stableSerialize = (value: unknown): string => {
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(',')}]`;
+  }
+
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([key, nestedValue]) =>
+          `${JSON.stringify(key)}:${stableSerialize(nestedValue)}`,
+      )
+      .join(',')}}`;
+  }
+
+  return JSON.stringify(value) ?? 'undefined';
+};
 
 @Injectable()
 export class ManagedProviderFundingJournalService {
@@ -118,6 +172,20 @@ export class ManagedProviderFundingJournalService {
   ): Promise<
     ManagedProviderFundingActionEntity & { createdByCaller?: boolean }
   > {
+    const amountCents = toNonNegativeSafeIntegerCents(
+      input.amountCents,
+      'amountCents',
+      true,
+    ) as string;
+    const prepaidPrincipalCents = toNonNegativeSafeIntegerCents(
+      input.prepaidPrincipalCents,
+      'prepaidPrincipalCents',
+    );
+    const taxCents = toNonNegativeSafeIntegerCents(input.taxCents, 'taxCents');
+    const collectedTotalCents = toNonNegativeSafeIntegerCents(
+      input.collectedTotalCents,
+      'collectedTotalCents',
+    );
     return this.repository.manager.transaction(async (manager) => {
       await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
         `myah:sponsored-grant-rate:${input.operatorIdentity}`,
@@ -164,7 +232,7 @@ export class ManagedProviderFundingJournalService {
         .digest('hex')}`;
       const action = repository.create({
         actionType: input.actionType,
-        amountCents: String(input.amountCents),
+        amountCents,
         applicability: input.applicability ?? null,
         commitmentId: null,
         correctedOperationId: input.correctedOperationId ?? null,
@@ -193,15 +261,9 @@ export class ManagedProviderFundingJournalService {
           input.stripeBillingConfigurationId ?? null,
         stripeDeliveryMethodId: input.stripeDeliveryMethodId ?? null,
         stripeCustomerId: input.stripeCustomerId ?? null,
-        prepaidPrincipalCents:
-          input.prepaidPrincipalCents == null
-            ? null
-            : String(input.prepaidPrincipalCents),
-        taxCents: input.taxCents == null ? null : String(input.taxCents),
-        collectedTotalCents:
-          input.collectedTotalCents == null
-            ? null
-            : String(input.collectedTotalCents),
+        prepaidPrincipalCents,
+        taxCents,
+        collectedTotalCents,
         paymentReceipt: input.paymentReceipt ?? null,
         refundReceipt: null,
         metronomeInvoiceId: null,
@@ -224,6 +286,20 @@ export class ManagedProviderFundingJournalService {
   ): Promise<
     ManagedProviderFundingActionEntity & { createdByCaller?: boolean }
   > {
+    const amountCents = toNonNegativeSafeIntegerCents(
+      input.amountCents,
+      'amountCents',
+      true,
+    ) as string;
+    const prepaidPrincipalCents = toNonNegativeSafeIntegerCents(
+      input.prepaidPrincipalCents,
+      'prepaidPrincipalCents',
+    );
+    const taxCents = toNonNegativeSafeIntegerCents(input.taxCents, 'taxCents');
+    const collectedTotalCents = toNonNegativeSafeIntegerCents(
+      input.collectedTotalCents,
+      'collectedTotalCents',
+    );
     const existing = await this.findByIdempotency(
       input.workspaceId,
       input.idempotencyKey,
@@ -247,7 +323,7 @@ export class ManagedProviderFundingJournalService {
       .digest('hex')}`;
     const action = this.repository.create({
       actionType: input.actionType,
-      amountCents: String(input.amountCents),
+      amountCents,
       applicability: input.applicability ?? null,
       applicableProductIds: input.applicableProductIds ?? null,
       commitmentId: null,
@@ -276,15 +352,9 @@ export class ManagedProviderFundingJournalService {
         input.stripeBillingConfigurationId ?? null,
       stripeDeliveryMethodId: input.stripeDeliveryMethodId ?? null,
       stripeCustomerId: input.stripeCustomerId ?? null,
-      prepaidPrincipalCents:
-        input.prepaidPrincipalCents == null
-          ? null
-          : String(input.prepaidPrincipalCents),
-      taxCents: input.taxCents == null ? null : String(input.taxCents),
-      collectedTotalCents:
-        input.collectedTotalCents == null
-          ? null
-          : String(input.collectedTotalCents),
+      prepaidPrincipalCents,
+      taxCents,
+      collectedTotalCents,
       paymentReceipt: input.paymentReceipt ?? null,
       refundReceipt: null,
       metronomeInvoiceId: null,
@@ -339,7 +409,9 @@ export class ManagedProviderFundingJournalService {
         current.state === input.nextState &&
         Object.entries(patch).every(
           ([key, value]) =>
-            current[key as keyof ManagedProviderFundingActionEntity] === value,
+            stableSerialize(
+              current[key as keyof ManagedProviderFundingActionEntity],
+            ) === stableSerialize(value),
         )
       ) {
         return current;
@@ -366,13 +438,21 @@ export class ManagedProviderFundingJournalService {
         `SELECT "id", "state", "reconciliationAttemptCount"
          FROM "core"."managedProviderFundingAction"
          WHERE "state" IN ('RECONCILIATION_REQUIRED', 'PAYMENT_PENDING',
-           'PAYMENT_ACTION_REQUIRED', 'METRONOME_EDIT_RECORDED')
+           'PAYMENT_ACTION_REQUIRED', 'METRONOME_EDIT_RECORDED',
+           'REFUND_INTENT_RECORDED', 'REFUND_RECONCILIATION_REQUIRED')
            AND ("nextReconciliationAt" IS NULL OR "nextReconciliationAt" <= $1)
-           AND "reconciliationClaimedAt" IS NULL
+           AND "reconciliationAttemptCount" < $3
+           AND ("reconciliationClaimedAt" IS NULL OR
+             "reconciliationClaimedAt" <= $2)
          ORDER BY "nextReconciliationAt" NULLS FIRST, "createdAt"
-         LIMIT $2
+         LIMIT $4
          FOR UPDATE SKIP LOCKED`,
-        [now, limit],
+        [
+          now,
+          new Date(now.getTime() - RECONCILIATION_CLAIM_LEASE_MS),
+          MAX_RECONCILIATION_ATTEMPTS,
+          limit,
+        ],
       )) as Array<{
         id: string;
         state: ManagedProviderFundingActionState;
@@ -392,7 +472,6 @@ export class ManagedProviderFundingJournalService {
           {
             id: action.id,
             state: action.state,
-            reconciliationClaimedAt: null,
           },
           {
             reconciliationClaimedAt: now,
@@ -445,13 +524,27 @@ export class ManagedProviderFundingJournalService {
     existing: ManagedProviderFundingActionEntity,
     input: CreateFundingIntent,
   ): ManagedProviderFundingActionEntity {
+    const amountCents = toNonNegativeSafeIntegerCents(
+      input.amountCents,
+      'amountCents',
+      true,
+    );
+    const prepaidPrincipalCents = toNonNegativeSafeIntegerCents(
+      input.prepaidPrincipalCents,
+      'prepaidPrincipalCents',
+    );
+    const taxCents = toNonNegativeSafeIntegerCents(input.taxCents, 'taxCents');
+    const collectedTotalCents = toNonNegativeSafeIntegerCents(
+      input.collectedTotalCents,
+      'collectedTotalCents',
+    );
     const applicableProductIdsEqual =
-      JSON.stringify(existing.applicableProductIds ?? null) ===
-      JSON.stringify(input.applicableProductIds ?? null);
+      stableSerialize(existing.applicableProductIds ?? null) ===
+      stableSerialize(input.applicableProductIds ?? null);
 
     if (
       existing.actionType !== input.actionType ||
-      existing.amountCents !== String(input.amountCents) ||
+      existing.amountCents !== amountCents ||
       existing.currency !== (input.currency ?? 'USD') ||
       existing.externalReference !== input.externalReference ||
       existing.operatorIdentity !== input.operatorIdentity ||
@@ -460,7 +553,8 @@ export class ManagedProviderFundingJournalService {
       existing.creditProductId !== (input.creditProductId ?? null) ||
       !applicableProductIdsEqual ||
       existing.correctedOperationId !== (input.correctedOperationId ?? null) ||
-      existing.expiresAt?.toISOString() !== input.expiresAt?.toISOString() ||
+      stableSerialize(existing.expiresAt ?? null) !==
+        stableSerialize(input.expiresAt ?? null) ||
       (existing.metronomeCustomerId ?? null) !==
         (input.metronomeCustomerId ?? null) ||
       (existing.metronomeContractId ?? null) !==
@@ -471,22 +565,15 @@ export class ManagedProviderFundingJournalService {
         (input.stripeDeliveryMethodId ?? null) ||
       (existing.stripeCustomerId ?? null) !==
         (input.stripeCustomerId ?? null) ||
-      (existing.prepaidPrincipalCents ?? null) !==
-        (input.prepaidPrincipalCents == null
-          ? null
-          : String(input.prepaidPrincipalCents)) ||
-      (existing.taxCents ?? null) !==
-        (input.taxCents == null ? null : String(input.taxCents)) ||
-      (existing.collectedTotalCents ?? null) !==
-        (input.collectedTotalCents == null
-          ? null
-          : String(input.collectedTotalCents)) ||
-      JSON.stringify(existing.applicability ?? null) !==
-        JSON.stringify(input.applicability ?? null) ||
-      JSON.stringify(existing.paymentEvidence ?? null) !==
-        JSON.stringify(input.paymentEvidence ?? null) ||
-      JSON.stringify(existing.paymentReceipt ?? null) !==
-        JSON.stringify(input.paymentReceipt ?? null)
+      (existing.prepaidPrincipalCents ?? null) !== prepaidPrincipalCents ||
+      (existing.taxCents ?? null) !== taxCents ||
+      (existing.collectedTotalCents ?? null) !== collectedTotalCents ||
+      stableSerialize(existing.applicability ?? null) !==
+        stableSerialize(input.applicability ?? null) ||
+      stableSerialize(existing.paymentEvidence ?? null) !==
+        stableSerialize(input.paymentEvidence ?? null) ||
+      stableSerialize(existing.paymentReceipt ?? null) !==
+        stableSerialize(input.paymentReceipt ?? null)
     ) {
       throw new Error('Managed provider funding replay conflicts');
     }
