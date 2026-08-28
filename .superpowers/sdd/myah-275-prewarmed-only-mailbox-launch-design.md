@@ -213,6 +213,33 @@ Create the two contract-specific overrides with `POST /v2/contracts/edit`, exact
 
 Every override, subscription, and invoice uses the rate card's exact non-empty fiat credit type ID whose canonical name is `USD (cents)`. All prices and totals are integer cents. The one-active-bundle rule prevents a later purchase from changing rates under an active bundle. No shared rate card is mutated. The subscription API receives product, cadence, quantity, schedules, proration, and uniqueness identity only; it does not receive a fabricated unit-price field.
 
+The customer sell rates are tax-exclusive. The initial invoice subtotal is:
+
+```text
+domainSellCents + mailboxSellCents * mailboxCount
+```
+
+The quote stores this tax-exclusive subtotal. After Stripe Tax calculation, the acquisition operation separately persists and correlates:
+
+- Metronome subscription subtotal cents;
+- Stripe tax cents;
+- Stripe tax-inclusive invoice total cents;
+- succeeded PaymentIntent amount equal to the tax-inclusive total.
+
+Only the two subscription components are provider-service revenue. Tax is never included in gross-margin math or treated as a managed-email product.
+
+This work consumes the shared migration defined by MYAH-147 before feature-specific billing changes:
+
+- one workspace installation, Metronome customer, and Stripe Customer;
+- shared customer billing-provider configuration and `METRONOME_STRIPE_DELIVERY_METHOD_ID`;
+- explicit `METRONOME_BASE_URL_ENVIRONMENT` argument in every `ManagedProviderStripeService` call;
+- Metronome credit type `USD (cents)` with one exact ID and integer cents;
+- Stripe currency `usd` and integer cents;
+- separate managed-AI and managed-email contracts and rate cards;
+- the managed-email contract's own direct-billing schedule referencing the shared customer configuration.
+
+The shared migration must update all existing managed-email callers/tests and become the reviewed base of this branch before override, subscription, tax, or payment-failure implementation begins.
+
 Do not:
 
 - create or bill `managed_warmup_month`;
@@ -341,22 +368,53 @@ For every definitively non-fulfillable paid outcome, Myah must not leave the cus
 
 Any provider-cleanup, subscription, invoice, credit-note, refund, or tax one-leg success/ambiguity remains `COMPENSATION_RECONCILIATION_REQUIRED`, blocks activation/sending and future renewal, and reconciles authoritative Icemail/Metronome/Stripe state. Ongoing acquisition reconciliation is reserved for genuinely ambiguous provider outcomes; once non-fulfillment is definitive, the operation moves to cleanup/compensation.
 
-## 9. Payment Gate
+## 9. Payment Gate and Failed-Payment Cleanup
 
-No Icemail purchase occurs until all exact payment facts are proven:
+Before creating overrides/subscriptions, Myah collects or refreshes the exact Stripe Customer billing address and optional business tax ID through the shared bounded Stripe Elements/server flow. Invalid or indeterminate tax location creates no Metronome write.
+
+The durable payment lifecycle is:
+
+```text
+CREATING_SUBSCRIPTIONS
+  → PAYMENT_PENDING
+  → PAYMENT_ACTION_REQUIRED | PAYMENT_PAID | PAYMENT_FAILED_CLEANUP_REQUIRED
+
+PAYMENT_PENDING | PAYMENT_ACTION_REQUIRED
+  → PAYMENT_RECONCILIATION_REQUIRED
+  → PAYMENT_PENDING | PAYMENT_ACTION_REQUIRED | PAYMENT_PAID | PAYMENT_FAILED_CLEANUP_REQUIRED
+
+PAYMENT_FAILED_CLEANUP_REQUIRED
+  → PAYMENT_FAILED_CLEANED | PAYMENT_CLEANUP_RECONCILIATION_REQUIRED
+```
+
+`PAYMENT_ACTION_REQUIRED` exposes the shared exact Stripe PaymentIntent authentication action for seven days. The browser may confirm the intended PaymentIntent but never mark it paid. Server reconciliation alone transitions payment state.
+
+No Icemail purchase occurs until `PAYMENT_PAID`, which requires:
 
 - expected workspace, actor, operation, and quote;
-- expected Metronome customer, contract, rate card, exact `USD (cents)` fiat credit type ID, overrides, and subscriptions;
-- exact override/subscription key, component, cadence, quantity, integer-cent rate, and amount correlation;
-- exact finalized/paid Metronome invoice in `USD (cents)`;
-- exact Stripe customer and livemode;
-- exact paid Stripe invoice in USD;
-- exact integer-cent amount;
-- expected Metronome invoice metadata;
+- expected Metronome customer, separate managed-email contract, rate card, exact `USD (cents)` fiat credit type ID, overrides, and subscriptions;
+- exact override/subscription key, component, cadence, quantity, integer-cent rate, and tax-exclusive subtotal correlation;
+- exact finalized/paid Metronome invoice subtotal in `USD (cents)`;
+- exact shared Stripe customer, delivery-method configuration, environment, and livemode;
+- exact paid Stripe invoice in `usd`;
+- Stripe invoice subtotal equal to the two-line Metronome subtotal;
+- separately persisted Stripe tax cents;
+- Stripe invoice total equal to subtotal plus tax;
 - exactly one accepted invoice payment;
-- succeeded PaymentIntent with exact customer and amount.
+- succeeded PaymentIntent with exact customer and tax-inclusive total;
+- no void, credit note, refund, dispute, reversal, or failed payment that invalidates proof.
 
 `METRONOME_USD_CREDIT_TYPE_NAME` remains exactly `USD (cents)`. Its non-empty rate-card credit type ID is persisted and required at contract recovery, override creation/read-back, subscription creation/read-back, invoice matching, and Stripe cent-amount correlation. Plain `USD` is not an accepted Metronome credit type name for this flow.
+
+If Metronome/Stripe definitively reports failed, expired, unpaid, or voided payment—or the seven-day action window closes unpaid—no provider write occurs. Before terminal failure, Myah:
+
+1. persists `PAYMENT_FAILED_CLEANUP_REQUIRED`;
+2. sets both domain and mailbox subscription quantities to zero from the acquisition start and proves the edit;
+3. voids/terminates the unpaid Metronome/Stripe invoice and proves no successful PaymentIntent;
+4. records `PAYMENT_FAILED_CLEANED`;
+5. requires a fresh inventory selection and quote for retry.
+
+Any ambiguous subscription, invoice, authentication, or cleanup outcome remains in the corresponding reconciliation-required state, keeps provider spend and activation blocked, and uses authoritative Metronome/Stripe reads. It never silently terminalizes or creates a new financial write.
 
 ## 10. Activation
 
@@ -552,6 +610,11 @@ Do not change operation state manually or delete provider/database resources as 
 - quote invalidation on stock/cost change;
 - no warmup line/subscription/provider call;
 - exact Metronome and Stripe payment gate;
+- tax-exclusive two-line subtotal, Stripe tax, invoice total, and PaymentIntent total correlation;
+- shared customer/config/environment migration precedes both feature lanes;
+- payment action-required completion and seven-day deadline;
+- definitive unpaid failure zeros subscriptions and terminates the invoice before terminal state;
+- ambiguous payment/cleanup remains blocked and reconciles;
 - idempotent quote consumption and purchase operation;
 - no provider call before payment;
 - exact success, zero failure, timeout, incomplete, extra/conflicting, receipt-total-mismatch, and ambiguous provider outcomes;
