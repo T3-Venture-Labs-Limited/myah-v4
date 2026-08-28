@@ -148,4 +148,108 @@ describe('ManagedProviderFundingJournalService', () => {
     );
     expect(transactionalRepository.save).toHaveBeenCalledTimes(1);
   });
+
+  it('transitions only the exact workspace action from the expected state', async () => {
+    const action = {
+      ...persistedAction,
+      workspaceId: 'workspace-id',
+      state: 'PAYMENT_PENDING',
+    } as ManagedProviderFundingActionEntity;
+    const repository = {
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      findOneByOrFail: jest.fn().mockResolvedValue(action),
+    };
+    const service = new ManagedProviderFundingJournalService(
+      repository as unknown as Repository<ManagedProviderFundingActionEntity>,
+    );
+
+    await expect(
+      service.transitionCompareAndSet({
+        id: action.id,
+        workspaceId: action.workspaceId as string,
+        expectedState: 'PENDING',
+        nextState: 'PAYMENT_PENDING',
+        patch: { metronomeInvoiceId: 'invoice-id' },
+      }),
+    ).resolves.toBe(action);
+    expect(repository.update).toHaveBeenCalledWith(
+      { id: action.id, workspaceId: action.workspaceId, state: 'PENDING' },
+      { state: 'PAYMENT_PENDING', metronomeInvoiceId: 'invoice-id' },
+    );
+  });
+
+  it('accepts a compare-and-set replay when the exact next state is already persisted', async () => {
+    const action = {
+      ...persistedAction,
+      workspaceId: 'workspace-id',
+      state: 'PAYMENT_PENDING',
+    } as ManagedProviderFundingActionEntity;
+    const repository = {
+      update: jest.fn().mockResolvedValue({ affected: 0 }),
+      findOne: jest.fn().mockResolvedValue(action),
+      findOneByOrFail: jest.fn().mockResolvedValue(action),
+    };
+    const service = new ManagedProviderFundingJournalService(
+      repository as unknown as Repository<ManagedProviderFundingActionEntity>,
+    );
+
+    await expect(
+      service.transitionCompareAndSet({
+        id: action.id,
+        workspaceId: action.workspaceId as string,
+        expectedState: 'PENDING',
+        nextState: 'PAYMENT_PENDING',
+      }),
+    ).resolves.toBe(action);
+  });
+
+  it('atomically claims due reconciliation actions and increments attempts', async () => {
+    const dueAction = {
+      ...persistedAction,
+      workspaceId: 'workspace-id',
+      state: 'RECONCILIATION_REQUIRED',
+      reconciliationAttemptCount: 2,
+      nextReconciliationAt: new Date('2026-08-29T00:00:00.000Z'),
+    } as ManagedProviderFundingActionEntity;
+    const claimedAction = {
+      ...dueAction,
+      reconciliationAttemptCount: 3,
+    };
+    const managerRepository = {
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      findOneBy: jest.fn().mockResolvedValue(claimedAction),
+    };
+    const manager = {
+      query: jest.fn().mockResolvedValue([dueAction]),
+      getRepository: jest.fn().mockReturnValue(managerRepository),
+    };
+    const repository = {
+      manager: {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      },
+    };
+    const service = new ManagedProviderFundingJournalService(
+      repository as unknown as Repository<ManagedProviderFundingActionEntity>,
+    );
+    const now = new Date('2026-08-29T01:00:00.000Z');
+
+    await expect(service.claimDueReconciliationActions(10, now)).resolves.toEqual(
+      [claimedAction],
+    );
+    expect(manager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      ['myah:managed-provider-funding-reconciliation'],
+    );
+    expect(managerRepository.update).toHaveBeenCalledWith(
+      {
+        id: dueAction.id,
+        state: 'RECONCILIATION_REQUIRED',
+        reconciliationClaimedAt: null,
+      },
+      expect.objectContaining({
+        reconciliationClaimedAt: now,
+        reconciliationAttemptCount: 3,
+      }),
+    );
+  });
 });

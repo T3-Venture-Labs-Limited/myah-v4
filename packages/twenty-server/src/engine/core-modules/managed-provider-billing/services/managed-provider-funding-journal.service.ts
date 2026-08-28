@@ -25,7 +25,59 @@ export type CreateFundingIntent = {
   permissionUsed: 'managed_provider_finance' | 'managed_provider_grant';
   reason: string;
   workspaceId: string;
+  metronomeCustomerId?: string | null;
+  metronomeContractId?: string | null;
+  stripeBillingConfigurationId?: string | null;
+  stripeDeliveryMethodId?: string | null;
+  stripeCustomerId?: string | null;
+  prepaidPrincipalCents?: number | string | null;
+  taxCents?: number | string | null;
+  collectedTotalCents?: number | string | null;
+  paymentReceipt?: Record<string, unknown> | null;
 };
+
+type FundingActionPatch = Partial<
+  Pick<
+    ManagedProviderFundingActionEntity,
+    | 'metronomeCustomerId'
+    | 'metronomeContractId'
+    | 'metronomeEditId'
+    | 'commitmentId'
+    | 'metronomeInvoiceId'
+    | 'stripeBillingConfigurationId'
+    | 'stripeDeliveryMethodId'
+    | 'stripeCustomerId'
+    | 'stripeInvoiceId'
+    | 'stripePaymentIntentId'
+    | 'stripeCreditNoteId'
+    | 'stripeRefundId'
+    | 'prepaidPrincipalCents'
+    | 'taxCents'
+    | 'collectedTotalCents'
+    | 'paymentReceipt'
+    | 'refundReceipt'
+    | 'expiresAt'
+    | 'nextReconciliationAt'
+    | 'reconciliationClaimedAt'
+    | 'reconciliationAttemptCount'
+    | 'creditId'
+    | 'externalResourceId'
+    | 'safeErrorCode'
+    | 'failureCode'
+  >
+>;
+
+export type CompareAndSetFundingActionInput = {
+  id: string;
+  workspaceId: string;
+  expectedState: ManagedProviderFundingActionState;
+  nextState: ManagedProviderFundingActionState;
+  patch?: FundingActionPatch;
+};
+
+const RECONCILIATION_LOCK_KEY = 'myah:managed-provider-funding-reconciliation';
+const MAX_RECONCILIATION_ATTEMPTS = 10;
+const RECONCILIATION_BACKOFF_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class ManagedProviderFundingJournalService {
@@ -135,6 +187,31 @@ export class ManagedProviderFundingJournalService {
         safeErrorCode: null,
         state: 'PENDING',
         workspaceId: input.workspaceId,
+        metronomeCustomerId: input.metronomeCustomerId ?? null,
+        metronomeContractId: input.metronomeContractId ?? null,
+        stripeBillingConfigurationId:
+          input.stripeBillingConfigurationId ?? null,
+        stripeDeliveryMethodId: input.stripeDeliveryMethodId ?? null,
+        stripeCustomerId: input.stripeCustomerId ?? null,
+        prepaidPrincipalCents:
+          input.prepaidPrincipalCents == null
+            ? null
+            : String(input.prepaidPrincipalCents),
+        taxCents: input.taxCents == null ? null : String(input.taxCents),
+        collectedTotalCents:
+          input.collectedTotalCents == null
+            ? null
+            : String(input.collectedTotalCents),
+        paymentReceipt: input.paymentReceipt ?? null,
+        refundReceipt: null,
+        metronomeInvoiceId: null,
+        stripeInvoiceId: null,
+        stripePaymentIntentId: null,
+        stripeCreditNoteId: null,
+        stripeRefundId: null,
+        nextReconciliationAt: null,
+        reconciliationClaimedAt: null,
+        reconciliationAttemptCount: 0,
       });
 
       const saved = await repository.save(action);
@@ -193,6 +270,31 @@ export class ManagedProviderFundingJournalService {
       safeErrorCode: null,
       state: 'PENDING',
       workspaceId: input.workspaceId,
+      metronomeCustomerId: input.metronomeCustomerId ?? null,
+      metronomeContractId: input.metronomeContractId ?? null,
+      stripeBillingConfigurationId:
+        input.stripeBillingConfigurationId ?? null,
+      stripeDeliveryMethodId: input.stripeDeliveryMethodId ?? null,
+      stripeCustomerId: input.stripeCustomerId ?? null,
+      prepaidPrincipalCents:
+        input.prepaidPrincipalCents == null
+          ? null
+          : String(input.prepaidPrincipalCents),
+      taxCents: input.taxCents == null ? null : String(input.taxCents),
+      collectedTotalCents:
+        input.collectedTotalCents == null
+          ? null
+          : String(input.collectedTotalCents),
+      paymentReceipt: input.paymentReceipt ?? null,
+      refundReceipt: null,
+      metronomeInvoiceId: null,
+      stripeInvoiceId: null,
+      stripePaymentIntentId: null,
+      stripeCreditNoteId: null,
+      stripeRefundId: null,
+      nextReconciliationAt: null,
+      reconciliationClaimedAt: null,
+      reconciliationAttemptCount: 0,
     });
 
     try {
@@ -212,6 +314,109 @@ export class ManagedProviderFundingJournalService {
 
       throw error;
     }
+  }
+
+  async transitionCompareAndSet(
+    input: CompareAndSetFundingActionInput,
+  ): Promise<ManagedProviderFundingActionEntity> {
+    const patch = input.patch ?? {};
+    const result = await this.repository.update(
+      {
+        id: input.id,
+        workspaceId: input.workspaceId,
+        state: input.expectedState,
+      },
+      { ...patch, state: input.nextState },
+    );
+
+    if (!result.affected) {
+      const current = await this.repository.findOne({
+        where: { id: input.id, workspaceId: input.workspaceId },
+      });
+
+      if (
+        current &&
+        current.state === input.nextState &&
+        Object.entries(patch).every(
+          ([key, value]) =>
+            current[key as keyof ManagedProviderFundingActionEntity] === value,
+        )
+      ) {
+        return current;
+      }
+
+      throw new Error('Managed provider funding transition conflict');
+    }
+
+    return this.repository.findOneByOrFail({
+      id: input.id,
+      workspaceId: input.workspaceId,
+    });
+  }
+
+  async claimDueReconciliationActions(
+    limit = 50,
+    now = new Date(),
+  ): Promise<ManagedProviderFundingActionEntity[]> {
+    return this.repository.manager.transaction(async (manager) => {
+      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        RECONCILIATION_LOCK_KEY,
+      ]);
+      const dueActions = (await manager.query(
+        `SELECT "id", "state", "reconciliationAttemptCount"
+         FROM "core"."managedProviderFundingAction"
+         WHERE "state" IN ('RECONCILIATION_REQUIRED', 'PAYMENT_PENDING',
+           'PAYMENT_ACTION_REQUIRED', 'METRONOME_EDIT_RECORDED')
+           AND ("nextReconciliationAt" IS NULL OR "nextReconciliationAt" <= $1)
+           AND "reconciliationClaimedAt" IS NULL
+         ORDER BY "nextReconciliationAt" NULLS FIRST, "createdAt"
+         LIMIT $2
+         FOR UPDATE SKIP LOCKED`,
+        [now, limit],
+      )) as Array<{
+        id: string;
+        state: ManagedProviderFundingActionState;
+        reconciliationAttemptCount: number | string | null;
+      }>;
+      const repository = manager.getRepository(
+        ManagedProviderFundingActionEntity,
+      );
+      const claimed: ManagedProviderFundingActionEntity[] = [];
+
+      for (const action of dueActions) {
+        const attemptCount = Math.min(
+          Number(action.reconciliationAttemptCount ?? 0) + 1,
+          MAX_RECONCILIATION_ATTEMPTS,
+        );
+        const updateResult = await repository.update(
+          {
+            id: action.id,
+            state: action.state,
+            reconciliationClaimedAt: null,
+          },
+          {
+            reconciliationClaimedAt: now,
+            reconciliationAttemptCount: attemptCount,
+            nextReconciliationAt: new Date(
+              now.getTime() +
+                Math.min(
+                  RECONCILIATION_BACKOFF_MS * 2 ** (attemptCount - 1),
+                  60 * 60 * 1000,
+                ),
+            ),
+          },
+        );
+
+        if (updateResult.affected) {
+          const persisted = await repository.findOneBy({ id: action.id });
+          if (persisted) {
+            claimed.push(persisted);
+          }
+        }
+      }
+
+      return claimed;
+    });
   }
 
   async transition(
@@ -256,10 +461,32 @@ export class ManagedProviderFundingJournalService {
       !applicableProductIdsEqual ||
       existing.correctedOperationId !== (input.correctedOperationId ?? null) ||
       existing.expiresAt?.toISOString() !== input.expiresAt?.toISOString() ||
-      JSON.stringify(existing.applicability) !==
+      (existing.metronomeCustomerId ?? null) !==
+        (input.metronomeCustomerId ?? null) ||
+      (existing.metronomeContractId ?? null) !==
+        (input.metronomeContractId ?? null) ||
+      (existing.stripeBillingConfigurationId ?? null) !==
+        (input.stripeBillingConfigurationId ?? null) ||
+      (existing.stripeDeliveryMethodId ?? null) !==
+        (input.stripeDeliveryMethodId ?? null) ||
+      (existing.stripeCustomerId ?? null) !==
+        (input.stripeCustomerId ?? null) ||
+      (existing.prepaidPrincipalCents ?? null) !==
+        (input.prepaidPrincipalCents == null
+          ? null
+          : String(input.prepaidPrincipalCents)) ||
+      (existing.taxCents ?? null) !==
+        (input.taxCents == null ? null : String(input.taxCents)) ||
+      (existing.collectedTotalCents ?? null) !==
+        (input.collectedTotalCents == null
+          ? null
+          : String(input.collectedTotalCents)) ||
+      JSON.stringify(existing.applicability ?? null) !==
         JSON.stringify(input.applicability ?? null) ||
-      JSON.stringify(existing.paymentEvidence) !==
-        JSON.stringify(input.paymentEvidence ?? null)
+      JSON.stringify(existing.paymentEvidence ?? null) !==
+        JSON.stringify(input.paymentEvidence ?? null) ||
+      JSON.stringify(existing.paymentReceipt ?? null) !==
+        JSON.stringify(input.paymentReceipt ?? null)
     ) {
       throw new Error('Managed provider funding replay conflicts');
     }
