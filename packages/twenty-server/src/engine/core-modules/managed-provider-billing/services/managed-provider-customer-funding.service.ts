@@ -412,6 +412,7 @@ export class ManagedProviderCustomerFundingService {
       id: action.id,
       nextState: 'PAYMENT_PENDING',
       patch: {
+        reconciliationAttemptCount: 0,
         nextReconciliationAt: new Date(),
         reconciliationClaimedAt: null,
         safeErrorCode: null,
@@ -504,6 +505,7 @@ export class ManagedProviderCustomerFundingService {
     const recoveredPatch = {
       commitmentId: recovered.commitmentId,
       metronomeEditId: recovered.metronomeEditId,
+      reconciliationAttemptCount: 0,
       nextReconciliationAt: new Date(),
       reconciliationClaimedAt: null,
       safeErrorCode: null,
@@ -531,7 +533,7 @@ export class ManagedProviderCustomerFundingService {
         workspaceId: action.workspaceId,
       });
 
-      return await this.reconcileCustomerFundingUnsafe(recorded);
+      return await this.reconcileCustomerFunding(recorded);
     }
 
     const invoice =
@@ -547,6 +549,7 @@ export class ManagedProviderCustomerFundingService {
       commitmentId: recovered.commitmentId,
       metronomeEditId: recovered.metronomeEditId,
       metronomeInvoiceId: invoice.metronomeInvoiceId,
+      reconciliationAttemptCount: 0,
       nextReconciliationAt: new Date(Date.now() + 5 * 60 * 1000),
       reconciliationClaimedAt: null,
     };
@@ -638,6 +641,7 @@ export class ManagedProviderCustomerFundingService {
         totalCents: stripeState.totalCents,
       },
       prepaidPrincipalCents: stripeState.principalCents,
+      reconciliationAttemptCount: 0,
       reconciliationClaimedAt: null,
       stripeInvoiceId: stripeState.stripeInvoiceId,
       stripePaymentIntentId: stripeState.paymentIntentId,

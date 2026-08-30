@@ -545,7 +545,10 @@ describe('ManagedProviderCustomerFundingService', () => {
 
   it('keeps an incomplete external invoice payment pending without expiry writes', async () => {
     const { action, journal, metronome, service, stripe } =
-      createReconciliationHarness({ externalInvoice: null });
+      createReconciliationHarness({
+        actionOverrides: { reconciliationAttemptCount: 10 },
+        externalInvoice: null,
+      });
 
     await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
       { state: 'PAYMENT_PENDING' },
@@ -559,6 +562,7 @@ describe('ManagedProviderCustomerFundingService', () => {
         nextState: 'PAYMENT_PENDING',
         patch: expect.objectContaining({
           metronomeInvoiceId: 'metronome-invoice-id',
+          reconciliationAttemptCount: 0,
         }),
       }),
     );
@@ -663,12 +667,37 @@ describe('ManagedProviderCustomerFundingService', () => {
       patch: {
         commitmentId: 'commitment-id',
         metronomeEditId: 'edit-id',
+        reconciliationAttemptCount: 0,
         nextReconciliationAt: now,
         reconciliationClaimedAt: null,
         safeErrorCode: null,
       },
       workspaceId,
     });
+  });
+
+  it('uses the recorded phase when reconciliation fails after recovering IDs', async () => {
+    const { action, journal, metronome, service } =
+      createReconciliationHarness({
+        actionOverrides: {
+          commitmentId: null,
+          metronomeEditId: null,
+          state: 'RECONCILIATION_REQUIRED',
+        },
+      });
+    metronome.readPaymentGatedPrepaidCommitInvoice.mockRejectedValue(
+      new Error('temporary invoice read failure'),
+    );
+
+    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
+      { state: 'RECONCILIATION_REQUIRED' },
+    );
+    expect(journal.transitionCompareAndSet.mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        expectedState: 'METRONOME_EDIT_RECORDED',
+        nextState: 'RECONCILIATION_REQUIRED',
+      }),
+    );
   });
 
   it('keeps a recovered commitment pending while its invoice materializes', async () => {
@@ -828,6 +857,7 @@ describe('ManagedProviderCustomerFundingService', () => {
       id: 'funding-action-id',
       nextState: 'PAYMENT_PENDING',
       patch: {
+        reconciliationAttemptCount: 0,
         nextReconciliationAt: now,
         reconciliationClaimedAt: null,
         safeErrorCode: null,
