@@ -20,6 +20,8 @@ import {
   MetronomeClientService,
   type MetronomeUsageEvent,
 } from './metronome-client.service';
+import { ManagedProviderCustomerFundingService } from './managed-provider-customer-funding.service';
+import { ManagedProviderFundingJournalService } from './managed-provider-funding-journal.service';
 import { OpenRouterGenerationLookupService } from './openrouter-generation-lookup.service';
 import { getManagedOpenRouterChargeCentUnits } from 'src/engine/metadata-modules/ai/ai-models/utils/get-managed-openrouter-charge-cent-units.util';
 import { getMetronomeEventProperties } from '../utils/get-metronome-event-properties.util';
@@ -51,6 +53,8 @@ export class ManagedProviderBillingRecoveryService {
     @InjectMessageQueue(MessageQueue.workspaceQueue)
     private readonly messageQueueService: MessageQueueService,
     private readonly twentyConfigService: TwentyConfigService,
+    private readonly fundingJournal: ManagedProviderFundingJournalService,
+    private readonly customerFunding: ManagedProviderCustomerFundingService,
     @Optional()
     private readonly openRouterGenerationLookupService?: OpenRouterGenerationLookupService,
   ) {}
@@ -64,9 +68,27 @@ export class ManagedProviderBillingRecoveryService {
       return;
     }
 
+    await this.recoverCustomerFunding(now);
     await this.recoverPendingOperations(now);
     await this.recoverAcceptedOperations(now);
     await this.recoverUnknownOpenRouterOperations(now);
+  }
+
+  private async recoverCustomerFunding(now: Date): Promise<void> {
+    const actions = await this.fundingJournal.claimDueCustomerFundingActions(
+      50,
+      now,
+    );
+
+    for (const action of actions) {
+      try {
+        await this.customerFunding.reconcileCustomerFunding(action);
+      } catch {
+        this.logger.warn(
+          `Customer funding reconciliation failed: action=${action.id}; state=${action.state}`,
+        );
+      }
+    }
   }
 
   private async recoverPendingOperations(now: Date): Promise<void> {

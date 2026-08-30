@@ -350,4 +350,33 @@ describe('ManagedProviderFundingJournalService', () => {
       '"reconciliationClaimedAt" <= $2',
     );
   });
+
+  it('claims only prepaid customer payment states for the customer funding cron', async () => {
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      getRepository: jest.fn(),
+    };
+    const repository = {
+      manager: {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      },
+    };
+    const service = new ManagedProviderFundingJournalService(
+      repository as unknown as Repository<ManagedProviderFundingActionEntity>,
+    );
+
+    await expect(
+      service.claimDueCustomerFundingActions(
+        50,
+        new Date('2026-08-29T01:00:00.000Z'),
+      ),
+    ).resolves.toEqual([]);
+    const query = manager.query.mock.calls[1][0] as string;
+
+    expect(query).toContain(`\"actionType\" = 'PREPAID_COMMIT'`);
+    expect(query).toContain(`'PAYMENT_ACTION_REQUIRED'`);
+    expect(query).toContain(`'METRONOME_EDIT_RECORDED'`);
+    expect(query).not.toContain(`'REFUND_INTENT_RECORDED'`);
+    expect(query).not.toContain(`'REFUND_RECONCILIATION_REQUIRED'`);
+  });
 });

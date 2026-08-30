@@ -433,6 +433,21 @@ export class ManagedProviderFundingJournalService {
     limit = 50,
     now = new Date(),
   ): Promise<ManagedProviderFundingActionEntity[]> {
+    return await this.claimDueActions(limit, now, false);
+  }
+
+  async claimDueCustomerFundingActions(
+    limit = 50,
+    now = new Date(),
+  ): Promise<ManagedProviderFundingActionEntity[]> {
+    return await this.claimDueActions(limit, now, true);
+  }
+
+  private async claimDueActions(
+    limit: number,
+    now: Date,
+    customerPaymentOnly: boolean,
+  ): Promise<ManagedProviderFundingActionEntity[]> {
     return this.repository.manager.transaction(async (manager) => {
       await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
         RECONCILIATION_LOCK_KEY,
@@ -440,9 +455,15 @@ export class ManagedProviderFundingJournalService {
       const dueActions = (await manager.query(
         `SELECT "id", "state", "reconciliationAttemptCount"
          FROM "core"."managedProviderFundingAction"
-         WHERE "state" IN ('RECONCILIATION_REQUIRED', 'PAYMENT_PENDING',
-           'PAYMENT_ACTION_REQUIRED', 'METRONOME_EDIT_RECORDED',
-           'REFUND_INTENT_RECORDED', 'REFUND_RECONCILIATION_REQUIRED')
+         WHERE ${
+           customerPaymentOnly
+             ? `\"actionType\" = 'PREPAID_COMMIT' AND \"state\" IN
+               ('RECONCILIATION_REQUIRED', 'PAYMENT_PENDING',
+                'PAYMENT_ACTION_REQUIRED', 'METRONOME_EDIT_RECORDED')`
+             : `\"state\" IN ('RECONCILIATION_REQUIRED', 'PAYMENT_PENDING',
+               'PAYMENT_ACTION_REQUIRED', 'METRONOME_EDIT_RECORDED',
+               'REFUND_INTENT_RECORDED', 'REFUND_RECONCILIATION_REQUIRED')`
+         }
            AND ("nextReconciliationAt" IS NULL OR "nextReconciliationAt" <= $1)
            AND "reconciliationAttemptCount" < $3
            AND ("reconciliationClaimedAt" IS NULL OR
