@@ -1382,6 +1382,108 @@ describe('MetronomeClientService', () => {
     expect(edit).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['is missing', undefined],
+    [
+      'has a different funding action',
+      {
+        myah_funding_action_id: 'different-funding-action-id',
+        myah_funding_identity: 'funding-identity',
+      },
+    ],
+    [
+      'has a different funding identity',
+      {
+        myah_funding_action_id: 'funding-action-id',
+        myah_funding_identity: 'different-funding-identity',
+      },
+    ],
+  ])(
+    'fails closed when recovered contract funding evidence %s',
+    async (_, customFields) => {
+      const input: MetronomePaymentGatedPrepaidCommitInput = {
+        chargeProductId: 'charge-product-id',
+        commitmentProductId: 'commitment-product-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        fundingActionId: 'funding-action-id',
+        fundingIdentity: 'funding-identity',
+        principalCents: 5_000,
+        purchaseAt: '2026-08-29T10:37:42.123Z',
+        uniquenessKey: 'funding-key',
+      };
+      const contractCommit = {
+        access_schedule: {
+          schedule_items: [
+            {
+              amount: 5_000,
+              ending_before: '2027-09-29T10:00:00.000Z',
+              id: 'access-schedule-item-id',
+              starting_at: '2026-08-29T10:00:00.000Z',
+            },
+          ],
+        },
+        applicable_product_ids: ['charge-product-id'],
+        ...(customFields === undefined ? {} : { custom_fields: customFields }),
+        id: 'commitment-id',
+        invoice_schedule: {
+          schedule_items: [
+            {
+              amount: 5_000,
+              id: 'invoice-schedule-item-id',
+              invoice_id: 'invoice-id',
+              timestamp: '2026-08-29T10:00:00.000Z',
+            },
+          ],
+        },
+        priority: 100,
+        product: { id: 'commitment-product-id', name: 'Managed AI credits' },
+        type: 'PREPAID',
+      };
+      const { custom_fields: _contractCustomFields, ...historyCommit } =
+        contractCommit;
+      const edit = jest.fn();
+      const getEditHistory = jest.fn().mockResolvedValue({
+        data: [
+          {
+            add_commits: [historyCommit],
+            id: 'metronome-edit-id',
+            uniqueness_key: 'funding-key',
+          },
+        ],
+      });
+      const listContracts = jest.fn().mockResolvedValue({
+        data: [
+          {
+            commits: [contractCommit],
+            customer_id: 'customer-id',
+            id: 'contract-id',
+          },
+        ],
+      });
+      metronomeConstructor.mockImplementation(
+        () =>
+          ({
+            v2: {
+              contracts: { edit, getEditHistory, list: listContracts },
+            },
+          }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      await expect(
+        service.recoverPaymentGatedPrepaidCommit(input),
+      ).rejects.toThrow();
+      expect(edit).not.toHaveBeenCalled();
+    },
+  );
+
   it('returns null when the payment-gated prepaid commit is absent without writing', async () => {
     const input: MetronomePaymentGatedPrepaidCommitInput = {
       chargeProductId: 'charge-product-id',

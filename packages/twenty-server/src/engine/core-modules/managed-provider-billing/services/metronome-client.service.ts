@@ -734,6 +734,10 @@ export class MetronomeClientService {
       commit.id.trim() === '' ||
       historyDetails === null ||
       contractDetails === null ||
+      !this.hasPaymentGatedPrepaidCommitFundingEvidence(
+        recoveredCommit,
+        input,
+      ) ||
       (edit.uniqueness_key !== undefined &&
         edit.uniqueness_key !== null &&
         edit.uniqueness_key !== input.uniquenessKey) ||
