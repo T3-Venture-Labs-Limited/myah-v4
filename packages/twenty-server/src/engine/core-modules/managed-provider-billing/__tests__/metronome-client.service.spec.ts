@@ -16,6 +16,7 @@ import {
 import {
   type MetronomePaymentGatedPrepaidCommitArchiveInput,
   type MetronomePaymentGatedPrepaidCommitExpiryInput,
+  type MetronomePaymentGatedPrepaidCommitExpiryProofInput,
   type MetronomePaymentGatedPrepaidCommitInput,
 } from '../types/metronome-payment-gated-prepaid-commit.type';
 
@@ -2705,6 +2706,152 @@ describe('MetronomeClientService', () => {
       },
       { idempotencyKey: 'funding-key', maxRetries: 0 },
     );
+  });
+
+  it('reads authoritative paid-at plus twelve-month commit expiry', async () => {
+    const commit = {
+      access_schedule: {
+        schedule_items: [
+          {
+            amount: 5_000,
+            ending_before: '2027-08-29T10:37:42.123Z',
+            id: 'access-schedule-item-id',
+            starting_at: '2026-08-29T10:00:00.000Z',
+          },
+        ],
+      },
+      applicable_product_ids: ['charge-product-id'],
+      archived_at: undefined,
+      contract: { id: 'contract-id' },
+      custom_fields: {
+        myah_funding_action_id: 'funding-action-id',
+        myah_funding_identity: 'funding-identity',
+      },
+      id: 'commitment-id',
+      invoice_schedule: {
+        schedule_items: [
+          {
+            amount: 5_000,
+            id: 'invoice-schedule-item-id',
+            invoice_id: 'invoice-id',
+            timestamp: '2026-08-29T10:00:00.000Z',
+          },
+        ],
+      },
+      priority: 100,
+      product: { id: 'commitment-product-id', name: 'Managed AI credits' },
+      type: 'PREPAID',
+    };
+    const list = jest.fn().mockResolvedValue({
+      data: [commit],
+      next_page: '',
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({ v1: { customers: { commits: { list } } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+    const input: MetronomePaymentGatedPrepaidCommitExpiryProofInput = {
+      accessScheduleItemId: 'access-schedule-item-id',
+      chargeProductId: 'charge-product-id',
+      commitmentId: 'commitment-id',
+      commitmentProductId: 'commitment-product-id',
+      contractId: 'contract-id',
+      customerId: 'customer-id',
+      fundingActionId: 'funding-action-id',
+      fundingIdentity: 'funding-identity',
+      paidAt: '2026-08-29T10:37:42.123Z',
+      principalCents: 5_000,
+      purchaseAt: '2026-08-29T10:37:42.123Z',
+      uniquenessKey: 'funding-key',
+    };
+
+    await expect(
+      service.assertPaymentGatedPrepaidCommitExpiry(input),
+    ).resolves.toEqual({ expiresAt: '2027-08-29T10:37:42.123Z' });
+    expect(list).toHaveBeenCalledWith({
+      commit_id: 'commitment-id',
+      customer_id: 'customer-id',
+      include_archived: true,
+      include_contract_commits: true,
+    });
+  });
+
+  it('rejects a commitment that still has the provisional access expiry', async () => {
+    const list = jest.fn().mockResolvedValue({
+      data: [
+        {
+          access_schedule: {
+            schedule_items: [
+              {
+                amount: 5_000,
+                ending_before: '2027-09-29T10:00:00.000Z',
+                id: 'access-schedule-item-id',
+                starting_at: '2026-08-29T10:00:00.000Z',
+              },
+            ],
+          },
+          applicable_product_ids: ['charge-product-id'],
+          contract: { id: 'contract-id' },
+          custom_fields: {
+            myah_funding_action_id: 'funding-action-id',
+            myah_funding_identity: 'funding-identity',
+          },
+          id: 'commitment-id',
+          invoice_schedule: {
+            schedule_items: [
+              {
+                amount: 5_000,
+                id: 'invoice-schedule-item-id',
+                invoice_id: 'invoice-id',
+                timestamp: '2026-08-29T10:00:00.000Z',
+              },
+            ],
+          },
+          priority: 100,
+          product: {
+            id: 'commitment-product-id',
+            name: 'Managed AI credits',
+          },
+          type: 'PREPAID',
+        },
+      ],
+      next_page: '',
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({ v1: { customers: { commits: { list } } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.assertPaymentGatedPrepaidCommitExpiry({
+        accessScheduleItemId: 'access-schedule-item-id',
+        chargeProductId: 'charge-product-id',
+        commitmentId: 'commitment-id',
+        commitmentProductId: 'commitment-product-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        fundingActionId: 'funding-action-id',
+        fundingIdentity: 'funding-identity',
+        paidAt: '2026-08-29T10:37:42.123Z',
+        principalCents: 5_000,
+        purchaseAt: '2026-08-29T10:37:42.123Z',
+        uniquenessKey: 'funding-key',
+      }),
+    ).rejects.toThrow('Metronome payment-gated commit expiry proof is invalid');
   });
 
   it('archives the exact prepaid commitment through a contract edit', async () => {

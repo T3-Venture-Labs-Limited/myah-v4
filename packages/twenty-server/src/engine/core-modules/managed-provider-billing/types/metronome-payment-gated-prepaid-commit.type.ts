@@ -32,6 +32,14 @@ export type MetronomePaymentGatedPrepaidCommitExpiryInput = Readonly<{
   uniquenessKey: string;
 }>;
 
+export type MetronomePaymentGatedPrepaidCommitExpiryProofInput =
+  MetronomePaymentGatedPrepaidCommitInput &
+    Readonly<{
+      accessScheduleItemId: string;
+      commitmentId: string;
+      paidAt: string;
+    }>;
+
 export type MetronomePaymentGatedPrepaidCommitArchiveInput = Readonly<{
   commitmentId: string;
   contractId: string;

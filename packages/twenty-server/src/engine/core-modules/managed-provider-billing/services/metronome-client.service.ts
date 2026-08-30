@@ -33,6 +33,7 @@ import {
 import {
   type MetronomePaymentGatedPrepaidCommitArchiveInput,
   type MetronomePaymentGatedPrepaidCommitExpiryInput,
+  type MetronomePaymentGatedPrepaidCommitExpiryProofInput,
   type MetronomePaymentGatedPrepaidCommitInput,
   type MetronomePaymentGatedPrepaidCommitReceipt,
   type MetronomePaymentGatedPrepaidCommitRecovery,
@@ -794,7 +795,7 @@ export class MetronomeClientService {
 
     const customerWideCommits = await this.listPaymentGatedPrepaidCommits(
       client,
-      input,
+      input.customerId,
     );
     const candidateCustomerCommits = customerWideCommits.filter(
       (commit) =>
@@ -853,7 +854,7 @@ export class MetronomeClientService {
 
     const listedCommits = await this.listPaymentGatedPrepaidCommits(
       client,
-      input,
+      input.customerId,
       commitment.id,
     );
     const candidateCommits = listedCommits.filter(
@@ -959,6 +960,54 @@ export class MetronomeClientService {
     } catch (error) {
       throw this.toWriteException(error);
     }
+  }
+
+  async assertPaymentGatedPrepaidCommitExpiry(
+    input: MetronomePaymentGatedPrepaidCommitExpiryProofInput,
+  ): Promise<{ expiresAt: string }> {
+    this.validatePaymentGatedPrepaidCommitInput(input);
+    this.validateSubscriptionDate(input.paidAt);
+    if (
+      input.accessScheduleItemId.trim() === '' ||
+      input.commitmentId.trim() === ''
+    ) {
+      throw new Error(
+        'Metronome payment-gated commit expiry proof is invalid',
+      );
+    }
+
+    const client = this.getClient();
+    const commits = await this.listPaymentGatedPrepaidCommits(
+      client,
+      input.customerId,
+      input.commitmentId,
+    );
+    const startingAt = toMetronomeHourBoundary(input.purchaseAt).toISOString();
+    const expiresAt = this.addCalendarMonths(input.paidAt, 12);
+    const matches = commits.filter((commit) => {
+      const details = this.getPaymentGatedPrepaidCommitRecoveryDetails(
+        commit,
+        input,
+        startingAt,
+        expiresAt,
+      );
+
+      return (
+        commit.id === input.commitmentId &&
+        commit.contract?.id === input.contractId &&
+        commit.archived_at == null &&
+        this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) &&
+        details?.accessScheduleItemId === input.accessScheduleItemId
+      );
+    });
+
+    if (matches.length !== 1) {
+      throw new Error(
+        'Metronome payment-gated commit expiry proof is invalid',
+      );
+    }
+
+    return { expiresAt };
   }
 
   async archivePaymentGatedPrepaidCommit(
@@ -2000,7 +2049,7 @@ export class MetronomeClientService {
 
   private async listPaymentGatedPrepaidCommits(
     client: Metronome,
-    input: MetronomePaymentGatedPrepaidCommitInput,
+    customerId: string,
     commitmentId?: string,
   ): Promise<Commit[]> {
     const commits: Commit[] = [];
@@ -2011,7 +2060,7 @@ export class MetronomeClientService {
       const response = await this.execute(() =>
         client.v1.customers.commits.list({
           ...(commitmentId === undefined ? {} : { commit_id: commitmentId }),
-          customer_id: input.customerId,
+          customer_id: customerId,
           include_archived: true,
           include_contract_commits: true,
           ...(nextPage === undefined ? {} : { next_page: nextPage }),
