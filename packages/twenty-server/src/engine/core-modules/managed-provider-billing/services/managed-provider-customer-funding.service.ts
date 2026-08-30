@@ -39,6 +39,14 @@ const customerFundingEvidenceSchema = z.object({
   preset: z.enum(['AI_25_USD', 'AI_50_USD', 'AI_100_USD']),
   purchaseAt: z.string().min(1),
 });
+const customerFundingExpiryIntentReceiptSchema = z.object({
+  expiryUpdateIntent: z.object({
+    accessScheduleItemId: z.string().min(1),
+    invoiceId: z.string().min(1),
+    paidAt: z.string().min(1),
+    recordedAt: z.string().min(1),
+  }),
+});
 
 const isAiTopUpPreset = (value: unknown): value is AiTopUpPreset =>
   typeof value === 'string' &&
@@ -489,8 +497,29 @@ export class ManagedProviderCustomerFundingService {
       purchaseAt: evidence.data.purchaseAt,
       uniquenessKey: action.metronomeUniquenessKey,
     };
-    const recovered =
-      await this.metronomeClient.recoverPaymentGatedPrepaidCommit(commitInput);
+    const parsedExpiryIntent =
+      customerFundingExpiryIntentReceiptSchema.safeParse(action.paymentReceipt);
+    const recovered = parsedExpiryIntent.success
+      ? action.commitmentId !== null &&
+        action.metronomeEditId !== null &&
+        action.metronomeInvoiceId ===
+          parsedExpiryIntent.data.expiryUpdateIntent.invoiceId &&
+        Number.isFinite(
+          Date.parse(parsedExpiryIntent.data.expiryUpdateIntent.paidAt),
+        ) &&
+        Number.isFinite(
+          Date.parse(parsedExpiryIntent.data.expiryUpdateIntent.recordedAt),
+        )
+        ? {
+            accessScheduleItemId:
+              parsedExpiryIntent.data.expiryUpdateIntent.accessScheduleItemId,
+            archivedAt: null,
+            commitmentId: action.commitmentId,
+            invoiceId: parsedExpiryIntent.data.expiryUpdateIntent.invoiceId,
+            metronomeEditId: action.metronomeEditId,
+          }
+        : null
+      : await this.metronomeClient.recoverPaymentGatedPrepaidCommit(commitInput);
 
     if (
       recovered === null ||
@@ -701,26 +730,90 @@ export class ManagedProviderCustomerFundingService {
       });
     }
 
-    await this.metronomeClient.updatePaymentGatedPrepaidCommitExpiry({
+    const expectedExpiryIntent = {
       accessScheduleItemId: recovered.accessScheduleItemId,
-      commitmentId: recovered.commitmentId,
-      contractId: action.metronomeContractId,
-      customerId: action.metronomeCustomerId,
+      invoiceId: recovered.invoiceId,
       paidAt: stripeState.paidAt,
-      uniquenessKey: `${action.metronomeUniquenessKey}:paid-expiry`,
-    });
-    const expiryProof =
-      await this.metronomeClient.assertPaymentGatedPrepaidCommitExpiry({
-        ...commitInput,
-        accessScheduleItemId: recovered.accessScheduleItemId,
-        commitmentId: recovered.commitmentId,
-        invoiceId: recovered.invoiceId,
-        paidAt: stripeState.paidAt,
+      recordedAt: new Date().toISOString(),
+    };
+    let expiryIntent = expectedExpiryIntent;
+    let completionAction = action;
+
+    if (parsedExpiryIntent.success) {
+      expiryIntent = parsedExpiryIntent.data.expiryUpdateIntent;
+      if (
+        expiryIntent.accessScheduleItemId !==
+          expectedExpiryIntent.accessScheduleItemId ||
+        expiryIntent.invoiceId !== expectedExpiryIntent.invoiceId ||
+        expiryIntent.paidAt !== expectedExpiryIntent.paidAt
+      ) {
+        throw new Error('Customer AI funding expiry intent is invalid');
+      }
+    } else {
+      completionAction = await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: action.state,
+        patch: {
+          ...paymentPatch,
+          nextReconciliationAt: new Date(),
+          paymentReceipt: {
+            ...paymentPatch.paymentReceipt,
+            expiryUpdateIntent: expectedExpiryIntent,
+            paidAt: stripeState.paidAt,
+            status: 'PAID',
+          },
+        },
+        workspaceId: action.workspaceId,
       });
+    }
+
+    const proofInput = {
+      ...commitInput,
+      accessScheduleItemId: expiryIntent.accessScheduleItemId,
+      commitmentId: recovered.commitmentId,
+      invoiceId: expiryIntent.invoiceId,
+      paidAt: expiryIntent.paidAt,
+    };
+    let expiryEditId: string | null = null;
+    let expiryProof: { expiresAt: string };
+
+    try {
+      expiryProof =
+        await this.metronomeClient.assertPaymentGatedPrepaidCommitExpiry(
+          proofInput,
+        );
+    } catch {
+      const recordedAt = Date.parse(expiryIntent.recordedAt);
+      const elapsed = Date.now() - recordedAt;
+
+      if (
+        !Number.isFinite(recordedAt) ||
+        elapsed < 0 ||
+        elapsed >= 24 * 60 * 60 * 1000
+      ) {
+        throw new Error('Customer AI funding expiry proof is invalid');
+      }
+
+      const editReceipt =
+        await this.metronomeClient.updatePaymentGatedPrepaidCommitExpiry({
+          accessScheduleItemId: expiryIntent.accessScheduleItemId,
+          commitmentId: recovered.commitmentId,
+          contractId: action.metronomeContractId,
+          customerId: action.metronomeCustomerId,
+          paidAt: expiryIntent.paidAt,
+          uniquenessKey: `${action.metronomeUniquenessKey}:paid-expiry`,
+        });
+      expiryEditId = editReceipt.metronomeEditId;
+      expiryProof =
+        await this.metronomeClient.assertPaymentGatedPrepaidCommitExpiry(
+          proofInput,
+        );
+    }
 
     return await this.fundingJournal.transitionCompareAndSet({
-      expectedState: action.state,
-      id: action.id,
+      expectedState: completionAction.state,
+      id: completionAction.id,
       nextState: 'SUCCEEDED',
       patch: {
         ...paymentPatch,
@@ -729,6 +822,8 @@ export class ManagedProviderCustomerFundingService {
         nextReconciliationAt: null,
         paymentReceipt: {
           ...paymentPatch.paymentReceipt,
+          expiryEditId,
+          expiryUpdateIntent: expiryIntent,
           paidAt: stripeState.paidAt,
           status: 'PAID',
         },

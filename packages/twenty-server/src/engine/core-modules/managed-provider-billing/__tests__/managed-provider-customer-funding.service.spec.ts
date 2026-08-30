@@ -173,6 +173,7 @@ describe('ManagedProviderCustomerFundingService', () => {
     },
     invoiceStatus = 'FINALIZED',
     recoveryInvoiceId = 'metronome-invoice-id',
+    expiryAlreadyApplied = false,
     stripeState = {
       invoiceUrl: 'https://invoice.example/in_metronome',
       paidAt: '2026-08-29T10:40:00.000Z',
@@ -211,6 +212,7 @@ describe('ManagedProviderCustomerFundingService', () => {
         };
     invoiceStatus?: 'DRAFT' | 'FINALIZED' | 'VOID';
     recoveryInvoiceId?: string | null;
+    expiryAlreadyApplied?: boolean;
     stripeState?: Record<string, unknown>;
   } = {}) => {
     const harness = createHarness();
@@ -227,9 +229,14 @@ describe('ManagedProviderCustomerFundingService', () => {
       ...actionOverrides,
     });
     Object.assign(harness.metronome, {
-      assertPaymentGatedPrepaidCommitExpiry: jest
-        .fn()
-        .mockResolvedValue({ expiresAt: '2027-08-29T10:40:00.000Z' }),
+      assertPaymentGatedPrepaidCommitExpiry: expiryAlreadyApplied
+        ? jest
+            .fn()
+            .mockResolvedValue({ expiresAt: '2027-08-29T10:40:00.000Z' })
+        : jest
+            .fn()
+            .mockRejectedValueOnce(new Error('expiry not applied'))
+            .mockResolvedValue({ expiresAt: '2027-08-29T10:40:00.000Z' }),
       readPaymentGatedPrepaidCommitInvoice: jest.fn().mockResolvedValue({
         externalInvoice,
         issuedAt: '2026-08-29T10:37:42.123Z',
@@ -499,6 +506,29 @@ describe('ManagedProviderCustomerFundingService', () => {
     await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
       { state: 'SUCCEEDED' },
     );
+    const expiryIntentTransition =
+      journal.transitionCompareAndSet.mock.calls[0][0];
+    expect(expiryIntentTransition).toEqual(
+      expect.objectContaining({
+        expectedState: 'METRONOME_EDIT_RECORDED',
+        nextState: 'METRONOME_EDIT_RECORDED',
+        patch: expect.objectContaining({
+          paymentReceipt: expect.objectContaining({
+            expiryUpdateIntent: {
+              accessScheduleItemId: 'access-schedule-item-id',
+              invoiceId: 'metronome-invoice-id',
+              paidAt: '2026-08-29T10:40:00.000Z',
+              recordedAt: now.toISOString(),
+            },
+          }),
+        }),
+      }),
+    );
+    expect(
+      journal.transitionCompareAndSet.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      metronome.updatePaymentGatedPrepaidCommitExpiry.mock.invocationCallOrder[0],
+    );
     expect(
       metronome.updatePaymentGatedPrepaidCommitExpiry,
     ).toHaveBeenCalledWith({
@@ -698,6 +728,38 @@ describe('ManagedProviderCustomerFundingService', () => {
         nextState: 'RECONCILIATION_REQUIRED',
       }),
     );
+  });
+
+  it('resumes paid expiry proof from durable intent without provisional recovery', async () => {
+    const { action, metronome, service } = createReconciliationHarness({
+      actionOverrides: {
+        collectedTotalCents: '3000',
+        metronomeInvoiceId: 'metronome-invoice-id',
+        paymentReceipt: {
+          expiryUpdateIntent: {
+            accessScheduleItemId: 'access-schedule-item-id',
+            invoiceId: 'metronome-invoice-id',
+            paidAt: '2026-08-29T10:40:00.000Z',
+            recordedAt: now.toISOString(),
+          },
+        },
+        state: 'PAYMENT_PENDING',
+        stripeInvoiceId: 'in_metronome',
+        stripePaymentIntentId: 'pi_metronome',
+        taxCents: '500',
+      },
+      expiryAlreadyApplied: true,
+    });
+
+    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
+      { state: 'SUCCEEDED' },
+    );
+    expect(
+      metronome.recoverPaymentGatedPrepaidCommit,
+    ).not.toHaveBeenCalled();
+    expect(
+      metronome.updatePaymentGatedPrepaidCommitExpiry,
+    ).not.toHaveBeenCalled();
   });
 
   it('keeps a recovered commitment pending while its invoice materializes', async () => {
