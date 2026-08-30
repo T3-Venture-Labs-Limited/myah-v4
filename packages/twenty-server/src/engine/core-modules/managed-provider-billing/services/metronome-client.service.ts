@@ -288,6 +288,10 @@ export type MetronomeCustomerCreditReceipt = {
   metronomeEditId: string;
 };
 
+export type MetronomeRefundableCommitInput =
+  MetronomePaymentGatedPrepaidCommitInput &
+    Readonly<{ commitmentId: string; invoiceId: string }>;
+
 @Injectable()
 export class MetronomeClientService {
   private client: Metronome | undefined;
@@ -1045,6 +1049,83 @@ export class MetronomeClientService {
     } catch (error) {
       throw this.toWriteException(error);
     }
+  }
+
+  async assertPaymentGatedPrepaidCommitRefundable(
+    input: MetronomeRefundableCommitInput,
+  ): Promise<{ remainingBalanceCents: number }> {
+    this.validatePaymentGatedPrepaidCommitInput(input);
+    const commits = await this.listPaymentGatedRefundCommitBalances(input);
+    const candidates = commits.filter(
+      (commit) =>
+        commit.id === input.commitmentId &&
+        commit.contract?.id === input.contractId &&
+        commit.archived_at == null,
+    );
+
+    if (
+      candidates.length !== 1 ||
+      !this.isExactRefundCommit(candidates[0], input) ||
+      candidates[0].balance !== input.principalCents ||
+      candidates[0].ledger?.length !== 1 ||
+      candidates[0].ledger[0].type !== 'PREPAID_COMMIT_SEGMENT_START' ||
+      candidates[0].ledger[0].amount !== input.principalCents
+    ) {
+      throw new Error('Metronome commitment is not fully refundable');
+    }
+
+    return { remainingBalanceCents: candidates[0].balance };
+  }
+
+  async voidPaymentGatedPrepaidInvoice(
+    input: MetronomePaymentGatedPrepaidInvoiceInput,
+  ): Promise<{ invoiceId: string }> {
+    const client = this.getClient();
+    const response = await client.v1.invoices.void(
+      { id: input.invoiceId },
+      { maxRetries: 0 },
+    );
+
+    if (response.data?.id !== input.invoiceId) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+      );
+    }
+
+    const invoice = await this.readPaymentGatedPrepaidCommitInvoice(input);
+
+    if (invoice.status !== 'VOID') {
+      throw new Error('Metronome payment invoice void proof is invalid');
+    }
+
+    return { invoiceId: invoice.metronomeInvoiceId };
+  }
+
+  async assertPaymentGatedPrepaidCommitArchived(
+    input: MetronomeRefundableCommitInput,
+  ): Promise<{ archivedAt: string }> {
+    this.validatePaymentGatedPrepaidCommitInput(input);
+    const commits = await this.listPaymentGatedRefundCommitBalances(input);
+    const candidates = commits.filter(
+      (commit) =>
+        commit.id === input.commitmentId &&
+        commit.contract?.id === input.contractId,
+    );
+    const commit = candidates[0];
+
+    if (
+      candidates.length !== 1 ||
+      commit.archived_at === undefined ||
+      commit.archived_at.trim() === '' ||
+      commit.balance !== 0 ||
+      (commit.ledger !== undefined &&
+        commit.ledger !== null &&
+        commit.ledger.length !== 0)
+    ) {
+      throw new Error('Metronome commitment archive proof is invalid');
+    }
+
+    return { archivedAt: commit.archived_at };
   }
 
   async readPaymentGatedPrepaidCommitInvoice(
@@ -2053,6 +2134,70 @@ export class MetronomeClientService {
     return (
       customFields?.myah_funding_action_id === input.fundingActionId ||
       customFields?.myah_funding_identity === input.fundingIdentity
+    );
+  }
+
+  private async listPaymentGatedRefundCommitBalances(
+    input: MetronomeRefundableCommitInput,
+  ): Promise<Commit[]> {
+    const client = this.getClient();
+    const commits: Commit[] = [];
+    const cursors = new Set<string>();
+    let nextPage: string | undefined;
+
+    for (let page = 1; page <= METRONOME_MAX_LIST_PAGES; page += 1) {
+      const response = await this.execute(() =>
+        client.v1.contracts.listBalances({
+          customer_id: input.customerId,
+          exclude_zero_balances: false,
+          id: input.commitmentId,
+          include_archived: true,
+          include_balance: true,
+          include_contract_balances: true,
+          include_ledgers: true,
+          limit: 25,
+          ...(nextPage === undefined ? {} : { next_page: nextPage }),
+        }),
+      );
+      commits.push(...(response.data.filter((item) => item.type !== 'CREDIT') as Commit[]));
+      const cursor = response.next_page;
+
+      if (cursor === '' || cursor === null || cursor === undefined) {
+        return commits;
+      }
+      if (cursors.has(cursor)) {
+        throw new Error('Metronome refund commitment cursor repeated');
+      }
+      cursors.add(cursor);
+      nextPage = cursor;
+    }
+
+    throw new Error('Metronome refund commitment pagination exceeded its limit');
+  }
+
+  private isExactRefundCommit(
+    commit: Commit,
+    input: MetronomeRefundableCommitInput,
+  ): boolean {
+    const startingAt = toMetronomeHourBoundary(input.purchaseAt).toISOString();
+    const access = commit.access_schedule?.schedule_items;
+    const invoice = commit.invoice_schedule?.schedule_items;
+
+    return (
+      commit.type === 'PREPAID' &&
+      commit.product.id === input.commitmentProductId &&
+      commit.priority === 100 &&
+      commit.applicable_product_ids?.length === 1 &&
+      commit.applicable_product_ids[0] === input.chargeProductId &&
+      commit.custom_fields?.myah_funding_action_id === input.fundingActionId &&
+      commit.custom_fields?.myah_funding_identity === input.fundingIdentity &&
+      access?.length === 1 &&
+      access[0].amount === input.principalCents &&
+      Date.parse(access[0].starting_at) === Date.parse(startingAt) &&
+      invoice?.length === 1 &&
+      invoice[0].amount === input.principalCents &&
+      invoice[0].invoice_id === input.invoiceId &&
+      Date.parse(invoice[0].timestamp) === Date.parse(startingAt)
     );
   }
 
