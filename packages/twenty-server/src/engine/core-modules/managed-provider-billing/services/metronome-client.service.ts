@@ -8,7 +8,7 @@ import type {
   ContractEditResponse,
   ContractGetEditHistoryResponse,
 } from '@metronome/sdk/resources/v2/contracts';
-import type { ContractV2 } from '@metronome/sdk/resources/shared';
+import type { Commit } from '@metronome/sdk/resources/shared';
 
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
@@ -45,8 +45,7 @@ type MetronomePaymentGatedPrepaidCommitHistoryCommit = NonNullable<
 
 type MetronomePaymentGatedPrepaidCommitCommercialRecord =
   | MetronomePaymentGatedPrepaidCommitHistoryCommit
-  | ContractV2.Commit;
-
+  | Commit;
 type PaymentGatedPrepaidCommitUpdateRequest = {
   contract_id: string;
   customer_id: string;
@@ -624,20 +623,12 @@ export class MetronomeClientService {
     const startingAt = toMetronomeHourBoundary(input.purchaseAt).toISOString();
     const endingBefore = this.addCalendarMonths(startingAt, 13);
     const client = this.getClient();
-    const [editHistoryResponse, contractsResponse] = await Promise.all([
-      this.execute(() =>
-        client.v2.contracts.getEditHistory({
-          contract_id: input.contractId,
-          customer_id: input.customerId,
-        }),
-      ),
-      this.execute(() =>
-        client.v2.contracts.list({
-          customer_id: input.customerId,
-          include_archived: true,
-        }),
-      ),
-    ]);
+    const editHistoryResponse = await this.execute(() =>
+      client.v2.contracts.getEditHistory({
+        contract_id: input.contractId,
+        customer_id: input.customerId,
+      }),
+    );
     const matchesInput = (
       edit: (typeof editHistoryResponse.data)[number],
     ): boolean => {
@@ -654,11 +645,6 @@ export class MetronomeClientService {
         ) !== null
       );
     };
-    const matchingContracts = contractsResponse.data.filter(
-      (contract) =>
-        contract.id === input.contractId &&
-        contract.customer_id === input.customerId,
-    );
     const candidateEdits = editHistoryResponse.data.filter(
       ({ add_commits, uniqueness_key }) =>
         uniqueness_key === input.uniquenessKey ||
@@ -670,57 +656,66 @@ export class MetronomeClientService {
             endingBefore,
           ) !== null),
     );
-    const contractCandidates = matchingContracts.flatMap(({ commits }) =>
-      commits.filter(
-        (commit) =>
-          this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
-          this.getPaymentGatedPrepaidCommitRecoveryDetails(
-            commit,
-            input,
-            startingAt,
-            endingBefore,
-          ) !== null,
-      ),
-    );
     const structuralHistoryMatches =
       editHistoryResponse.data.filter(matchesInput);
-    const structuralContractMatches = matchingContracts.flatMap(({ commits }) =>
-      commits.filter(
-        (commit) =>
-          this.getPaymentGatedPrepaidCommitRecoveryDetails(
-            commit,
-            input,
-            startingAt,
-            endingBefore,
-          ) !== null,
-      ),
-    );
 
-    if (candidateEdits.length === 0 && contractCandidates.length === 0) {
-      return null;
-    }
+    if (candidateEdits.length === 0) return null;
     if (
       candidateEdits.length !== 1 ||
-      contractCandidates.length !== 1 ||
-      structuralHistoryMatches.length !== 1 ||
-      matchingContracts.length !== 1 ||
-      structuralContractMatches.length !== 1
+      structuralHistoryMatches.length !== 1
     ) {
       throw new Error('Metronome payment-gated commit recovery mismatch');
     }
 
     const edit = structuralHistoryMatches[0];
-    const commit = edit.add_commits?.[0];
+    const commitment = edit.add_commits?.[0];
     const historyDetails =
-      commit === undefined
+      commitment === undefined
         ? null
         : this.getPaymentGatedPrepaidCommitRecoveryDetails(
-            commit,
+            commitment,
             input,
             startingAt,
             endingBefore,
           );
-    const recoveredCommit = structuralContractMatches[0];
+
+    if (
+      commitment === undefined ||
+      commitment.id.trim() === '' ||
+      historyDetails === null ||
+      (edit.uniqueness_key !== undefined &&
+        edit.uniqueness_key !== null &&
+        edit.uniqueness_key !== input.uniquenessKey)
+    ) {
+      throw new Error('Metronome payment-gated commit recovery mismatch');
+    }
+
+    const listedCommits = await this.listExactPaymentGatedPrepaidCommit(
+      client,
+      input,
+      commitment.id,
+    );
+    const candidateCommits = listedCommits.filter(
+      ({ id }) => id === commitment.id,
+    );
+    const structuralCommitMatches = candidateCommits.filter(
+      (commit) =>
+        this.getPaymentGatedPrepaidCommitRecoveryDetails(
+          commit,
+          input,
+          startingAt,
+          endingBefore,
+        ) !== null,
+    );
+
+    if (
+      candidateCommits.length !== 1 ||
+      structuralCommitMatches.length !== 1
+    ) {
+      throw new Error('Metronome payment-gated commit recovery mismatch');
+    }
+
+    const recoveredCommit = structuralCommitMatches[0];
     const contractDetails = this.getPaymentGatedPrepaidCommitRecoveryDetails(
       recoveredCommit,
       input,
@@ -730,18 +725,13 @@ export class MetronomeClientService {
     const archivedAt = recoveredCommit.archived_at ?? null;
 
     if (
-      commit === undefined ||
-      commit.id.trim() === '' ||
-      historyDetails === null ||
       contractDetails === null ||
       !this.hasPaymentGatedPrepaidCommitFundingEvidence(
         recoveredCommit,
         input,
       ) ||
-      (edit.uniqueness_key !== undefined &&
-        edit.uniqueness_key !== null &&
-        edit.uniqueness_key !== input.uniquenessKey) ||
-      recoveredCommit.id !== commit.id ||
+      recoveredCommit.contract?.id !== input.contractId ||
+      recoveredCommit.id !== commitment.id ||
       contractDetails.accessScheduleItemId !==
         historyDetails.accessScheduleItemId ||
       contractDetails.invoiceScheduleItemId !==
@@ -756,7 +746,7 @@ export class MetronomeClientService {
     return {
       accessScheduleItemId: contractDetails.accessScheduleItemId,
       archivedAt,
-      commitmentId: commit.id,
+      commitmentId: commitment.id,
       invoiceId: contractDetails.invoiceId,
       metronomeEditId: edit.id,
     };
@@ -1706,13 +1696,51 @@ export class MetronomeClientService {
   }
 
   private hasPaymentGatedPrepaidCommitFundingEvidence(
-    commit: ContractV2.Commit,
+    commit: Commit,
     input: MetronomePaymentGatedPrepaidCommitInput,
   ): boolean {
     return (
       commit.custom_fields?.myah_funding_action_id === input.fundingActionId &&
       commit.custom_fields?.myah_funding_identity === input.fundingIdentity
     );
+  }
+
+  private async listExactPaymentGatedPrepaidCommit(
+    client: Metronome,
+    input: MetronomePaymentGatedPrepaidCommitInput,
+    commitmentId: string,
+  ): Promise<Commit[]> {
+    const commits: Commit[] = [];
+    const seenPageCursors = new Set<string>();
+    let nextPage: string | undefined;
+
+    for (let page = 1; page <= METRONOME_MAX_LIST_PAGES; page += 1) {
+      const response = await this.execute(() =>
+        client.v1.customers.commits.list({
+          commit_id: commitmentId,
+          customer_id: input.customerId,
+          include_archived: true,
+          include_contract_commits: true,
+          ...(nextPage === undefined ? {} : { next_page: nextPage }),
+        }),
+      );
+
+      if (!Array.isArray(response.data) || typeof response.next_page !== 'string') {
+        throw new Error('Metronome commitment pagination response is invalid');
+      }
+      commits.push(...response.data);
+
+      if (response.next_page === '') {
+        return commits;
+      }
+      if (seenPageCursors.has(response.next_page)) {
+        throw new Error('Metronome commitment pagination cursor repeated');
+      }
+      seenPageCursors.add(response.next_page);
+      nextPage = response.next_page;
+    }
+
+    throw new Error('Metronome commitment pagination exceeded its limit');
   }
 
   private getPaymentGatedPrepaidCommitRecoveryDetails(

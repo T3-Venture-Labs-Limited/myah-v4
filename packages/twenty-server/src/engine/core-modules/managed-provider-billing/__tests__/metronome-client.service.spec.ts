@@ -1298,10 +1298,12 @@ describe('MetronomeClientService', () => {
       },
       applicable_product_ids: ['charge-product-id'],
       archived_at: '2026-09-02T12:00:00.000Z',
+      contract: { id: 'contract-id' },
       custom_fields: {
         myah_funding_action_id: 'funding-action-id',
         myah_funding_identity: 'funding-identity',
       },
+      created_at: '2026-08-29T10:00:00.000Z',
       id: 'commitment-id',
       invoice_schedule: {
         schedule_items: [
@@ -1319,23 +1321,16 @@ describe('MetronomeClientService', () => {
     };
     const {
       archived_at: _recoveredCommitArchivedAt,
+      contract: _recoveredCommitContract,
+      created_at: _recoveredCommitCreatedAt,
       custom_fields: _recoveredCommitCustomFields,
       ...historyCommit
     } = recoveredCommit;
-    const listContracts = jest.fn().mockResolvedValue({
-      data: [
-        {
-          commits: [],
-          customer_id: 'customer-id',
-          id: 'different-contract-id',
-        },
-        {
-          commits: [recoveredCommit],
-          customer_id: 'customer-id',
-          id: 'contract-id',
-        },
-      ],
+    const listCommits = jest.fn().mockResolvedValue({
+      data: [recoveredCommit],
+      next_page: '',
     });
+    const listContracts = jest.fn();
     const getEditHistory = jest.fn().mockResolvedValue({
       data: [
         {
@@ -1349,6 +1344,7 @@ describe('MetronomeClientService', () => {
     metronomeConstructor.mockImplementation(
       () =>
         ({
+          v1: { customers: { commits: { list: listCommits } } },
           v2: {
             contracts: { edit, getEditHistory, list: listContracts },
           },
@@ -1371,16 +1367,252 @@ describe('MetronomeClientService', () => {
       invoiceId: 'invoice-id',
       metronomeEditId: 'metronome-edit-id',
     });
-    expect(listContracts).toHaveBeenCalledWith({
+    expect(listCommits).toHaveBeenCalledWith({
+      commit_id: 'commitment-id',
       customer_id: 'customer-id',
       include_archived: true,
+      include_contract_commits: true,
     });
     expect(getEditHistory).toHaveBeenCalledWith({
       contract_id: 'contract-id',
       customer_id: 'customer-id',
     });
+    expect(listContracts).not.toHaveBeenCalled();
     expect(edit).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['is missing', undefined],
+    ['does not match', { id: 'different-contract-id' }],
+  ])(
+    'fails closed when the exact commitment contract ID %s',
+    async (_, commitContract) => {
+      const input: MetronomePaymentGatedPrepaidCommitInput = {
+        chargeProductId: 'charge-product-id',
+        commitmentProductId: 'commitment-product-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        fundingActionId: 'funding-action-id',
+        fundingIdentity: 'funding-identity',
+        principalCents: 5_000,
+        purchaseAt: '2026-08-29T10:37:42.123Z',
+        uniquenessKey: 'funding-key',
+      };
+      const recoveredCommit = {
+        access_schedule: {
+          schedule_items: [
+            {
+              amount: 5_000,
+              ending_before: '2027-09-29T10:00:00.000Z',
+              id: 'access-schedule-item-id',
+              starting_at: '2026-08-29T10:00:00.000Z',
+            },
+          ],
+        },
+        applicable_product_ids: ['charge-product-id'],
+        ...(commitContract === undefined
+          ? {}
+          : { contract: commitContract }),
+        created_at: '2026-08-29T10:00:00.000Z',
+        custom_fields: {
+          myah_funding_action_id: 'funding-action-id',
+          myah_funding_identity: 'funding-identity',
+        },
+        id: 'commitment-id',
+        invoice_schedule: {
+          schedule_items: [
+            {
+              amount: 5_000,
+              id: 'invoice-schedule-item-id',
+              invoice_id: 'invoice-id',
+              timestamp: '2026-08-29T10:00:00.000Z',
+            },
+          ],
+        },
+        priority: 100,
+        product: { id: 'commitment-product-id', name: 'Managed AI credits' },
+        type: 'PREPAID',
+      };
+      const {
+        contract: _recoveredCommitContract,
+        created_at: _recoveredCommitCreatedAt,
+        custom_fields: _recoveredCommitCustomFields,
+        ...historyCommit
+      } = recoveredCommit;
+      const edit = jest.fn();
+      const getEditHistory = jest.fn().mockResolvedValue({
+        data: [
+          {
+            add_commits: [historyCommit],
+            id: 'metronome-edit-id',
+            uniqueness_key: 'funding-key',
+          },
+        ],
+      });
+      const listCommits = jest.fn().mockResolvedValue({
+        data: [recoveredCommit],
+        next_page: '',
+      });
+      const listContracts = jest.fn().mockResolvedValue({
+        data: [
+          {
+            commits: [recoveredCommit],
+            customer_id: 'customer-id',
+            id: 'contract-id',
+          },
+        ],
+      });
+      metronomeConstructor.mockImplementation(
+        () =>
+          ({
+            v1: { customers: { commits: { list: listCommits } } },
+            v2: {
+              contracts: { edit, getEditHistory, list: listContracts },
+            },
+          }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      await expect(
+        service.recoverPaymentGatedPrepaidCommit(input),
+      ).rejects.toThrow();
+      expect(edit).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      'returns duplicate commitments',
+      (commit: object) =>
+        jest
+          .fn()
+          .mockResolvedValue({ data: [commit, commit], next_page: '' }),
+    ],
+    [
+      'repeats a cursor',
+      (_commit: object) =>
+        jest
+          .fn()
+          .mockResolvedValueOnce({ data: [], next_page: 'repeated-cursor' })
+          .mockResolvedValueOnce({ data: [], next_page: 'repeated-cursor' }),
+    ],
+    [
+      'exceeds the page cap',
+      (_commit: object) => {
+        let page = 0;
+
+        return jest.fn().mockImplementation(() => {
+          page += 1;
+
+          return Promise.resolve({
+            data: [],
+            next_page: `cursor-${page}`,
+          });
+        });
+      },
+    ],
+  ])(
+    'fails closed when exact commitment pagination %s',
+    async (_, createListCommits) => {
+      const input: MetronomePaymentGatedPrepaidCommitInput = {
+        chargeProductId: 'charge-product-id',
+        commitmentProductId: 'commitment-product-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        fundingActionId: 'funding-action-id',
+        fundingIdentity: 'funding-identity',
+        principalCents: 5_000,
+        purchaseAt: '2026-08-29T10:37:42.123Z',
+        uniquenessKey: 'funding-key',
+      };
+      const recoveredCommit = {
+        access_schedule: {
+          schedule_items: [
+            {
+              amount: 5_000,
+              ending_before: '2027-09-29T10:00:00.000Z',
+              id: 'access-schedule-item-id',
+              starting_at: '2026-08-29T10:00:00.000Z',
+            },
+          ],
+        },
+        applicable_product_ids: ['charge-product-id'],
+        contract: { id: 'contract-id' },
+        created_at: '2026-08-29T10:00:00.000Z',
+        custom_fields: {
+          myah_funding_action_id: 'funding-action-id',
+          myah_funding_identity: 'funding-identity',
+        },
+        id: 'commitment-id',
+        invoice_schedule: {
+          schedule_items: [
+            {
+              amount: 5_000,
+              id: 'invoice-schedule-item-id',
+              invoice_id: 'invoice-id',
+              timestamp: '2026-08-29T10:00:00.000Z',
+            },
+          ],
+        },
+        priority: 100,
+        product: { id: 'commitment-product-id', name: 'Managed AI credits' },
+        type: 'PREPAID',
+      };
+      const {
+        contract: _recoveredCommitContract,
+        created_at: _recoveredCommitCreatedAt,
+        custom_fields: _recoveredCommitCustomFields,
+        ...historyCommit
+      } = recoveredCommit;
+      const edit = jest.fn();
+      const getEditHistory = jest.fn().mockResolvedValue({
+        data: [
+          {
+            add_commits: [historyCommit],
+            id: 'metronome-edit-id',
+            uniqueness_key: 'funding-key',
+          },
+        ],
+      });
+      const listCommits = createListCommits(recoveredCommit);
+      const listContracts = jest.fn().mockResolvedValue({
+        data: [
+          {
+            commits: [recoveredCommit],
+            customer_id: 'customer-id',
+            id: 'contract-id',
+          },
+        ],
+      });
+      metronomeConstructor.mockImplementation(
+        () =>
+          ({
+            v1: { customers: { commits: { list: listCommits } } },
+            v2: {
+              contracts: { edit, getEditHistory, list: listContracts },
+            },
+          }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
+
+      await expect(
+        service.recoverPaymentGatedPrepaidCommit(input),
+      ).rejects.toThrow();
+      expect(edit).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ['is missing', undefined],
@@ -1424,7 +1656,9 @@ describe('MetronomeClientService', () => {
           ],
         },
         applicable_product_ids: ['charge-product-id'],
+        contract: { id: 'contract-id' },
         ...(customFields === undefined ? {} : { custom_fields: customFields }),
+        created_at: '2026-08-29T10:00:00.000Z',
         id: 'commitment-id',
         invoice_schedule: {
           schedule_items: [
@@ -1440,8 +1674,12 @@ describe('MetronomeClientService', () => {
         product: { id: 'commitment-product-id', name: 'Managed AI credits' },
         type: 'PREPAID',
       };
-      const { custom_fields: _contractCustomFields, ...historyCommit } =
-        contractCommit;
+      const {
+        contract: _contractCommitContract,
+        created_at: _contractCommitCreatedAt,
+        custom_fields: _contractCustomFields,
+        ...historyCommit
+      } = contractCommit;
       const edit = jest.fn();
       const getEditHistory = jest.fn().mockResolvedValue({
         data: [
@@ -1452,21 +1690,15 @@ describe('MetronomeClientService', () => {
           },
         ],
       });
-      const listContracts = jest.fn().mockResolvedValue({
-        data: [
-          {
-            commits: [contractCommit],
-            customer_id: 'customer-id',
-            id: 'contract-id',
-          },
-        ],
+      const listCommits = jest.fn().mockResolvedValue({
+        data: [contractCommit],
+        next_page: '',
       });
       metronomeConstructor.mockImplementation(
         () =>
           ({
-            v2: {
-              contracts: { edit, getEditHistory, list: listContracts },
-            },
+            v1: { customers: { commits: { list: listCommits } } },
+            v2: { contracts: { edit, getEditHistory } },
           }) as unknown as Metronome,
       );
       const service = new MetronomeClientService({
@@ -1521,7 +1753,7 @@ describe('MetronomeClientService', () => {
     expect(edit).not.toHaveBeenCalled();
   });
 
-  it('fails closed when contract-only funding evidence contradicts payment-gated commit recovery', async () => {
+  it('fails closed when the exact commitment read contradicts payment-gated recovery', async () => {
     const input: MetronomePaymentGatedPrepaidCommitInput = {
       chargeProductId: 'charge-product-id',
       commitmentProductId: 'commitment-product-id',
@@ -1533,55 +1765,71 @@ describe('MetronomeClientService', () => {
       purchaseAt: '2026-08-29T10:37:42.123Z',
       uniquenessKey: 'funding-key',
     };
+    const historyCommit = {
+      access_schedule: {
+        schedule_items: [
+          {
+            amount: 5_000,
+            ending_before: '2027-09-29T10:00:00.000Z',
+            id: 'access-schedule-item-id',
+            starting_at: '2026-08-29T10:00:00.000Z',
+          },
+        ],
+      },
+      applicable_product_ids: ['charge-product-id'],
+      id: 'commitment-id',
+      invoice_schedule: {
+        schedule_items: [
+          {
+            amount: 5_000,
+            id: 'invoice-schedule-item-id',
+            invoice_id: 'invoice-id',
+            timestamp: '2026-08-29T10:00:00.000Z',
+          },
+        ],
+      },
+      priority: 100,
+      product: { id: 'commitment-product-id', name: 'Managed AI credits' },
+      type: 'PREPAID',
+    };
+    const recoveredCommit = {
+      ...historyCommit,
+      access_schedule: {
+        schedule_items: [
+          {
+            ...historyCommit.access_schedule.schedule_items[0],
+            amount: 4_999,
+            ending_before: '2027-09-30T10:00:00.000Z',
+          },
+        ],
+      },
+      contract: { id: 'contract-id' },
+      created_at: '2026-08-29T10:00:00.000Z',
+      custom_fields: {
+        myah_funding_action_id: 'funding-action-id',
+        myah_funding_identity: 'funding-identity',
+      },
+      product: { id: 'different-commitment-product-id', name: 'Managed AI credits' },
+    };
     const edit = jest.fn();
-    const getEditHistory = jest.fn().mockResolvedValue({ data: [] });
-    const listContracts = jest.fn().mockResolvedValue({
+    const getEditHistory = jest.fn().mockResolvedValue({
       data: [
         {
-          commits: [
-            {
-              access_schedule: {
-                schedule_items: [
-                  {
-                    amount: 4_999,
-                    ending_before: '2027-09-30T10:00:00.000Z',
-                    id: 'access-schedule-item-id',
-                    starting_at: '2026-08-29T10:00:00.000Z',
-                  },
-                ],
-              },
-              applicable_product_ids: ['charge-product-id'],
-              custom_fields: {
-                myah_funding_action_id: 'funding-action-id',
-                myah_funding_identity: 'funding-identity',
-              },
-              id: 'commitment-id',
-              invoice_schedule: {
-                schedule_items: [
-                  {
-                    amount: 5_000,
-                    id: 'invoice-schedule-item-id',
-                    invoice_id: 'invoice-id',
-                    timestamp: '2026-08-29T10:00:00.000Z',
-                  },
-                ],
-              },
-              priority: 100,
-              product: { id: 'different-commitment-product-id' },
-              type: 'PREPAID',
-            },
-          ],
-          customer_id: 'customer-id',
-          id: 'contract-id',
+          add_commits: [historyCommit],
+          id: 'metronome-edit-id',
+          uniqueness_key: 'funding-key',
         },
       ],
+    });
+    const listCommits = jest.fn().mockResolvedValue({
+      data: [recoveredCommit],
+      next_page: '',
     });
     metronomeConstructor.mockImplementation(
       () =>
         ({
-          v2: {
-            contracts: { edit, getEditHistory, list: listContracts },
-          },
+          v1: { customers: { commits: { list: listCommits } } },
+          v2: { contracts: { edit, getEditHistory } },
         }) as unknown as Metronome,
     );
     const service = new MetronomeClientService({
