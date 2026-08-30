@@ -32,6 +32,8 @@ export type CreateCustomerFundingInput = Readonly<{
 }>;
 
 const customerFundingEvidenceSchema = z.object({
+  fiatCreditTypeId: z.string().min(1),
+  fiatCreditTypeName: z.literal('USD (cents)'),
   fundingIdentity: z.string().min(1),
   paymentActionDeadlineAt: z.string().min(1),
   preset: z.enum(['AI_25_USD', 'AI_50_USD', 'AI_100_USD']),
@@ -139,7 +141,11 @@ export class ManagedProviderCustomerFundingService {
     const paymentActionDeadlineAt = new Date(
       Date.parse(purchaseAt) + 7 * 24 * 60 * 60 * 1000,
     ).toISOString();
-    const fundingIdentity = this.getFundingIdentity(input);
+    const fundingIdentity = this.getFundingIdentity(
+      input,
+      billingContext.fiatCreditTypeId,
+      billingContext.fiatCreditTypeName,
+    );
     const externalReference = `customer-ai-top-up:${input.workspaceId}:${input.idempotencyKey}`;
     const action = await this.fundingJournal.createPending({
       actionType: 'PREPAID_COMMIT',
@@ -155,6 +161,8 @@ export class ManagedProviderCustomerFundingService {
       metronomeCustomerId: billingContext.metronomeCustomerId,
       operatorIdentity: input.actorId,
       paymentEvidence: {
+        fiatCreditTypeId: billingContext.fiatCreditTypeId,
+        fiatCreditTypeName: billingContext.fiatCreditTypeName,
         fundingIdentity,
         paymentActionDeadlineAt,
         preset: input.preset,
@@ -225,7 +233,13 @@ export class ManagedProviderCustomerFundingService {
     const evidence = customerFundingEvidenceSchema.safeParse(
       existing.paymentEvidence,
     );
-    const expectedIdentity = this.getFundingIdentity(input);
+    const expectedIdentity = evidence.success
+      ? this.getFundingIdentity(
+          input,
+          evidence.data.fiatCreditTypeId,
+          evidence.data.fiatCreditTypeName,
+        )
+      : null;
 
     if (
       !evidence.success ||
@@ -248,9 +262,15 @@ export class ManagedProviderCustomerFundingService {
     }
   }
 
-  private getFundingIdentity(input: CreateCustomerFundingInput): string {
+  private getFundingIdentity(
+    input: CreateCustomerFundingInput,
+    fiatCreditTypeId: string,
+    fiatCreditTypeName: 'USD (cents)',
+  ): string {
     return createHash('sha256')
-      .update(`${input.workspaceId}:${input.preset}:${input.idempotencyKey}`)
+      .update(
+        `${input.workspaceId}:${input.preset}:${input.idempotencyKey}:${fiatCreditTypeId}:${fiatCreditTypeName}`,
+      )
       .digest('hex');
   }
 }

@@ -20,7 +20,9 @@ describe('ManagedProviderCustomerFundingService', () => {
   const now = new Date('2026-08-29T10:37:42.123Z');
   const purchaseAt = '2026-08-29T10:00:00.000Z';
   const fundingIdentity = createHash('sha256')
-    .update(`${workspaceId}:AI_25_USD:${idempotencyKey}`)
+    .update(
+      `${workspaceId}:AI_25_USD:${idempotencyKey}:fiat-credit-type-id:USD (cents)`,
+    )
     .digest('hex');
 
   const createAction = (
@@ -40,6 +42,8 @@ describe('ManagedProviderCustomerFundingService', () => {
       operatorIdentity: actorId,
       paymentEvidence: {
         fundingIdentity,
+        fiatCreditTypeId: 'fiat-credit-type-id',
+        fiatCreditTypeName: 'USD (cents)',
         paymentActionDeadlineAt: '2026-09-05T10:00:00.000Z',
         preset: 'AI_25_USD',
         purchaseAt,
@@ -204,6 +208,19 @@ describe('ManagedProviderCustomerFundingService', () => {
   it.each([
     ['actor', { operatorIdentity: 'other-actor' }],
     ['preset', { amountCents: '5000' }],
+    [
+      'fiat credit type',
+      {
+        paymentEvidence: {
+          fiatCreditTypeId: 'other-credit-type-id',
+          fiatCreditTypeName: 'USD (cents)',
+          fundingIdentity,
+          paymentActionDeadlineAt: '2026-09-05T10:00:00.000Z',
+          preset: 'AI_25_USD',
+          purchaseAt,
+        },
+      },
+    ],
   ])('rejects a conflicting existing %s replay', async (_, overrides) => {
     const { service } = createHarness({ existing: createAction(overrides) });
 
@@ -270,6 +287,8 @@ describe('ManagedProviderCustomerFundingService', () => {
       expect.objectContaining({
         paymentEvidence: {
           fundingIdentity: expect.any(String),
+          fiatCreditTypeId: 'fiat-credit-type-id',
+          fiatCreditTypeName: 'USD (cents)',
           paymentActionDeadlineAt: '2026-09-05T10:00:00.000Z',
           preset: 'AI_25_USD',
           purchaseAt,
