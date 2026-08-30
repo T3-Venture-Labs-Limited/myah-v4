@@ -171,6 +171,8 @@ describe('ManagedProviderCustomerFundingService', () => {
       taxCents: 500,
       totalCents: 3_000,
     },
+    invoiceStatus = 'FINALIZED',
+    recoveryInvoiceId = 'metronome-invoice-id',
     stripeState = {
       invoiceUrl: 'https://invoice.example/in_metronome',
       paidAt: '2026-08-29T10:40:00.000Z',
@@ -207,6 +209,8 @@ describe('ManagedProviderCustomerFundingService', () => {
           taxCents: number | null;
           totalCents: number | null;
         };
+    invoiceStatus?: 'DRAFT' | 'FINALIZED' | 'VOID';
+    recoveryInvoiceId?: string | null;
     stripeState?: Record<string, unknown>;
   } = {}) => {
     const harness = createHarness();
@@ -231,13 +235,13 @@ describe('ManagedProviderCustomerFundingService', () => {
         issuedAt: '2026-08-29T10:37:42.123Z',
         metronomeInvoiceId: 'metronome-invoice-id',
         principalCents: 2_500,
-        status: 'FINALIZED',
+        status: invoiceStatus,
       }),
       recoverPaymentGatedPrepaidCommit: jest.fn().mockResolvedValue({
         accessScheduleItemId: 'access-schedule-item-id',
         archivedAt: null,
         commitmentId: 'commitment-id',
-        invoiceId: 'metronome-invoice-id',
+        invoiceId: recoveryInvoiceId,
         metronomeEditId: 'edit-id',
       }),
       updatePaymentGatedPrepaidCommitExpiry: jest
@@ -640,6 +644,75 @@ describe('ManagedProviderCustomerFundingService', () => {
     );
   });
 
+  it('persists recovered Metronome IDs after an uncertain create response', async () => {
+    const { action, journal, service } = createReconciliationHarness({
+      actionOverrides: {
+        commitmentId: null,
+        metronomeEditId: null,
+        state: 'RECONCILIATION_REQUIRED',
+      },
+    });
+
+    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
+      { state: 'SUCCEEDED' },
+    );
+    expect(journal.transitionCompareAndSet.mock.calls[0][0]).toEqual({
+      expectedState: 'RECONCILIATION_REQUIRED',
+      id: 'funding-action-id',
+      nextState: 'METRONOME_EDIT_RECORDED',
+      patch: {
+        commitmentId: 'commitment-id',
+        metronomeEditId: 'edit-id',
+        nextReconciliationAt: now,
+        reconciliationClaimedAt: null,
+        safeErrorCode: null,
+      },
+      workspaceId,
+    });
+  });
+
+  it('keeps a recovered commitment pending while its invoice materializes', async () => {
+    const { action, journal, metronome, service } =
+      createReconciliationHarness({ recoveryInvoiceId: null });
+
+    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
+      { state: 'PAYMENT_PENDING' },
+    );
+    expect(
+      metronome.readPaymentGatedPrepaidCommitInvoice,
+    ).not.toHaveBeenCalled();
+    expect(journal.transitionCompareAndSet).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        nextState: 'PAYMENT_PENDING',
+        patch: expect.objectContaining({
+          commitmentId: 'commitment-id',
+          metronomeEditId: 'edit-id',
+        }),
+      }),
+    );
+  });
+
+  it('marks a void Metronome payment invoice definitively failed', async () => {
+    const { action, journal, service } = createReconciliationHarness({
+      externalInvoice: null,
+      invoiceStatus: 'VOID',
+    });
+
+    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
+      { state: 'FAILED_DEFINITIVE' },
+    );
+    expect(journal.transitionCompareAndSet).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        nextState: 'FAILED_DEFINITIVE',
+        patch: expect.objectContaining({
+          expiresAt: null,
+          failureCode: 'METRONOME_INVOICE_VOID',
+          nextReconciliationAt: null,
+        }),
+      }),
+    );
+  });
+
   it('returns an exact action-required client secret only after re-verifying the workspace payment', async () => {
     const { action, journal, service } = createReconciliationHarness({
       actionOverrides: {
@@ -701,6 +774,46 @@ describe('ManagedProviderCustomerFundingService', () => {
     expect(stripe.readPaymentGatedInvoicePayment).not.toHaveBeenCalled();
   });
 
+
+  it('rechecks the action deadline after authoritative remote reads', async () => {
+    const { action, service, stripe } = createReconciliationHarness({
+      actionOverrides: {
+        collectedTotalCents: '3000',
+        metronomeInvoiceId: 'metronome-invoice-id',
+        state: 'PAYMENT_ACTION_REQUIRED',
+        stripeInvoiceId: 'in_metronome',
+        stripePaymentIntentId: 'pi_metronome',
+        taxCents: '500',
+      },
+      stripeState: {
+        clientSecret: 'pi_action_secret',
+        invoiceUrl: 'https://invoice.example/in_metronome',
+        paymentIntentId: 'pi_metronome',
+        principalCents: 2_500,
+        status: 'ACTION_REQUIRED',
+        stripeInvoiceId: 'in_metronome',
+        taxCents: 500,
+        totalCents: 3_000,
+      },
+    });
+    stripe.readPaymentGatedInvoicePayment.mockImplementation(async () => {
+      jest.setSystemTime(new Date('2026-09-05T10:00:00.000Z'));
+      return {
+        clientSecret: 'pi_action_secret',
+        invoiceUrl: 'https://invoice.example/in_metronome',
+        paymentIntentId: 'pi_metronome',
+        principalCents: 2_500,
+        status: 'ACTION_REQUIRED',
+        stripeInvoiceId: 'in_metronome',
+        taxCents: 500,
+        totalCents: 3_000,
+      };
+    });
+
+    await expect(
+      service.getCustomerFundingPaymentAction({ action, workspaceId }),
+    ).rejects.toThrow('Customer AI payment action is unavailable');
+  });
   it('acknowledges browser confirmation only by returning to payment pending', async () => {
     const { action, journal, service } = createReconciliationHarness({
       actionOverrides: { state: 'PAYMENT_ACTION_REQUIRED' },

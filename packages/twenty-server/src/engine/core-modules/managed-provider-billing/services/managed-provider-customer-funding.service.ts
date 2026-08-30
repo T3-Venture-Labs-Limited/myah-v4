@@ -285,6 +285,9 @@ export class ManagedProviderCustomerFundingService {
     const principalCents = Number(action.prepaidPrincipalCents);
     const taxCents = Number(action.taxCents);
     const totalCents = Number(action.collectedTotalCents);
+    const paymentActionDeadline = evidence.success
+      ? Date.parse(evidence.data.paymentActionDeadlineAt)
+      : Number.NaN;
 
     if (
       !evidence.success ||
@@ -305,7 +308,8 @@ export class ManagedProviderCustomerFundingService {
       taxCents < 0 ||
       !Number.isSafeInteger(totalCents) ||
       totalCents !== principalCents + taxCents ||
-      Date.now() > Date.parse(evidence.data.paymentActionDeadlineAt)
+      !Number.isFinite(paymentActionDeadline) ||
+      Date.now() >= paymentActionDeadline
     ) {
       throw new Error('Customer AI payment action is unavailable');
     }
@@ -369,7 +373,10 @@ export class ManagedProviderCustomerFundingService {
       workspaceId,
     });
 
-    if (stripeState.status !== 'ACTION_REQUIRED') {
+    if (
+      stripeState.status !== 'ACTION_REQUIRED' ||
+      Date.now() >= paymentActionDeadline
+    ) {
       throw new Error('Customer AI payment action is unavailable');
     }
 
@@ -395,7 +402,7 @@ export class ManagedProviderCustomerFundingService {
       !evidence.success ||
       action.state !== 'PAYMENT_ACTION_REQUIRED' ||
       action.workspaceId !== workspaceId ||
-      Date.now() > Date.parse(evidence.data.paymentActionDeadlineAt)
+      Date.now() >= Date.parse(evidence.data.paymentActionDeadlineAt)
     ) {
       throw new Error('Customer AI payment action is unavailable');
     }
@@ -428,8 +435,6 @@ export class ManagedProviderCustomerFundingService {
       action.workspaceId === null ||
       action.metronomeCustomerId === null ||
       action.metronomeContractId === null ||
-      action.metronomeEditId === null ||
-      action.commitmentId === null ||
       action.stripeBillingConfigurationId === null ||
       action.stripeDeliveryMethodId === null ||
       action.stripeCustomerId === null ||
@@ -488,16 +493,50 @@ export class ManagedProviderCustomerFundingService {
 
     if (
       recovered === null ||
-      recovered.commitmentId !== action.commitmentId ||
-      recovered.metronomeEditId !== action.metronomeEditId ||
-      recovered.invoiceId === null
+      (action.commitmentId !== null &&
+        recovered.commitmentId !== action.commitmentId) ||
+      (action.metronomeEditId !== null &&
+        recovered.metronomeEditId !== action.metronomeEditId)
     ) {
       throw new Error('Customer AI funding commitment is invalid');
     }
 
+    const recoveredPatch = {
+      commitmentId: recovered.commitmentId,
+      metronomeEditId: recovered.metronomeEditId,
+      nextReconciliationAt: new Date(),
+      reconciliationClaimedAt: null,
+      safeErrorCode: null,
+    };
+
+    if (recovered.invoiceId === null) {
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'PAYMENT_PENDING',
+        patch: {
+          ...recoveredPatch,
+          nextReconciliationAt: new Date(Date.now() + 5 * 60 * 1000),
+        },
+        workspaceId: action.workspaceId,
+      });
+    }
+
+    if (action.commitmentId === null || action.metronomeEditId === null) {
+      const recorded = await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'METRONOME_EDIT_RECORDED',
+        patch: recoveredPatch,
+        workspaceId: action.workspaceId,
+      });
+
+      return await this.reconcileCustomerFundingUnsafe(recorded);
+    }
+
     const invoice =
       await this.metronomeClient.readPaymentGatedPrepaidCommitInvoice({
-        commitmentId: action.commitmentId,
+        commitmentId: recovered.commitmentId,
         contractId: action.metronomeContractId,
         customerId: action.metronomeCustomerId,
         fiatCreditTypeId: evidence.data.fiatCreditTypeId,
@@ -505,13 +544,30 @@ export class ManagedProviderCustomerFundingService {
         principalCents,
       });
     const pendingPatch = {
+      commitmentId: recovered.commitmentId,
+      metronomeEditId: recovered.metronomeEditId,
       metronomeInvoiceId: invoice.metronomeInvoiceId,
       nextReconciliationAt: new Date(Date.now() + 5 * 60 * 1000),
       reconciliationClaimedAt: null,
     };
     const external = invoice.externalInvoice;
 
-    if (external === null || invoice.status !== 'FINALIZED') {
+    if (invoice.status === 'VOID') {
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'FAILED_DEFINITIVE',
+        patch: {
+          ...pendingPatch,
+          expiresAt: null,
+          failureCode: 'METRONOME_INVOICE_VOID',
+          nextReconciliationAt: null,
+        },
+        workspaceId: action.workspaceId,
+      });
+    }
+
+    if (external === null || invoice.status === 'DRAFT') {
       return await this.fundingJournal.transitionCompareAndSet({
         expectedState: action.state,
         id: action.id,
