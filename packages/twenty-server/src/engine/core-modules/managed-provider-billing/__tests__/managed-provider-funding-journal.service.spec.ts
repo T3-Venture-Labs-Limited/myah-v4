@@ -379,4 +379,39 @@ describe('ManagedProviderFundingJournalService', () => {
     expect(query).not.toContain(`'REFUND_INTENT_RECORDED'`);
     expect(query).not.toContain(`'REFUND_RECONCILIATION_REQUIRED'`);
   });
+
+  it('reads one funding action only within the supplied workspace', async () => {
+    const repository = {
+      findOneBy: jest.fn().mockResolvedValue(persistedAction),
+    };
+    const service = new ManagedProviderFundingJournalService(
+      repository as unknown as Repository<ManagedProviderFundingActionEntity>,
+    );
+
+    await expect(
+      service.findWorkspaceAction('workspace-id', persistedAction.id),
+    ).resolves.toBe(persistedAction);
+    expect(repository.findOneBy).toHaveBeenCalledWith({
+      id: persistedAction.id,
+      workspaceId: 'workspace-id',
+    });
+  });
+
+  it('lists at most fifty newest workspace funding actions', async () => {
+    const repository = {
+      find: jest.fn().mockResolvedValue([persistedAction]),
+    };
+    const service = new ManagedProviderFundingJournalService(
+      repository as unknown as Repository<ManagedProviderFundingActionEntity>,
+    );
+
+    await expect(
+      service.listWorkspaceActions('workspace-id', 500),
+    ).resolves.toEqual([persistedAction]);
+    expect(repository.find).toHaveBeenCalledWith({
+      order: { createdAt: 'DESC' },
+      take: 50,
+      where: { workspaceId: 'workspace-id' },
+    });
+  });
 });

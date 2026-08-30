@@ -31,6 +31,13 @@ export type CreateCustomerFundingInput = Readonly<{
   workspaceId: string;
 }>;
 
+export type CustomerFundingPaymentMethodPreparation = Readonly<{
+  clientSecret: string | null;
+  publishableKey: string | null;
+  ready: boolean;
+  setupIntentId: string | null;
+}>;
+
 const customerFundingEvidenceSchema = z.object({
   fiatCreditTypeId: z.string().min(1),
   fiatCreditTypeName: z.literal('USD (cents)'),
@@ -70,6 +77,106 @@ export class ManagedProviderCustomerFundingService {
         .get('MANAGED_PROVIDER_CUSTOMER_FUNDING_WORKSPACE_IDS')
         .includes(workspaceId)
     );
+  }
+
+  async getCustomerFundingAction(
+    workspaceId: string,
+    actionId: string,
+  ): Promise<ManagedProviderFundingActionEntity> {
+    const action = await this.fundingJournal.findWorkspaceAction(
+      workspaceId,
+      actionId,
+    );
+
+    if (action === null) {
+      throw new Error('Customer AI funding action was not found');
+    }
+
+    return action;
+  }
+
+  async listCustomerFundingHistory(
+    workspaceId: string,
+  ): Promise<ManagedProviderFundingActionEntity[]> {
+    return await this.fundingJournal.listWorkspaceActions(workspaceId, 50);
+  }
+
+  async isCustomerFundingPaymentMethodReady(
+    workspaceId: string,
+  ): Promise<boolean> {
+    if (!this.isCustomerFundingAvailable(workspaceId)) return false;
+
+    try {
+      await this.stripe.assertWorkspacePaymentMethodReady({
+        metronomeBaseUrlEnvironment: this.getCustomerFundingEnvironment(),
+        workspaceId,
+      });
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async prepareCustomerFundingPaymentMethod(
+    workspaceId: string,
+  ): Promise<CustomerFundingPaymentMethodPreparation> {
+    if (!this.isCustomerFundingAvailable(workspaceId)) {
+      throw new Error('Customer AI funding is unavailable');
+    }
+
+    const environment = this.getCustomerFundingEnvironment();
+
+    try {
+      await this.stripe.assertWorkspacePaymentMethodReady({
+        metronomeBaseUrlEnvironment: environment,
+        workspaceId,
+      });
+
+      return {
+        clientSecret: null,
+        publishableKey: null,
+        ready: true,
+        setupIntentId: null,
+      };
+    } catch {
+      const preparation = await this.stripe.prepareWorkspacePaymentMethod({
+        metronomeBaseUrlEnvironment: environment,
+        workspaceId,
+      });
+
+      return {
+        clientSecret: preparation.clientSecret,
+        publishableKey: preparation.publishableKey,
+        ready: false,
+        setupIntentId: preparation.setupIntentId,
+      };
+    }
+  }
+
+  async completeCustomerFundingPaymentMethod(
+    workspaceId: string,
+    setupIntentId: string,
+  ): Promise<CustomerFundingPaymentMethodPreparation> {
+    if (
+      !this.isCustomerFundingAvailable(workspaceId) ||
+      setupIntentId.trim() === ''
+    ) {
+      throw new Error('Customer AI funding is unavailable');
+    }
+
+    await this.stripe.completeWorkspacePaymentMethodSetup({
+      metronomeBaseUrlEnvironment: this.getCustomerFundingEnvironment(),
+      setupIntentId,
+      workspaceId,
+    });
+
+    return {
+      clientSecret: null,
+      publishableKey: null,
+      ready: true,
+      setupIntentId: null,
+    };
   }
 
   async createCustomerFunding(
@@ -868,6 +975,18 @@ export class ManagedProviderCustomerFundingService {
     ) {
       throw new Error('Customer AI funding replay conflicts');
     }
+  }
+
+  private getCustomerFundingEnvironment(): 'PRODUCTION' | 'SANDBOX' {
+    const environment = this.twentyConfig.get(
+      'METRONOME_BASE_URL_ENVIRONMENT',
+    );
+
+    if (environment !== 'PRODUCTION' && environment !== 'SANDBOX') {
+      throw new Error('Customer AI funding environment is invalid');
+    }
+
+    return environment;
   }
 
   private getFundingIdentity(

@@ -92,6 +92,10 @@ describe('ManagedProviderCustomerFundingService', () => {
         .fn()
         .mockResolvedValue(Object.assign(action, { createdByCaller: true })),
       findByIdempotency: jest.fn().mockResolvedValue(existing),
+      findWorkspaceAction: jest.fn().mockResolvedValue(existing),
+      listWorkspaceActions: jest.fn().mockResolvedValue(
+        existing === null ? [] : [existing],
+      ),
       transitionCompareAndSet: jest
         .fn()
         .mockResolvedValueOnce(recorded)
@@ -134,6 +138,17 @@ describe('ManagedProviderCustomerFundingService', () => {
       assertWorkspacePaymentMethodReady: jest.fn().mockResolvedValue({
         paymentMethodId: 'pm_default',
         ready: true,
+        stripeCustomerId,
+      }),
+      completeWorkspacePaymentMethodSetup: jest.fn().mockResolvedValue({
+        paymentMethodId: 'pm_default',
+        stripeCustomerId,
+      }),
+      prepareWorkspacePaymentMethod: jest.fn().mockResolvedValue({
+        clientSecret: 'seti_secret',
+        publishableKey: 'pk_test',
+        ready: false,
+        setupIntentId: 'seti_id',
         stripeCustomerId,
       }),
     };
@@ -486,7 +501,6 @@ describe('ManagedProviderCustomerFundingService', () => {
       preset: 'AI_25_USD',
       workspaceId,
     });
-
     expect(journal.transitionCompareAndSet).toHaveBeenCalledWith({
       expectedState: 'PENDING',
       id: 'funding-action-id',
@@ -495,6 +509,89 @@ describe('ManagedProviderCustomerFundingService', () => {
         nextReconciliationAt: now,
         safeErrorCode: 'METRONOME_CREATE_OUTCOME_UNCERTAIN',
       },
+      workspaceId,
+    });
+  });
+
+  it('reads funding actions only through workspace-scoped journal methods', async () => {
+    const existing = createAction();
+    const { journal, service } = createHarness({ existing });
+
+    await expect(
+      service.getCustomerFundingAction(workspaceId, existing.id),
+    ).resolves.toBe(existing);
+    await expect(service.listCustomerFundingHistory(workspaceId)).resolves.toEqual(
+      [existing],
+    );
+    expect(journal.findWorkspaceAction).toHaveBeenCalledWith(
+      workspaceId,
+      existing.id,
+    );
+    expect(journal.listWorkspaceActions).toHaveBeenCalledWith(workspaceId, 50);
+  });
+
+  it('reads payment-method readiness without creating a SetupIntent', async () => {
+    const { service, stripe } = createHarness();
+
+    await expect(
+      service.isCustomerFundingPaymentMethodReady(workspaceId),
+    ).resolves.toBe(true);
+    stripe.assertWorkspacePaymentMethodReady.mockRejectedValue(
+      new Error('payment method missing'),
+    );
+    await expect(
+      service.isCustomerFundingPaymentMethodReady(workspaceId),
+    ).resolves.toBe(false);
+    expect(stripe.prepareWorkspacePaymentMethod).not.toHaveBeenCalled();
+  });
+
+  it('reuses a ready payment method without exposing Stripe identifiers', async () => {
+    const { service, stripe } = createHarness();
+
+    await expect(
+      service.prepareCustomerFundingPaymentMethod(workspaceId),
+    ).resolves.toEqual({
+      clientSecret: null,
+      publishableKey: null,
+      ready: true,
+      setupIntentId: null,
+    });
+    expect(stripe.prepareWorkspacePaymentMethod).not.toHaveBeenCalled();
+  });
+
+  it('returns only bounded SetupIntent fields when a payment method is missing', async () => {
+    const { service, stripe } = createHarness();
+    stripe.assertWorkspacePaymentMethodReady.mockRejectedValue(
+      new Error('payment method missing'),
+    );
+
+    await expect(
+      service.prepareCustomerFundingPaymentMethod(workspaceId),
+    ).resolves.toEqual({
+      clientSecret: 'seti_secret',
+      publishableKey: 'pk_test',
+      ready: false,
+      setupIntentId: 'seti_id',
+    });
+  });
+
+  it('completes the exact SetupIntent without exposing Stripe customer or method IDs', async () => {
+    const { service, stripe } = createHarness();
+
+    await expect(
+      service.completeCustomerFundingPaymentMethod(
+        workspaceId,
+        'seti_id',
+      ),
+    ).resolves.toEqual({
+      clientSecret: null,
+      publishableKey: null,
+      ready: true,
+      setupIntentId: null,
+    });
+    expect(stripe.completeWorkspacePaymentMethodSetup).toHaveBeenCalledWith({
+      metronomeBaseUrlEnvironment: 'SANDBOX',
+      setupIntentId: 'seti_id',
       workspaceId,
     });
   });

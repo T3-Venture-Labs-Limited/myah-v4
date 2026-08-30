@@ -152,6 +152,38 @@ export class ManagedProviderFundingJournalService {
     return this.repository.findOne({ where: { workspaceId, idempotencyKey } });
   }
 
+  async findWorkspaceAction(
+    workspaceId: string,
+    actionId: string,
+  ): Promise<ManagedProviderFundingActionEntity | null> {
+    if (workspaceId.trim() === '' || actionId.trim() === '') {
+      throw new Error('Managed provider funding action identity is invalid');
+    }
+
+    return await this.repository.findOneBy({
+      id: actionId,
+      workspaceId,
+    });
+  }
+
+  async listWorkspaceActions(
+    workspaceId: string,
+    limit = 50,
+  ): Promise<ManagedProviderFundingActionEntity[]> {
+    if (workspaceId.trim() === '') {
+      throw new Error('Managed provider funding workspace is invalid');
+    }
+
+    const boundedLimit =
+      Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 50) : 50;
+
+    return await this.repository.find({
+      order: { createdAt: 'DESC' },
+      take: boundedLimit,
+      where: { workspaceId },
+    });
+  }
+
   async countRecentActions(operatorIdentity: string): Promise<number> {
     return this.repository
       .createQueryBuilder('action')
