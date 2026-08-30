@@ -436,6 +436,26 @@ export class ConfigVariables {
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Enable customer-managed AI prepaid funding',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  MANAGED_PROVIDER_CUSTOMER_FUNDING_ENABLED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Workspaces eligible to purchase managed AI prepaid funding',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.ARRAY,
+  })
+  @IsOptional()
+  MANAGED_PROVIDER_CUSTOMER_FUNDING_WORKSPACE_IDS: string[] = [];
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
     description: 'Workspaces eligible for managed OpenRouter funding',
     isEnvOnly: true,
     isHiddenInAdminPanel: true,

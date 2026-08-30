@@ -22,7 +22,10 @@ export type CreateFundingIntent = {
   idempotencyKey: string;
   operatorIdentity: string;
   paymentEvidence?: Record<string, unknown> | null;
-  permissionUsed: 'managed_provider_finance' | 'managed_provider_grant';
+  permissionUsed:
+    | 'managed_provider_finance'
+    | 'managed_provider_grant'
+    | 'workspace_billing';
   reason: string;
   workspaceId: string;
   metronomeCustomerId?: string | null;

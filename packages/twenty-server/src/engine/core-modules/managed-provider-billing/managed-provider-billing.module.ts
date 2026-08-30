@@ -22,6 +22,7 @@ import { ManagedProviderBillingRecoveryService } from './services/managed-provid
 import { ManagedProviderBillingStatusService } from './services/managed-provider-billing-status.service';
 import { ManagedProviderFundingJournalService } from './services/managed-provider-funding-journal.service';
 import { ManagedProviderPoolService } from './services/managed-provider-pool.service';
+import { ManagedProviderCustomerFundingService } from './services/managed-provider-customer-funding.service';
 
 import { MetronomeWorkspaceCustomerService } from './services/metronome-workspace-customer.service';
 import { ManagedProviderStripeService } from './stripe/managed-provider-stripe.service';
@@ -63,6 +64,7 @@ import { ManagedProviderStripeService } from './stripe/managed-provider-stripe.s
     { provide: 'MANAGED_PROVIDER_STRIPE_CLIENT', useValue: undefined },
     ManagedProviderStripeService,
     ManagedProviderFundingJournalService,
+    ManagedProviderCustomerFundingService,
     MetronomeWorkspaceCustomerService,
   ],
   exports: [
@@ -74,6 +76,7 @@ import { ManagedProviderStripeService } from './stripe/managed-provider-stripe.s
     MetronomeWorkspaceCustomerService,
     ManagedProviderStripeService,
     ManagedProviderFundingJournalService,
+    ManagedProviderCustomerFundingService,
     ManagedProviderBillingRecoveryCronCommand,
   ],
 })

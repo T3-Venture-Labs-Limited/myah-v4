@@ -133,6 +133,31 @@ describe('managed provider billing configuration', () => {
     );
   });
 
+  it('defaults customer AI funding to disabled with an empty exact workspace allowlist', () => {
+    const config = new ConfigVariables();
+    const metadata = TypedReflect.getMetadata(
+      'config-variables',
+      ConfigVariables,
+    );
+
+    expect(config.MANAGED_PROVIDER_CUSTOMER_FUNDING_ENABLED).toBe(false);
+    expect(config.MANAGED_PROVIDER_CUSTOMER_FUNDING_WORKSPACE_IDS).toEqual([]);
+    expect(metadata?.MANAGED_PROVIDER_CUSTOMER_FUNDING_ENABLED).toMatchObject({
+      group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.BOOLEAN,
+    });
+    expect(
+      metadata?.MANAGED_PROVIDER_CUSTOMER_FUNDING_WORKSPACE_IDS,
+    ).toMatchObject({
+      group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+      isEnvOnly: true,
+      isHiddenInAdminPanel: true,
+      type: ConfigVariableType.ARRAY,
+    });
+  });
+
   it('bounds sponsored managed provider credit lifetimes to 30 days', () => {
     const validErrors = validateSync(
       Object.assign(new ConfigVariables(), {
