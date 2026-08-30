@@ -15,7 +15,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { InlineBanner } from 'twenty-ui/feedback';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 import { H2Title } from 'twenty-ui/typography';
 
 import { type WorkspaceBillingSafeSummary } from './SettingsWorkspaceBillingContent';
@@ -41,6 +41,10 @@ const StyledGrid = styled.div`
   display: grid;
   gap: ${themeCssVariables.spacing[3]};
   grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    grid-template-columns: 1fr;
+  }
 `;
 const StyledActions = styled.div`
   display: flex;
@@ -48,11 +52,13 @@ const StyledActions = styled.div`
 `;
 
 const PaymentSetupControl = ({
+  canSave,
   clientSecret,
   details,
   onComplete,
   setupIntentId,
 }: {
+  canSave: boolean;
   clientSecret: string;
   details: CustomerFundingBillingDetails;
   onComplete: (
@@ -65,9 +71,10 @@ const PaymentSetupControl = ({
   const elements = useElements();
   const { enqueueErrorSnackBar } = useSnackBar();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isStripeReady = isDefined(stripe) && isDefined(elements);
 
   const handleSubmit = async () => {
-    if (!isDefined(stripe) || !isDefined(elements)) return;
+    if (!isStripeReady) return;
     setIsSubmitting(true);
 
     try {
@@ -97,11 +104,17 @@ const PaymentSetupControl = ({
 
   return (
     <>
+      {!isStripeReady ? (
+        <InlineBanner
+          color="blue"
+          message={t`Secure payment form is loading.`}
+        />
+      ) : null}
       <PaymentElement />
       <Button
         title={t`Save payment details`}
         accent="brand"
-        disabled={isSubmitting}
+        disabled={!isStripeReady || !canSave || isSubmitting}
         isLoading={isSubmitting}
         onClick={handleSubmit}
       />
@@ -135,7 +148,7 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
     name: billingSummary?.name ?? '',
     postalCode: billingSummary?.address.postalCode ?? '',
     state: billingSummary?.address.state ?? null,
-    taxIdType: billingSummary?.taxId?.type ?? null,
+    taxIdType: null,
     taxIdValue: null,
   });
   const [isSavingAddress, setIsSavingAddress] = useState(false);
@@ -152,12 +165,15 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
       [field]: isOptional ? value || null : value,
     }));
   };
+  const hasTaxIdType = details.taxIdType !== null;
+  const hasTaxIdValue = details.taxIdValue !== null;
   const canSave =
     details.name.trim() !== '' &&
     details.line1.trim() !== '' &&
     details.city.trim() !== '' &&
     details.postalCode.trim() !== '' &&
-    /^[A-Za-z]{2}$/.test(details.country);
+    /^[A-Za-z]{2}$/.test(details.country) &&
+    hasTaxIdType === hasTaxIdValue;
 
   const saveAddressOnly = async () => {
     if (!canSave) return;
@@ -180,12 +196,14 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
           <SettingsTextInput
             instanceId="managed-ai-billing-name"
             label={t`Billing name`}
+            required
             value={details.name}
             onChange={(value) => set('name', value)}
           />
           <SettingsTextInput
             instanceId="managed-ai-billing-line-1"
             label={t`Address line 1`}
+            required
             value={details.line1}
             onChange={(value) => set('line1', value)}
           />
@@ -198,6 +216,7 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
           <SettingsTextInput
             instanceId="managed-ai-billing-city"
             label={t`City`}
+            required
             value={details.city}
             onChange={(value) => set('city', value)}
           />
@@ -210,12 +229,14 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
           <SettingsTextInput
             instanceId="managed-ai-billing-postal-code"
             label={t`Postal code`}
+            required
             value={details.postalCode}
             onChange={(value) => set('postalCode', value)}
           />
           <SettingsTextInput
             instanceId="managed-ai-billing-country"
             label={t`Country code`}
+            required
             value={details.country}
             onChange={(value) => set('country', value.toUpperCase())}
           />
@@ -232,6 +253,12 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
             onChange={(value) => set('taxIdValue', value)}
           />
         </StyledGrid>
+        {!canSave ? (
+          <InlineBanner
+            color="blue"
+            message={t`Complete every required billing field. Tax ID type and value must be entered together.`}
+          />
+        ) : null}
         {clientSecret !== null && setupIntentId !== null ? (
           isDefined(stripePromise) ? (
             <Elements
@@ -240,6 +267,7 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
               options={{ appearance, clientSecret }}
             >
               <PaymentSetupControl
+                canSave={canSave}
                 clientSecret={clientSecret}
                 details={details}
                 onComplete={onComplete}
@@ -280,9 +308,10 @@ const PaymentActionControl = ({
   const elements = useElements();
   const { enqueueErrorSnackBar } = useSnackBar();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isStripeReady = isDefined(stripe) && isDefined(elements);
 
   const confirm = async () => {
-    if (!isDefined(stripe) || !isDefined(elements)) return;
+    if (!isStripeReady) return;
     setIsSubmitting(true);
     try {
       const { error: submitError } = await elements.submit();
@@ -308,11 +337,17 @@ const PaymentActionControl = ({
 
   return (
     <StyledForm>
+      {!isStripeReady ? (
+        <InlineBanner
+          color="blue"
+          message={t`Secure payment form is loading.`}
+        />
+      ) : null}
       <PaymentElement />
       <Button
         title={t`Authenticate payment`}
         accent="brand"
-        disabled={isSubmitting}
+        disabled={!isStripeReady || isSubmitting}
         isLoading={isSubmitting}
         onClick={confirm}
       />

@@ -336,10 +336,16 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
       await acknowledgePaymentAction({
         variables: { actionId: paymentAction.actionId },
       });
-      setPaymentAction(null);
-      await refetchFunding();
     } catch (error) {
       showError(error);
+      return;
+    }
+
+    setPaymentAction(null);
+    try {
+      await refetchFunding();
+    } catch {
+      // Polling will refresh the acknowledged action.
     }
   };
 
@@ -369,24 +375,24 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
             onComplete={completePaymentDetails}
             setupIntentId={paymentPreparation.setupIntentId}
           />
-        ) : null}
-        {paymentAction !== null ? (
+        ) : paymentAction !== null ? (
           <ManagedProviderCustomerFundingPaymentActionForm
             clientSecret={paymentAction.clientSecret}
             onCancel={() => setPaymentAction(null)}
             onConfirmed={acknowledgeAction}
           />
-        ) : null}
-        <SettingsWorkspaceBillingContent
-          viewModel={viewModel}
-          managedEmailSubscriptions={managedEmailSubscriptions}
-          onCompletePayment={completePayment}
-          onManageManagedEmail={() =>
-            navigateSettings(SettingsPath.WorkspaceEmail)
-          }
-          onManagePaymentDetails={managePaymentDetails}
-          onRequestTopUp={requestTopUp}
-        />
+        ) : (
+          <SettingsWorkspaceBillingContent
+            viewModel={viewModel}
+            managedEmailSubscriptions={managedEmailSubscriptions}
+            onCompletePayment={completePayment}
+            onManageManagedEmail={() =>
+              navigateSettings(SettingsPath.WorkspaceEmail)
+            }
+            onManagePaymentDetails={managePaymentDetails}
+            onRequestTopUp={requestTopUp}
+          />
+        )}
       </SettingsPageContainer>
     </SettingsPageLayout>
   );
