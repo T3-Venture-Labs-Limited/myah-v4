@@ -4,6 +4,11 @@ import type {
   ContractCreateParams,
   ContractListBalancesResponse,
 } from '@metronome/sdk/resources/v1/contracts';
+import type {
+  ContractEditResponse,
+  ContractGetEditHistoryResponse,
+} from '@metronome/sdk/resources/v2/contracts';
+import type { ContractV2 } from '@metronome/sdk/resources/shared';
 
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
@@ -34,45 +39,13 @@ const METRONOME_MAX_LIST_PAGES = 100;
 
 type MetronomeBalanceResponse = ContractListBalancesResponse;
 
-type PaymentGatedPrepaidCommitScheduleItem = {
-  amount?: number;
-  ending_before?: string;
-  id?: string;
-  invoice_id?: string | null;
-  starting_at?: string;
-  timestamp?: string;
-};
+type MetronomePaymentGatedPrepaidCommitHistoryCommit = NonNullable<
+  ContractGetEditHistoryResponse.Data['add_commits']
+>[number];
 
-type PaymentGatedPrepaidCommitRecord = {
-  access_schedule?: {
-    schedule_items?: PaymentGatedPrepaidCommitScheduleItem[];
-  };
-  applicable_product_ids?: string[];
-  archived_at?: string | null;
-  custom_fields?: Record<string, string>;
-  id?: string;
-  invoice_schedule?: {
-    schedule_items?: PaymentGatedPrepaidCommitScheduleItem[];
-  };
-  payment_gate_config?: {
-    payment_gate_type?: string;
-    tax_type?: string;
-  };
-  product?: { id?: string };
-  type?: string;
-};
-
-type PaymentGatedPrepaidCommitEdit = {
-  add_commits?: PaymentGatedPrepaidCommitRecord[];
-  id?: string;
-  uniqueness_key?: string | null;
-};
-
-type PaymentGatedPrepaidCommitContract = {
-  commits?: PaymentGatedPrepaidCommitRecord[];
-  customer_id?: string;
-  id?: string;
-};
+type MetronomePaymentGatedPrepaidCommitCommercialRecord =
+  | MetronomePaymentGatedPrepaidCommitHistoryCommit
+  | ContractV2.Commit;
 
 type PaymentGatedPrepaidCommitUpdateRequest = {
   contract_id: string;
@@ -614,16 +587,30 @@ export class MetronomeClientService {
         { idempotencyKey: input.uniquenessKey, maxRetries: 0 },
       );
       const edit = response.data.edit;
-      const commitmentId =
-        edit?.add_commits?.length === 1 ? edit.add_commits[0].id : undefined;
+      const commitment =
+        edit?.add_commits?.length === 1 ? edit.add_commits[0] : undefined;
+      const commitmentDetails =
+        commitment === undefined
+          ? null
+          : this.getPaymentGatedPrepaidCommitRecoveryDetails(
+              commitment,
+              input,
+              startingAt,
+              endingBefore,
+            );
 
-      if (!edit?.id?.trim() || !commitmentId?.trim()) {
+      if (
+        response.data.id !== input.contractId ||
+        !edit?.id?.trim() ||
+        !commitment?.id?.trim() ||
+        commitmentDetails === null
+      ) {
         throw new MetronomeClientException(
           MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
         );
       }
 
-      return { commitmentId, metronomeEditId: edit.id };
+      return { commitmentId: commitment.id, metronomeEditId: edit.id };
     } catch (error) {
       throw this.toWriteException(error);
     }
@@ -651,20 +638,13 @@ export class MetronomeClientService {
         }),
       ),
     ]);
-    const edits =
-      editHistoryResponse.data as unknown as PaymentGatedPrepaidCommitEdit[];
-    const contracts =
-      contractsResponse.data as unknown as PaymentGatedPrepaidCommitContract[];
-
-    if (!Array.isArray(edits) || !Array.isArray(contracts)) {
-      throw new Error('Metronome payment-gated commit recovery mismatch');
-    }
-
-    const matchesInput = (edit: PaymentGatedPrepaidCommitEdit): boolean => {
+    const matchesInput = (
+      edit: (typeof editHistoryResponse.data)[number],
+    ): boolean => {
       const addedCommits = edit.add_commits;
 
       return (
-        !!edit.id?.trim() &&
+        edit.id.trim() !== '' &&
         addedCommits?.length === 1 &&
         this.getPaymentGatedPrepaidCommitRecoveryDetails(
           addedCommits[0],
@@ -674,36 +654,46 @@ export class MetronomeClientService {
         ) !== null
       );
     };
-    const candidateEdits = edits.filter(
-      ({ add_commits, uniqueness_key }) =>
-        uniqueness_key === input.uniquenessKey ||
-        add_commits?.some((commit) =>
-          this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input),
-        ) === true,
-    );
-    const matchingContracts = contracts.filter(
+    const matchingContracts = contractsResponse.data.filter(
       (contract) =>
         contract.id === input.contractId &&
         contract.customer_id === input.customerId,
     );
-    const contractCandidates = matchingContracts.flatMap(
-      ({ commits }) =>
-        commits?.filter((commit) =>
-          this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input),
-        ) ?? [],
+    const candidateEdits = editHistoryResponse.data.filter(
+      ({ add_commits, uniqueness_key }) =>
+        uniqueness_key === input.uniquenessKey ||
+        (add_commits?.length === 1 &&
+          this.getPaymentGatedPrepaidCommitRecoveryDetails(
+            add_commits[0],
+            input,
+            startingAt,
+            endingBefore,
+          ) !== null),
     );
-    const structuralHistoryMatches = edits.filter(matchesInput);
-    const structuralContractMatches = matchingContracts.flatMap(
-      ({ commits }) =>
-        commits?.filter(
-          (commit) =>
-            this.getPaymentGatedPrepaidCommitRecoveryDetails(
-              commit,
-              input,
-              startingAt,
-              endingBefore,
-            ) !== null,
-        ) ?? [],
+    const contractCandidates = matchingContracts.flatMap(({ commits }) =>
+      commits.filter(
+        (commit) =>
+          this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
+          this.getPaymentGatedPrepaidCommitRecoveryDetails(
+            commit,
+            input,
+            startingAt,
+            endingBefore,
+          ) !== null,
+      ),
+    );
+    const structuralHistoryMatches =
+      editHistoryResponse.data.filter(matchesInput);
+    const structuralContractMatches = matchingContracts.flatMap(({ commits }) =>
+      commits.filter(
+        (commit) =>
+          this.getPaymentGatedPrepaidCommitRecoveryDetails(
+            commit,
+            input,
+            startingAt,
+            endingBefore,
+          ) !== null,
+      ),
     );
 
     if (candidateEdits.length === 0 && contractCandidates.length === 0) {
@@ -740,7 +730,8 @@ export class MetronomeClientService {
     const archivedAt = recoveredCommit.archived_at ?? null;
 
     if (
-      !commit?.id?.trim() ||
+      commit === undefined ||
+      commit.id.trim() === '' ||
       historyDetails === null ||
       contractDetails === null ||
       (edit.uniqueness_key !== undefined &&
@@ -749,6 +740,8 @@ export class MetronomeClientService {
       recoveredCommit.id !== commit.id ||
       contractDetails.accessScheduleItemId !==
         historyDetails.accessScheduleItemId ||
+      contractDetails.invoiceScheduleItemId !==
+        historyDetails.invoiceScheduleItemId ||
       contractDetails.invoiceId !== historyDetails.invoiceId ||
       (archivedAt !== null &&
         (typeof archivedAt !== 'string' || archivedAt.trim() === ''))
@@ -797,7 +790,8 @@ export class MetronomeClientService {
       );
 
       return this.requirePaymentGatedPrepaidCommitEditReceipt(
-        response.data.edit,
+        response.data,
+        input.contractId,
         input.commitmentId,
         'update_commits',
       );
@@ -824,7 +818,8 @@ export class MetronomeClientService {
       );
 
       return this.requirePaymentGatedPrepaidCommitEditReceipt(
-        response.data.edit,
+        response.data,
+        input.contractId,
         input.commitmentId,
         'archive_commits',
       );
@@ -1683,20 +1678,17 @@ export class MetronomeClientService {
   }
 
   private requirePaymentGatedPrepaidCommitEditReceipt(
-    edit:
-      | {
-          archive_commits?: Array<{ id?: string }>;
-          id?: string;
-          update_commits?: Array<{ id?: string }>;
-        }
-      | undefined,
+    response: ContractEditResponse.Data,
+    expectedContractId: string,
     expectedCommitmentId: string,
     commitField: 'archive_commits' | 'update_commits',
   ): { metronomeEditId: string } {
+    const edit = response.edit;
     const commits = edit?.[commitField];
     const commitmentId = commits?.length === 1 ? commits[0].id : undefined;
 
     if (
+      response.id !== expectedContractId ||
       !edit?.id?.trim() ||
       !commitmentId?.trim() ||
       commitmentId !== expectedCommitmentId
@@ -1710,7 +1702,7 @@ export class MetronomeClientService {
   }
 
   private hasPaymentGatedPrepaidCommitFundingEvidence(
-    commit: PaymentGatedPrepaidCommitRecord,
+    commit: ContractV2.Commit,
     input: MetronomePaymentGatedPrepaidCommitInput,
   ): boolean {
     return (
@@ -1720,23 +1712,25 @@ export class MetronomeClientService {
   }
 
   private getPaymentGatedPrepaidCommitRecoveryDetails(
-    commit: PaymentGatedPrepaidCommitRecord,
+    commit: MetronomePaymentGatedPrepaidCommitCommercialRecord,
     input: MetronomePaymentGatedPrepaidCommitInput,
     startingAt: string,
     endingBefore: string,
-  ): { accessScheduleItemId: string; invoiceId: string | null } | null {
+  ): {
+    accessScheduleItemId: string;
+    invoiceId: string | null;
+    invoiceScheduleItemId: string;
+  } | null {
     const accessScheduleItems = commit.access_schedule?.schedule_items;
     const invoiceScheduleItems = commit.invoice_schedule?.schedule_items;
 
     if (
-      !commit.id?.trim() ||
+      commit.id.trim() === '' ||
       commit.type !== 'PREPAID' ||
-      commit.product?.id !== input.commitmentProductId ||
+      commit.product.id !== input.commitmentProductId ||
       commit.applicable_product_ids?.length !== 1 ||
       commit.applicable_product_ids[0] !== input.chargeProductId ||
-      !this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
-      commit.payment_gate_config?.payment_gate_type !== 'STRIPE' ||
-      commit.payment_gate_config.tax_type !== 'STRIPE' ||
+      commit.priority !== 100 ||
       accessScheduleItems?.length !== 1 ||
       invoiceScheduleItems?.length !== 1
     ) {
@@ -1746,23 +1740,23 @@ export class MetronomeClientService {
     const accessScheduleItem = accessScheduleItems[0];
     const invoiceScheduleItem = invoiceScheduleItems[0];
     const accessScheduleItemId = accessScheduleItem.id;
+    const invoiceScheduleItemId = invoiceScheduleItem.id;
     const invoiceId = invoiceScheduleItem.invoice_id ?? null;
 
     if (
-      typeof accessScheduleItemId !== 'string' ||
       accessScheduleItemId.trim() === '' ||
+      invoiceScheduleItemId.trim() === '' ||
       accessScheduleItem.amount !== input.principalCents ||
       accessScheduleItem.starting_at !== startingAt ||
       accessScheduleItem.ending_before !== endingBefore ||
       invoiceScheduleItem.amount !== input.principalCents ||
       invoiceScheduleItem.timestamp !== startingAt ||
-      (invoiceId !== null &&
-        (typeof invoiceId !== 'string' || invoiceId.trim() === ''))
+      (invoiceId !== null && invoiceId.trim() === '')
     ) {
       return null;
     }
 
-    return { accessScheduleItemId, invoiceId };
+    return { accessScheduleItemId, invoiceId, invoiceScheduleItemId };
   }
 
   private validatePaymentGatedPrepaidCommitExpiryInput(
