@@ -2,7 +2,7 @@ import { MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST } from 'src/engine/metadata-m
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -11,6 +11,7 @@ import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queu
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 
 import { DeliverManagedProviderUsageJob } from '../jobs/deliver-managed-provider-usage.job';
+import { ManagedProviderFundingActionEntity } from '../entities/managed-provider-funding-action.entity';
 import { ManagedProviderOperationEntity } from '../entities/managed-provider-operation.entity';
 import { ManagedProviderPoolEntity } from '../entities/managed-provider-pool.entity';
 import { ManagedProviderOperationState } from '../enums/managed-provider-operation-state.enum';
@@ -161,6 +162,20 @@ export class ManagedProviderOperationService {
 
       if (!installation || installation.metronomeCustomerId !== customerId) {
         throw new Error('Metronome workspace customer mapping is unavailable');
+      }
+
+      const refundBlocked = await manager
+        .getRepository(ManagedProviderFundingActionEntity)
+        .existsBy({
+          state: In([
+            'REFUND_INTENT_RECORDED',
+            'REFUND_RECONCILIATION_REQUIRED',
+          ]),
+          workspaceId: operationInput.workspaceId,
+        });
+
+      if (refundBlocked) {
+        throw new Error('Managed provider workspace refund is in progress');
       }
 
       if (
