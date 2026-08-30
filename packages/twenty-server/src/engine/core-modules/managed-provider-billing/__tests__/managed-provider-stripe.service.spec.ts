@@ -59,15 +59,48 @@ describe('ManagedProviderStripeService', () => {
           has_more: false,
         }),
       },
-      invoices: { retrieve: jest.fn() },
+      invoices: {
+        retrieve: jest.fn().mockResolvedValue({
+          amount_paid: 3000,
+          currency: 'usd',
+          customer: stripeCustomerId,
+          hosted_invoice_url: 'https://invoice.example/in_metronome',
+          id: 'in_metronome',
+          livemode,
+          metadata: { metronome_id: 'metronome-invoice-id' },
+          status: 'paid',
+          status_transitions: { paid_at: 1_787_997_600 },
+          subtotal: 2500,
+          total: 3000,
+          total_taxes: [{ amount: 500 }],
+        }),
+      },
       paymentIntents: {
         retrieve: jest.fn().mockResolvedValue({
+          amount: 3000,
           amount_received: 3000,
+          canceled_at: null,
+          cancellation_reason: null,
+          client_secret: null,
           currency: 'usd',
           customer: stripeCustomerId,
           id: stripePaymentIntentId,
-          status: 'succeeded',
+          latest_charge: {
+            amount: 3000,
+            amount_captured: 3000,
+            amount_refunded: 0,
+            disputed: false,
+            failure_balance_transaction: null,
+            id: 'ch_metronome',
+            livemode,
+            outcome: { network_status: 'approved_by_network' },
+            paid: true,
+            payment_intent: stripePaymentIntentId,
+            refunded: false,
+            status: 'succeeded',
+          },
           livemode,
+          status: 'succeeded',
         }),
       },
     };
@@ -563,5 +596,248 @@ describe('ManagedProviderStripeService', () => {
       stripeInvoiceId: 'in_metronome',
       workspaceId, }),
     ).rejects.toThrow('Stripe external invoice proof is invalid');
+  });
+  const paymentGatedInput = {
+    expectedPaymentIntentId: stripePaymentIntentId,
+    expectedPrincipalCents: 2500,
+    expectedTaxCents: 500,
+    expectedTotalCents: 3000,
+    metronomeBaseUrlEnvironment: 'SANDBOX' as const,
+    metronomeInvoiceId: 'metronome-invoice-id',
+    stripeInvoiceId: 'in_metronome',
+    workspaceId,
+  };
+
+  const pendingInvoice = (status: 'draft' | 'open' | 'void' = 'open') => ({
+    amount_paid: 0,
+    currency: 'usd',
+    customer: stripeCustomerId,
+    hosted_invoice_url: 'https://invoice.example/in_metronome',
+    id: 'in_metronome',
+    livemode: false,
+    metadata: { metronome_id: 'metronome-invoice-id' },
+    status,
+    status_transitions: { paid_at: null },
+    subtotal: 2500,
+    total: 3000,
+    total_taxes: [{ amount: 500 }],
+  });
+
+  const pendingPaymentIntent = (
+    status:
+      | 'canceled'
+      | 'processing'
+      | 'requires_action'
+      | 'requires_payment_method',
+  ) => ({
+    amount: 3000,
+    amount_received: 0,
+    canceled_at: status === 'canceled' ? 1_787_997_600 : null,
+    cancellation_reason: status === 'canceled' ? 'failed_invoice' : null,
+    client_secret:
+      status === 'requires_action' ? 'pi_action_required_secret' : null,
+    currency: 'usd',
+    customer: stripeCustomerId,
+    id: stripePaymentIntentId,
+    latest_charge: null,
+    livemode: false,
+    status,
+  });
+
+  it('returns exact paid principal, tax, total, paid-at, and no-reversal proof', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+
+    await expect(
+      service.readPaymentGatedInvoicePayment(paymentGatedInput),
+    ).resolves.toEqual({
+      invoiceUrl: 'https://invoice.example/in_metronome',
+      paidAt: new Date(1_787_997_600_000).toISOString(),
+      paymentIntentId: stripePaymentIntentId,
+      principalCents: 2500,
+      status: 'PAID',
+      stripeInvoiceId: 'in_metronome',
+      taxCents: 500,
+      totalCents: 3000,
+    });
+    expect(stripe.paymentIntents.retrieve).toHaveBeenCalledWith(
+      stripePaymentIntentId,
+      { expand: ['latest_charge'] },
+    );
+    expect(stripe.invoicePayments.list).toHaveBeenCalledWith({
+      invoice: 'in_metronome',
+      limit: 2,
+      payment: {
+        payment_intent: stripePaymentIntentId,
+        type: 'payment_intent',
+      },
+      status: 'paid',
+    });
+  });
+
+  it('returns the exact client secret only while the intended payment requires action', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.invoices.retrieve.mockResolvedValue(pendingInvoice());
+    stripe.paymentIntents.retrieve.mockResolvedValue(
+      pendingPaymentIntent('requires_action'),
+    );
+
+    await expect(
+      service.readPaymentGatedInvoicePayment(paymentGatedInput),
+    ).resolves.toEqual({
+      clientSecret: 'pi_action_required_secret',
+      invoiceUrl: 'https://invoice.example/in_metronome',
+      paymentIntentId: stripePaymentIntentId,
+      principalCents: 2500,
+      status: 'ACTION_REQUIRED',
+      stripeInvoiceId: 'in_metronome',
+      taxCents: 500,
+      totalCents: 3000,
+    });
+    expect(stripe.invoicePayments.list).not.toHaveBeenCalled();
+  });
+
+  it('returns pending without leaking a PaymentIntent client secret', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.invoices.retrieve.mockResolvedValue(pendingInvoice());
+    stripe.paymentIntents.retrieve.mockResolvedValue({
+      ...pendingPaymentIntent('processing'),
+      client_secret: 'must-not-leak',
+    });
+
+    await expect(
+      service.readPaymentGatedInvoicePayment(paymentGatedInput),
+    ).resolves.toEqual({
+      invoiceUrl: 'https://invoice.example/in_metronome',
+      paymentIntentId: stripePaymentIntentId,
+      principalCents: 2500,
+      status: 'PENDING',
+      stripeInvoiceId: 'in_metronome',
+      taxCents: 500,
+      totalCents: 3000,
+    });
+    expect(stripe.invoicePayments.list).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['void invoice', 'void', 'processing', 'INVOICE_VOID'],
+    [
+      'canceled PaymentIntent',
+      'open',
+      'canceled',
+      'PAYMENT_INTENT_CANCELED',
+    ],
+    [
+      'payment method failure',
+      'open',
+      'requires_payment_method',
+      'PAYMENT_METHOD_REQUIRED',
+    ],
+  ] as const)(
+    'returns bounded definitive failure for %s',
+    async (_, invoiceStatus, paymentIntentStatus, reason) => {
+      const { service, stripe } = createService({
+        workspaceId,
+        stripeCustomerId,
+      });
+      stripe.invoices.retrieve.mockResolvedValue(
+        pendingInvoice(invoiceStatus),
+      );
+      stripe.paymentIntents.retrieve.mockResolvedValue(
+        pendingPaymentIntent(paymentIntentStatus),
+      );
+
+      await expect(
+        service.readPaymentGatedInvoicePayment(paymentGatedInput),
+      ).resolves.toEqual({
+        invoiceUrl: 'https://invoice.example/in_metronome',
+        paymentIntentId: stripePaymentIntentId,
+        principalCents: 2500,
+        reason,
+        status: 'FAILED_DEFINITIVE',
+        stripeInvoiceId: 'in_metronome',
+        taxCents: 500,
+        totalCents: 3000,
+      });
+      expect(stripe.invoicePayments.list).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['wrong subtotal', 'subtotal'],
+    ['wrong tax', 'tax'],
+    ['wrong total', 'total'],
+    ['partial refund', 'refund'],
+    ['dispute', 'dispute'],
+    ['reversal', 'reversal'],
+  ])('rejects paid proof with %s', async (_, mutation) => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    const invoice = {
+      amount_paid: 3000,
+      currency: 'usd',
+      customer: stripeCustomerId,
+      hosted_invoice_url: 'https://invoice.example/in_metronome',
+      id: 'in_metronome',
+      livemode: false,
+      metadata: { metronome_id: 'metronome-invoice-id' },
+      status: 'paid',
+      status_transitions: { paid_at: 1_787_997_600 },
+      subtotal: 2500,
+      total: 3000,
+      total_taxes: [{ amount: 500 }],
+    };
+    const paymentIntent = {
+      amount: 3000,
+      amount_received: 3000,
+      canceled_at: null,
+      cancellation_reason: null,
+      client_secret: null,
+      currency: 'usd',
+      customer: stripeCustomerId,
+      id: stripePaymentIntentId,
+      latest_charge: {
+        amount: 3000,
+        amount_captured: 3000,
+        amount_refunded: 0,
+        disputed: false,
+        failure_balance_transaction: null,
+        id: 'ch_metronome',
+        livemode: false,
+        outcome: { network_status: 'approved_by_network' },
+        paid: true,
+        payment_intent: stripePaymentIntentId,
+        refunded: false,
+        status: 'succeeded',
+      },
+      livemode: false,
+      status: 'succeeded',
+    };
+
+    if (mutation === 'subtotal') invoice.subtotal = 2499;
+    if (mutation === 'tax') invoice.total_taxes = [{ amount: 499 }];
+    if (mutation === 'total') invoice.total = 2999;
+    if (mutation === 'refund')
+      paymentIntent.latest_charge.amount_refunded = 1;
+    if (mutation === 'dispute') paymentIntent.latest_charge.disputed = true;
+    if (mutation === 'reversal')
+      paymentIntent.latest_charge.failure_balance_transaction = 'txn_reversal';
+
+    stripe.invoices.retrieve.mockResolvedValue(invoice);
+    stripe.paymentIntents.retrieve.mockResolvedValue(paymentIntent);
+
+    await expect(
+      service.readPaymentGatedInvoicePayment(paymentGatedInput),
+    ).rejects.toThrow('Stripe payment-gated invoice proof is invalid');
   });
 });
