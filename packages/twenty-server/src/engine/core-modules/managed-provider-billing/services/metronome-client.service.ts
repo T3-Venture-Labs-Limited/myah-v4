@@ -659,10 +659,36 @@ export class MetronomeClientService {
     const structuralHistoryMatches =
       editHistoryResponse.data.filter(matchesInput);
 
-    if (candidateEdits.length === 0) return null;
+    if (
+      candidateEdits.length > 1 ||
+      (candidateEdits.length === 1 && structuralHistoryMatches.length !== 1)
+    ) {
+      throw new Error('Metronome payment-gated commit recovery mismatch');
+    }
+
+    const customerWideCommits = await this.listPaymentGatedPrepaidCommits(
+      client,
+      input,
+    );
+    const candidateCustomerCommits = customerWideCommits.filter(
+      (commit) =>
+        commit.contract?.id === input.contractId &&
+        (this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
+          this.getPaymentGatedPrepaidCommitRecoveryDetails(
+            commit,
+            input,
+            startingAt,
+            endingBefore,
+          ) !== null),
+    );
+
+    if (candidateEdits.length === 0 && candidateCustomerCommits.length === 0) {
+      return null;
+    }
     if (
       candidateEdits.length !== 1 ||
-      structuralHistoryMatches.length !== 1
+      structuralHistoryMatches.length !== 1 ||
+      candidateCustomerCommits.length !== 1
     ) {
       throw new Error('Metronome payment-gated commit recovery mismatch');
     }
@@ -678,11 +704,20 @@ export class MetronomeClientService {
             startingAt,
             endingBefore,
           );
+    const customerCommit = candidateCustomerCommits[0];
+    const customerDetails = this.getPaymentGatedPrepaidCommitRecoveryDetails(
+      customerCommit,
+      input,
+      startingAt,
+      endingBefore,
+    );
 
     if (
       commitment === undefined ||
       commitment.id.trim() === '' ||
       historyDetails === null ||
+      customerDetails === null ||
+      customerCommit.id !== commitment.id ||
       (edit.uniqueness_key !== undefined &&
         edit.uniqueness_key !== null &&
         edit.uniqueness_key !== input.uniquenessKey)
@@ -690,7 +725,7 @@ export class MetronomeClientService {
       throw new Error('Metronome payment-gated commit recovery mismatch');
     }
 
-    const listedCommits = await this.listExactPaymentGatedPrepaidCommit(
+    const listedCommits = await this.listPaymentGatedPrepaidCommits(
       client,
       input,
       commitment.id,
@@ -732,11 +767,17 @@ export class MetronomeClientService {
       ) ||
       recoveredCommit.contract?.id !== input.contractId ||
       recoveredCommit.id !== commitment.id ||
-      contractDetails.accessScheduleItemId !==
+      customerCommit.id !== recoveredCommit.id ||
+      customerDetails.accessScheduleItemId !==
         historyDetails.accessScheduleItemId ||
-      contractDetails.invoiceScheduleItemId !==
+      customerDetails.accessScheduleItemId !==
+        contractDetails.accessScheduleItemId ||
+      customerDetails.invoiceScheduleItemId !==
         historyDetails.invoiceScheduleItemId ||
-      contractDetails.invoiceId !== historyDetails.invoiceId ||
+      customerDetails.invoiceScheduleItemId !==
+        contractDetails.invoiceScheduleItemId ||
+      customerDetails.invoiceId !== historyDetails.invoiceId ||
+      customerDetails.invoiceId !== contractDetails.invoiceId ||
       (archivedAt !== null &&
         (typeof archivedAt !== 'string' || archivedAt.trim() === ''))
     ) {
@@ -1705,10 +1746,10 @@ export class MetronomeClientService {
     );
   }
 
-  private async listExactPaymentGatedPrepaidCommit(
+  private async listPaymentGatedPrepaidCommits(
     client: Metronome,
     input: MetronomePaymentGatedPrepaidCommitInput,
-    commitmentId: string,
+    commitmentId?: string,
   ): Promise<Commit[]> {
     const commits: Commit[] = [];
     const seenPageCursors = new Set<string>();
@@ -1717,7 +1758,7 @@ export class MetronomeClientService {
     for (let page = 1; page <= METRONOME_MAX_LIST_PAGES; page += 1) {
       const response = await this.execute(() =>
         client.v1.customers.commits.list({
-          commit_id: commitmentId,
+          ...(commitmentId === undefined ? {} : { commit_id: commitmentId }),
           customer_id: input.customerId,
           include_archived: true,
           include_contract_commits: true,
