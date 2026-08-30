@@ -139,8 +139,19 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
     taxIdValue: null,
   });
   const [isSavingAddress, setIsSavingAddress] = useState(false);
-  const set = (field: keyof CustomerFundingBillingDetails, value: string) =>
-    setDetails((current) => ({ ...current, [field]: value || null }));
+  const set = (field: keyof CustomerFundingBillingDetails, value: string) => {
+    const isOptional = [
+      'line2',
+      'state',
+      'taxIdType',
+      'taxIdValue',
+    ].includes(field);
+
+    setDetails((current) => ({
+      ...current,
+      [field]: isOptional ? value || null : value,
+    }));
+  };
   const canSave =
     details.name.trim() !== '' &&
     details.line1.trim() !== '' &&

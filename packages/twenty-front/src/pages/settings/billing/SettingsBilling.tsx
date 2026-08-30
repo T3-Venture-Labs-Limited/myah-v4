@@ -25,7 +25,7 @@ import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
@@ -59,6 +59,7 @@ type FundingHistoryItem = {
 };
 type ManagedProviderBillingStatusQueryData = {
   managedProviderBillingStatus: {
+    available: boolean;
     prepaidBalanceCents: string | null;
     pendingOperationCount: number;
     reconciliationRequiredOperationCount: number;
@@ -84,6 +85,9 @@ type PreparePaymentActionData = {
     clientSecret: string;
   };
 };
+type RequestFundingData = {
+  requestManagedProviderCustomerFunding: { id: string };
+};
 
 const toSafeCents = (value: string | null): number | null => {
   if (value === null) return null;
@@ -103,6 +107,7 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
   const [pendingPresetId, setPendingPresetId] = useState<
     'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD' | null
   >(null);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [paymentPreparation, setPaymentPreparation] =
     useState<PaymentMethodPreparation | null>(null);
   const [paymentAction, setPaymentAction] = useState<{
@@ -131,7 +136,9 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
   const [completePaymentMethod] = useMutation(
     COMPLETE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD,
   );
-  const [requestFunding] = useMutation(REQUEST_MANAGED_PROVIDER_CUSTOMER_FUNDING);
+  const [requestFunding] = useMutation<RequestFundingData>(
+    REQUEST_MANAGED_PROVIDER_CUSTOMER_FUNDING,
+  );
   const [preparePaymentAction] = useMutation<PreparePaymentActionData>(
     PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION,
   );
@@ -149,11 +156,23 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
               managedEmailSubscriptionsData?.managedEmailSubscriptions ?? [],
           };
   const status = fundingData?.managedProviderBillingStatus;
+  useEffect(() => {
+    if (
+      pendingActionId !== null &&
+      status?.customerFundingHistory.some(
+        (entry) => entry.id === pendingActionId,
+      )
+    ) {
+      setPendingActionId(null);
+    }
+  }, [pendingActionId, status?.customerFundingHistory]);
   const fetchedViewModel: WorkspaceBillingViewModel = fundingLoading
     ? { state: 'loading' }
     : fundingError !== undefined || status === undefined
       ? { state: 'unavailable', reason: 'loadFailed' }
-      : {
+      : !status.available
+        ? { state: 'unavailable', reason: 'notConnected' }
+        : {
           availableBalanceCents: toSafeCents(status.prepaidBalanceCents),
           customerFundingAvailable: status.customerFundingAvailable,
           customerFundingBillingSummary:
@@ -187,7 +206,7 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
               (entry): entry is typeof entry & { principalCents: number } =>
                 entry.principalCents !== null,
             ),
-          isSubmitting,
+          isSubmitting: isSubmitting || pendingActionId !== null,
           pendingOperationCount: status.pendingOperationCount,
           reconciliationRequiredOperationCount:
             status.reconciliationRequiredOperationCount,
@@ -206,18 +225,28 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
     presetId: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD',
   ) => {
     setIsSubmitting(true);
+
     try {
-      await requestFunding({
+      const result = await requestFunding({
         variables: { idempotencyKey: newIdempotencyKey(), preset: presetId },
       });
-      await refetchFunding();
+      const actionId = result.data?.requestManagedProviderCustomerFunding.id;
+      if (actionId === undefined) throw new Error('Missing funding action');
+      setPendingActionId(actionId);
     } catch (error) {
       showError(error);
-    } finally {
       setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
+    try {
+      await refetchFunding();
+    } catch {
+      // Polling will reconcile the locally pending action without inviting a retry.
     }
   };
-  const managePaymentDetails = async () => {
+  const managePaymentDetails = async (): Promise<boolean> => {
     setIsSubmitting(true);
     try {
       const result = await preparePaymentMethod();
@@ -225,8 +254,10 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
         result.data?.prepareManagedProviderCustomerFundingPaymentMethod;
       if (preparation === undefined) throw new Error('Missing setup response');
       setPaymentPreparation(preparation);
+      return true;
     } catch (error) {
       showError(error);
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -241,8 +272,9 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
       await submitFunding(presetId);
       return;
     }
-    setPendingPresetId(presetId);
-    await managePaymentDetails();
+    if (await managePaymentDetails()) {
+      setPendingPresetId(presetId);
+    }
   };
   const completePaymentDetails = async (
     setupIntentId: string | null,
@@ -252,7 +284,11 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
     try {
       await completePaymentMethod({ variables: { ...details, setupIntentId } });
       setPaymentPreparation(null);
-      await refetchFunding();
+      try {
+        await refetchFunding();
+      } catch {
+        // Polling will refresh saved payment details.
+      }
       if (pendingPresetId !== null) {
         const preset = pendingPresetId;
         setPendingPresetId(null);
