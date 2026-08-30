@@ -126,3 +126,131 @@ describe('SettingsWorkspaceBillingContent managed email subscriptions', () => {
     expect(onManageManagedEmail).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('SettingsWorkspaceBillingContent fixed AI top-ups', () => {
+  const readyViewModel = {
+    availableBalanceCents: 10_000,
+    customerFundingAvailable: true,
+    customerFundingBillingSummary: {
+      address: {
+        city: 'San Francisco',
+        country: 'US',
+        line1: '123 Market Street',
+        line2: null,
+        postalCode: '94105',
+        state: 'CA',
+      },
+      card: {
+        brand: 'visa',
+        expiryMonth: 12,
+        expiryYear: 2030,
+        last4: '4242',
+      },
+      name: 'Myah Test LLC',
+      paymentMethodReady: true,
+      taxId: { country: 'US', type: 'us_ein' },
+    },
+    customerFundingPaymentMethodReady: true,
+    customerFundingPresets: [
+      { id: 'AI_25_USD', principalCents: 2_500 },
+      { id: 'AI_50_USD', principalCents: 5_000 },
+      { id: 'AI_100_USD', principalCents: 10_000 },
+    ],
+    fundingHistory: [
+      {
+        actionRequired: true,
+        collectedTotalCents: 5_500,
+        createdAt: '2026-08-29T10:00:00.000Z',
+        expiresAt: null,
+        fundingType: 'PURCHASED',
+        id: 'funding-action-id',
+        invoiceUrl: 'https://invoice.example/in_1',
+        presetId: 'AI_50_USD',
+        principalCents: 5_000,
+        state: 'AWAITING_PAYMENT',
+        taxCents: 500,
+        updatedAt: '2026-08-29T10:40:00.000Z',
+      },
+    ],
+    isSubmitting: false,
+    pendingOperationCount: 1,
+    reconciliationRequiredOperationCount: 0,
+    state: 'ready' as const,
+  };
+
+  const renderFunding = ({
+    onCompletePayment = jest.fn(),
+    onManagePaymentDetails = jest.fn(),
+    onRequestTopUp = jest.fn(),
+  } = {}) => {
+    render(
+      <JotaiProvider>
+        <I18nProvider i18n={i18n}>
+          <ThemeProvider colorScheme="light">
+            <SettingsWorkspaceBillingContent
+              managedEmailSubscriptions={{ state: 'ready', subscriptions: [] }}
+              onCompletePayment={onCompletePayment}
+              onManagePaymentDetails={onManagePaymentDetails}
+              onRequestTopUp={onRequestTopUp}
+              viewModel={readyViewModel as never}
+            />
+          </ThemeProvider>
+        </I18nProvider>
+      </JotaiProvider>,
+    );
+
+    return {
+      onCompletePayment,
+      onManagePaymentDetails,
+      onRequestTopUp,
+    };
+  };
+
+  it('offers only fixed presets with tax and expiration disclosure', () => {
+    renderFunding();
+
+    expect(screen.getByRole('button', { name: '$25' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '$50' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '$100' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/plus applicable tax/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/expires 12 months/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/automatic top-up/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/online top-ups coming soon/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  });
+
+  it('uses one selected preset and one primary top-up action', () => {
+    const { onRequestTopUp } = renderFunding();
+
+    fireEvent.click(screen.getByRole('button', { name: '$50' }));
+    expect(screen.getByRole('button', { name: '$50' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add $50 credit' }));
+
+    expect(onRequestTopUp).toHaveBeenCalledWith('AI_50_USD');
+  });
+
+  it('shows only safe payment details and routes payment actions', () => {
+    const { onCompletePayment, onManagePaymentDetails } = renderFunding();
+
+    expect(screen.getByText(/visa •••• 4242/i)).toBeInTheDocument();
+    expect(screen.getByText('Myah Test LLC')).toBeInTheDocument();
+    expect(screen.getByText(/123 Market Street/i)).toBeInTheDocument();
+    expect(screen.queryByText('12-3456789')).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Update payment details' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Complete payment' }));
+
+    expect(onManagePaymentDetails).toHaveBeenCalledTimes(1);
+    expect(onCompletePayment).toHaveBeenCalledWith('funding-action-id');
+  });
+});

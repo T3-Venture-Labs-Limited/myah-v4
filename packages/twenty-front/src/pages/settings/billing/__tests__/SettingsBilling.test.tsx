@@ -1,4 +1,5 @@
 import { GET_MANAGED_EMAIL_SUBSCRIPTIONS } from '@/settings/workspace/graphql/managed-email/managedEmailQueries';
+import { GET_MANAGED_PROVIDER_BILLING_STATUS } from '@/settings/billing/graphql/managedProviderCustomerFunding';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
 import { type MockedResponse } from '@apollo/client/testing';
@@ -57,10 +58,32 @@ const subscriptionMock: MockedResponse = {
     },
   },
 };
+const fundingStatusMock: MockedResponse = {
+  request: { query: GET_MANAGED_PROVIDER_BILLING_STATUS },
+  result: {
+    data: {
+      managedProviderBillingStatus: {
+        available: true,
+        prepaidBalanceCents: '10000',
+        pendingOperationCount: 0,
+        reconciliationRequiredOperationCount: 0,
+        customerFundingAvailable: true,
+        customerFundingPaymentMethodReady: true,
+        customerFundingPresets: [
+          { id: 'AI_25_USD', principalCents: '2500' },
+          { id: 'AI_50_USD', principalCents: '5000' },
+          { id: 'AI_100_USD', principalCents: '10000' },
+        ],
+        customerFundingBillingSummary: null,
+        customerFundingHistory: [],
+      },
+    },
+  },
+};
 
 const renderPage = () =>
   render(
-    <MockedProvider mocks={[subscriptionMock]}>
+    <MockedProvider mocks={[subscriptionMock, fundingStatusMock]}>
       <JotaiProvider>
         <I18nProvider i18n={i18n}>
           <ThemeProvider colorScheme="light">
@@ -93,6 +116,9 @@ describe('SettingsBilling managed email subscriptions', () => {
       screen.getByText(
         'AI usage and balance are tracked separately from managed email.',
       ),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: '$25' }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
