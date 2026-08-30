@@ -9,6 +9,7 @@ import type {
   ContractGetEditHistoryResponse,
 } from '@metronome/sdk/resources/v2/contracts';
 import type { Commit } from '@metronome/sdk/resources/shared';
+import { z } from 'zod';
 
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
@@ -35,42 +36,78 @@ import {
   type MetronomePaymentGatedPrepaidCommitInput,
   type MetronomePaymentGatedPrepaidCommitReceipt,
   type MetronomePaymentGatedPrepaidCommitRecovery,
-  type MetronomePaymentGatedPrepaidExternalInvoice,
   type MetronomePaymentGatedPrepaidInvoice,
   type MetronomePaymentGatedPrepaidInvoiceInput,
 } from '../types/metronome-payment-gated-prepaid-commit.type';
 const BALANCE_PAGE_LIMIT = 25;
 const METRONOME_MAX_LIST_PAGES = 100;
-const METRONOME_PAYMENT_GATED_INVOICE_STATUSES = new Set([
-  'DRAFT',
-  'FINALIZED',
-  'VOID',
-]);
-const METRONOME_PAYMENT_GATED_EXTERNAL_INVOICE_STATUSES = new Set([
-  'DRAFT',
-  'FINALIZED',
-  'PAID',
-  'PARTIALLY_PAID',
-  'UNCOLLECTIBLE',
-  'VOID',
-  'DELETED',
-  'PAYMENT_FAILED',
-  'INVALID_REQUEST_ERROR',
-  'SKIPPED',
-  'SENT',
-  'QUEUED',
-]);
-const toOptionalTrimmedString = (
-  value: string | null | undefined,
-): string | null => {
+const safeNonnegativeCentsSchema = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER);
+const metronomePaymentGatedPrepaidInvoiceSchema = z.object({
+  contract_id: z.string(),
+  credit_type: z.object({
+    id: z.string(),
+    name: z.string(),
+  }),
+  customer_id: z.string(),
+  external_invoice: z
+    .object({
+      billing_provider_type: z.literal('stripe'),
+      external_payment_id: z.string().optional(),
+      external_status: z.enum([
+        'DRAFT',
+        'FINALIZED',
+        'PAID',
+        'PARTIALLY_PAID',
+        'UNCOLLECTIBLE',
+        'VOID',
+        'DELETED',
+        'PAYMENT_FAILED',
+        'INVALID_REQUEST_ERROR',
+        'SKIPPED',
+        'SENT',
+        'QUEUED',
+      ]),
+      invoice_id: z.string().optional(),
+      invoiced_sub_total: safeNonnegativeCentsSchema.optional(),
+      invoiced_total: safeNonnegativeCentsSchema.optional(),
+      issued_at_timestamp: z.string().optional(),
+      pdf_url: z.string().optional(),
+      tax: z
+        .object({
+          total_tax_amount: safeNonnegativeCentsSchema.optional(),
+          total_taxable_amount: safeNonnegativeCentsSchema.optional(),
+        })
+        .optional(),
+    })
+    .nullish(),
+  id: z.string(),
+  issued_at: z.string().optional(),
+  line_items: z.array(
+    z.object({
+      applied_commit_or_credit: z.unknown().optional(),
+      commit_id: z.string().optional(),
+      credit_type: z.object({
+        id: z.string(),
+        name: z.string(),
+      }),
+      total: safeNonnegativeCentsSchema,
+      type: z.string(),
+    }),
+  ),
+  status: z.enum(['DRAFT', 'FINALIZED', 'VOID']),
+  subtotal: safeNonnegativeCentsSchema.optional(),
+  total: safeNonnegativeCentsSchema,
+  type: z.literal('SCHEDULED'),
+});
+const toOptionalTrimmedString = (value: string | undefined): string | null => {
   const trimmed = value?.trim();
 
   return trimmed ? trimmed : null;
 };
-const isSafeNonnegativeCents = (
-  value: number | null,
-): value is number =>
-  value !== null && Number.isSafeInteger(value) && value >= 0;
 
 type MetronomeBalanceResponse = ContractListBalancesResponse;
 
@@ -918,15 +955,25 @@ export class MetronomeClientService {
     }
 
     const client = this.getClient();
-    const { data: invoice } = await this.execute(() =>
+    const response = await this.execute(() =>
       client.v1.customers.invoices.retrieve({
         customer_id: input.customerId,
         invoice_id: input.invoiceId,
       }),
     );
+    const parsedInvoice =
+      metronomePaymentGatedPrepaidInvoiceSchema.safeParse(response.data);
+
+    if (!parsedInvoice.success) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+
+    const invoice = parsedInvoice.data;
     const line =
       invoice.line_items.length === 1 ? invoice.line_items[0] : undefined;
-    const status = invoice.status as MetronomePaymentGatedPrepaidInvoice['status'];
+    const status = invoice.status;
 
     if (
       invoice.id !== input.invoiceId ||
@@ -934,8 +981,6 @@ export class MetronomeClientService {
       invoice.contract_id !== input.contractId ||
       invoice.credit_type.id !== input.fiatCreditTypeId ||
       invoice.credit_type.name !== METRONOME_USD_CREDIT_TYPE_NAME ||
-      !METRONOME_PAYMENT_GATED_INVOICE_STATUSES.has(status) ||
-      !Number.isSafeInteger(invoice.total) ||
       invoice.total !== input.principalCents ||
       (invoice.subtotal !== undefined &&
         (!Number.isSafeInteger(invoice.subtotal) ||
@@ -967,30 +1012,13 @@ export class MetronomeClientService {
       };
     }
 
-    const externalStatus =
-      external.external_status as
-        | MetronomePaymentGatedPrepaidExternalInvoice['status']
-        | undefined;
+    const externalStatus = external.external_status;
     const subtotalCents = external.invoiced_sub_total ?? null;
     const taxCents = external.tax?.total_tax_amount ?? null;
-    const taxableCents = external.tax?.total_taxable_amount ?? null;
     const totalCents = external.invoiced_total ?? null;
-    const monetaryValues = [
-      subtotalCents,
-      taxCents,
-      taxableCents,
-      totalCents,
-    ];
 
     if (
-      external.billing_provider_type !== 'stripe' ||
-      externalStatus === undefined ||
-      !METRONOME_PAYMENT_GATED_EXTERNAL_INVOICE_STATUSES.has(externalStatus) ||
-      monetaryValues.some(
-        (value) => value !== null && !isSafeNonnegativeCents(value),
-      ) ||
       (subtotalCents !== null && subtotalCents !== input.principalCents) ||
-      (taxableCents !== null && taxableCents !== input.principalCents) ||
       (totalCents !== null && totalCents < input.principalCents) ||
       (totalCents !== null &&
         taxCents !== null &&

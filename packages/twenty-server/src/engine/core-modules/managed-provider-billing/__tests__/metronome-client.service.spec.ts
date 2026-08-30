@@ -4367,7 +4367,7 @@ describe('MetronomeClientService', () => {
         contract_id: 'contract-id',
         credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
         status: 'DRAFT',
-        type: 'PREPAID',
+        type: 'SCHEDULED',
         total: 5_000,
         subtotal: 5_000,
         issued_at: '2026-08-29T10:37:42.123Z',
@@ -4427,7 +4427,7 @@ describe('MetronomeClientService', () => {
         contract_id: 'contract-id',
         credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
         status: 'FINALIZED',
-        type: 'PREPAID',
+        type: 'SCHEDULED',
         total: 5_000,
         subtotal: 5_000,
         issued_at: '2026-08-29T10:37:42.123Z',
@@ -4442,7 +4442,7 @@ describe('MetronomeClientService', () => {
           pdf_url: 'https://example.com/invoices/stripe-invoice-id.pdf',
           tax: {
             total_tax_amount: 500,
-            total_taxable_amount: 5_000,
+            total_taxable_amount: 2_500,
             transaction_id: 'tax-transaction-id',
           },
           billing_provider_error: 'raw provider error',
@@ -4509,7 +4509,7 @@ describe('MetronomeClientService', () => {
     contract_id: 'contract-id',
     credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
     status: 'FINALIZED',
-    type: 'PREPAID',
+    type: 'SCHEDULED',
     total: 5_000,
     subtotal: 5_000,
     issued_at: '2026-08-29T10:37:42.123Z',
@@ -4524,7 +4524,7 @@ describe('MetronomeClientService', () => {
       pdf_url: 'https://example.com/invoices/stripe-invoice-id.pdf',
       tax: {
         total_tax_amount: 500,
-        total_taxable_amount: 5_000,
+        total_taxable_amount: 2_500,
         transaction_id: 'tax-transaction-id',
       },
     },
@@ -4552,6 +4552,9 @@ describe('MetronomeClientService', () => {
     ['commitment id', 'commitment'],
     ['line item count', 'lineCount'],
     ['line item type', 'lineType'],
+    ['invoice type', 'invoiceType'],
+    ['missing line items', 'missingLines'],
+    ['missing credit type', 'missingCreditType'],
     ['principal', 'principal'],
     ['non-Stripe external provider', 'provider'],
     ['unknown invoice status', 'status'],
@@ -4589,6 +4592,23 @@ describe('MetronomeClientService', () => {
         break;
       case 'lineType':
         invoice.line_items[0].type = 'usage';
+        break;
+      case 'invoiceType':
+        invoice.type = 'USAGE';
+        break;
+      case 'missingLines':
+        (
+          invoice as unknown as {
+            line_items: null;
+          }
+        ).line_items = null;
+        break;
+      case 'missingCreditType':
+        (
+          invoice as unknown as {
+            credit_type: null;
+          }
+        ).credit_type = null;
         break;
       case 'principal':
         invoice.line_items[0].total = 4_999;
