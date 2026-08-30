@@ -220,7 +220,7 @@ export class BillingResolver {
 
     return await this.managedProviderCustomerFundingService.completeCustomerFundingPaymentMethod(
       workspace.id,
-      setupIntentId,
+      setupIntentId ?? null,
       billingDetails,
     );
   }

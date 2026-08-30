@@ -41,7 +41,7 @@ export class CompleteManagedProviderCustomerFundingPaymentMethodInput
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  setupIntentId: string | null;
+  setupIntentId?: string | null;
 
   @Field(() => String)
   @IsString()

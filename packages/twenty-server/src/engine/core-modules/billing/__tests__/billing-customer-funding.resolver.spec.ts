@@ -201,6 +201,13 @@ describe('BillingResolver customer AI funding', () => {
     expect(
       fundingService.completeCustomerFundingPaymentMethod,
     ).toHaveBeenCalledWith(workspace.id, 'seti_1', billingDetails);
+    await resolver.completeManagedProviderCustomerFundingPaymentMethod(
+      workspace as never,
+      { ...billingDetails, setupIntentId: undefined } as never,
+    );
+    expect(
+      fundingService.completeCustomerFundingPaymentMethod,
+    ).toHaveBeenLastCalledWith(workspace.id, null, billingDetails);
   });
   it('looks up a polled action through the authenticated workspace boundary', async () => {
     const { fundingService, resolver } = createResolver();
