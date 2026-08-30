@@ -190,6 +190,7 @@ export class MetronomeWorkspaceCustomerService {
     }
 
     return {
+      billingConfigurationId: billingConfiguration.id,
       deliveryMethodId,
       environment,
       fiatCreditTypeId: rateCard.fiatCreditType.id,

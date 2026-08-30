@@ -174,6 +174,7 @@ export type MetronomeBillingConfiguration = Readonly<{
 export type MetronomeEnvironment = 'PRODUCTION' | 'SANDBOX';
 
 export type ExactStripeBillingContext = Readonly<{
+  billingConfigurationId: string;
   deliveryMethodId: string;
   environment: MetronomeEnvironment;
   fiatCreditTypeId: string;

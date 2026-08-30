@@ -1056,6 +1056,7 @@ describe('MetronomeWorkspaceCustomerService shared Stripe billing context', () =
         workspaceId,
       }),
     ).resolves.toEqual({
+      billingConfigurationId: 'billing-config-id',
       deliveryMethodId,
       environment: 'SANDBOX',
       fiatCreditTypeId: 'usd-credit-type-id',
