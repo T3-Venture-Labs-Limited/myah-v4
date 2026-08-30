@@ -108,6 +108,10 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
     'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD' | null
   >(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [pendingFundingRequest, setPendingFundingRequest] = useState<{
+    idempotencyKey: string;
+    presetId: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD';
+  } | null>(null);
   const [paymentPreparation, setPaymentPreparation] =
     useState<PaymentMethodPreparation | null>(null);
   const [paymentAction, setPaymentAction] = useState<{
@@ -207,6 +211,7 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
                 entry.principalCents !== null,
             ),
           isSubmitting: isSubmitting || pendingActionId !== null,
+          retryPresetId: pendingFundingRequest?.presetId ?? null,
           pendingOperationCount: status.pendingOperationCount,
           reconciliationRequiredOperationCount:
             status.reconciliationRequiredOperationCount,
@@ -224,14 +229,24 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
   const submitFunding = async (
     presetId: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD',
   ) => {
-    setIsSubmitting(true);
+    const request =
+      pendingFundingRequest ?? {
+        idempotencyKey: newIdempotencyKey(),
+        presetId,
+      };
 
+    setPendingFundingRequest(request);
+    setIsSubmitting(true);
     try {
       const result = await requestFunding({
-        variables: { idempotencyKey: newIdempotencyKey(), preset: presetId },
+        variables: {
+          idempotencyKey: request.idempotencyKey,
+          preset: request.presetId,
+        },
       });
       const actionId = result.data?.requestManagedProviderCustomerFunding.id;
       if (actionId === undefined) throw new Error('Missing funding action');
+      setPendingFundingRequest(null);
       setPendingActionId(actionId);
     } catch (error) {
       showError(error);

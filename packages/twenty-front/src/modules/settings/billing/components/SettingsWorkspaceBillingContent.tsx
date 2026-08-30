@@ -71,6 +71,7 @@ type WorkspaceBillingReadyViewModel = {
   customerFundingPresets: WorkspaceBillingPreset[];
   fundingHistory: WorkspaceBillingFundingHistoryEntry[];
   isSubmitting: boolean;
+  retryPresetId?: WorkspaceBillingPreset['id'] | null;
   pendingOperationCount: number;
   reconciliationRequiredOperationCount: number;
 };
@@ -460,7 +461,10 @@ export const SettingsWorkspaceBillingContent = ({
       <>
         {managedEmail}
         <Section>
-          <H2Title title={t`AI balance`} description={t`Prepaid managed AI credit.`} />
+          <H2Title
+            title={t`AI balance`}
+            description={t`Prepaid managed AI credit.`}
+          />
           <InlineBanner
             color="blue"
             message={
@@ -475,9 +479,14 @@ export const SettingsWorkspaceBillingContent = ({
   }
 
   const selectedPreset =
-    viewModel.customerFundingPresets.find(
-      (preset) => preset.id === selectedPresetId,
-    ) ?? viewModel.customerFundingPresets[0];
+    viewModel.retryPresetId === undefined ||
+    viewModel.retryPresetId === null
+      ? (viewModel.customerFundingPresets.find(
+          (preset) => preset.id === selectedPresetId,
+        ) ?? viewModel.customerFundingPresets[0])
+      : viewModel.customerFundingPresets.find(
+          (preset) => preset.id === viewModel.retryPresetId,
+        );
   const availableBalance = viewModel.availableBalanceCents;
 
   return (
@@ -490,7 +499,9 @@ export const SettingsWorkspaceBillingContent = ({
         />
         <StyledSummaryGrid>
           <StyledSettingsBillingCard>
-            <StyledSettingsBillingCardHeader>{t`Available`}</StyledSettingsBillingCardHeader>
+            <StyledSettingsBillingCardHeader>
+              {t`Available`}
+            </StyledSettingsBillingCardHeader>
             <StyledCardBody>
               <StyledBalance>
                 {availableBalance === null
@@ -509,7 +520,9 @@ export const SettingsWorkspaceBillingContent = ({
             </StyledCardBody>
           </StyledSettingsBillingCard>
           <StyledSettingsBillingCard>
-            <StyledSettingsBillingCardHeader>{t`Add AI credit`}</StyledSettingsBillingCardHeader>
+            <StyledSettingsBillingCardHeader>
+              {t`Add AI credit`}
+            </StyledSettingsBillingCardHeader>
             <StyledCardBody>
               <StyledActions role="group" aria-label={t`AI credit amount`}>
                 {viewModel.customerFundingPresets.map((preset) => (
@@ -517,6 +530,10 @@ export const SettingsWorkspaceBillingContent = ({
                     key={preset.id}
                     type="button"
                     aria-pressed={preset.id === selectedPreset?.id}
+                    disabled={
+                      viewModel.retryPresetId !== undefined &&
+                      viewModel.retryPresetId !== null
+                    }
                     onClick={() => setSelectedPresetId(preset.id)}
                   >
                     {formatUsdCents(preset.principalCents).replace('.00', '')}
@@ -531,7 +548,9 @@ export const SettingsWorkspaceBillingContent = ({
                   title={
                     selectedPreset === undefined
                       ? t`Add AI credit`
-                      : t`Add ${formatUsdCents(selectedPreset.principalCents).replace('.00', '')} credit`
+                      : viewModel.retryPresetId === selectedPreset.id
+                        ? t`Retry ${formatUsdCents(selectedPreset.principalCents).replace('.00', '')} credit`
+                        : t`Add ${formatUsdCents(selectedPreset.principalCents).replace('.00', '')} credit`
                   }
                   accent="brand"
                   disabled={
