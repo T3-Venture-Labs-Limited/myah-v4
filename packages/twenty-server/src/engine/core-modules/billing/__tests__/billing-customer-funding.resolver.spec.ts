@@ -209,6 +209,17 @@ describe('BillingResolver customer AI funding', () => {
       fundingService.completeCustomerFundingPaymentMethod,
     ).toHaveBeenLastCalledWith(workspace.id, null, billingDetails);
   });
+
+  it('returns only the client secret for payment authentication', async () => {
+    const { resolver } = createResolver();
+
+    await expect(
+      resolver.prepareManagedProviderCustomerFundingPaymentAction(
+        workspace as never,
+        { actionId: action.id },
+      ),
+    ).resolves.toEqual({ clientSecret: 'pi_secret' });
+  });
   it('looks up a polled action through the authenticated workspace boundary', async () => {
     const { fundingService, resolver } = createResolver();
 

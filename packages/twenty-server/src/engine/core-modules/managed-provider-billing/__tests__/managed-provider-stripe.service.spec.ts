@@ -105,6 +105,7 @@ describe('ManagedProviderStripeService', () => {
       },
       taxIds: {
         create: jest.fn(),
+        del: jest.fn(),
         list: jest.fn().mockResolvedValue({ data: [], has_more: false }),
       },
     };
@@ -1122,7 +1123,7 @@ describe('ManagedProviderStripeService', () => {
     line2: null,
     name: 'Myah Test LLC',
     postalCode: '94105',
-    state: 'CA',
+    state: null,
     taxIdType: 'us_ein' as const,
     taxIdValue: '12-3456789',
   };
@@ -1163,6 +1164,12 @@ describe('ManagedProviderStripeService', () => {
     type: 'us_ein',
     value: billingDetails.taxIdValue,
   };
+  const staleTaxId = {
+    ...readyTaxId,
+    id: 'txi_stale',
+    type: 'eu_vat',
+    value: 'EU123456789',
+  };
 
   it('updates and reads back exact billing address and optional tax ID as a safe summary', async () => {
     const { service, stripe } = createService({
@@ -1172,7 +1179,11 @@ describe('ManagedProviderStripeService', () => {
     stripe.customers.retrieve.mockResolvedValue(readyBillingCustomer);
     stripe.taxIds.list
       .mockResolvedValue({ data: [readyTaxId], has_more: false })
-      .mockResolvedValueOnce({ data: [], has_more: false })
+      .mockResolvedValueOnce({ data: [staleTaxId], has_more: false })
+      .mockResolvedValueOnce({
+        data: [staleTaxId, readyTaxId],
+        has_more: false,
+      })
       .mockResolvedValueOnce({ data: [readyTaxId], has_more: false });
     stripe.taxIds.create.mockResolvedValue(readyTaxId);
 
@@ -1206,9 +1217,9 @@ describe('ManagedProviderStripeService', () => {
         city: billingDetails.city,
         country: billingDetails.country,
         line1: billingDetails.line1,
-        line2: undefined,
+        line2: '',
         postal_code: billingDetails.postalCode,
-        state: billingDetails.state,
+        state: '',
       },
       name: billingDetails.name,
     });
@@ -1220,10 +1231,15 @@ describe('ManagedProviderStripeService', () => {
       },
       { idempotencyKey: expect.stringMatching(/^customer-tax-id:/) },
     );
-    expect(JSON.stringify(await service.getWorkspaceBillingDetailsSummary({
+    expect(stripe.taxIds.del).toHaveBeenCalledWith('txi_stale');
+    const safeSummary = await service.getWorkspaceBillingDetailsSummary({
       metronomeBaseUrlEnvironment: 'SANDBOX',
       workspaceId,
-    }))).not.toContain(billingDetails.taxIdValue);
+    });
+
+    expect(JSON.stringify(safeSummary)).not.toContain(
+      billingDetails.taxIdValue,
+    );
   });
 
   it('rejects billing readiness when required tax location fields are missing', async () => {

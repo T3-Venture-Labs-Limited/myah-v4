@@ -242,9 +242,12 @@ export class BillingResolver {
         actionId,
       );
 
-    return await this.managedProviderCustomerFundingService.getCustomerFundingPaymentAction(
-      { action, workspaceId: workspace.id },
-    );
+    const paymentAction =
+      await this.managedProviderCustomerFundingService.getCustomerFundingPaymentAction(
+        { action, workspaceId: workspace.id },
+      );
+
+    return { clientSecret: paymentAction.clientSecret };
   }
 
   @Mutation(() => ManagedProviderCustomerFundingHistoryItemDTO)

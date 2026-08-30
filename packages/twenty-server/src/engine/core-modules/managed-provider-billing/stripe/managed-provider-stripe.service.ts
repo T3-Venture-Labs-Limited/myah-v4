@@ -642,9 +642,9 @@ export class ManagedProviderStripeService {
         city: normalized.city,
         country: normalized.country,
         line1: normalized.line1,
-        line2: normalized.line2 ?? undefined,
+        line2: normalized.line2 ?? '',
         postal_code: normalized.postalCode,
-        state: normalized.state ?? undefined,
+        state: normalized.state ?? '',
       },
       name: normalized.name,
     });
@@ -675,9 +675,13 @@ export class ManagedProviderStripeService {
               .digest('hex')}`,
           },
         );
+        const taxIdCustomer =
+          typeof taxId.customer === 'string'
+            ? taxId.customer
+            : taxId.customer?.id;
 
         if (
-          taxId.customer !== customerId ||
+          taxIdCustomer !== customerId ||
           taxId.livemode !==
             this.expectedLivemode(metronomeBaseUrlEnvironment) ||
           taxId.type !== normalized.taxIdType ||
@@ -698,6 +702,25 @@ export class ManagedProviderStripeService {
       }
 
       if (matches.length !== 1) {
+        throw new Error('Workspace Stripe tax ID proof is invalid');
+      }
+
+      await Promise.all(
+        taxIds
+          .filter((taxId) => taxId.id !== matches[0].id)
+          .map((taxId) => stripe.taxIds.del(taxId.id)),
+      );
+      taxIds = await this.listWorkspaceTaxIds(
+        customerId,
+        metronomeBaseUrlEnvironment,
+      );
+      matches = taxIds.filter(
+        (candidate) =>
+          candidate.type === normalized.taxIdType &&
+          candidate.value === normalized.taxIdValue,
+      );
+
+      if (taxIds.length !== 1 || matches.length !== 1) {
         throw new Error('Workspace Stripe tax ID proof is invalid');
       }
     }

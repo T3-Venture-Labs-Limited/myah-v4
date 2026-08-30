@@ -139,10 +139,4 @@ export class ManagedProviderCustomerFundingPaymentMethodDTO {
 export class ManagedProviderCustomerFundingPaymentActionDTO {
   @Field(() => String)
   clientSecret: string;
-
-  @Field(() => String)
-  paymentIntentId: string;
-
-  @Field(() => String)
-  stripeInvoiceId: string;
 }
