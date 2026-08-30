@@ -15,6 +15,7 @@ describe('ManagedProviderStripeService', () => {
   ) => {
     const livemode = stripeMode === 'PRODUCTION';
     const stripe = {
+      creditNotes: { create: jest.fn() },
       customers: {
         create: jest.fn().mockResolvedValue({ id: stripeCustomerId, livemode }),
         retrieve: jest.fn().mockResolvedValue({
@@ -1262,5 +1263,75 @@ describe('ManagedProviderStripeService', () => {
         workspaceId,
       }),
     ).rejects.toThrow('Workspace Stripe billing details are not ready');
+  });
+
+  it('creates one exact full credit-note refund with tax reversal', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.creditNotes.create.mockResolvedValue({
+      amount: 3_000,
+      currency: 'usd',
+      customer: stripeCustomerId,
+      id: 'cn_1',
+      invoice: 'in_metronome',
+      livemode: false,
+      out_of_band_amount: 0,
+      post_payment_amount: 3_000,
+      pre_payment_amount: 0,
+      refunds: [
+        {
+          amount_refunded: 3_000,
+          payment_record_refund: null,
+          refund: {
+            amount: 3_000,
+            currency: 'usd',
+            id: 're_1',
+            payment_intent: stripePaymentIntentId,
+            status: 'succeeded',
+          },
+          type: 'refund',
+        },
+      ],
+      status: 'issued',
+      subtotal: 2_500,
+      total: 3_000,
+      total_taxes: [{ amount: 500 }],
+      type: 'post_payment',
+    });
+
+    await expect(
+      service.refundPaymentGatedInvoice({
+        expectedPaymentIntentId: stripePaymentIntentId,
+        expectedPrincipalCents: 2_500,
+        expectedTaxCents: 500,
+        expectedTotalCents: 3_000,
+        fundingActionId: 'funding-action-id',
+        idempotencyKey: 'refund-key',
+        metronomeBaseUrlEnvironment: 'SANDBOX',
+        metronomeInvoiceId: 'metronome-invoice-id',
+        stripeInvoiceId: 'in_metronome',
+        workspaceId,
+      }),
+    ).resolves.toEqual({
+      creditNoteId: 'cn_1',
+      refundId: 're_1',
+      refundedTotalCents: 3_000,
+      reversedTaxCents: 500,
+    });
+    expect(stripe.creditNotes.create).toHaveBeenCalledWith(
+      {
+        amount: 3_000,
+        invoice: 'in_metronome',
+        memo: 'Full unused Myah managed AI credit refund',
+        metadata: {
+          myah_funding_action_id: 'funding-action-id',
+          myah_refund_identity: 'refund-key',
+        },
+        refund_amount: 3_000,
+      },
+      { idempotencyKey: 'refund-key' },
+    );
   });
 });

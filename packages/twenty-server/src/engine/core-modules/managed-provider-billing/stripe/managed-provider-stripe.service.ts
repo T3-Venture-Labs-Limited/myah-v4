@@ -55,6 +55,10 @@ export type ReadPaymentGatedInvoicePaymentInput = Readonly<{
   workspaceId: string;
 }>;
 
+export type RefundPaymentGatedInvoiceInput =
+  ReadPaymentGatedInvoicePaymentInput &
+    Readonly<{ fundingActionId: string; idempotencyKey: string }>;
+
 type PaymentGatedInvoicePaymentBase = Readonly<{
   invoiceUrl: string | null;
   paymentIntentId: string;
@@ -601,6 +605,90 @@ export class ManagedProviderStripeService {
     }
 
     return { ...base, status: 'PENDING' };
+  }
+
+
+  async refundPaymentGatedInvoice(
+    input: RefundPaymentGatedInvoiceInput,
+  ): Promise<{
+    creditNoteId: string;
+    refundId: string;
+    refundedTotalCents: number;
+    reversedTaxCents: number;
+  }> {
+    if (
+      input.fundingActionId.trim() === '' ||
+      input.idempotencyKey.trim() === ''
+    ) {
+      throw new Error('Stripe refund identity is invalid');
+    }
+
+    await this.readPaymentGatedInvoicePayment(input);
+    const creditNote = await this.stripe().creditNotes.create(
+      {
+        amount: input.expectedTotalCents,
+        invoice: input.stripeInvoiceId,
+        memo: 'Full unused Myah managed AI credit refund',
+        metadata: {
+          myah_funding_action_id: input.fundingActionId,
+          myah_refund_identity: input.idempotencyKey,
+        },
+        refund_amount: input.expectedTotalCents,
+      },
+      { idempotencyKey: input.idempotencyKey },
+    );
+    const creditNoteCustomer =
+      typeof creditNote.customer === 'string'
+        ? creditNote.customer
+        : creditNote.customer.id;
+    const creditNoteInvoice =
+      typeof creditNote.invoice === 'string'
+        ? creditNote.invoice
+        : creditNote.invoice.id;
+    const refundLink = creditNote.refunds[0];
+    const refund =
+      typeof refundLink?.refund === 'string' ? null : refundLink?.refund;
+    const taxCents = (creditNote.total_taxes ?? []).reduce(
+      (sum, tax) => sum + tax.amount,
+      0,
+    );
+
+    if (
+      creditNote.id.trim() === '' ||
+      creditNoteCustomer !==
+        (await this.persistedCustomerId(input.workspaceId)) ||
+      creditNoteInvoice !== input.stripeInvoiceId ||
+      creditNote.currency.toLowerCase() !== 'usd' ||
+      creditNote.livemode !==
+        this.expectedLivemode(input.metronomeBaseUrlEnvironment) ||
+      creditNote.type !== 'post_payment' ||
+      creditNote.status !== 'issued' ||
+      creditNote.amount !== input.expectedTotalCents ||
+      creditNote.subtotal !== input.expectedPrincipalCents ||
+      creditNote.total !== input.expectedTotalCents ||
+      creditNote.post_payment_amount !== input.expectedTotalCents ||
+      creditNote.pre_payment_amount !== 0 ||
+      (creditNote.out_of_band_amount ?? 0) !== 0 ||
+      taxCents !== input.expectedTaxCents ||
+      creditNote.refunds.length !== 1 ||
+      refundLink.amount_refunded !== input.expectedTotalCents ||
+      refundLink.type !== 'refund' ||
+      refund === null ||
+      refund.id.trim() === '' ||
+      refund.amount !== input.expectedTotalCents ||
+      refund.currency.toLowerCase() !== 'usd' ||
+      refund.payment_intent !== input.expectedPaymentIntentId ||
+      refund.status !== 'succeeded'
+    ) {
+      throw new Error('Stripe full refund proof is invalid');
+    }
+
+    return {
+      creditNoteId: creditNote.id,
+      refundId: refund.id,
+      refundedTotalCents: refund.amount,
+      reversedTaxCents: taxCents,
+    };
   }
 
   async updateWorkspaceBillingDetails({
