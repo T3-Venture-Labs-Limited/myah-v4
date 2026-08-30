@@ -22,10 +22,71 @@ import {
   type MetronomeSubscriptionReceipt,
 } from '../types/metronome-subscription.type';
 
+import {
+  type MetronomePaymentGatedPrepaidCommitArchiveInput,
+  type MetronomePaymentGatedPrepaidCommitExpiryInput,
+  type MetronomePaymentGatedPrepaidCommitInput,
+  type MetronomePaymentGatedPrepaidCommitReceipt,
+  type MetronomePaymentGatedPrepaidCommitRecovery,
+} from '../types/metronome-payment-gated-prepaid-commit.type';
 const BALANCE_PAGE_LIMIT = 25;
 const METRONOME_MAX_LIST_PAGES = 100;
 
 type MetronomeBalanceResponse = ContractListBalancesResponse;
+
+type PaymentGatedPrepaidCommitScheduleItem = {
+  amount?: number;
+  ending_before?: string;
+  id?: string;
+  invoice_id?: string | null;
+  starting_at?: string;
+  timestamp?: string;
+};
+
+type PaymentGatedPrepaidCommitRecord = {
+  access_schedule?: {
+    schedule_items?: PaymentGatedPrepaidCommitScheduleItem[];
+  };
+  applicable_product_ids?: string[];
+  archived_at?: string | null;
+  custom_fields?: Record<string, string>;
+  id?: string;
+  invoice_schedule?: {
+    schedule_items?: PaymentGatedPrepaidCommitScheduleItem[];
+  };
+  payment_gate_config?: {
+    payment_gate_type?: string;
+    tax_type?: string;
+  };
+  product?: { id?: string };
+  type?: string;
+};
+
+type PaymentGatedPrepaidCommitEdit = {
+  add_commits?: PaymentGatedPrepaidCommitRecord[];
+  id?: string;
+  uniqueness_key?: string | null;
+};
+
+type PaymentGatedPrepaidCommitContract = {
+  commits?: PaymentGatedPrepaidCommitRecord[];
+  customer_id?: string;
+  id?: string;
+};
+
+type PaymentGatedPrepaidCommitUpdateRequest = {
+  contract_id: string;
+  customer_id: string;
+  uniqueness_key: string;
+  update_commits: [
+    {
+      access_schedule: {
+        update_schedule_items: [{ ending_before: string; id: string }];
+      };
+      commit_id: string;
+    },
+  ];
+};
 export type MetronomeCustomerInput = {
   alias: string;
   name: string;
@@ -504,6 +565,260 @@ export class MetronomeClientService {
       );
     }
   }
+  async createPaymentGatedPrepaidCommit(
+    input: MetronomePaymentGatedPrepaidCommitInput,
+  ): Promise<MetronomePaymentGatedPrepaidCommitReceipt> {
+    this.validatePaymentGatedPrepaidCommitInput(input);
+
+    const startingAt = toMetronomeHourBoundary(input.purchaseAt).toISOString();
+    const endingBefore = this.addCalendarMonths(startingAt, 13);
+    const client = this.getClient();
+
+    try {
+      const response = await client.v2.contracts.edit(
+        {
+          add_commits: [
+            {
+              access_schedule: {
+                schedule_items: [
+                  {
+                    amount: input.principalCents,
+                    ending_before: endingBefore,
+                    starting_at: startingAt,
+                  },
+                ],
+              },
+              applicable_product_ids: [input.chargeProductId],
+              custom_fields: {
+                myah_funding_action_id: input.fundingActionId,
+                myah_funding_identity: input.fundingIdentity,
+              },
+              invoice_schedule: {
+                schedule_items: [
+                  { amount: input.principalCents, timestamp: startingAt },
+                ],
+              },
+              payment_gate_config: {
+                payment_gate_type: 'STRIPE',
+                tax_type: 'STRIPE',
+              },
+              priority: 100,
+              product_id: input.commitmentProductId,
+              type: 'PREPAID',
+            },
+          ],
+          contract_id: input.contractId,
+          customer_id: input.customerId,
+          uniqueness_key: input.uniquenessKey,
+        },
+        { idempotencyKey: input.uniquenessKey, maxRetries: 0 },
+      );
+      const edit = response.data.edit;
+      const commitmentId =
+        edit?.add_commits?.length === 1 ? edit.add_commits[0].id : undefined;
+
+      if (!edit?.id?.trim() || !commitmentId?.trim()) {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+        );
+      }
+
+      return { commitmentId, metronomeEditId: edit.id };
+    } catch (error) {
+      throw this.toWriteException(error);
+    }
+  }
+
+  async recoverPaymentGatedPrepaidCommit(
+    input: MetronomePaymentGatedPrepaidCommitInput,
+  ): Promise<MetronomePaymentGatedPrepaidCommitRecovery | null> {
+    this.validatePaymentGatedPrepaidCommitInput(input);
+
+    const startingAt = toMetronomeHourBoundary(input.purchaseAt).toISOString();
+    const endingBefore = this.addCalendarMonths(startingAt, 13);
+    const client = this.getClient();
+    const [editHistoryResponse, contractsResponse] = await Promise.all([
+      this.execute(() =>
+        client.v2.contracts.getEditHistory({
+          contract_id: input.contractId,
+          customer_id: input.customerId,
+        }),
+      ),
+      this.execute(() =>
+        client.v2.contracts.list({
+          customer_id: input.customerId,
+          include_archived: true,
+        }),
+      ),
+    ]);
+    const edits =
+      editHistoryResponse.data as unknown as PaymentGatedPrepaidCommitEdit[];
+    const contracts =
+      contractsResponse.data as unknown as PaymentGatedPrepaidCommitContract[];
+
+    if (!Array.isArray(edits) || !Array.isArray(contracts)) {
+      throw new Error('Metronome payment-gated commit recovery mismatch');
+    }
+
+    const matchesInput = (edit: PaymentGatedPrepaidCommitEdit): boolean => {
+      const addedCommits = edit.add_commits;
+
+      return (
+        !!edit.id?.trim() &&
+        addedCommits?.length === 1 &&
+        this.getPaymentGatedPrepaidCommitRecoveryDetails(
+          addedCommits[0],
+          input,
+          startingAt,
+          endingBefore,
+        ) !== null
+      );
+    };
+    const keyedEdits = edits.filter(
+      ({ uniqueness_key }) => uniqueness_key === input.uniquenessKey,
+    );
+    const structuralMatches = edits.filter(matchesInput);
+    const matchingEdits =
+      keyedEdits.length === 0
+        ? structuralMatches
+        : keyedEdits.filter(matchesInput);
+
+    if (keyedEdits.length === 0 && matchingEdits.length === 0) return null;
+    if (
+      matchingEdits.length !== 1 ||
+      (keyedEdits.length > 0 && keyedEdits.length !== 1) ||
+      (keyedEdits.length === 0 &&
+        matchingEdits[0].uniqueness_key !== undefined &&
+        matchingEdits[0].uniqueness_key !== null)
+    ) {
+      throw new Error('Metronome payment-gated commit recovery mismatch');
+    }
+
+    const edit = matchingEdits[0];
+    const commit = edit.add_commits?.[0];
+    const historyDetails =
+      commit === undefined
+        ? null
+        : this.getPaymentGatedPrepaidCommitRecoveryDetails(
+            commit,
+            input,
+            startingAt,
+            endingBefore,
+          );
+
+    if (!commit?.id?.trim() || historyDetails === null) {
+      throw new Error('Metronome payment-gated commit recovery mismatch');
+    }
+
+    const matchingContracts = contracts.filter(
+      (contract) =>
+        contract.id === input.contractId &&
+        contract.customer_id === input.customerId,
+    );
+    const matchingCommits =
+      matchingContracts.length === 1
+        ? (matchingContracts[0].commits?.filter(
+            ({ id }) => id === commit.id,
+          ) ?? [])
+        : [];
+
+    if (matchingContracts.length !== 1 || matchingCommits.length !== 1) {
+      throw new Error('Metronome payment-gated commit recovery mismatch');
+    }
+
+    const recoveredCommit = matchingCommits[0];
+    const contractDetails = this.getPaymentGatedPrepaidCommitRecoveryDetails(
+      recoveredCommit,
+      input,
+      startingAt,
+      endingBefore,
+    );
+    const archivedAt = recoveredCommit.archived_at ?? null;
+
+    if (
+      contractDetails === null ||
+      contractDetails.accessScheduleItemId !==
+        historyDetails.accessScheduleItemId ||
+      contractDetails.invoiceId !== historyDetails.invoiceId ||
+      (archivedAt !== null &&
+        (typeof archivedAt !== 'string' || archivedAt.trim() === ''))
+    ) {
+      throw new Error('Metronome payment-gated commit recovery mismatch');
+    }
+
+    return {
+      accessScheduleItemId: contractDetails.accessScheduleItemId,
+      archivedAt,
+      commitmentId: commit.id,
+      invoiceId: contractDetails.invoiceId,
+      metronomeEditId: edit.id,
+    };
+  }
+
+  async updatePaymentGatedPrepaidCommitExpiry(
+    input: MetronomePaymentGatedPrepaidCommitExpiryInput,
+  ): Promise<{ metronomeEditId: string }> {
+    this.validatePaymentGatedPrepaidCommitExpiryInput(input);
+
+    const request: PaymentGatedPrepaidCommitUpdateRequest = {
+      contract_id: input.contractId,
+      customer_id: input.customerId,
+      uniqueness_key: input.uniquenessKey,
+      update_commits: [
+        {
+          access_schedule: {
+            update_schedule_items: [
+              {
+                ending_before: this.addCalendarMonths(input.paidAt, 12),
+                id: input.accessScheduleItemId,
+              },
+            ],
+          },
+          commit_id: input.commitmentId,
+        },
+      ],
+    };
+    const client = this.getClient();
+
+    try {
+      const response = await client.v2.contracts.edit(
+        request as unknown as Parameters<typeof client.v2.contracts.edit>[0],
+        { idempotencyKey: input.uniquenessKey, maxRetries: 0 },
+      );
+
+      return this.requirePaymentGatedPrepaidCommitEditReceipt(
+        response.data.edit,
+      );
+    } catch (error) {
+      throw this.toWriteException(error);
+    }
+  }
+
+  async archivePaymentGatedPrepaidCommit(
+    input: MetronomePaymentGatedPrepaidCommitArchiveInput,
+  ): Promise<{ metronomeEditId: string }> {
+    this.validatePaymentGatedPrepaidCommitArchiveInput(input);
+
+    const client = this.getClient();
+    try {
+      const response = await client.v2.contracts.edit(
+        {
+          archive_commits: [{ id: input.commitmentId }],
+          contract_id: input.contractId,
+          customer_id: input.customerId,
+          uniqueness_key: input.uniquenessKey,
+        },
+        { idempotencyKey: input.uniquenessKey, maxRetries: 0 },
+      );
+
+      return this.requirePaymentGatedPrepaidCommitEditReceipt(
+        response.data.edit,
+      );
+    } catch (error) {
+      throw this.toWriteException(error);
+    }
+  }
+
 
   async addSubscription(
     input: MetronomeAddSubscriptionInput,
@@ -1353,6 +1668,97 @@ export class MetronomeClientService {
     };
   }
 
+  private requirePaymentGatedPrepaidCommitEditReceipt(
+    edit: { id?: string } | undefined,
+  ): { metronomeEditId: string } {
+    if (!edit?.id?.trim()) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+      );
+    }
+
+    return { metronomeEditId: edit.id };
+  }
+
+  private getPaymentGatedPrepaidCommitRecoveryDetails(
+    commit: PaymentGatedPrepaidCommitRecord,
+    input: MetronomePaymentGatedPrepaidCommitInput,
+    startingAt: string,
+    endingBefore: string,
+  ): { accessScheduleItemId: string; invoiceId: string | null } | null {
+    const accessScheduleItems = commit.access_schedule?.schedule_items;
+    const invoiceScheduleItems = commit.invoice_schedule?.schedule_items;
+
+    if (
+      !commit.id?.trim() ||
+      commit.type !== 'PREPAID' ||
+      commit.product?.id !== input.commitmentProductId ||
+      commit.applicable_product_ids?.length !== 1 ||
+      commit.applicable_product_ids[0] !== input.chargeProductId ||
+      commit.custom_fields?.myah_funding_action_id !== input.fundingActionId ||
+      commit.custom_fields?.myah_funding_identity !== input.fundingIdentity ||
+      commit.payment_gate_config?.payment_gate_type !== 'STRIPE' ||
+      commit.payment_gate_config.tax_type !== 'STRIPE' ||
+      accessScheduleItems?.length !== 1 ||
+      invoiceScheduleItems?.length !== 1
+    ) {
+      return null;
+    }
+
+    const accessScheduleItem = accessScheduleItems[0];
+    const invoiceScheduleItem = invoiceScheduleItems[0];
+    const accessScheduleItemId = accessScheduleItem.id;
+    const invoiceId = invoiceScheduleItem.invoice_id ?? null;
+
+    if (
+      typeof accessScheduleItemId !== 'string' ||
+      accessScheduleItemId.trim() === '' ||
+      accessScheduleItem.amount !== input.principalCents ||
+      accessScheduleItem.starting_at !== startingAt ||
+      accessScheduleItem.ending_before !== endingBefore ||
+      invoiceScheduleItem.amount !== input.principalCents ||
+      invoiceScheduleItem.timestamp !== startingAt ||
+      (invoiceId !== null &&
+        (typeof invoiceId !== 'string' || invoiceId.trim() === ''))
+    ) {
+      return null;
+    }
+
+    return { accessScheduleItemId, invoiceId };
+  }
+
+  private validatePaymentGatedPrepaidCommitExpiryInput(
+    input: MetronomePaymentGatedPrepaidCommitExpiryInput,
+  ): void {
+    this.validateSubscriptionDate(input.paidAt);
+    this.validatePaymentGatedPrepaidCommitIdentifiers([
+      input.accessScheduleItemId,
+      input.commitmentId,
+      input.contractId,
+      input.customerId,
+      input.uniquenessKey,
+    ]);
+  }
+
+  private validatePaymentGatedPrepaidCommitArchiveInput(
+    input: MetronomePaymentGatedPrepaidCommitArchiveInput,
+  ): void {
+    this.validatePaymentGatedPrepaidCommitIdentifiers([
+      input.commitmentId,
+      input.contractId,
+      input.customerId,
+      input.uniquenessKey,
+    ]);
+  }
+
+  private validatePaymentGatedPrepaidCommitIdentifiers(
+    values: string[],
+  ): void {
+    if (values.some((value) => typeof value !== 'string' || value.trim() === '')) {
+      throw new Error('Metronome payment-gated commit identifiers are required');
+    }
+  }
+
   private validatePositiveSubscriptionQuantity(quantity: number): void {
     if (!Number.isSafeInteger(quantity) || quantity <= 0) {
       throw new Error(
@@ -1389,6 +1795,43 @@ export class MetronomeClientService {
       );
     }
   }
+  private validatePaymentGatedPrepaidCommitInput(
+    input: MetronomePaymentGatedPrepaidCommitInput,
+  ): void {
+    if (!Number.isSafeInteger(input.principalCents) || input.principalCents <= 0) {
+      throw new Error(
+        'Metronome payment-gated commit amount must be positive safe cents',
+      );
+    }
+
+    this.validateSubscriptionDate(input.purchaseAt);
+    this.validatePaymentGatedPrepaidCommitIdentifiers([
+      input.chargeProductId,
+      input.commitmentProductId,
+      input.contractId,
+      input.customerId,
+      input.fundingActionId,
+      input.fundingIdentity,
+      input.uniquenessKey,
+    ]);
+  }
+
+  private addCalendarMonths(value: string, months: number): string {
+    const date = new Date(value);
+    const day = date.getUTCDate();
+    const month = date.getUTCMonth() + months;
+    const year = date.getUTCFullYear() + Math.floor(month / 12);
+    const targetMonth = month % 12;
+
+    date.setUTCDate(1);
+    date.setUTCFullYear(year, targetMonth);
+    date.setUTCDate(
+      Math.min(day, new Date(Date.UTC(year, targetMonth + 1, 0)).getUTCDate()),
+    );
+
+    return date.toISOString();
+  }
+
 
   private toWriteException(error: unknown): MetronomeClientException {
     if (error instanceof MetronomeClientException) {
