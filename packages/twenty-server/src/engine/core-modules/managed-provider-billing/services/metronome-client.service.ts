@@ -969,7 +969,8 @@ export class MetronomeClientService {
     this.validateSubscriptionDate(input.paidAt);
     if (
       input.accessScheduleItemId.trim() === '' ||
-      input.commitmentId.trim() === ''
+      input.commitmentId.trim() === '' ||
+      input.invoiceId.trim() === ''
     ) {
       throw new Error(
         'Metronome payment-gated commit expiry proof is invalid',
@@ -984,24 +985,32 @@ export class MetronomeClientService {
     );
     const startingAt = toMetronomeHourBoundary(input.purchaseAt).toISOString();
     const expiresAt = this.addCalendarMonths(input.paidAt, 12);
-    const matches = commits.filter((commit) => {
-      const details = this.getPaymentGatedPrepaidCommitRecoveryDetails(
-        commit,
-        input,
-        startingAt,
-        expiresAt,
-      );
-
-      return (
+    const candidates = commits.filter(
+      (commit) =>
         commit.id === input.commitmentId &&
         commit.contract?.id === input.contractId &&
-        commit.archived_at == null &&
-        this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) &&
-        details?.accessScheduleItemId === input.accessScheduleItemId
-      );
-    });
+        commit.archived_at == null,
+    );
 
-    if (matches.length !== 1) {
+    if (candidates.length !== 1) {
+      throw new Error(
+        'Metronome payment-gated commit expiry proof is invalid',
+      );
+    }
+
+    const commit = candidates[0];
+    const details = this.getPaymentGatedPrepaidCommitRecoveryDetails(
+      commit,
+      input,
+      startingAt,
+      expiresAt,
+    );
+
+    if (
+      !this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
+      details?.accessScheduleItemId !== input.accessScheduleItemId ||
+      details.invoiceId !== input.invoiceId
+    ) {
       throw new Error(
         'Metronome payment-gated commit expiry proof is invalid',
       );

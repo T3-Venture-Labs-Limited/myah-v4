@@ -37,6 +37,7 @@ export type MetronomePaymentGatedPrepaidCommitExpiryProofInput =
     Readonly<{
       accessScheduleItemId: string;
       commitmentId: string;
+      invoiceId: string;
       paidAt: string;
     }>;
 

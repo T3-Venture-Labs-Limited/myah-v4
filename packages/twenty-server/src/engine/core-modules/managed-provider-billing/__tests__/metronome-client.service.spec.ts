@@ -2766,6 +2766,7 @@ describe('MetronomeClientService', () => {
       customerId: 'customer-id',
       fundingActionId: 'funding-action-id',
       fundingIdentity: 'funding-identity',
+      invoiceId: 'invoice-id',
       paidAt: '2026-08-29T10:37:42.123Z',
       principalCents: 5_000,
       purchaseAt: '2026-08-29T10:37:42.123Z',
@@ -2781,6 +2782,30 @@ describe('MetronomeClientService', () => {
       include_archived: true,
       include_contract_commits: true,
     });
+
+    commit.invoice_schedule.schedule_items[0].invoice_id = 'other-invoice-id';
+    list.mockResolvedValue({ data: [commit], next_page: '' });
+    await expect(
+      service.assertPaymentGatedPrepaidCommitExpiry(input),
+    ).rejects.toThrow('Metronome payment-gated commit expiry proof is invalid');
+
+    commit.invoice_schedule.schedule_items[0].invoice_id = 'invoice-id';
+    list.mockResolvedValue({
+      data: [
+        commit,
+        {
+          ...commit,
+          custom_fields: {
+            ...commit.custom_fields,
+            myah_funding_identity: 'other-funding-identity',
+          },
+        },
+      ],
+      next_page: '',
+    });
+    await expect(
+      service.assertPaymentGatedPrepaidCommitExpiry(input),
+    ).rejects.toThrow('Metronome payment-gated commit expiry proof is invalid');
   });
 
   it('rejects a commitment that still has the provisional access expiry', async () => {
@@ -2846,6 +2871,7 @@ describe('MetronomeClientService', () => {
         customerId: 'customer-id',
         fundingActionId: 'funding-action-id',
         fundingIdentity: 'funding-identity',
+        invoiceId: 'invoice-id',
         paidAt: '2026-08-29T10:37:42.123Z',
         principalCents: 5_000,
         purchaseAt: '2026-08-29T10:37:42.123Z',
