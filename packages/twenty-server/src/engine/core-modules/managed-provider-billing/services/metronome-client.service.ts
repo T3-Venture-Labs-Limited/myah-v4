@@ -12,6 +12,8 @@ import type { Commit } from '@metronome/sdk/resources/shared';
 
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 
+import { METRONOME_USD_CREDIT_TYPE_NAME } from '../constants/metronome-workspace-alias-prefix.constant';
+
 import {
   MetronomeClientException,
   MetronomeClientExceptionCode,
@@ -33,9 +35,42 @@ import {
   type MetronomePaymentGatedPrepaidCommitInput,
   type MetronomePaymentGatedPrepaidCommitReceipt,
   type MetronomePaymentGatedPrepaidCommitRecovery,
+  type MetronomePaymentGatedPrepaidExternalInvoice,
+  type MetronomePaymentGatedPrepaidInvoice,
+  type MetronomePaymentGatedPrepaidInvoiceInput,
 } from '../types/metronome-payment-gated-prepaid-commit.type';
 const BALANCE_PAGE_LIMIT = 25;
 const METRONOME_MAX_LIST_PAGES = 100;
+const METRONOME_PAYMENT_GATED_INVOICE_STATUSES = new Set([
+  'DRAFT',
+  'FINALIZED',
+  'VOID',
+]);
+const METRONOME_PAYMENT_GATED_EXTERNAL_INVOICE_STATUSES = new Set([
+  'DRAFT',
+  'FINALIZED',
+  'PAID',
+  'PARTIALLY_PAID',
+  'UNCOLLECTIBLE',
+  'VOID',
+  'DELETED',
+  'PAYMENT_FAILED',
+  'INVALID_REQUEST_ERROR',
+  'SKIPPED',
+  'SENT',
+  'QUEUED',
+]);
+const toOptionalTrimmedString = (
+  value: string | null | undefined,
+): string | null => {
+  const trimmed = value?.trim();
+
+  return trimmed ? trimmed : null;
+};
+const isSafeNonnegativeCents = (
+  value: number | null,
+): value is number =>
+  value !== null && Number.isSafeInteger(value) && value >= 0;
 
 type MetronomeBalanceResponse = ContractListBalancesResponse;
 
@@ -861,6 +896,129 @@ export class MetronomeClientService {
     } catch (error) {
       throw this.toWriteException(error);
     }
+  }
+
+  async readPaymentGatedPrepaidCommitInvoice(
+    input: MetronomePaymentGatedPrepaidInvoiceInput,
+  ): Promise<MetronomePaymentGatedPrepaidInvoice> {
+    if (
+      !Number.isSafeInteger(input.principalCents) ||
+      input.principalCents <= 0 ||
+      [
+        input.commitmentId,
+        input.contractId,
+        input.customerId,
+        input.fiatCreditTypeId,
+        input.invoiceId,
+      ].some((value) => value.trim() === '')
+    ) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+
+    const client = this.getClient();
+    const { data: invoice } = await this.execute(() =>
+      client.v1.customers.invoices.retrieve({
+        customer_id: input.customerId,
+        invoice_id: input.invoiceId,
+      }),
+    );
+    const line =
+      invoice.line_items.length === 1 ? invoice.line_items[0] : undefined;
+    const status = invoice.status as MetronomePaymentGatedPrepaidInvoice['status'];
+
+    if (
+      invoice.id !== input.invoiceId ||
+      invoice.customer_id !== input.customerId ||
+      invoice.contract_id !== input.contractId ||
+      invoice.credit_type.id !== input.fiatCreditTypeId ||
+      invoice.credit_type.name !== METRONOME_USD_CREDIT_TYPE_NAME ||
+      !METRONOME_PAYMENT_GATED_INVOICE_STATUSES.has(status) ||
+      !Number.isSafeInteger(invoice.total) ||
+      invoice.total !== input.principalCents ||
+      (invoice.subtotal !== undefined &&
+        (!Number.isSafeInteger(invoice.subtotal) ||
+          invoice.subtotal !== input.principalCents)) ||
+      line === undefined ||
+      line.type !== 'commit_purchase' ||
+      line.commit_id !== input.commitmentId ||
+      line.credit_type.id !== input.fiatCreditTypeId ||
+      line.credit_type.name !== METRONOME_USD_CREDIT_TYPE_NAME ||
+      !Number.isSafeInteger(line.total) ||
+      line.total !== input.principalCents ||
+      line.applied_commit_or_credit !== undefined
+    ) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+
+    const issuedAt = toOptionalTrimmedString(invoice.issued_at);
+    const external = invoice.external_invoice;
+
+    if (external == null) {
+      return {
+        externalInvoice: null,
+        issuedAt,
+        metronomeInvoiceId: invoice.id,
+        principalCents: input.principalCents,
+        status,
+      };
+    }
+
+    const externalStatus =
+      external.external_status as
+        | MetronomePaymentGatedPrepaidExternalInvoice['status']
+        | undefined;
+    const subtotalCents = external.invoiced_sub_total ?? null;
+    const taxCents = external.tax?.total_tax_amount ?? null;
+    const taxableCents = external.tax?.total_taxable_amount ?? null;
+    const totalCents = external.invoiced_total ?? null;
+    const monetaryValues = [
+      subtotalCents,
+      taxCents,
+      taxableCents,
+      totalCents,
+    ];
+
+    if (
+      external.billing_provider_type !== 'stripe' ||
+      externalStatus === undefined ||
+      !METRONOME_PAYMENT_GATED_EXTERNAL_INVOICE_STATUSES.has(externalStatus) ||
+      monetaryValues.some(
+        (value) => value !== null && !isSafeNonnegativeCents(value),
+      ) ||
+      (subtotalCents !== null && subtotalCents !== input.principalCents) ||
+      (taxableCents !== null && taxableCents !== input.principalCents) ||
+      (totalCents !== null && totalCents < input.principalCents) ||
+      (totalCents !== null &&
+        taxCents !== null &&
+        totalCents !== input.principalCents + taxCents)
+    ) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+
+    return {
+      externalInvoice: {
+        issuedAt: toOptionalTrimmedString(external.issued_at_timestamp),
+        pdfUrl: toOptionalTrimmedString(external.pdf_url),
+        status: externalStatus,
+        stripeInvoiceId: toOptionalTrimmedString(external.invoice_id),
+        stripePaymentIntentId: toOptionalTrimmedString(
+          external.external_payment_id,
+        ),
+        subtotalCents,
+        taxCents,
+        totalCents,
+      },
+      issuedAt,
+      metronomeInvoiceId: invoice.id,
+      principalCents: input.principalCents,
+      status,
+    };
   }
 
 

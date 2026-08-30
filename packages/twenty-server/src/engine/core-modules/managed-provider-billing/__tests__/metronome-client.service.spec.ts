@@ -4358,6 +4358,283 @@ describe('MetronomeClientService', () => {
       expect(createContract).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('reads a DRAFT funding invoice without an external invoice', async () => {
+    const retrieve = jest.fn().mockResolvedValue({
+      data: {
+        id: 'invoice-id',
+        customer_id: 'customer-id',
+        contract_id: 'contract-id',
+        credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
+        status: 'DRAFT',
+        type: 'PREPAID',
+        total: 5_000,
+        subtotal: 5_000,
+        issued_at: '2026-08-29T10:37:42.123Z',
+        external_invoice: null,
+        line_items: [
+          {
+            credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
+            name: 'Commit purchase',
+            type: 'commit_purchase',
+            commit_id: 'commitment-id',
+            total: 5_000,
+            quantity: 1,
+            unit_price: 5_000,
+          },
+        ],
+      },
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({ v1: { customers: { invoices: { retrieve } } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.readPaymentGatedPrepaidCommitInvoice({
+        customerId: 'customer-id',
+        contractId: 'contract-id',
+        commitmentId: 'commitment-id',
+        invoiceId: 'invoice-id',
+        principalCents: 5_000,
+        fiatCreditTypeId: 'fiat-credit-type-id',
+      }),
+    ).resolves.toEqual({
+      metronomeInvoiceId: 'invoice-id',
+      status: 'DRAFT',
+      issuedAt: '2026-08-29T10:37:42.123Z',
+      principalCents: 5_000,
+      externalInvoice: null,
+    });
+    expect(retrieve).toHaveBeenCalledWith({
+      customer_id: 'customer-id',
+      invoice_id: 'invoice-id',
+    });
+  });
+
+  it('reads a FINALIZED Stripe-paid funding invoice without exposing provider errors', async () => {
+    const retrieve = jest.fn().mockResolvedValue({
+      data: {
+        id: 'invoice-id',
+        customer_id: 'customer-id',
+        contract_id: 'contract-id',
+        credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
+        status: 'FINALIZED',
+        type: 'PREPAID',
+        total: 5_000,
+        subtotal: 5_000,
+        issued_at: '2026-08-29T10:37:42.123Z',
+        external_invoice: {
+          billing_provider_type: 'stripe',
+          external_payment_id: 'pi_123',
+          external_status: 'PAID',
+          invoice_id: 'stripe-invoice-id',
+          invoiced_sub_total: 5_000,
+          invoiced_total: 5_500,
+          issued_at_timestamp: '2026-08-29T10:40:00.000Z',
+          pdf_url: 'https://example.com/invoices/stripe-invoice-id.pdf',
+          tax: {
+            total_tax_amount: 500,
+            total_taxable_amount: 5_000,
+            transaction_id: 'tax-transaction-id',
+          },
+          billing_provider_error: 'raw provider error',
+        },
+        line_items: [
+          {
+            credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
+            name: 'Commit purchase',
+            type: 'commit_purchase',
+            commit_id: 'commitment-id',
+            total: 5_000,
+            quantity: 1,
+            unit_price: 5_000,
+          },
+        ],
+      },
+    });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({ v1: { customers: { invoices: { retrieve } } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.readPaymentGatedPrepaidCommitInvoice({
+        customerId: 'customer-id',
+        contractId: 'contract-id',
+        commitmentId: 'commitment-id',
+        invoiceId: 'invoice-id',
+        principalCents: 5_000,
+        fiatCreditTypeId: 'fiat-credit-type-id',
+      }),
+    ).resolves.toEqual({
+      metronomeInvoiceId: 'invoice-id',
+      status: 'FINALIZED',
+      issuedAt: '2026-08-29T10:37:42.123Z',
+      principalCents: 5_000,
+      externalInvoice: {
+        status: 'PAID',
+        stripeInvoiceId: 'stripe-invoice-id',
+        stripePaymentIntentId: 'pi_123',
+        subtotalCents: 5_000,
+        taxCents: 500,
+        totalCents: 5_500,
+        issuedAt: '2026-08-29T10:40:00.000Z',
+        pdfUrl: 'https://example.com/invoices/stripe-invoice-id.pdf',
+      },
+    });
+    expect(retrieve).toHaveBeenCalledWith({
+      customer_id: 'customer-id',
+      invoice_id: 'invoice-id',
+    });
+  });
+
+  const createFinalizedInvoice = () => ({
+    id: 'invoice-id',
+    customer_id: 'customer-id',
+    contract_id: 'contract-id',
+    credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
+    status: 'FINALIZED',
+    type: 'PREPAID',
+    total: 5_000,
+    subtotal: 5_000,
+    issued_at: '2026-08-29T10:37:42.123Z',
+    external_invoice: {
+      billing_provider_type: 'stripe',
+      external_payment_id: 'pi_123',
+      external_status: 'PAID',
+      invoice_id: 'stripe-invoice-id',
+      invoiced_sub_total: 5_000,
+      invoiced_total: 5_500,
+      issued_at_timestamp: '2026-08-29T10:40:00.000Z',
+      pdf_url: 'https://example.com/invoices/stripe-invoice-id.pdf',
+      tax: {
+        total_tax_amount: 500,
+        total_taxable_amount: 5_000,
+        transaction_id: 'tax-transaction-id',
+      },
+    },
+    line_items: [
+      {
+        credit_type: { id: 'fiat-credit-type-id', name: 'USD (cents)' },
+        name: 'Commit purchase',
+        type: 'commit_purchase',
+        commit_id: 'commitment-id',
+        total: 5_000,
+        quantity: 1,
+        unit_price: 5_000,
+      },
+    ],
+  });
+
+  it.each([
+    ['invoice id', 'invoice'],
+    ['customer id', 'customer'],
+    ['contract id', 'contract'],
+    ['credit type id', 'creditTypeId'],
+    ['credit type name', 'creditTypeName'],
+    ['line credit type id', 'lineCreditTypeId'],
+    ['line credit type name', 'lineCreditTypeName'],
+    ['commitment id', 'commitment'],
+    ['line item count', 'lineCount'],
+    ['line item type', 'lineType'],
+    ['principal', 'principal'],
+    ['non-Stripe external provider', 'provider'],
+    ['unknown invoice status', 'status'],
+    ['unsafe external money', 'unsafeMoney'],
+    ['inconsistent external money', 'inconsistentMoney'],
+  ])('rejects a funding invoice with an invalid %s', async (_, mutation) => {
+    const invoice = createFinalizedInvoice();
+    switch (mutation) {
+      case 'invoice':
+        invoice.id = 'other-invoice-id';
+        break;
+      case 'customer':
+        invoice.customer_id = 'other-customer-id';
+        break;
+      case 'contract':
+        invoice.contract_id = 'other-contract-id';
+        break;
+      case 'creditTypeId':
+        invoice.credit_type.id = 'other-credit-type-id';
+        break;
+      case 'creditTypeName':
+        invoice.credit_type.name = 'EUR';
+        break;
+      case 'lineCreditTypeId':
+        invoice.line_items[0].credit_type.id = 'other-credit-type-id';
+        break;
+      case 'lineCreditTypeName':
+        invoice.line_items[0].credit_type.name = 'EUR';
+        break;
+      case 'commitment':
+        invoice.line_items[0].commit_id = 'other-commitment-id';
+        break;
+      case 'lineCount':
+        invoice.line_items.push({ ...invoice.line_items[0] });
+        break;
+      case 'lineType':
+        invoice.line_items[0].type = 'usage';
+        break;
+      case 'principal':
+        invoice.line_items[0].total = 4_999;
+        break;
+      case 'provider':
+        invoice.external_invoice.billing_provider_type = 'paypal';
+        break;
+      case 'status':
+        invoice.status = 'UNKNOWN';
+        break;
+      case 'unsafeMoney':
+        invoice.external_invoice.invoiced_total = Number.MAX_SAFE_INTEGER + 1;
+        break;
+      case 'inconsistentMoney':
+        invoice.external_invoice.invoiced_total = 5_501;
+        break;
+      default:
+        throw new Error(`Unexpected mutation: ${mutation}`);
+    }
+    const retrieve = jest.fn().mockResolvedValue({ data: invoice });
+    metronomeConstructor.mockImplementation(
+      () =>
+        ({ v1: { customers: { invoices: { retrieve } } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.readPaymentGatedPrepaidCommitInvoice({
+        customerId: 'customer-id',
+        contractId: 'contract-id',
+        commitmentId: 'commitment-id',
+        invoiceId: 'invoice-id',
+        principalCents: 5_000,
+        fiatCreditTypeId: 'fiat-credit-type-id',
+      }),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.REQUEST_FAILED,
+    });
+  });
+
 });
 
 describe('MetronomeClientService rate-card product resolution', () => {

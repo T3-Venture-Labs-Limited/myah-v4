@@ -38,3 +38,43 @@ export type MetronomePaymentGatedPrepaidCommitArchiveInput = Readonly<{
   customerId: string;
   uniquenessKey: string;
 }>;
+
+export type MetronomePaymentGatedPrepaidInvoiceInput = Readonly<{
+  commitmentId: string;
+  contractId: string;
+  customerId: string;
+  fiatCreditTypeId: string;
+  invoiceId: string;
+  principalCents: number;
+}>;
+
+export type MetronomePaymentGatedPrepaidExternalInvoice = Readonly<{
+  issuedAt: string | null;
+  pdfUrl: string | null;
+  status:
+    | 'DRAFT'
+    | 'FINALIZED'
+    | 'PAID'
+    | 'PARTIALLY_PAID'
+    | 'UNCOLLECTIBLE'
+    | 'VOID'
+    | 'DELETED'
+    | 'PAYMENT_FAILED'
+    | 'INVALID_REQUEST_ERROR'
+    | 'SKIPPED'
+    | 'SENT'
+    | 'QUEUED';
+  stripeInvoiceId: string | null;
+  stripePaymentIntentId: string | null;
+  subtotalCents: number | null;
+  taxCents: number | null;
+  totalCents: number | null;
+}>;
+
+export type MetronomePaymentGatedPrepaidInvoice = Readonly<{
+  externalInvoice: MetronomePaymentGatedPrepaidExternalInvoice | null;
+  issuedAt: string | null;
+  metronomeInvoiceId: string;
+  principalCents: number;
+  status: 'DRAFT' | 'FINALIZED' | 'VOID';
+}>;
