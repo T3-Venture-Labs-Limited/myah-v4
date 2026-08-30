@@ -674,22 +674,18 @@ export class MetronomeClientService {
         ) !== null
       );
     };
-    const keyedEdits = edits.filter(
-      ({ uniqueness_key }) => uniqueness_key === input.uniquenessKey,
+    const candidateEdits = edits.filter(
+      ({ add_commits, uniqueness_key }) =>
+        uniqueness_key === input.uniquenessKey ||
+        add_commits?.some((commit) =>
+          this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input),
+        ) === true,
     );
     const matchingContracts = contracts.filter(
       (contract) =>
         contract.id === input.contractId &&
         contract.customer_id === input.customerId,
     );
-    const hasHistoryCandidate =
-      keyedEdits.length > 0 ||
-      edits.some(
-        ({ add_commits }) =>
-          add_commits?.some((commit) =>
-            this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input),
-          ) === true,
-      );
     const contractCandidates = matchingContracts.flatMap(
       ({ commits }) =>
         commits?.filter((commit) =>
@@ -710,10 +706,12 @@ export class MetronomeClientService {
         ) ?? [],
     );
 
-    if (!hasHistoryCandidate && contractCandidates.length === 0) return null;
+    if (candidateEdits.length === 0 && contractCandidates.length === 0) {
+      return null;
+    }
     if (
-      keyedEdits.length > 1 ||
-      (keyedEdits.length === 1 && !matchesInput(keyedEdits[0])) ||
+      candidateEdits.length !== 1 ||
+      contractCandidates.length !== 1 ||
       structuralHistoryMatches.length !== 1 ||
       matchingContracts.length !== 1 ||
       structuralContractMatches.length !== 1
