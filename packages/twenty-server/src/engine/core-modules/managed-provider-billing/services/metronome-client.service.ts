@@ -672,11 +672,8 @@ export class MetronomeClientService {
     );
     const candidateCustomerCommits = customerWideCommits.filter(
       (commit) =>
-        commit.contract?.id === input.contractId &&
-        (this.hasPartialPaymentGatedPrepaidCommitFundingEvidence(
-          commit,
-          input,
-        ) ||
+        this.hasPartialPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
+        (commit.contract?.id === input.contractId &&
           this.getPaymentGatedPrepaidCommitRecoveryDetails(
             commit,
             input,
