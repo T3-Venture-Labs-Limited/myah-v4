@@ -26,6 +26,36 @@ const action = {
   taxCents: '250',
   updatedAt,
 };
+const billingDetails = {
+  city: 'San Francisco',
+  country: 'US',
+  line1: '123 Market Street',
+  line2: null,
+  name: 'Myah Test LLC',
+  postalCode: '94105',
+  state: 'CA',
+  taxIdType: 'us_ein' as const,
+  taxIdValue: '12-3456789',
+};
+const billingSummary = {
+  address: {
+    city: billingDetails.city,
+    country: billingDetails.country,
+    line1: billingDetails.line1,
+    line2: null,
+    postalCode: billingDetails.postalCode,
+    state: billingDetails.state,
+  },
+  card: {
+    brand: 'visa',
+    expiryMonth: 12,
+    expiryYear: 2030,
+    last4: '4242',
+  },
+  name: billingDetails.name,
+  paymentMethodReady: true,
+  taxId: { country: 'US', type: 'us_ein' },
+};
 
 const createResolver = () => {
   const statusService = {
@@ -39,6 +69,7 @@ const createResolver = () => {
   const fundingService = {
     acknowledgeCustomerFundingPaymentAction: jest.fn().mockResolvedValue(action),
     completeCustomerFundingPaymentMethod: jest.fn().mockResolvedValue({
+      billingSummary,
       clientSecret: null,
       publishableKey: null,
       ready: true,
@@ -46,6 +77,7 @@ const createResolver = () => {
     }),
     createCustomerFunding: jest.fn().mockResolvedValue(action),
     getCustomerFundingAction: jest.fn().mockResolvedValue(action),
+    getCustomerFundingBillingSummary: jest.fn().mockResolvedValue(billingSummary),
     getCustomerFundingPaymentAction: jest.fn().mockResolvedValue({
       clientSecret: 'pi_secret',
       paymentIntentId: 'pi_1',
@@ -55,6 +87,7 @@ const createResolver = () => {
     isCustomerFundingPaymentMethodReady: jest.fn().mockResolvedValue(true),
     listCustomerFundingHistory: jest.fn().mockResolvedValue([action]),
     prepareCustomerFundingPaymentMethod: jest.fn().mockResolvedValue({
+      billingSummary,
       clientSecret: 'seti_secret',
       publishableKey: 'pk_test',
       ready: false,
@@ -128,6 +161,7 @@ describe('BillingResolver customer AI funding', () => {
     ).resolves.toEqual({
       available: true,
       customerFundingAvailable: true,
+      customerFundingBillingSummary: billingSummary,
       customerFundingHistory: [
         {
           actionRequired: false,
@@ -156,6 +190,18 @@ describe('BillingResolver customer AI funding', () => {
     });
   });
 
+
+  it('forwards bounded billing details when completing payment setup', async () => {
+    const { fundingService, resolver } = createResolver();
+
+    await resolver.completeManagedProviderCustomerFundingPaymentMethod(
+      workspace as never,
+      { ...billingDetails, setupIntentId: 'seti_1' },
+    );
+    expect(
+      fundingService.completeCustomerFundingPaymentMethod,
+    ).toHaveBeenCalledWith(workspace.id, 'seti_1', billingDetails);
+  });
   it('looks up a polled action through the authenticated workspace boundary', async () => {
     const { fundingService, resolver } = createResolver();
 

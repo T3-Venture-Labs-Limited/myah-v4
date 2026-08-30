@@ -10,7 +10,11 @@ import {
   MetronomeClientException,
   MetronomeClientExceptionCode,
 } from '../metronome-client.exception';
-import { ManagedProviderStripeService } from '../stripe/managed-provider-stripe.service';
+import {
+  ManagedProviderStripeService,
+  type WorkspaceBillingDetailsInput,
+  type WorkspaceBillingDetailsSummary,
+} from '../stripe/managed-provider-stripe.service';
 import { toMetronomeHourBoundary } from '../utils/to-metronome-hour-boundary.util';
 import { ManagedProviderFundingJournalService } from './managed-provider-funding-journal.service';
 import { MetronomeClientService } from './metronome-client.service';
@@ -32,6 +36,7 @@ export type CreateCustomerFundingInput = Readonly<{
 }>;
 
 export type CustomerFundingPaymentMethodPreparation = Readonly<{
+  billingSummary: WorkspaceBillingDetailsSummary | null;
   clientSecret: string | null;
   publishableKey: string | null;
   ready: boolean;
@@ -107,7 +112,7 @@ export class ManagedProviderCustomerFundingService {
     if (!this.isCustomerFundingAvailable(workspaceId)) return false;
 
     try {
-      await this.stripe.assertWorkspacePaymentMethodReady({
+      await this.stripe.assertWorkspaceBillingDetailsReady({
         metronomeBaseUrlEnvironment: this.getCustomerFundingEnvironment(),
         workspaceId,
       });
@@ -115,6 +120,21 @@ export class ManagedProviderCustomerFundingService {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async getCustomerFundingBillingSummary(
+    workspaceId: string,
+  ): Promise<WorkspaceBillingDetailsSummary | null> {
+    if (!this.isCustomerFundingAvailable(workspaceId)) return null;
+
+    try {
+      return await this.stripe.getWorkspaceBillingDetailsSummary({
+        metronomeBaseUrlEnvironment: this.getCustomerFundingEnvironment(),
+        workspaceId,
+      });
+    } catch {
+      return null;
     }
   }
 
@@ -127,25 +147,43 @@ export class ManagedProviderCustomerFundingService {
 
     const environment = this.getCustomerFundingEnvironment();
 
+    let billingSummary: WorkspaceBillingDetailsSummary | null = null;
+
     try {
-      await this.stripe.assertWorkspacePaymentMethodReady({
+      billingSummary = await this.stripe.getWorkspaceBillingDetailsSummary({
+        metronomeBaseUrlEnvironment: environment,
+        workspaceId,
+      });
+      await this.stripe.assertWorkspaceBillingDetailsReady({
         metronomeBaseUrlEnvironment: environment,
         workspaceId,
       });
 
       return {
+        billingSummary,
         clientSecret: null,
         publishableKey: null,
         ready: true,
         setupIntentId: null,
       };
     } catch {
+      if (billingSummary?.paymentMethodReady) {
+        return {
+          billingSummary,
+          clientSecret: null,
+          publishableKey: null,
+          ready: false,
+          setupIntentId: null,
+        };
+      }
+
       const preparation = await this.stripe.prepareWorkspacePaymentMethod({
         metronomeBaseUrlEnvironment: environment,
         workspaceId,
       });
 
       return {
+        billingSummary,
         clientSecret: preparation.clientSecret,
         publishableKey: preparation.publishableKey,
         ready: false,
@@ -156,22 +194,35 @@ export class ManagedProviderCustomerFundingService {
 
   async completeCustomerFundingPaymentMethod(
     workspaceId: string,
-    setupIntentId: string,
+    setupIntentId: string | null,
+    billingDetails: WorkspaceBillingDetailsInput,
   ): Promise<CustomerFundingPaymentMethodPreparation> {
-    if (
-      !this.isCustomerFundingAvailable(workspaceId) ||
-      setupIntentId.trim() === ''
-    ) {
+    if (!this.isCustomerFundingAvailable(workspaceId)) {
       throw new Error('Customer AI funding is unavailable');
     }
 
-    await this.stripe.completeWorkspacePaymentMethodSetup({
-      metronomeBaseUrlEnvironment: this.getCustomerFundingEnvironment(),
-      setupIntentId,
+    const environment = this.getCustomerFundingEnvironment();
+
+    if (setupIntentId !== null && setupIntentId.trim() !== '') {
+      await this.stripe.completeWorkspacePaymentMethodSetup({
+        metronomeBaseUrlEnvironment: environment,
+        setupIntentId,
+        workspaceId,
+      });
+    }
+
+    const billingSummary = await this.stripe.updateWorkspaceBillingDetails({
+      billingDetails,
+      metronomeBaseUrlEnvironment: environment,
       workspaceId,
     });
 
+    if (!billingSummary.paymentMethodReady) {
+      throw new Error('Customer AI funding payment method is unavailable');
+    }
+
     return {
+      billingSummary,
       clientSecret: null,
       publishableKey: null,
       ready: true,
@@ -229,6 +280,10 @@ export class ManagedProviderCustomerFundingService {
     }
 
     const paymentMethod = await this.stripe.assertWorkspacePaymentMethodReady({
+      metronomeBaseUrlEnvironment: environment,
+      workspaceId: input.workspaceId,
+    });
+    await this.stripe.assertWorkspaceBillingDetailsReady({
       metronomeBaseUrlEnvironment: environment,
       workspaceId: input.workspaceId,
     });

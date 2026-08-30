@@ -24,6 +24,36 @@ describe('ManagedProviderCustomerFundingService', () => {
       `${workspaceId}:AI_25_USD:${idempotencyKey}:fiat-credit-type-id:USD (cents)`,
     )
     .digest('hex');
+  const billingDetails = {
+    city: 'San Francisco',
+    country: 'US',
+    line1: '123 Market Street',
+    line2: null,
+    name: 'Myah Test LLC',
+    postalCode: '94105',
+    state: 'CA',
+    taxIdType: 'us_ein' as const,
+    taxIdValue: '12-3456789',
+  };
+  const billingSummary = {
+    address: {
+      city: billingDetails.city,
+      country: billingDetails.country,
+      line1: billingDetails.line1,
+      line2: null,
+      postalCode: billingDetails.postalCode,
+      state: billingDetails.state,
+    },
+    card: {
+      brand: 'visa',
+      expiryMonth: 12,
+      expiryYear: 2030,
+      last4: '4242',
+    },
+    name: billingDetails.name,
+    paymentMethodReady: true,
+    taxId: { country: 'US', type: 'us_ein' },
+  };
 
   const createAction = (
     overrides: Partial<ManagedProviderFundingActionEntity> = {},
@@ -140,6 +170,9 @@ describe('ManagedProviderCustomerFundingService', () => {
         ready: true,
         stripeCustomerId,
       }),
+      assertWorkspaceBillingDetailsReady: jest
+        .fn()
+        .mockResolvedValue(billingSummary),
       completeWorkspacePaymentMethodSetup: jest.fn().mockResolvedValue({
         paymentMethodId: 'pm_default',
         stripeCustomerId,
@@ -151,6 +184,10 @@ describe('ManagedProviderCustomerFundingService', () => {
         setupIntentId: 'seti_id',
         stripeCustomerId,
       }),
+      getWorkspaceBillingDetailsSummary: jest
+        .fn()
+        .mockResolvedValue(billingSummary),
+      updateWorkspaceBillingDetails: jest.fn().mockResolvedValue(billingSummary),
     };
     const twentyConfig = {
       get: jest.fn((key: keyof typeof config) => config[key]),
@@ -536,8 +573,8 @@ describe('ManagedProviderCustomerFundingService', () => {
     await expect(
       service.isCustomerFundingPaymentMethodReady(workspaceId),
     ).resolves.toBe(true);
-    stripe.assertWorkspacePaymentMethodReady.mockRejectedValue(
-      new Error('payment method missing'),
+    stripe.assertWorkspaceBillingDetailsReady.mockRejectedValue(
+      new Error('billing details missing'),
     );
     await expect(
       service.isCustomerFundingPaymentMethodReady(workspaceId),
@@ -551,6 +588,7 @@ describe('ManagedProviderCustomerFundingService', () => {
     await expect(
       service.prepareCustomerFundingPaymentMethod(workspaceId),
     ).resolves.toEqual({
+      billingSummary,
       clientSecret: null,
       publishableKey: null,
       ready: true,
@@ -561,13 +599,23 @@ describe('ManagedProviderCustomerFundingService', () => {
 
   it('returns only bounded SetupIntent fields when a payment method is missing', async () => {
     const { service, stripe } = createHarness();
-    stripe.assertWorkspacePaymentMethodReady.mockRejectedValue(
-      new Error('payment method missing'),
+    stripe.getWorkspaceBillingDetailsSummary.mockResolvedValue({
+      ...billingSummary,
+      card: null,
+      paymentMethodReady: false,
+    });
+    stripe.assertWorkspaceBillingDetailsReady.mockRejectedValue(
+      new Error('billing details missing'),
     );
 
     await expect(
       service.prepareCustomerFundingPaymentMethod(workspaceId),
     ).resolves.toEqual({
+      billingSummary: {
+        ...billingSummary,
+        card: null,
+        paymentMethodReady: false,
+      },
       clientSecret: 'seti_secret',
       publishableKey: 'pk_test',
       ready: false,
@@ -582,8 +630,10 @@ describe('ManagedProviderCustomerFundingService', () => {
       service.completeCustomerFundingPaymentMethod(
         workspaceId,
         'seti_id',
+        billingDetails,
       ),
     ).resolves.toEqual({
+      billingSummary,
       clientSecret: null,
       publishableKey: null,
       ready: true,
@@ -592,6 +642,11 @@ describe('ManagedProviderCustomerFundingService', () => {
     expect(stripe.completeWorkspacePaymentMethodSetup).toHaveBeenCalledWith({
       metronomeBaseUrlEnvironment: 'SANDBOX',
       setupIntentId: 'seti_id',
+      workspaceId,
+    });
+    expect(stripe.updateWorkspaceBillingDetails).toHaveBeenCalledWith({
+      billingDetails,
+      metronomeBaseUrlEnvironment: 'SANDBOX',
       workspaceId,
     });
   });

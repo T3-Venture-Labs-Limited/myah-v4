@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { Injectable, Inject, Optional } from '@nestjs/common';
 import Stripe from 'stripe';
 import { z } from 'zod';
@@ -9,6 +11,38 @@ import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
 export type MetronomeBaseUrlEnvironment = 'PRODUCTION' | 'SANDBOX';
+
+export type WorkspaceBillingDetailsInput = Readonly<{
+  city: string;
+  country: string;
+  line1: string;
+  line2?: string | null;
+  name: string;
+  postalCode: string;
+  state?: string | null;
+  taxIdType?: Stripe.TaxIdCreateParams.Type | null;
+  taxIdValue?: string | null;
+}>;
+
+export type WorkspaceBillingDetailsSummary = Readonly<{
+  address: Readonly<{
+    city: string | null;
+    country: string | null;
+    line1: string | null;
+    line2: string | null;
+    postalCode: string | null;
+    state: string | null;
+  }>;
+  card: Readonly<{
+    brand: string;
+    expiryMonth: number;
+    expiryYear: number;
+    last4: string;
+  }> | null;
+  name: string | null;
+  paymentMethodReady: boolean;
+  taxId: Readonly<{ country: string | null; type: string }> | null;
+}>;
 
 export type ReadPaymentGatedInvoicePaymentInput = Readonly<{
   expectedPaymentIntentId: string;
@@ -567,6 +601,247 @@ export class ManagedProviderStripeService {
     }
 
     return { ...base, status: 'PENDING' };
+  }
+
+  async updateWorkspaceBillingDetails({
+    billingDetails,
+    metronomeBaseUrlEnvironment,
+    workspaceId,
+  }: {
+    billingDetails: WorkspaceBillingDetailsInput;
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment;
+    workspaceId: string;
+  }): Promise<WorkspaceBillingDetailsSummary> {
+    const normalized = {
+      city: billingDetails.city.trim(),
+      country: billingDetails.country.trim().toUpperCase(),
+      line1: billingDetails.line1.trim(),
+      line2: billingDetails.line2?.trim() || null,
+      name: billingDetails.name.trim(),
+      postalCode: billingDetails.postalCode.trim(),
+      state: billingDetails.state?.trim() || null,
+      taxIdType: billingDetails.taxIdType ?? null,
+      taxIdValue: billingDetails.taxIdValue?.trim() || null,
+    };
+
+    if (
+      normalized.city === '' ||
+      !/^[A-Z]{2}$/.test(normalized.country) ||
+      normalized.line1 === '' ||
+      normalized.name === '' ||
+      normalized.postalCode === '' ||
+      (normalized.taxIdType === null) !== (normalized.taxIdValue === null)
+    ) {
+      throw new Error('Workspace Stripe billing details are invalid');
+    }
+
+    const customerId = await this.persistedCustomerId(workspaceId);
+    const stripe = this.stripe();
+    await stripe.customers.update(customerId, {
+      address: {
+        city: normalized.city,
+        country: normalized.country,
+        line1: normalized.line1,
+        line2: normalized.line2 ?? undefined,
+        postal_code: normalized.postalCode,
+        state: normalized.state ?? undefined,
+      },
+      name: normalized.name,
+    });
+
+    if (normalized.taxIdType !== null && normalized.taxIdValue !== null) {
+      let taxIds = await this.listWorkspaceTaxIds(
+        customerId,
+        metronomeBaseUrlEnvironment,
+      );
+      let matches = taxIds.filter(
+        (taxId) =>
+          taxId.type === normalized.taxIdType &&
+          taxId.value === normalized.taxIdValue,
+      );
+
+      if (matches.length === 0) {
+        const taxId = await stripe.taxIds.create(
+          {
+            owner: { customer: customerId, type: 'customer' },
+            type: normalized.taxIdType,
+            value: normalized.taxIdValue,
+          },
+          {
+            idempotencyKey: `customer-tax-id:${createHash('sha256')
+              .update(
+                `${workspaceId}:${normalized.taxIdType}:${normalized.taxIdValue}`,
+              )
+              .digest('hex')}`,
+          },
+        );
+
+        if (
+          taxId.customer !== customerId ||
+          taxId.livemode !==
+            this.expectedLivemode(metronomeBaseUrlEnvironment) ||
+          taxId.type !== normalized.taxIdType ||
+          taxId.value !== normalized.taxIdValue
+        ) {
+          throw new Error('Workspace Stripe tax ID proof is invalid');
+        }
+
+        taxIds = await this.listWorkspaceTaxIds(
+          customerId,
+          metronomeBaseUrlEnvironment,
+        );
+        matches = taxIds.filter(
+          (candidate) =>
+            candidate.type === normalized.taxIdType &&
+            candidate.value === normalized.taxIdValue,
+        );
+      }
+
+      if (matches.length !== 1) {
+        throw new Error('Workspace Stripe tax ID proof is invalid');
+      }
+    }
+
+    const summary = await this.getWorkspaceBillingDetailsSummary({
+      metronomeBaseUrlEnvironment,
+      workspaceId,
+    });
+
+    if (
+      summary.name !== normalized.name ||
+      summary.address.city !== normalized.city ||
+      summary.address.country !== normalized.country ||
+      summary.address.line1 !== normalized.line1 ||
+      summary.address.line2 !== normalized.line2 ||
+      summary.address.postalCode !== normalized.postalCode ||
+      summary.address.state !== normalized.state ||
+      (normalized.taxIdType !== null &&
+        summary.taxId?.type !== normalized.taxIdType)
+    ) {
+      throw new Error('Workspace Stripe billing details proof is invalid');
+    }
+
+    return summary;
+  }
+
+  async getWorkspaceBillingDetailsSummary({
+    metronomeBaseUrlEnvironment,
+    workspaceId,
+  }: {
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment;
+    workspaceId: string;
+  }): Promise<WorkspaceBillingDetailsSummary> {
+    const customerId = await this.persistedCustomerId(workspaceId);
+    const customer = await this.stripe().customers.retrieve(customerId, {
+      expand: ['invoice_settings.default_payment_method'],
+    });
+
+    if (
+      customer.deleted ||
+      customer.id !== customerId ||
+      customer.livemode !==
+        this.expectedLivemode(metronomeBaseUrlEnvironment)
+    ) {
+      throw new Error('Stripe Customer proof is invalid');
+    }
+
+    const taxIds = await this.listWorkspaceTaxIds(
+      customerId,
+      metronomeBaseUrlEnvironment,
+    );
+    const paymentMethod = customer.invoice_settings?.default_payment_method;
+    const expandedPaymentMethod =
+      typeof paymentMethod === 'object' && paymentMethod !== null
+        ? paymentMethod
+        : null;
+    const card = expandedPaymentMethod?.card;
+    const address = customer.address;
+    const trimOrNull = (value: string | null | undefined): string | null =>
+      value?.trim() || null;
+
+    return {
+      address: {
+        city: trimOrNull(address?.city),
+        country: trimOrNull(address?.country)?.toUpperCase() ?? null,
+        line1: trimOrNull(address?.line1),
+        line2: trimOrNull(address?.line2),
+        postalCode: trimOrNull(address?.postal_code),
+        state: trimOrNull(address?.state),
+      },
+      card:
+        card === undefined
+          ? null
+          : {
+              brand: card.brand,
+              expiryMonth: card.exp_month,
+              expiryYear: card.exp_year,
+              last4: card.last4,
+            },
+      name: trimOrNull(customer.name),
+      paymentMethodReady:
+        (typeof paymentMethod === 'string' && paymentMethod.trim() !== '') ||
+        (expandedPaymentMethod?.id.trim() ?? '') !== '',
+      taxId:
+        taxIds.length === 0
+          ? null
+          : { country: taxIds[0].country, type: taxIds[0].type },
+    };
+  }
+
+  async assertWorkspaceBillingDetailsReady({
+    metronomeBaseUrlEnvironment,
+    workspaceId,
+  }: {
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment;
+    workspaceId: string;
+  }): Promise<WorkspaceBillingDetailsSummary> {
+    const summary = await this.getWorkspaceBillingDetailsSummary({
+      metronomeBaseUrlEnvironment,
+      workspaceId,
+    });
+
+    if (
+      !summary.paymentMethodReady ||
+      summary.name === null ||
+      summary.address.city === null ||
+      summary.address.country === null ||
+      summary.address.line1 === null ||
+      summary.address.postalCode === null
+    ) {
+      throw new Error('Workspace Stripe billing details are not ready');
+    }
+
+    return summary;
+  }
+
+  private async listWorkspaceTaxIds(
+    customerId: string,
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment,
+  ): Promise<Stripe.TaxId[]> {
+    const response = await this.stripe().taxIds.list({
+      limit: 100,
+      owner: { customer: customerId, type: 'customer' },
+    });
+
+    if (
+      response.has_more ||
+      response.data.some((taxId) => {
+        const taxIdCustomer =
+          typeof taxId.customer === 'string'
+            ? taxId.customer
+            : taxId.customer?.id;
+
+        return (
+          taxIdCustomer !== customerId ||
+          taxId.livemode !==
+            this.expectedLivemode(metronomeBaseUrlEnvironment)
+        );
+      })
+    ) {
+      throw new Error('Workspace Stripe tax ID proof is invalid');
+    }
+
+    return response.data;
   }
 
   private expectedLivemode(

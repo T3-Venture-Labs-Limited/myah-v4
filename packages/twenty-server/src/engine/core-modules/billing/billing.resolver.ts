@@ -116,15 +116,19 @@ export class BillingResolver {
   async managedProviderBillingStatus(
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<ManagedProviderBillingStatusDTO> {
-    const [status, history, paymentMethodReady] = await Promise.all([
-      this.managedProviderBillingStatusService.getStatus(workspace.id),
-      this.managedProviderCustomerFundingService.listCustomerFundingHistory(
-        workspace.id,
-      ),
-      this.managedProviderCustomerFundingService.isCustomerFundingPaymentMethodReady(
-        workspace.id,
-      ),
-    ]);
+    const [status, history, paymentMethodReady, billingSummary] =
+      await Promise.all([
+        this.managedProviderBillingStatusService.getStatus(workspace.id),
+        this.managedProviderCustomerFundingService.listCustomerFundingHistory(
+          workspace.id,
+        ),
+        this.managedProviderCustomerFundingService.isCustomerFundingPaymentMethodReady(
+          workspace.id,
+        ),
+        this.managedProviderCustomerFundingService.getCustomerFundingBillingSummary(
+          workspace.id,
+        ),
+      ]);
 
     return {
       ...status,
@@ -132,6 +136,7 @@ export class BillingResolver {
         this.managedProviderCustomerFundingService.isCustomerFundingAvailable(
           workspace.id,
         ),
+      customerFundingBillingSummary: billingSummary,
       customerFundingHistory: history.map((action) =>
         this.toCustomerFundingHistoryItem(action),
       ),
@@ -209,11 +214,14 @@ export class BillingResolver {
   async completeManagedProviderCustomerFundingPaymentMethod(
     @AuthWorkspace() workspace: WorkspaceEntity,
     @Args()
-    { setupIntentId }: CompleteManagedProviderCustomerFundingPaymentMethodInput,
+    input: CompleteManagedProviderCustomerFundingPaymentMethodInput,
   ): Promise<ManagedProviderCustomerFundingPaymentMethodDTO> {
+    const { setupIntentId, ...billingDetails } = input;
+
     return await this.managedProviderCustomerFundingService.completeCustomerFundingPaymentMethod(
       workspace.id,
       setupIntentId,
+      billingDetails,
     );
   }
 

@@ -103,6 +103,10 @@ describe('ManagedProviderStripeService', () => {
           status: 'succeeded',
         }),
       },
+      taxIds: {
+        create: jest.fn(),
+        list: jest.fn().mockResolvedValue({ data: [], has_more: false }),
+      },
     };
     const installationRepository = {
       findOneBy: jest.fn().mockResolvedValue(installation),
@@ -1109,5 +1113,138 @@ describe('ManagedProviderStripeService', () => {
     await expect(
       service.readPaymentGatedInvoicePayment(paymentGatedInput),
     ).rejects.toThrow('Stripe payment-gated invoice proof is invalid');
+  });
+
+  const billingDetails = {
+    city: 'San Francisco',
+    country: 'US',
+    line1: '123 Market Street',
+    line2: null,
+    name: 'Myah Test LLC',
+    postalCode: '94105',
+    state: 'CA',
+    taxIdType: 'us_ein' as const,
+    taxIdValue: '12-3456789',
+  };
+
+  const readyBillingCustomer = {
+    address: {
+      city: billingDetails.city,
+      country: billingDetails.country,
+      line1: billingDetails.line1,
+      line2: billingDetails.line2,
+      postal_code: billingDetails.postalCode,
+      state: billingDetails.state,
+    },
+    deleted: false,
+    id: stripeCustomerId,
+    invoice_settings: {
+      default_payment_method: {
+        card: {
+          brand: 'visa',
+          exp_month: 12,
+          exp_year: 2030,
+          last4: '4242',
+        },
+        id: paymentMethodId,
+        type: 'card',
+      },
+    },
+    livemode: false,
+    name: billingDetails.name,
+  };
+
+  const readyTaxId = {
+    country: 'US',
+    customer: stripeCustomerId,
+    id: 'txi_1',
+    livemode: false,
+    owner: { customer: stripeCustomerId, customer_account: null, type: 'customer' },
+    type: 'us_ein',
+    value: billingDetails.taxIdValue,
+  };
+
+  it('updates and reads back exact billing address and optional tax ID as a safe summary', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.customers.retrieve.mockResolvedValue(readyBillingCustomer);
+    stripe.taxIds.list
+      .mockResolvedValue({ data: [readyTaxId], has_more: false })
+      .mockResolvedValueOnce({ data: [], has_more: false })
+      .mockResolvedValueOnce({ data: [readyTaxId], has_more: false });
+    stripe.taxIds.create.mockResolvedValue(readyTaxId);
+
+    await expect(
+      service.updateWorkspaceBillingDetails({
+        billingDetails,
+        metronomeBaseUrlEnvironment: 'SANDBOX',
+        workspaceId,
+      }),
+    ).resolves.toEqual({
+      address: {
+        city: billingDetails.city,
+        country: billingDetails.country,
+        line1: billingDetails.line1,
+        line2: null,
+        postalCode: billingDetails.postalCode,
+        state: billingDetails.state,
+      },
+      card: {
+        brand: 'visa',
+        expiryMonth: 12,
+        expiryYear: 2030,
+        last4: '4242',
+      },
+      name: billingDetails.name,
+      paymentMethodReady: true,
+      taxId: { country: 'US', type: 'us_ein' },
+    });
+    expect(stripe.customers.update).toHaveBeenCalledWith(stripeCustomerId, {
+      address: {
+        city: billingDetails.city,
+        country: billingDetails.country,
+        line1: billingDetails.line1,
+        line2: undefined,
+        postal_code: billingDetails.postalCode,
+        state: billingDetails.state,
+      },
+      name: billingDetails.name,
+    });
+    expect(stripe.taxIds.create).toHaveBeenCalledWith(
+      {
+        owner: { customer: stripeCustomerId, type: 'customer' },
+        type: 'us_ein',
+        value: billingDetails.taxIdValue,
+      },
+      { idempotencyKey: expect.stringMatching(/^customer-tax-id:/) },
+    );
+    expect(JSON.stringify(await service.getWorkspaceBillingDetailsSummary({
+      metronomeBaseUrlEnvironment: 'SANDBOX',
+      workspaceId,
+    }))).not.toContain(billingDetails.taxIdValue);
+  });
+
+  it('rejects billing readiness when required tax location fields are missing', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.customers.retrieve.mockResolvedValue({
+      ...readyBillingCustomer,
+      address: { ...readyBillingCustomer.address, postal_code: null },
+    });
+    stripe.taxIds.list.mockResolvedValue({
+      data: [readyTaxId],
+      has_more: false,
+    });
+
+    await expect(
+      service.assertWorkspaceBillingDetailsReady({
+        metronomeBaseUrlEnvironment: 'SANDBOX',
+        workspaceId,
+      }),
+    ).rejects.toThrow('Workspace Stripe billing details are not ready');
   });
 });
