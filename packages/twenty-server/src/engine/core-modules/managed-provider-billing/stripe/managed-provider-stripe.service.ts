@@ -65,11 +65,13 @@ const stripePaymentGatedInvoiceSchema = z.object({
   }),
   subtotal: safeStripeCentsSchema,
   total: safeStripeCentsSchema,
-  total_taxes: z.array(
-    z.object({
-      amount: safeStripeCentsSchema,
-    }),
-  ),
+  total_taxes: z
+    .array(
+      z.object({
+        amount: safeStripeCentsSchema,
+      }),
+    )
+    .nullable(),
 });
 const stripePaymentGatedChargeSchema = z.object({
   amount: safeStripeCentsSchema,
@@ -375,7 +377,7 @@ export class ManagedProviderStripeService {
     const paymentIntent = parsedPaymentIntent.data;
     let taxCents = 0;
 
-    for (const tax of invoice.total_taxes) {
+    for (const tax of invoice.total_taxes ?? []) {
       taxCents += tax.amount;
       if (!Number.isSafeInteger(taxCents)) {
         throw new Error('Stripe payment-gated invoice proof is invalid');
@@ -444,10 +446,6 @@ export class ManagedProviderStripeService {
       const rawInvoicePayments = await stripe.invoicePayments.list({
         invoice: invoice.id,
         limit: 2,
-        payment: {
-          payment_intent: paymentIntent.id,
-          type: 'payment_intent',
-        },
         status: 'paid',
       });
       const parsedInvoicePayments =
