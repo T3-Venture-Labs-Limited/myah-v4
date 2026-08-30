@@ -234,6 +234,450 @@ export class ManagedProviderCustomerFundingService {
     }
   }
 
+  async reconcileCustomerFunding(
+    action: ManagedProviderFundingActionEntity,
+  ): Promise<ManagedProviderFundingActionEntity> {
+    if (
+      action.state === 'SUCCEEDED' ||
+      action.state === 'FAILED_DEFINITIVE' ||
+      action.state === 'REFUND_INTENT_RECORDED' ||
+      action.state === 'REFUND_RECONCILIATION_REQUIRED' ||
+      action.state === 'REFUNDED'
+    ) {
+      return action;
+    }
+
+    try {
+      return await this.reconcileCustomerFundingUnsafe(action);
+    } catch {
+      if (action.workspaceId === null) {
+        throw new Error('Customer AI funding workspace is invalid');
+      }
+
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'RECONCILIATION_REQUIRED',
+        patch: {
+          nextReconciliationAt: new Date(Date.now() + 5 * 60 * 1000),
+          reconciliationClaimedAt: null,
+          safeErrorCode: 'CUSTOMER_FUNDING_RECONCILIATION_REQUIRED',
+        },
+        workspaceId: action.workspaceId,
+      });
+    }
+  }
+
+  async getCustomerFundingPaymentAction({
+    action,
+    workspaceId,
+  }: {
+    action: ManagedProviderFundingActionEntity;
+    workspaceId: string;
+  }): Promise<{
+    clientSecret: string;
+    paymentIntentId: string;
+    stripeInvoiceId: string;
+  }> {
+    const evidence = customerFundingEvidenceSchema.safeParse(
+      action.paymentEvidence,
+    );
+    const principalCents = Number(action.prepaidPrincipalCents);
+    const taxCents = Number(action.taxCents);
+    const totalCents = Number(action.collectedTotalCents);
+
+    if (
+      !evidence.success ||
+      action.state !== 'PAYMENT_ACTION_REQUIRED' ||
+      action.workspaceId !== workspaceId ||
+      action.metronomeCustomerId === null ||
+      action.metronomeContractId === null ||
+      action.commitmentId === null ||
+      action.metronomeInvoiceId === null ||
+      action.stripeBillingConfigurationId === null ||
+      action.stripeDeliveryMethodId === null ||
+      action.stripeCustomerId === null ||
+      action.stripeInvoiceId === null ||
+      action.stripePaymentIntentId === null ||
+      !Number.isSafeInteger(principalCents) ||
+      principalCents <= 0 ||
+      !Number.isSafeInteger(taxCents) ||
+      taxCents < 0 ||
+      !Number.isSafeInteger(totalCents) ||
+      totalCents !== principalCents + taxCents ||
+      Date.now() > Date.parse(evidence.data.paymentActionDeadlineAt)
+    ) {
+      throw new Error('Customer AI payment action is unavailable');
+    }
+
+    const environment = this.twentyConfig.get(
+      'METRONOME_BASE_URL_ENVIRONMENT',
+    );
+
+    if (environment !== 'PRODUCTION' && environment !== 'SANDBOX') {
+      throw new Error('Customer AI payment action is unavailable');
+    }
+
+    const billingContext =
+      await this.workspaceCustomer.ensureWorkspaceContractStripeBillingContext({
+        billingConfigurationId: action.stripeBillingConfigurationId,
+        contractId: action.metronomeContractId,
+        environment,
+        workspaceId,
+      });
+
+    if (
+      billingContext.deliveryMethodId !== action.stripeDeliveryMethodId ||
+      billingContext.metronomeCustomerId !== action.metronomeCustomerId ||
+      billingContext.stripeCustomerId !== action.stripeCustomerId ||
+      billingContext.fiatCreditTypeId !== evidence.data.fiatCreditTypeId
+    ) {
+      throw new Error('Customer AI payment action is unavailable');
+    }
+
+    const invoice =
+      await this.metronomeClient.readPaymentGatedPrepaidCommitInvoice({
+        commitmentId: action.commitmentId,
+        contractId: action.metronomeContractId,
+        customerId: action.metronomeCustomerId,
+        fiatCreditTypeId: evidence.data.fiatCreditTypeId,
+        invoiceId: action.metronomeInvoiceId,
+        principalCents,
+      });
+    const external = invoice.externalInvoice;
+
+    if (
+      invoice.status !== 'FINALIZED' ||
+      external === null ||
+      external.stripeInvoiceId !== action.stripeInvoiceId ||
+      external.stripePaymentIntentId !== action.stripePaymentIntentId ||
+      external.subtotalCents !== principalCents ||
+      external.taxCents !== taxCents ||
+      external.totalCents !== totalCents
+    ) {
+      throw new Error('Customer AI payment action is unavailable');
+    }
+
+    const stripeState = await this.stripe.readPaymentGatedInvoicePayment({
+      expectedPaymentIntentId: action.stripePaymentIntentId,
+      expectedPrincipalCents: principalCents,
+      expectedTaxCents: taxCents,
+      expectedTotalCents: totalCents,
+      metronomeBaseUrlEnvironment: environment,
+      metronomeInvoiceId: action.metronomeInvoiceId,
+      stripeInvoiceId: action.stripeInvoiceId,
+      workspaceId,
+    });
+
+    if (stripeState.status !== 'ACTION_REQUIRED') {
+      throw new Error('Customer AI payment action is unavailable');
+    }
+
+    return {
+      clientSecret: stripeState.clientSecret,
+      paymentIntentId: stripeState.paymentIntentId,
+      stripeInvoiceId: stripeState.stripeInvoiceId,
+    };
+  }
+
+  async acknowledgeCustomerFundingPaymentAction({
+    action,
+    workspaceId,
+  }: {
+    action: ManagedProviderFundingActionEntity;
+    workspaceId: string;
+  }): Promise<ManagedProviderFundingActionEntity> {
+    const evidence = customerFundingEvidenceSchema.safeParse(
+      action.paymentEvidence,
+    );
+
+    if (
+      !evidence.success ||
+      action.state !== 'PAYMENT_ACTION_REQUIRED' ||
+      action.workspaceId !== workspaceId ||
+      Date.now() > Date.parse(evidence.data.paymentActionDeadlineAt)
+    ) {
+      throw new Error('Customer AI payment action is unavailable');
+    }
+
+    return await this.fundingJournal.transitionCompareAndSet({
+      expectedState: 'PAYMENT_ACTION_REQUIRED',
+      id: action.id,
+      nextState: 'PAYMENT_PENDING',
+      patch: {
+        nextReconciliationAt: new Date(),
+        reconciliationClaimedAt: null,
+        safeErrorCode: null,
+      },
+      workspaceId,
+    });
+  }
+
+  private async reconcileCustomerFundingUnsafe(
+    action: ManagedProviderFundingActionEntity,
+  ): Promise<ManagedProviderFundingActionEntity> {
+    const evidence = customerFundingEvidenceSchema.safeParse(
+      action.paymentEvidence,
+    );
+    const principalCents = Number(action.prepaidPrincipalCents);
+    const chargeProductIds = action.applicableProductIds;
+
+    if (
+      !evidence.success ||
+      action.actionType !== 'PREPAID_COMMIT' ||
+      action.workspaceId === null ||
+      action.metronomeCustomerId === null ||
+      action.metronomeContractId === null ||
+      action.metronomeEditId === null ||
+      action.commitmentId === null ||
+      action.stripeBillingConfigurationId === null ||
+      action.stripeDeliveryMethodId === null ||
+      action.stripeCustomerId === null ||
+      action.creditProductId === null ||
+      chargeProductIds?.length !== 1 ||
+      !Number.isSafeInteger(principalCents) ||
+      principalCents <= 0 ||
+      !Number.isFinite(Date.parse(evidence.data.purchaseAt)) ||
+      !Number.isFinite(Date.parse(evidence.data.paymentActionDeadlineAt))
+    ) {
+      throw new Error('Customer AI funding evidence is invalid');
+    }
+
+    const environment = this.twentyConfig.get(
+      'METRONOME_BASE_URL_ENVIRONMENT',
+    );
+
+    if (environment !== 'PRODUCTION' && environment !== 'SANDBOX') {
+      throw new Error('Customer AI funding environment is invalid');
+    }
+
+    const billingContext =
+      await this.workspaceCustomer.ensureWorkspaceContractStripeBillingContext({
+        billingConfigurationId: action.stripeBillingConfigurationId,
+        contractId: action.metronomeContractId,
+        environment,
+        workspaceId: action.workspaceId,
+      });
+
+    if (
+      billingContext.billingConfigurationId !==
+        action.stripeBillingConfigurationId ||
+      billingContext.deliveryMethodId !== action.stripeDeliveryMethodId ||
+      billingContext.metronomeCustomerId !== action.metronomeCustomerId ||
+      billingContext.metronomeContractId !== action.metronomeContractId ||
+      billingContext.stripeCustomerId !== action.stripeCustomerId ||
+      billingContext.fiatCreditTypeId !== evidence.data.fiatCreditTypeId ||
+      billingContext.fiatCreditTypeName !== evidence.data.fiatCreditTypeName
+    ) {
+      throw new Error('Customer AI funding billing context is invalid');
+    }
+
+    const commitInput = {
+      chargeProductId: chargeProductIds[0],
+      commitmentProductId: action.creditProductId,
+      contractId: action.metronomeContractId,
+      customerId: action.metronomeCustomerId,
+      fundingActionId: action.id,
+      fundingIdentity: evidence.data.fundingIdentity,
+      principalCents,
+      purchaseAt: evidence.data.purchaseAt,
+      uniquenessKey: action.metronomeUniquenessKey,
+    };
+    const recovered =
+      await this.metronomeClient.recoverPaymentGatedPrepaidCommit(commitInput);
+
+    if (
+      recovered === null ||
+      recovered.commitmentId !== action.commitmentId ||
+      recovered.metronomeEditId !== action.metronomeEditId ||
+      recovered.invoiceId === null
+    ) {
+      throw new Error('Customer AI funding commitment is invalid');
+    }
+
+    const invoice =
+      await this.metronomeClient.readPaymentGatedPrepaidCommitInvoice({
+        commitmentId: action.commitmentId,
+        contractId: action.metronomeContractId,
+        customerId: action.metronomeCustomerId,
+        fiatCreditTypeId: evidence.data.fiatCreditTypeId,
+        invoiceId: recovered.invoiceId,
+        principalCents,
+      });
+    const pendingPatch = {
+      metronomeInvoiceId: invoice.metronomeInvoiceId,
+      nextReconciliationAt: new Date(Date.now() + 5 * 60 * 1000),
+      reconciliationClaimedAt: null,
+    };
+    const external = invoice.externalInvoice;
+
+    if (external === null || invoice.status !== 'FINALIZED') {
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'PAYMENT_PENDING',
+        patch: pendingPatch,
+        workspaceId: action.workspaceId,
+      });
+    }
+
+    if (
+      external.stripeInvoiceId === null ||
+      external.stripePaymentIntentId === null ||
+      external.subtotalCents === null ||
+      external.taxCents === null ||
+      external.totalCents === null
+    ) {
+      if (
+        external.status === 'PAYMENT_FAILED' ||
+        external.status === 'UNCOLLECTIBLE' ||
+        external.status === 'VOID' ||
+        external.status === 'DELETED' ||
+        external.status === 'INVALID_REQUEST_ERROR' ||
+        external.status === 'SKIPPED'
+      ) {
+        return await this.fundingJournal.transitionCompareAndSet({
+          expectedState: action.state,
+          id: action.id,
+          nextState: 'FAILED_DEFINITIVE',
+          patch: {
+            ...pendingPatch,
+            expiresAt: null,
+            failureCode: `METRONOME_${external.status}`,
+            nextReconciliationAt: null,
+          },
+          workspaceId: action.workspaceId,
+        });
+      }
+
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'PAYMENT_PENDING',
+        patch: pendingPatch,
+        workspaceId: action.workspaceId,
+      });
+    }
+
+    const stripeState = await this.stripe.readPaymentGatedInvoicePayment({
+      expectedPaymentIntentId: external.stripePaymentIntentId,
+      expectedPrincipalCents: external.subtotalCents,
+      expectedTaxCents: external.taxCents,
+      expectedTotalCents: external.totalCents,
+      metronomeBaseUrlEnvironment: environment,
+      metronomeInvoiceId: invoice.metronomeInvoiceId,
+      stripeInvoiceId: external.stripeInvoiceId,
+      workspaceId: action.workspaceId,
+    });
+    const paymentPatch = {
+      collectedTotalCents: stripeState.totalCents,
+      metronomeInvoiceId: invoice.metronomeInvoiceId,
+      paymentReceipt: {
+        invoiceUrl: stripeState.invoiceUrl,
+        paymentIntentId: stripeState.paymentIntentId,
+        principalCents: stripeState.principalCents,
+        status: stripeState.status,
+        stripeInvoiceId: stripeState.stripeInvoiceId,
+        taxCents: stripeState.taxCents,
+        totalCents: stripeState.totalCents,
+      },
+      prepaidPrincipalCents: stripeState.principalCents,
+      reconciliationClaimedAt: null,
+      stripeInvoiceId: stripeState.stripeInvoiceId,
+      stripePaymentIntentId: stripeState.paymentIntentId,
+      taxCents: stripeState.taxCents,
+    };
+
+    if (stripeState.status === 'FAILED_DEFINITIVE') {
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'FAILED_DEFINITIVE',
+        patch: {
+          ...paymentPatch,
+          expiresAt: null,
+          failureCode: stripeState.reason,
+          nextReconciliationAt: null,
+        },
+        workspaceId: action.workspaceId,
+      });
+    }
+
+    if (stripeState.status === 'ACTION_REQUIRED') {
+      const deadline = Date.parse(evidence.data.paymentActionDeadlineAt);
+
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState:
+          Date.now() > deadline
+            ? 'RECONCILIATION_REQUIRED'
+            : 'PAYMENT_ACTION_REQUIRED',
+        patch: {
+          ...paymentPatch,
+          nextReconciliationAt: new Date(
+            Date.now() > deadline
+              ? Date.now() + 24 * 60 * 60 * 1000
+              : Math.min(deadline, Date.now() + 5 * 60 * 1000),
+          ),
+          ...(Date.now() > deadline
+            ? { safeErrorCode: 'PAYMENT_ACTION_DEADLINE_EXPIRED' }
+            : {}),
+        },
+        workspaceId: action.workspaceId,
+      });
+    }
+
+    if (stripeState.status === 'PENDING') {
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'PAYMENT_PENDING',
+        patch: {
+          ...paymentPatch,
+          nextReconciliationAt: new Date(Date.now() + 5 * 60 * 1000),
+        },
+        workspaceId: action.workspaceId,
+      });
+    }
+
+    await this.metronomeClient.updatePaymentGatedPrepaidCommitExpiry({
+      accessScheduleItemId: recovered.accessScheduleItemId,
+      commitmentId: recovered.commitmentId,
+      contractId: action.metronomeContractId,
+      customerId: action.metronomeCustomerId,
+      paidAt: stripeState.paidAt,
+      uniquenessKey: `${action.metronomeUniquenessKey}:paid-expiry`,
+    });
+    const expiryProof =
+      await this.metronomeClient.assertPaymentGatedPrepaidCommitExpiry({
+        ...commitInput,
+        accessScheduleItemId: recovered.accessScheduleItemId,
+        commitmentId: recovered.commitmentId,
+        invoiceId: recovered.invoiceId,
+        paidAt: stripeState.paidAt,
+      });
+
+    return await this.fundingJournal.transitionCompareAndSet({
+      expectedState: action.state,
+      id: action.id,
+      nextState: 'SUCCEEDED',
+      patch: {
+        ...paymentPatch,
+        expiresAt: new Date(expiryProof.expiresAt),
+        failureCode: null,
+        nextReconciliationAt: null,
+        paymentReceipt: {
+          ...paymentPatch.paymentReceipt,
+          paidAt: stripeState.paidAt,
+          status: 'PAID',
+        },
+        safeErrorCode: null,
+      },
+      workspaceId: action.workspaceId,
+    });
+  }
+
   private assertExistingReplay(
     existing: ManagedProviderFundingActionEntity,
     input: CreateCustomerFundingInput,
