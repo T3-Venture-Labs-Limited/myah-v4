@@ -2,7 +2,7 @@ import { MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST } from 'src/engine/metadata-m
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -76,6 +76,39 @@ export class ManagedProviderOperationService {
       throw new Error('Managed provider configuration is quarantined');
     }
   }
+  async listWorkspaceLaterSettleableOperations(
+    workspaceId: string,
+  ): Promise<ManagedProviderOperationEntity[]> {
+    if (workspaceId.trim() === '') {
+      throw new Error('Managed provider workspace is invalid');
+    }
+
+    return await this.operationRepository.find({
+      order: { createdAt: 'ASC' },
+      where: [
+        {
+          state: In([
+            ManagedProviderOperationState.RESERVED,
+            ManagedProviderOperationState.USAGE_PENDING,
+            ManagedProviderOperationState.USAGE_ACCEPTED,
+            ManagedProviderOperationState.RECONCILIATION_REQUIRED,
+          ]),
+          workspaceId,
+        },
+        {
+          completionOutcome: IsNull(),
+          state: ManagedProviderOperationState.RELEASED,
+          workspaceId,
+        },
+        {
+          completionOutcome: 'UNKNOWN',
+          state: ManagedProviderOperationState.RELEASED,
+          workspaceId,
+        },
+      ],
+    });
+  }
+
 
   async reserveOperation(
     input: ReserveManagedProviderOperationInput,
