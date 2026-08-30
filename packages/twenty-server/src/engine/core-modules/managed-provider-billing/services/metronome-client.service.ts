@@ -433,7 +433,7 @@ export class MetronomeClientService {
     deliveryMethodId: string;
     stripeCustomerId: string;
     stripeCollectionMethod: 'charge_automatically';
-  }): Promise<void> {
+  }): Promise<MetronomeBillingConfiguration> {
     const client = this.getClient();
     let writeError: unknown;
 
@@ -477,7 +477,7 @@ export class MetronomeClientService {
       current.stripeCustomerId === input.stripeCustomerId &&
       current.stripeCollectionMethod === input.stripeCollectionMethod
     ) {
-      return;
+      return current;
     }
 
     if (writeError !== undefined) {
@@ -487,6 +487,59 @@ export class MetronomeClientService {
     throw new MetronomeClientException(
       MetronomeClientExceptionCode.REQUEST_FAILED,
     );
+  }
+
+  async addStripeBillingConfigurationToContract(input: {
+    billingConfigurationId: string;
+    contractId: string;
+    customerId: string;
+    uniquenessKey: string;
+  }): Promise<{ metronomeEditId: string }> {
+    if (
+      [
+        input.billingConfigurationId,
+        input.contractId,
+        input.customerId,
+        input.uniquenessKey,
+      ].some((value) => value.trim() === '')
+    ) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.REQUEST_FAILED,
+      );
+    }
+
+    const client = this.getClient();
+
+    try {
+      const response = await client.v2.contracts.edit(
+        {
+          add_billing_provider_configuration_update: {
+            billing_provider_configuration: {
+              billing_provider: 'stripe',
+              billing_provider_configuration_id:
+                input.billingConfigurationId,
+              delivery_method: 'direct_to_billing_provider',
+            },
+            schedule: { effective_at: 'START_OF_CURRENT_PERIOD' },
+          },
+          contract_id: input.contractId,
+          customer_id: input.customerId,
+          uniqueness_key: input.uniquenessKey,
+        },
+        { idempotencyKey: input.uniquenessKey, maxRetries: 0 },
+      );
+      const editId = response.data.edit?.id;
+
+      if (response.data.id !== input.contractId || !editId?.trim()) {
+        throw new MetronomeClientException(
+          MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+        );
+      }
+
+      return { metronomeEditId: editId };
+    } catch (error) {
+      throw this.toWriteException(error);
+    }
   }
 
   async createContract({

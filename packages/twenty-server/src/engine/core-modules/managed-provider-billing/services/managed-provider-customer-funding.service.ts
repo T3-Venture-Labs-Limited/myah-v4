@@ -113,15 +113,22 @@ export class ManagedProviderCustomerFundingService {
       throw new Error('Customer AI funding is unavailable');
     }
 
-    const contractId = await this.workspaceCustomer.ensureWorkspaceContract(
-      input.workspaceId,
-    );
     const paymentMethod = await this.stripe.assertWorkspacePaymentMethodReady({
       metronomeBaseUrlEnvironment: environment,
       workspaceId: input.workspaceId,
     });
+    await this.workspaceCustomer.ensureWorkspaceCustomer(input.workspaceId);
+    const billingConfiguration =
+      await this.workspaceCustomer.ensureStripeBillingConfiguration(
+        input.workspaceId,
+        paymentMethod.stripeCustomerId,
+      );
+    const contractId = await this.workspaceCustomer.ensureWorkspaceContract(
+      input.workspaceId,
+    );
     const billingContext =
-      await this.workspaceCustomer.ensureWorkspaceStripeBillingContext({
+      await this.workspaceCustomer.ensureWorkspaceContractStripeBillingContext({
+        billingConfigurationId: billingConfiguration.id,
         contractId,
         environment,
         workspaceId: input.workspaceId,
@@ -130,6 +137,8 @@ export class ManagedProviderCustomerFundingService {
     if (
       paymentMethod.ready !== true ||
       paymentMethod.stripeCustomerId !== billingContext.stripeCustomerId ||
+      billingConfiguration.id !== billingContext.billingConfigurationId ||
+      billingConfiguration.stripeCustomerId !== billingContext.stripeCustomerId ||
       billingContext.metronomeContractId !== contractId ||
       billingContext.environment !== environment ||
       billingContext.fiatCreditTypeName !== 'USD (cents)'

@@ -3265,7 +3265,14 @@ describe('MetronomeClientService', () => {
           stripeCollectionMethod: 'charge_automatically',
           stripeCustomerId: 'cus_123',
         }),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        billingProviderType: 'stripe',
+        deliveryMethod: 'direct_to_billing_provider',
+        deliveryMethodId: 'delivery-method-id',
+        id: 'billing-config-id',
+        stripeCollectionMethod: 'charge_automatically',
+        stripeCustomerId: 'cus_123',
+      });
       expect(setBillingConfigurations).toHaveBeenCalledWith(
         {
           data: [
@@ -4652,6 +4659,74 @@ describe('MetronomeClientService', () => {
       }),
     ).rejects.toMatchObject({
       code: MetronomeClientExceptionCode.REQUEST_FAILED,
+    });
+  });
+
+  it('adds the exact Stripe billing configuration to an existing contract', async () => {
+    const edit = jest.fn().mockResolvedValue({
+      data: { id: 'contract-id', edit: { id: 'billing-edit-id' } },
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.addStripeBillingConfigurationToContract({
+        billingConfigurationId: 'billing-configuration-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        uniquenessKey: 'billing-update-key',
+      }),
+    ).resolves.toEqual({ metronomeEditId: 'billing-edit-id' });
+    expect(edit).toHaveBeenCalledWith(
+      {
+        add_billing_provider_configuration_update: {
+          billing_provider_configuration: {
+            billing_provider: 'stripe',
+            billing_provider_configuration_id: 'billing-configuration-id',
+            delivery_method: 'direct_to_billing_provider',
+          },
+          schedule: { effective_at: 'START_OF_CURRENT_PERIOD' },
+        },
+        contract_id: 'contract-id',
+        customer_id: 'customer-id',
+        uniqueness_key: 'billing-update-key',
+      },
+      { idempotencyKey: 'billing-update-key', maxRetries: 0 },
+    );
+  });
+
+  it('fails closed when the billing configuration edit receipt is incomplete', async () => {
+    const edit = jest.fn().mockResolvedValue({
+      data: { id: 'other-contract-id', edit: { id: 'billing-edit-id' } },
+    });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
+
+    await expect(
+      service.addStripeBillingConfigurationToContract({
+        billingConfigurationId: 'billing-configuration-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        uniquenessKey: 'billing-update-key',
+      }),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
     });
   });
 

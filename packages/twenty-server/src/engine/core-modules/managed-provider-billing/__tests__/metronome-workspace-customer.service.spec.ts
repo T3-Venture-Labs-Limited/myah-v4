@@ -1017,6 +1017,9 @@ describe('MetronomeWorkspaceCustomerService shared Stripe billing context', () =
       getBillingConfiguration: jest
         .fn()
         .mockResolvedValue(existingConfiguration),
+      addStripeBillingConfigurationToContract: jest
+        .fn()
+        .mockResolvedValue({ metronomeEditId: 'billing-edit-id' }),
       getRateCard: jest.fn((rateCardId: string) =>
         Promise.resolve({
           aliases: [],
@@ -1068,6 +1071,39 @@ describe('MetronomeWorkspaceCustomerService shared Stripe billing context', () =
     expect(metronomeClientService.findCurrentContracts).toHaveBeenCalledWith(
       metronomeCustomerId,
     );
+  });
+
+  it('adds the exact Stripe configuration to a generic AI contract before returning context', async () => {
+    const contractWithoutBilling = {
+      ...aiContract,
+      activeBillingProviderConfiguration: null,
+    };
+    const { metronomeClientService, service } = createService({
+      contracts: [contractWithoutBilling],
+    });
+    metronomeClientService.findCurrentContracts
+      .mockResolvedValueOnce([contractWithoutBilling])
+      .mockResolvedValue([aiContract]);
+
+    await expect(
+      service.ensureWorkspaceContractStripeBillingContext({
+        billingConfigurationId: billingConfiguration.id,
+        contractId: aiContract.id,
+        environment: 'SANDBOX',
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({
+      billingConfigurationId: billingConfiguration.id,
+      metronomeContractId: aiContract.id,
+    });
+    expect(
+      metronomeClientService.addStripeBillingConfigurationToContract,
+    ).toHaveBeenCalledWith({
+      billingConfigurationId: billingConfiguration.id,
+      contractId: aiContract.id,
+      customerId: metronomeCustomerId,
+      uniquenessKey: `myah:workspace-contract-billing:${workspaceId}:${aiContract.id}`,
+    });
   });
 
   it.each([

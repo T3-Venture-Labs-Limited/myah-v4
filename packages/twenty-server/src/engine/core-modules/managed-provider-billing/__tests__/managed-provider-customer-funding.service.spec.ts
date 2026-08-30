@@ -105,18 +105,30 @@ describe('ManagedProviderCustomerFundingService', () => {
             metronomeEditId: 'edit-id',
           }),
     };
+    const billingContext = {
+      billingConfigurationId: 'billing-config-id',
+      deliveryMethodId: 'delivery-method-id',
+      environment: 'SANDBOX',
+      fiatCreditTypeId: 'fiat-credit-type-id',
+      fiatCreditTypeName: 'USD (cents)',
+      metronomeContractId: contractId,
+      metronomeCustomerId: customerId,
+      stripeCustomerId,
+    };
     const workspaceCustomer = {
-      ensureWorkspaceContract: jest.fn().mockResolvedValue(contractId),
-      ensureWorkspaceStripeBillingContext: jest.fn().mockResolvedValue({
-        billingConfigurationId: 'billing-config-id',
+      ensureStripeBillingConfiguration: jest.fn().mockResolvedValue({
+        billingProviderType: 'stripe',
+        deliveryMethod: 'direct_to_billing_provider',
         deliveryMethodId: 'delivery-method-id',
-        environment: 'SANDBOX',
-        fiatCreditTypeId: 'fiat-credit-type-id',
-        fiatCreditTypeName: 'USD (cents)',
-        metronomeContractId: contractId,
-        metronomeCustomerId: customerId,
+        id: 'billing-config-id',
+        stripeCollectionMethod: 'charge_automatically',
         stripeCustomerId,
       }),
+      ensureWorkspaceContract: jest.fn().mockResolvedValue(contractId),
+      ensureWorkspaceContractStripeBillingContext: jest
+        .fn()
+        .mockResolvedValue(billingContext),
+      ensureWorkspaceCustomer: jest.fn().mockResolvedValue(customerId),
     };
     const stripe = {
       assertWorkspacePaymentMethodReady: jest.fn().mockResolvedValue({
@@ -254,9 +266,16 @@ describe('ManagedProviderCustomerFundingService', () => {
       metronomeBaseUrlEnvironment: 'SANDBOX',
       workspaceId,
     });
+    expect(workspaceCustomer.ensureWorkspaceCustomer).toHaveBeenCalledWith(
+      workspaceId,
+    );
     expect(
-      workspaceCustomer.ensureWorkspaceStripeBillingContext,
+      workspaceCustomer.ensureStripeBillingConfiguration,
+    ).toHaveBeenCalledWith(workspaceId, stripeCustomerId);
+    expect(
+      workspaceCustomer.ensureWorkspaceContractStripeBillingContext,
     ).toHaveBeenCalledWith({
+      billingConfigurationId: 'billing-config-id',
       contractId,
       environment: 'SANDBOX',
       workspaceId,

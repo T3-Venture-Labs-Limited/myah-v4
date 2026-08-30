@@ -15,6 +15,7 @@ import {
 
 import {
   type ExactStripeBillingContext,
+  type MetronomeBillingConfiguration,
   type MetronomeEnvironment,
   MetronomeClientService,
 } from './metronome-client.service';
@@ -49,7 +50,7 @@ export class MetronomeWorkspaceCustomerService {
   async ensureStripeBillingConfiguration(
     workspaceId: string,
     stripeCustomerId: string,
-  ): Promise<unknown> {
+  ): Promise<MetronomeBillingConfiguration> {
     if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
       throw new MetronomeClientException(
         MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
@@ -199,6 +200,74 @@ export class MetronomeWorkspaceCustomerService {
       metronomeCustomerId: installation.metronomeCustomerId,
       stripeCustomerId: installation.stripeCustomerId,
     };
+  }
+
+  async ensureWorkspaceContractStripeBillingContext({
+    billingConfigurationId,
+    contractId,
+    environment,
+    workspaceId,
+  }: {
+    billingConfigurationId: string;
+    contractId: string;
+    environment: MetronomeEnvironment;
+    workspaceId: string;
+  }): Promise<ExactStripeBillingContext> {
+    if (
+      billingConfigurationId.trim() === '' ||
+      contractId.trim() === '' ||
+      workspaceId.trim() === ''
+    ) {
+      throw new Error('Metronome billing contract context is invalid');
+    }
+
+    const installation = await this.installationRepository.findOneBy({
+      workspaceId,
+    });
+
+    if (!installation?.metronomeCustomerId) {
+      throw new Error('Workspace Metronome customer is not configured');
+    }
+
+    const contracts = (
+      await this.metronomeClientService.findCurrentContracts(
+        installation.metronomeCustomerId,
+      )
+    ).filter((contract) => contract.id === contractId);
+
+    if (contracts.length !== 1) {
+      throw new Error('Metronome billing contract could not be reconciled');
+    }
+
+    const activeConfiguration =
+      contracts[0].activeBillingProviderConfiguration;
+    const expectedDeliveryMethodId = this.twentyConfigService.get(
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
+    );
+
+    if (activeConfiguration === null) {
+      await this.metronomeClientService.addStripeBillingConfigurationToContract(
+        {
+          billingConfigurationId,
+          contractId,
+          customerId: installation.metronomeCustomerId,
+          uniquenessKey: `myah:workspace-contract-billing:${workspaceId}:${contractId}`,
+        },
+      );
+    } else if (
+      activeConfiguration.id !== billingConfigurationId ||
+      activeConfiguration.billingProvider !== 'stripe' ||
+      activeConfiguration.deliveryMethod !== 'direct_to_billing_provider' ||
+      activeConfiguration.deliveryMethodId !== expectedDeliveryMethodId
+    ) {
+      throw new Error('Metronome billing contract schedule mismatch');
+    }
+
+    return await this.ensureWorkspaceStripeBillingContext({
+      contractId,
+      environment,
+      workspaceId,
+    });
   }
 
   async ensureWorkspaceCustomer(workspaceId: string): Promise<string> {
