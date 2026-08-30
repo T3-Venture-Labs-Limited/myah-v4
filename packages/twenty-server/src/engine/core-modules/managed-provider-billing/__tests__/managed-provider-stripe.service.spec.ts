@@ -608,7 +608,9 @@ describe('ManagedProviderStripeService', () => {
     workspaceId,
   };
 
-  const pendingInvoice = (status: 'draft' | 'open' | 'void' = 'open') => ({
+  const pendingInvoice = (
+    status: 'draft' | 'open' | 'uncollectible' | 'void' = 'open',
+  ) => ({
     amount_paid: 0,
     currency: 'usd',
     customer: stripeCustomerId,
@@ -980,6 +982,12 @@ describe('ManagedProviderStripeService', () => {
   it.each([
     ['void invoice', 'void', 'processing', 'INVOICE_VOID'],
     [
+      'partially paid uncollectible invoice',
+      'uncollectible',
+      'processing',
+      'INVOICE_UNCOLLECTIBLE',
+    ],
+    [
       'canceled PaymentIntent',
       'open',
       'canceled',
@@ -993,14 +1001,18 @@ describe('ManagedProviderStripeService', () => {
     ],
   ] as const)(
     'returns bounded definitive failure for %s',
-    async (_, invoiceStatus, paymentIntentStatus, reason) => {
+    async (scenario, invoiceStatus, paymentIntentStatus, reason) => {
       const { service, stripe } = createService({
         workspaceId,
         stripeCustomerId,
       });
-      stripe.invoices.retrieve.mockResolvedValue(
-        pendingInvoice(invoiceStatus),
-      );
+      const invoice = pendingInvoice(invoiceStatus);
+
+      if (scenario === 'partially paid uncollectible invoice') {
+        invoice.amount_paid = 500;
+      }
+
+      stripe.invoices.retrieve.mockResolvedValue(invoice);
       stripe.paymentIntents.retrieve.mockResolvedValue(
         pendingPaymentIntent(paymentIntentStatus),
       );

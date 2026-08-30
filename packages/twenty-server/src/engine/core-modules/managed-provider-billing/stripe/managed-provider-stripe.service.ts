@@ -506,15 +506,6 @@ export class ManagedProviderStripeService {
       };
     }
 
-    if (
-      invoice.status === 'paid' ||
-      paymentIntent.status === 'succeeded' ||
-      invoice.amount_paid > 0 ||
-      paymentIntent.amount_received > 0 ||
-      associationPayment.status === 'paid'
-    ) {
-      return { ...base, status: 'PENDING' };
-    }
 
     if (invoice.status === 'uncollectible') {
       return {
@@ -546,6 +537,15 @@ export class ManagedProviderStripeService {
         reason: 'PAYMENT_METHOD_REQUIRED',
         status: 'FAILED_DEFINITIVE',
       };
+    }
+    if (
+      invoice.status === 'paid' ||
+      paymentIntent.status === 'succeeded' ||
+      invoice.amount_paid > 0 ||
+      paymentIntent.amount_received > 0 ||
+      associationPayment.status === 'paid'
+    ) {
+      return { ...base, status: 'PENDING' };
     }
 
     if (paymentIntent.status === 'requires_action') {
