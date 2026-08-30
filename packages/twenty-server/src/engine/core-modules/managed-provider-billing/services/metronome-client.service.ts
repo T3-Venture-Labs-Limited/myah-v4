@@ -673,7 +673,10 @@ export class MetronomeClientService {
     const candidateCustomerCommits = customerWideCommits.filter(
       (commit) =>
         commit.contract?.id === input.contractId &&
-        (this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
+        (this.hasPartialPaymentGatedPrepaidCommitFundingEvidence(
+          commit,
+          input,
+        ) ||
           this.getPaymentGatedPrepaidCommitRecoveryDetails(
             commit,
             input,
@@ -1743,6 +1746,18 @@ export class MetronomeClientService {
     return (
       commit.custom_fields?.myah_funding_action_id === input.fundingActionId &&
       commit.custom_fields?.myah_funding_identity === input.fundingIdentity
+    );
+  }
+
+  private hasPartialPaymentGatedPrepaidCommitFundingEvidence(
+    commit: Commit,
+    input: MetronomePaymentGatedPrepaidCommitInput,
+  ): boolean {
+    const customFields = commit.custom_fields;
+
+    return (
+      customFields?.myah_funding_action_id === input.fundingActionId ||
+      customFields?.myah_funding_identity === input.fundingIdentity
     );
   }
 
