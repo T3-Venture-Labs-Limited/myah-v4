@@ -644,6 +644,24 @@ describe('ManagedProviderStripeService', () => {
     status,
   });
 
+  const openInvoicePayment = () => ({
+    data: [
+      {
+        amount_paid: null,
+        amount_requested: 3000,
+        currency: 'usd',
+        invoice: 'in_metronome',
+        livemode: false,
+        payment: {
+          payment_intent: stripePaymentIntentId,
+          type: 'payment_intent',
+        },
+        status: 'open',
+      },
+    ],
+    has_more: false,
+  });
+
   it('returns exact paid principal, tax, total, paid-at, and no-reversal proof', async () => {
     const { service, stripe } = createService({
       workspaceId,
@@ -754,6 +772,43 @@ describe('ManagedProviderStripeService', () => {
     });
   });
 
+  it('accepts a successful Charge whose network status is null', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.paymentIntents.retrieve.mockResolvedValue({
+      amount: 3000,
+      amount_received: 3000,
+      canceled_at: null,
+      cancellation_reason: null,
+      client_secret: null,
+      currency: 'usd',
+      customer: stripeCustomerId,
+      id: stripePaymentIntentId,
+      latest_charge: {
+        amount: 3000,
+        amount_captured: 3000,
+        amount_refunded: 0,
+        disputed: false,
+        failure_balance_transaction: null,
+        id: 'ch_metronome',
+        livemode: false,
+        outcome: { network_status: null },
+        paid: true,
+        payment_intent: stripePaymentIntentId,
+        refunded: false,
+        status: 'succeeded',
+      },
+      livemode: false,
+      status: 'succeeded',
+    });
+
+    await expect(
+      service.readPaymentGatedInvoicePayment(paymentGatedInput),
+    ).resolves.toMatchObject({ status: 'PAID' });
+  });
+
   it('rejects a second paid InvoicePayment even when one matches the expected PaymentIntent', async () => {
     const { service, stripe } = createService({
       workspaceId,
@@ -803,6 +858,7 @@ describe('ManagedProviderStripeService', () => {
     stripe.paymentIntents.retrieve.mockResolvedValue(
       pendingPaymentIntent('requires_action'),
     );
+    stripe.invoicePayments.list.mockResolvedValue(openInvoicePayment());
 
     await expect(
       service.readPaymentGatedInvoicePayment(paymentGatedInput),
@@ -816,7 +872,46 @@ describe('ManagedProviderStripeService', () => {
       taxCents: 500,
       totalCents: 3000,
     });
-    expect(stripe.invoicePayments.list).not.toHaveBeenCalled();
+    expect(stripe.invoicePayments.list).toHaveBeenCalledWith({
+      invoice: 'in_metronome',
+      limit: 2,
+      payment: {
+        payment_intent: stripePaymentIntentId,
+        type: 'payment_intent',
+      },
+    });
+  });
+
+  it('rejects an action-required PaymentIntent that is not associated with the invoice', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.invoices.retrieve.mockResolvedValue(pendingInvoice());
+    stripe.paymentIntents.retrieve.mockResolvedValue(
+      pendingPaymentIntent('requires_action'),
+    );
+    stripe.invoicePayments.list.mockResolvedValue({
+      data: [
+        {
+          amount_paid: null,
+          amount_requested: 3000,
+          currency: 'usd',
+          invoice: 'in_metronome',
+          livemode: false,
+          payment: {
+            payment_intent: 'pi_other',
+            type: 'payment_intent',
+          },
+          status: 'open',
+        },
+      ],
+      has_more: false,
+    });
+
+    await expect(
+      service.readPaymentGatedInvoicePayment(paymentGatedInput),
+    ).rejects.toThrow('Stripe payment-gated invoice proof is invalid');
   });
 
   it('returns pending without leaking a PaymentIntent client secret', async () => {
@@ -829,6 +924,7 @@ describe('ManagedProviderStripeService', () => {
       ...pendingPaymentIntent('processing'),
       client_secret: 'must-not-leak',
     });
+    stripe.invoicePayments.list.mockResolvedValue(openInvoicePayment());
 
     await expect(
       service.readPaymentGatedInvoicePayment(paymentGatedInput),
@@ -841,8 +937,45 @@ describe('ManagedProviderStripeService', () => {
       taxCents: 500,
       totalCents: 3000,
     });
-    expect(stripe.invoicePayments.list).not.toHaveBeenCalled();
+    expect(stripe.invoicePayments.list).toHaveBeenCalledWith({
+      invoice: 'in_metronome',
+      limit: 2,
+      payment: {
+        payment_intent: stripePaymentIntentId,
+        type: 'payment_intent',
+      },
+    });
   });
+
+  it.each(['invoice status lags', 'PaymentIntent status lags'] as const)(
+    'keeps %s as pending during asynchronous settlement',
+    async (laggingResource) => {
+      const { service, stripe } = createService({
+        workspaceId,
+        stripeCustomerId,
+      });
+
+      if (laggingResource === 'invoice status lags') {
+        stripe.invoices.retrieve.mockResolvedValue(pendingInvoice());
+      } else {
+        stripe.paymentIntents.retrieve.mockResolvedValue(
+          pendingPaymentIntent('processing'),
+        );
+      }
+
+      await expect(
+        service.readPaymentGatedInvoicePayment(paymentGatedInput),
+      ).resolves.toEqual({
+        invoiceUrl: 'https://invoice.example/in_metronome',
+        paymentIntentId: stripePaymentIntentId,
+        principalCents: 2500,
+        status: 'PENDING',
+        stripeInvoiceId: 'in_metronome',
+        taxCents: 500,
+        totalCents: 3000,
+      });
+    },
+  );
 
   it.each([
     ['void invoice', 'void', 'processing', 'INVOICE_VOID'],
@@ -871,6 +1004,7 @@ describe('ManagedProviderStripeService', () => {
       stripe.paymentIntents.retrieve.mockResolvedValue(
         pendingPaymentIntent(paymentIntentStatus),
       );
+      stripe.invoicePayments.list.mockResolvedValue(openInvoicePayment());
 
       await expect(
         service.readPaymentGatedInvoicePayment(paymentGatedInput),
@@ -884,7 +1018,14 @@ describe('ManagedProviderStripeService', () => {
         taxCents: 500,
         totalCents: 3000,
       });
-      expect(stripe.invoicePayments.list).not.toHaveBeenCalled();
+      expect(stripe.invoicePayments.list).toHaveBeenCalledWith({
+        invoice: 'in_metronome',
+        limit: 2,
+        payment: {
+          payment_intent: stripePaymentIntentId,
+          type: 'payment_intent',
+        },
+      });
     },
   );
 

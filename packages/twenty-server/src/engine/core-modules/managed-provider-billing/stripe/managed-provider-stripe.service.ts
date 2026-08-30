@@ -83,7 +83,7 @@ const stripePaymentGatedChargeSchema = z.object({
   livemode: z.boolean(),
   outcome: z
     .object({
-      network_status: z.string(),
+      network_status: z.string().nullable(),
     })
     .nullish(),
   paid: z.boolean(),
@@ -114,21 +114,20 @@ const stripePaymentGatedIntentSchema = z.object({
     'succeeded',
   ]),
 });
-const stripePaidInvoicePaymentsSchema = z.object({
-  data: z.array(
-    z.object({
-      amount_paid: safeStripeCentsSchema.nullable(),
-      amount_requested: safeStripeCentsSchema,
-      currency: z.string(),
-      invoice: z.string(),
-      livemode: z.boolean(),
-      payment: z.object({
-        payment_intent: z.string(),
-        type: z.literal('payment_intent'),
-      }),
-      status: z.literal('paid'),
-    }),
-  ),
+const stripeInvoicePaymentSchema = z.object({
+  amount_paid: safeStripeCentsSchema.nullable(),
+  amount_requested: safeStripeCentsSchema,
+  currency: z.string(),
+  invoice: z.string(),
+  livemode: z.boolean(),
+  payment: z.object({
+    payment_intent: z.string(),
+    type: z.literal('payment_intent'),
+  }),
+  status: z.enum(['canceled', 'open', 'paid']),
+});
+const stripeInvoicePaymentsSchema = z.object({
+  data: z.array(stripeInvoicePaymentSchema),
   has_more: z.boolean(),
 });
 
@@ -401,6 +400,8 @@ export class ManagedProviderStripeService {
       paymentIntent.customer !== customerId ||
       paymentIntent.currency.toLowerCase() !== 'usd' ||
       paymentIntent.amount !== input.expectedTotalCents ||
+      paymentIntent.amount_received > input.expectedTotalCents ||
+      invoice.amount_paid > input.expectedTotalCents ||
       paymentIntent.livemode !== expectedLivemode
     ) {
       throw new Error('Stripe payment-gated invoice proof is invalid');
@@ -416,7 +417,35 @@ export class ManagedProviderStripeService {
       totalCents: input.expectedTotalCents,
     };
 
-    if (invoice.status === 'paid') {
+    const rawAssociationPayments = await stripe.invoicePayments.list({
+      invoice: invoice.id,
+      limit: 2,
+      payment: {
+        payment_intent: paymentIntent.id,
+        type: 'payment_intent',
+      },
+    });
+    const parsedAssociationPayments =
+      stripeInvoicePaymentsSchema.safeParse(rawAssociationPayments);
+    const associationPayment = parsedAssociationPayments.success
+      ? parsedAssociationPayments.data.data[0]
+      : undefined;
+
+    if (
+      !parsedAssociationPayments.success ||
+      parsedAssociationPayments.data.has_more ||
+      parsedAssociationPayments.data.data.length !== 1 ||
+      associationPayment === undefined ||
+      associationPayment.amount_requested !== input.expectedTotalCents ||
+      associationPayment.currency.toLowerCase() !== 'usd' ||
+      associationPayment.invoice !== invoice.id ||
+      associationPayment.livemode !== expectedLivemode ||
+      associationPayment.payment.payment_intent !== paymentIntent.id
+    ) {
+      throw new Error('Stripe payment-gated invoice proof is invalid');
+    }
+
+    if (invoice.status === 'paid' && paymentIntent.status === 'succeeded') {
       const charge = paymentIntent.latest_charge;
       const paidAt = invoice.status_transitions.paid_at;
 
@@ -449,7 +478,7 @@ export class ManagedProviderStripeService {
         status: 'paid',
       });
       const parsedInvoicePayments =
-        stripePaidInvoicePaymentsSchema.safeParse(rawInvoicePayments);
+        stripeInvoicePaymentsSchema.safeParse(rawInvoicePayments);
       const invoicePayment = parsedInvoicePayments.success
         ? parsedInvoicePayments.data.data[0]
         : undefined;
@@ -464,6 +493,7 @@ export class ManagedProviderStripeService {
         invoicePayment.currency.toLowerCase() !== 'usd' ||
         invoicePayment.invoice !== invoice.id ||
         invoicePayment.livemode !== expectedLivemode ||
+        invoicePayment.status !== 'paid' ||
         invoicePayment.payment.payment_intent !== paymentIntent.id
       ) {
         throw new Error('Stripe payment-gated invoice proof is invalid');
@@ -476,8 +506,14 @@ export class ManagedProviderStripeService {
       };
     }
 
-    if (invoice.amount_paid !== 0 || paymentIntent.amount_received !== 0) {
-      throw new Error('Stripe payment-gated invoice proof is invalid');
+    if (
+      invoice.status === 'paid' ||
+      paymentIntent.status === 'succeeded' ||
+      invoice.amount_paid > 0 ||
+      paymentIntent.amount_received > 0 ||
+      associationPayment.status === 'paid'
+    ) {
+      return { ...base, status: 'PENDING' };
     }
 
     if (invoice.status === 'uncollectible') {
