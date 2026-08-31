@@ -646,6 +646,51 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
     }
   });
 
+  it('requires the exact MessageThread draft evidence before exposing an Inbox receipt', async () => {
+    const messageThreadMetadataId =
+      '00000000-0000-4000-8000-000000000023';
+    const receipt = {
+      id: '00000000-0000-4000-8000-000000000024',
+      workspaceId,
+      state: ActionExecutionReceiptState.SENT,
+      providerCode: 'accepted',
+      redactedOutcome: 'accepted',
+      updatedAt: new Date('2026-08-31T00:00:00.000Z'),
+      actionApprovalBinding: {
+        evidenceLinks: [
+          {
+            objectMetadataId: messageThreadMetadataId,
+            recordId: inboxReplyBinding.draftId,
+            role: 'draft',
+          },
+        ],
+      },
+    };
+    const receiptRepository = {
+      findOne: jest.fn().mockResolvedValue(receipt),
+    };
+    const service = new ActionApprovalService(
+      {
+        getRepository: jest.fn().mockReturnValue(receiptRepository),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+    const input = {
+      workspaceId,
+      receiptId: receipt.id,
+      draftId: inboxReplyBinding.draftId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      messageThreadMetadataId,
+    };
+
+    await expect(
+      service.findInboxReplyExecutionReceipt(input),
+    ).resolves.toMatchObject({ id: receipt.id });
+
+    receipt.actionApprovalBinding.evidenceLinks[0].role = 'message';
+    await expect(service.findInboxReplyExecutionReceipt(input)).resolves.toBeNull();
+  });
+
   it('invalidates only an unconsumed approved Inbox binding for its actor and thread', async () => {
     let receipt: object | null = null;
     const binding = { ...inboxBinding };

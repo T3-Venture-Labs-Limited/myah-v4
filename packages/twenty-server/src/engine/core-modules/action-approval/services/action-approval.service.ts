@@ -499,6 +499,48 @@ export class ActionApprovalService {
     return receipt ? this.redactionService.toSafeReceipt(receipt) : null;
   }
 
+  async findInboxReplyExecutionReceipt({
+    workspaceId,
+    receiptId,
+    draftId,
+    initiatorUserWorkspaceId,
+    messageThreadMetadataId,
+  }: {
+    workspaceId: string;
+    receiptId: string;
+    draftId: string;
+    initiatorUserWorkspaceId: string;
+    messageThreadMetadataId: string;
+  }): Promise<SafeActionExecutionReceipt | null> {
+    const receipt = await this.dataSource
+      .getRepository(ActionExecutionReceiptEntity)
+      .findOne({
+        where: {
+          id: receiptId,
+          workspaceId,
+          actionApprovalBinding: {
+            actionName: 'send_inbox_reply',
+            draftId,
+            initiatorUserWorkspaceId,
+          },
+        },
+        relations: { actionApprovalBinding: { evidenceLinks: true } },
+      });
+    if (
+      !receipt ||
+      !receipt.actionApprovalBinding.evidenceLinks.some(
+        (evidence) =>
+          evidence.objectMetadataId === messageThreadMetadataId &&
+          evidence.recordId === draftId &&
+          evidence.role === 'draft',
+      )
+    ) {
+      return null;
+    }
+
+    return this.redactionService.toSafeReceipt(receipt);
+  }
+
   async isDraftExecutionLocked({
     workspaceId,
     actionName,

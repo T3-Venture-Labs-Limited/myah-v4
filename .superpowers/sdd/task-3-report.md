@@ -50,5 +50,25 @@ Result: 4 suites passed, 84 tests passed.
 - Autosave and send use the same workspace-plus-thread transaction advisory key. Send holds it through authority build, exact binding creation, authority recheck, and reservation, and releases it before the only provider call.
 - Exact-binding reservation converges a matching prior logical receipt by moving the newly created receipt-free binding to `CHANGES_REQUESTED`; it does not invalidate a duplicate path or alter a binding with a receipt.
 - A provider rejection CAS-preserves the authoritative draft under the advisory lock before terminal receipt transition. A CAS conflict/write failure becomes `UNKNOWN`; provider send remains exactly once.
-- Readiness distinguishes pending and unknown scoped receipt state. Status rebuilds current authority before receipt lookup and returns current body/revision only for the current readable thread.
+- Readiness distinguishes pending and unknown scoped receipt state. Status returns current body/revision only after validating the current readable thread and the receipt's MessageThread draft evidence.
 - Cleanup failures are contained as `STALE`, with no provider I/O. Task 4 receipt projection remains deferred.
+
+## Status/readiness preservation fix
+
+### RED evidence
+
+The exact focused suite exposed that status rebuilt execution authority, so a later mutable sender/readiness failure changed a stored receipt result. The foreign-receipt regression also initially returned the current draft body and revision.
+
+### GREEN evidence
+
+```bash
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/services/action-approval.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-reply-send.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/resolvers/__tests__/myah-inbox-reply-send.resolver.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-mutation.service.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand
+```
+
+Result: 4 suites passed, 92 tests passed.
+
+### Self-review
+
+- Status uses a permission-scoped readable-thread snapshot and explicit MessageThread draft evidence validation; it neither rebuilds execution/projection authority nor uses a system bypass.
+- Stored FAILED, UNKNOWN, and SENT receipt outcomes survive subsequent mutable delivery-readiness changes; foreign, deleted, and unreadable requests return stale null results.
+- Active pending and unknown receipt states are checked before mutable readiness, so they continue to lock delivery despite later mailbox/channel/account changes.

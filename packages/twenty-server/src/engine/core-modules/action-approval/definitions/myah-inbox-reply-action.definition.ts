@@ -25,6 +25,7 @@ import {
   type MyahInboxReplyActionAuthority,
   type MyahInboxReplyEvidenceObjectMetadataIds,
   type MyahInboxReplyExpectedActionBindingWithWorkspace,
+  type MyahInboxReplyReadableDraftSnapshot,
   MyahInboxReplyUnavailableCode,
   MyahInboxReplyUnavailableError,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
@@ -35,6 +36,7 @@ export {
 export type {
   CanonicalMyahInboxReplyGraph,
   MyahInboxReplyActionAuthority,
+  MyahInboxReplyReadableDraftSnapshot,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
@@ -105,6 +107,59 @@ export class MyahInboxReplyActionDefinition {
       initiatorUserWorkspaceId,
       graph,
     });
+  }
+
+  async getReadableDraftSnapshot({
+    workspaceId,
+    initiatorUserWorkspaceId,
+    messageThreadId,
+  }: {
+    workspaceId: string;
+    initiatorUserWorkspaceId: string;
+    messageThreadId: string;
+  }): Promise<MyahInboxReplyReadableDraftSnapshot> {
+    const workspace = await this.workspaceRepository.findOneBy({ id: workspaceId });
+    if (!workspace) {
+      throw new MyahInboxReplyUnavailableError(
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      );
+    }
+    const authContext = await this.buildInitiatorAuthContext(
+      workspace,
+      initiatorUserWorkspaceId,
+    );
+    const messageThread = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const repository =
+          await this.globalWorkspaceOrmManager.getRepository<InboxMessageThreadRecord>(
+            workspaceId,
+            'messageThread',
+          );
+
+        return repository.findOneBy({ id: messageThreadId });
+      },
+      authContext,
+    );
+    if (!messageThread || messageThread.id !== messageThreadId) {
+      throw new MyahInboxReplyUnavailableError(
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      );
+    }
+
+    const evidenceObjectMetadataIds =
+      await this.resolveEvidenceObjectMetadataIds(workspaceId);
+
+    return {
+      revision: messageThread.myahReplyDraftRevision,
+      body:
+        messageThread.myahReplyDraftBodyMarkdown === null
+          ? null
+          : {
+              markdown: messageThread.myahReplyDraftBodyMarkdown,
+              blocknote: messageThread.myahReplyDraftBodyBlocknote,
+            },
+      messageThreadMetadataId: evidenceObjectMetadataIds.messageThread,
+    };
   }
 
   async rebuildExecutionAuthority({

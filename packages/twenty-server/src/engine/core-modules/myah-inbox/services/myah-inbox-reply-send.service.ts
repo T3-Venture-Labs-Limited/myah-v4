@@ -70,23 +70,17 @@ export class MyahInboxReplySendService {
     private readonly projector: ActionReceiptProjectorService,
     private readonly myahInboxMutationService: MyahInboxMutationService,
   ) {}
-
   async getReadiness(
     input: MyahInboxReplySendRequestContext,
   ): Promise<MyahInboxReplySendReadiness> {
     this.assertUserRequest(input);
 
     try {
-      const authority = await this.actionDefinition.buildAuthority({
-        workspaceId: input.workspace.id,
-        initiatorUserWorkspaceId: input.userWorkspaceId,
-        messageThreadId: input.threadId,
-      });
       const executionState =
         await this.actionApprovalService.getInboxReplyDraftExecutionState({
           workspaceId: input.workspace.id,
           initiatorUserWorkspaceId: input.userWorkspaceId,
-          draftId: authority.expectedActionBinding.draftId,
+          draftId: input.threadId,
         });
 
       if (executionState === 'UNKNOWN') {
@@ -101,6 +95,12 @@ export class MyahInboxReplySendService {
           reason: 'The previous delivery is still being confirmed.',
         };
       }
+
+      await this.actionDefinition.buildAuthority({
+        workspaceId: input.workspace.id,
+        initiatorUserWorkspaceId: input.userWorkspaceId,
+        messageThreadId: input.threadId,
+      });
 
       return { status: MyahInboxReplySendReadinessStatus.READY, reason: null };
     } catch (error) {
@@ -242,20 +242,34 @@ export class MyahInboxReplySendService {
     this.assertUserRequest(input);
 
     try {
-      const authority = await this.actionDefinition.buildAuthority({
+      const draft = await this.actionDefinition.getReadableDraftSnapshot({
         workspaceId: input.workspace.id,
         initiatorUserWorkspaceId: input.userWorkspaceId,
         messageThreadId: input.threadId,
       });
-      const receipt = await this.findReceipt(input, input.receiptId);
+      const receipt =
+        await this.actionApprovalService.findInboxReplyExecutionReceipt({
+          workspaceId: input.workspace.id,
+          receiptId: input.receiptId,
+          draftId: input.threadId,
+          initiatorUserWorkspaceId: input.userWorkspaceId,
+          messageThreadMetadataId: draft.messageThreadMetadataId,
+        });
+
+      if (!receipt) {
+        return {
+          outcome: MyahInboxReplySendOutcome.STALE,
+          receiptId: null,
+          revision: 0,
+          body: null,
+        };
+      }
 
       return {
-        outcome: receipt
-          ? this.toOutcome(receipt.state)
-          : MyahInboxReplySendOutcome.STALE,
-        receiptId: receipt?.id ?? null,
-        revision: authority.canonicalGraph.draftRevision,
-        body: authority.canonicalGraph.draftBody,
+        outcome: this.toOutcome(receipt.state),
+        receiptId: receipt.id,
+        revision: draft.revision,
+        body: draft.body,
       };
     } catch {
       return {

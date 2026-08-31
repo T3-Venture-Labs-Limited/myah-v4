@@ -81,12 +81,20 @@ const request = () => ({
   workspaceMemberId,
 });
 
+const draftSnapshot = {
+  revision: 4,
+  body: authority.canonicalGraph.draftBody,
+  messageThreadMetadataId: 'thread-metadata-id',
+};
+
 const createService = (overrides?: {
   executeInboxReplyLocked?: jest.Mock;
   buildAuthority?: jest.Mock;
   rebuildExecutionAuthority?: jest.Mock;
+  getReadableDraftSnapshot?: jest.Mock;
   reserveExecutionForBinding?: jest.Mock;
   findExecutionReceipt?: jest.Mock;
+  findInboxReplyExecutionReceipt?: jest.Mock;
   getInboxReplyDraftExecutionState?: jest.Mock;
   sendMessage?: jest.Mock;
   recordProviderAccepted?: jest.Mock;
@@ -121,6 +129,9 @@ const createService = (overrides?: {
   const getInboxReplyDraftExecutionState =
     overrides?.getInboxReplyDraftExecutionState ??
     jest.fn().mockResolvedValue(null);
+  const getReadableDraftSnapshot =
+    overrides?.getReadableDraftSnapshot ??
+    jest.fn().mockResolvedValue(draftSnapshot);
   const sendMessage =
     overrides?.sendMessage ??
     jest.fn().mockResolvedValue({
@@ -133,6 +144,9 @@ const createService = (overrides?: {
   const recordProviderTerminalState =
     overrides?.recordProviderTerminalState ??
     jest.fn().mockImplementation(({ state }) => Promise.resolve(receipt(state)));
+  const findInboxReplyExecutionReceipt =
+    overrides?.findInboxReplyExecutionReceipt ??
+    jest.fn().mockResolvedValue(receipt(ActionExecutionReceiptState.SENT));
   const projectReceipt = overrides?.projectReceipt ?? jest.fn().mockResolvedValue({ projected: true });
   const saveMyahInboxDraftAfterProviderFailure =
     overrides?.saveMyahInboxDraftAfterProviderFailure ??
@@ -150,11 +164,16 @@ const createService = (overrides?: {
         invalidateApprovedInboxReplyBinding,
         reserveExecutionForBinding,
         findExecutionReceipt,
+        findInboxReplyExecutionReceipt,
         recordProviderAccepted,
         recordProviderTerminalState,
         getInboxReplyDraftExecutionState,
       } as never,
-      { buildAuthority, rebuildExecutionAuthority } as never,
+      {
+        buildAuthority,
+        rebuildExecutionAuthority,
+        getReadableDraftSnapshot,
+      } as never,
       { sendMessage } as never,
       { projectReceipt } as never,
       { saveMyahInboxDraftAfterProviderFailure } as never,
@@ -164,8 +183,10 @@ const createService = (overrides?: {
     invalidateApprovedInboxReplyBinding,
     buildAuthority,
     rebuildExecutionAuthority,
+    getReadableDraftSnapshot,
     reserveExecutionForBinding,
     findExecutionReceipt,
+    findInboxReplyExecutionReceipt,
     sendMessage,
     getInboxReplyDraftExecutionState,
     recordProviderAccepted,
@@ -368,9 +389,9 @@ describe('MyahInboxReplySendService', () => {
     expect(setup.sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('reads a receipt only for the authenticated workspace, actor, action, and thread', async () => {
+  it('reads status only for the authenticated workspace, actor, receipt evidence, and current thread', async () => {
     const setup = createService({
-      findExecutionReceipt: jest
+      findInboxReplyExecutionReceipt: jest
         .fn()
         .mockResolvedValue(receipt(ActionExecutionReceiptState.UNKNOWN)),
     });
@@ -383,21 +404,22 @@ describe('MyahInboxReplySendService', () => {
     ).resolves.toEqual({
       outcome: MyahInboxReplySendOutcome.UNKNOWN,
       receiptId,
-      revision: authority.canonicalGraph.draftRevision,
-      body: authority.canonicalGraph.draftBody,
+      revision: draftSnapshot.revision,
+      body: draftSnapshot.body,
     });
-    expect(setup.findExecutionReceipt).toHaveBeenCalledWith({
+    expect(setup.findInboxReplyExecutionReceipt).toHaveBeenCalledWith({
       workspaceId,
       receiptId,
-      actionName: 'send_inbox_reply',
       draftId: threadId,
       initiatorUserWorkspaceId: userWorkspaceId,
+      messageThreadMetadataId: draftSnapshot.messageThreadMetadataId,
     });
+    expect(setup.buildAuthority).not.toHaveBeenCalled();
   });
 
-  it('does not expose a draft when the status thread was deleted or changed', async () => {
+  it('does not expose the current draft for a foreign receipt', async () => {
     const setup = createService({
-      buildAuthority: jest.fn().mockRejectedValue(new Error('thread unavailable')),
+      findInboxReplyExecutionReceipt: jest.fn().mockResolvedValue(null),
     });
 
     await expect(
@@ -411,8 +433,67 @@ describe('MyahInboxReplySendService', () => {
       revision: 0,
       body: null,
     });
-    expect(setup.findExecutionReceipt).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['deleted', new Error('thread unavailable')],
+    ['unreadable', new Error('thread hidden')],
+  ])('does not expose a receipt when the status thread is %s', async (_case, error) => {
+    const setup = createService({
+      getReadableDraftSnapshot: jest.fn().mockRejectedValue(error),
+    });
+
+    await expect(
+      setup.service.getStatus({
+        ...request(),
+        receiptId,
+      }),
+    ).resolves.toEqual({
+      outcome: MyahInboxReplySendOutcome.STALE,
+      receiptId: null,
+      revision: 0,
+      body: null,
+    });
+    expect(setup.findInboxReplyExecutionReceipt).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [ActionExecutionReceiptState.FAILED, MyahInboxReplySendOutcome.FAILED],
+    [ActionExecutionReceiptState.UNKNOWN, MyahInboxReplySendOutcome.UNKNOWN],
+    [ActionExecutionReceiptState.SENT, MyahInboxReplySendOutcome.SENT],
+  ])(
+    'returns a %s receipt with the current cleared draft after delivery readiness changes',
+    async (state, outcome) => {
+      const setup = createService({
+        getReadableDraftSnapshot: jest.fn().mockResolvedValue({
+          ...draftSnapshot,
+          revision: 5,
+          body: null,
+        }),
+        buildAuthority: jest.fn().mockRejectedValue(
+          new MyahInboxReplyUnavailableError(
+            MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+          ),
+        ),
+        findInboxReplyExecutionReceipt: jest
+          .fn()
+          .mockResolvedValue(receipt(state)),
+      });
+
+      await expect(
+        setup.service.getStatus({
+          ...request(),
+          receiptId,
+        }),
+      ).resolves.toEqual({
+        outcome,
+        receiptId,
+        revision: 5,
+        body: null,
+      });
+      expect(setup.buildAuthority).not.toHaveBeenCalled();
+    },
+  );
 
   it('maps only known authority failures to safe readiness without exposing raw errors', async () => {
     const setup = createService({
@@ -451,6 +532,25 @@ describe('MyahInboxReplySendService', () => {
     });
   });
 
+
+  it.each([
+    ['PENDING', MyahInboxReplySendReadinessStatus.OUTCOME_PENDING],
+    ['UNKNOWN', MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN],
+  ])('reports existing %s before mutable readiness failures', async (state, status) => {
+    const setup = createService({
+      buildAuthority: jest.fn().mockRejectedValue(
+        new MyahInboxReplyUnavailableError(
+          MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+        ),
+      ),
+      getInboxReplyDraftExecutionState: jest.fn().mockResolvedValue(state),
+    });
+
+    await expect(setup.service.getReadiness(request())).resolves.toMatchObject({
+      status,
+    });
+    expect(setup.buildAuthority).not.toHaveBeenCalled();
+  });
   it.each([
     ['CAS conflict', { status: 'CONFLICT', revision: 5, body: authority.canonicalGraph.draftBody }],
     ['CAS write error', new Error('write failed')],
