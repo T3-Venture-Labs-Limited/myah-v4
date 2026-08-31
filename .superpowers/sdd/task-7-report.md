@@ -100,3 +100,41 @@ npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-serv
 ```text
 NX Successfully ran target typecheck for project twenty-server
 ```
+
+## Follow-up — MYAH-169 autosave advisory lock
+
+`WorkspaceEntityManager` rejects raw SQL, so autosave no longer asks it to acquire the shared Inbox-reply advisory lock. `MyahInboxMutationService` now injects the concrete Nest core `DataSource`; its outer core transaction acquires `MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY`, then enters the existing permission-aware workspace transaction for the execution-lock check and revision CAS. The `enforceExecutionLock=false` provider-failure path takes the same advisory lock but still skips only the execution-lock rejection.
+
+### RED
+
+The new regression configured `WorkspaceEntityManager.query` to reject `Raw SQL queries are not allowed`. Before the implementation it failed as expected: the save promise rejected with that error.
+
+### GREEN
+
+```sh
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-mutation.service.spec.ts --config packages/twenty-server/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       38 passed, 38 total
+```
+
+```sh
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-reply-send.service.spec.ts --config packages/twenty-server/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       26 passed, 26 total
+```
+
+```sh
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-server --excludeTaskDependencies
+```
+
+```text
+NX Successfully ran target typecheck for project twenty-server
+```
+
+No concerns.

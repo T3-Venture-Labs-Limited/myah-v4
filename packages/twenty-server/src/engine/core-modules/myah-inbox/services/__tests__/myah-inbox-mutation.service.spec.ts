@@ -256,6 +256,14 @@ const createService = ({
         run(transactionManager),
     );
   Object.assign(messageThreadRepository, { manager: { transaction } });
+  const coreTransactionManager = { query: jest.fn().mockResolvedValue([]) };
+  const coreTransaction = jest
+    .fn()
+    .mockImplementation(
+      (run: (manager: typeof coreTransactionManager) => unknown) =>
+        run(coreTransactionManager),
+    );
+  const dataSource = { transaction: coreTransaction };
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest
       .fn()
@@ -299,6 +307,7 @@ const createService = ({
     globalWorkspaceOrmManager as never,
     { getThreadSummary } as never,
     { isDraftExecutionLocked } as never,
+    dataSource as never,
   );
 
   return {
@@ -308,6 +317,8 @@ const createService = ({
     globalWorkspaceOrmManager,
     transaction,
     transactionManager,
+    coreTransaction,
+    coreTransactionManager,
     getThreadSummary,
     isDraftExecutionLocked,
     get persistedThread() {
@@ -972,6 +983,38 @@ describe('MyahInboxMutationService', () => {
     });
   });
 
+  it('keeps workspace raw SQL forbidden while acquiring the advisory lock through the core transaction before CAS', async () => {
+    const setup = createService();
+    setup.transactionManager.query.mockRejectedValue(
+      new Error('Raw SQL queries are not allowed'),
+    );
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'core transaction copy', blocknote: null },
+      }),
+    ).resolves.toEqual({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'core transaction copy', blocknote: null },
+    });
+
+    expect(setup.coreTransaction).toHaveBeenCalledTimes(1);
+    expect(setup.coreTransactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`myah-inbox-reply:${workspaceId}:${threadId}`],
+    );
+    expect(
+      setup.coreTransactionManager.query.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      setup.bypassedMessageThreadRepository.update.mock.invocationCallOrder[0],
+    );
+    expect(setup.transactionManager.query).not.toHaveBeenCalled();
+  });
+
   it('takes the shared advisory lock before checking the execution lock and draft CAS', async () => {
     const setup = createService();
 
@@ -982,12 +1025,12 @@ describe('MyahInboxMutationService', () => {
       body: { markdown: 'serialized copy', blocknote: null },
     });
 
-    expect(setup.transactionManager.query).toHaveBeenCalledWith(
+    expect(setup.coreTransactionManager.query).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
       [`myah-inbox-reply:${workspaceId}:${threadId}`],
     );
     expect(
-      setup.transactionManager.query.mock.invocationCallOrder[0],
+      setup.coreTransactionManager.query.mock.invocationCallOrder[0],
     ).toBeLessThan(setup.isDraftExecutionLocked.mock.invocationCallOrder[0]);
     expect(
       setup.isDraftExecutionLocked.mock.invocationCallOrder[0],
@@ -1012,7 +1055,7 @@ describe('MyahInboxMutationService', () => {
       body: { markdown: 'rejected copy', blocknote: null },
     });
     expect(setup.isDraftExecutionLocked).not.toHaveBeenCalled();
-    expect(setup.transactionManager.query).toHaveBeenCalledWith(
+    expect(setup.coreTransactionManager.query).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
       [`myah-inbox-reply:${workspaceId}:${threadId}`],
     );
