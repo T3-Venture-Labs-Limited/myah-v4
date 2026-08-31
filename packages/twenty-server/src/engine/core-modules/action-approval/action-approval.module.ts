@@ -7,6 +7,8 @@ import { ActionApprovalResolver } from 'src/engine/core-modules/action-approval/
 import { InstagramReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/instagram-reply-action.definition';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
+import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-authority-context.service';
+import { MyahInboxReplyReceiptProjectionService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-receipt-projection.service';
 import { ActionApprovalBindingEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding.entity';
 import { ActionApprovalBindingEvidenceLinkEntity } from 'src/engine/core-modules/action-approval/entities/action-approval-binding-evidence-link.entity';
 import { ActionExecutionReceiptEntity } from 'src/engine/core-modules/action-approval/entities/action-execution-receipt.entity';
@@ -50,6 +52,8 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
     ActionApprovalResolver,
     ActionReceiptRedactionService,
     ActionReceiptWorkspaceProjectionWriterService,
+    MyahInboxReplyAuthorityContextService,
+    MyahInboxReplyReceiptProjectionService,
     InstagramReplyActionDefinition,
     OutreachEmailActionDefinition,
     MyahInboxReplyActionDefinition,

@@ -3,6 +3,7 @@ import {
   MyahInboxReplyUnavailableCode,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-authority-context.service';
 
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const initiatorUserWorkspaceId = '00000000-0000-4000-8000-000000000002';
@@ -189,17 +190,24 @@ const createDefinition = ({
       .mockResolvedValue(managedMailbox),
     findConnectedIdentity: jest.fn().mockResolvedValue(managedMailbox),
   };
+  const Context =
+    MyahInboxReplyAuthorityContextService as unknown as new (
+      ...args: unknown[]
+    ) => MyahInboxReplyAuthorityContextService;
   const Definition = MyahInboxReplyActionDefinition as unknown as new (
     ...args: unknown[]
   ) => MyahInboxReplyActionDefinition;
+  const authorityContext = new Context(
+    workspaceRepository,
+    globalWorkspaceOrmManager,
+    objectMetadataRepository,
+    userWorkspaceRepository,
+    workspaceCacheService,
+  );
 
   return {
     definition: new Definition(
-      workspaceRepository,
-      globalWorkspaceOrmManager,
-      objectMetadataRepository,
-      userWorkspaceRepository,
-      workspaceCacheService,
+      authorityContext,
       connectedAccountRepository,
       messageChannelRepository,
       managedEmailCampaignEligibilityService,

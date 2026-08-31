@@ -33,6 +33,11 @@ export type InboxParentMessageRecord = MessageWorkspaceEntity & {
   messageChannelMessageAssociations: MessageChannelMessageAssociationWorkspaceEntity[];
 };
 
+export type MyahInboxReplyAuthoritySource = {
+  messageThread: InboxMessageThreadRecord | null;
+  parentMessage: InboxParentMessageRecord | undefined;
+};
+
 export type MyahInboxReplyEvidenceObjectMetadataIds = {
   message: string;
   messageThread: string;

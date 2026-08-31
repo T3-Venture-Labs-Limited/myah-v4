@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { isNonEmptyString } from '@sniptt/guards';
-import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import {
   ConnectedAccountProvider,
   MessageChannelSyncStatus,
@@ -10,9 +9,8 @@ import {
   MessageChannelVisibility,
 } from 'twenty-shared/types';
 import { emailSchema } from 'twenty-shared/utils';
-import { In, type Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
-import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
 import { resolveMyahInboxReplyRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-myah-inbox-reply-recipient.util';
 import {
   buildMyahInboxReplyExpectedActionBinding,
@@ -20,10 +18,7 @@ import {
 } from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-action-binding.util';
 import {
   type CanonicalMyahInboxReplyGraph,
-  type InboxMessageThreadRecord,
-  type InboxParentMessageRecord,
   type MyahInboxReplyActionAuthority,
-  type MyahInboxReplyEvidenceObjectMetadataIds,
   type MyahInboxReplyExpectedActionBindingWithWorkspace,
   type MyahInboxReplyReadableDraftSnapshot,
   MyahInboxReplyUnavailableCode,
@@ -38,17 +33,10 @@ export type {
   MyahInboxReplyActionAuthority,
   MyahInboxReplyReadableDraftSnapshot,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
+import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-authority-context.service';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
-import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
-import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
-import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
-import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
-import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 const isValidMessageId = (value: string): boolean => {
   const match = /^<([^@<>]+)@([^@<>]+)>$/.exec(value);
@@ -73,14 +61,7 @@ export class MyahInboxReplyActionDefinition {
   readonly actionVersion = 1 as const;
 
   constructor(
-    @InjectRepository(WorkspaceEntity)
-    private readonly workspaceRepository: Repository<WorkspaceEntity>,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    @InjectRepository(ObjectMetadataEntity)
-    private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
-    @InjectRepository(UserWorkspaceEntity)
-    private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
-    private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly authorityContextService: MyahInboxReplyAuthorityContextService,
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     @InjectRepository(MessageChannelEntity)
@@ -123,51 +104,11 @@ export class MyahInboxReplyActionDefinition {
     initiatorUserWorkspaceId: string;
     messageThreadId: string;
   }): Promise<MyahInboxReplyReadableDraftSnapshot> {
-    const workspace = await this.workspaceRepository.findOneBy({
-      id: workspaceId,
-    });
-    if (!workspace) {
-      throw new MyahInboxReplyUnavailableError(
-        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-      );
-    }
-    const authContext = await this.buildInitiatorAuthContext(
-      workspace,
+    return this.authorityContextService.getReadableDraftSnapshot({
+      workspaceId,
       initiatorUserWorkspaceId,
-    );
-    const messageThread =
-      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          const repository =
-            await this.globalWorkspaceOrmManager.getRepository<InboxMessageThreadRecord>(
-              workspaceId,
-              'messageThread',
-            );
-
-          return repository.findOneBy({ id: messageThreadId });
-        },
-        authContext,
-      );
-    if (!messageThread || messageThread.id !== messageThreadId) {
-      throw new MyahInboxReplyUnavailableError(
-        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-      );
-    }
-
-    const evidenceObjectMetadataIds =
-      await this.resolveEvidenceObjectMetadataIds(workspaceId);
-
-    return {
-      revision: messageThread.myahReplyDraftRevision,
-      body:
-        messageThread.myahReplyDraftBodyMarkdown === null
-          ? null
-          : {
-              markdown: messageThread.myahReplyDraftBodyMarkdown,
-              blocknote: messageThread.myahReplyDraftBodyBlocknote,
-            },
-      messageThreadMetadataId: evidenceObjectMetadataIds.messageThread,
-    };
+      messageThreadId,
+    });
   }
 
   async rebuildExecutionAuthority({
@@ -252,7 +193,9 @@ export class MyahInboxReplyActionDefinition {
     graph: CanonicalMyahInboxReplyGraph;
   }): Promise<MyahInboxReplyActionAuthority> {
     const evidenceObjectMetadataIds =
-      await this.resolveEvidenceObjectMetadataIds(workspaceId);
+      await this.authorityContextService.resolveEvidenceObjectMetadataIds(
+        workspaceId,
+      );
 
     return {
       canonicalGraph: graph,
@@ -265,39 +208,6 @@ export class MyahInboxReplyActionDefinition {
     };
   }
 
-  private async resolveEvidenceObjectMetadataIds(
-    workspaceId: string,
-  ): Promise<MyahInboxReplyEvidenceObjectMetadataIds> {
-    const metadata = await this.objectMetadataRepository.find({
-      where: {
-        workspaceId,
-        universalIdentifier: In([
-          STANDARD_OBJECTS.messageThread.universalIdentifier,
-          STANDARD_OBJECTS.message.universalIdentifier,
-        ]),
-      },
-      select: { id: true, workspaceId: true, universalIdentifier: true },
-    });
-    const messageThread = metadata.find(
-      ({ workspaceId: itemWorkspaceId, universalIdentifier }) =>
-        itemWorkspaceId === workspaceId &&
-        universalIdentifier ===
-          STANDARD_OBJECTS.messageThread.universalIdentifier,
-    )?.id;
-    const message = metadata.find(
-      ({ workspaceId: itemWorkspaceId, universalIdentifier }) =>
-        itemWorkspaceId === workspaceId &&
-        universalIdentifier === STANDARD_OBJECTS.message.universalIdentifier,
-    )?.id;
-
-    if (!messageThread || !message) {
-      throw new MyahInboxReplyUnavailableError(
-        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-      );
-    }
-
-    return { messageThread, message };
-  }
 
   private async loadCanonicalGraph({
     workspaceId,
@@ -312,53 +222,12 @@ export class MyahInboxReplyActionDefinition {
     expectedDraftRevision?: number;
     mode: LoadMode;
   }): Promise<CanonicalMyahInboxReplyGraph> {
-    const workspace = await this.workspaceRepository.findOneBy({
-      id: workspaceId,
+    const source = await this.authorityContextService.loadAuthoritySource({
+      workspaceId,
+      initiatorUserWorkspaceId,
+      messageThreadId,
+      mode,
     });
-
-    if (!workspace) {
-      throw new MyahInboxReplyUnavailableError(
-        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-      );
-    }
-
-    const authContext =
-      mode === 'projection'
-        ? buildSystemAuthContext(workspaceId)
-        : await this.buildInitiatorAuthContext(
-            workspace,
-            initiatorUserWorkspaceId,
-          );
-    const source =
-      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          const messageThreadRepository =
-            await this.globalWorkspaceOrmManager.getRepository<InboxMessageThreadRecord>(
-              workspaceId,
-              'messageThread',
-            );
-          const messageRepository =
-            await this.globalWorkspaceOrmManager.getRepository<InboxParentMessageRecord>(
-              workspaceId,
-              'message',
-            );
-          const messageThread = await messageThreadRepository.findOneBy({
-            id: messageThreadId,
-          });
-          const messages = await messageRepository.find({
-            where: { messageThreadId, isDraft: false },
-            relations: {
-              messageParticipants: true,
-              messageChannelMessageAssociations: true,
-            },
-            order: { receivedAt: 'DESC', id: 'DESC' },
-            take: 1,
-          });
-
-          return { messageThread, parentMessage: messages[0] };
-        },
-        authContext,
-      );
 
     const rawDraftMarkdown = source.messageThread?.myahReplyDraftBodyMarkdown;
     const subject = source.messageThread?.subject?.trim();
@@ -558,43 +427,4 @@ export class MyahInboxReplyActionDefinition {
     ].includes(provider);
   }
 
-  private async buildInitiatorAuthContext(
-    workspace: WorkspaceEntity,
-    userWorkspaceId: string,
-  ) {
-    const userWorkspace = await this.userWorkspaceRepository.findOne({
-      where: { id: userWorkspaceId, workspaceId: workspace.id },
-      relations: { user: true },
-    });
-
-    if (!userWorkspace?.user) {
-      throw new MyahInboxReplyUnavailableError(
-        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-      );
-    }
-
-    const { flatWorkspaceMemberMaps } =
-      await this.workspaceCacheService.getOrRecompute(workspace.id, [
-        'flatWorkspaceMemberMaps',
-      ]);
-    const workspaceMemberId =
-      flatWorkspaceMemberMaps.idByUserId[userWorkspace.user.id];
-    const workspaceMember = workspaceMemberId
-      ? flatWorkspaceMemberMaps.byId[workspaceMemberId]
-      : undefined;
-
-    if (!workspaceMemberId || !workspaceMember) {
-      throw new MyahInboxReplyUnavailableError(
-        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-      );
-    }
-
-    return buildUserAuthContext({
-      workspace: workspace as unknown as FlatWorkspace,
-      userWorkspaceId,
-      user: userWorkspace.user as unknown as FlatUser,
-      workspaceMemberId,
-      workspaceMember,
-    });
-  }
 }
