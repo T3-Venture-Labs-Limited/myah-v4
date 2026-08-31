@@ -287,12 +287,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       } as never,
       new ActionReceiptProjectorService(
         dataSource.getRepository(ActionExecutionReceiptEntity),
-        new ActionReceiptWorkspaceProjectionWriterService(
-          dataSource,
-          {} as never,
-          {} as never,
-          { rebuildProjectionAuthority: jest.fn() },
-        ),
+        global.app.get(ActionReceiptWorkspaceProjectionWriterService),
       ),
     );
 
@@ -476,11 +471,8 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       }
     }
 
-    const projectionWriter = new ActionReceiptWorkspaceProjectionWriterService(
-      dataSource,
-      {} as never,
-      {} as never,
-      { rebuildProjectionAuthority: jest.fn() },
+    const projectionWriter = global.app.get(
+      ActionReceiptWorkspaceProjectionWriterService,
     );
     service = new ActionApprovalService(
       dataSource,
@@ -809,12 +801,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
 
     const projector = new ActionReceiptProjectorService(
       dataSource.getRepository(ActionExecutionReceiptEntity),
-      new ActionReceiptWorkspaceProjectionWriterService(
-        dataSource,
-        {} as never,
-        {} as never,
-        { rebuildProjectionAuthority: jest.fn() },
-      ),
+      global.app.get(ActionReceiptWorkspaceProjectionWriterService),
     );
 
     await expect(

@@ -15,6 +15,7 @@ import {
 } from 'twenty-shared/types';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
+import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
 import { OutreachEmailActionDefinition } from 'src/engine/core-modules/action-approval/definitions/outreach-email-action.definition';
 import {
   ActionApprovalBindingEntity,
@@ -1046,7 +1047,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       dataSource,
       connectedAccountRepository as never,
       { persistSentMessage: recoverPersistence } as never,
-      { rebuildProjectionAuthority: jest.fn() },
+      global.app.get(MyahInboxReplyActionDefinition),
     );
     const projection = {
       receiptId: recoveryReceiptId,

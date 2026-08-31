@@ -18,10 +18,7 @@ import { SentMessagePersistenceService } from 'src/modules/messaging/message-out
 
 type ProjectionInput = Parameters<ActionReceiptProjectionWriter['project']>[0];
 
-type InboxProjectionAuthorityBuilder = Pick<
-  MyahInboxReplyActionDefinition,
-  'rebuildProjectionAuthority'
->;
+
 
 type OutreachActionProjectionRow = {
   subject: string | null;
@@ -80,7 +77,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     private readonly sentMessagePersistenceService: SentMessagePersistenceService,
-    private readonly myahInboxReplyActionDefinition: InboxProjectionAuthorityBuilder,
+    private readonly myahInboxReplyActionDefinition: MyahInboxReplyActionDefinition,
   ) {}
 
   async project(input: ProjectionInput): Promise<void> {

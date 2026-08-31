@@ -43,3 +43,35 @@ NODE_ENV=development PG_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:1569
 ```
 
 The isolated MYAH-169 Postgres/Redis services connected, but the two integration specs require a seeded active or suspended physical Myah workspace and its tables. No destructive global setup or shared database was used.
+
+## Follow-up — projection writer injection
+
+The writer's constructor was briefly typed as a `Pick` capability. Nest therefore received `Object` rather than `MyahInboxReplyActionDefinition` in emitted `design:paramtypes`, preventing application boot. The constructor again carries the concrete authority class token; integration tests resolve the real authority/writer from the Nest application rather than supplying cast mocks. A reflection regression verifies constructor parameter 3 retains `MyahInboxReplyActionDefinition`.
+
+Passed:
+
+```sh
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-approval.module.spec.ts --config packages/twenty-server/jest.config.mjs
+```
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+```
+
+```sh
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-workspace-projection-writer.service.spec.ts --config packages/twenty-server/jest.config.mjs
+```
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       18 passed, 18 total
+```
+
+```sh
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-server --excludeTaskDependencies
+```
+
+```text
+NX Successfully ran target typecheck for project twenty-server
+```
