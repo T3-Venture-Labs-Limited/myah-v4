@@ -129,9 +129,9 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         parentMessageId,
       );
 
-      const existingMessage = sentMessages[0];
+      let existingMessage: SentInboxMessageRow | undefined;
       if (currentDraft.myahReplyDraftBody === null) {
-        const replayMatches = sentMessages.filter((message) =>
+        existingMessage = this.selectOneInboxMessage(sentMessages, (message) =>
           this.isMatchingSentInboxMessage(
             message,
             input,
@@ -139,7 +139,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
             parentMessageId,
           ),
         );
-        if (replayMatches.length === 1) {
+        if (existingMessage) {
           return;
         }
 
@@ -161,17 +161,19 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         throw new Error('The approved Inbox reply is unavailable for projection');
       }
 
-      if (
-        existingMessage &&
-        (!this.isMatchingSentInboxMessage(
-          existingMessage,
-          input,
-          canonicalGraph.draftRevision,
-          parentMessageId,
-        ) ||
-          existingMessage.messageChannelId !== canonicalGraph.messageChannelId ||
-          existingMessage.senderEmail !== canonicalGraph.senderEmail)
-      ) {
+      existingMessage = this.selectOneInboxMessage(
+        sentMessages,
+        (message) =>
+          this.isMatchingSentInboxMessage(
+            message,
+            input,
+            canonicalGraph.draftRevision,
+            parentMessageId,
+          ) &&
+          message.messageChannelId === canonicalGraph.messageChannelId &&
+          message.senderEmail === canonicalGraph.senderEmail,
+      );
+      if (sentMessages.length > 0 && !existingMessage) {
         throw new Error('The sent Inbox Message is unavailable for projection');
       }
 
@@ -213,17 +215,19 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         input.providerExternalMessageId,
         parentMessageId,
       );
-      if (
-        matchingMessages.length !== 1 ||
-        !this.isMatchingSentInboxMessage(
-          matchingMessages[0],
-          input,
-          canonicalGraph.draftRevision,
-          parentMessageId,
-        ) ||
-        matchingMessages[0].messageChannelId !== canonicalGraph.messageChannelId ||
-        matchingMessages[0].senderEmail !== canonicalGraph.senderEmail
-      ) {
+      const matchedMessage = this.selectOneInboxMessage(
+        matchingMessages,
+        (message) =>
+          this.isMatchingSentInboxMessage(
+            message,
+            input,
+            canonicalGraph.draftRevision,
+            parentMessageId,
+          ) &&
+          message.messageChannelId === canonicalGraph.messageChannelId &&
+          message.senderEmail === canonicalGraph.senderEmail,
+      );
+      if (!matchedMessage) {
         throw new Error('The sent Inbox Message is unavailable for projection');
       }
 
@@ -363,11 +367,31 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         WHERE "id" = $1`,
       [messageThreadId],
     );
+
     if (!draft || !Number.isInteger(draft.myahReplyDraftRevision)) {
       throw new Error('The approved Inbox reply is unavailable for projection');
     }
 
     return draft;
+  }
+  private selectOneInboxMessage(
+    messages: readonly SentInboxMessageRow[],
+    matches: (message: SentInboxMessageRow) => boolean,
+  ): SentInboxMessageRow | undefined {
+    const matchesByMessageId = new Map<string, SentInboxMessageRow[]>();
+    for (const message of messages) {
+      if (!matches(message)) {
+        continue;
+      }
+      const grouped = matchesByMessageId.get(message.id) ?? [];
+      grouped.push(message);
+      matchesByMessageId.set(message.id, grouped);
+    }
+    const matchingGroups = [...matchesByMessageId.values()].filter(
+      (group) => group.length === 1,
+    );
+
+    return matchingGroups.length === 1 ? matchingGroups[0][0] : undefined;
   }
 
   private async findSentInboxMessages(
