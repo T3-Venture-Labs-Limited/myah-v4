@@ -1,9 +1,11 @@
 import { CampaignInfluencerIndex } from '@/myah/creator-crm/components/CampaignInfluencerIndex';
 import { PageLayoutContent } from '@/page-layout/components/PageLayoutContent';
 import { MyahCampaignHome } from '@/page-layout/components/MyahCampaignHome';
+import { MyahCampaignAgent } from '@/page-layout/components/MyahCampaignAgent';
 import { MyahCreatorListMembers } from '@/page-layout/components/MyahCreatorListMembers';
 import { CampaignOutreachTab } from '@/myah-outreach/components/CampaignOutreachTab';
 import { MYAH_CAMPAIGN_HOME_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignHomeTabUniversalIdentifier';
+import { MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignAgentTabUniversalIdentifier';
 import { MYAH_CAMPAIGN_OUTREACH_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignOutreachTabUniversalIdentifier';
 import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignRecordPageLayoutUniversalIdentifier';
 import { MYAH_CREATOR_LIST_PAGE_LAYOUT_UNIVERSAL_IDENTIFIERS } from '@/page-layout/constants/MyahCreatorListPageLayoutUniversalIdentifiers';
@@ -44,6 +46,15 @@ export const PageLayoutMainContent = ({
       MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER &&
     activeTab.universalIdentifier ===
       MYAH_CAMPAIGN_OUTREACH_TAB_UNIVERSAL_IDENTIFIER;
+  const shouldRenderCampaignAgent =
+    targetRecordIdentifier?.targetObjectNameSingular === 'campaign' &&
+    currentPageLayout.universalIdentifier ===
+      MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER &&
+    activeTab.universalIdentifier ===
+      MYAH_CAMPAIGN_AGENT_TAB_UNIVERSAL_IDENTIFIER;
+  const campaignAgentWidget =
+    activeTab.widgets?.length === 1 ? activeTab.widgets[0] : undefined;
+  const campaignAgentTitle = campaignAgentWidget?.title ?? activeTab.title;
   const shouldRenderCreatorListMembers =
     targetRecordIdentifier?.targetObjectNameSingular === 'creatorList' &&
     currentPageLayout.universalIdentifier ===
@@ -76,6 +87,11 @@ export const PageLayoutMainContent = ({
         />
       ) : shouldRenderCampaignOutreach ? (
         <CampaignOutreachTab campaignId={targetRecordIdentifier.id} />
+      ) : shouldRenderCampaignAgent ? (
+        <MyahCampaignAgent
+          campaignId={targetRecordIdentifier.id}
+          title={campaignAgentTitle}
+        />
       ) : (
         <>
           {shouldRenderCampaignHome ? (

@@ -23,7 +23,7 @@ let activeTab: {
   layout: string;
   title: string;
   universalIdentifier: string;
-  widgets?: unknown[];
+  widgets?: Array<{ title?: string }>;
 };
 let targetRecordIdentifier:
   | { id: string; targetObjectNameSingular: string }
@@ -37,6 +37,16 @@ jest.mock('@/page-layout/components/MyahCampaignHome', () => ({
   MyahCampaignHome: ({ campaignId }: { campaignId: string }) => (
     <div>{`Campaign home integration:${campaignId}`}</div>
   ),
+}));
+
+jest.mock('@/page-layout/components/MyahCampaignAgent', () => ({
+  MyahCampaignAgent: ({
+    campaignId,
+    title,
+  }: {
+    campaignId: string;
+    title: string;
+  }) => <div>{`Campaign agent integration:${campaignId}:${title}`}</div>,
 }));
 
 jest.mock('@/myah-outreach/components/CampaignOutreachTab', () => ({
@@ -205,6 +215,58 @@ describe('PageLayoutMainContent', () => {
       screen.queryByText('Native page layout content'),
     ).not.toBeInTheDocument();
   });
+
+  it('mounts the guided editor only on the canonical Campaign Agent tab', () => {
+    activeTab = {
+      ...activeTab,
+      title: 'Agent',
+      universalIdentifier: '0d213a1a-e001-496c-970e-e692968cf17c',
+      widgets: [{ title: 'Campaign agent' }],
+    };
+
+    render(<PageLayoutMainContent tabId="agent-tab-id" />);
+
+    expect(
+      screen.getByText('Campaign agent integration:campaign-1:Campaign agent'),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Native page layout content'),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a different layout', 'different-layout', 'campaign'],
+    [
+      'a non-Campaign record',
+      'ad261155-3c89-436d-8898-3e52d8b37632',
+      'person',
+    ],
+  ])(
+    'keeps native content for the Agent identifier on %s',
+    (_description, layoutUniversalIdentifier, objectNameSingular) => {
+      currentPageLayout = {
+        ...currentPageLayout,
+        universalIdentifier: layoutUniversalIdentifier,
+      };
+      targetRecordIdentifier = {
+        id: 'record-1',
+        targetObjectNameSingular: objectNameSingular,
+      };
+      activeTab = {
+        ...activeTab,
+        title: 'Agent',
+        universalIdentifier: '0d213a1a-e001-496c-970e-e692968cf17c',
+        widgets: [{ title: 'Campaign agent' }],
+      };
+
+      render(<PageLayoutMainContent tabId="agent-tab-id" />);
+
+      expect(screen.getByText('Native page layout content')).toBeVisible();
+      expect(
+        screen.queryByText(/Campaign agent integration:/),
+      ).not.toBeInTheDocument();
+    },
+  );
   it.each([
     {
       description: 'the Campaign Tasks tab',
@@ -232,7 +294,7 @@ describe('PageLayoutMainContent', () => {
         activeTab = {
           ...activeTab,
           title: 'Agent',
-          universalIdentifier: 'd67e7fa1-87d2-4730-b4dd-0b06680f4c49',
+          universalIdentifier: '0d213a1a-e001-496c-970e-e692968cf17c',
         };
       },
     },
