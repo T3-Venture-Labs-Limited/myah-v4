@@ -289,6 +289,36 @@ describe('MyahInboxReplySendService', () => {
     });
   });
 
+  it('uses the canonical approved alias identity for the provider send', async () => {
+    const aliasAuthority = {
+      ...authority,
+      canonicalGraph: {
+        ...authority.canonicalGraph,
+        senderEmail: 'brand-alias@example.com',
+        connectedAccount: {
+          id: 'connected-account-id',
+          handle: 'brand-alias@example.com',
+          provider: 'google',
+          accessToken: 'provider-token',
+        },
+      },
+    };
+    const setup = createService({
+      buildAuthority: jest.fn().mockResolvedValue(aliasAuthority),
+      rebuildExecutionAuthority: jest.fn().mockResolvedValue(aliasAuthority),
+    });
+
+    await setup.service.send(request());
+
+    expect(setup.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ['creator@example.com'],
+        subject: 'Re: Partnership',
+      }),
+      aliasAuthority.canonicalGraph.connectedAccount,
+    );
+  });
+
   it('returns the post-projection permission-scoped snapshot after a sent receipt clears the draft', async () => {
     const clearedSnapshot = {
       revision: 5,

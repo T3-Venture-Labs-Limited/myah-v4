@@ -35,7 +35,7 @@ export class SentMessagePersistenceService {
       await this.saveMessagesAndEnqueueContactCreationService.saveMessagesAndEnqueueContactCreation(
         [messageToSave],
         messageChannel,
-        messageChannel.connectedAccount,
+        input.connectedAccount,
         input.workspaceId,
       );
 

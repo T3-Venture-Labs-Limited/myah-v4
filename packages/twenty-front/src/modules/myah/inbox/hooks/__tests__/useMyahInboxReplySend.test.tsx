@@ -21,6 +21,7 @@ const mockUseQuery = jest.mocked(useQuery);
 const mockUseApolloCoreClient = jest.mocked(useApolloCoreClient);
 const sendMutation = jest.fn();
 const statusQuery = jest.fn();
+const refetchReadiness = jest.fn();
 
 const createDeferred = <Value,>() => {
   let resolve: (value: Value) => void;
@@ -33,9 +34,8 @@ const createDeferred = <Value,>() => {
 
 const threadId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const receiptId = '30303030-1c25-4d02-bf25-6aeccf7ea419';
-
 const renderReplySendHook = () =>
-  renderHook(() => useMyahInboxReplySend(threadId));
+  renderHook(() => useMyahInboxReplySend(threadId, 4));
 
 describe('useMyahInboxReplySend', () => {
   beforeEach(() => {
@@ -54,6 +54,7 @@ describe('useMyahInboxReplySend', () => {
         },
       },
       loading: false,
+      refetch: refetchReadiness,
     } as never);
   });
 
@@ -67,6 +68,52 @@ describe('useMyahInboxReplySend', () => {
     expect(result.current.readiness).toEqual({ status: 'READY', reason: null });
     expect(result.current.readinessLoading).toBe(false);
     expect(statusQuery).not.toHaveBeenCalled();
+  });
+
+  it('refetches readiness once when a saved revision changes on the same thread', () => {
+    const useReplySend = useMyahInboxReplySend as unknown as (
+      thread: string,
+      confirmedRevision: number,
+    ) => {
+      readiness: { status: string; reason: string | null } | null;
+    };
+    mockUseQuery.mockReturnValue({
+      data: {
+        myahInboxReplySendReadiness: {
+          status: 'THREAD_UNAVAILABLE',
+          reason: 'Save a draft before sending.',
+        },
+      },
+      loading: false,
+      refetch: refetchReadiness,
+    } as never);
+    const { result, rerender } = renderHook(
+      ({ confirmedRevision }) => useReplySend(threadId, confirmedRevision),
+      { initialProps: { confirmedRevision: 4 } },
+    );
+
+    expect(result.current.readiness).toEqual({
+      status: 'THREAD_UNAVAILABLE',
+      reason: 'Save a draft before sending.',
+    });
+    mockUseQuery.mockReturnValue({
+      data: {
+        myahInboxReplySendReadiness: {
+          status: 'READY',
+          reason: null,
+        },
+      },
+      loading: false,
+      refetch: refetchReadiness,
+    } as never);
+
+    rerender({ confirmedRevision: 5 });
+
+    expect(refetchReadiness).toHaveBeenCalledTimes(1);
+    expect(result.current.readiness).toEqual({ status: 'READY', reason: null });
+    act(() => jest.advanceTimersByTime(10_000));
+    expect(refetchReadiness).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it('sends only the thread and confirmed draft revision', async () => {

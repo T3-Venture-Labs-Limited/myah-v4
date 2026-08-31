@@ -2,13 +2,13 @@ import { MyahInboxReplyReceiptProjectionService } from 'src/engine/core-modules/
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 
 describe('MyahInboxReplyReceiptProjectionService', () => {
-  it('projects one native Inbox sent Message, clears only its approved revision, and replays after the draft is cleared', async () => {
+  it('projects an empty-subject Inbox reply from an approved alias and clears only its approved revision', async () => {
     const workspaceId = '00000000-0000-4000-8000-000000000101';
     const messageThreadId = '00000000-0000-4000-8000-000000000102';
     const messageChannelId = '00000000-0000-4000-8000-000000000103';
     const parentMessageId = '00000000-0000-4000-8000-000000000104';
     const providerMessageId = '<sent@example.com>';
-    const subject = 'Re: Partnership';
+    const subject = '';
     const body = 'Thanks for the update';
     const projection = {
       receiptId: '00000000-0000-4000-8000-000000000105',
@@ -29,7 +29,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
           null,
           'connected-account-id',
           messageChannelId,
-          'sender@example.com',
+          'brand-alias@example.com',
           'Sender',
         ]),
       ),
@@ -42,7 +42,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
           'incoming-provider-message-id',
           'connected-account-id',
           messageChannelId,
-          'sender@example.com',
+          'brand-alias@example.com',
           'Sender',
         ]),
       ),
@@ -68,7 +68,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
       draftBody: { markdown: body, blocknote: null },
       connectedAccountId: 'connected-account-id',
       messageChannelId,
-      senderEmail: 'sender@example.com',
+      senderEmail: 'brand-alias@example.com',
       senderDisplayName: 'Sender',
       recipientEmail: 'creator@example.com',
       recipientLabel: 'Creator',
@@ -81,7 +81,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
       connectedAccount: {
         id: 'connected-account-id',
         workspaceId,
-        handle: 'sender@example.com',
+        handle: 'brand-alias@example.com',
       },
     };
     const actionDefinition = {
@@ -105,7 +105,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
       messageThreadExternalId: 'provider-thread-id',
       recipientCount: 1,
       recipientEmail: 'creator@example.com',
-      senderEmail: 'sender@example.com',
+      senderEmail: 'brand-alias@example.com',
       senderCount: 1,
       senderDisplayName: 'Sender',
       connectedAccountId: 'connected-account-id',
@@ -193,22 +193,21 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
     );
     expect(persistSentMessage).toHaveBeenCalledTimes(1);
     expect(operations).toEqual(['persist', 'draft-cas']);
-    expect(persistSentMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sendResult: {
-          headerMessageId: providerMessageId,
-          messageExternalId: 'provider-message-id',
-          threadExternalId: 'provider-thread-id',
-        },
-        subject,
-        body,
-        recipients: { to: ['creator@example.com'], cc: [], bcc: [] },
-        messageChannelId,
-        inReplyTo: '<incoming@example.com>',
-        parentThreadExternalId: 'provider-thread-id',
-        workspaceId,
-      }),
-    );
+    expect(persistSentMessage).toHaveBeenCalledWith({
+      sendResult: {
+        headerMessageId: providerMessageId,
+        messageExternalId: 'provider-message-id',
+        threadExternalId: 'provider-thread-id',
+      },
+      subject,
+      body,
+      recipients: { to: ['creator@example.com'], cc: [], bcc: [] },
+      connectedAccount: canonicalGraph.connectedAccount,
+      messageChannelId,
+      inReplyTo: '<incoming@example.com>',
+      parentThreadExternalId: 'provider-thread-id',
+      workspaceId,
+    });
     const messageLookup = query.mock.calls.find(([sql]) =>
       String(sql).includes('"recipientCount"'),
     );
@@ -236,7 +235,7 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
       'The sent Inbox Message is unavailable for projection',
     );
 
-    sentMessage.senderEmail = 'sender@example.com';
+    sentMessage.senderEmail = 'brand-alias@example.com';
     draftBody = body;
     revision = 5;
     await expect(writer.project(projection)).rejects.toThrow(

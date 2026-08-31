@@ -87,9 +87,16 @@ const waitForNextPoll = (operation: PollingOperation) => {
   });
 };
 
-export const useMyahInboxReplySend = (threadId: string) => {
+export const useMyahInboxReplySend = (
+  threadId: string,
+  confirmedRevision: number,
+) => {
   const apolloCoreClient = useApolloCoreClient();
-  const { data: readinessData, loading: readinessLoading } = useQuery(
+  const {
+    data: readinessData,
+    loading: readinessLoading,
+    refetch: refetchReadiness,
+  } = useQuery(
     MyahInboxReplySendReadinessDocument,
     {
       client: apolloCoreClient,
@@ -106,6 +113,8 @@ export const useMyahInboxReplySend = (threadId: string) => {
   );
   // oxlint-disable-next-line twenty/no-state-useref
   const nextPollingOperationTokenRef = useRef(0);
+  // oxlint-disable-next-line twenty/no-state-useref
+  const readinessKeyRef = useRef({ threadId, confirmedRevision });
 
   useEffect(() => {
     const activePollingOperations = activePollingOperationsRef.current;
@@ -115,6 +124,18 @@ export const useMyahInboxReplySend = (threadId: string) => {
       activePollingOperations.clear();
     };
   }, []);
+
+  useEffect(() => {
+    const previousReadinessKey = readinessKeyRef.current;
+
+    readinessKeyRef.current = { threadId, confirmedRevision };
+    if (
+      previousReadinessKey.threadId === threadId &&
+      previousReadinessKey.confirmedRevision !== confirmedRevision
+    ) {
+      void refetchReadiness();
+    }
+  }, [confirmedRevision, refetchReadiness, threadId]);
 
   const send = useCallback(
     async ({

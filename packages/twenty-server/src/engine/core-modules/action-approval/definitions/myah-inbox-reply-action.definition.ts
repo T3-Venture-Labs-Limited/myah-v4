@@ -232,15 +232,14 @@ export class MyahInboxReplyActionDefinition {
     const draftBody = source.messageThread
       ? normalizeMyahInboxReplyDraft(source.messageThread)
       : null;
-    const subject = source.messageThread?.subject?.trim();
     const parentMessage = source.parentMessage;
+    const parentSubject = parentMessage?.subject?.trim() ?? '';
 
     if (
       !source.messageThread ||
       source.messageThread.id !== messageThreadId ||
       draftBody === null ||
       draftBody.markdown.trim().length === 0 ||
-      !isNonEmptyString(subject) ||
       (expectedDraftRevision !== undefined &&
         source.messageThread.myahReplyDraftRevision !==
           expectedDraftRevision) ||
@@ -411,7 +410,11 @@ export class MyahInboxReplyActionDefinition {
       senderDisplayName: account.name?.trim() || null,
       recipientEmail: recipient.email,
       recipientLabel: recipient.label,
-      subject: /^re:\s*/i.test(subject) ? subject : `Re: ${subject}`,
+      subject: /^re:\s*/i.test(parentSubject)
+        ? parentSubject
+        : parentSubject === ''
+          ? ''
+          : `Re: ${parentSubject}`,
       inReplyTo: headerMessageId,
       parentMessageId: parentMessage.id,
       providerMessageExternalId:
@@ -419,7 +422,7 @@ export class MyahInboxReplyActionDefinition {
       providerThreadExternalId:
         associations[0].messageThreadExternalId?.trim() || null,
       managedMailboxId,
-      connectedAccount: account,
+      connectedAccount: { ...account, handle: senderEmail },
     };
   }
 

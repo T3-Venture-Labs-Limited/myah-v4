@@ -27,7 +27,6 @@ export type MyahInboxReplyDraft = {
 
 export type InboxMessageThreadRecord = ObjectRecord & {
   id: string;
-  subject: string | null;
   myahReplyDraftBody?: MyahInboxReplyDraft | null;
   myahReplyDraftBodyMarkdown?: string | null;
   myahReplyDraftBodyBlocknote?: string | null;

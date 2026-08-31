@@ -27,6 +27,7 @@ type InboxReplyAuthorityOverride = {
     myahReplyDraftRevision: number;
   }>;
   parent?: Partial<{
+    subject: string | null;
     id: string;
     messageThreadId: string;
     isDraft: boolean;
@@ -72,6 +73,12 @@ type InboxReplyDraftFixture = Required<
 type InboxReplyParentFixture = Required<
   NonNullable<InboxReplyAuthorityOverride['parent']>
 >;
+type InboxReplyParentOverrideFixture = Omit<
+  InboxReplyParentFixture,
+  'subject'
+> & {
+  subject?: string | null;
+};
 type InboxReplyAccountFixture = Required<
   NonNullable<InboxReplyAuthorityOverride['account']>
 >;
@@ -104,6 +111,7 @@ const createDefinition = ({
     id: parentMessageId,
     messageThreadId,
     isDraft: false,
+    subject: 'Partnership',
     receivedAt: new Date('2026-08-06T12:00:00.000Z'),
     headerMessageId: '<incoming@example.com>',
     messageParticipants: [
@@ -142,7 +150,7 @@ const createDefinition = ({
   managedMailbox = null,
 }: {
   draft?: InboxReplyDraftFixture;
-  parent?: InboxReplyParentFixture;
+  parent?: InboxReplyParentOverrideFixture;
   account?: InboxReplyAccountFixture;
   channel?: InboxReplyChannelFixture;
   managedMailbox?: { id: string } | null;
@@ -522,6 +530,118 @@ describe('MyahInboxReplyActionDefinition', () => {
     });
   });
 
+  it('derives the reply subject from the latest parent Message rather than the MessageThread', async () => {
+    const { definition } = createDefinition({
+      draft: {
+        id: messageThreadId,
+        subject: 'Stale thread subject',
+        myahReplyDraftBodyMarkdown: 'Thanks for the update',
+        myahReplyDraftBodyBlocknote: null,
+        myahReplyDraftRevision: 4,
+      },
+      parent: {
+        id: parentMessageId,
+        messageThreadId,
+        isDraft: false,
+        receivedAt: new Date('2026-08-06T12:00:00.000Z'),
+        subject: 'Latest parent subject',
+        headerMessageId: '<incoming@example.com>',
+        messageParticipants: [
+          {
+            role: 'FROM',
+            handle: 'creator@example.com',
+            displayName: 'Creator',
+          },
+          { role: 'TO', handle: 'team@brand.com', displayName: 'Brand' },
+        ],
+        messageChannelMessageAssociations: [
+          {
+            messageChannelId,
+            direction: 'INCOMING',
+            messageExternalId: 'provider-message-id',
+            messageThreadExternalId: 'provider-thread-id',
+          },
+        ],
+      },
+    });
+
+    await expect(buildAuthority(definition)).resolves.toMatchObject({
+      canonicalGraph: { subject: 'Re: Latest parent subject' },
+    });
+  });
+
+  it.each([null, ''])(
+    'keeps a %p parent Message subject empty and eligible',
+    async (subject) => {
+      const { definition } = createDefinition({
+        parent: {
+          id: parentMessageId,
+          messageThreadId,
+          isDraft: false,
+          receivedAt: new Date('2026-08-06T12:00:00.000Z'),
+          subject,
+          headerMessageId: '<incoming@example.com>',
+          messageParticipants: [
+            {
+              role: 'FROM',
+              handle: 'creator@example.com',
+              displayName: 'Creator',
+            },
+            {
+              role: 'TO',
+              handle: 'team@brand.com',
+              displayName: 'Brand',
+            },
+          ],
+          messageChannelMessageAssociations: [
+            {
+              messageChannelId,
+              direction: 'INCOMING',
+              messageExternalId: 'provider-message-id',
+              messageThreadExternalId: 'provider-thread-id',
+            },
+          ],
+        },
+      });
+
+      await expect(buildAuthority(definition)).resolves.toMatchObject({
+        canonicalGraph: { subject: '' },
+        expectedActionBinding: {
+          contentDigest: computeActionContentDigest(
+            JSON.stringify(['', 'Thanks for the update']),
+          ),
+        },
+      });
+    },
+  );
+
+  it('uses an approved channel alias as the connected-account send identity', async () => {
+    const { definition, account } = createDefinition({
+      channel: {
+        id: messageChannelId,
+        workspaceId,
+        connectedAccountId,
+        handle: 'brand-alias@brand.com',
+        type: 'EMAIL',
+        visibility: 'SHARE_EVERYTHING',
+        isSyncEnabled: true,
+        syncStatus: 'ACTIVE',
+      },
+    });
+
+    await expect(buildAuthority(definition)).resolves.toMatchObject({
+      canonicalGraph: {
+        connectedAccountId,
+        senderEmail: 'brand-alias@brand.com',
+        connectedAccount: expect.objectContaining({
+          id: connectedAccountId,
+          handle: 'brand-alias@brand.com',
+          provider: account.provider,
+        }),
+      },
+    });
+  });
+
   it('allows SHARE_EVERYTHING channels for another workspace user', async () => {
     const { definition } = createDefinition();
 
@@ -728,6 +848,8 @@ describe('MyahInboxReplyActionDefinition', () => {
   it('keeps projection authority provider-free after mutable eligibility changes', async () => {
     const setup = createDefinition();
     const authority = await buildAuthority(setup.definition);
+    const { connectedAccount: _approvedAccount, ...expectedGraph } =
+      authority.canonicalGraph;
     setup.account.archivedAt = new Date();
     setup.channel.isSyncEnabled = false;
     setup.channel.syncStatus = 'NOT_SYNCED';
@@ -746,6 +868,6 @@ describe('MyahInboxReplyActionDefinition', () => {
         workspaceId,
         binding: authority.expectedActionBinding,
       }),
-    ).resolves.toMatchObject({ canonicalGraph: authority.canonicalGraph });
+    ).resolves.toMatchObject({ canonicalGraph: expectedGraph });
   });
 });

@@ -401,7 +401,7 @@ export class MyahInboxReplyReceiptProjectionService {
       message.messageThreadId === input.threadId &&
       isNonEmptyString(message.messageChannelId) &&
       isNonEmptyString(message.connectedAccountId) &&
-      isNonEmptyString(message.subject) &&
+      message.subject !== null &&
       isNonEmptyString(message.body) &&
       isNonEmptyString(message.recipientEmail) &&
       isNonEmptyString(message.senderEmail) &&

@@ -15,6 +15,7 @@ import {
 
 const mockFlush = jest.fn();
 const mockSend = jest.fn();
+const mockUseMyahInboxReplySend = jest.fn();
 const mockRefetchQueries = jest.fn();
 const mockEnqueueSuccessSnackBar = jest.fn();
 const mockEnqueueInfoSnackBar = jest.fn();
@@ -55,12 +56,16 @@ jest.mock('@/myah/inbox/hooks/useMyahInboxDraftAutosaveController', () => ({
 }));
 
 jest.mock('@/myah/inbox/hooks/useMyahInboxReplySend', () => ({
-  useMyahInboxReplySend: () => ({
-    readiness: mockReadiness,
-    readinessLoading: mockReadinessLoading,
-    send: mockSend,
-    sending: mockSending,
-  }),
+  useMyahInboxReplySend: (...args: unknown[]) => {
+    mockUseMyahInboxReplySend(...args);
+
+    return {
+      readiness: mockReadiness,
+      readinessLoading: mockReadinessLoading,
+      send: mockSend,
+      sending: mockSending,
+    };
+  },
 }));
 
 jest.mock('@/object-metadata/hooks/useApolloCoreClient', () => ({
@@ -176,6 +181,12 @@ describe('MyahInboxReplySendAction', () => {
     renderAction({ entry, readiness: 'READY' });
 
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  });
+
+  it('passes the confirmed draft revision to readiness', () => {
+    renderAction({ entry: confirmedEntry({ confirmedRevision: 7 }) });
+
+    expect(mockUseMyahInboxReplySend).toHaveBeenCalledWith('thread-1', 7);
   });
 
   it.each([

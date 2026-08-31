@@ -42,6 +42,7 @@ export const MyahInboxReplySendAction = ({
   } = useSnackBar();
   const { readiness, readinessLoading, send, sending } = useMyahInboxReplySend(
     draftKey.threadId,
+    entry.confirmedRevision,
   );
   const [isSending, setIsSending] = useState(false);
   const [isUnknown, setIsUnknown] = useState(false);
