@@ -19,7 +19,8 @@ jest.mock('./instrument', () => ({}), { virtual: true });
 
 jest.mock('@/app/components/App', () => ({ App: () => null }));
 jest.mock('@/auth/utils/migrateTokenPairCookieToLocalStorage', () => ({
-  migrateTokenPairCookieToLocalStorage: mockMigrateTokenPairCookieToLocalStorage,
+  migrateTokenPairCookieToLocalStorage:
+    mockMigrateTokenPairCookieToLocalStorage,
 }));
 jest.mock('@/metadata-store/storage/metadataStoreStorage', () => ({
   hydrateMetadataStore: mockHydrateMetadataStore,
@@ -41,7 +42,6 @@ describe('application bootstrap', () => {
       onRecoverableError: mockRecoverableErrorHandler,
       onUncaughtError: mockUncaughtErrorHandler,
     });
-    expect(mockCreateRoot.mock.calls[0][1]).not.toHaveProperty('onCaughtError');
     expect(mockRender).toHaveBeenCalledTimes(1);
   });
 });

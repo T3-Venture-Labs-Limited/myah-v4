@@ -87,8 +87,7 @@ describe('generateFrontConfig', () => {
 
   it('should inject public Sentry config when the frontend base URL is automatic', () => {
     delete process.env.SERVER_URL;
-    process.env.SENTRY_FRONT_DSN =
-      'https://public@example.ingest.sentry.io/1';
+    process.env.SENTRY_FRONT_DSN = 'https://public@example.ingest.sentry.io/1';
     process.env.SENTRY_ENVIRONMENT = 'production';
     process.env.APP_VERSION = '2026.08.31';
 

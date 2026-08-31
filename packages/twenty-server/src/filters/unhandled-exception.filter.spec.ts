@@ -46,7 +46,8 @@ describe('UnhandledExceptionFilter', () => {
   });
 
   it('captures exceptions through the existing catch-all filter', () => {
-    const catchMethod = UnhandledExceptionFilter.prototype.catch as typeof UnhandledExceptionFilter.prototype.catch & {
+    const catchMethod = UnhandledExceptionFilter.prototype
+      .catch as typeof UnhandledExceptionFilter.prototype.catch & {
       __sentryExceptionCaptured?: boolean;
     };
 

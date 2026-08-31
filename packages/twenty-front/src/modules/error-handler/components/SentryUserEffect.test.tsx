@@ -4,9 +4,7 @@ import * as Sentry from '@sentry/react';
 import { SentryUserEffect } from '@/error-handler/components/SentryUserEffect';
 
 const mockAtomValues: Record<string, unknown> = {};
-const mockUseAtomStateValue = jest.fn(
-  (state: string) => mockAtomValues[state],
-);
+const mockUseAtomStateValue = jest.fn((state: string) => mockAtomValues[state]);
 
 jest.mock('@sentry/react', () => ({ setUser: jest.fn() }));
 jest.mock('@/auth/states/currentUserState', () => ({
@@ -18,12 +16,9 @@ jest.mock('@/auth/states/currentWorkspaceMemberState', () => ({
 jest.mock('@/auth/states/currentWorkspaceState', () => ({
   currentWorkspaceState: 'currentWorkspaceState',
 }));
-jest.mock(
-  '@/ui/utilities/state/jotai/hooks/useAtomStateValue',
-  () => ({
-    useAtomStateValue: (state: string) => mockUseAtomStateValue(state),
-  }),
-);
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
+  useAtomStateValue: (state: string) => mockUseAtomStateValue(state),
+}));
 
 describe('SentryUserEffect', () => {
   beforeEach(() => {

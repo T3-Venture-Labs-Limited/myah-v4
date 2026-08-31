@@ -32,19 +32,14 @@ if (isNonEmptyString(SENTRY_FRONT_DSN)) {
       }),
       Sentry.replayIntegration({
         _experiments: {
-          ignoreMutations: [
-            `[${SENTRY_REPLAY_IGNORE_MUTATIONS_ATTRIBUTE}]`,
-          ],
+          ignoreMutations: [`[${SENTRY_REPLAY_IGNORE_MUTATIONS_ATTRIBUTE}]`],
         },
       }),
       Sentry.globalHandlersIntegration({
         onunhandledrejection: false,
       }),
     ],
-    tracePropagationTargets: [
-      'localhost:3001',
-      REACT_APP_SERVER_BASE_URL,
-    ],
+    tracePropagationTargets: ['localhost:3001', REACT_APP_SERVER_BASE_URL],
     tracesSampleRate: 1.0,
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,

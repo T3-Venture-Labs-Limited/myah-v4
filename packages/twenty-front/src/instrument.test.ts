@@ -54,10 +54,7 @@ describe('frontend Sentry instrumentation', () => {
         release: '2026.08.31',
         replaysOnErrorSampleRate: 1,
         replaysSessionSampleRate: 0.1,
-        tracePropagationTargets: [
-          'localhost:3001',
-          'https://api.example.com',
-        ],
+        tracePropagationTargets: ['localhost:3001', 'https://api.example.com'],
         tracesSampleRate: 1,
       }),
     );

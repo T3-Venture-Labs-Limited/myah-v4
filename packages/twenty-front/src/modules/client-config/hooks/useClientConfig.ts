@@ -275,7 +275,6 @@ export const useClientConfig = (): UseClientConfigResult => {
       setBilling(clientConfig.billing);
       setSupportChat(clientConfig.support);
 
-
       setCaptcha({
         provider: clientConfig?.captcha?.provider,
         siteKey: clientConfig?.captcha?.siteKey,

@@ -28,5 +28,4 @@ export const SENTRY_FRONT_DSN =
 export const SENTRY_ENVIRONMENT =
   window._env_?.SENTRY_ENVIRONMENT || process.env.SENTRY_ENVIRONMENT;
 
-export const APP_VERSION =
-  window._env_?.APP_VERSION || process.env.APP_VERSION;
+export const APP_VERSION = window._env_?.APP_VERSION || process.env.APP_VERSION;

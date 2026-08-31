@@ -1,9 +1,5 @@
 import { lazy, useState } from 'react';
-import {
-  createRoutesFromElements,
-  Navigate,
-  Route,
-} from 'react-router-dom';
+import { createRoutesFromElements, Navigate, Route } from 'react-router-dom';
 import { AppPath } from 'twenty-shared/types';
 
 import { LazyRoute } from '@/app/components/LazyRoute';
