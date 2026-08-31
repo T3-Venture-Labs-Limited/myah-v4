@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
 import { CampaignOutreachWorkflowEditor } from '@/myah-outreach/components/CampaignOutreachWorkflowEditor';
+import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
 import { CampaignOutreachWorkflowGraph } from '@/myah-outreach/components/CampaignOutreachWorkflowGraph';
 
 const mockWorkflowVisualizerEffect = jest.fn(
@@ -22,19 +23,8 @@ jest.mock('@/ui/layout/page/components/PageCardHeader', () => ({
     </header>
   ),
 }));
-jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
-  PageCardLayout: ({
-    children,
-    header,
-  }: {
-    children: React.ReactNode;
-    header: React.ReactNode;
-  }) => (
-    <>
-      {header}
-      {children}
-    </>
-  ),
+jest.mock('@/information-banner/components/InformationBannerWrapper', () => ({
+  InformationBannerWrapper: () => <div>Page-level information banner</div>,
 }));
 
 jest.mock(
@@ -136,5 +126,28 @@ describe('CampaignOutreachWorkflowEditor', () => {
     ).toBeVisible();
     expect(screen.getByText('Campaign Outreach')).toBeVisible();
     expect(screen.getByText('Draft')).toBeVisible();
+  });
+
+  it('keeps page-level information banners enabled by default', () => {
+    render(
+      <PageCardLayout header={<div>Page header</div>}>
+        <div>Page content</div>
+      </PageCardLayout>,
+    );
+
+    expect(screen.getByText('Page-level information banner')).toBeVisible();
+  });
+
+  it('does not repeat the page-level information banner inside Outreach', () => {
+    render(
+      <CampaignOutreachWorkflowEditor
+        campaignId="campaign-a"
+        workflowId="workflow-a"
+      />,
+    );
+
+    expect(
+      screen.queryByText('Page-level information banner'),
+    ).not.toBeInTheDocument();
   });
 });

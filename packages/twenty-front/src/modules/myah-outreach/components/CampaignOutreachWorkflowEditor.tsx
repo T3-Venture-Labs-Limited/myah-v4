@@ -33,6 +33,7 @@ export const CampaignOutreachWorkflowEditor = ({
       data-testid="campaign-outreach-workflow-editor"
     >
       <PageCardLayout
+        showInformationBanner={false}
         header={
           <PageCardHeader
             icon={<IconSend />}
