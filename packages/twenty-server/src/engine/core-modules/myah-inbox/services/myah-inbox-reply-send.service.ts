@@ -163,7 +163,7 @@ export class MyahInboxReplySendService {
       // Reconciliation retries this provider-free projection without issuing a send.
     }
 
-    return this.readStatus(input, receipt.id, authority);
+    return this.getStatus({ ...input, receiptId: receipt.id });
   }
 
   private async prepareSend(
@@ -287,34 +287,6 @@ export class MyahInboxReplySendService {
     }
   }
 
-  private async readStatus(
-    input: MyahInboxReplySendRequest,
-    receiptId: string,
-    authority: MyahInboxReplyActionAuthority,
-  ): Promise<MyahInboxReplySendResult> {
-    try {
-      const receipt = await this.findReceipt(input, receiptId);
-
-      return receipt
-        ? this.toReceiptOutcome(input, receipt, authority)
-        : this.toStaleOutcome(input);
-    } catch {
-      return this.toUnknownOutcome(input, receiptId, authority);
-    }
-  }
-
-  private async findReceipt(
-    input: MyahInboxReplySendRequestContext,
-    receiptId: string,
-  ): Promise<SafeActionExecutionReceipt | null> {
-    return this.actionApprovalService.findExecutionReceipt({
-      workspaceId: input.workspace.id,
-      receiptId,
-      actionName: 'send_inbox_reply',
-      draftId: input.threadId,
-      initiatorUserWorkspaceId: input.userWorkspaceId,
-    });
-  }
 
   private async recordProviderFailure(
     input: MyahInboxReplySendRequest,

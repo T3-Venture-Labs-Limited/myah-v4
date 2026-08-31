@@ -47,6 +47,7 @@ type MyahInboxDraftEditorProps = {
   onRetry: () => void;
   onReloadConflict: () => void;
   actions: ReactNode;
+  disabled?: boolean;
 };
 
 export const MyahInboxDraftEditor = ({
@@ -55,6 +56,7 @@ export const MyahInboxDraftEditor = ({
   onRetry,
   onReloadConflict,
   actions,
+  disabled = false,
 }: MyahInboxDraftEditorProps) => {
   const conflictPanelRef = useRef<HTMLDivElement>(null);
 
@@ -71,7 +73,7 @@ export const MyahInboxDraftEditor = ({
         ariaLabel="Shared reply draft"
         defaultValue={entry.localBody.markdown}
         placeholder="Write a reply draft"
-        readonly={false}
+        readonly={disabled}
         onChange={(markdown) => {
           onDraftChange({ markdown, blocknote: null });
         }}

@@ -242,6 +242,39 @@ describe('MyahInboxReplySendService', () => {
     });
   });
 
+  it('returns the post-projection permission-scoped snapshot after a sent receipt clears the draft', async () => {
+    const clearedSnapshot = {
+      revision: 5,
+      body: null,
+      messageThreadMetadataId: 'thread-metadata-id',
+    };
+    const setup = createService({
+      getReadableDraftSnapshot: jest.fn().mockResolvedValue(clearedSnapshot),
+      findInboxReplyExecutionReceipt: jest
+        .fn()
+        .mockResolvedValue(receipt(ActionExecutionReceiptState.SENT)),
+    });
+
+    await expect(setup.service.send(request())).resolves.toEqual({
+      outcome: MyahInboxReplySendOutcome.SENT,
+      receiptId,
+      revision: 5,
+      body: null,
+    });
+    expect(setup.getReadableDraftSnapshot).toHaveBeenCalledWith({
+      workspaceId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      messageThreadId: threadId,
+    });
+    expect(setup.findInboxReplyExecutionReceipt).toHaveBeenCalledWith({
+      workspaceId,
+      receiptId,
+      draftId: threadId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      messageThreadMetadataId: 'thread-metadata-id',
+    });
+  });
+
   it('does not issue a second provider send for a duplicate logical receipt', async () => {
     const setup = createService({
       reserveExecutionForBinding: jest.fn().mockResolvedValue({
@@ -373,7 +406,7 @@ describe('MyahInboxReplySendService', () => {
   it('leaves a provider-accepted projection failure pending for provider-free reconciliation', async () => {
     const setup = createService({
       projectReceipt: jest.fn().mockRejectedValue(new Error('projection failed')),
-      findExecutionReceipt: jest
+      findInboxReplyExecutionReceipt: jest
         .fn()
         .mockResolvedValue(receipt(ActionExecutionReceiptState.PROVIDER_ACCEPTED)),
     });

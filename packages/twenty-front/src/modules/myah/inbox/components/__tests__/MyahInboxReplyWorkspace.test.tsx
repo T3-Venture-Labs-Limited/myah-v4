@@ -81,16 +81,19 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     onRetry,
     onReloadConflict,
     actions,
+    disabled,
   }: {
     entry: MyahInboxDraftAutosaveEntry;
     onDraftChange: (body: { markdown: string; blocknote: null }) => void;
     onRetry: () => void;
     onReloadConflict: () => void;
     actions: ReactType.ReactNode;
+    disabled: boolean;
   }) => (
     <div aria-label="Shared reply draft editor">
       <output aria-label="Draft status">{entry.status}</output>
       <button
+        disabled={disabled}
         onClick={() =>
           onDraftChange({ markdown: 'pending local edit', blocknote: null })
         }
@@ -264,7 +267,7 @@ describe('MyahInboxReplyWorkspace', () => {
     expect(screen.queryByText('Approve & send')).not.toBeInTheDocument();
   });
 
-  it('disables Generate Reply while a direct send is executing', () => {
+  it('locks generation and draft mutation while direct delivery is unresolved', () => {
     render(<MyahInboxReplyWorkspace thread={thread} />);
 
     fireEvent.click(
@@ -278,6 +281,13 @@ describe('MyahInboxReplyWorkspace', () => {
         name: 'Generate Reply',
       }),
     ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Make pending local edit' }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Make pending local edit' }),
+    );
+    expect(mockController.updateDraft).not.toHaveBeenCalled();
   });
 
   it('serializes direct generated replies through the autosave controller', async () => {

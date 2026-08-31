@@ -134,6 +134,7 @@ const MyahInboxReplyWorkspaceContent = ({
           onReloadConflict={() =>
             draftAutosaveController.reloadConflict(draftKey)
           }
+          disabled={isSending}
           actions={
             <>
               {generateAction}

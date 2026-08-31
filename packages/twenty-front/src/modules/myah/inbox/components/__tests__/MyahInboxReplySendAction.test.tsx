@@ -230,6 +230,48 @@ describe('MyahInboxReplySendAction', () => {
       ],
     });
   });
+  it('reconciles the canonical empty draft after a sent receipt', async () => {
+    const onDraftReconciled = jest.fn();
+    mockSend.mockResolvedValue({
+      outcome: 'SENT',
+      receiptId: 'receipt-1',
+      revision: 8,
+      body: null,
+      error: null,
+    });
+    renderAction({ onDraftReconciled });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() =>
+      expect(onDraftReconciled).toHaveBeenCalledWith({
+        key: draftKey,
+        revision: 8,
+        body: null,
+      }),
+    );
+  });
+
+  it.each(['STALE', 'UNKNOWN'])(
+    'preserves a typed draft for a non-authoritative %s result without a body',
+    async (outcome) => {
+      const onDraftReconciled = jest.fn();
+      mockSend.mockResolvedValue({
+        outcome,
+        receiptId: null,
+        revision: 4,
+        body: null,
+        error: null,
+      });
+      renderAction({ onDraftReconciled });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+      expect(onDraftReconciled).not.toHaveBeenCalled();
+    },
+  );
+
 
   it('does not send when the flushed draft is unsafe', async () => {
     mockFlush.mockResolvedValue(dirtyEntry);
@@ -294,6 +336,32 @@ describe('MyahInboxReplySendAction', () => {
 
     await waitFor(() => expect(enqueue).toHaveBeenCalledWith({ message }));
   });
+  it('keeps the shared execution lock while delivery remains pending', async () => {
+    const onSendingChange = jest.fn();
+    mockSend.mockResolvedValue({
+      outcome: 'SENDING',
+      receiptId: 'receipt-1',
+      revision: 4,
+      body: { markdown: 'Confirmed draft', blocknote: null },
+      error: null,
+    });
+    renderAction({ onSendingChange });
+
+    const send = screen.getByRole('button', { name: 'Send' });
+    fireEvent.click(send);
+
+    await waitFor(() =>
+      expect(mockEnqueueInfoSnackBar).toHaveBeenCalledWith({
+        message: 'Email accepted. Confirming delivery record…',
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(onSendingChange).toHaveBeenCalledTimes(1);
+    expect(onSendingChange).toHaveBeenCalledWith(true);
+  });
+
 
   it('keeps an unknown outcome inline and locks Send against another click', async () => {
     mockSend.mockResolvedValue({

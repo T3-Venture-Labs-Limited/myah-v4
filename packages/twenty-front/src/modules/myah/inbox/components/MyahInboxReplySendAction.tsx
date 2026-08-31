@@ -45,10 +45,12 @@ export const MyahInboxReplySendAction = ({
   );
   const [isSending, setIsSending] = useState(false);
   const [isUnknown, setIsUnknown] = useState(false);
+  const [isPending, setIsPending] = useState(false);
 
   const canSend =
     !isSending &&
     !sending &&
+    !isPending &&
     !isUnknown &&
     !readinessLoading &&
     readiness?.status === MyahInboxReplySendReadinessStatus.READY &&
@@ -105,6 +107,8 @@ export const MyahInboxReplySendAction = ({
     setIsSending(true);
     onSendingChange(true);
 
+    let remainsPending = false;
+
     try {
       const flushed = await autosaveController.flush(draftKey);
 
@@ -122,15 +126,24 @@ export const MyahInboxReplySendAction = ({
         threadId: draftKey.threadId,
         expectedDraftRevision: flushed.confirmedRevision,
       });
-      onDraftReconciled({
-        key: draftKey,
-        revision: result.revision,
-        body: result.body ?? null,
-      });
+      if (
+        result.body !== null ||
+        result.outcome === MyahInboxReplySendOutcome.SENT
+      ) {
+        onDraftReconciled({
+          key: draftKey,
+          revision: result.revision,
+          body: result.body,
+        });
+      }
+      remainsPending = result.outcome === MyahInboxReplySendOutcome.SENDING;
+      setIsPending(remainsPending);
       handleOutcome(result);
     } finally {
       setIsSending(false);
-      onSendingChange(false);
+      if (!remainsPending) {
+        onSendingChange(false);
+      }
     }
   };
 
