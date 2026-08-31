@@ -42,7 +42,8 @@ if (process.env.EXCEPTION_HANDLER_DRIVER === ExceptionHandlerDriver.SENTRY) {
       nodeProfilingIntegration(),
     ],
     tracesSampleRate: 0.1,
-    profilesSampleRate: 0.3,
+    profileSessionSampleRate: 0.3,
+    profileLifecycle: 'trace',
     sendDefaultPii: true,
     debug: process.env.NODE_ENV === NodeEnvironment.DEVELOPMENT,
     beforeSendSpan: (span) => {

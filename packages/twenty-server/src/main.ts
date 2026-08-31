@@ -1,3 +1,4 @@
+import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 
@@ -21,7 +22,6 @@ import { shouldCaptureException } from 'src/engine/utils/global-exception-handle
 import { UnhandledExceptionFilter } from 'src/filters/unhandled-exception.filter';
 
 import { AppModule } from './app.module';
-import './instrument';
 
 import { settings } from './engine/constants/settings';
 import { generateFrontConfig } from './utils/generate-front-config';
