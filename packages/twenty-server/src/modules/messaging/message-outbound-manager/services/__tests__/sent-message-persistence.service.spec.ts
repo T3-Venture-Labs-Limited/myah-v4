@@ -24,7 +24,9 @@ describe('SentMessagePersistenceService', () => {
       }),
     };
     const saveMessagesAndEnqueueContactCreation = jest.fn().mockResolvedValue({
-      messageExternalIdsAndIdsMap: new Map([['provider-message-id', 'message-id']]),
+      messageExternalIdsAndIdsMap: new Map([
+        ['provider-message-id', 'message-id'],
+      ]),
       messageExternalIdToMessageThreadIdMap: new Map([
         ['provider-message-id', 'message-thread-id'],
       ]),

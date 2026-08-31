@@ -96,13 +96,10 @@ export const useMyahInboxReplySend = (
     data: readinessData,
     loading: readinessLoading,
     refetch: refetchReadiness,
-  } = useQuery(
-    MyahInboxReplySendReadinessDocument,
-    {
-      client: apolloCoreClient,
-      variables: { threadId },
-    },
-  );
+  } = useQuery(MyahInboxReplySendReadinessDocument, {
+    client: apolloCoreClient,
+    variables: { threadId },
+  });
   const [sendMyahInboxReply, { loading: sending }] = useMutation(
     SendMyahInboxReplyDocument,
     { client: apolloCoreClient },
