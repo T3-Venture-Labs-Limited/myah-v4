@@ -579,6 +579,25 @@ describe('MyahInboxReplySendService', () => {
     expect(setup.sendMessage).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['PENDING', 'UNKNOWN'])(
+    'does not expose %s readiness for an unreadable thread',
+    async (state) => {
+      const setup = createService({
+        getReadableDraftSnapshot: jest
+          .fn()
+          .mockRejectedValue(new Error('thread unavailable')),
+        getInboxReplyDraftExecutionState: jest.fn().mockResolvedValue(state),
+      });
+
+      await expect(setup.service.getReadiness(request())).resolves.toEqual({
+        status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
+        reason: 'This Inbox thread is unavailable for a reply.',
+      });
+      expect(setup.getInboxReplyDraftExecutionState).not.toHaveBeenCalled();
+      expect(setup.buildAuthority).not.toHaveBeenCalled();
+    },
+  );
+
   it('contains invalidation failure as stale without provider I/O', async () => {
     const setup = createService({
       rebuildExecutionAuthority: jest.fn().mockRejectedValue(new Error('changed')),

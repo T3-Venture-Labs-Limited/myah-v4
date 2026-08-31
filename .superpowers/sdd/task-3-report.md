@@ -72,3 +72,22 @@ Result: 4 suites passed, 92 tests passed.
 - Status uses a permission-scoped readable-thread snapshot and explicit MessageThread draft evidence validation; it neither rebuilds execution/projection authority nor uses a system bypass.
 - Stored FAILED, UNKNOWN, and SENT receipt outcomes survive subsequent mutable delivery-readiness changes; foreign, deleted, and unreadable requests return stale null results.
 - Active pending and unknown receipt states are checked before mutable readiness, so they continue to lock delivery despite later mailbox/channel/account changes.
+
+## Readiness visibility scoping fix
+
+### RED evidence
+
+With a pending or unknown scoped receipt, the exact focused suite returned `OUTCOME_PENDING` or `OUTCOME_UNKNOWN` before verifying the requester could still read the MessageThread.
+
+### GREEN evidence
+
+```bash
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/services/action-approval.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-reply-send.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/resolvers/__tests__/myah-inbox-reply-send.resolver.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-mutation.service.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand
+```
+
+Result: 4 suites passed, 94 tests passed.
+
+### Self-review
+
+- Readiness first obtains the permission-scoped readable-thread/current-draft snapshot, then evaluates scoped active receipt state, and only then evaluates mutable delivery readiness.
+- Deleted or unreadable threads return `THREAD_UNAVAILABLE` even if a matching pending or unknown receipt exists. Readable pending/unknown threads retain outcome precedence over later delivery-readiness failures.

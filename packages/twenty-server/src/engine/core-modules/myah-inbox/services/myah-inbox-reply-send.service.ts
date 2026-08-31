@@ -76,6 +76,12 @@ export class MyahInboxReplySendService {
     this.assertUserRequest(input);
 
     try {
+      await this.actionDefinition.getReadableDraftSnapshot({
+        workspaceId: input.workspace.id,
+        initiatorUserWorkspaceId: input.userWorkspaceId,
+        messageThreadId: input.threadId,
+      });
+
       const executionState =
         await this.actionApprovalService.getInboxReplyDraftExecutionState({
           workspaceId: input.workspace.id,
