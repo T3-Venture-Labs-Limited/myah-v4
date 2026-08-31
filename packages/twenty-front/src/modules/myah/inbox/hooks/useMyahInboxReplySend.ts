@@ -30,6 +30,12 @@ type MyahInboxReplySendResponse = {
   } | null;
 };
 
+type PollingOperation = {
+  cancelled: boolean;
+  resolver: ((shouldPoll: boolean) => void) | null;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
 export type MyahInboxReplySendResult = {
   outcome: MyahInboxReplySendOutcome;
   receiptId: string | null;
@@ -40,9 +46,10 @@ export type MyahInboxReplySendResult = {
 
 const toSafeResult = (
   result: MyahInboxReplySendResponse,
+  receiptId = result.receiptId ?? null,
 ): MyahInboxReplySendResult => ({
   outcome: result.outcome,
-  receiptId: result.receiptId ?? null,
+  receiptId,
   revision: result.revision,
   body: result.body
     ? {
@@ -52,6 +59,33 @@ const toSafeResult = (
     : null,
   error: null,
 });
+
+const cancelPollingOperation = (operation: PollingOperation) => {
+  operation.cancelled = true;
+
+  if (operation.timer !== null) {
+    clearTimeout(operation.timer);
+    operation.timer = null;
+  }
+
+  operation.resolver?.(false);
+  operation.resolver = null;
+};
+
+const waitForNextPoll = (operation: PollingOperation) => {
+  if (operation.cancelled) {
+    return Promise.resolve(false);
+  }
+
+  return new Promise<boolean>((resolve) => {
+    operation.resolver = resolve;
+    operation.timer = setTimeout(() => {
+      operation.timer = null;
+      operation.resolver = null;
+      resolve(!operation.cancelled);
+    }, POLL_INTERVAL_MS);
+  });
+};
 
 export const useMyahInboxReplySend = (threadId: string) => {
   const apolloCoreClient = useApolloCoreClient();
@@ -67,43 +101,39 @@ export const useMyahInboxReplySend = (threadId: string) => {
     { client: apolloCoreClient },
   );
   // oxlint-disable-next-line twenty/no-state-useref
-  const pollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activePollingOperationsRef = useRef(new Map<number, PollingOperation>());
   // oxlint-disable-next-line twenty/no-state-useref
-  const pollingResolverRef = useRef<((shouldPoll: boolean) => void) | null>(
-    null,
-  );
+  const nextPollingOperationTokenRef = useRef(0);
 
-  const stopPolling = useCallback(() => {
-    if (pollingTimerRef.current !== null) {
-      clearTimeout(pollingTimerRef.current);
-      pollingTimerRef.current = null;
-    }
+  useEffect(() => {
+    const activePollingOperations = activePollingOperationsRef.current;
 
-    pollingResolverRef.current?.(false);
-    pollingResolverRef.current = null;
+    return () => {
+      activePollingOperations.forEach(cancelPollingOperation);
+      activePollingOperations.clear();
+    };
   }, []);
-
-  const waitForNextPoll = useCallback(
-    () =>
-      new Promise<boolean>((resolve) => {
-        pollingResolverRef.current = resolve;
-        pollingTimerRef.current = setTimeout(() => {
-          pollingTimerRef.current = null;
-          pollingResolverRef.current = null;
-          resolve(true);
-        }, POLL_INTERVAL_MS);
-      }),
-    [],
-  );
-
-  useEffect(() => stopPolling, [stopPolling]);
 
   const send = useCallback(
     async ({
       threadId: draftThreadId,
       expectedDraftRevision,
     }: SendMyahInboxReplyInput): Promise<MyahInboxReplySendResult> => {
-      stopPolling();
+      const token = nextPollingOperationTokenRef.current++;
+      const operation: PollingOperation = {
+        cancelled: false,
+        resolver: null,
+        timer: null,
+      };
+      const activePollingOperations = activePollingOperationsRef.current;
+      activePollingOperations.set(token, operation);
+      let lastResult: MyahInboxReplySendResult = {
+        outcome: MyahInboxReplySendOutcome.UNKNOWN,
+        receiptId: null,
+        revision: expectedDraftRevision,
+        body: null,
+        error: UNKNOWN_SEND_ERROR,
+      };
 
       try {
         const response = await sendMyahInboxReply({
@@ -117,26 +147,31 @@ export const useMyahInboxReplySend = (threadId: string) => {
         const directResult = response.data?.sendMyahInboxReply;
 
         if (!directResult) {
+          return lastResult;
+        }
+
+        lastResult = toSafeResult(directResult);
+
+        if (operation.cancelled) {
+          return lastResult;
+        }
+
+        if (lastResult.outcome !== MyahInboxReplySendOutcome.SENDING) {
+          return lastResult;
+        }
+
+        const initialReceiptId = lastResult.receiptId;
+
+        if (!initialReceiptId) {
           return {
+            ...lastResult,
             outcome: MyahInboxReplySendOutcome.UNKNOWN,
-            receiptId: null,
-            revision: expectedDraftRevision,
-            body: null,
             error: UNKNOWN_SEND_ERROR,
           };
         }
 
-        let lastResult = toSafeResult(directResult);
-
-        if (
-          lastResult.outcome !== MyahInboxReplySendOutcome.SENDING ||
-          !lastResult.receiptId
-        ) {
-          return lastResult;
-        }
-
         for (let attempt = 0; attempt < MAX_STATUS_POLL_ATTEMPTS; attempt++) {
-          if (!(await waitForNextPoll())) {
+          if (!(await waitForNextPoll(operation)) || operation.cancelled) {
             return lastResult;
           }
 
@@ -146,11 +181,15 @@ export const useMyahInboxReplySend = (threadId: string) => {
               variables: {
                 input: {
                   threadId: draftThreadId,
-                  receiptId: lastResult.receiptId,
+                  receiptId: initialReceiptId,
                 },
               },
               fetchPolicy: 'network-only',
             });
+
+            if (operation.cancelled) {
+              return lastResult;
+            }
 
             const statusResult = response.data?.myahInboxReplySendStatus;
 
@@ -162,17 +201,16 @@ export const useMyahInboxReplySend = (threadId: string) => {
               };
             }
 
-            lastResult = toSafeResult(statusResult);
+            lastResult = toSafeResult(statusResult, initialReceiptId);
 
-            if (
-              lastResult.outcome !== MyahInboxReplySendOutcome.SENDING ||
-              !lastResult.receiptId
-            ) {
-              stopPolling();
-
+            if (lastResult.outcome !== MyahInboxReplySendOutcome.SENDING) {
               return lastResult;
             }
           } catch {
+            if (operation.cancelled) {
+              return lastResult;
+            }
+
             return {
               ...lastResult,
               outcome: MyahInboxReplySendOutcome.UNKNOWN,
@@ -184,15 +222,16 @@ export const useMyahInboxReplySend = (threadId: string) => {
         return lastResult;
       } catch {
         return {
+          ...lastResult,
           outcome: MyahInboxReplySendOutcome.UNKNOWN,
-          receiptId: null,
-          revision: expectedDraftRevision,
-          body: null,
           error: UNKNOWN_SEND_ERROR,
         };
+      } finally {
+        cancelPollingOperation(operation);
+        activePollingOperations.delete(token);
       }
     },
-    [apolloCoreClient, sendMyahInboxReply, stopPolling, waitForNextPoll],
+    [apolloCoreClient, sendMyahInboxReply],
   );
 
   return {

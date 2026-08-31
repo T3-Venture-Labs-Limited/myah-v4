@@ -14,6 +14,7 @@ import {
   type MyahInboxDraftAutosaveEntry,
   type MyahInboxDraftAutosaveKey,
   type MyahInboxDraftAutosaveThread,
+  type MyahInboxRichText,
 } from '@/myah/inbox/types/MyahInboxDraftAutosave';
 import { MyahInboxDraftSaveStatus } from '~/generated/graphql';
 
