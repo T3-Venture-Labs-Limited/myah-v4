@@ -36,6 +36,7 @@ type UseAdvancedTextEditorProps = {
   onImageUploadError?: (error: Error, file: File) => void;
   enableSlashCommand?: boolean;
   contentType?: AdvancedTextEditorContentType;
+  ariaLabel?: string;
 };
 
 export const useAdvancedTextEditor = (
@@ -50,6 +51,7 @@ export const useAdvancedTextEditor = (
     onImageUploadError,
     enableSlashCommand,
     contentType = 'json',
+    ariaLabel,
   }: UseAdvancedTextEditorProps,
   dependencies?: DependencyList,
 ) => {
@@ -124,6 +126,7 @@ export const useAdvancedTextEditor = (
         onBlur?.(editor);
       },
       editorProps: {
+        attributes: ariaLabel ? { 'aria-label': ariaLabel } : {},
         scrollThreshold: 60,
         scrollMargin: 60,
       },

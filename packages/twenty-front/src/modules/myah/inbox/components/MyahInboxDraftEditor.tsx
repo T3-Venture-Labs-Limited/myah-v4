@@ -68,7 +68,7 @@ export const MyahInboxDraftEditor = ({
     <StyledDraftEditor aria-label="Shared reply draft editor">
       <FormAdvancedTextFieldInput
         key={entry.editorVersion}
-        label="Shared reply draft"
+        ariaLabel="Shared reply draft"
         defaultValue={entry.localBody.markdown}
         placeholder="Write a reply draft"
         readonly={false}

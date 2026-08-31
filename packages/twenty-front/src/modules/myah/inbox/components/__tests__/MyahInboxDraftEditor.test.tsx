@@ -42,28 +42,28 @@ jest.mock(
 
     const FormAdvancedTextFieldInput = ({
       label,
+      ariaLabel,
       defaultValue,
       onChange,
     }: {
       label?: string;
+      ariaLabel?: string;
       defaultValue: string;
       onChange: (value: string) => void;
     }) => {
       const [value, setValue] = React.useState(defaultValue);
-
-      return (
-        <label>
-          {label}
-          <textarea
-            aria-label={label}
-            value={value}
-            onChange={(event) => {
-              setValue(event.target.value);
-              onChange(event.target.value);
-            }}
-          />
-        </label>
+      const textarea = (
+        <textarea
+          aria-label={ariaLabel}
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value);
+            onChange(event.target.value);
+          }}
+        />
       );
+
+      return label ? <label>{label}{textarea}</label> : textarea;
     };
 
     return { FormAdvancedTextFieldInput };
@@ -121,6 +121,15 @@ const renderEditor = ({
   );
 
 describe('MyahInboxDraftEditor', () => {
+  it('keeps the shared reply draft name accessible without a visible label', () => {
+    renderEditor();
+
+    expect(screen.queryByText('Shared reply draft')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Shared reply draft' }),
+    ).toBeInTheDocument();
+  });
+
   it('keeps autosave progress silent while retaining the draft actions', () => {
     renderEditor({
       draftEntry: {
