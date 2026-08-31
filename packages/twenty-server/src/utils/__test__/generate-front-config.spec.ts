@@ -35,6 +35,9 @@ describe('generateFrontConfig', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env = { ...ORIGINAL_ENV };
+    delete process.env.SENTRY_FRONT_DSN;
+    delete process.env.SENTRY_ENVIRONMENT;
+    delete process.env.APP_VERSION;
     mockedFs.readFileSync.mockReturnValue(INDEX_TEMPLATE);
   });
 
@@ -79,6 +82,20 @@ describe('generateFrontConfig', () => {
 
     expect(getInjectedEnv()).toBe(
       '{"REACT_APP_SERVER_BASE_URL":"http://x.com"}',
+    );
+  });
+
+  it('should inject public Sentry config when the frontend base URL is automatic', () => {
+    delete process.env.SERVER_URL;
+    process.env.SENTRY_FRONT_DSN =
+      'https://public@example.ingest.sentry.io/1';
+    process.env.SENTRY_ENVIRONMENT = 'production';
+    process.env.APP_VERSION = '2026.08.31';
+
+    generateFrontConfig();
+
+    expect(getInjectedEnv()).toBe(
+      '{"SENTRY_FRONT_DSN":"https://public@example.ingest.sentry.io/1","SENTRY_ENVIRONMENT":"production","APP_VERSION":"2026.08.31"}',
     );
   });
 });
