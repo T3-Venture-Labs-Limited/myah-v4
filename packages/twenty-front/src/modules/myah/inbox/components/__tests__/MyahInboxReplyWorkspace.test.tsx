@@ -51,6 +51,14 @@ let mockDraftEntry: MyahInboxDraftAutosaveEntry | null = {
 };
 let mockObjectMetadataItems = [{ nameSingular: 'messageThread' }];
 
+type MockSendActionMode = 'deferred' | 'pending' | 'sending' | 'unknown';
+
+let mockSendActionMode: MockSendActionMode = 'sending';
+let mockSendActionDeferred: {
+  promise: Promise<void>;
+  resolve: (value: void) => void;
+} | null = null;
+
 jest.mock('@/object-record/hooks/useFindOneRecord', () => ({
   useFindOneRecord: (...args: unknown[]) => mockUseFindOneRecord(...args),
 }));
@@ -106,20 +114,55 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     </div>
   ),
 }));
-
 jest.mock(
   '@/myah/inbox/components/MyahInboxReplySendAction',
-  () => ({
-    MyahInboxReplySendAction: ({
-      onSendingChange,
-    }: {
-      onSendingChange: (sending: boolean) => void;
-    }) => (
-      <button data-variant="primary" onClick={() => onSendingChange(true)}>
-        Send
-      </button>
-    ),
-  }),
+  () => {
+    const React = jest.requireActual('react') as typeof ReactType;
+
+    return {
+      MyahInboxReplySendAction: ({
+        onSendingChange,
+      }: {
+        onSendingChange: (sending: boolean) => void;
+      }) => {
+        const [isLocked, setIsLocked] = React.useState(false);
+        const [isUnknown, setIsUnknown] = React.useState(false);
+
+        const handleSend = () => {
+          onSendingChange(true);
+
+          if (mockSendActionMode === 'unknown') {
+            setIsUnknown(true);
+            setIsLocked(true);
+          }
+          if (
+            mockSendActionMode === 'pending' ||
+            mockSendActionMode === 'deferred'
+          ) {
+            setIsLocked(true);
+          }
+          if (mockSendActionMode === 'deferred') {
+            void mockSendActionDeferred?.promise.finally(() =>
+              onSendingChange(false),
+            );
+          }
+        };
+
+        return (
+          <>
+            <button
+              data-variant="primary"
+              disabled={isLocked}
+              onClick={handleSend}
+            >
+              Send
+            </button>
+            {isUnknown && <span role="alert">Unknown delivery</span>}
+          </>
+        );
+      },
+    };
+  },
   { virtual: true },
 );
 
@@ -173,6 +216,8 @@ describe('MyahInboxReplyWorkspace', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCurrentWorkspace = { id: 'workspace-1' };
+    mockSendActionMode = 'sending';
+    mockSendActionDeferred = null;
     mockDraftEntry = {
       localBody: { markdown: 'Saved draft', blocknote: null },
       confirmedBody: { markdown: 'Saved draft', blocknote: null },
@@ -289,6 +334,68 @@ describe('MyahInboxReplyWorkspace', () => {
     );
     expect(mockController.updateDraft).not.toHaveBeenCalled();
   });
+  it.each(['unknown', 'pending'] as const)(
+    'resets the %s delivery lock when the same thread enters another workspace',
+    (mode) => {
+      mockSendActionMode = mode;
+      const workspace = render(<MyahInboxReplyWorkspace thread={thread} />);
+
+      fireEvent.click(
+        within(screen.getByLabelText('Draft actions')).getByRole('button', {
+          name: 'Send',
+        }),
+      );
+      expect(
+        screen.getByRole('button', { name: 'Make pending local edit' }),
+      ).toBeDisabled();
+
+      mockCurrentWorkspace = { id: 'workspace-2' };
+      workspace.rerender(<MyahInboxReplyWorkspace thread={thread} />);
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+      expect(
+        screen.getByRole('button', { name: 'Make pending local edit' }),
+      ).toBeEnabled();
+    },
+  );
+
+  it('keeps a new workspace delivery locked when an old send completes', async () => {
+    const oldSend = createDeferred<void>();
+    mockSendActionMode = 'deferred';
+    mockSendActionDeferred = oldSend;
+    const workspace = render(<MyahInboxReplyWorkspace thread={thread} />);
+
+    fireEvent.click(
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Send',
+      }),
+    );
+
+    mockCurrentWorkspace = { id: 'workspace-2' };
+    mockSendActionMode = 'pending';
+    workspace.rerender(<MyahInboxReplyWorkspace thread={thread} />);
+    fireEvent.click(
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Send',
+      }),
+    );
+
+    await act(async () => {
+      oldSend.resolve(undefined);
+      await oldSend.promise;
+    });
+
+    expect(
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Generate Reply',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Make pending local edit' }),
+    ).toBeDisabled();
+  });
+
 
   it('serializes direct generated replies through the autosave controller', async () => {
     const application = createDeferred<boolean>();

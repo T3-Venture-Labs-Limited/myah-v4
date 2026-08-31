@@ -173,6 +173,7 @@ export const MyahInboxReplyWorkspace = ({
       </StyledComposerHeader>
       {isMessageThreadMetadataReady && currentWorkspace ? (
         <MyahInboxReplyWorkspaceContent
+          key={`${currentWorkspace.id}:${thread.id}`}
           thread={thread}
           workspaceId={currentWorkspace.id}
         />
