@@ -70,4 +70,18 @@ describe('frontend Sentry instrumentation', () => {
       mockedSentry.wrapCreateBrowserRouterV6.mock.results[0].value,
     );
   });
+
+  it('exposes build-time Sentry fallbacks through Vite', () => {
+    const viteConfigSource = readFileSync(
+      join(__dirname, '..', 'vite.config.ts'),
+      'utf8',
+    );
+    const processEnvironmentDefinition =
+      viteConfigSource.match(/'process\.env': \{([\s\S]*?)\n      \},/)?.[1] ??
+      '';
+
+    expect(processEnvironmentDefinition).toContain('SENTRY_FRONT_DSN');
+    expect(processEnvironmentDefinition).toContain('SENTRY_ENVIRONMENT');
+    expect(processEnvironmentDefinition).toContain('APP_VERSION');
+  });
 });

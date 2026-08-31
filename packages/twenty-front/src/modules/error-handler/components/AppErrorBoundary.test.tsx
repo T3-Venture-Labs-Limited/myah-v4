@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import type { ErrorInfo, ReactNode } from 'react';
 import * as Sentry from '@sentry/react';
 
@@ -8,7 +8,6 @@ let mockOnError:
   | undefined;
 
 jest.mock('@sentry/react', () => ({
-  captureException: jest.fn(),
   captureReactException: jest.fn(),
 }));
 
@@ -41,15 +40,13 @@ const reactErrorInfo = {
 } as ErrorInfo;
 
 describe('AppErrorBoundary', () => {
-  it('captures a coded React error once with its component stack and code fingerprint', async () => {
+  it('captures a coded React error once with its component stack and code fingerprint', () => {
     const error = Object.assign(new Error('Something broke'), {
       code: 'BROKEN_COMPONENT',
     });
 
     renderBoundary();
-    await act(async () => {
-      await mockOnError?.(error, reactErrorInfo);
-    });
+    mockOnError?.(error, reactErrorInfo);
 
     expect(Sentry.captureReactException).toHaveBeenCalledTimes(1);
     expect(Sentry.captureReactException).toHaveBeenCalledWith(
@@ -59,13 +56,11 @@ describe('AppErrorBoundary', () => {
     );
   });
 
-  it('uses the error message when no code is available', async () => {
+  it('uses the error message when no code is available', () => {
     const error = new Error('Something broke');
 
     renderBoundary();
-    await act(async () => {
-      await mockOnError?.(error, reactErrorInfo);
-    });
+    mockOnError?.(error, reactErrorInfo);
 
     expect(Sentry.captureReactException).toHaveBeenCalledWith(
       error,

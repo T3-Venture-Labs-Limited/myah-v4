@@ -26,6 +26,9 @@ export default defineConfig(({ mode }) => {
     REACT_APP_PORT,
     IS_DEBUG_MODE,
     REACT_APP_SERVER_BASE_URL,
+    SENTRY_FRONT_DSN,
+    SENTRY_ENVIRONMENT,
+    APP_VERSION,
   } = env;
 
   const port = isNonEmptyString(REACT_APP_PORT)
@@ -248,6 +251,9 @@ export default defineConfig(({ mode }) => {
       'process.env': {
         IS_DEBUG_MODE,
         REACT_APP_SERVER_BASE_URL,
+        SENTRY_FRONT_DSN,
+        SENTRY_ENVIRONMENT,
+        APP_VERSION,
         IS_DEV_ENV: mode === 'development' ? 'true' : 'false',
       },
     },

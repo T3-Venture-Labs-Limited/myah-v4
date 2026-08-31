@@ -1,10 +1,9 @@
-import { render, waitFor } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import * as Sentry from '@sentry/react';
 
 import { SentryUserEffect } from '@/error-handler/components/SentryUserEffect';
 
 const mockAtomValues: Record<string, unknown> = {};
-const mockUseAtomStateValue = jest.fn((state: string) => mockAtomValues[state]);
 
 jest.mock('@sentry/react', () => ({ setUser: jest.fn() }));
 jest.mock('@/auth/states/currentUserState', () => ({
@@ -17,7 +16,7 @@ jest.mock('@/auth/states/currentWorkspaceState', () => ({
   currentWorkspaceState: 'currentWorkspaceState',
 }));
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
-  useAtomStateValue: (state: string) => mockUseAtomStateValue(state),
+  useAtomStateValue: (state: string) => mockAtomValues[state],
 }));
 
 describe('SentryUserEffect', () => {
@@ -28,7 +27,7 @@ describe('SentryUserEffect', () => {
     delete mockAtomValues.currentWorkspaceMemberState;
   });
 
-  it('sets authenticated user and workspace context', async () => {
+  it('sets authenticated user and workspace context', () => {
     mockAtomValues.currentUserState = {
       email: 'user@example.com',
       id: 'user-id',
@@ -40,21 +39,17 @@ describe('SentryUserEffect', () => {
 
     render(<SentryUserEffect />);
 
-    await waitFor(() => {
-      expect(Sentry.setUser).toHaveBeenCalledWith({
-        email: 'user@example.com',
-        id: 'user-id',
-        workspaceId: 'workspace-id',
-        workspaceMemberId: 'workspace-member-id',
-      });
+    expect(Sentry.setUser).toHaveBeenCalledWith({
+      email: 'user@example.com',
+      id: 'user-id',
+      workspaceId: 'workspace-id',
+      workspaceMemberId: 'workspace-member-id',
     });
   });
 
-  it('clears Sentry user context when signed out', async () => {
+  it('clears Sentry user context when signed out', () => {
     render(<SentryUserEffect />);
 
-    await waitFor(() => {
-      expect(Sentry.setUser).toHaveBeenCalledWith(null);
-    });
+    expect(Sentry.setUser).toHaveBeenCalledWith(null);
   });
 });

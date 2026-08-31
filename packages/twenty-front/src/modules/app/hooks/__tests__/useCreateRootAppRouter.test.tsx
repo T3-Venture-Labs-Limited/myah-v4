@@ -2,10 +2,6 @@ import { renderHook } from '@testing-library/react';
 
 import { useCreateRootAppRouter } from '@/app/hooks/useCreateRootAppRouter';
 
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  createBrowserRouter: jest.fn(() => ({ direct: true })),
-}));
 jest.mock('~/instrument', () => ({
   sentryCreateBrowserRouter: jest.fn(() => ({ sentryWrapped: true })),
 }));
