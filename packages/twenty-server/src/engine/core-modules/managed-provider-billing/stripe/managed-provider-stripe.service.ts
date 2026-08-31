@@ -621,7 +621,24 @@ export class ManagedProviderStripeService {
       throw new Error('Stripe refund identity is invalid');
     }
 
-    await this.readPaymentGatedInvoicePayment(input);
+    const customerId = await this.persistedCustomerId(input.workspaceId);
+    await this.readWorkspaceCustomer(
+      customerId,
+      input.metronomeBaseUrlEnvironment,
+    );
+    const recovered = await this.findFullPaymentGatedInvoiceRefund(
+      input,
+      customerId,
+    );
+
+    if (recovered) return recovered;
+
+    const payment = await this.readPaymentGatedInvoicePayment(input);
+
+    if (payment.status !== 'PAID') {
+      throw new Error('Stripe payment-gated invoice is not paid');
+    }
+
     const creditNote = await this.stripe().creditNotes.create(
       {
         amount: input.expectedTotalCents,
@@ -635,58 +652,17 @@ export class ManagedProviderStripeService {
       },
       { idempotencyKey: input.idempotencyKey },
     );
-    const creditNoteCustomer =
-      typeof creditNote.customer === 'string'
-        ? creditNote.customer
-        : creditNote.customer.id;
-    const creditNoteInvoice =
-      typeof creditNote.invoice === 'string'
-        ? creditNote.invoice
-        : creditNote.invoice.id;
-    const refundLink = creditNote.refunds[0];
-    const refund =
-      typeof refundLink?.refund === 'string' ? null : refundLink?.refund;
-    const taxCents = (creditNote.total_taxes ?? []).reduce(
-      (sum, tax) => sum + tax.amount,
-      0,
-    );
+    const creditNoteId = creditNote.id.trim();
 
-    if (
-      creditNote.id.trim() === '' ||
-      creditNoteCustomer !==
-        (await this.persistedCustomerId(input.workspaceId)) ||
-      creditNoteInvoice !== input.stripeInvoiceId ||
-      creditNote.currency.toLowerCase() !== 'usd' ||
-      creditNote.livemode !==
-        this.expectedLivemode(input.metronomeBaseUrlEnvironment) ||
-      creditNote.type !== 'post_payment' ||
-      creditNote.status !== 'issued' ||
-      creditNote.amount !== input.expectedTotalCents ||
-      creditNote.subtotal !== input.expectedPrincipalCents ||
-      creditNote.total !== input.expectedTotalCents ||
-      creditNote.post_payment_amount !== input.expectedTotalCents ||
-      creditNote.pre_payment_amount !== 0 ||
-      (creditNote.out_of_band_amount ?? 0) !== 0 ||
-      taxCents !== input.expectedTaxCents ||
-      creditNote.refunds.length !== 1 ||
-      refundLink.amount_refunded !== input.expectedTotalCents ||
-      refundLink.type !== 'refund' ||
-      refund === null ||
-      refund.id.trim() === '' ||
-      refund.amount !== input.expectedTotalCents ||
-      refund.currency.toLowerCase() !== 'usd' ||
-      refund.payment_intent !== input.expectedPaymentIntentId ||
-      refund.status !== 'succeeded'
-    ) {
+    if (creditNoteId === '') {
       throw new Error('Stripe full refund proof is invalid');
     }
 
-    return {
-      creditNoteId: creditNote.id,
-      refundId: refund.id,
-      refundedTotalCents: refund.amount,
-      reversedTaxCents: taxCents,
-    };
+    return this.readFullPaymentGatedInvoiceRefund(
+      input,
+      customerId,
+      creditNoteId,
+    );
   }
 
   async updateWorkspaceBillingDetails({
@@ -723,6 +699,10 @@ export class ManagedProviderStripeService {
 
     const customerId = await this.persistedCustomerId(workspaceId);
     const stripe = this.stripe();
+    await this.readWorkspaceCustomer(
+      customerId,
+      metronomeBaseUrlEnvironment,
+    );
     await stripe.customers.update(customerId, {
       address: {
         city: normalized.city,
@@ -807,6 +787,24 @@ export class ManagedProviderStripeService {
       );
 
       if (taxIds.length !== 1 || matches.length !== 1) {
+        throw new Error('Workspace Stripe tax ID proof is invalid');
+      }
+    } else {
+      const taxIds = await this.listWorkspaceTaxIds(
+        customerId,
+        metronomeBaseUrlEnvironment,
+      );
+
+      await Promise.all(taxIds.map((taxId) => stripe.taxIds.del(taxId.id)));
+
+      if (
+        (
+          await this.listWorkspaceTaxIds(
+            customerId,
+            metronomeBaseUrlEnvironment,
+          )
+        ).length !== 0
+      ) {
         throw new Error('Workspace Stripe tax ID proof is invalid');
       }
     }
@@ -920,6 +918,189 @@ export class ManagedProviderStripeService {
     }
 
     return summary;
+  }
+
+  private async findFullPaymentGatedInvoiceRefund(
+    input: RefundPaymentGatedInvoiceInput,
+    customerId: string,
+  ): Promise<{
+    creditNoteId: string;
+    refundId: string;
+    refundedTotalCents: number;
+    reversedTaxCents: number;
+  } | null> {
+    const creditNotes = await this.stripe().creditNotes.list({
+      customer: customerId,
+      invoice: input.stripeInvoiceId,
+      limit: 100,
+    });
+
+    if (creditNotes.has_more) {
+      throw new Error('Stripe refund recovery proof is invalid');
+    }
+
+    const matchingCreditNotes = creditNotes.data.filter(
+      (creditNote) =>
+        creditNote.object === 'credit_note' &&
+        creditNote.metadata?.myah_funding_action_id ===
+          input.fundingActionId &&
+        creditNote.metadata?.myah_refund_identity === input.idempotencyKey,
+    );
+
+    if (matchingCreditNotes.length === 0) return null;
+
+    const creditNoteId = matchingCreditNotes[0].id.trim();
+
+    if (matchingCreditNotes.length !== 1 || creditNoteId === '') {
+      throw new Error('Stripe refund recovery proof is invalid');
+    }
+
+    return this.readFullPaymentGatedInvoiceRefund(
+      input,
+      customerId,
+      creditNoteId,
+    );
+  }
+
+  private async readFullPaymentGatedInvoiceRefund(
+    input: RefundPaymentGatedInvoiceInput,
+    customerId: string,
+    creditNoteId: string,
+  ): Promise<{
+    creditNoteId: string;
+    refundId: string;
+    refundedTotalCents: number;
+    reversedTaxCents: number;
+  }> {
+    const stripe = this.stripe();
+    const [creditNote, invoice] = await Promise.all([
+      stripe.creditNotes.retrieve(creditNoteId),
+      stripe.invoices.retrieve(input.stripeInvoiceId),
+    ]);
+    const refundLink = creditNote.refunds[0];
+    const refundId =
+      typeof refundLink?.refund === 'string'
+        ? refundLink.refund
+        : refundLink?.refund?.id;
+
+    if (!refundId || refundId.trim() === '') {
+      throw new Error('Stripe full refund proof is invalid');
+    }
+
+    const refund = await stripe.refunds.retrieve(refundId);
+    const creditNoteCustomerId =
+      typeof creditNote.customer === 'string'
+        ? creditNote.customer
+        : creditNote.customer.deleted
+          ? null
+          : creditNote.customer.id;
+    const creditNoteInvoiceId =
+      typeof creditNote.invoice === 'string'
+        ? creditNote.invoice
+        : creditNote.invoice.id;
+    const invoiceCustomerId =
+      typeof invoice.customer === 'string'
+        ? invoice.customer
+        : invoice.customer?.deleted
+          ? null
+          : invoice.customer?.id;
+    const refundPaymentIntentId =
+      typeof refund.payment_intent === 'string'
+        ? refund.payment_intent
+        : refund.payment_intent?.id;
+    let creditNoteTaxCents = 0;
+
+    for (const tax of creditNote.total_taxes ?? []) {
+      creditNoteTaxCents += tax.amount;
+      if (!Number.isSafeInteger(creditNoteTaxCents)) {
+        throw new Error('Stripe full refund proof is invalid');
+      }
+    }
+
+    let invoiceTaxCents = 0;
+
+    for (const tax of invoice.total_taxes ?? []) {
+      invoiceTaxCents += tax.amount;
+      if (!Number.isSafeInteger(invoiceTaxCents)) {
+        throw new Error('Stripe full refund proof is invalid');
+      }
+    }
+
+    if (
+      creditNote.object !== 'credit_note' ||
+      creditNote.id !== creditNoteId ||
+      creditNote.metadata?.myah_funding_action_id !== input.fundingActionId ||
+      creditNote.metadata?.myah_refund_identity !== input.idempotencyKey ||
+      creditNoteCustomerId !== customerId ||
+      creditNoteInvoiceId !== input.stripeInvoiceId ||
+      creditNote.currency.toLowerCase() !== 'usd' ||
+      creditNote.livemode !==
+        this.expectedLivemode(input.metronomeBaseUrlEnvironment) ||
+      creditNote.type !== 'post_payment' ||
+      creditNote.status !== 'issued' ||
+      creditNote.amount !== input.expectedTotalCents ||
+      creditNote.subtotal !== input.expectedPrincipalCents ||
+      creditNote.total !== input.expectedTotalCents ||
+      creditNote.post_payment_amount !== input.expectedTotalCents ||
+      creditNote.pre_payment_amount !== 0 ||
+      creditNote.customer_balance_transaction !== null ||
+      (creditNote.out_of_band_amount ?? 0) !== 0 ||
+      creditNoteTaxCents !== input.expectedTaxCents ||
+      creditNote.refunds.length !== 1 ||
+      refundLink === undefined ||
+      refundLink.amount_refunded !== input.expectedTotalCents ||
+      refundLink.payment_record_refund !== null ||
+      refundLink.type !== 'refund' ||
+      refund.object !== 'refund' ||
+      refund.id !== refundId ||
+      refund.amount !== input.expectedTotalCents ||
+      refund.currency.toLowerCase() !== 'usd' ||
+      refundPaymentIntentId !== input.expectedPaymentIntentId ||
+      refund.status !== 'succeeded' ||
+      invoice.object !== 'invoice' ||
+      invoice.id !== input.stripeInvoiceId ||
+      invoiceCustomerId !== customerId ||
+      invoice.status !== 'paid' ||
+      invoice.amount_paid !== input.expectedTotalCents ||
+      invoice.currency.toLowerCase() !== 'usd' ||
+      invoice.metadata?.metronome_id !== input.metronomeInvoiceId ||
+      invoice.livemode !==
+        this.expectedLivemode(input.metronomeBaseUrlEnvironment) ||
+      invoice.subtotal !== input.expectedPrincipalCents ||
+      invoiceTaxCents !== input.expectedTaxCents ||
+      invoice.total !== input.expectedTotalCents ||
+      invoice.post_payment_credit_notes_amount !==
+        input.expectedTotalCents ||
+      invoice.pre_payment_credit_notes_amount !== 0
+    ) {
+      throw new Error('Stripe full refund proof is invalid');
+    }
+
+    return {
+      creditNoteId,
+      refundId,
+      refundedTotalCents: refund.amount,
+      reversedTaxCents: creditNoteTaxCents,
+    };
+  }
+
+  private async readWorkspaceCustomer(
+    customerId: string,
+    metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment,
+  ): Promise<Stripe.Customer> {
+    const customer = await this.stripe().customers.retrieve(customerId);
+
+    if (
+      customer.deleted ||
+      customer.object !== 'customer' ||
+      customer.id !== customerId ||
+      customer.livemode !==
+        this.expectedLivemode(metronomeBaseUrlEnvironment)
+    ) {
+      throw new Error('Stripe Customer proof is invalid');
+    }
+
+    return customer;
   }
 
   private async listWorkspaceTaxIds(

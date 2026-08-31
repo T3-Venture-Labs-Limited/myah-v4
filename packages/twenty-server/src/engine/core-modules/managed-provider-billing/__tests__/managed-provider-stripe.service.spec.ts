@@ -15,13 +15,14 @@ describe('ManagedProviderStripeService', () => {
   ) => {
     const livemode = stripeMode === 'PRODUCTION';
     const stripe = {
-      creditNotes: { create: jest.fn() },
+      creditNotes: { create: jest.fn(), list: jest.fn(), retrieve: jest.fn() },
       customers: {
         create: jest.fn().mockResolvedValue({ id: stripeCustomerId, livemode }),
         retrieve: jest.fn().mockResolvedValue({
           id: stripeCustomerId,
           invoice_settings: {},
           livemode,
+          object: 'customer',
         }),
         update: jest.fn().mockResolvedValue({ id: stripeCustomerId }),
       },
@@ -74,6 +75,8 @@ describe('ManagedProviderStripeService', () => {
           subtotal: 2500,
           total: 3000,
           total_taxes: [{ amount: 500 }],
+          post_payment_credit_notes_amount: 0,
+          pre_payment_credit_notes_amount: 0,
         }),
       },
       paymentIntents: {
@@ -104,6 +107,7 @@ describe('ManagedProviderStripeService', () => {
           status: 'succeeded',
         }),
       },
+      refunds: { retrieve: jest.fn() },
       taxIds: {
         create: jest.fn(),
         del: jest.fn(),
@@ -1200,6 +1204,7 @@ describe('ManagedProviderStripeService', () => {
       },
     },
     livemode: false,
+    object: 'customer' as const,
     name: billingDetails.name,
   };
 
@@ -1275,6 +1280,9 @@ describe('ManagedProviderStripeService', () => {
       },
       name: billingDetails.name,
     });
+    expect(stripe.customers.retrieve.mock.invocationCallOrder[0]).toBeLessThan(
+      stripe.customers.update.mock.invocationCallOrder[0],
+    );
     expect(stripe.taxIds.create).toHaveBeenCalledWith(
       {
         owner: { customer: stripeCustomerId, type: 'customer' },
@@ -1292,6 +1300,67 @@ describe('ManagedProviderStripeService', () => {
     expect(JSON.stringify(safeSummary)).not.toContain(
       billingDetails.taxIdValue,
     );
+  });
+
+  it.each([
+    ['a foreign Customer ID', { ...readyBillingCustomer, id: 'cus_foreign' }],
+    ['a Customer from the wrong Stripe mode', {
+      ...readyBillingCustomer,
+      livemode: true,
+    }],
+    ['a non-Customer Stripe object', {
+      ...readyBillingCustomer,
+      object: 'not_customer',
+    }],
+  ])(
+    'refuses billing mutations for %s',
+    async (_, invalidCustomer) => {
+      const { service, stripe } = createService({
+        workspaceId,
+        stripeCustomerId,
+      });
+      stripe.customers.retrieve.mockResolvedValue(invalidCustomer);
+
+      await expect(
+        service.updateWorkspaceBillingDetails({
+          billingDetails,
+          metronomeBaseUrlEnvironment: 'SANDBOX',
+          workspaceId,
+        }),
+      ).rejects.toThrow('Stripe Customer proof is invalid');
+
+      expect(stripe.customers.update).not.toHaveBeenCalled();
+      expect(stripe.taxIds.create).not.toHaveBeenCalled();
+      expect(stripe.taxIds.del).not.toHaveBeenCalled();
+    },
+  );
+
+  it('removes every tax ID and proves the empty result when no tax ID is supplied', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.customers.retrieve.mockResolvedValue(readyBillingCustomer);
+    stripe.taxIds.list
+      .mockResolvedValueOnce({
+        data: [readyTaxId, staleTaxId],
+        has_more: false,
+      })
+      .mockResolvedValueOnce({ data: [], has_more: false })
+      .mockResolvedValue({ data: [], has_more: false });
+
+    await expect(
+      service.updateWorkspaceBillingDetails({
+        billingDetails: { ...billingDetails, taxIdType: null, taxIdValue: null },
+        metronomeBaseUrlEnvironment: 'SANDBOX',
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({ taxId: null });
+
+    expect(stripe.taxIds.del).toHaveBeenCalledTimes(2);
+    expect(stripe.taxIds.del).toHaveBeenCalledWith(readyTaxId.id);
+    expect(stripe.taxIds.del).toHaveBeenCalledWith(staleTaxId.id);
+    expect(stripe.taxIds.list).toHaveBeenCalledTimes(3);
   });
 
   it('rejects billing readiness when required tax location fields are missing', async () => {
@@ -1316,55 +1385,86 @@ describe('ManagedProviderStripeService', () => {
     ).rejects.toThrow('Workspace Stripe billing details are not ready');
   });
 
+  const fullRefundInput = {
+    ...paymentGatedInput,
+    fundingActionId: 'funding-action-id',
+    idempotencyKey: 'refund-key',
+  };
+  const fullRefundCreditNote = {
+    amount: 3_000,
+    currency: 'usd',
+    customer: stripeCustomerId,
+    customer_balance_transaction: null,
+    id: 'cn_1',
+    invoice: 'in_metronome',
+    livemode: false,
+    metadata: {
+      myah_funding_action_id: 'funding-action-id',
+      myah_refund_identity: 'refund-key',
+    },
+    object: 'credit_note',
+    out_of_band_amount: 0,
+    post_payment_amount: 3_000,
+    pre_payment_amount: 0,
+    refunds: [
+      {
+        amount_refunded: 3_000,
+        payment_record_refund: null,
+        refund: 're_1',
+        type: 'refund',
+      },
+    ],
+    status: 'issued',
+    subtotal: 2_500,
+    total: 3_000,
+    total_taxes: [{ amount: 500 }],
+    type: 'post_payment',
+  };
+  const fullRefund = {
+    amount: 3_000,
+    currency: 'usd',
+    id: 're_1',
+    livemode: false,
+    object: 'refund',
+    payment_intent: stripePaymentIntentId,
+    status: 'succeeded',
+  };
+  const fullyRefundedInvoice = {
+    amount_paid: 3_000,
+    currency: 'usd',
+    customer: stripeCustomerId,
+    id: 'in_metronome',
+    hosted_invoice_url: 'https://invoice.example/in_metronome',
+    livemode: false,
+    status_transitions: { paid_at: 1_787_997_600 },
+    metadata: { metronome_id: 'metronome-invoice-id' },
+    object: 'invoice',
+    post_payment_credit_notes_amount: 3_000,
+    pre_payment_credit_notes_amount: 0,
+    status: 'paid',
+    subtotal: 2_500,
+    total: 3_000,
+    total_taxes: [{ amount: 500 }],
+  };
+
   it('creates one exact full credit-note refund with tax reversal', async () => {
     const { service, stripe } = createService({
       workspaceId,
       stripeCustomerId,
     });
-    stripe.creditNotes.create.mockResolvedValue({
-      amount: 3_000,
-      currency: 'usd',
-      customer: stripeCustomerId,
-      id: 'cn_1',
-      invoice: 'in_metronome',
-      livemode: false,
-      out_of_band_amount: 0,
-      post_payment_amount: 3_000,
-      pre_payment_amount: 0,
-      refunds: [
-        {
-          amount_refunded: 3_000,
-          payment_record_refund: null,
-          refund: {
-            amount: 3_000,
-            currency: 'usd',
-            id: 're_1',
-            payment_intent: stripePaymentIntentId,
-            status: 'succeeded',
-          },
-          type: 'refund',
-        },
-      ],
-      status: 'issued',
-      subtotal: 2_500,
-      total: 3_000,
-      total_taxes: [{ amount: 500 }],
-      type: 'post_payment',
-    });
+    stripe.creditNotes.list.mockResolvedValue({ data: [], has_more: false });
+    stripe.creditNotes.create.mockResolvedValue({ id: 'cn_1' });
+    stripe.creditNotes.retrieve.mockResolvedValue(fullRefundCreditNote);
+    stripe.refunds.retrieve.mockResolvedValue(fullRefund);
+    stripe.invoices.retrieve
+      .mockResolvedValueOnce({
+        ...fullyRefundedInvoice,
+        post_payment_credit_notes_amount: 0,
+      })
+      .mockResolvedValue(fullyRefundedInvoice);
 
     await expect(
-      service.refundPaymentGatedInvoice({
-        expectedPaymentIntentId: stripePaymentIntentId,
-        expectedPrincipalCents: 2_500,
-        expectedTaxCents: 500,
-        expectedTotalCents: 3_000,
-        fundingActionId: 'funding-action-id',
-        idempotencyKey: 'refund-key',
-        metronomeBaseUrlEnvironment: 'SANDBOX',
-        metronomeInvoiceId: 'metronome-invoice-id',
-        stripeInvoiceId: 'in_metronome',
-        workspaceId,
-      }),
+      service.refundPaymentGatedInvoice(fullRefundInput),
     ).resolves.toEqual({
       creditNoteId: 'cn_1',
       refundId: 're_1',
@@ -1384,5 +1484,97 @@ describe('ManagedProviderStripeService', () => {
       },
       { idempotencyKey: 'refund-key' },
     );
+    expect(stripe.creditNotes.retrieve).toHaveBeenCalledWith('cn_1');
+    expect(stripe.refunds.retrieve).toHaveBeenCalledWith('re_1');
+  });
+
+  it('refuses a non-PAID payment-gated invoice before creating a credit note', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.creditNotes.list.mockResolvedValue({ data: [], has_more: false });
+    stripe.invoices.retrieve.mockResolvedValue({
+      ...fullyRefundedInvoice,
+      amount_paid: 0,
+      post_payment_credit_notes_amount: 0,
+      status: 'open',
+    });
+    stripe.paymentIntents.retrieve.mockResolvedValue({
+      amount: 3_000,
+      amount_received: 0,
+      canceled_at: null,
+      cancellation_reason: null,
+      client_secret: null,
+      currency: 'usd',
+      customer: stripeCustomerId,
+      id: stripePaymentIntentId,
+      latest_charge: null,
+      livemode: false,
+      status: 'requires_payment_method',
+    });
+    stripe.invoicePayments.list.mockResolvedValue({
+      data: [
+        {
+          amount_paid: null,
+          amount_requested: 3_000,
+          currency: 'usd',
+          invoice: 'in_metronome',
+          livemode: false,
+          payment: {
+            payment_intent: stripePaymentIntentId,
+            type: 'payment_intent',
+          },
+          status: 'open',
+        },
+      ],
+      has_more: false,
+    });
+
+    await expect(
+      service.refundPaymentGatedInvoice(fullRefundInput),
+    ).rejects.toThrow('Stripe payment-gated invoice is not paid');
+
+    expect(stripe.creditNotes.create).not.toHaveBeenCalled();
+  });
+
+  it('recovers the same full refund after a credit-note response is lost without a duplicate write', async () => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.creditNotes.list
+      .mockResolvedValueOnce({ data: [], has_more: false })
+      .mockResolvedValueOnce({
+        data: [fullRefundCreditNote],
+        has_more: false,
+      });
+    stripe.creditNotes.create.mockRejectedValueOnce(
+      new Error('Stripe response was lost'),
+    );
+    stripe.creditNotes.retrieve.mockResolvedValue(fullRefundCreditNote);
+    stripe.refunds.retrieve.mockResolvedValue(fullRefund);
+    stripe.invoices.retrieve
+      .mockResolvedValueOnce({
+        ...fullyRefundedInvoice,
+        post_payment_credit_notes_amount: 0,
+      })
+      .mockResolvedValue(fullyRefundedInvoice);
+
+    await expect(
+      service.refundPaymentGatedInvoice(fullRefundInput),
+    ).rejects.toThrow('Stripe response was lost');
+    await expect(
+      service.refundPaymentGatedInvoice(fullRefundInput),
+    ).resolves.toEqual({
+      creditNoteId: 'cn_1',
+      refundId: 're_1',
+      refundedTotalCents: 3_000,
+      reversedTaxCents: 500,
+    });
+
+    expect(stripe.creditNotes.create).toHaveBeenCalledTimes(1);
+    expect(stripe.creditNotes.retrieve).toHaveBeenCalledWith('cn_1');
+    expect(stripe.refunds.retrieve).toHaveBeenCalledWith('re_1');
   });
 });
