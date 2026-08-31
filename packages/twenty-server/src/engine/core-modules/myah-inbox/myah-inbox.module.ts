@@ -16,6 +16,7 @@ import { AiAgentExecutionModule } from 'src/engine/metadata-modules/ai/ai-agent-
 import { AiBillingModule } from 'src/engine/metadata-modules/ai/ai-billing/ai-billing.module';
 import { BrandBrainPreflightService } from 'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service';
 import { AiModelsModule } from 'src/engine/metadata-modules/ai/ai-models/ai-models.module';
+import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { MessagingQueryHookModule } from 'src/modules/messaging/common/query-hooks/messaging-query-hook.module';
 import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbound-manager/messaging-send-manager.module';
 
@@ -25,6 +26,7 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
     AiBillingModule,
     AiModelsModule,
     BillingModule,
+    PermissionsModule,
     forwardRef(() => AiAgentExecutionModule),
     MessagingQueryHookModule,
     MessagingSendManagerModule,
