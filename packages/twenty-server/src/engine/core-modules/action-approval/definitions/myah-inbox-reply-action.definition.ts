@@ -51,7 +51,12 @@ import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/module
 import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 
-const MESSAGE_ID_PATTERN = /^<[^<>\s@]+@[^<>\s@]+>$/;
+const isValidMessageId = (value: string): boolean => {
+  const match = /^<([^@<>]+)@([^@<>]+)>$/.exec(value);
+  if (!match) return false;
+  return /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/.test(match[1]) &&
+    match[2].split('.').every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label));
+};
 
 type LoadMode = 'execution' | 'projection';
 
@@ -270,15 +275,15 @@ export class MyahInboxReplyActionDefinition {
       authContext,
     );
 
-    const draftMarkdown = source.messageThread?.myahReplyDraftBodyMarkdown;
-    const draftMarkdownForValidation = draftMarkdown?.trim();
+    const rawDraftMarkdown = source.messageThread?.myahReplyDraftBodyMarkdown;
     const subject = source.messageThread?.subject?.trim();
     const parentMessage = source.parentMessage;
 
     if (
       !source.messageThread ||
       source.messageThread.id !== messageThreadId ||
-      !isNonEmptyString(draftMarkdownForValidation) ||
+      typeof rawDraftMarkdown !== 'string' ||
+      rawDraftMarkdown.trim().length === 0 ||
       !isNonEmptyString(subject) ||
       (expectedDraftRevision !== undefined &&
         source.messageThread.myahReplyDraftRevision !== expectedDraftRevision) ||
@@ -295,7 +300,7 @@ export class MyahInboxReplyActionDefinition {
     const headerMessageId = parentMessage.headerMessageId?.trim();
     const associations = parentMessage.messageChannelMessageAssociations ?? [];
 
-    if (!isNonEmptyString(headerMessageId) || !MESSAGE_ID_PATTERN.test(headerMessageId)) {
+    if (!isNonEmptyString(headerMessageId) || !isValidMessageId(headerMessageId)) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
       );
@@ -425,7 +430,7 @@ export class MyahInboxReplyActionDefinition {
       messageThreadId,
       draftRevision: source.messageThread.myahReplyDraftRevision,
       draftBody: {
-        markdown: draftMarkdown,
+        markdown: rawDraftMarkdown,
         blocknote: source.messageThread.myahReplyDraftBodyBlocknote,
       },
       connectedAccountId: account.id,
@@ -446,11 +451,7 @@ export class MyahInboxReplyActionDefinition {
   }
 
   private isSupportedProvider(provider: ConnectedAccountProvider): boolean {
-    return (
-      provider === ConnectedAccountProvider.GOOGLE ||
-      provider === ConnectedAccountProvider.MICROSOFT ||
-      provider === ConnectedAccountProvider.IMAP_SMTP_CALDAV
-    );
+    return [ConnectedAccountProvider.GOOGLE, ConnectedAccountProvider.MICROSOFT, ConnectedAccountProvider.IMAP_SMTP_CALDAV].includes(provider);
   }
 
   private async buildInitiatorAuthContext(

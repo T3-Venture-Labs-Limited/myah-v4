@@ -242,9 +242,14 @@ describe('MyahInboxReplyActionDefinition', () => {
     });
   });
 
-  it.each(['not-a-message-id', '<invalid value@example.com>'])(
-    'rejects malformed parent Message-ID %s',
-    async (headerMessageId) => {
+  it.each([
+    'not-a-message-id',
+    '<invalid value@example.com>',
+    '<local,@example.com>',
+    '<local..part@example.com>',
+    '<local@-example.com>',
+    '<local@example-.com>',
+  ])('rejects malformed parent Message-ID %s', async (headerMessageId) => {
       const { definition } = createDefinition({
         parent: {
           id: parentMessageId,
