@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, type EntityManager } from 'typeorm';
+import { DataSource, In, type EntityManager } from 'typeorm';
 
 import {
   ActionApprovalBindingEntity,
@@ -16,6 +16,7 @@ import {
   type ActionApprovalFaultHooks,
   type ActionExecutionReservation,
   type ExpectedActionBindingWithWorkspace,
+  type MyahInboxReplyExpectedActionBinding,
   type ProviderAcceptedOutcomeInput,
   type SafeActionExecutionReceipt,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
@@ -88,6 +89,47 @@ export class ActionApprovalService {
           state: ActionApprovalBindingState.PENDING,
           expiresAt: new Date(Date.now() + ACTION_APPROVAL_TTL_MS),
           decidedAt: null,
+        }),
+      );
+      await manager.save(
+        ActionApprovalBindingEvidenceLinkEntity,
+        input.evidenceLinks.map((evidence) =>
+          manager.create(ActionApprovalBindingEvidenceLinkEntity, {
+            actionApprovalBindingId: binding.id,
+            ...evidence,
+          }),
+        ),
+      );
+
+      return { id: binding.id };
+    });
+  }
+
+  async createApprovedInboxReplyBinding(
+    input: MyahInboxReplyExpectedActionBinding & { workspaceId: string },
+  ): Promise<{ id: string }> {
+    return this.dataSource.transaction(async (manager) => {
+      const decidedAt = new Date();
+      const binding = await manager.save(
+        ActionApprovalBindingEntity,
+        manager.create(ActionApprovalBindingEntity, {
+          workspaceId: input.workspaceId,
+          initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
+          actionName: input.actionName,
+          actionVersion: input.actionVersion,
+          draftId: input.draftId,
+          contentDigest: input.contentDigest,
+          recipientFingerprint: input.recipientFingerprint,
+          sendingAccountFingerprint: input.sendingAccountFingerprint,
+          actionContextFingerprint: input.actionContextFingerprint,
+          inboundMessageId: null,
+          inboundSenderIgsid: null,
+          inboundDirection: null,
+          inboundReceivedAt: null,
+          threadId: input.threadId,
+          state: ActionApprovalBindingState.APPROVED,
+          expiresAt: new Date(decidedAt.getTime() + ACTION_APPROVAL_TTL_MS),
+          decidedAt,
         }),
       );
       await manager.save(
@@ -230,6 +272,44 @@ export class ActionApprovalService {
     });
   }
 
+  async invalidateApprovedInboxReplyBinding({
+    workspaceId,
+    approvalBindingId,
+    initiatorUserWorkspaceId,
+    threadId,
+  }: {
+    workspaceId: string;
+    approvalBindingId: string;
+    initiatorUserWorkspaceId: string;
+    threadId: string;
+  }): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const binding = await manager.findOne(ActionApprovalBindingEntity, {
+        where: { id: approvalBindingId, workspaceId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !binding ||
+        binding.actionName !== 'send_inbox_reply' ||
+        binding.initiatorUserWorkspaceId !== initiatorUserWorkspaceId ||
+        binding.threadId !== threadId ||
+        binding.state !== ActionApprovalBindingState.APPROVED
+      ) {
+        throw new Error('An approved Inbox reply binding cannot be invalidated');
+      }
+      const receipt = await manager.findOne(ActionExecutionReceiptEntity, {
+        where: { workspaceId, actionApprovalBindingId: binding.id },
+      });
+      if (receipt) {
+        throw new Error('An approved Inbox reply binding cannot be invalidated');
+      }
+
+      binding.state = ActionApprovalBindingState.CHANGES_REQUESTED;
+      binding.decidedAt = new Date();
+      await manager.save(ActionApprovalBindingEntity, binding);
+    });
+  }
+
   async getApprovedBinding({
     workspaceId,
     approvalBindingId,
@@ -320,6 +400,26 @@ export class ActionApprovalService {
               actionVersion: 1 as const,
               actionContextFingerprint: binding.actionContextFingerprint,
             };
+          case 'send_inbox_reply':
+            if (
+              binding.actionVersion !== 1 ||
+              binding.actionContextFingerprint?.length !== 64 ||
+              binding.recipientFingerprint == null ||
+              binding.sendingAccountFingerprint == null ||
+              binding.inboundMessageId != null ||
+              binding.inboundSenderIgsid != null ||
+              binding.inboundDirection != null ||
+              binding.inboundReceivedAt != null
+            ) {
+              return null;
+            }
+
+            return {
+              ...commonBinding,
+              actionName: 'send_inbox_reply' as const,
+              actionVersion: 1 as const,
+              actionContextFingerprint: binding.actionContextFingerprint,
+            };
           default:
             return null;
         }
@@ -347,6 +447,75 @@ export class ActionApprovalService {
       });
 
     return receipt ? this.redactionService.toSafeReceipt(receipt) : null;
+  }
+
+  async findExecutionReceipt({
+    workspaceId,
+    receiptId,
+    actionName,
+    draftId,
+    initiatorUserWorkspaceId,
+  }: {
+    workspaceId: string;
+    receiptId: string;
+    actionName: ExpectedActionBindingWithWorkspace['actionName'];
+    draftId: string;
+    initiatorUserWorkspaceId: string;
+  }): Promise<SafeActionExecutionReceipt | null> {
+    const receipt = await this.dataSource
+      .getRepository(ActionExecutionReceiptEntity)
+      .findOne({
+        where: {
+          id: receiptId,
+          workspaceId,
+          actionApprovalBinding: {
+            actionName,
+            draftId,
+            initiatorUserWorkspaceId,
+          },
+        },
+      });
+
+    return receipt ? this.redactionService.toSafeReceipt(receipt) : null;
+  }
+
+  async isDraftExecutionLocked({
+    workspaceId,
+    actionName,
+    draftId,
+  }: {
+    workspaceId: string;
+    actionName: ExpectedActionBindingWithWorkspace['actionName'];
+    draftId: string;
+  }): Promise<boolean> {
+    const bindings = await this.dataSource
+      .getRepository(ActionApprovalBindingEntity)
+      .find({
+        where: {
+          workspaceId,
+          actionName,
+          draftId,
+          state: In([
+            ActionApprovalBindingState.APPROVED,
+            ActionApprovalBindingState.CONSUMED,
+          ]),
+        },
+        relations: { receipts: true },
+      });
+    const lockingReceiptStates = new Set([
+      ActionExecutionReceiptState.PROCESSING,
+      ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+      ActionExecutionReceiptState.UNKNOWN,
+    ]);
+
+    return bindings.some((binding) =>
+      binding.state === ActionApprovalBindingState.APPROVED
+        ? binding.expiresAt > new Date() && binding.receipts.length === 0
+        : binding.state === ActionApprovalBindingState.CONSUMED &&
+          binding.receipts.some((receipt) =>
+            lockingReceiptStates.has(receipt.state),
+          ),
+    );
   }
 
   async reserveExecutionForBinding({

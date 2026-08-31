@@ -29,9 +29,15 @@ export type OutreachEmailExpectedActionBinding = ActionBindingBase & {
   actionContextFingerprint: string;
 };
 
+export type MyahInboxReplyExpectedActionBinding = ActionBindingBase & {
+  actionName: 'send_inbox_reply';
+  actionContextFingerprint: string;
+};
+
 export type ExpectedActionBinding =
   | InstagramReplyExpectedActionBinding
-  | OutreachEmailExpectedActionBinding;
+  | OutreachEmailExpectedActionBinding
+  | MyahInboxReplyExpectedActionBinding;
 
 export type ExpectedActionBindingWithWorkspace = ExpectedActionBinding & {
   workspaceId: string;
