@@ -1,6 +1,6 @@
 import { type QueryRunner } from 'typeorm';
 
-import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000005000-extend-managed-provider-funding-action';
+import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1788163457871-extend-managed-provider-funding-action';
 import { INSTANCE_COMMANDS } from 'src/database/commands/upgrade-version-command/instance-commands.constant';
 import { getRegisteredInstanceCommandMetadata } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 
@@ -15,7 +15,7 @@ describe('ExtendManagedProviderFundingActionFastInstanceCommand', () => {
       ),
     ).toEqual({
       runAfterWorkspace: false,
-      timestamp: 1786000005000,
+      timestamp: 1788163457871,
       type: 'fast',
       version: '2.20.0',
     });
