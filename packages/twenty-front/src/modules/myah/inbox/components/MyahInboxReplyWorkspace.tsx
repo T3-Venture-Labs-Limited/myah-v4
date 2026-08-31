@@ -1,5 +1,6 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
+import { MyahInboxReplySendAction } from '@/myah/inbox/components/MyahInboxReplySendAction';
 import { MyahInboxProposalPreview } from '@/myah/inbox/components/MyahInboxProposalPreview';
 import { useMyahInboxDraftAutosaveControllerContext } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
@@ -84,6 +85,7 @@ const MyahInboxReplyWorkspaceContent = ({
     myahInboxDraftAutosaveFamilyState.atomFamily(draftKey),
   );
   const [isApplyingProposal, setIsApplyingProposal] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     if (!draftRecord) {
@@ -114,6 +116,7 @@ const MyahInboxReplyWorkspaceContent = ({
       threadId={thread.id}
       disabled={
         isApplyingProposal ||
+        isSending ||
         draftEntry.status === 'saving' ||
         draftEntry.status === 'error' ||
         draftEntry.status === 'conflict'
@@ -131,7 +134,17 @@ const MyahInboxReplyWorkspaceContent = ({
           onReloadConflict={() =>
             draftAutosaveController.reloadConflict(draftKey)
           }
-          proposalAction={generateAction}
+          actions={
+            <>
+              {generateAction}
+              <MyahInboxReplySendAction
+                draftKey={draftKey}
+                entry={draftEntry}
+                onDraftReconciled={draftAutosaveController.reconcile}
+                onSendingChange={setIsSending}
+              />
+            </>
+          }
         />
       )}
     />

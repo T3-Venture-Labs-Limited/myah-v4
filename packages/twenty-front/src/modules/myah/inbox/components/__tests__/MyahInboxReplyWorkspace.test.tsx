@@ -80,13 +80,13 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
     onDraftChange,
     onRetry,
     onReloadConflict,
-    proposalAction,
+    actions,
   }: {
     entry: MyahInboxDraftAutosaveEntry;
     onDraftChange: (body: { markdown: string; blocknote: null }) => void;
     onRetry: () => void;
     onReloadConflict: () => void;
-    proposalAction: ReactType.ReactNode;
+    actions: ReactType.ReactNode;
   }) => (
     <div aria-label="Shared reply draft editor">
       <output aria-label="Draft status">{entry.status}</output>
@@ -99,10 +99,26 @@ jest.mock('@/myah/inbox/components/MyahInboxDraftEditor', () => ({
       </button>
       <button onClick={onRetry}>Retry draft save</button>
       <button onClick={onReloadConflict}>Reload draft conflict</button>
-      <div aria-label="Draft actions">{proposalAction}</div>
+      <div aria-label="Draft actions">{actions}</div>
     </div>
   ),
 }));
+
+jest.mock(
+  '@/myah/inbox/components/MyahInboxReplySendAction',
+  () => ({
+    MyahInboxReplySendAction: ({
+      onSendingChange,
+    }: {
+      onSendingChange: (sending: boolean) => void;
+    }) => (
+      <button data-variant="primary" onClick={() => onSendingChange(true)}>
+        Send
+      </button>
+    ),
+  }),
+  { virtual: true },
+);
 
 jest.mock('@/myah/inbox/components/MyahInboxProposalPreview', () => ({
   MyahInboxProposalPreview: ({
@@ -118,6 +134,7 @@ jest.mock('@/myah/inbox/components/MyahInboxProposalPreview', () => ({
   }) =>
     renderGenerateAction(
       <button
+        data-variant="secondary"
         disabled={disabled}
         onClick={() =>
           onApply({ markdown: 'generated reply', blocknote: null })
@@ -228,6 +245,39 @@ describe('MyahInboxReplyWorkspace', () => {
     });
     expect(mockController.retry).toHaveBeenCalledWith(key);
     expect(mockController.reloadConflict).toHaveBeenCalledWith(key);
+  });
+
+  it('renders Generate Reply then Send as the only normal action row controls', () => {
+    render(<MyahInboxReplyWorkspace thread={thread} />);
+
+    const buttons = within(
+      screen.getByLabelText('Draft actions'),
+    ).getAllByRole('button');
+
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      'Generate Reply',
+      'Send',
+    ]);
+    expect(buttons[0]).toHaveAttribute('data-variant', 'secondary');
+    expect(buttons[1]).toHaveAttribute('data-variant', 'primary');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('Approve & send')).not.toBeInTheDocument();
+  });
+
+  it('disables Generate Reply while a direct send is executing', () => {
+    render(<MyahInboxReplyWorkspace thread={thread} />);
+
+    fireEvent.click(
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Send',
+      }),
+    );
+
+    expect(
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Generate Reply',
+      }),
+    ).toBeDisabled();
   });
 
   it('serializes direct generated replies through the autosave controller', async () => {

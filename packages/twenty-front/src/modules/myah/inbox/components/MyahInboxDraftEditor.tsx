@@ -46,7 +46,7 @@ type MyahInboxDraftEditorProps = {
   onDraftChange: (body: MyahInboxRichText) => void;
   onRetry: () => void;
   onReloadConflict: () => void;
-  proposalAction: ReactNode;
+  actions: ReactNode;
 };
 
 export const MyahInboxDraftEditor = ({
@@ -54,7 +54,7 @@ export const MyahInboxDraftEditor = ({
   onDraftChange,
   onRetry,
   onReloadConflict,
-  proposalAction,
+  actions,
 }: MyahInboxDraftEditorProps) => {
   const conflictPanelRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +80,7 @@ export const MyahInboxDraftEditor = ({
         contentType="markdown"
         enableFullScreen={false}
       />
-      <StyledActions aria-label="Draft actions">{proposalAction}</StyledActions>
+      <StyledActions aria-label="Draft actions">{actions}</StyledActions>
       {entry.status === 'error' && (
         <StyledError role="alert">
           {entry.error}

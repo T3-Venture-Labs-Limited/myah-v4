@@ -104,11 +104,18 @@ const renderEditor = ({
   onDraftChange = jest.fn(),
   retry = jest.fn(),
   reloadConflict = jest.fn(),
+  actions = (
+    <>
+      <button>Generate Reply</button>
+      <button>Send</button>
+    </>
+  ),
 }: {
   draftEntry?: MyahInboxDraftAutosaveEntry;
   onDraftChange?: (body: MyahInboxRichText) => void;
   retry?: () => void;
   reloadConflict?: () => void;
+  actions?: ReactType.ReactNode;
 } = {}) =>
   render(
     <MyahInboxDraftEditor
@@ -116,7 +123,7 @@ const renderEditor = ({
       onDraftChange={onDraftChange}
       onRetry={retry}
       onReloadConflict={reloadConflict}
-      proposalAction={<button>Generate Reply</button>}
+      actions={actions}
     />,
   );
 
@@ -236,13 +243,15 @@ describe('MyahInboxDraftEditor', () => {
     });
   });
 
-  it('keeps Generate Reply as the only normal action-row button', () => {
+  it('renders supplied draft actions once in their supplied order', () => {
     renderEditor();
 
     const actions = screen.getByLabelText('Draft actions');
     expect(
-      within(actions).getByRole('button', { name: 'Generate Reply' }),
-    ).toBeVisible();
+      within(actions)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Generate Reply', 'Send']);
     expect(
       within(actions).queryByRole('button', { name: 'Save draft' }),
     ).not.toBeInTheDocument();
