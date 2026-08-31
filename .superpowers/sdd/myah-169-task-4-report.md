@@ -45,3 +45,22 @@ The Task 2 authority suite failed after its expected action-context digest was e
 ### Concerns
 
 None known.
+
+## Sender-association follow-up
+
+### RED evidence
+
+The authority suite failed after expected action context was extended to include immutable account, channel, sender email, and sender display identities.
+
+### GREEN evidence
+
+- Writer focused suite: 1 suite, 12 tests passed.
+
+### Self-review
+
+- Projection reads sender display identity from the connected account rather than the formatter-owned FROM display value, while preserving the exact FROM handle check.
+- Candidate participant values remain correlated per Message; replay evaluates matching receipt identity and context before clearing.
+
+### Concerns
+
+None known.

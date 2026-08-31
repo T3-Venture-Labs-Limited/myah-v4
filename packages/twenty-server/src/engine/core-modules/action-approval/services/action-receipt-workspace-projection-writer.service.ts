@@ -129,20 +129,17 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         parentMessageId,
       );
 
-      if (sentMessages.length > 1) {
-        throw new Error('The sent Inbox Message is unavailable for projection');
-      }
-
       const existingMessage = sentMessages[0];
-      if (existingMessage && currentDraft.myahReplyDraftBody === null) {
-        if (
+      if (currentDraft.myahReplyDraftBody === null) {
+        const replayMatches = sentMessages.filter((message) =>
           this.isMatchingSentInboxMessage(
-            existingMessage,
+            message,
             input,
             currentDraft.myahReplyDraftRevision - 1,
             parentMessageId,
-          )
-        ) {
+          ),
+        );
+        if (replayMatches.length === 1) {
           return;
         }
 
@@ -381,7 +378,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     parentMessageId: string,
   ): Promise<SentInboxMessageRow[]> {
     return manager.query<SentInboxMessageRow[]>(
-      `SELECT DISTINCT ON (message."id")
+      `SELECT
         message."id",
         message."messageThreadId",
         message."subject",
@@ -393,7 +390,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         (SELECT COUNT(*) FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'TO') AS "recipientCount",
         (SELECT MIN(participant."handle") FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'FROM') AS "senderEmail",
         (SELECT COUNT(*) FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'FROM') AS "senderCount",
-        (SELECT MIN(participant."displayName") FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'FROM') AS "senderDisplayName",
+        account."name" AS "senderDisplayName",
         channel."connectedAccountId",
         parent."id" AS "parentMessageId",
         parent."headerMessageId" AS "parentHeaderMessageId",
@@ -402,7 +399,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       FROM "${schemaName}"."message" message
       INNER JOIN "${schemaName}"."messageChannelMessageAssociation" association ON association."messageId" = message."id"
       INNER JOIN core."messageChannel" channel ON channel."id" = association."messageChannelId"
-      INNER JOIN "${schemaName}"."message" parent ON parent."id" = $3 AND parent."messageThreadId" = message."messageThreadId"
+      INNER JOIN core."connectedAccount" account ON account."id" = channel."connectedAccountId"
       LEFT JOIN "${schemaName}"."messageChannelMessageAssociation" parent_association ON parent_association."messageId" = parent."id" AND parent_association."messageChannelId" = association."messageChannelId"
       WHERE message."headerMessageId" = $1
         OR ($2 IS NOT NULL AND association."messageExternalId" = $2)
