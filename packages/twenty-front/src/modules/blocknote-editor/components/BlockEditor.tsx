@@ -21,6 +21,7 @@ import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 interface BlockEditorProps {
   editor: typeof BLOCK_SCHEMA.BlockNoteEditor;
+  editorMinHeight?: number;
   onFocus?: () => void;
   onBlur?: () => void;
   onPaste?: (event: ClipboardEvent) => void;
@@ -29,7 +30,7 @@ interface BlockEditorProps {
 }
 
 // oxlint-disable-next-line twenty/no-hardcoded-colors
-const StyledEditor = styled.div`
+const StyledEditor = styled.div<{ editorMinHeight: number }>`
   max-width: 100%;
   min-width: 0;
   width: 100%;
@@ -38,7 +39,7 @@ const StyledEditor = styled.div`
     background: transparent;
     color: ${themeCssVariables.font.color.primary};
     font-size: 13px;
-    min-height: 400px;
+    min-height: ${({ editorMinHeight }) => editorMinHeight}px;
   }
   & .editor [class^='_inlineContent']:before {
     color: ${themeCssVariables.font.color.tertiary};
@@ -159,6 +160,7 @@ const StyledEditor = styled.div`
 
 export const BlockEditor = ({
   editor,
+  editorMinHeight = 400,
   onFocus,
   onBlur,
   onChange,
@@ -207,7 +209,7 @@ export const BlockEditor = ({
   };
 
   return (
-    <StyledEditor>
+    <StyledEditor editorMinHeight={editorMinHeight}>
       <BlockNoteView
         onFocus={handleFocus}
         onBlur={handleBlur}

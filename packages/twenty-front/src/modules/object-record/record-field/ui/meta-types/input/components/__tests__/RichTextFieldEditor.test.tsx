@@ -34,8 +34,18 @@ jest.mock('@/blocknote-editor/blocks/Schema', () => ({
 }));
 
 jest.mock('@/blocknote-editor/components/BlockEditor', () => ({
-  BlockEditor: ({ onChange }: { onChange: () => void }) => (
-    <button onClick={onChange} type="button">
+  BlockEditor: ({
+    editorMinHeight,
+    onChange,
+  }: {
+    editorMinHeight?: number;
+    onChange: () => void;
+  }) => (
+    <button
+      data-editor-min-height={editorMinHeight}
+      onClick={onChange}
+      type="button"
+    >
       Change body
     </button>
   ),
@@ -176,5 +186,26 @@ describe('RichTextFieldEditor', () => {
     });
     expect(mockModifyRecordFromCache).not.toHaveBeenCalled();
     expect(store.get(recordAtom)).toEqual(persistedRecord);
+  });
+
+  it('passes a requested minimum editor height to BlockEditor', () => {
+    const store = resetJotaiStore();
+    const recordAtom = recordStoreFamilyState.atomFamily(recordId);
+    store.set(recordAtom, persistedRecord);
+
+    render(
+      <Provider store={store}>
+        <RichTextFieldEditor
+          editorMinHeight={80}
+          fieldName="campaignBrief"
+          objectNameSingular="campaign"
+          recordId={recordId}
+        />
+      </Provider>,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Change body' }),
+    ).toHaveAttribute('data-editor-min-height', '80');
   });
 });

@@ -36,6 +36,7 @@ type RichTextFieldEditorProps = {
   recordId: string;
   objectNameSingular: string;
   fieldName: string;
+  editorMinHeight?: number;
   onPersistBody?: (blocknote: string) => void;
   onFocus?: () => void;
   onBlur?: () => void;
@@ -48,6 +49,7 @@ export const RichTextFieldEditor = ({
   recordId,
   objectNameSingular,
   fieldName,
+  editorMinHeight,
   onPersistBody,
   onFocus: onFocusOverride,
   onBlur: onBlurOverride,
@@ -255,6 +257,7 @@ export const RichTextFieldEditor = ({
 
   return (
     <BlockEditor
+      editorMinHeight={editorMinHeight}
       onFocus={handleBlockEditorFocus}
       onBlur={handleBlockEditorBlur}
       onChange={handleEditorChange}
