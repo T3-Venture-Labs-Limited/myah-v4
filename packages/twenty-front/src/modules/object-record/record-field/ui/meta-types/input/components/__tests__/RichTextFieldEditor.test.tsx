@@ -204,8 +204,9 @@ describe('RichTextFieldEditor', () => {
       </Provider>,
     );
 
-    expect(
-      screen.getByRole('button', { name: 'Change body' }),
-    ).toHaveAttribute('data-editor-min-height', '80');
+    expect(screen.getByRole('button', { name: 'Change body' })).toHaveAttribute(
+      'data-editor-min-height',
+      '80',
+    );
   });
 });

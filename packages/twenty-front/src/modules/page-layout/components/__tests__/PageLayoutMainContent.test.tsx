@@ -236,11 +236,7 @@ describe('PageLayoutMainContent', () => {
 
   it.each([
     ['a different layout', 'different-layout', 'campaign'],
-    [
-      'a non-Campaign record',
-      'ad261155-3c89-436d-8898-3e52d8b37632',
-      'person',
-    ],
+    ['a non-Campaign record', 'ad261155-3c89-436d-8898-3e52d8b37632', 'person'],
   ])(
     'keeps native content for the Agent identifier on %s',
     (_description, layoutUniversalIdentifier, objectNameSingular) => {

@@ -3,10 +3,7 @@ import { styled } from '@linaria/react';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { RichTextFieldEditor } from '@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor';
 import { useRecordShowContainerData } from '@/object-record/record-show/hooks/useRecordShowContainerData';
-import {
-  MOBILE_VIEWPORT,
-  themeCssVariables,
-} from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 
 const CAMPAIGN_AGENT_FIELD_NAMES = [
   'campaignBrief',
@@ -150,7 +147,9 @@ export const MyahCampaignAgent = ({
                 role="group"
               >
                 <StyledGuidance>
-                  <StyledLabel id={labelId}>{fieldMetadataItem.label}</StyledLabel>
+                  <StyledLabel id={labelId}>
+                    {fieldMetadataItem.label}
+                  </StyledLabel>
                   <StyledDescription>
                     {fieldMetadataItem.description}
                   </StyledDescription>

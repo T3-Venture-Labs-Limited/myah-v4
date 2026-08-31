@@ -53,12 +53,17 @@ const campaignFields = [
 ];
 
 jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
-  useObjectMetadataItems: () => ({ objectMetadataItems: mockObjectMetadataItems }),
+  useObjectMetadataItems: () => ({
+    objectMetadataItems: mockObjectMetadataItems,
+  }),
 }));
 
-jest.mock('@/object-record/record-show/hooks/useRecordShowContainerData', () => ({
-  useRecordShowContainerData: () => ({ recordLoading: mockRecordLoading }),
-}));
+jest.mock(
+  '@/object-record/record-show/hooks/useRecordShowContainerData',
+  () => ({
+    useRecordShowContainerData: () => ({ recordLoading: mockRecordLoading }),
+  }),
+);
 
 jest.mock(
   '@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor',
@@ -98,9 +103,13 @@ describe('MyahCampaignAgent', () => {
   });
 
   it('renders the five canonical native editors in metadata order', () => {
-    render(<MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />);
+    render(
+      <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />,
+    );
 
-    expect(screen.getByRole('heading', { name: 'Campaign agent' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Campaign agent' }),
+    ).toBeVisible();
 
     const editors = screen.getAllByTestId('campaign-agent-editor');
     expect(editors).toHaveLength(5);
@@ -115,18 +124,15 @@ describe('MyahCampaignAgent', () => {
     for (const field of campaignFields) {
       const group = screen.getByRole('group', { name: field.label });
       expect(within(group).getByText(field.description)).toBeVisible();
-      expect(within(group).getByTestId('campaign-agent-editor')).toHaveAttribute(
-        'data-editor-min-height',
-        '80',
-      );
-      expect(within(group).getByTestId('campaign-agent-editor')).toHaveAttribute(
-        'data-object-name',
-        'campaign',
-      );
-      expect(within(group).getByTestId('campaign-agent-editor')).toHaveAttribute(
-        'data-record-id',
-        'campaign-1',
-      );
+      expect(
+        within(group).getByTestId('campaign-agent-editor'),
+      ).toHaveAttribute('data-editor-min-height', '80');
+      expect(
+        within(group).getByTestId('campaign-agent-editor'),
+      ).toHaveAttribute('data-object-name', 'campaign');
+      expect(
+        within(group).getByTestId('campaign-agent-editor'),
+      ).toHaveAttribute('data-record-id', 'campaign-1');
     }
   });
 
@@ -136,7 +142,9 @@ describe('MyahCampaignAgent', () => {
   ])('shows row placeholders while %s', (_description, arrange) => {
     arrange();
 
-    render(<MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />);
+    render(
+      <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />,
+    );
 
     expect(screen.getByTestId('campaign-agent-loading')).toBeVisible();
     expect(screen.queryAllByTestId('campaign-agent-editor')).toHaveLength(0);
