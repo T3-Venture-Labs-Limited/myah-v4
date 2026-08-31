@@ -121,7 +121,7 @@ import { AddManagedProviderStripeCustomerFastInstanceCommand } from 'src/databas
 import { CreateManagedEmailOfferFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000003000-create-managed-email-offer';
 import { AddManagedEmailPaymentReceiptsColumnFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000004000-add-managed-email-payment-receipts-column';
 import { MigrateManagedEmailPaymentReceiptsSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1786000004001-migrate-managed-email-payment-receipts';
-import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1786000005000-extend-managed-provider-funding-action';
+import { ExtendManagedProviderFundingActionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1788163457871-extend-managed-provider-funding-action';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
