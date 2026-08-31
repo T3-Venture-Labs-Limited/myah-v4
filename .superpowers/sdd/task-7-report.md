@@ -1,140 +1,15 @@
-# Task 7 — server typecheck repair
+# Task 7 report
 
-## Original failure
+## Composite Inbox reply-draft hydration
 
-`twenty-server` typecheck reported 30 diagnostics after MYAH-169 changes. The errors covered receipt-projection binding discrimination and nullability, inferred test fixtures, reply-send readiness status mapping, and call sites missing the new projection writer dependency.
-
-## Root causes and changes
-
-- Replaced the flattened receipt-projection input with a discriminated `ExpectedActionBindingWithWorkspace` union plus receipt/provider fields.
-- Added projector-side reconstruction/validation of persisted action bindings before projection. It now rejects unsupported action versions, names, incompatible action fields, and nullable identities rather than casting database values into the approved union.
-- Captured the validated Inbox provider message ID before the transaction closure, preserving its non-null narrowing.
-- Mapped `MyahInboxReplyUnavailableCode` explicitly to the GraphQL readiness enum.
-- Completed and explicitly typed affected action-projection, authority, approval-service, and reply-send test fixtures; added regression coverage that an unsupported receipt binding is not projected or marked sent.
-- Updated the focused integration constructor call sites to pass the required Inbox authority dependency and completed outreach projection bindings.
+- Added `normalizeMyahInboxReplyDraft`, which prefers a defined composite RICH_TEXT hydration (including `null`) and otherwise falls back to flattened physical fields.
+- Applied the normalizer to canonical authority construction and readable draft snapshots. Raw Markdown and BlockNote values are retained unchanged.
+- Updated thread-record typing for optional composite and flattened repository shapes.
+- Added regression coverage for composite-only hydration, composite-null precedence, and flattened fallback.
+- Removed the temporary `MYAH169_READINESS_DEBUG` diagnostic.
 
 ## Verification
 
-Passed:
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-server --excludeTaskDependencies
-```
-
-```text
-NX Successfully ran target typecheck for project twenty-server
-```
-
-Passed:
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-projector.service.spec.ts packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-workspace-projection-writer.service.spec.ts packages/twenty-server/src/engine/core-modules/action-approval/definitions/__tests__/myah-inbox-reply-action.definition.spec.ts packages/twenty-server/src/engine/core-modules/action-approval/services/action-approval.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-reply-send.service.spec.ts --config packages/twenty-server/jest.config.mjs
-```
-
-```text
-Test Suites: 5 passed, 5 total
-Tests:       99 passed, 99 total
-```
-
-Qualified integration blocker:
-
-```sh
-NODE_ENV=development PG_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:15691/default REDIS_URL=redis://127.0.0.1:16691 APP_SECRET=myah169-local-only-app-secret-20260831 npx -y node@24.16.0 ../../.yarn/releases/yarn-4.13.0.cjs exec jest test/integration/action-approval/action-approval.integration-spec.ts test/integration/action-approval/outreach-email-workflow.integration-spec.ts --config jest-integration.config.ts
-```
-
-The isolated MYAH-169 Postgres/Redis services connected, but the two integration specs require a seeded active or suspended physical Myah workspace and its tables. No destructive global setup or shared database was used.
-
-## Follow-up — projection writer injection
-
-The writer's constructor was briefly typed as a `Pick` capability. Nest therefore received `Object` rather than `MyahInboxReplyActionDefinition` in emitted `design:paramtypes`, preventing application boot. The constructor again carries the concrete authority class token; integration tests resolve the real authority/writer from the Nest application rather than supplying cast mocks. A reflection regression verifies constructor parameter 3 retains `MyahInboxReplyActionDefinition`.
-
-Passed:
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-approval.module.spec.ts --config packages/twenty-server/jest.config.mjs
-```
-
-```text
-Test Suites: 1 passed, 1 total
-Tests:       2 passed, 2 total
-```
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-workspace-projection-writer.service.spec.ts --config packages/twenty-server/jest.config.mjs
-```
-
-```text
-Test Suites: 1 passed, 1 total
-Tests:       18 passed, 18 total
-```
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-server --excludeTaskDependencies
-```
-
-```text
-NX Successfully ran target typecheck for project twenty-server
-```
-
-## Follow-up — Email Group reply authority
-
-The shared Inbox reply authority now accepts `ConnectedAccountProvider.EMAIL_GROUP` and `MessageChannelType.EMAIL_GROUP` through the existing provider and channel allow-lists. No Email Group-specific execution path or provider call was added.
-
-The authority definition regression test first failed with `SENDER_UNAVAILABLE`, then passed after the shared allow-list update. It verifies that the Email Group fixture produces the same canonical graph and expected action binding as the existing email fixture (apart from the factual connected-account provider), and continues through the common managed-identity eligibility service.
-
-Passed:
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/definitions/__tests__/myah-inbox-reply-action.definition.spec.ts --config packages/twenty-server/jest.config.mjs --runInBand
-```
-
-```text
-Test Suites: 1 passed, 1 total
-Tests:       26 passed, 26 total
-```
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-server --excludeTaskDependencies
-```
-
-```text
-NX Successfully ran target typecheck for project twenty-server
-```
-
-## Follow-up — MYAH-169 autosave advisory lock
-
-`WorkspaceEntityManager` rejects raw SQL, so autosave no longer asks it to acquire the shared Inbox-reply advisory lock. `MyahInboxMutationService` now injects the concrete Nest core `DataSource`; its outer core transaction acquires `MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY`, then enters the existing permission-aware workspace transaction for the execution-lock check and revision CAS. The `enforceExecutionLock=false` provider-failure path takes the same advisory lock but still skips only the execution-lock rejection.
-
-### RED
-
-The new regression configured `WorkspaceEntityManager.query` to reject `Raw SQL queries are not allowed`. Before the implementation it failed as expected: the save promise rejected with that error.
-
-### GREEN
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-mutation.service.spec.ts --config packages/twenty-server/jest.config.mjs --runInBand
-```
-
-```text
-Test Suites: 1 passed, 1 total
-Tests:       38 passed, 38 total
-```
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-reply-send.service.spec.ts --config packages/twenty-server/jest.config.mjs --runInBand
-```
-
-```text
-Test Suites: 1 passed, 1 total
-Tests:       26 passed, 26 total
-```
-
-```sh
-npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-server --excludeTaskDependencies
-```
-
-```text
-NX Successfully ran target typecheck for project twenty-server
-```
-
-No concerns.
+- `node .yarn/releases/yarn-4.13.0.cjs nx jest twenty-server --runInBand src/engine/core-modules/action-approval/definitions/__tests__/myah-inbox-reply-action.definition.spec.ts` — 29 passed
+- `node .yarn/releases/yarn-4.13.0.cjs nx jest twenty-server --runInBand src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-reply-send.service.spec.ts` — 26 passed
+- `node .yarn/releases/yarn-4.13.0.cjs nx typecheck twenty-server` — passed

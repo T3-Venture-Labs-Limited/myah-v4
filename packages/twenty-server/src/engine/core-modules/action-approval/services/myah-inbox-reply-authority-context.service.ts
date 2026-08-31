@@ -13,6 +13,7 @@ import {
   MyahInboxReplyUnavailableCode,
   MyahInboxReplyUnavailableError,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
+import { normalizeMyahInboxReplyDraft } from 'src/engine/core-modules/action-approval/utils/normalize-myah-inbox-reply-draft.util';
 import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
@@ -77,13 +78,7 @@ export class MyahInboxReplyAuthorityContextService {
 
     return {
       revision: messageThread.myahReplyDraftRevision,
-      body:
-        messageThread.myahReplyDraftBodyMarkdown === null
-          ? null
-          : {
-              markdown: messageThread.myahReplyDraftBodyMarkdown,
-              blocknote: messageThread.myahReplyDraftBodyBlocknote,
-            },
+      body: normalizeMyahInboxReplyDraft(messageThread),
       messageThreadMetadataId: evidenceObjectMetadataIds.messageThread,
     };
   }

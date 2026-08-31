@@ -379,6 +379,83 @@ describe('MyahInboxReplyActionDefinition', () => {
     });
   });
 
+  it('reads a permission-hydrated composite draft exactly for authority and status', async () => {
+    const markdown = '  <p>Saved draft</p>\n';
+    const blocknote = '{"type":"doc","content":[]}';
+    const { definition, repositories } = createDefinition();
+    repositories.messageThread.findOneBy.mockResolvedValue({
+      id: messageThreadId,
+      subject: 'Partnership',
+      myahReplyDraftBody: { markdown, blocknote },
+      myahReplyDraftRevision: 4,
+    });
+
+    const [authority, snapshot] = await Promise.all([
+      buildAuthority(definition),
+      definition.getReadableDraftSnapshot({
+        workspaceId,
+        initiatorUserWorkspaceId,
+        messageThreadId,
+      }),
+    ]);
+
+    expect(authority.canonicalGraph).toMatchObject({
+      draftRevision: 4,
+      draftBody: { markdown, blocknote },
+    });
+    expect(snapshot).toEqual({
+      revision: 4,
+      body: { markdown, blocknote },
+      messageThreadMetadataId: metadata[0].id,
+    });
+  });
+
+  it('treats a defined null composite draft as cleared', async () => {
+    const { definition, repositories } = createDefinition();
+    repositories.messageThread.findOneBy.mockResolvedValue({
+      id: messageThreadId,
+      subject: 'Partnership',
+      myahReplyDraftBody: null,
+      myahReplyDraftBodyMarkdown: 'legacy draft',
+      myahReplyDraftBodyBlocknote: null,
+      myahReplyDraftRevision: 4,
+    });
+
+    await expect(
+      definition.getReadableDraftSnapshot({
+        workspaceId,
+        initiatorUserWorkspaceId,
+        messageThreadId,
+      }),
+    ).resolves.toEqual({
+      revision: 4,
+      body: null,
+      messageThreadMetadataId: metadata[0].id,
+    });
+    await expect(buildAuthority(definition)).rejects.toThrow(
+      MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+    );
+  });
+
+  it('falls back to flattened drafts when the composite field is absent', async () => {
+    const markdown = '  legacy draft\n';
+    const { definition, repositories } = createDefinition();
+    repositories.messageThread.findOneBy.mockResolvedValue({
+      id: messageThreadId,
+      subject: 'Partnership',
+      myahReplyDraftBodyMarkdown: markdown,
+      myahReplyDraftBodyBlocknote: null,
+      myahReplyDraftRevision: 4,
+    });
+
+    await expect(buildAuthority(definition)).resolves.toMatchObject({
+      canonicalGraph: {
+        draftRevision: 4,
+        draftBody: { markdown, blocknote: null },
+      },
+    });
+  });
+
   it.each([
     'not-a-message-id',
     '<invalid value@example.com>',

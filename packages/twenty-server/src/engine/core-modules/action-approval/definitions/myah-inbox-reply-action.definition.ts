@@ -16,6 +16,7 @@ import {
   buildMyahInboxReplyExpectedActionBinding,
   matchesMyahInboxReplyBinding,
 } from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-action-binding.util';
+import { normalizeMyahInboxReplyDraft } from 'src/engine/core-modules/action-approval/utils/normalize-myah-inbox-reply-draft.util';
 import {
   type CanonicalMyahInboxReplyGraph,
   type MyahInboxReplyActionAuthority,
@@ -229,15 +230,17 @@ export class MyahInboxReplyActionDefinition {
       mode,
     });
 
-    const rawDraftMarkdown = source.messageThread?.myahReplyDraftBodyMarkdown;
+    const draftBody = source.messageThread
+      ? normalizeMyahInboxReplyDraft(source.messageThread)
+      : null;
     const subject = source.messageThread?.subject?.trim();
     const parentMessage = source.parentMessage;
 
     if (
       !source.messageThread ||
       source.messageThread.id !== messageThreadId ||
-      typeof rawDraftMarkdown !== 'string' ||
-      rawDraftMarkdown.trim().length === 0 ||
+      draftBody === null ||
+      draftBody.markdown.trim().length === 0 ||
       !isNonEmptyString(subject) ||
       (expectedDraftRevision !== undefined &&
         source.messageThread.myahReplyDraftRevision !==
@@ -401,8 +404,8 @@ export class MyahInboxReplyActionDefinition {
       messageThreadId,
       draftRevision: source.messageThread.myahReplyDraftRevision,
       draftBody: {
-        markdown: rawDraftMarkdown,
-        blocknote: source.messageThread.myahReplyDraftBodyBlocknote,
+        markdown: draftBody.markdown,
+        blocknote: draftBody.blocknote,
       },
       connectedAccountId: account.id,
       messageChannelId: channel.id,

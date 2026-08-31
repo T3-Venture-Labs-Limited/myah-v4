@@ -20,11 +20,17 @@ export class MyahInboxReplyUnavailableError extends Error {
   }
 }
 
+export type MyahInboxReplyDraft = {
+  markdown: string;
+  blocknote: string | null;
+};
+
 export type InboxMessageThreadRecord = ObjectRecord & {
   id: string;
   subject: string | null;
-  myahReplyDraftBodyMarkdown: string | null;
-  myahReplyDraftBodyBlocknote: string | null;
+  myahReplyDraftBody?: MyahInboxReplyDraft | null;
+  myahReplyDraftBodyMarkdown?: string | null;
+  myahReplyDraftBodyBlocknote?: string | null;
   myahReplyDraftRevision: number;
 };
 
@@ -45,7 +51,7 @@ export type MyahInboxReplyEvidenceObjectMetadataIds = {
 
 export type MyahInboxReplyReadableDraftSnapshot = {
   revision: number;
-  body: { markdown: string; blocknote: string | null } | null;
+  body: MyahInboxReplyDraft | null;
   messageThreadMetadataId: string;
 };
 export type MyahInboxReplyExpectedActionBindingWithWorkspace =
@@ -54,7 +60,7 @@ export type MyahInboxReplyExpectedActionBindingWithWorkspace =
 export type CanonicalMyahInboxReplyGraph = {
   messageThreadId: string;
   draftRevision: number;
-  draftBody: { markdown: string; blocknote: string | null };
+  draftBody: MyahInboxReplyDraft;
   connectedAccountId: string;
   messageChannelId: string;
   senderEmail: string;
