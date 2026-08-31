@@ -212,9 +212,9 @@ describe('ManagedEmailSubscriptionService', () => {
       >
     >;
     const workspaceCustomerService = {
-      ensureWorkspaceCustomer: jest
-        .fn()
-        .mockResolvedValue('123e4567-e89b-42d3-a456-426614174050'),
+      ensureWorkspaceStripeBillingContext: jest.fn().mockResolvedValue({
+        metronomeCustomerId: '123e4567-e89b-42d3-a456-426614174050',
+      }),
       ensureWorkspaceManagedEmailContract: jest.fn().mockResolvedValue({
         contractId: '123e4567-e89b-42d3-a456-426614174051',
         rateCardId: quote.metronomeRateCardId,
@@ -223,8 +223,8 @@ describe('ManagedEmailSubscriptionService', () => {
     } as unknown as jest.Mocked<
       Pick<
         MetronomeWorkspaceCustomerService,
+        | 'ensureWorkspaceStripeBillingContext'
         | 'ensureStripeBillingConfiguration'
-        | 'ensureWorkspaceCustomer'
         | 'ensureWorkspaceManagedEmailContract'
       >
     >;
@@ -244,6 +244,9 @@ describe('ManagedEmailSubscriptionService', () => {
         'assertPaidExternalInvoice' | 'assertWorkspacePaymentMethodReady'
       >
     >;
+    const twentyConfigService = {
+      get: jest.fn().mockReturnValue('SANDBOX'),
+    };
 
     return {
       managedProviderStripeService,
@@ -255,6 +258,7 @@ describe('ManagedEmailSubscriptionService', () => {
         metronomeClient as unknown as MetronomeClientService,
         workspaceCustomerService as unknown as MetronomeWorkspaceCustomerService,
         managedProviderStripeService as unknown as ManagedProviderStripeService,
+        twentyConfigService as never,
       ),
       workspaceCustomerService,
     };
@@ -309,6 +313,13 @@ describe('ManagedEmailSubscriptionService', () => {
       metronomeClient.addSubscription.mock.invocationCallOrder[0],
     );
     expect(metronomeClient.addSubscription).toHaveBeenCalledTimes(3);
+    expect(
+      workspaceCustomerService.ensureWorkspaceStripeBillingContext,
+    ).toHaveBeenCalledWith({
+      contractId: '123e4567-e89b-42d3-a456-426614174051',
+      environment: 'SANDBOX',
+      workspaceId,
+    });
     expect(metronomeClient.addSubscription).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -568,6 +579,7 @@ describe('ManagedEmailSubscriptionService', () => {
     expect(
       managedProviderStripeService.assertPaidExternalInvoice,
     ).toHaveBeenCalledWith({
+      metronomeBaseUrlEnvironment: 'SANDBOX',
       currency: 'USD',
       expectedAmountCents: quote.lines.reduce(
         (sum, line) => sum + line.amountCents,

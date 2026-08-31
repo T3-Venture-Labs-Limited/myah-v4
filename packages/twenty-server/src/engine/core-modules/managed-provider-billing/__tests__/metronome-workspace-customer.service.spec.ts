@@ -122,7 +122,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
         if (key === 'METRONOME_RATE_CARD_ALIAS') return 'managed-provider';
         if (key === 'MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS')
           return 'managed-email';
-        if (key === 'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID')
+        if (key === 'METRONOME_STRIPE_DELIVERY_METHOD_ID')
           return 'managed-email-delivery-method';
         throw new Error(`Unexpected config key: ${String(key)}`);
       }),
@@ -657,7 +657,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
             startingAt: '2026-07-01T00:00:00.000Z',
           },
         ],
-        fiatCreditType: { id: 'usd-credit-type-id', name: 'USD' },
+        fiatCreditType: { id: 'usd-credit-type-id', name: 'USD (cents)' },
         id: 'managed-email-rate-card-id',
       },
     });
@@ -806,7 +806,7 @@ describe('MetronomeWorkspaceCustomerService', () => {
               startingAt: '2026-07-01T00:00:00.000Z',
             },
           ],
-          fiatCreditType: { id: 'usd-credit-type-id', name: 'USD' },
+          fiatCreditType: { id: 'usd-credit-type-id', name: 'USD (cents)' },
           id: 'managed-email-rate-card-id',
         },
       });
@@ -859,7 +859,7 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
     const config = {
       get: jest.fn((key: string) => {
         if (key === 'METRONOME_ENABLED') return true;
-        if (key === 'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID') {
+        if (key === 'METRONOME_STRIPE_DELIVERY_METHOD_ID') {
           return 'delivery-method-id';
         }
         throw new Error(`Unexpected config key: ${key}`);
@@ -956,6 +956,224 @@ describe('MetronomeWorkspaceCustomerService billing configuration', () => {
       expect(
         metronomeClientService.createBillingConfiguration,
       ).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('MetronomeWorkspaceCustomerService shared Stripe billing context', () => {
+  const workspaceId = 'workspace-id';
+  const metronomeCustomerId = 'metronome-customer-id';
+  const stripeCustomerId = 'cus_workspace';
+  const deliveryMethodId = 'delivery-method-id';
+  const billingConfiguration = {
+    billingProviderType: 'stripe' as const,
+    deliveryMethod: 'direct_to_billing_provider' as const,
+    deliveryMethodId,
+    id: 'billing-config-id',
+    stripeCollectionMethod: 'charge_automatically' as const,
+    stripeCustomerId,
+  };
+  const managedEmailContract: MetronomeCurrentContract = {
+    activeBillingProviderConfiguration: {
+      billingProvider: 'stripe',
+      deliveryMethod: 'direct_to_billing_provider',
+      deliveryMethodId,
+      id: 'billing-config-id',
+    },
+    id: 'managed-email-contract-id',
+    rateCardId: 'managed-email-rate-card-id',
+    startingAt: '2026-07-16T12:00:00.000Z',
+    uniquenessKey: `myah-managed-email-workspace-contract:${workspaceId}`,
+  };
+  const aiContract: MetronomeCurrentContract = {
+    ...managedEmailContract,
+    id: 'ai-contract-id',
+    rateCardId: 'ai-rate-card-id',
+    uniquenessKey: `myah-workspace-contract:${workspaceId}`,
+  };
+
+  const createService = ({
+    contracts = [aiContract, managedEmailContract],
+    environment = 'SANDBOX',
+    existingConfiguration = billingConfiguration,
+    fiatCreditType = { id: 'usd-credit-type-id', name: 'USD (cents)' },
+  }: {
+    contracts?: MetronomeCurrentContract[];
+    environment?: 'PRODUCTION' | 'SANDBOX';
+    existingConfiguration?: typeof billingConfiguration | null;
+    fiatCreditType?: { id: string; name: string } | null;
+  } = {}) => {
+    const installationRepository = {
+      findOneBy: jest.fn().mockResolvedValue({
+        metronomeCustomerId,
+        stripeCustomerId,
+        workspaceId,
+      }),
+      manager: {},
+      update: jest.fn(),
+    };
+    const metronomeClientService = {
+      findCurrentContracts: jest.fn().mockResolvedValue(contracts),
+      getBillingConfiguration: jest
+        .fn()
+        .mockResolvedValue(existingConfiguration),
+      addStripeBillingConfigurationToContract: jest
+        .fn()
+        .mockResolvedValue({ metronomeEditId: 'billing-edit-id' }),
+      getRateCard: jest.fn((rateCardId: string) =>
+        Promise.resolve({
+          aliases: [],
+          fiatCreditType,
+          id: rateCardId,
+        }),
+      ),
+    };
+    const config = {
+      get: jest.fn((key: string) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_BASE_URL_ENVIRONMENT') return environment;
+        if (key === 'METRONOME_STRIPE_DELIVERY_METHOD_ID')
+          return deliveryMethodId;
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    };
+
+    return {
+      metronomeClientService,
+      service: new MetronomeWorkspaceCustomerService(
+        installationRepository as never,
+        metronomeClientService as never,
+        {} as never,
+        config as never,
+      ),
+    };
+  };
+
+  it('returns one exact context for the supplied managed-email contract schedule', async () => {
+    const { metronomeClientService, service } = createService();
+
+    await expect(
+      service.ensureWorkspaceStripeBillingContext({
+        contractId: managedEmailContract.id,
+        environment: 'SANDBOX',
+        workspaceId,
+      }),
+    ).resolves.toEqual({
+      billingConfigurationId: 'billing-config-id',
+      deliveryMethodId,
+      environment: 'SANDBOX',
+      fiatCreditTypeId: 'usd-credit-type-id',
+      fiatCreditTypeName: 'USD (cents)',
+      metronomeContractId: managedEmailContract.id,
+      metronomeCustomerId,
+      stripeCustomerId,
+    });
+    expect(metronomeClientService.findCurrentContracts).toHaveBeenCalledWith(
+      metronomeCustomerId,
+    );
+  });
+
+  it('adds the exact Stripe configuration to a generic AI contract before returning context', async () => {
+    const contractWithoutBilling = {
+      ...aiContract,
+      activeBillingProviderConfiguration: null,
+    };
+    const { metronomeClientService, service } = createService({
+      contracts: [contractWithoutBilling],
+    });
+    metronomeClientService.findCurrentContracts
+      .mockResolvedValueOnce([contractWithoutBilling])
+      .mockResolvedValue([aiContract]);
+
+    await expect(
+      service.ensureWorkspaceContractStripeBillingContext({
+        billingConfigurationId: billingConfiguration.id,
+        contractId: aiContract.id,
+        environment: 'SANDBOX',
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({
+      billingConfigurationId: billingConfiguration.id,
+      metronomeContractId: aiContract.id,
+    });
+    expect(
+      metronomeClientService.addStripeBillingConfigurationToContract,
+    ).toHaveBeenCalledWith({
+      billingConfigurationId: billingConfiguration.id,
+      contractId: aiContract.id,
+      customerId: metronomeCustomerId,
+      uniquenessKey: `myah:workspace-contract-billing:${workspaceId}:${aiContract.id}`,
+    });
+  });
+
+  it.each([
+    [
+      'configured environment differs',
+      { environment: 'PRODUCTION' as const },
+      [aiContract, managedEmailContract],
+      billingConfiguration,
+      { id: 'usd-credit-type-id', name: 'USD (cents)' },
+    ],
+    [
+      'multiple supplied contracts',
+      { environment: 'SANDBOX' as const },
+      [managedEmailContract, managedEmailContract],
+      billingConfiguration,
+      { id: 'usd-credit-type-id', name: 'USD (cents)' },
+    ],
+    [
+      'billing configuration Stripe Customer differs',
+      { environment: 'SANDBOX' as const },
+      [aiContract, managedEmailContract],
+      { ...billingConfiguration, stripeCustomerId: 'cus_other' },
+      { id: 'usd-credit-type-id', name: 'USD (cents)' },
+    ],
+    [
+      'contract configuration differs',
+      { environment: 'SANDBOX' as const },
+      [
+        aiContract,
+        {
+          ...managedEmailContract,
+          activeBillingProviderConfiguration: {
+            ...managedEmailContract.activeBillingProviderConfiguration!,
+            id: 'other-billing-config-id',
+          },
+        },
+      ],
+      billingConfiguration,
+      { id: 'usd-credit-type-id', name: 'USD (cents)' },
+    ],
+    [
+      'rate card uses plain USD',
+      { environment: 'SANDBOX' as const },
+      [aiContract, managedEmailContract],
+      billingConfiguration,
+      { id: 'usd-credit-type-id', name: 'USD' },
+    ],
+  ] as const)(
+    'fails closed when %s',
+    async (
+      _,
+      { environment },
+      contracts,
+      existingConfiguration,
+      fiatCreditType,
+    ) => {
+      const { service } = createService({
+        contracts: [...contracts],
+        environment,
+        existingConfiguration,
+        fiatCreditType,
+      });
+
+      await expect(
+        service.ensureWorkspaceStripeBillingContext({
+          contractId: managedEmailContract.id,
+          environment: 'SANDBOX',
+          workspaceId,
+        }),
+      ).rejects.toThrow();
     },
   );
 });

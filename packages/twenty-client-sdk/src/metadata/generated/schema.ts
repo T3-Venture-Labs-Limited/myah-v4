@@ -1520,11 +1520,85 @@ export interface BillingUpdate {
     __typename: 'BillingUpdate'
 }
 
+export interface ManagedProviderCustomerFundingBillingAddress {
+    city?: Scalars['String']
+    country?: Scalars['String']
+    line1?: Scalars['String']
+    line2?: Scalars['String']
+    postalCode?: Scalars['String']
+    state?: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingBillingAddress'
+}
+
+export interface ManagedProviderCustomerFundingCardSummary {
+    brand: Scalars['String']
+    expiryMonth: Scalars['Float']
+    expiryYear: Scalars['Float']
+    last4: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingCardSummary'
+}
+
+export interface ManagedProviderCustomerFundingTaxIdSummary {
+    country?: Scalars['String']
+    type: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingTaxIdSummary'
+}
+
+export interface ManagedProviderCustomerFundingBillingSummary {
+    address: ManagedProviderCustomerFundingBillingAddress
+    card?: ManagedProviderCustomerFundingCardSummary
+    name?: Scalars['String']
+    paymentMethodReady: Scalars['Boolean']
+    taxId?: ManagedProviderCustomerFundingTaxIdSummary
+    __typename: 'ManagedProviderCustomerFundingBillingSummary'
+}
+
+export interface ManagedProviderAiTopUpPreset {
+    id: Scalars['String']
+    principalCents: Scalars['String']
+    __typename: 'ManagedProviderAiTopUpPreset'
+}
+
+export interface ManagedProviderCustomerFundingHistoryItem {
+    id: Scalars['String']
+    fundingType: Scalars['String']
+    state: Scalars['String']
+    presetId?: Scalars['String']
+    principalCents: Scalars['String']
+    taxCents?: Scalars['String']
+    collectedTotalCents?: Scalars['String']
+    expiresAt?: Scalars['DateTime']
+    createdAt: Scalars['DateTime']
+    updatedAt: Scalars['DateTime']
+    invoiceUrl?: Scalars['String']
+    actionRequired: Scalars['Boolean']
+    __typename: 'ManagedProviderCustomerFundingHistoryItem'
+}
+
+export interface ManagedProviderCustomerFundingPaymentMethod {
+    ready: Scalars['Boolean']
+    clientSecret?: Scalars['String']
+    billingSummary?: ManagedProviderCustomerFundingBillingSummary
+    publishableKey?: Scalars['String']
+    setupIntentId?: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingPaymentMethod'
+}
+
+export interface ManagedProviderCustomerFundingPaymentAction {
+    clientSecret: Scalars['String']
+    __typename: 'ManagedProviderCustomerFundingPaymentAction'
+}
+
 export interface ManagedProviderBillingStatus {
     available: Scalars['Boolean']
     prepaidBalanceCents?: Scalars['String']
     pendingOperationCount: Scalars['Int']
     reconciliationRequiredOperationCount: Scalars['Int']
+    customerFundingAvailable: Scalars['Boolean']
+    customerFundingPaymentMethodReady: Scalars['Boolean']
+    customerFundingPresets: ManagedProviderAiTopUpPreset[]
+    customerFundingHistory: ManagedProviderCustomerFundingHistoryItem[]
+    customerFundingBillingSummary?: ManagedProviderCustomerFundingBillingSummary
     __typename: 'ManagedProviderBillingStatus'
 }
 
@@ -3021,6 +3095,7 @@ export interface Query {
     getWorkspaceCreationDefaults: WorkspaceCreationDefaultsDTO
     validatePasswordResetToken: ValidatePasswordResetToken
     managedProviderBillingStatus: ManagedProviderBillingStatus
+    managedProviderCustomerFundingAction: ManagedProviderCustomerFundingHistoryItem
     billingPortalSession: BillingSession
     listPlans: BillingPlan[]
     getResourceCreditUsage: BillingResourceCreditUsage[]
@@ -3182,6 +3257,11 @@ export interface Mutation {
     generatePlaygroundToken: AuthToken
     emailPasswordResetLink: EmailPasswordResetLink
     updatePasswordViaResetToken: InvalidatePassword
+    requestManagedProviderCustomerFunding: ManagedProviderCustomerFundingHistoryItem
+    prepareManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod
+    completeManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod
+    prepareManagedProviderCustomerFundingPaymentAction: ManagedProviderCustomerFundingPaymentAction
+    acknowledgeManagedProviderCustomerFundingPaymentAction: ManagedProviderCustomerFundingHistoryItem
     checkoutSession: BillingSession
     createSubscriptionPaymentIntent: BillingPaymentIntent
     createBillingPaymentMethodSetupIntent: BillingPaymentIntent
@@ -4971,11 +5051,93 @@ export interface BillingUpdateGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface ManagedProviderCustomerFundingBillingAddressGenqlSelection{
+    city?: boolean | number
+    country?: boolean | number
+    line1?: boolean | number
+    line2?: boolean | number
+    postalCode?: boolean | number
+    state?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingCardSummaryGenqlSelection{
+    brand?: boolean | number
+    expiryMonth?: boolean | number
+    expiryYear?: boolean | number
+    last4?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingTaxIdSummaryGenqlSelection{
+    country?: boolean | number
+    type?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingBillingSummaryGenqlSelection{
+    address?: ManagedProviderCustomerFundingBillingAddressGenqlSelection
+    card?: ManagedProviderCustomerFundingCardSummaryGenqlSelection
+    name?: boolean | number
+    paymentMethodReady?: boolean | number
+    taxId?: ManagedProviderCustomerFundingTaxIdSummaryGenqlSelection
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderAiTopUpPresetGenqlSelection{
+    id?: boolean | number
+    principalCents?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingHistoryItemGenqlSelection{
+    id?: boolean | number
+    fundingType?: boolean | number
+    state?: boolean | number
+    presetId?: boolean | number
+    principalCents?: boolean | number
+    taxCents?: boolean | number
+    collectedTotalCents?: boolean | number
+    expiresAt?: boolean | number
+    createdAt?: boolean | number
+    updatedAt?: boolean | number
+    invoiceUrl?: boolean | number
+    actionRequired?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingPaymentMethodGenqlSelection{
+    ready?: boolean | number
+    clientSecret?: boolean | number
+    billingSummary?: ManagedProviderCustomerFundingBillingSummaryGenqlSelection
+    publishableKey?: boolean | number
+    setupIntentId?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface ManagedProviderCustomerFundingPaymentActionGenqlSelection{
+    clientSecret?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface ManagedProviderBillingStatusGenqlSelection{
     available?: boolean | number
     prepaidBalanceCents?: boolean | number
     pendingOperationCount?: boolean | number
     reconciliationRequiredOperationCount?: boolean | number
+    customerFundingAvailable?: boolean | number
+    customerFundingPaymentMethodReady?: boolean | number
+    customerFundingPresets?: ManagedProviderAiTopUpPresetGenqlSelection
+    customerFundingHistory?: ManagedProviderCustomerFundingHistoryItemGenqlSelection
+    customerFundingBillingSummary?: ManagedProviderCustomerFundingBillingSummaryGenqlSelection
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6583,6 +6745,7 @@ export interface QueryGenqlSelection{
     getWorkspaceCreationDefaults?: WorkspaceCreationDefaultsDTOGenqlSelection
     validatePasswordResetToken?: (ValidatePasswordResetTokenGenqlSelection & { __args: {passwordResetToken: Scalars['String']} })
     managedProviderBillingStatus?: ManagedProviderBillingStatusGenqlSelection
+    managedProviderCustomerFundingAction?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {actionId: Scalars['String']} })
     billingPortalSession?: (BillingSessionGenqlSelection & { __args?: {returnUrlPath?: (Scalars['String'] | null), forPaymentMethodUpdate?: (Scalars['Boolean'] | null)} })
     listPlans?: BillingPlanGenqlSelection
     getResourceCreditUsage?: BillingResourceCreditUsageGenqlSelection
@@ -6807,6 +6970,11 @@ export interface MutationGenqlSelection{
     generatePlaygroundToken?: AuthTokenGenqlSelection
     emailPasswordResetLink?: (EmailPasswordResetLinkGenqlSelection & { __args: {email: Scalars['String'], workspaceId?: (Scalars['UUID'] | null)} })
     updatePasswordViaResetToken?: (InvalidatePasswordGenqlSelection & { __args: {passwordResetToken: Scalars['String'], newPassword: Scalars['String']} })
+    requestManagedProviderCustomerFunding?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {preset: Scalars['String'], idempotencyKey: Scalars['String']} })
+    prepareManagedProviderCustomerFundingPaymentMethod?: ManagedProviderCustomerFundingPaymentMethodGenqlSelection
+    completeManagedProviderCustomerFundingPaymentMethod?: (ManagedProviderCustomerFundingPaymentMethodGenqlSelection & { __args: {setupIntentId?: (Scalars['String'] | null), name: Scalars['String'], line1: Scalars['String'], line2?: (Scalars['String'] | null), city: Scalars['String'], state?: (Scalars['String'] | null), postalCode: Scalars['String'], country: Scalars['String'], taxIdType?: (Scalars['String'] | null), taxIdValue?: (Scalars['String'] | null)} })
+    prepareManagedProviderCustomerFundingPaymentAction?: (ManagedProviderCustomerFundingPaymentActionGenqlSelection & { __args: {actionId: Scalars['String']} })
+    acknowledgeManagedProviderCustomerFundingPaymentAction?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {actionId: Scalars['String']} })
     checkoutSession?: (BillingSessionGenqlSelection & { __args: {recurringInterval: SubscriptionInterval, plan: BillingPlanKey, requirePaymentMethod: Scalars['Boolean'], successUrlPath?: (Scalars['String'] | null)} })
     createSubscriptionPaymentIntent?: (BillingPaymentIntentGenqlSelection & { __args: {recurringInterval: SubscriptionInterval, plan: BillingPlanKey, requirePaymentMethod: Scalars['Boolean'], successUrlPath?: (Scalars['String'] | null), idempotencyKey: Scalars['String']} })
     createBillingPaymentMethodSetupIntent?: BillingPaymentIntentGenqlSelection
@@ -8438,6 +8606,70 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isBillingUpdate = (obj?: { __typename?: any } | null): obj is BillingUpdate => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isBillingUpdate"')
       return BillingUpdate_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingBillingAddress_possibleTypes: string[] = ['ManagedProviderCustomerFundingBillingAddress']
+    export const isManagedProviderCustomerFundingBillingAddress = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingBillingAddress => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingBillingAddress"')
+      return ManagedProviderCustomerFundingBillingAddress_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingCardSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingCardSummary']
+    export const isManagedProviderCustomerFundingCardSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingCardSummary => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingCardSummary"')
+      return ManagedProviderCustomerFundingCardSummary_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingTaxIdSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingTaxIdSummary']
+    export const isManagedProviderCustomerFundingTaxIdSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingTaxIdSummary => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingTaxIdSummary"')
+      return ManagedProviderCustomerFundingTaxIdSummary_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingBillingSummary_possibleTypes: string[] = ['ManagedProviderCustomerFundingBillingSummary']
+    export const isManagedProviderCustomerFundingBillingSummary = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingBillingSummary => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingBillingSummary"')
+      return ManagedProviderCustomerFundingBillingSummary_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderAiTopUpPreset_possibleTypes: string[] = ['ManagedProviderAiTopUpPreset']
+    export const isManagedProviderAiTopUpPreset = (obj?: { __typename?: any } | null): obj is ManagedProviderAiTopUpPreset => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderAiTopUpPreset"')
+      return ManagedProviderAiTopUpPreset_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingHistoryItem_possibleTypes: string[] = ['ManagedProviderCustomerFundingHistoryItem']
+    export const isManagedProviderCustomerFundingHistoryItem = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingHistoryItem => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingHistoryItem"')
+      return ManagedProviderCustomerFundingHistoryItem_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingPaymentMethod_possibleTypes: string[] = ['ManagedProviderCustomerFundingPaymentMethod']
+    export const isManagedProviderCustomerFundingPaymentMethod = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingPaymentMethod => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingPaymentMethod"')
+      return ManagedProviderCustomerFundingPaymentMethod_possibleTypes.includes(obj.__typename)
+    }
+    
+
+
+    const ManagedProviderCustomerFundingPaymentAction_possibleTypes: string[] = ['ManagedProviderCustomerFundingPaymentAction']
+    export const isManagedProviderCustomerFundingPaymentAction = (obj?: { __typename?: any } | null): obj is ManagedProviderCustomerFundingPaymentAction => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderCustomerFundingPaymentAction"')
+      return ManagedProviderCustomerFundingPaymentAction_possibleTypes.includes(obj.__typename)
     }
     
 

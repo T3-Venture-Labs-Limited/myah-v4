@@ -7,6 +7,7 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 
 import { DeliverManagedProviderUsageJob } from '../jobs/deliver-managed-provider-usage.job';
+import { ManagedProviderFundingActionEntity } from '../entities/managed-provider-funding-action.entity';
 import { ManagedProviderOperationEntity } from '../entities/managed-provider-operation.entity';
 import { ManagedProviderOperationState } from '../enums/managed-provider-operation-state.enum';
 import { ManagedProviderBillingExceptionCode } from '../managed-provider-billing.exception';
@@ -45,10 +46,12 @@ describe('ManagedProviderOperationService', () => {
     existingOperation = null,
     metronomeEnabled = true,
     managedWorkspace = false,
+    refundBlocked = false,
   }: {
     balance?: number;
     existingOperation?: Partial<ManagedProviderOperationEntity> | null;
     metronomeEnabled?: boolean;
+    refundBlocked?: boolean;
     managedWorkspace?: boolean;
   } = {}) => {
     const manager: TransactionManagerMock = {
@@ -79,9 +82,17 @@ describe('ManagedProviderOperationService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(activeReservationQuery),
       findOneBy: jest.fn().mockResolvedValue(null),
     };
-    manager.getRepository.mockReturnValue(transactionOperationRepository);
+    const fundingActionRepository = {
+      existsBy: jest.fn().mockResolvedValue(refundBlocked),
+    };
+    manager.getRepository.mockImplementation((entity) =>
+      entity === ManagedProviderFundingActionEntity
+        ? fundingActionRepository
+        : transactionOperationRepository,
+    );
     const operationRepository = {
       createQueryBuilder: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       findOneBy: jest.fn().mockResolvedValue(existingOperation),
       manager: {
         transaction: jest.fn(
@@ -91,7 +102,7 @@ describe('ManagedProviderOperationService', () => {
       },
     } as unknown as Pick<
       Repository<ManagedProviderOperationEntity>,
-      'createQueryBuilder' | 'findOneBy' | 'manager'
+      'createQueryBuilder' | 'find' | 'findOneBy' | 'manager'
     >;
     const metronomeClientService = {
       getBillableMetricIds: jest.fn().mockResolvedValue(['metric-id']),
@@ -141,6 +152,7 @@ describe('ManagedProviderOperationService', () => {
 
     return {
       activeReservationQuery,
+      fundingActionRepository,
       manager,
       previewUsageMock:
         metronomeClientService.previewUsage as unknown as jest.Mock,
@@ -234,6 +246,45 @@ describe('ManagedProviderOperationService', () => {
       ManagedProviderOperationEntity,
     );
     expect(operationRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('rejects new reservations while a workspace refund fence is active', async () => {
+    const {
+      fundingActionRepository,
+      manager,
+      metronomeClientService,
+      service,
+    } = createService({ refundBlocked: true });
+
+    await expect(service.reserveOperation(input)).rejects.toThrow(
+      'Managed provider workspace refund is in progress',
+    );
+    expect(fundingActionRepository.existsBy).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId }),
+    );
+    expect(metronomeClientService.getPrepaidBalance).not.toHaveBeenCalled();
+    expect(manager.save).not.toHaveBeenCalled();
+  });
+
+  it('lists every workspace operation that can still settle after a refund fence', async () => {
+    const { operationRepository, service } = createService();
+    const unresolved = [{ id: 'operation-id' }];
+    (operationRepository.find as jest.Mock).mockResolvedValue(unresolved);
+
+    await expect(
+      service.listWorkspaceLaterSettleableOperations(workspaceId),
+    ).resolves.toEqual(unresolved);
+    expect(operationRepository.find).toHaveBeenCalledWith({
+      order: { createdAt: 'ASC' },
+      where: expect.arrayContaining([
+        expect.objectContaining({ workspaceId }),
+        expect.objectContaining({
+          completionOutcome: 'UNKNOWN',
+          state: ManagedProviderOperationState.RELEASED,
+          workspaceId,
+        }),
+      ]),
+    });
   });
   it('rejects a zero-priced preview for the reference-priced Gemma route', async () => {
     const { manager, metronomeClientService, service } = createService();

@@ -5,6 +5,7 @@ import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
+import { z } from 'zod';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { type ApiKeyEntity } from 'src/engine/core-modules/api-key/api-key.entity';
@@ -27,6 +28,21 @@ import { BillingUsageService } from 'src/engine/core-modules/billing/services/bi
 import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { formatBillingDatabaseProductToGraphqlDTO } from 'src/engine/core-modules/billing/utils/format-database-product-to-graphql-dto.util';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
+import {
+  AI_TOP_UP_PRESETS,
+  ManagedProviderCustomerFundingService,
+} from 'src/engine/core-modules/managed-provider-billing/services/managed-provider-customer-funding.service';
+import { type ManagedProviderFundingActionEntity } from 'src/engine/core-modules/managed-provider-billing/entities/managed-provider-funding-action.entity';
+import {
+  ManagedProviderCustomerFundingHistoryItemDTO,
+  ManagedProviderCustomerFundingPaymentActionDTO,
+  ManagedProviderCustomerFundingPaymentMethodDTO,
+} from 'src/engine/core-modules/managed-provider-billing/types/managed-provider-customer-funding.dto';
+import {
+  CompleteManagedProviderCustomerFundingPaymentMethodInput,
+  ManagedProviderCustomerFundingActionInput,
+  RequestManagedProviderCustomerFundingInput,
+} from 'src/engine/core-modules/managed-provider-billing/types/managed-provider-customer-funding.input';
 import { ManagedProviderBillingStatusService } from 'src/engine/core-modules/managed-provider-billing/services/managed-provider-billing-status.service';
 import { ManagedProviderBillingStatusDTO } from 'src/engine/core-modules/managed-provider-billing/types/managed-provider-billing-status.dto';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
@@ -42,6 +58,7 @@ import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorat
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
+import { NoImpersonationGuard } from 'src/engine/guards/no-impersonation.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import {
   PermissionsException,
@@ -50,6 +67,28 @@ import {
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
+
+const customerFundingBrowserEvidenceSchema = z.looseObject({
+  preset: z.enum(['AI_25_USD', 'AI_50_USD', 'AI_100_USD']),
+});
+const customerFundingBrowserReceiptSchema = z.object({
+  invoiceUrl: z.string().nullable().optional(),
+});
+const CUSTOMER_FUNDING_STATE_LABELS: Record<
+  ManagedProviderFundingActionEntity['state'],
+  string
+> = {
+  FAILED_DEFINITIVE: 'PAYMENT_FAILED',
+  METRONOME_EDIT_RECORDED: 'PREPARING_PAYMENT',
+  PAYMENT_ACTION_REQUIRED: 'AWAITING_PAYMENT',
+  PAYMENT_PENDING: 'AWAITING_PAYMENT',
+  PENDING: 'PREPARING_PAYMENT',
+  RECONCILIATION_REQUIRED: 'NEEDS_SUPPORT',
+  REFUNDED: 'REFUNDED',
+  REFUND_INTENT_RECORDED: 'NEEDS_SUPPORT',
+  REFUND_RECONCILIATION_REQUIRED: 'NEEDS_SUPPORT',
+  SUCCEEDED: 'BALANCE_ACTIVE',
+};
 @MetadataResolver()
 @UsePipes(ResolverValidationPipe)
 @UseFilters(
@@ -65,6 +104,7 @@ export class BillingResolver {
     private readonly billingService: BillingService,
     private readonly billingUsageService: BillingUsageService,
     private readonly managedProviderBillingStatusService: ManagedProviderBillingStatusService,
+    private readonly managedProviderCustomerFundingService: ManagedProviderCustomerFundingService,
     private readonly permissionsService: PermissionsService,
   ) {}
 
@@ -76,7 +116,162 @@ export class BillingResolver {
   async managedProviderBillingStatus(
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<ManagedProviderBillingStatusDTO> {
-    return this.managedProviderBillingStatusService.getStatus(workspace.id);
+    const [status, history, paymentMethodReady, billingSummary] =
+      await Promise.all([
+        this.managedProviderBillingStatusService.getStatus(workspace.id),
+        this.managedProviderCustomerFundingService.listCustomerFundingHistory(
+          workspace.id,
+        ),
+        this.managedProviderCustomerFundingService.isCustomerFundingPaymentMethodReady(
+          workspace.id,
+        ),
+        this.managedProviderCustomerFundingService.getCustomerFundingBillingSummary(
+          workspace.id,
+        ),
+      ]);
+
+    return {
+      ...status,
+      customerFundingAvailable:
+        this.managedProviderCustomerFundingService.isCustomerFundingAvailable(
+          workspace.id,
+        ),
+      customerFundingBillingSummary: billingSummary,
+      customerFundingHistory: history.map((action) =>
+        this.toCustomerFundingHistoryItem(action),
+      ),
+      customerFundingPaymentMethodReady: paymentMethodReady,
+      customerFundingPresets: Object.entries(AI_TOP_UP_PRESETS).map(
+        ([id, principalCents]) => ({
+          id,
+          principalCents: principalCents.toString(),
+        }),
+      ),
+    };
+  }
+
+  @Query(() => ManagedProviderCustomerFundingHistoryItemDTO)
+  @UseGuards(
+    WorkspaceAuthGuard,
+    SettingsPermissionGuard(PermissionFlagType.BILLING),
+  )
+  async managedProviderCustomerFundingAction(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @Args() { actionId }: ManagedProviderCustomerFundingActionInput,
+  ): Promise<ManagedProviderCustomerFundingHistoryItemDTO> {
+    return this.toCustomerFundingHistoryItem(
+      await this.managedProviderCustomerFundingService.getCustomerFundingAction(
+        workspace.id,
+        actionId,
+      ),
+    );
+  }
+
+  @Mutation(() => ManagedProviderCustomerFundingHistoryItemDTO)
+  @UseGuards(
+    WorkspaceAuthGuard,
+    UserAuthGuard,
+    SettingsPermissionGuard(PermissionFlagType.BILLING),
+    NoImpersonationGuard,
+  )
+  async requestManagedProviderCustomerFunding(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUser() user: AuthContextUser,
+    @Args() input: RequestManagedProviderCustomerFundingInput,
+  ): Promise<ManagedProviderCustomerFundingHistoryItemDTO> {
+    return this.toCustomerFundingHistoryItem(
+      await this.managedProviderCustomerFundingService.createCustomerFunding({
+        actorId: user.id,
+        idempotencyKey: input.idempotencyKey,
+        preset: input.preset,
+        workspaceId: workspace.id,
+      }),
+    );
+  }
+
+  @Mutation(() => ManagedProviderCustomerFundingPaymentMethodDTO)
+  @UseGuards(
+    WorkspaceAuthGuard,
+    UserAuthGuard,
+    SettingsPermissionGuard(PermissionFlagType.BILLING),
+    NoImpersonationGuard,
+  )
+  async prepareManagedProviderCustomerFundingPaymentMethod(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<ManagedProviderCustomerFundingPaymentMethodDTO> {
+    return await this.managedProviderCustomerFundingService.prepareCustomerFundingPaymentMethod(
+      workspace.id,
+    );
+  }
+
+  @Mutation(() => ManagedProviderCustomerFundingPaymentMethodDTO)
+  @UseGuards(
+    WorkspaceAuthGuard,
+    UserAuthGuard,
+    SettingsPermissionGuard(PermissionFlagType.BILLING),
+    NoImpersonationGuard,
+  )
+  async completeManagedProviderCustomerFundingPaymentMethod(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @Args()
+    input: CompleteManagedProviderCustomerFundingPaymentMethodInput,
+  ): Promise<ManagedProviderCustomerFundingPaymentMethodDTO> {
+    const { setupIntentId, ...billingDetails } = input;
+
+    return await this.managedProviderCustomerFundingService.completeCustomerFundingPaymentMethod(
+      workspace.id,
+      setupIntentId ?? null,
+      billingDetails,
+    );
+  }
+
+  @Mutation(() => ManagedProviderCustomerFundingPaymentActionDTO)
+  @UseGuards(
+    WorkspaceAuthGuard,
+    UserAuthGuard,
+    SettingsPermissionGuard(PermissionFlagType.BILLING),
+    NoImpersonationGuard,
+  )
+  async prepareManagedProviderCustomerFundingPaymentAction(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @Args() { actionId }: ManagedProviderCustomerFundingActionInput,
+  ): Promise<ManagedProviderCustomerFundingPaymentActionDTO> {
+    const action =
+      await this.managedProviderCustomerFundingService.getCustomerFundingAction(
+        workspace.id,
+        actionId,
+      );
+
+    const paymentAction =
+      await this.managedProviderCustomerFundingService.getCustomerFundingPaymentAction(
+        { action, workspaceId: workspace.id },
+      );
+
+    return { clientSecret: paymentAction.clientSecret };
+  }
+
+  @Mutation(() => ManagedProviderCustomerFundingHistoryItemDTO)
+  @UseGuards(
+    WorkspaceAuthGuard,
+    UserAuthGuard,
+    SettingsPermissionGuard(PermissionFlagType.BILLING),
+    NoImpersonationGuard,
+  )
+  async acknowledgeManagedProviderCustomerFundingPaymentAction(
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @Args() { actionId }: ManagedProviderCustomerFundingActionInput,
+  ): Promise<ManagedProviderCustomerFundingHistoryItemDTO> {
+    const action =
+      await this.managedProviderCustomerFundingService.getCustomerFundingAction(
+        workspace.id,
+        actionId,
+      );
+
+    return this.toCustomerFundingHistoryItem(
+      await this.managedProviderCustomerFundingService.acknowledgeCustomerFundingPaymentAction(
+        { action, workspaceId: workspace.id },
+      ),
+    );
   }
 
   @Query(() => BillingSessionDTO)
@@ -399,6 +594,41 @@ export class BillingResolver {
         await this.billingSubscriptionService.getCurrentBillingSubscriptionOrThrow(
           { workspaceId: workspace.id },
         ),
+    };
+  }
+
+  private toCustomerFundingHistoryItem(
+    action: ManagedProviderFundingActionEntity,
+  ): ManagedProviderCustomerFundingHistoryItemDTO {
+    const evidence = customerFundingBrowserEvidenceSchema.safeParse(
+      action.paymentEvidence,
+    );
+    const receipt = customerFundingBrowserReceiptSchema.safeParse(
+      action.paymentReceipt,
+    );
+    const invoiceUrl =
+      receipt.success && typeof receipt.data.invoiceUrl === 'string'
+        ? receipt.data.invoiceUrl.trim() || null
+        : null;
+
+    return {
+      actionRequired: action.state === 'PAYMENT_ACTION_REQUIRED',
+      collectedTotalCents: action.collectedTotalCents,
+      createdAt: action.createdAt,
+      expiresAt: action.expiresAt,
+      fundingType:
+        action.actionType === 'SPONSORED_CREDIT'
+          ? 'SPONSORED'
+          : action.actionType === 'CORRECTION'
+            ? 'CORRECTION'
+            : 'PURCHASED',
+      id: action.id,
+      invoiceUrl,
+      presetId: evidence.success ? evidence.data.preset : null,
+      principalCents: action.prepaidPrincipalCents ?? action.amountCents,
+      state: CUSTOMER_FUNDING_STATE_LABELS[action.state],
+      taxCents: action.taxCents,
+      updatedAt: action.updatedAt,
     };
   }
 

@@ -12,6 +12,7 @@ import { ManagedProviderBillingRecoveryCronCommand } from '../crons/commands/man
 import { MetronomeWorkspaceCustomerService } from '../services/metronome-workspace-customer.service';
 import { ManagedProviderOperationService } from '../services/managed-provider-operation.service';
 
+import { ManagedProviderCustomerFundingService } from '../services/managed-provider-customer-funding.service';
 import { ManagedProviderBillingModule } from '../managed-provider-billing.module';
 
 describe('ManagedProviderBillingModule', () => {
@@ -65,6 +66,8 @@ describe('ManagedProviderBillingModule', () => {
     expect(exports).toContain(MetronomeWorkspaceCustomerService);
     expect(providers).toContain(ManagedProviderOperationService);
     expect(exports).toContain(ManagedProviderOperationService);
+    expect(providers).toContain(ManagedProviderCustomerFundingService);
+    expect(exports).toContain(ManagedProviderCustomerFundingService);
     expect(exports).toContain(ManagedProviderBillingRecoveryCronCommand);
   });
   it('keeps the billing foundation isolated behind approved entry-point modules', () => {

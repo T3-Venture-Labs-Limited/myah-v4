@@ -11,9 +11,12 @@ import {
   MetronomeClientExceptionCode,
 } from '../metronome-client.exception';
 
+import { type ManagedProviderFundingActionEntity } from '../entities/managed-provider-funding-action.entity';
 import { ManagedProviderOperationEntity } from '../entities/managed-provider-operation.entity';
 import { ManagedProviderOperationState } from '../enums/managed-provider-operation-state.enum';
 import { ManagedProviderBillingRecoveryService } from '../services/managed-provider-billing-recovery.service';
+import { type ManagedProviderCustomerFundingService } from '../services/managed-provider-customer-funding.service';
+import { type ManagedProviderFundingJournalService } from '../services/managed-provider-funding-journal.service';
 import { MetronomeClientService } from '../services/metronome-client.service';
 import { type OpenRouterGenerationLookupService } from '../services/openrouter-generation-lookup.service';
 
@@ -110,6 +113,18 @@ describe('ManagedProviderBillingRecoveryService', () => {
     const twentyConfigService = {
       get: jest.fn().mockReturnValue(true),
     } as Pick<TwentyConfigService, 'get'>;
+    const fundingJournal = {
+      claimDueCustomerFundingActions: jest.fn().mockResolvedValue([]),
+    } as unknown as Pick<
+      ManagedProviderFundingJournalService,
+      'claimDueCustomerFundingActions'
+    >;
+    const customerFunding = {
+      reconcileCustomerFunding: jest.fn().mockResolvedValue(undefined),
+    } as unknown as Pick<
+      ManagedProviderCustomerFundingService,
+      'reconcileCustomerFunding'
+    >;
 
     return {
       countBy,
@@ -120,16 +135,65 @@ describe('ManagedProviderBillingRecoveryService', () => {
       operationRepository,
       save,
       twentyConfigService,
+      customerFunding,
+      fundingJournal,
       service: new ManagedProviderBillingRecoveryService(
         operationRepository as Repository<ManagedProviderOperationEntity>,
         installationRepository as Repository<MyahWorkspaceInstallationEntity>,
         metronomeClientService as MetronomeClientService,
         messageQueueService as MessageQueueService,
         twentyConfigService as TwentyConfigService,
+        fundingJournal as ManagedProviderFundingJournalService,
+        customerFunding as ManagedProviderCustomerFundingService,
         lookup as OpenRouterGenerationLookupService | undefined,
       ),
     };
   };
+
+  it('claims and independently reconciles every due customer funding action', async () => {
+    const { customerFunding, fundingJournal, service, twentyConfigService } =
+      createService();
+    const actions = [
+      {
+        actionType: 'PREPAID_COMMIT',
+        id: 'funding-action-1',
+        state: 'PAYMENT_PENDING',
+        workspaceId: 'workspace-id',
+      },
+      {
+        actionType: 'PREPAID_COMMIT',
+        id: 'funding-action-2',
+        state: 'PAYMENT_ACTION_REQUIRED',
+        workspaceId: 'workspace-id',
+      },
+    ] as ManagedProviderFundingActionEntity[];
+    (
+      fundingJournal.claimDueCustomerFundingActions as jest.Mock
+    ).mockResolvedValue(actions);
+    (customerFunding.reconcileCustomerFunding as jest.Mock)
+      .mockRejectedValueOnce(new Error('temporary reconciliation failure'))
+      .mockResolvedValueOnce(actions[1]);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+
+    await service.recover();
+
+    expect(fundingJournal.claimDueCustomerFundingActions).toHaveBeenCalledWith(
+      50,
+      new Date('2026-07-16T00:02:00.000Z'),
+    );
+    expect(customerFunding.reconcileCustomerFunding).toHaveBeenCalledTimes(2);
+    expect(customerFunding.reconcileCustomerFunding).toHaveBeenNthCalledWith(
+      1,
+      actions[0],
+    );
+    expect(customerFunding.reconcileCustomerFunding).toHaveBeenNthCalledWith(
+      2,
+      actions[1],
+    );
+    expect(twentyConfigService.get).not.toHaveBeenCalledWith(
+      'MANAGED_PROVIDER_CUSTOMER_FUNDING_ENABLED',
+    );
+  });
 
   it('pages through every due pending operation in bounded batches', async () => {
     const { messageQueueService, operationRepository, service } =

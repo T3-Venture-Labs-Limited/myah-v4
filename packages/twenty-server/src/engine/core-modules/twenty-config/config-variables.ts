@@ -206,7 +206,10 @@ export class ConfigVariables {
   })
   MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS = '';
 
-  @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
+  @ValidateIf(
+    (env) =>
+      env.METRONOME_ENABLED === true || env.MANAGED_EMAIL_ENABLED === true,
+  )
   @IsUUID()
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
@@ -216,7 +219,7 @@ export class ConfigVariables {
     isHiddenInAdminPanel: true,
     type: ConfigVariableType.STRING,
   })
-  MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID = '';
+  METRONOME_STRIPE_DELIVERY_METHOD_ID = '';
 
   @ValidateIf((env) => env.MANAGED_EMAIL_ENABLED === true)
   @Transform(({ value }) =>
@@ -430,6 +433,26 @@ export class ConfigVariables {
   @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
   @IsUUID()
   MANAGED_OPENROUTER_CREDIT_PRODUCT_ID = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Enable customer-managed AI prepaid funding',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  MANAGED_PROVIDER_CUSTOMER_FUNDING_ENABLED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Workspaces eligible to purchase managed AI prepaid funding',
+    isEnvOnly: true,
+    isHiddenInAdminPanel: true,
+    type: ConfigVariableType.ARRAY,
+  })
+  @IsOptional()
+  MANAGED_PROVIDER_CUSTOMER_FUNDING_WORKSPACE_IDS: string[] = [];
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,

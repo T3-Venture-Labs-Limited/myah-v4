@@ -1,106 +1,85 @@
 import { SettingsSectionSkeletonLoader } from '@/settings/components/SettingsSectionSkeletonLoader';
-import { SettingsBillingLabelValueItem } from '@/settings/billing/components/internal/SettingsBillingLabelValueItem';
 import {
   StyledSettingsBillingCard,
   StyledSettingsBillingCardHeader,
 } from '@/settings/billing/components/internal/SettingsBillingCard';
-import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
-import { Select } from '@/ui/input/components/Select';
-import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
-import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentState';
-import { TAB_LIST_GAP } from '@/ui/layout/tab-list/constants/TabListGap';
-import { TAB_LIST_HEIGHT } from '@/ui/layout/tab-list/constants/TabListHeight';
-import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
-import { Table } from '@/ui/layout/table/components/Table';
-import { TableCell } from '@/ui/layout/table/components/TableCell';
-import { TableHeader } from '@/ui/layout/table/components/TableHeader';
-import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { styled } from '@linaria/react';
-import { plural, t } from '@lingui/core/macro';
-import { type KeyboardEvent, useState } from 'react';
-import { Status } from 'twenty-ui/data-display';
-import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
-import { Button, TabButton, Toggle } from 'twenty-ui/input';
+import { t } from '@lingui/core/macro';
+import { useState } from 'react';
 import { InlineBanner } from 'twenty-ui/feedback';
+import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 import { H2Title } from 'twenty-ui/typography';
 
-const EM_DASH = '—';
 const usdFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
   currency: 'USD',
+  style: 'currency',
 });
 const formatUsdCents = (amountCents: number): string =>
   usdFormatter.format(amountCents / 100);
-const WORKSPACE_BILLING_TAB_LIST_ID = 'settings-workspace-billing-tabs';
-const COMPACT_LEDGER_VIEWPORT = 1080;
-const WORKSPACE_BILLING_TAB_IDS = {
-  USAGE: 'usage',
-  BILLING_HISTORY: 'billing-history',
-} as const;
-const WORKSPACE_BILLING_TAB_IDS_LIST = [
-  WORKSPACE_BILLING_TAB_IDS.USAGE,
-  WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY,
-] as const;
-type UsagePeriod = '7d' | '30d' | '90d';
 
-export type WorkspaceBillingUsageStatus =
-  | 'settled'
-  | 'processing'
-  | 'notCharged'
-  | 'underReview';
-export type WorkspaceBillingUsageEntry = {
+export type WorkspaceBillingPreset = {
+  id: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD';
+  principalCents: number;
+};
+export type WorkspaceBillingSafeSummary = {
+  address: {
+    city: string | null;
+    country: string | null;
+    line1: string | null;
+    line2: string | null;
+    postalCode: string | null;
+    state: string | null;
+  };
+  card: {
+    brand: string;
+    expiryMonth: number;
+    expiryYear: number;
+    last4: string;
+  } | null;
+  name: string | null;
+  paymentMethodReady: boolean;
+  taxId: { country: string | null; type: string } | null;
+};
+export type WorkspaceBillingFundingHistoryEntry = {
+  actionRequired: boolean;
+  collectedTotalCents: number | null;
+  createdAt: string;
+  expiresAt: string | null;
+  fundingType: 'PURCHASED' | 'SPONSORED' | 'CORRECTION';
   id: string;
-  occurredAt: string;
-  activity: string;
-  member: string;
-  status: WorkspaceBillingUsageStatus;
-  chargeCents: number | null;
+  invoiceUrl: string | null;
+  presetId: string | null;
+  principalCents: number;
+  state:
+    | 'PREPARING_PAYMENT'
+    | 'AWAITING_PAYMENT'
+    | 'PAYMENT_FAILED'
+    | 'BALANCE_ACTIVE'
+    | 'NEEDS_SUPPORT'
+    | 'REFUNDED';
+  taxCents: number | null;
+  updatedAt: string;
 };
-export type WorkspaceBillingHistoryEntry = {
-  id: string;
-  occurredAt: string;
-  description: string;
-  type: 'purchasedTopUp' | 'sponsoredGrant' | 'refund' | 'adjustment';
-  amountCents: number;
-  document?: { label: string; url: string };
-};
-export type WorkspaceBillingAutomaticTopUpSettings = {
-  enabled: boolean;
-  thresholdCents: number;
-  topUpAmountCents: number;
-  monthlyLimitCents: number | null;
-};
-export type WorkspaceBillingPaymentSettings =
-  | { state: 'unavailable' }
-  | {
-      state: 'ready';
-      defaultPaymentMethod: {
-        brand: string;
-        lastFour: string;
-        expiryMonth: number;
-        expiryYear: number;
-      } | null;
-      automaticTopUp: WorkspaceBillingAutomaticTopUpSettings;
-      isSaving: boolean;
-    };
 type WorkspaceBillingReadyViewModel = {
   state: 'ready';
-  balanceStatus: 'healthy' | 'low' | 'empty';
-  availableBalanceCents: number;
-  sponsoredBalanceCents: number | null;
-  purchasedBalanceCents: number | null;
-  monthToDateSpendCents: number;
-  settledOperationCount: number;
-  monthToDateRangeLabel: string;
-  paymentSettings: WorkspaceBillingPaymentSettings;
-  usageHistory: WorkspaceBillingUsageEntry[];
-  billingHistory: WorkspaceBillingHistoryEntry[];
+  availableBalanceCents: number | null;
+  customerFundingAvailable: boolean;
+  customerFundingBillingSummary: WorkspaceBillingSafeSummary | null;
+  customerFundingPaymentMethodReady: boolean;
+  customerFundingPresets: WorkspaceBillingPreset[];
+  fundingHistory: WorkspaceBillingFundingHistoryEntry[];
+  isSubmitting: boolean;
+  retryPresetId?: WorkspaceBillingPreset['id'] | null;
+  pendingOperationCount: number;
+  reconciliationRequiredOperationCount: number;
 };
 export type WorkspaceBillingViewModel =
   | { state: 'loading' }
   | { state: 'unavailable'; reason: 'notConnected' | 'loadFailed' }
   | WorkspaceBillingReadyViewModel;
+
 export type WorkspaceManagedEmailSubscription = {
   action: 'CANCEL_RENEWAL' | 'STOP_SERVICE' | null;
   billingInterval: 'ANNUAL' | 'MONTHLY';
@@ -122,1016 +101,514 @@ export type WorkspaceManagedEmailSubscription = {
 export type WorkspaceManagedEmailSubscriptionsViewModel =
   | { state: 'loading' }
   | { state: 'unavailable' }
-  | {
-      state: 'ready';
-      subscriptions: WorkspaceManagedEmailSubscription[];
-    };
+  | { state: 'ready'; subscriptions: WorkspaceManagedEmailSubscription[] };
 
-const StyledSummary = styled.div`
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
-    grid-template-columns: 1fr;
-  }
-`;
+export type SettingsWorkspaceBillingContentProps = {
+  viewModel: WorkspaceBillingViewModel;
+  managedEmailSubscriptions?: WorkspaceManagedEmailSubscriptionsViewModel;
+  onManageManagedEmail?: () => void;
+  onManagePaymentDetails?: () => void;
+  onRequestTopUp?: (presetId: WorkspaceBillingPreset['id']) => void;
+  onCompletePayment?: (actionId: string) => void;
+};
+
 const StyledCardBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: ${themeCssVariables.spacing[3]};
+  padding: ${themeCssVariables.spacing[4]};
 `;
-const StyledPrimaryValue = styled.div`
+const StyledBalance = styled.div`
   font-size: 28px;
-  font-weight: 600;
+  font-weight: ${themeCssVariables.font.weight.semiBold};
 `;
-const StyledBreakdown = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+const StyledMuted = styled.span`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
 `;
 const StyledActions = styled.div`
   align-items: center;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[2]};
 `;
-const StyledComingSoonText = styled.span`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: 12px;
-`;
-const StyledPaymentSettingsGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`;
-const StyledPaymentSettingsGroupTitle = styled.strong`
+const StyledPresetButton = styled.button`
+  background: ${themeCssVariables.background.primary};
+  border: 1px solid ${themeCssVariables.border.color.medium};
+  border-radius: ${themeCssVariables.border.radius.md};
   color: ${themeCssVariables.font.color.primary};
-`;
-const StyledPaymentMethodRow = styled.div`
-  align-items: center;
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
-    align-items: flex-start;
-    flex-direction: column;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: ${themeCssVariables.font.size.md};
+  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
+
+  &[aria-pressed='true'] {
+    background: ${themeCssVariables.brand.soft};
+    border-color: ${themeCssVariables.brand.solid};
+    color: ${themeCssVariables.brand.text};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${themeCssVariables.brand.focusRing};
+    outline-offset: 2px;
   }
 `;
-const StyledPaymentMethodSummary = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`;
-const StyledAutomaticTopUpHeader = styled.div`
-  align-items: center;
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-`;
-const StyledAutomaticTopUpFields = styled.div`
+const StyledSummaryGrid = styled.div`
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: ${themeCssVariables.spacing[3]};
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
   @media (max-width: ${MOBILE_VIEWPORT}px) {
     grid-template-columns: 1fr;
   }
 `;
-const StyledPaymentHelperText = styled.span`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: 12px;
+const StyledTableWrap = styled.div`
+  overflow-x: auto;
 `;
-const StyledEmptyCopy = styled.p`
-  color: ${themeCssVariables.font.color.secondary};
-  margin: 0;
-`;
-const StyledLowBalanceWarning = styled.div`
-  align-items: center;
-  background: ${themeCssVariables.snackBar.warning.backgroundColor};
-  border-radius: ${themeCssVariables.border.radius.md};
-  color: ${themeCssVariables.snackBar.warning.color};
-  display: flex;
-  gap: 8px;
-  padding: 8px 12px;
-`;
-const StyledBillingEmptyState = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px 8px;
-`;
-const StyledDocumentLink = styled.a`
-  color: ${themeCssVariables.font.color.primary};
-`;
-const StyledBillingTabList = styled.div`
-  box-sizing: border-box;
-  display: flex;
-  gap: ${TAB_LIST_GAP}px;
-  height: ${TAB_LIST_HEIGHT};
-  position: relative;
-  user-select: none;
+const StyledTable = styled.table`
+  border-collapse: collapse;
+  min-width: 680px;
   width: 100%;
 
-  &::after {
-    background-color: ${themeCssVariables.border.color.light};
-    bottom: 0;
-    content: '';
-    height: 1px;
-    left: 0;
-    position: absolute;
-    right: 0;
+  th,
+  td {
+    border-bottom: 1px solid ${themeCssVariables.border.color.light};
+    padding: ${themeCssVariables.spacing[2]};
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    color: ${themeCssVariables.font.color.secondary};
+    font-size: ${themeCssVariables.font.size.sm};
+    font-weight: ${themeCssVariables.font.weight.medium};
   }
 `;
-const StyledResponsiveTableRow = styled(TableRow)`
-  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
-    grid-template-columns: minmax(96px, 0.9fr) minmax(0, 1.5fr) minmax(
-        88px,
-        0.8fr
-      ) !important;
-  }
-`;
-const StyledResponsiveTableHeader = styled(TableHeader)`
-  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
-    &:nth-child(3),
-    &:nth-child(4) {
-      display: none;
-    }
-  }
-`;
-const StyledResponsiveTableCell = styled(TableCell)`
-  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
-    &:nth-child(3),
-    &:nth-child(4) {
-      display: none;
-    }
-  }
-`;
-const StyledResponsivePrimaryCell = styled(TableCell)`
-  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
-    height: auto;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 2px;
-  }
-`;
-const StyledResponsiveMetadata = styled.span`
+const StyledEmpty = styled.div`
   color: ${themeCssVariables.font.color.secondary};
-  display: none;
-  font-size: 12px;
-  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
-    display: block;
-  }
+  padding: ${themeCssVariables.spacing[4]};
 `;
-const StyledSubscriptionTableRow = styled(TableRow)`
-  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
-    grid-template-columns:
-      minmax(120px, 1.5fr) minmax(44px, 0.4fr) minmax(88px, 0.8fr)
-      minmax(120px, 1fr) !important;
-  }
-`;
-const StyledSubscriptionOptionalHeader = styled(TableHeader)`
-  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
-    display: none;
-  }
-`;
-const StyledSubscriptionOptionalCell = styled(TableCell)`
-  @media (max-width: ${COMPACT_LEDGER_VIEWPORT}px) {
-    display: none;
-  }
-`;
-const StyledSubscriptionPrimaryCell = styled(TableCell)`
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 2px;
-  height: auto;
-`;
-const StyledSubscriptionResourceLabels = styled.span`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  width: 100%;
-`;
-const StyledSubscriptionStatusCell = styled(TableCell)`
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 4px;
-  height: auto;
-`;
-const getUsageStatus = (status: WorkspaceBillingUsageStatus) => {
-  switch (status) {
-    case 'settled':
-      return { label: t`Settled` };
-    case 'processing':
-      return { label: t`Processing` };
-    case 'notCharged':
-      return { label: t`Not charged` };
-    case 'underReview':
-      return { label: t`Under review` };
-  }
-};
 
-const getUsageAmount = (
-  status: WorkspaceBillingUsageStatus,
-  chargeCents: number | null,
-) => {
-  if (status === 'processing' || status === 'underReview') return t`Pending`;
-  if (status === 'notCharged') return formatUsdCents(0);
-  if (chargeCents === null) return EM_DASH;
-  return formatUsdCents(chargeCents);
-};
-
-const getBillingHistoryTypeLabel = (
-  type: WorkspaceBillingHistoryEntry['type'],
-) => {
-  switch (type) {
-    case 'purchasedTopUp':
-      return t`Purchased top-up`;
-    case 'sponsoredGrant':
-      return t`Sponsored grant`;
-    case 'refund':
-      return t`Refund`;
-    case 'adjustment':
-      return t`Adjustment`;
-  }
-};
-
-const formatSignedUsdCents = (amountCents: number) =>
-  amountCents > 0
-    ? `+${formatUsdCents(amountCents)}`
-    : formatUsdCents(amountCents);
-const getManagedEmailProductLabel = (
+const managedEmailProductLabel = (
   productKey: WorkspaceManagedEmailSubscription['productKey'],
-) => {
-  switch (productKey) {
-    case 'managed_sending_domain_year':
-      return t`Sending domain`;
-    case 'managed_mailbox_month':
-      return t`Mailbox`;
-    case 'managed_warmup_month':
-      return t`Warmup`;
+): string => {
+  if (productKey === 'managed_sending_domain_year') return t`Sending domain`;
+  if (productKey === 'managed_mailbox_month') return t`Mailbox`;
+  return t`Warmup`;
+};
+const fundingStateLabel = (
+  state: WorkspaceBillingFundingHistoryEntry['state'],
+): string => {
+  switch (state) {
+    case 'PREPARING_PAYMENT':
+      return t`Preparing payment`;
+    case 'AWAITING_PAYMENT':
+      return t`Awaiting payment`;
+    case 'PAYMENT_FAILED':
+      return t`Payment failed`;
+    case 'BALANCE_ACTIVE':
+      return t`Balance active`;
+    case 'NEEDS_SUPPORT':
+      return t`Needs support`;
+    case 'REFUNDED':
+      return t`Refunded`;
   }
 };
 
-const getManagedEmailIntervalLabel = (
-  interval: WorkspaceManagedEmailSubscription['billingInterval'],
-) => {
-  switch (interval) {
-    case 'ANNUAL':
-      return t`Annual`;
-    case 'MONTHLY':
-      return t`Monthly`;
-  }
-};
-
-const getManagedEmailStatusLabel = (
-  status: WorkspaceManagedEmailSubscription['status'],
-) => {
-  switch (status) {
-    case 'ACTIVE':
-      return t`Active`;
-    case 'CANCELS_AT_PERIOD_END':
-      return t`Cancels at period end`;
-    case 'ACTION_REQUIRED':
-      return t`Action required`;
-  }
-};
-
-const formatUsdInput = (amountCents: number) =>
-  `${Math.floor(amountCents / 100)}.${String(amountCents % 100).padStart(2, '0')}`;
-
-const parseUsdCents = (value: string): number | null => {
-  const match = value.trim().match(/^(\d+)(?:\.(\d{1,2}))?$/);
-  if (match === null) return null;
-
-  const wholeCents = Number(match[1]) * 100;
-  const fractionalCents = Number((match[2] ?? '').padEnd(2, '0'));
-  const amountCents = wholeCents + fractionalCents;
-
-  return Number.isSafeInteger(amountCents) && amountCents > 0
-    ? amountCents
-    : null;
-};
-
-const renderPaymentSettingsUnavailable = () => (
-  <Section>
-    <H2Title
-      title={t`Payment settings`}
-      description={t`Payment method and automatic top-up`}
-    />
-    <StyledSettingsBillingCard>
-      <StyledCardBody>
-        <StyledEmptyCopy>
-          {t`Payment settings will appear when billing is connected.`}
-        </StyledEmptyCopy>
-      </StyledCardBody>
-    </StyledSettingsBillingCard>
-  </Section>
-);
-
-const usageColumns =
-  'minmax(132px, 0.9fr) minmax(180px, 1.5fr) minmax(140px, 1fr) minmax(110px, 0.8fr) minmax(96px, 0.7fr)';
-const billingHistoryColumns =
-  'minmax(120px, 0.9fr) minmax(170px, 1.4fr) minmax(110px, 1fr) minmax(150px, 1.2fr) minmax(90px, 0.7fr)';
-const managedEmailSubscriptionColumns =
-  'minmax(180px, 1.5fr) minmax(72px, 0.5fr) minmax(100px, 0.8fr) minmax(110px, 0.8fr) minmax(90px, 0.7fr) minmax(120px, 0.9fr) minmax(140px, 1fr)';
-
-const renderUnknownSummary = () => (
-  <StyledSummary>
-    <SubscriptionInfoContainer>
-      <StyledCardBody>
-        <SettingsBillingLabelValueItem
-          label={t`Available balance`}
-          value={EM_DASH}
-        />
-      </StyledCardBody>
-    </SubscriptionInfoContainer>
-    <SubscriptionInfoContainer>
-      <StyledCardBody>
-        <SettingsBillingLabelValueItem
-          label={t`Month-to-date spend`}
-          value={EM_DASH}
-        />
-        <SettingsBillingLabelValueItem
-          label={t`Settled operations`}
-          value={EM_DASH}
-        />
-      </StyledCardBody>
-    </SubscriptionInfoContainer>
-  </StyledSummary>
-);
-
-const renderUnavailable = (reason: 'notConnected' | 'loadFailed') => (
-  <>
-    <InlineBanner
-      color="blue"
-      message={
-        reason === 'notConnected'
-          ? t`Live billing information has not been connected yet.`
-          : t`Billing information is temporarily unavailable.`
-      }
-    />
-    <StyledEmptyCopy>
-      {t`AI usage and balance are tracked separately from managed email.`}
-    </StyledEmptyCopy>
-    <Section>
-      <H2Title title={t`Balance`} description={t`Workspace billing summary`} />
-      {renderUnknownSummary()}
-      <StyledActions>
-        <Button
-          ariaLabel={t`Add funds`}
-          title={t`Add funds`}
-          variant="secondary"
-          disabled
-        />
-        <StyledComingSoonText>{t`Online top-ups coming soon`}</StyledComingSoonText>
-      </StyledActions>
-    </Section>
-    {renderPaymentSettingsUnavailable()}
-    <Section>
-      <H2Title title={t`Usage`} description={t`Recent workspace usage`} />
-      <StyledEmptyCopy>{t`Usage details will appear here when billing data is connected.`}</StyledEmptyCopy>
-    </Section>
-    <Section>
-      <H2Title
-        title={t`Billing history`}
-        description={t`Workspace billing activity`}
-      />
-      <StyledEmptyCopy>{t`Billing history will appear here when billing data is connected.`}</StyledEmptyCopy>
-    </Section>
-  </>
-);
-const renderManagedEmailSubscriptions = (
-  viewModel: WorkspaceManagedEmailSubscriptionsViewModel | undefined,
-  onManageManagedEmail: (() => void) | undefined,
-) => {
-  if (viewModel === undefined) {
-    return null;
-  }
+const ManagedEmailSubscriptions = ({
+  viewModel,
+  onManage,
+}: {
+  viewModel: WorkspaceManagedEmailSubscriptionsViewModel | undefined;
+  onManage: (() => void) | undefined;
+}) => {
+  if (viewModel === undefined) return null;
 
   return (
     <Section>
       <H2Title
         title={t`Managed email subscriptions`}
-        description={t`Domains, mailboxes, and warmup renewals`}
+        description={t`Managed email subscriptions renew separately and do not use your AI balance.`}
       />
-      <StyledEmptyCopy>
-        {t`Managed email subscriptions renew separately and do not use your AI balance.`}
-      </StyledEmptyCopy>
       {viewModel.state === 'loading' ? (
-        <SettingsSectionSkeletonLoader rowCount={4} />
+        <SettingsSectionSkeletonLoader rowCount={3} />
       ) : viewModel.state === 'unavailable' ? (
         <InlineBanner
           color="blue"
           message={t`Managed email subscription information is temporarily unavailable.`}
         />
       ) : viewModel.subscriptions.length === 0 ? (
-        <StyledBillingEmptyState>
-          <strong>{t`No managed email subscriptions yet`}</strong>
-          <StyledEmptyCopy>
-            {t`Domain, mailbox, and warmup renewals will appear here after purchase.`}
-          </StyledEmptyCopy>
-        </StyledBillingEmptyState>
+        <StyledSettingsBillingCard>
+          <StyledEmpty>{t`No managed email subscriptions yet`}</StyledEmpty>
+        </StyledSettingsBillingCard>
       ) : (
-        <Table role="table" aria-label={t`Managed email subscriptions`}>
-          <StyledSubscriptionTableRow
-            role="row"
-            gridTemplateColumns={managedEmailSubscriptionColumns}
-          >
-            <TableHeader role="columnheader">{t`Service`}</TableHeader>
-            <TableHeader role="columnheader">{t`Quantity`}</TableHeader>
-            <StyledSubscriptionOptionalHeader role="columnheader">
-              {t`Unit price`}
-            </StyledSubscriptionOptionalHeader>
-            <TableHeader role="columnheader">{t`Recurring`}</TableHeader>
-            <StyledSubscriptionOptionalHeader role="columnheader">
-              {t`Interval`}
-            </StyledSubscriptionOptionalHeader>
-            <StyledSubscriptionOptionalHeader role="columnheader">
-              {t`Paid through`}
-            </StyledSubscriptionOptionalHeader>
-            <TableHeader role="columnheader">{t`Status`}</TableHeader>
-          </StyledSubscriptionTableRow>
-          {viewModel.subscriptions.map((subscription) => (
-            <StyledSubscriptionTableRow
-              key={`${subscription.productKey}:${subscription.resourceIds.join(':')}`}
-              role="row"
-              gridTemplateColumns={managedEmailSubscriptionColumns}
-            >
-              <StyledSubscriptionPrimaryCell role="cell">
-                {getManagedEmailProductLabel(subscription.productKey)}
-                <StyledSubscriptionResourceLabels>
-                  {subscription.resourceLabels.join(', ')}
-                </StyledSubscriptionResourceLabels>
-              </StyledSubscriptionPrimaryCell>
-              <TableCell role="cell">{subscription.quantity}</TableCell>
-              <StyledSubscriptionOptionalCell role="cell">
-                {formatUsdCents(subscription.unitPriceCents)}
-              </StyledSubscriptionOptionalCell>
-              <TableCell role="cell" align="right">
-                {formatUsdCents(subscription.recurringAmountCents)}
-              </TableCell>
-              <StyledSubscriptionOptionalCell role="cell">
-                {getManagedEmailIntervalLabel(subscription.billingInterval)}
-              </StyledSubscriptionOptionalCell>
-              <StyledSubscriptionOptionalCell role="cell">
-                {subscription.paidThrough === null
-                  ? EM_DASH
-                  : new Date(subscription.paidThrough).toLocaleDateString()}
-              </StyledSubscriptionOptionalCell>
-              <StyledSubscriptionStatusCell role="cell">
-                {getManagedEmailStatusLabel(subscription.status)}
-                {subscription.action !== null &&
-                  onManageManagedEmail !== undefined && (
-                    <Button
-                      ariaLabel={t`Manage`}
-                      title={t`Manage`}
-                      variant="secondary"
-                      onClick={onManageManagedEmail}
-                    />
-                  )}
-              </StyledSubscriptionStatusCell>
-            </StyledSubscriptionTableRow>
-          ))}
-        </Table>
+        <StyledTableWrap>
+          <StyledTable aria-label={t`Managed email subscriptions`}>
+            <thead>
+              <tr>
+                <th>{t`Product`}</th>
+                <th>{t`Resources`}</th>
+                <th>{t`Unit price`}</th>
+                <th>{t`Recurring total`}</th>
+                <th>{t`Status`}</th>
+                <th>{t`Action`}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {viewModel.subscriptions.map((subscription) => (
+                <tr
+                  key={`${subscription.productKey}:${subscription.resourceIds.join(':')}`}
+                >
+                  <td>{managedEmailProductLabel(subscription.productKey)}</td>
+                  <td>
+                    {subscription.quantity} ·{' '}
+                    {subscription.resourceLabels.join(', ')}
+                  </td>
+                  <td>{formatUsdCents(subscription.unitPriceCents)}</td>
+                  <td>{formatUsdCents(subscription.recurringAmountCents)}</td>
+                  <td>
+                    {subscription.status === 'CANCELS_AT_PERIOD_END'
+                      ? t`Cancels at period end`
+                      : subscription.status === 'ACTION_REQUIRED'
+                        ? t`Action required`
+                        : t`Active`}
+                  </td>
+                  <td>
+                    {subscription.action !== null && onManage !== undefined ? (
+                      <Button
+                        title={t`Manage`}
+                        variant="secondary"
+                        size="small"
+                        onClick={onManage}
+                      />
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </StyledTable>
+        </StyledTableWrap>
       )}
+      <StyledMuted>
+        {t`AI usage and balance are tracked separately from managed email.`}
+      </StyledMuted>
     </Section>
   );
 };
 
-const WorkspacePaymentSettings = ({
-  paymentSettings,
-  onManagePaymentMethod,
-  onSaveAutomaticTopUp,
+const PaymentSummary = ({
+  summary,
+  onManage,
+  isCustomerFundingAvailable,
 }: {
-  paymentSettings: Extract<WorkspaceBillingPaymentSettings, { state: 'ready' }>;
-  onManagePaymentMethod?: () => void;
-  onSaveAutomaticTopUp?: (
-    settings: WorkspaceBillingAutomaticTopUpSettings,
-  ) => void;
+  summary: WorkspaceBillingSafeSummary | null;
+  onManage: (() => void) | undefined;
+  isCustomerFundingAvailable: boolean;
 }) => {
-  const initialSettings = paymentSettings.automaticTopUp;
-  const [enabled, setEnabled] = useState(initialSettings.enabled);
-  const [threshold, setThreshold] = useState(
-    formatUsdInput(initialSettings.thresholdCents),
-  );
-  const [topUpAmount, setTopUpAmount] = useState(
-    formatUsdInput(initialSettings.topUpAmountCents),
-  );
-  const [monthlyLimit, setMonthlyLimit] = useState(
-    initialSettings.monthlyLimitCents === null
-      ? ''
-      : formatUsdInput(initialSettings.monthlyLimitCents),
-  );
-  const thresholdCents = parseUsdCents(threshold);
-  const topUpAmountCents = parseUsdCents(topUpAmount);
-  const submittedThresholdCents =
-    enabled || thresholdCents !== null
-      ? thresholdCents
-      : initialSettings.thresholdCents;
-  const submittedTopUpAmountCents =
-    enabled || topUpAmountCents !== null
-      ? topUpAmountCents
-      : initialSettings.topUpAmountCents;
-  const monthlyLimitCents =
-    monthlyLimit.trim() === '' ? null : parseUsdCents(monthlyLimit);
-  const thresholdError =
-    enabled && thresholdCents === null
-      ? t`Enter a valid balance threshold.`
-      : undefined;
-  const topUpAmountError =
-    enabled && topUpAmountCents === null
-      ? t`Enter a valid top-up amount.`
-      : undefined;
-  const monthlyLimitError =
-    monthlyLimit.trim() !== '' && monthlyLimitCents === null
-      ? t`Enter a valid monthly limit.`
-      : monthlyLimitCents !== null &&
-          submittedTopUpAmountCents !== null &&
-          monthlyLimitCents < submittedTopUpAmountCents
-        ? t`Monthly limit must be at least the top-up amount.`
-        : undefined;
-  const hasPaymentMethod = paymentSettings.defaultPaymentMethod !== null;
-  const hasChanges =
-    enabled !== initialSettings.enabled ||
-    thresholdCents !== initialSettings.thresholdCents ||
-    topUpAmountCents !== initialSettings.topUpAmountCents ||
-    monthlyLimitCents !== initialSettings.monthlyLimitCents;
-  const canSave =
-    onSaveAutomaticTopUp !== undefined &&
-    hasChanges &&
-    !paymentSettings.isSaving &&
-    (!enabled || hasPaymentMethod) &&
-    thresholdError === undefined &&
-    topUpAmountError === undefined &&
-    monthlyLimitError === undefined &&
-    submittedThresholdCents !== null &&
-    submittedTopUpAmountCents !== null;
-  const paymentMethodActionLabel =
-    paymentSettings.defaultPaymentMethod === null
-      ? t`Add payment method`
-      : t`Manage payment method`;
-
-  const saveChanges = () => {
-    if (
-      !canSave ||
-      submittedThresholdCents === null ||
-      submittedTopUpAmountCents === null
-    ) {
-      return;
-    }
-    onSaveAutomaticTopUp({
-      enabled,
-      thresholdCents: submittedThresholdCents,
-      topUpAmountCents: submittedTopUpAmountCents,
-      monthlyLimitCents,
-    });
-  };
+  const address = summary?.address;
+  const addressText = [
+    address?.line1,
+    address?.line2,
+    address?.city,
+    address?.state,
+    address?.postalCode,
+    address?.country,
+  ]
+    .filter((value): value is string => value !== null && value !== undefined)
+    .join(', ');
 
   return (
     <Section>
       <H2Title
-        title={t`Payment settings`}
-        description={t`Payment method and automatic top-up`}
+        title={t`Payment & billing details`}
+        description={t`Used for Stripe payment collection and applicable tax.`}
       />
       <StyledSettingsBillingCard>
         <StyledCardBody>
-          <StyledPaymentSettingsGroup>
-            <StyledPaymentSettingsGroupTitle>
-              {t`Payment method`}
-            </StyledPaymentSettingsGroupTitle>
-            <StyledPaymentMethodRow>
-              {paymentSettings.defaultPaymentMethod === null ? (
-                <StyledPaymentMethodSummary>
-                  <span>{t`No payment method on file.`}</span>
-                </StyledPaymentMethodSummary>
+          {summary === null ? (
+            <StyledMuted>{t`No payment and billing details saved.`}</StyledMuted>
+          ) : (
+            <>
+              {summary.card === null ? (
+                <StyledMuted>{t`No payment method on file.`}</StyledMuted>
               ) : (
-                <StyledPaymentMethodSummary>
-                  <span>
-                    {paymentSettings.defaultPaymentMethod.brand} {'•••• '}
-                    {paymentSettings.defaultPaymentMethod.lastFour}
-                  </span>
-                  <StyledPaymentHelperText>
-                    {t`Expires ${String(paymentSettings.defaultPaymentMethod.expiryMonth).padStart(2, '0')}/${String(paymentSettings.defaultPaymentMethod.expiryYear).slice(-2)}`}
-                  </StyledPaymentHelperText>
-                </StyledPaymentMethodSummary>
+                <strong>
+                  {summary.card.brand} {'•••• '} {summary.card.last4} ·{' '}
+                  {String(summary.card.expiryMonth).padStart(2, '0')}/
+                  {String(summary.card.expiryYear).slice(-2).padStart(2, '0')}
+                </strong>
               )}
-              <Button
-                ariaLabel={paymentMethodActionLabel}
-                title={paymentMethodActionLabel}
-                variant="secondary"
-                disabled={onManagePaymentMethod === undefined}
-                onClick={onManagePaymentMethod}
-              />
-            </StyledPaymentMethodRow>
-          </StyledPaymentSettingsGroup>
-          <StyledPaymentSettingsGroup>
-            <StyledAutomaticTopUpHeader>
-              <StyledPaymentSettingsGroupTitle>
-                {t`Automatic top-up`}
-              </StyledPaymentSettingsGroupTitle>
-              <Toggle
-                aria-label={t`Automatic top-up`}
-                value={enabled}
-                disabled={!hasPaymentMethod && !enabled}
-                onChange={setEnabled}
-              />
-            </StyledAutomaticTopUpHeader>
-            {!hasPaymentMethod && (
-              <StyledPaymentHelperText>
-                {t`Add a payment method before enabling automatic top-up.`}
-              </StyledPaymentHelperText>
-            )}
-            <StyledAutomaticTopUpFields>
-              <SettingsTextInput
-                instanceId="workspace-billing-auto-top-up-threshold"
-                label={t`Balance threshold`}
-                value={threshold}
-                onChange={setThreshold}
-                inputMode="decimal"
-                leftAdornment="$"
-                error={thresholdError}
-                disabled={!enabled || !hasPaymentMethod}
-                fullWidth
-              />
-              <SettingsTextInput
-                instanceId="workspace-billing-auto-top-up-amount"
-                label={t`Top-up amount`}
-                value={topUpAmount}
-                onChange={setTopUpAmount}
-                inputMode="decimal"
-                leftAdornment="$"
-                error={topUpAmountError}
-                disabled={!enabled || !hasPaymentMethod}
-                fullWidth
-              />
-              <SettingsTextInput
-                instanceId="workspace-billing-auto-top-up-monthly-limit"
-                label={t`Monthly automatic top-up limit (optional)`}
-                value={monthlyLimit}
-                onChange={setMonthlyLimit}
-                inputMode="decimal"
-                leftAdornment="$"
-                error={monthlyLimitError}
-                disabled={!enabled || !hasPaymentMethod}
-                fullWidth
-              />
-            </StyledAutomaticTopUpFields>
-            {enabled && monthlyLimit.trim() === '' && (
-              <StyledPaymentHelperText>
-                {t`No monthly limit allows repeated automatic charges.`}
-              </StyledPaymentHelperText>
-            )}
-            <StyledActions>
-              <Button
-                ariaLabel={t`Save changes`}
-                title={t`Save changes`}
-                variant="secondary"
-                disabled={!canSave}
-                isLoading={paymentSettings.isSaving}
-                onClick={saveChanges}
-              />
-            </StyledActions>
-          </StyledPaymentSettingsGroup>
+              {summary.name !== null ? <span>{summary.name}</span> : null}
+              {addressText !== '' ? (
+                <StyledMuted>{addressText}</StyledMuted>
+              ) : null}
+              {summary.taxId !== null ? (
+                <StyledMuted>
+                  {t`Tax ID: ${summary.taxId.type}${summary.taxId.country === null ? '' : ` (${summary.taxId.country})`}`}
+                </StyledMuted>
+              ) : null}
+            </>
+          )}
+          {isCustomerFundingAvailable ? (
+            onManage !== undefined ? (
+              <StyledActions>
+                <Button
+                  title={t`Update payment details`}
+                  variant="secondary"
+                  onClick={onManage}
+                />
+              </StyledActions>
+            ) : null
+          ) : (
+            <InlineBanner
+              color="blue"
+              message={t`Payment details are unavailable because AI funding is not enabled for this workspace.`}
+            />
+          )}
         </StyledCardBody>
       </StyledSettingsBillingCard>
     </Section>
   );
 };
 
-export type SettingsWorkspaceBillingContentProps = {
-  viewModel: WorkspaceBillingViewModel;
-  managedEmailSubscriptions?: WorkspaceManagedEmailSubscriptionsViewModel;
-  onManageManagedEmail?: () => void;
-  onManagePaymentMethod?: () => void;
-  onSaveAutomaticTopUp?: (
-    settings: WorkspaceBillingAutomaticTopUpSettings,
-  ) => void;
-};
+const FundingHistory = ({
+  entries,
+  onCompletePayment,
+}: {
+  entries: WorkspaceBillingFundingHistoryEntry[];
+  onCompletePayment: ((actionId: string) => void) | undefined;
+}) => (
+  <Section>
+    <H2Title
+      title={t`AI funding history`}
+      description={t`Purchased and sponsored AI credit activity.`}
+    />
+    {entries.length === 0 ? (
+      <StyledSettingsBillingCard>
+        <StyledEmpty>{t`No AI funding activity yet`}</StyledEmpty>
+      </StyledSettingsBillingCard>
+    ) : (
+      <StyledTableWrap>
+        <StyledTable aria-label={t`AI funding history`}>
+          <thead>
+            <tr>
+              <th>{t`Date`}</th>
+              <th>{t`Type`}</th>
+              <th>{t`Amount`}</th>
+              <th>{t`Status`}</th>
+              <th>{t`Expiration`}</th>
+              <th>{t`Action`}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((entry) => (
+              <tr key={entry.id}>
+                <td>{new Date(entry.createdAt).toLocaleString()}</td>
+                <td>{entry.fundingType}</td>
+                <td>
+                  <div>{t`Principal: ${formatUsdCents(entry.principalCents)}`}</div>
+                  {entry.taxCents !== null ? (
+                    <div>
+                      <StyledMuted>
+                        {t`Tax: ${formatUsdCents(entry.taxCents)}`}
+                      </StyledMuted>
+                    </div>
+                  ) : null}
+                  {entry.collectedTotalCents !== null ? (
+                    <div>
+                      <strong>
+                        {t`Total collected: ${formatUsdCents(entry.collectedTotalCents)}`}
+                      </strong>
+                    </div>
+                  ) : null}
+                </td>
+                <td>{fundingStateLabel(entry.state)}</td>
+                <td>
+                  {entry.expiresAt === null
+                    ? '—'
+                    : new Date(entry.expiresAt).toLocaleDateString()}
+                </td>
+                <td>
+                  <StyledActions>
+                    {entry.invoiceUrl !== null ? (
+                      <a
+                        href={entry.invoiceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t`Invoice`}
+                      </a>
+                    ) : null}
+                    {entry.actionRequired && onCompletePayment !== undefined ? (
+                      <Button
+                        title={t`Complete payment`}
+                        variant="secondary"
+                        size="small"
+                        onClick={() => onCompletePayment(entry.id)}
+                      />
+                    ) : null}
+                  </StyledActions>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </StyledTable>
+      </StyledTableWrap>
+    )}
+  </Section>
+);
 
 export const SettingsWorkspaceBillingContent = ({
   managedEmailSubscriptions,
+  onCompletePayment,
   onManageManagedEmail,
+  onManagePaymentDetails,
+  onRequestTopUp,
   viewModel,
-  onManagePaymentMethod,
-  onSaveAutomaticTopUp,
 }: SettingsWorkspaceBillingContentProps) => {
-  const [usagePeriod, setUsagePeriod] = useState<UsagePeriod>('30d');
-  const [activeTabId, setActiveTabId] = useAtomComponentState(
-    activeTabIdComponentState,
-    WORKSPACE_BILLING_TAB_LIST_ID,
+  const [selectedPresetId, setSelectedPresetId] =
+    useState<WorkspaceBillingPreset['id']>('AI_25_USD');
+  const managedEmail = (
+    <ManagedEmailSubscriptions
+      viewModel={managedEmailSubscriptions}
+      onManage={onManageManagedEmail}
+    />
   );
-  const managedEmailSubscriptionsSection = renderManagedEmailSubscriptions(
-    managedEmailSubscriptions,
-    onManageManagedEmail,
-  );
-  if (viewModel.state === 'loading')
-    return (
-      <>
-        {managedEmailSubscriptionsSection}
-        <SettingsSectionSkeletonLoader rowCount={3} />
-        <SettingsSectionSkeletonLoader rowCount={4} />
-        <SettingsSectionSkeletonLoader rowCount={4} />
-      </>
-    );
-  if (viewModel.state === 'unavailable')
-    return (
-      <>
-        {managedEmailSubscriptionsSection}
-        {renderUnavailable(viewModel.reason)}
-      </>
-    );
-  const displayedTabId =
-    activeTabId === WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY
-      ? WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY
-      : WORKSPACE_BILLING_TAB_IDS.USAGE;
-  const handleBillingTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const currentTabIndex =
-      WORKSPACE_BILLING_TAB_IDS_LIST.indexOf(displayedTabId);
-    const nextTabIndex =
-      event.key === 'ArrowRight'
-        ? (currentTabIndex + 1) % WORKSPACE_BILLING_TAB_IDS_LIST.length
-        : event.key === 'ArrowLeft'
-          ? (currentTabIndex - 1 + WORKSPACE_BILLING_TAB_IDS_LIST.length) %
-            WORKSPACE_BILLING_TAB_IDS_LIST.length
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? WORKSPACE_BILLING_TAB_IDS_LIST.length - 1
-              : null;
-    if (nextTabIndex === null) return;
 
-    const nextTabId =
-      WORKSPACE_BILLING_TAB_IDS_LIST[nextTabIndex] ?? displayedTabId;
-    event.preventDefault();
-    setActiveTabId(nextTabId);
-    document.getElementById(`tab-workspace-billing-tab-${nextTabId}`)?.focus();
-  };
+  if (viewModel.state === 'loading') {
+    return (
+      <>
+        {managedEmail}
+        <SettingsSectionSkeletonLoader rowCount={5} />
+      </>
+    );
+  }
+
+  if (viewModel.state === 'unavailable') {
+    return (
+      <>
+        {managedEmail}
+        <Section>
+          <H2Title
+            title={t`AI balance`}
+            description={t`Prepaid managed AI credit.`}
+          />
+          <InlineBanner
+            color="blue"
+            message={
+              viewModel.reason === 'loadFailed'
+                ? t`AI billing information is temporarily unavailable.`
+                : t`AI billing is not connected for this workspace.`
+            }
+          />
+        </Section>
+      </>
+    );
+  }
+
+  const selectedPreset =
+    viewModel.retryPresetId === undefined || viewModel.retryPresetId === null
+      ? (viewModel.customerFundingPresets.find(
+          (preset) => preset.id === selectedPresetId,
+        ) ?? viewModel.customerFundingPresets[0])
+      : viewModel.customerFundingPresets.find(
+          (preset) => preset.id === viewModel.retryPresetId,
+        );
+  const availableBalance = viewModel.availableBalanceCents;
+
   return (
     <>
-      {managedEmailSubscriptionsSection}
+      {managedEmail}
       <Section>
         <H2Title
-          title={t`Balance`}
-          description={t`Workspace billing summary`}
+          title={t`AI balance`}
+          description={t`Prepaid credit used by Myah-managed AI.`}
         />
-        <StyledEmptyCopy>
-          {t`AI usage and balance are tracked separately from managed email.`}
-        </StyledEmptyCopy>
-        {viewModel.balanceStatus === 'low' && (
-          <StyledLowBalanceWarning>
-            <Status color="orange" text={t`Low balance`} weight="medium" />
-            <span>{t`Managed services may pause soon.`}</span>
-          </StyledLowBalanceWarning>
-        )}
-        {viewModel.balanceStatus === 'empty' && (
-          <InlineBanner
-            color="danger"
-            message={t`Your balance is empty. Managed services are paused until funds are added.`}
-          />
-        )}
-        <StyledSummary>
+        <StyledSummaryGrid>
           <StyledSettingsBillingCard>
-            <StyledSettingsBillingCardHeader>{t`Available balance`}</StyledSettingsBillingCardHeader>
+            <StyledSettingsBillingCardHeader>
+              {t`Available`}
+            </StyledSettingsBillingCardHeader>
             <StyledCardBody>
-              <StyledPrimaryValue>
-                {formatUsdCents(viewModel.availableBalanceCents)}
-              </StyledPrimaryValue>
-              <StyledBreakdown>
-                {viewModel.sponsoredBalanceCents !== null && (
-                  <SettingsBillingLabelValueItem
-                    label={t`Sponsored`}
-                    value={t`${formatUsdCents(viewModel.sponsoredBalanceCents)} sponsored`}
-                  />
-                )}
-                {viewModel.purchasedBalanceCents !== null && (
-                  <SettingsBillingLabelValueItem
-                    label={t`Purchased`}
-                    value={t`${formatUsdCents(viewModel.purchasedBalanceCents)} purchased`}
-                  />
-                )}
-              </StyledBreakdown>
+              <StyledBalance>
+                {availableBalance === null
+                  ? '—'
+                  : formatUsdCents(availableBalance)}
+              </StyledBalance>
+              <StyledMuted>
+                {t`${viewModel.pendingOperationCount} payment or usage operation(s) pending`}
+              </StyledMuted>
+              {viewModel.reconciliationRequiredOperationCount > 0 ? (
+                <InlineBanner
+                  color="blue"
+                  message={t`Some billing activity needs support review.`}
+                />
+              ) : null}
+            </StyledCardBody>
+          </StyledSettingsBillingCard>
+          <StyledSettingsBillingCard>
+            <StyledSettingsBillingCardHeader>
+              {t`Add AI credit`}
+            </StyledSettingsBillingCardHeader>
+            <StyledCardBody>
+              <StyledActions role="group" aria-label={t`AI credit amount`}>
+                {viewModel.customerFundingPresets.map((preset) => (
+                  <StyledPresetButton
+                    key={preset.id}
+                    type="button"
+                    aria-pressed={preset.id === selectedPreset?.id}
+                    disabled={
+                      viewModel.retryPresetId !== undefined &&
+                      viewModel.retryPresetId !== null
+                    }
+                    onClick={() => setSelectedPresetId(preset.id)}
+                  >
+                    {formatUsdCents(preset.principalCents).replace('.00', '')}
+                  </StyledPresetButton>
+                ))}
+              </StyledActions>
+              <StyledMuted>
+                {t`The selected amount is prepaid principal, plus applicable tax. Purchased AI credit expires 12 months after successful payment.`}
+              </StyledMuted>
               <StyledActions>
                 <Button
-                  ariaLabel={t`Add funds`}
-                  title={t`Add funds`}
-                  variant="secondary"
-                  disabled
+                  title={
+                    selectedPreset === undefined
+                      ? t`Add AI credit`
+                      : viewModel.retryPresetId === selectedPreset.id
+                        ? t`Retry ${formatUsdCents(selectedPreset.principalCents).replace('.00', '')} credit`
+                        : t`Add ${formatUsdCents(selectedPreset.principalCents).replace('.00', '')} credit`
+                  }
+                  accent="brand"
+                  disabled={
+                    selectedPreset === undefined ||
+                    !viewModel.customerFundingAvailable ||
+                    viewModel.isSubmitting
+                  }
+                  isLoading={viewModel.isSubmitting}
+                  onClick={() =>
+                    selectedPreset !== undefined &&
+                    onRequestTopUp?.(selectedPreset.id)
+                  }
                 />
-                <StyledComingSoonText>{t`Online top-ups coming soon`}</StyledComingSoonText>
               </StyledActions>
             </StyledCardBody>
           </StyledSettingsBillingCard>
-          <StyledSettingsBillingCard>
-            <StyledSettingsBillingCardHeader>{t`Month-to-date spend`}</StyledSettingsBillingCardHeader>
-            <StyledCardBody>
-              <StyledPrimaryValue>
-                {formatUsdCents(viewModel.monthToDateSpendCents)}
-              </StyledPrimaryValue>
-              <SettingsBillingLabelValueItem
-                label={t`Operations`}
-                value={plural(viewModel.settledOperationCount, {
-                  one: `${viewModel.settledOperationCount} managed operation`,
-                  other: `${viewModel.settledOperationCount} managed operations`,
-                })}
-              />
-              <SettingsBillingLabelValueItem
-                label={t`Period`}
-                value={viewModel.monthToDateRangeLabel}
-              />
-            </StyledCardBody>
-          </StyledSettingsBillingCard>
-        </StyledSummary>
+        </StyledSummaryGrid>
       </Section>
-      {viewModel.paymentSettings.state === 'unavailable' ? (
-        renderPaymentSettingsUnavailable()
-      ) : (
-        <WorkspacePaymentSettings
-          paymentSettings={viewModel.paymentSettings}
-          onManagePaymentMethod={onManagePaymentMethod}
-          onSaveAutomaticTopUp={onSaveAutomaticTopUp}
-        />
-      )}
-      <Section>
-        <StyledBillingTabList
-          role="tablist"
-          aria-label={t`Billing history views`}
-        >
-          <TabButton
-            id="workspace-billing-tab-usage"
-            title={t`Usage history`}
-            role="tab"
-            ariaSelected={displayedTabId === WORKSPACE_BILLING_TAB_IDS.USAGE}
-            aria-controls="workspace-billing-panel-usage"
-            tabIndex={
-              displayedTabId === WORKSPACE_BILLING_TAB_IDS.USAGE ? 0 : -1
-            }
-            active={displayedTabId === WORKSPACE_BILLING_TAB_IDS.USAGE}
-            onClick={() => setActiveTabId(WORKSPACE_BILLING_TAB_IDS.USAGE)}
-            onKeyDown={handleBillingTabKeyDown}
-          />
-          <TabButton
-            id="workspace-billing-tab-billing-history"
-            title={t`Billing history`}
-            role="tab"
-            ariaSelected={
-              displayedTabId === WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY
-            }
-            aria-controls="workspace-billing-panel-billing-history"
-            tabIndex={
-              displayedTabId === WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY
-                ? 0
-                : -1
-            }
-            active={
-              displayedTabId === WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY
-            }
-            onClick={() =>
-              setActiveTabId(WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY)
-            }
-            onKeyDown={handleBillingTabKeyDown}
-          />
-        </StyledBillingTabList>
-        <div
-          role="tabpanel"
-          id="workspace-billing-panel-usage"
-          aria-labelledby="tab-workspace-billing-tab-usage"
-          hidden={displayedTabId !== WORKSPACE_BILLING_TAB_IDS.USAGE}
-        >
-          <Select
-            label={t`Usage period`}
-            dropdownId="workspace-billing-usage-period"
-            value={usagePeriod}
-            options={[
-              { value: '7d', label: t`Last 7 days` },
-              { value: '30d', label: t`Last 30 days` },
-              { value: '90d', label: t`Last 90 days` },
-            ]}
-            onChange={(value) => setUsagePeriod(value as UsagePeriod)}
-          />
-          {viewModel.usageHistory.length === 0 ? (
-            <StyledBillingEmptyState>
-              <strong>{t`No usage yet`}</strong>
-              <StyledEmptyCopy>
-                {t`Managed service activity will appear here when your workspace starts using it.`}
-              </StyledEmptyCopy>
-            </StyledBillingEmptyState>
-          ) : (
-            <Table role="table" aria-label={t`Usage history`}>
-              <StyledResponsiveTableRow
-                role="row"
-                gridTemplateColumns={usageColumns}
-              >
-                <StyledResponsiveTableHeader role="columnheader">{t`Date`}</StyledResponsiveTableHeader>
-                <StyledResponsiveTableHeader role="columnheader">{t`Activity`}</StyledResponsiveTableHeader>
-                <StyledResponsiveTableHeader role="columnheader">{t`Member`}</StyledResponsiveTableHeader>
-                <StyledResponsiveTableHeader role="columnheader">{t`Status`}</StyledResponsiveTableHeader>
-                <StyledResponsiveTableHeader
-                  role="columnheader"
-                  align="right"
-                >{t`Amount`}</StyledResponsiveTableHeader>
-              </StyledResponsiveTableRow>
-              {viewModel.usageHistory.map((entry) => (
-                <StyledResponsiveTableRow
-                  key={entry.id}
-                  role="row"
-                  gridTemplateColumns={usageColumns}
-                >
-                  <StyledResponsiveTableCell role="cell">
-                    {new Date(entry.occurredAt).toLocaleString()}
-                  </StyledResponsiveTableCell>
-                  <StyledResponsivePrimaryCell role="cell">
-                    {entry.activity}
-                    <StyledResponsiveMetadata>
-                      {t`${entry.member} · ${getUsageStatus(entry.status).label}`}
-                    </StyledResponsiveMetadata>
-                  </StyledResponsivePrimaryCell>
-                  <StyledResponsiveTableCell role="cell">
-                    {entry.member}
-                  </StyledResponsiveTableCell>
-                  <StyledResponsiveTableCell role="cell">
-                    {getUsageStatus(entry.status).label}
-                  </StyledResponsiveTableCell>
-                  <StyledResponsiveTableCell role="cell" align="right">
-                    {getUsageAmount(entry.status, entry.chargeCents)}
-                  </StyledResponsiveTableCell>
-                </StyledResponsiveTableRow>
-              ))}
-            </Table>
-          )}
-        </div>
-        <div
-          role="tabpanel"
-          id="workspace-billing-panel-billing-history"
-          aria-labelledby="tab-workspace-billing-tab-billing-history"
-          hidden={displayedTabId !== WORKSPACE_BILLING_TAB_IDS.BILLING_HISTORY}
-        >
-          {viewModel.billingHistory.length === 0 ? (
-            <StyledBillingEmptyState>
-              <strong>{t`No billing events yet`}</strong>
-              <StyledEmptyCopy>
-                {t`Funding events will appear here when funds are added or adjusted.`}
-              </StyledEmptyCopy>
-            </StyledBillingEmptyState>
-          ) : (
-            <Table role="table" aria-label={t`Billing history`}>
-              <StyledResponsiveTableRow
-                role="row"
-                gridTemplateColumns={billingHistoryColumns}
-              >
-                <StyledResponsiveTableHeader role="columnheader">{t`Date`}</StyledResponsiveTableHeader>
-                <StyledResponsiveTableHeader role="columnheader">{t`Event`}</StyledResponsiveTableHeader>
-                <StyledResponsiveTableHeader role="columnheader">{t`Type`}</StyledResponsiveTableHeader>
-                <StyledResponsiveTableHeader role="columnheader">{t`Document`}</StyledResponsiveTableHeader>
-                <StyledResponsiveTableHeader
-                  role="columnheader"
-                  align="right"
-                >{t`Amount`}</StyledResponsiveTableHeader>
-              </StyledResponsiveTableRow>
-              {viewModel.billingHistory.map((entry) => (
-                <StyledResponsiveTableRow
-                  key={entry.id}
-                  role="row"
-                  gridTemplateColumns={billingHistoryColumns}
-                >
-                  <StyledResponsiveTableCell role="cell">
-                    {new Date(entry.occurredAt).toLocaleString()}
-                  </StyledResponsiveTableCell>
-                  <StyledResponsivePrimaryCell role="cell">
-                    {entry.description}
-                    <StyledResponsiveMetadata>
-                      {getBillingHistoryTypeLabel(entry.type)}
-                      {entry.document !== undefined && (
-                        <>
-                          {' · '}
-                          <StyledDocumentLink href={entry.document.url}>
-                            {entry.document.label}
-                          </StyledDocumentLink>
-                        </>
-                      )}
-                    </StyledResponsiveMetadata>
-                  </StyledResponsivePrimaryCell>
-                  <StyledResponsiveTableCell role="cell">
-                    {getBillingHistoryTypeLabel(entry.type)}
-                  </StyledResponsiveTableCell>
-                  <StyledResponsiveTableCell role="cell">
-                    {entry.document === undefined ? (
-                      EM_DASH
-                    ) : (
-                      <StyledDocumentLink href={entry.document.url}>
-                        {entry.document.label}
-                      </StyledDocumentLink>
-                    )}
-                  </StyledResponsiveTableCell>
-                  <StyledResponsiveTableCell role="cell" align="right">
-                    {formatSignedUsdCents(entry.amountCents)}
-                  </StyledResponsiveTableCell>
-                </StyledResponsiveTableRow>
-              ))}
-            </Table>
-          )}
-        </div>
-      </Section>
+      <PaymentSummary
+        summary={viewModel.customerFundingBillingSummary}
+        onManage={
+          viewModel.customerFundingAvailable
+            ? onManagePaymentDetails
+            : undefined
+        }
+        isCustomerFundingAvailable={viewModel.customerFundingAvailable}
+      />
+      <FundingHistory
+        entries={viewModel.fundingHistory}
+        onCompletePayment={onCompletePayment}
+      />
     </>
   );
 };

@@ -8,11 +8,17 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 
 import {
   MANAGED_EMAIL_METRONOME_WORKSPACE_CONTRACT_UNIQUENESS_KEY_PREFIX,
+  METRONOME_USD_CREDIT_TYPE_NAME,
   METRONOME_WORKSPACE_ALIAS_PREFIX,
   METRONOME_WORKSPACE_CONTRACT_UNIQUENESS_KEY_PREFIX,
 } from '../constants/metronome-workspace-alias-prefix.constant';
 
-import { MetronomeClientService } from './metronome-client.service';
+import {
+  type ExactStripeBillingContext,
+  type MetronomeBillingConfiguration,
+  type MetronomeEnvironment,
+  MetronomeClientService,
+} from './metronome-client.service';
 import {
   MetronomeClientException,
   MetronomeClientExceptionCode,
@@ -44,14 +50,14 @@ export class MetronomeWorkspaceCustomerService {
   async ensureStripeBillingConfiguration(
     workspaceId: string,
     stripeCustomerId: string,
-  ): Promise<unknown> {
+  ): Promise<MetronomeBillingConfiguration> {
     if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
       throw new MetronomeClientException(
         MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
       );
     }
     const expectedDeliveryMethodId = this.twentyConfigService.get(
-      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
     );
 
     return this.installationRepository.manager.transaction(async (manager) => {
@@ -94,6 +100,172 @@ export class MetronomeWorkspaceCustomerService {
         stripeCustomerId,
         stripeCollectionMethod: 'charge_automatically',
       });
+    });
+  }
+
+  async ensureWorkspaceStripeBillingContext({
+    contractId,
+    environment,
+    workspaceId,
+  }: {
+    contractId: string;
+    environment: MetronomeEnvironment;
+    workspaceId: string;
+  }): Promise<ExactStripeBillingContext> {
+    if (!this.twentyConfigService.get('METRONOME_ENABLED')) {
+      throw new MetronomeClientException(
+        MetronomeClientExceptionCode.CONFIGURATION_DISABLED,
+      );
+    }
+    if (
+      !['PRODUCTION', 'SANDBOX'].includes(environment) ||
+      this.twentyConfigService.get('METRONOME_BASE_URL_ENVIRONMENT') !==
+        environment ||
+      contractId.trim() === ''
+    ) {
+      throw new Error('Metronome billing context is invalid');
+    }
+
+    const installation = await this.installationRepository.findOneBy({
+      workspaceId,
+    });
+    if (
+      !installation?.metronomeCustomerId ||
+      !installation.stripeCustomerId ||
+      installation.stripeCustomerId.trim() === ''
+    ) {
+      throw new Error('Workspace Stripe billing context is not configured');
+    }
+
+    const deliveryMethodId = this.twentyConfigService.get(
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
+    );
+    const billingConfiguration =
+      await this.metronomeClientService.getBillingConfiguration(
+        installation.metronomeCustomerId,
+      );
+    if (
+      billingConfiguration === null ||
+      billingConfiguration.id.trim() === '' ||
+      billingConfiguration.billingProviderType !== 'stripe' ||
+      billingConfiguration.deliveryMethod !== 'direct_to_billing_provider' ||
+      billingConfiguration.deliveryMethodId !== deliveryMethodId ||
+      billingConfiguration.stripeCustomerId !== installation.stripeCustomerId ||
+      billingConfiguration.stripeCollectionMethod !== 'charge_automatically'
+    ) {
+      throw new Error('Metronome billing configuration mismatch');
+    }
+
+    const contracts = (
+      await this.metronomeClientService.findCurrentContracts(
+        installation.metronomeCustomerId,
+      )
+    ).filter((contract) => contract.id === contractId);
+    if (contracts.length !== 1) {
+      throw new Error('Metronome billing contract could not be reconciled');
+    }
+
+    const contract = contracts[0];
+    const schedule = contract.activeBillingProviderConfiguration;
+    if (
+      contract.rateCardId === null ||
+      schedule === null ||
+      schedule.id !== billingConfiguration.id ||
+      schedule.billingProvider !== 'stripe' ||
+      schedule.deliveryMethod !== 'direct_to_billing_provider' ||
+      schedule.deliveryMethodId !== deliveryMethodId
+    ) {
+      throw new Error('Metronome billing contract schedule mismatch');
+    }
+
+    const rateCard = await this.metronomeClientService.getRateCard(
+      contract.rateCardId,
+    );
+    if (
+      rateCard.id !== contract.rateCardId ||
+      rateCard.fiatCreditType === null ||
+      rateCard.fiatCreditType.id.trim() === '' ||
+      rateCard.fiatCreditType.name !== METRONOME_USD_CREDIT_TYPE_NAME
+    ) {
+      throw new Error('Metronome billing credit type mismatch');
+    }
+
+    return {
+      billingConfigurationId: billingConfiguration.id,
+      deliveryMethodId,
+      environment,
+      fiatCreditTypeId: rateCard.fiatCreditType.id,
+      fiatCreditTypeName: METRONOME_USD_CREDIT_TYPE_NAME,
+      metronomeContractId: contract.id,
+      metronomeCustomerId: installation.metronomeCustomerId,
+      stripeCustomerId: installation.stripeCustomerId,
+    };
+  }
+
+  async ensureWorkspaceContractStripeBillingContext({
+    billingConfigurationId,
+    contractId,
+    environment,
+    workspaceId,
+  }: {
+    billingConfigurationId: string;
+    contractId: string;
+    environment: MetronomeEnvironment;
+    workspaceId: string;
+  }): Promise<ExactStripeBillingContext> {
+    if (
+      billingConfigurationId.trim() === '' ||
+      contractId.trim() === '' ||
+      workspaceId.trim() === ''
+    ) {
+      throw new Error('Metronome billing contract context is invalid');
+    }
+
+    const installation = await this.installationRepository.findOneBy({
+      workspaceId,
+    });
+
+    if (!installation?.metronomeCustomerId) {
+      throw new Error('Workspace Metronome customer is not configured');
+    }
+
+    const contracts = (
+      await this.metronomeClientService.findCurrentContracts(
+        installation.metronomeCustomerId,
+      )
+    ).filter((contract) => contract.id === contractId);
+
+    if (contracts.length !== 1) {
+      throw new Error('Metronome billing contract could not be reconciled');
+    }
+
+    const activeConfiguration = contracts[0].activeBillingProviderConfiguration;
+    const expectedDeliveryMethodId = this.twentyConfigService.get(
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
+    );
+
+    if (activeConfiguration === null) {
+      await this.metronomeClientService.addStripeBillingConfigurationToContract(
+        {
+          billingConfigurationId,
+          contractId,
+          customerId: installation.metronomeCustomerId,
+          uniquenessKey: `myah:workspace-contract-billing:${workspaceId}:${contractId}`,
+        },
+      );
+    } else if (
+      activeConfiguration.id !== billingConfigurationId ||
+      activeConfiguration.billingProvider !== 'stripe' ||
+      activeConfiguration.deliveryMethod !== 'direct_to_billing_provider' ||
+      activeConfiguration.deliveryMethodId !== expectedDeliveryMethodId
+    ) {
+      throw new Error('Metronome billing contract schedule mismatch');
+    }
+
+    return await this.ensureWorkspaceStripeBillingContext({
+      contractId,
+      environment,
+      workspaceId,
     });
   }
 
@@ -249,7 +421,7 @@ export class MetronomeWorkspaceCustomerService {
     const contract = matchingContracts[0];
     const configuration = contract.activeBillingProviderConfiguration;
     const expectedDeliveryMethodId = this.twentyConfigService.get(
-      'MANAGED_EMAIL_METRONOME_STRIPE_DELIVERY_METHOD_ID',
+      'METRONOME_STRIPE_DELIVERY_METHOD_ID',
     );
 
     if (
@@ -271,7 +443,7 @@ export class MetronomeWorkspaceCustomerService {
       rateCard.id !== contract.rateCardId ||
       rateCard.fiatCreditType === null ||
       rateCard.fiatCreditType.id.trim() === '' ||
-      rateCard.fiatCreditType.name !== 'USD' ||
+      rateCard.fiatCreditType.name !== METRONOME_USD_CREDIT_TYPE_NAME ||
       rateCard.aliases.some(
         (alias) =>
           alias.name === rateCardAlias &&

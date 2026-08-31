@@ -37,6 +37,7 @@ import {
   matchExactMetronomeInvoice,
   matchExactPaidMetronomeInvoice,
 } from 'src/engine/core-modules/managed-provider-billing/utils/match-exact-paid-metronome-invoice.util';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { type WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
@@ -123,6 +124,7 @@ export class ManagedEmailLifecycleService {
     private readonly dataSource: DataSource,
     private readonly metronomeClientService: MetronomeClientService,
     private readonly managedProviderStripeService: ManagedProviderStripeService,
+    private readonly twentyConfigService: TwentyConfigService,
     private readonly warmupInboxClient: WarmupInboxClient,
     private readonly icemailClient: IcemailClient,
     private readonly permissionsService: PermissionsService,
@@ -281,6 +283,9 @@ export class ManagedEmailLifecycleService {
           currency: operation.currency,
           expectedAmountCents: expected.total,
           expectedPaymentIntentId: receipt.externalPaymentId,
+          metronomeBaseUrlEnvironment: this.twentyConfigService.get(
+            'METRONOME_BASE_URL_ENVIRONMENT',
+          )!,
           metronomeInvoiceId: receipt.invoiceId,
           stripeInvoiceId: receipt.externalInvoiceId,
           workspaceId,

@@ -1,4 +1,4 @@
-import { UseGuards, UsePipes } from '@nestjs/common';
+import { Inject, UseGuards, UsePipes } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
@@ -7,6 +7,7 @@ import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorato
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace-member-id.decorator';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
@@ -50,7 +51,9 @@ import { ManagedProviderStripeService } from 'src/engine/core-modules/managed-pr
 export class ManagedEmailResolver {
   constructor(
     private readonly managedEmailCustomerService: ManagedEmailCustomerService,
-    private readonly managedProviderStripeService?: ManagedProviderStripeService,
+    @Inject(ManagedProviderStripeService)
+    private readonly managedProviderStripeService: ManagedProviderStripeService,
+    private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
   @Query(() => ManagedEmailOverviewDTO)
@@ -142,6 +145,9 @@ export class ManagedEmailResolver {
     }
     const result =
       await this.managedProviderStripeService.prepareWorkspacePaymentMethod({
+        metronomeBaseUrlEnvironment: this.twentyConfigService.get(
+          'METRONOME_BASE_URL_ENVIRONMENT',
+        )!,
         workspaceId: workspace.id,
       });
     return {
@@ -162,6 +168,9 @@ export class ManagedEmailResolver {
     }
     await this.managedProviderStripeService.completeWorkspacePaymentMethodSetup(
       {
+        metronomeBaseUrlEnvironment: this.twentyConfigService.get(
+          'METRONOME_BASE_URL_ENVIRONMENT',
+        )!,
         setupIntentId: input.setupIntentId,
         workspaceId: workspace.id,
       },

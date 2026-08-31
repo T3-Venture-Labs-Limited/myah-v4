@@ -1871,11 +1871,77 @@ type BillingUpdate {
   billingSubscriptions: [BillingSubscription!]!
 }
 
+type ManagedProviderCustomerFundingBillingAddress {
+  city: String
+  country: String
+  line1: String
+  line2: String
+  postalCode: String
+  state: String
+}
+
+type ManagedProviderCustomerFundingCardSummary {
+  brand: String!
+  expiryMonth: Float!
+  expiryYear: Float!
+  last4: String!
+}
+
+type ManagedProviderCustomerFundingTaxIdSummary {
+  country: String
+  type: String!
+}
+
+type ManagedProviderCustomerFundingBillingSummary {
+  address: ManagedProviderCustomerFundingBillingAddress!
+  card: ManagedProviderCustomerFundingCardSummary
+  name: String
+  paymentMethodReady: Boolean!
+  taxId: ManagedProviderCustomerFundingTaxIdSummary
+}
+
+type ManagedProviderAiTopUpPreset {
+  id: String!
+  principalCents: String!
+}
+
+type ManagedProviderCustomerFundingHistoryItem {
+  id: String!
+  fundingType: String!
+  state: String!
+  presetId: String
+  principalCents: String!
+  taxCents: String
+  collectedTotalCents: String
+  expiresAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  invoiceUrl: String
+  actionRequired: Boolean!
+}
+
+type ManagedProviderCustomerFundingPaymentMethod {
+  ready: Boolean!
+  clientSecret: String
+  billingSummary: ManagedProviderCustomerFundingBillingSummary
+  publishableKey: String
+  setupIntentId: String
+}
+
+type ManagedProviderCustomerFundingPaymentAction {
+  clientSecret: String!
+}
+
 type ManagedProviderBillingStatus {
   available: Boolean!
   prepaidBalanceCents: String
   pendingOperationCount: Int!
   reconciliationRequiredOperationCount: Int!
+  customerFundingAvailable: Boolean!
+  customerFundingPaymentMethodReady: Boolean!
+  customerFundingPresets: [ManagedProviderAiTopUpPreset!]!
+  customerFundingHistory: [ManagedProviderCustomerFundingHistoryItem!]!
+  customerFundingBillingSummary: ManagedProviderCustomerFundingBillingSummary
 }
 
 type InviteSuggestion {
@@ -3353,6 +3419,7 @@ type Query {
   getWorkspaceCreationDefaults: WorkspaceCreationDefaultsDTO!
   validatePasswordResetToken(passwordResetToken: String!): ValidatePasswordResetToken!
   managedProviderBillingStatus: ManagedProviderBillingStatus!
+  managedProviderCustomerFundingAction(actionId: String!): ManagedProviderCustomerFundingHistoryItem!
   billingPortalSession(returnUrlPath: String, forPaymentMethodUpdate: Boolean): BillingSession!
   listPlans: [BillingPlan!]!
   getResourceCreditUsage: [BillingResourceCreditUsage!]!
@@ -3669,6 +3736,11 @@ type Mutation {
   generatePlaygroundToken: AuthToken!
   emailPasswordResetLink(email: String!, workspaceId: UUID): EmailPasswordResetLink!
   updatePasswordViaResetToken(passwordResetToken: String!, newPassword: String!): InvalidatePassword!
+  requestManagedProviderCustomerFunding(preset: String!, idempotencyKey: String!): ManagedProviderCustomerFundingHistoryItem!
+  prepareManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod!
+  completeManagedProviderCustomerFundingPaymentMethod(setupIntentId: String, name: String!, line1: String!, line2: String, city: String!, state: String, postalCode: String!, country: String!, taxIdType: String, taxIdValue: String): ManagedProviderCustomerFundingPaymentMethod!
+  prepareManagedProviderCustomerFundingPaymentAction(actionId: String!): ManagedProviderCustomerFundingPaymentAction!
+  acknowledgeManagedProviderCustomerFundingPaymentAction(actionId: String!): ManagedProviderCustomerFundingHistoryItem!
   checkoutSession(recurringInterval: SubscriptionInterval!, plan: BillingPlanKey! = PRO, requirePaymentMethod: Boolean! = true, successUrlPath: String): BillingSession!
   createSubscriptionPaymentIntent(recurringInterval: SubscriptionInterval!, plan: BillingPlanKey! = PRO, requirePaymentMethod: Boolean! = true, successUrlPath: String, idempotencyKey: String!): BillingPaymentIntent!
   createBillingPaymentMethodSetupIntent: BillingPaymentIntent!
