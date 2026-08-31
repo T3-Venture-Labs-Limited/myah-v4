@@ -62,4 +62,10 @@ export class MyahInboxReplySendStatus {
 
   @Field(() => String, { nullable: true })
   receiptId: string | null;
+
+  @Field(() => Int)
+  revision: number;
+
+  @Field(() => MyahInboxRichText, { nullable: true })
+  body: MyahRichText | null;
 }

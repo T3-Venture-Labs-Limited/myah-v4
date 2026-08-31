@@ -237,6 +237,7 @@ const createService = ({
     ]),
   );
   const transactionManager = {
+    query: jest.fn().mockResolvedValue(undefined),
     getRepository: jest.fn(
       (
         target: symbol,
@@ -969,5 +970,49 @@ describe('MyahInboxMutationService', () => {
       actionName: 'send_inbox_reply',
       draftId: threadId,
     });
+  });
+
+  it('takes the shared advisory lock before checking the execution lock and draft CAS', async () => {
+    const setup = createService();
+
+    await setup.service.saveMyahInboxDraft({
+      ...request(),
+      threadId,
+      expectedRevision: 2,
+      body: { markdown: 'serialized copy', blocknote: null },
+    });
+
+    expect(setup.transactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`myah-inbox-reply:${workspaceId}:${threadId}`],
+    );
+    expect(setup.transactionManager.query.mock.invocationCallOrder[0]).toBeLessThan(
+      setup.isDraftExecutionLocked.mock.invocationCallOrder[0],
+    );
+    expect(setup.isDraftExecutionLocked.mock.invocationCallOrder[0]).toBeLessThan(
+      setup.bypassedMessageThreadRepository.update.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('uses the same advisory lock to preserve a rejected draft while its receipt is processing', async () => {
+    const setup = createService({ draftExecutionLocked: true });
+
+    await expect(
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'rejected copy', blocknote: null },
+      }),
+    ).resolves.toEqual({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'rejected copy', blocknote: null },
+    });
+    expect(setup.isDraftExecutionLocked).not.toHaveBeenCalled();
+    expect(setup.transactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`myah-inbox-reply:${workspaceId}:${threadId}`],
+    );
   });
 });

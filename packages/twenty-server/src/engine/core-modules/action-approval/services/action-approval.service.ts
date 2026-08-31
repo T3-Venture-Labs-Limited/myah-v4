@@ -21,6 +21,10 @@ import {
   type SafeActionExecutionReceipt,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import {
+  getMyahInboxReplyAdvisoryLockKey,
+  MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY,
+} from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-advisory-lock.util';
 import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
 
 const ACTION_APPROVAL_TTL_MS = 30 * 60 * 1000;
@@ -51,6 +55,19 @@ export class ActionApprovalService {
     operation: (manager: EntityManager) => Promise<T>,
   ): Promise<T> {
     return this.dataSource.transaction(operation);
+  }
+
+  async executeInboxReplyLocked<T>(
+    input: { workspaceId: string; draftId: string },
+    operation: (manager: EntityManager) => Promise<T>,
+  ): Promise<T> {
+    return this.dataSource.transaction(async (manager) => {
+      await manager.query(MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY, [
+        getMyahInboxReplyAdvisoryLockKey(input.workspaceId, input.draftId),
+      ]);
+
+      return operation(manager);
+    });
   }
 
   async createPendingBinding(
@@ -521,6 +538,60 @@ export class ActionApprovalService {
     );
   }
 
+  async getInboxReplyDraftExecutionState({
+    workspaceId,
+    initiatorUserWorkspaceId,
+    draftId,
+  }: {
+    workspaceId: string;
+    initiatorUserWorkspaceId: string;
+    draftId: string;
+  }): Promise<'PENDING' | 'UNKNOWN' | null> {
+    const bindings = await this.dataSource
+      .getRepository(ActionApprovalBindingEntity)
+      .find({
+        where: {
+          workspaceId,
+          initiatorUserWorkspaceId,
+          actionName: 'send_inbox_reply',
+          draftId,
+          state: In([
+            ActionApprovalBindingState.APPROVED,
+            ActionApprovalBindingState.CONSUMED,
+          ]),
+        },
+        relations: { receipts: true },
+      });
+
+    if (
+      bindings.some(
+        (binding) =>
+          binding.state === ActionApprovalBindingState.CONSUMED &&
+          binding.receipts.some(
+            (receipt) => receipt.state === ActionExecutionReceiptState.UNKNOWN,
+          ),
+      )
+    ) {
+      return 'UNKNOWN';
+    }
+
+    return bindings.some(
+      (binding) =>
+        (binding.state === ActionApprovalBindingState.APPROVED &&
+          binding.expiresAt > new Date() &&
+          binding.receipts.length === 0) ||
+        (binding.state === ActionApprovalBindingState.CONSUMED &&
+          binding.receipts.some((receipt) =>
+            [
+              ActionExecutionReceiptState.PROCESSING,
+              ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+            ].includes(receipt.state),
+          )),
+    )
+      ? 'PENDING'
+      : null;
+  }
+
   async reserveExecutionForBinding({
     approvalBindingId,
     expectedActionBinding,
@@ -555,13 +626,22 @@ export class ActionApprovalService {
           },
           relations: { actionApprovalBinding: { evidenceLinks: true } },
         });
-      if (!receipt || receipt.actionApprovalBindingId !== approvalBindingId) {
+      if (!receipt) {
         throw error;
       }
       this.assertBindingMatches(
         receipt.actionApprovalBinding,
         expectedActionBinding,
       );
+      if (receipt.actionApprovalBindingId !== approvalBindingId) {
+        await this.dataSource.transaction((manager) =>
+          this.convergeInboxReplyBindingInTransaction(
+            manager,
+            approvalBindingId,
+            expectedActionBinding,
+          ),
+        );
+      }
 
       return {
         created: false,
@@ -793,10 +873,14 @@ export class ActionApprovalService {
       relations: { actionApprovalBinding: { evidenceLinks: true } },
     });
     if (priorReceipt) {
-      if (priorReceipt.actionApprovalBindingId !== approvalBindingId) {
-        throw new Error('An approved action binding is required');
-      }
       this.assertBindingMatches(priorReceipt.actionApprovalBinding, input);
+      if (priorReceipt.actionApprovalBindingId !== approvalBindingId) {
+        await this.convergeInboxReplyBindingInTransaction(
+          manager,
+          approvalBindingId,
+          input,
+        );
+      }
 
       return {
         created: false,
@@ -852,6 +936,36 @@ export class ActionApprovalService {
     };
   }
 
+
+  private async convergeInboxReplyBindingInTransaction(
+    manager: EntityManager,
+    approvalBindingId: string,
+    input: ExpectedActionBindingWithWorkspace,
+  ): Promise<void> {
+    const binding = await manager.findOne(ActionApprovalBindingEntity, {
+      where: { id: approvalBindingId, workspaceId: input.workspaceId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!binding) {
+      throw new Error('An approved action binding is required');
+    }
+    this.assertBindingMatches(
+      binding,
+      input,
+      await this.findEvidence(manager, binding.id),
+    );
+    const receipt = await manager.findOne(ActionExecutionReceiptEntity, {
+      where: { workspaceId: input.workspaceId, actionApprovalBindingId: binding.id },
+    });
+    if (
+      !receipt &&
+      binding.state === ActionApprovalBindingState.APPROVED
+    ) {
+      binding.state = ActionApprovalBindingState.CHANGES_REQUESTED;
+      binding.decidedAt = new Date();
+      await manager.save(ActionApprovalBindingEntity, binding);
+    }
+  }
   private async reserveInTransaction(
     manager: EntityManager,
     input: ExpectedActionBindingWithWorkspace,

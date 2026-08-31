@@ -11,6 +11,10 @@ import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialE
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
 
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import {
+  getMyahInboxReplyAdvisoryLockKey,
+  MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY,
+} from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-advisory-lock.util';
 import { validateRichTextFieldOrThrow } from 'src/engine/api/common/common-args-processors/data-arg-processor/validator-utils/validate-rich-text-field-or-throw.util';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
@@ -160,6 +164,19 @@ export class MyahInboxMutationService {
   async saveMyahInboxDraft(
     input: SaveMyahInboxDraftMutationInput,
   ): Promise<MyahInboxDraftSaveResult> {
+    return this.saveMyahInboxDraftInternal(input, true);
+  }
+
+  async saveMyahInboxDraftAfterProviderFailure(
+    input: SaveMyahInboxDraftMutationInput,
+  ): Promise<MyahInboxDraftSaveResult> {
+    return this.saveMyahInboxDraftInternal(input, false);
+  }
+
+  private async saveMyahInboxDraftInternal(
+    input: SaveMyahInboxDraftMutationInput,
+    enforceExecutionLock: boolean,
+  ): Promise<MyahInboxDraftSaveResult> {
     this.assertUserRequest(input);
     this.assertValidDraftInput(input);
     await this.assertPolicyVisibleThread(input);
@@ -185,6 +202,16 @@ export class MyahInboxMutationService {
               input.authContext,
             );
 
+            await (manager as WorkspaceEntityManager).query(
+              MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY,
+              [
+                getMyahInboxReplyAdvisoryLockKey(
+                  input.workspace.id,
+                  input.threadId,
+                ),
+              ],
+            );
+
             await this.assertReadableCurrentMember(
               transactionalRepositories.workspaceMember,
               input.workspaceMemberId,
@@ -197,11 +224,12 @@ export class MyahInboxMutationService {
             await this.assertPolicyVisibleThread(input);
 
             if (
-              await this.actionApprovalService.isDraftExecutionLocked({
+              enforceExecutionLock &&
+              (await this.actionApprovalService.isDraftExecutionLocked({
                 workspaceId: input.workspace.id,
                 actionName: 'send_inbox_reply',
                 draftId: input.threadId,
-              })
+              }))
             ) {
               throw new ConflictException(
                 'Inbox reply draft is locked while delivery is being confirmed',

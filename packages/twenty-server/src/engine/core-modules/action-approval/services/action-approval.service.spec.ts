@@ -544,6 +544,35 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
   });
 
   it.each([
+    ['approved without receipt', { ...inboxBinding, receipts: [] }, 'PENDING'],
+    [
+      'processing receipt',
+      consumedBindingWithReceipt(ActionExecutionReceiptState.PROCESSING),
+      'PENDING',
+    ],
+    [
+      'provider-accepted receipt',
+      consumedBindingWithReceipt(ActionExecutionReceiptState.PROVIDER_ACCEPTED),
+      'PENDING',
+    ],
+    [
+      'unknown receipt',
+      consumedBindingWithReceipt(ActionExecutionReceiptState.UNKNOWN),
+      'UNKNOWN',
+    ],
+  ])('reports %s as the current scoped execution state', async (_case, binding, state) => {
+    const { service } = createLockingService([binding]);
+
+    await expect(
+      service.getInboxReplyDraftExecutionState({
+        workspaceId,
+        initiatorUserWorkspaceId: userWorkspaceId,
+        draftId: inboxReplyBinding.draftId,
+      }),
+    ).resolves.toBe(state);
+  });
+
+  it.each([
     ActionApprovalBindingState.PENDING,
     ActionApprovalBindingState.REJECTED,
     ActionApprovalBindingState.EXPIRED,
@@ -676,5 +705,57 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
     await expect(
       service.invalidateApprovedInboxReplyBinding(input),
     ).rejects.toThrow('An approved Inbox reply binding cannot be invalidated');
+  });
+
+  it('converges a new exact binding on a prior matching logical receipt without leaving it locked', async () => {
+    const priorBindingId = '00000000-0000-4000-8000-000000000021';
+    const newBinding = { ...inboxBinding };
+    const priorReceipt = {
+      id: '00000000-0000-4000-8000-000000000022',
+      workspaceId,
+      actionApprovalBindingId: priorBindingId,
+      state: ActionExecutionReceiptState.SENT,
+      providerCode: 'accepted',
+      redactedOutcome: 'accepted',
+      updatedAt: new Date('2026-08-31T00:00:00.000Z'),
+      actionApprovalBinding: {
+        ...inboxBinding,
+        id: priorBindingId,
+        evidenceLinks: inboxReplyBinding.evidenceLinks,
+      },
+    };
+    const manager = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(priorReceipt)
+        .mockResolvedValueOnce(newBinding)
+        .mockResolvedValueOnce(null),
+      find: jest.fn().mockResolvedValue(inboxReplyBinding.evidenceLinks),
+      save: jest.fn(async (_entity, value) => value),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.reserveExecutionForBinding({
+        approvalBindingId,
+        expectedActionBinding: inboxReplyBinding,
+      }),
+    ).resolves.toMatchObject({
+      created: false,
+      receipt: { id: priorReceipt.id },
+    });
+    expect(newBinding.state).toBe(ActionApprovalBindingState.CHANGES_REQUESTED);
+    expect(manager.save).toHaveBeenCalledWith(
+      ActionApprovalBindingEntity,
+      expect.objectContaining({
+        id: approvalBindingId,
+        state: ActionApprovalBindingState.CHANGES_REQUESTED,
+      }),
+    );
   });
 });
