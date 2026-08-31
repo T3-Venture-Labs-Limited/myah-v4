@@ -462,7 +462,6 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     expect(createQueryBuilder).not.toHaveBeenCalled();
   });
 
-
   it('dispatches an Inbox receipt to the Inbox projection service', async () => {
     const inboxProjectionService = { project: jest.fn() };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(

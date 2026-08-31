@@ -421,10 +421,9 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
           callback({ query }),
       ),
     };
-    const Writer =
-      MyahInboxReplyReceiptProjectionService as unknown as new (
-        ...args: unknown[]
-      ) => { project: (input: typeof projection) => Promise<void> };
+    const Writer = MyahInboxReplyReceiptProjectionService as unknown as new (
+      ...args: unknown[]
+    ) => { project: (input: typeof projection) => Promise<void> };
     const writer = new Writer(
       dataSource,
       { persistSentMessage: jest.fn() },
@@ -722,4 +721,3 @@ describe('Inbox projected Message association grouping', () => {
     },
   );
 });
-

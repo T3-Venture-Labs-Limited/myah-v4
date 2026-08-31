@@ -59,7 +59,10 @@ export class MyahInboxReplyReceiptProjectionService {
       await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
         `myah-inbox-reply-projection:${input.workspaceId}:${input.draftId}`,
       ]);
-      const parentMessageId = await this.getInboxParentEvidenceId(manager, input);
+      const parentMessageId = await this.getInboxParentEvidenceId(
+        manager,
+        input,
+      );
       const currentDraft = await this.loadInboxDraft(
         manager,
         schemaName,
@@ -102,7 +105,9 @@ export class MyahInboxReplyReceiptProjectionService {
         canonicalGraph.draftRevision !== currentDraft.myahReplyDraftRevision ||
         currentDraft.myahReplyDraftBody === null
       ) {
-        throw new Error('The approved Inbox reply is unavailable for projection');
+        throw new Error(
+          'The approved Inbox reply is unavailable for projection',
+        );
       }
 
       existingMessage = this.selectOneInboxMessage(
@@ -148,7 +153,9 @@ export class MyahInboxReplyReceiptProjectionService {
           !persisted ||
           persisted.messageThreadId !== canonicalGraph.messageThreadId
         ) {
-          throw new Error('The sent Inbox Message is unavailable for projection');
+          throw new Error(
+            'The sent Inbox Message is unavailable for projection',
+          );
         }
       }
 
@@ -188,7 +195,9 @@ export class MyahInboxReplyReceiptProjectionService {
         [input.draftId, canonicalGraph.draftRevision],
       );
       if (cleared.length !== 1) {
-        throw new Error('The approved Inbox reply is unavailable for projection');
+        throw new Error(
+          'The approved Inbox reply is unavailable for projection',
+        );
       }
     });
   }
@@ -247,7 +256,8 @@ export class MyahInboxReplyReceiptProjectionService {
     )?.id;
     const messageMetadataId = metadata.find(
       (item) =>
-        item.universalIdentifier === STANDARD_OBJECTS.message.universalIdentifier,
+        item.universalIdentifier ===
+        STANDARD_OBJECTS.message.universalIdentifier,
     )?.id;
     const exactEvidence = [
       {

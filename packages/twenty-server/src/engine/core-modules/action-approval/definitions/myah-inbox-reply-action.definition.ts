@@ -209,7 +209,6 @@ export class MyahInboxReplyActionDefinition {
     };
   }
 
-
   private async loadCanonicalGraph({
     workspaceId,
     initiatorUserWorkspaceId,
@@ -307,10 +306,9 @@ export class MyahInboxReplyActionDefinition {
       !channel ||
       !account ||
       channel.connectedAccountId !== account.id ||
-      ![
-        MessageChannelType.EMAIL,
-        MessageChannelType.EMAIL_GROUP,
-      ].includes(channel.type)
+      ![MessageChannelType.EMAIL, MessageChannelType.EMAIL_GROUP].includes(
+        channel.type,
+      )
     ) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
@@ -433,5 +431,4 @@ export class MyahInboxReplyActionDefinition {
       ConnectedAccountProvider.EMAIL_GROUP,
     ].includes(provider);
   }
-
 }

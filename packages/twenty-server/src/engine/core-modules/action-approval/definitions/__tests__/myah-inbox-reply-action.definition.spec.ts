@@ -195,10 +195,9 @@ const createDefinition = ({
       .mockResolvedValue(managedMailbox),
     findConnectedIdentity: jest.fn().mockResolvedValue(managedMailbox),
   };
-  const Context =
-    MyahInboxReplyAuthorityContextService as unknown as new (
-      ...args: unknown[]
-    ) => MyahInboxReplyAuthorityContextService;
+  const Context = MyahInboxReplyAuthorityContextService as unknown as new (
+    ...args: unknown[]
+  ) => MyahInboxReplyAuthorityContextService;
   const Definition = MyahInboxReplyActionDefinition as unknown as new (
     ...args: unknown[]
   ) => MyahInboxReplyActionDefinition;

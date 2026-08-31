@@ -42,7 +42,6 @@ type SentOutreachMessageRow = {
   messageThreadExternalId: string | null;
 };
 
-
 @Injectable()
 export class ActionReceiptWorkspaceProjectionWriterService implements ActionReceiptProjectionWriter {
   constructor(
@@ -74,7 +73,6 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
 
     throw new Error('Unsupported action receipt projection');
   }
-
 
   private async projectInstagramReply(
     { receiptId, draftId, contentDigest }: ProjectionInput,
