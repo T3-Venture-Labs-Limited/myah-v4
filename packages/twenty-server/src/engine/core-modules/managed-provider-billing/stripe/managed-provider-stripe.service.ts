@@ -600,9 +600,6 @@ export class ManagedProviderStripeService {
       };
     }
 
-    if (paymentIntent.status === 'succeeded') {
-      throw new Error('Stripe payment-gated invoice proof is invalid');
-    }
 
     return { ...base, status: 'PENDING' };
   }

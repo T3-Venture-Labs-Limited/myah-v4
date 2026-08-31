@@ -1087,7 +1087,7 @@ describe('ManagedProviderStripeService', () => {
         amount_captured: 3000,
         amount_refunded: 0,
         disputed: false,
-        failure_balance_transaction: null,
+        failure_balance_transaction: null as string | null,
         id: 'ch_metronome',
         livemode: false,
         outcome: { network_status: 'approved_by_network' },

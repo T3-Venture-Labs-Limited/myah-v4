@@ -280,7 +280,13 @@ describe('ManagedProviderCustomerFundingService', () => {
       stripeDeliveryMethodId: 'delivery-method-id',
       ...actionOverrides,
     });
-    Object.assign(harness.metronome, {
+    const metronome = harness.metronome as typeof harness.metronome & {
+      assertPaymentGatedPrepaidCommitExpiry: jest.Mock;
+      readPaymentGatedPrepaidCommitInvoice: jest.Mock;
+      recoverPaymentGatedPrepaidCommit: jest.Mock;
+      updatePaymentGatedPrepaidCommitExpiry: jest.Mock;
+    };
+    Object.assign(metronome, {
       assertPaymentGatedPrepaidCommitExpiry: expiryAlreadyApplied
         ? jest
             .fn()
@@ -307,7 +313,10 @@ describe('ManagedProviderCustomerFundingService', () => {
         .fn()
         .mockResolvedValue({ metronomeEditId: 'expiry-edit-id' }),
     });
-    Object.assign(harness.stripe, {
+    const stripe = harness.stripe as typeof harness.stripe & {
+      readPaymentGatedInvoicePayment: jest.Mock;
+    };
+    Object.assign(stripe, {
       readPaymentGatedInvoicePayment: jest.fn().mockResolvedValue(stripeState),
     });
     harness.journal.transitionCompareAndSet.mockReset();
@@ -321,7 +330,7 @@ describe('ManagedProviderCustomerFundingService', () => {
       }) => createAction({ ...action, ...patch, state: nextState }),
     );
 
-    return { ...harness, action };
+    return { ...harness, action, metronome, stripe };
   };
 
   beforeEach(() => {
@@ -720,7 +729,9 @@ describe('ManagedProviderCustomerFundingService', () => {
     });
     expect(
       JSON.stringify(
-        journal.transitionCompareAndSet.mock.calls.at(-1)?.[0].patch,
+        journal.transitionCompareAndSet.mock.calls[
+          journal.transitionCompareAndSet.mock.calls.length - 1
+        ]?.[0].patch,
       ),
     ).not.toContain('clientSecret');
   });
@@ -767,7 +778,10 @@ describe('ManagedProviderCustomerFundingService', () => {
     await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
       { state: 'PAYMENT_ACTION_REQUIRED' },
     );
-    const transition = journal.transitionCompareAndSet.mock.calls.at(-1)?.[0];
+    const transition =
+      journal.transitionCompareAndSet.mock.calls[
+        journal.transitionCompareAndSet.mock.calls.length - 1
+      ]?.[0];
     expect(transition.nextState).toBe('PAYMENT_ACTION_REQUIRED');
     expect(JSON.stringify(transition.patch)).not.toContain('pi_action_secret');
   });

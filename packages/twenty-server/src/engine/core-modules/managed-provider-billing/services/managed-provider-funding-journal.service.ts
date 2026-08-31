@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 import {
   ManagedProviderFundingActionEntity,
@@ -40,35 +41,42 @@ export type CreateFundingIntent = {
 };
 
 type FundingActionPatch = Partial<
-  Pick<
-    ManagedProviderFundingActionEntity,
-    | 'metronomeCustomerId'
-    | 'metronomeContractId'
-    | 'metronomeEditId'
-    | 'commitmentId'
-    | 'metronomeInvoiceId'
-    | 'stripeBillingConfigurationId'
-    | 'stripeDeliveryMethodId'
-    | 'stripeCustomerId'
-    | 'stripeInvoiceId'
-    | 'stripePaymentIntentId'
-    | 'stripeCreditNoteId'
-    | 'stripeRefundId'
-    | 'prepaidPrincipalCents'
-    | 'taxCents'
-    | 'collectedTotalCents'
-    | 'paymentReceipt'
-    | 'refundReceipt'
-    | 'expiresAt'
-    | 'nextReconciliationAt'
-    | 'reconciliationClaimedAt'
-    | 'reconciliationAttemptCount'
-    | 'creditId'
-    | 'externalResourceId'
-    | 'safeErrorCode'
-    | 'failureCode'
+  Omit<
+    Pick<
+      ManagedProviderFundingActionEntity,
+      | 'metronomeCustomerId'
+      | 'metronomeContractId'
+      | 'metronomeEditId'
+      | 'commitmentId'
+      | 'metronomeInvoiceId'
+      | 'stripeBillingConfigurationId'
+      | 'stripeDeliveryMethodId'
+      | 'stripeCustomerId'
+      | 'stripeInvoiceId'
+      | 'stripePaymentIntentId'
+      | 'stripeCreditNoteId'
+      | 'stripeRefundId'
+      | 'prepaidPrincipalCents'
+      | 'taxCents'
+      | 'collectedTotalCents'
+      | 'paymentReceipt'
+      | 'refundReceipt'
+      | 'expiresAt'
+      | 'nextReconciliationAt'
+      | 'reconciliationClaimedAt'
+      | 'reconciliationAttemptCount'
+      | 'creditId'
+      | 'externalResourceId'
+      | 'safeErrorCode'
+      | 'failureCode'
+    >,
+    'prepaidPrincipalCents' | 'taxCents' | 'collectedTotalCents'
   >
->;
+> & {
+  prepaidPrincipalCents?: number | string | null;
+  taxCents?: number | string | null;
+  collectedTotalCents?: number | string | null;
+};
 
 export type CompareAndSetFundingActionInput = {
   id: string;
@@ -425,13 +433,42 @@ export class ManagedProviderFundingJournalService {
     input: CompareAndSetFundingActionInput,
   ): Promise<ManagedProviderFundingActionEntity> {
     const patch = input.patch ?? {};
+    const normalizedPatch = {
+      ...patch,
+      ...(patch.prepaidPrincipalCents === undefined
+        ? {}
+        : {
+            prepaidPrincipalCents: toNonNegativeSafeIntegerCents(
+              patch.prepaidPrincipalCents,
+              'prepaidPrincipalCents',
+            ),
+          }),
+      ...(patch.taxCents === undefined
+        ? {}
+        : {
+            taxCents: toNonNegativeSafeIntegerCents(patch.taxCents, 'taxCents'),
+          }),
+      ...(patch.collectedTotalCents === undefined
+        ? {}
+        : {
+            collectedTotalCents: toNonNegativeSafeIntegerCents(
+              patch.collectedTotalCents,
+              'collectedTotalCents',
+            ),
+          }),
+    };
+    // TypeORM's QueryDeepPartialEntity cannot represent JSONB Record fields.
+    const update = {
+      ...normalizedPatch,
+      state: input.nextState,
+    } as QueryDeepPartialEntity<ManagedProviderFundingActionEntity>;
     const result = await this.repository.update(
       {
         id: input.id,
         workspaceId: input.workspaceId,
         state: input.expectedState,
       },
-      { ...patch, state: input.nextState },
+      update,
     );
 
     if (!result.affected) {
@@ -442,7 +479,7 @@ export class ManagedProviderFundingJournalService {
       if (
         current &&
         current.state === input.nextState &&
-        Object.entries(patch).every(
+        Object.entries(normalizedPatch).every(
           ([key, value]) =>
             stableSerialize(
               current[key as keyof ManagedProviderFundingActionEntity],
