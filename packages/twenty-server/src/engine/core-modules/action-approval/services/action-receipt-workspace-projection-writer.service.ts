@@ -390,7 +390,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         (SELECT COUNT(*) FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'TO') AS "recipientCount",
         (SELECT MIN(participant."handle") FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'FROM') AS "senderEmail",
         (SELECT COUNT(*) FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'FROM') AS "senderCount",
-        account."name" AS "senderDisplayName",
+        NULLIF(BTRIM(account."name"), '') AS "senderDisplayName",
         channel."connectedAccountId",
         parent."id" AS "parentMessageId",
         parent."headerMessageId" AS "parentHeaderMessageId",
@@ -400,11 +400,10 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       INNER JOIN "${schemaName}"."messageChannelMessageAssociation" association ON association."messageId" = message."id"
       INNER JOIN core."messageChannel" channel ON channel."id" = association."messageChannelId"
       INNER JOIN core."connectedAccount" account ON account."id" = channel."connectedAccountId"
+      INNER JOIN "${schemaName}"."message" parent ON parent."id" = $3 AND parent."messageThreadId" = message."messageThreadId"
       LEFT JOIN "${schemaName}"."messageChannelMessageAssociation" parent_association ON parent_association."messageId" = parent."id" AND parent_association."messageChannelId" = association."messageChannelId"
       WHERE message."headerMessageId" = $1
-        OR ($2 IS NOT NULL AND association."messageExternalId" = $2)
-      ORDER BY message."id"
-      LIMIT 2`,
+        OR ($2 IS NOT NULL AND association."messageExternalId" = $2)`,
       [providerMessageId, providerExternalMessageId, parentMessageId],
     );
   }

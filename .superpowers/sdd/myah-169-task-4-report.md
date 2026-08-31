@@ -64,3 +64,9 @@ The authority suite failed after expected action context was extended to include
 ### Concerns
 
 None known.
+
+## Candidate SQL repair
+
+### GREEN evidence
+
+- Writer focused suite: 1 suite, 12 tests passed after restoring the parent Message join and normalizing connected-account sender display names.
