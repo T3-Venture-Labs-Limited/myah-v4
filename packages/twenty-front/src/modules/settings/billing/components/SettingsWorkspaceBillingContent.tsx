@@ -299,9 +299,11 @@ const ManagedEmailSubscriptions = ({
 const PaymentSummary = ({
   summary,
   onManage,
+  isCustomerFundingAvailable,
 }: {
   summary: WorkspaceBillingSafeSummary | null;
   onManage: (() => void) | undefined;
+  isCustomerFundingAvailable: boolean;
 }) => {
   const address = summary?.address;
   const addressText = [
@@ -331,7 +333,9 @@ const PaymentSummary = ({
                 <StyledMuted>{t`No payment method on file.`}</StyledMuted>
               ) : (
                 <strong>
-                  {summary.card.brand} {'•••• '} {summary.card.last4}
+                  {summary.card.brand} {'•••• '} {summary.card.last4} ·{' '}
+                  {String(summary.card.expiryMonth).padStart(2, '0')}/
+                  {String(summary.card.expiryYear).slice(-2).padStart(2, '0')}
                 </strong>
               )}
               {summary.name !== null ? <span>{summary.name}</span> : null}
@@ -345,15 +349,22 @@ const PaymentSummary = ({
               ) : null}
             </>
           )}
-          {onManage !== undefined ? (
-            <StyledActions>
-              <Button
-                title={t`Update payment details`}
-                variant="secondary"
-                onClick={onManage}
-              />
-            </StyledActions>
-          ) : null}
+          {isCustomerFundingAvailable ? (
+            onManage !== undefined ? (
+              <StyledActions>
+                <Button
+                  title={t`Update payment details`}
+                  variant="secondary"
+                  onClick={onManage}
+                />
+              </StyledActions>
+            ) : null
+          ) : (
+            <InlineBanner
+              color="blue"
+              message={t`Payment details are unavailable because AI funding is not enabled for this workspace.`}
+            />
+          )}
         </StyledCardBody>
       </StyledSettingsBillingCard>
     </Section>
@@ -395,11 +406,20 @@ const FundingHistory = ({
                 <td>{new Date(entry.createdAt).toLocaleString()}</td>
                 <td>{entry.fundingType}</td>
                 <td>
-                  {formatUsdCents(entry.principalCents)}
+                  <div>{t`Principal: ${formatUsdCents(entry.principalCents)}`}</div>
                   {entry.taxCents !== null ? (
-                    <StyledMuted>
-                      {t` + ${formatUsdCents(entry.taxCents)} tax`}
-                    </StyledMuted>
+                    <div>
+                      <StyledMuted>
+                        {t`Tax: ${formatUsdCents(entry.taxCents)}`}
+                      </StyledMuted>
+                    </div>
+                  ) : null}
+                  {entry.collectedTotalCents !== null ? (
+                    <div>
+                      <strong>
+                        {t`Total collected: ${formatUsdCents(entry.collectedTotalCents)}`}
+                      </strong>
+                    </div>
                   ) : null}
                 </td>
                 <td>{fundingStateLabel(entry.state)}</td>
@@ -578,7 +598,12 @@ export const SettingsWorkspaceBillingContent = ({
       </Section>
       <PaymentSummary
         summary={viewModel.customerFundingBillingSummary}
-        onManage={onManagePaymentDetails}
+        onManage={
+          viewModel.customerFundingAvailable
+            ? onManagePaymentDetails
+            : undefined
+        }
+        isCustomerFundingAvailable={viewModel.customerFundingAvailable}
       />
       <FundingHistory
         entries={viewModel.fundingHistory}

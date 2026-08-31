@@ -1,27 +1,30 @@
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
-import {
-  SettingsWorkspaceBillingContent,
-  type WorkspaceBillingSafeSummary,
-  type WorkspaceBillingViewModel,
-  type WorkspaceManagedEmailSubscription,
-  type WorkspaceManagedEmailSubscriptionsViewModel,
-} from '@/settings/billing/components/SettingsWorkspaceBillingContent';
 import {
   ManagedProviderCustomerFundingPaymentActionForm,
   ManagedProviderCustomerFundingPaymentForm,
   type CustomerFundingBillingDetails,
 } from '@/settings/billing/components/ManagedProviderCustomerFundingStripeForms';
 import {
+  SettingsWorkspaceBillingContent,
+  type WorkspaceBillingPreset,
+  type WorkspaceBillingSafeSummary,
+  type WorkspaceBillingViewModel,
+  type WorkspaceManagedEmailSubscription,
+  type WorkspaceManagedEmailSubscriptionsViewModel,
+} from '@/settings/billing/components/SettingsWorkspaceBillingContent';
+import {
   ACKNOWLEDGE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION,
   COMPLETE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD,
+  GET_MANAGED_EMAIL_SUBSCRIPTIONS,
   GET_MANAGED_PROVIDER_BILLING_STATUS,
   PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION,
   PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD,
   REQUEST_MANAGED_PROVIDER_CUSTOMER_FUNDING,
 } from '@/settings/billing/graphql/managedProviderCustomerFunding';
-import { GET_MANAGED_EMAIL_SUBSCRIPTIONS } from '@/settings/workspace/graphql/managed-email/managedEmailQueries';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -88,6 +91,87 @@ type PreparePaymentActionData = {
 type RequestFundingData = {
   requestManagedProviderCustomerFunding: { id: string };
 };
+type CustomerFundingPresetCode = WorkspaceBillingPreset['id'];
+type PendingFundingRequest = {
+  idempotencyKey: string;
+  presetCode: CustomerFundingPresetCode;
+  workspaceId: string | null;
+};
+
+const CUSTOMER_FUNDING_PENDING_STORAGE_KEY_PREFIX =
+  'managed-provider-customer-funding:';
+const terminalFundingStates: Partial<
+  Record<FundingHistoryItem['state'], true>
+> = {
+  BALANCE_ACTIVE: true,
+  PAYMENT_FAILED: true,
+  REFUNDED: true,
+};
+
+const isCustomerFundingPresetCode = (
+  value: unknown,
+): value is CustomerFundingPresetCode =>
+  value === 'AI_25_USD' || value === 'AI_50_USD' || value === 'AI_100_USD';
+
+const readPendingFundingRequest = (
+  workspaceId: string | null,
+): PendingFundingRequest | null => {
+  if (workspaceId === null) return null;
+
+  try {
+    const serialized = globalThis.localStorage.getItem(
+      `${CUSTOMER_FUNDING_PENDING_STORAGE_KEY_PREFIX}${workspaceId}`,
+    );
+    if (serialized === null) return null;
+
+    const parsed: unknown = JSON.parse(serialized);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+
+    const { idempotencyKey, presetCode } = parsed as {
+      idempotencyKey?: unknown;
+      presetCode?: unknown;
+    };
+    if (
+      typeof idempotencyKey !== 'string' ||
+      idempotencyKey.trim() === '' ||
+      !isCustomerFundingPresetCode(presetCode)
+    ) {
+      return null;
+    }
+
+    return { idempotencyKey, presetCode, workspaceId };
+  } catch {
+    return null;
+  }
+};
+
+const persistPendingFundingRequest = (request: PendingFundingRequest) => {
+  if (request.workspaceId === null) return;
+
+  try {
+    globalThis.localStorage.setItem(
+      `${CUSTOMER_FUNDING_PENDING_STORAGE_KEY_PREFIX}${request.workspaceId}`,
+      JSON.stringify({
+        idempotencyKey: request.idempotencyKey,
+        presetCode: request.presetCode,
+      }),
+    );
+  } catch {
+    // Browser storage is optional; the in-memory request still protects retries.
+  }
+};
+
+const clearPendingFundingRequest = (workspaceId: string | null) => {
+  if (workspaceId === null) return;
+
+  try {
+    globalThis.localStorage.removeItem(
+      `${CUSTOMER_FUNDING_PENDING_STORAGE_KEY_PREFIX}${workspaceId}`,
+    );
+  } catch {
+    // Browser storage is optional.
+  }
+};
 
 const toSafeCents = (value: string | null): number | null => {
   if (value === null) return null;
@@ -105,15 +189,17 @@ export const SettingsBilling = ({
   const { t } = useLingui();
   const navigateSettings = useNavigateSettings();
   const { enqueueErrorSnackBar } = useSnackBar();
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const workspaceId = currentWorkspace?.id ?? null;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingPresetId, setPendingPresetId] = useState<
-    'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD' | null
+    CustomerFundingPresetCode | null
   >(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
-  const [pendingFundingRequest, setPendingFundingRequest] = useState<{
-    idempotencyKey: string;
-    presetId: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD';
-  } | null>(null);
+  const [pendingFundingRequest, setPendingFundingRequest] =
+    useState<PendingFundingRequest | null>(() =>
+      readPendingFundingRequest(workspaceId),
+    );
   const [paymentPreparation, setPaymentPreparation] =
     useState<PaymentMethodPreparation | null>(null);
   const [paymentAction, setPaymentAction] = useState<{
@@ -162,16 +248,40 @@ export const SettingsBilling = ({
               managedEmailSubscriptionsData?.managedEmailSubscriptions ?? [],
           };
   const status = fundingData?.managedProviderBillingStatus;
+
   useEffect(() => {
-    if (
-      pendingActionId !== null &&
-      status?.customerFundingHistory.some(
-        (entry) => entry.id === pendingActionId,
-      )
-    ) {
-      setPendingActionId(null);
+    setPendingFundingRequest(readPendingFundingRequest(workspaceId));
+    setPendingActionId(null);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    const action =
+      pendingActionId === null
+        ? undefined
+        : status?.customerFundingHistory.find(
+            (entry) => entry.id === pendingActionId,
+          );
+
+    if (action === undefined || terminalFundingStates[action.state] !== true) {
+      return;
     }
-  }, [pendingActionId, status?.customerFundingHistory]);
+
+    if (pendingFundingRequest?.workspaceId === workspaceId) {
+      clearPendingFundingRequest(workspaceId);
+    }
+    setPendingFundingRequest(null);
+    setPendingActionId(null);
+  }, [
+    pendingActionId,
+    pendingFundingRequest?.workspaceId,
+    status?.customerFundingHistory,
+    workspaceId,
+  ]);
+
+  const activePendingFundingRequest =
+    pendingFundingRequest?.workspaceId === workspaceId
+      ? pendingFundingRequest
+      : null;
   const fetchedViewModel: WorkspaceBillingViewModel = fundingLoading
     ? { state: 'loading' }
     : fundingError !== undefined || status === undefined
@@ -186,14 +296,14 @@ export const SettingsBilling = ({
               status.customerFundingPaymentMethodReady,
             customerFundingPresets: status.customerFundingPresets
               .map((preset) => ({
-                id: preset.id as 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD',
+                id: preset.id as CustomerFundingPresetCode,
                 principalCents: toSafeCents(preset.principalCents),
               }))
               .filter(
                 (
                   preset,
                 ): preset is {
-                  id: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD';
+                  id: CustomerFundingPresetCode;
                   principalCents: number;
                 } => preset.principalCents !== null,
               ),
@@ -209,7 +319,7 @@ export const SettingsBilling = ({
                   entry.principalCents !== null,
               ),
             isSubmitting: isSubmitting || pendingActionId !== null,
-            retryPresetId: pendingFundingRequest?.presetId ?? null,
+            retryPresetId: activePendingFundingRequest?.presetCode ?? null,
             pendingOperationCount: status.pendingOperationCount,
             reconciliationRequiredOperationCount:
               status.reconciliationRequiredOperationCount,
@@ -226,26 +336,28 @@ export const SettingsBilling = ({
       });
     }
   };
-  const submitFunding = async (
-    presetId: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD',
-  ) => {
-    const request = pendingFundingRequest ?? {
-      idempotencyKey: newIdempotencyKey(),
-      presetId,
-    };
+  const submitFunding = async (presetCode: CustomerFundingPresetCode) => {
+    const request =
+      activePendingFundingRequest ?? {
+        idempotencyKey: newIdempotencyKey(),
+        presetCode,
+        workspaceId,
+      };
 
+    if (activePendingFundingRequest === null) {
+      persistPendingFundingRequest(request);
+    }
     setPendingFundingRequest(request);
     setIsSubmitting(true);
     try {
       const result = await requestFunding({
         variables: {
           idempotencyKey: request.idempotencyKey,
-          preset: request.presetId,
+          preset: request.presetCode,
         },
       });
       const actionId = result.data?.requestManagedProviderCustomerFunding.id;
       if (actionId === undefined) throw new Error('Missing funding action');
-      setPendingFundingRequest(null);
       setPendingActionId(actionId);
     } catch (error) {
       showError(error);
@@ -261,6 +373,13 @@ export const SettingsBilling = ({
     }
   };
   const managePaymentDetails = async (): Promise<boolean> => {
+    if (
+      viewModel.state === 'ready' &&
+      viewModel.customerFundingAvailable === false
+    ) {
+      return false;
+    }
+
     setIsSubmitting(true);
     try {
       const result = await preparePaymentMethod();
@@ -276,18 +395,23 @@ export const SettingsBilling = ({
       setIsSubmitting(false);
     }
   };
-  const requestTopUp = async (
-    presetId: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD',
-  ) => {
+  const requestTopUp = async (presetCode: CustomerFundingPresetCode) => {
+    if (
+      viewModel.state === 'ready' &&
+      viewModel.customerFundingAvailable === false
+    ) {
+      return;
+    }
+
     if (
       viewModel.state === 'ready' &&
       viewModel.customerFundingPaymentMethodReady
     ) {
-      await submitFunding(presetId);
+      await submitFunding(presetCode);
       return;
     }
     if (await managePaymentDetails()) {
-      setPendingPresetId(presetId);
+      setPendingPresetId(presetCode);
     }
   };
   const completePaymentDetails = async (
@@ -304,9 +428,9 @@ export const SettingsBilling = ({
         // Polling will refresh saved payment details.
       }
       if (pendingPresetId !== null) {
-        const preset = pendingPresetId;
+        const presetCode = pendingPresetId;
         setPendingPresetId(null);
-        await submitFunding(preset);
+        await submitFunding(presetCode);
       }
     } catch (error) {
       showError(error);

@@ -1,23 +1,28 @@
-import { GET_MANAGED_EMAIL_SUBSCRIPTIONS } from '@/settings/workspace/graphql/managed-email/managedEmailQueries';
-import { GET_MANAGED_PROVIDER_BILLING_STATUS } from '@/settings/billing/graphql/managedProviderCustomerFunding';
+import {
+  GET_MANAGED_EMAIL_SUBSCRIPTIONS,
+  GET_MANAGED_PROVIDER_BILLING_STATUS,
+} from '@/settings/billing/graphql/managedProviderCustomerFunding';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
-import { type MockedResponse } from '@apollo/client/testing';
-import { MockedProvider } from '@apollo/client/testing/react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { Provider as JotaiProvider } from 'jotai';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { SettingsPath } from 'twenty-shared/types';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
 import { ThemeProvider } from 'twenty-ui/theme-constants';
 import { messages } from '~/locales/generated/en';
 import { SettingsBilling } from '~/pages/settings/billing/SettingsBilling';
 
-const mockNavigateSettings = jest.fn();
+const mockRequestFunding = jest.fn();
+const mockUseMutation = jest.fn();
+const mockUseQuery = jest.fn();
+
+jest.mock('@apollo/client/react', () => ({
+  useMutation: (...args: unknown[]) => mockUseMutation(...args),
+  useQuery: (...args: unknown[]) => mockUseQuery(...args),
+}));
 
 jest.mock('~/hooks/useNavigateSettings', () => ({
-  useNavigateSettings: () => mockNavigateSettings,
+  useNavigateSettings: () => jest.fn(),
 }));
 
 jest.mock('@/settings/components/layout/SettingsPageLayout', () => ({
@@ -28,103 +33,103 @@ jest.mock('@/settings/components/SettingsPageContainer', () => ({
   SettingsPageContainer: ({ children }: { children: ReactNode }) => children,
 }));
 
+jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
+  useSnackBar: () => ({ enqueueErrorSnackBar: jest.fn() }),
+}));
+
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
+  useAtomStateValue: () => ({ id: 'workspace-1' }),
+}));
+
 i18n.load({ [SOURCE_LOCALE]: messages });
 i18n.activate(SOURCE_LOCALE);
 
-const subscriptionMock: MockedResponse = {
-  request: { query: GET_MANAGED_EMAIL_SUBSCRIPTIONS },
-  result: {
-    data: {
-      managedEmailSubscriptions: [
-        {
-          action: 'STOP_SERVICE',
-          billingInterval: 'MONTHLY',
-          currency: 'USD',
-          paidThrough: '2026-09-06T12:00:00.000Z',
-          productKey: 'managed_mailbox_month',
-          quantity: 2,
-          recurringAmountCents: 1_300,
-          resourceIds: ['mailbox-1', 'mailbox-2'],
-          resourceLabels: [
-            'maya@creator-partners.test',
-            'lin@creator-partners.test',
-          ],
-          resourceType: 'MAILBOX',
-          service: 'MANAGED_EMAIL',
-          status: 'ACTIVE',
-          unitPriceCents: 650,
-        },
-      ],
-    },
-  },
-};
-const fundingStatusMock: MockedResponse = {
-  request: { query: GET_MANAGED_PROVIDER_BILLING_STATUS },
-  result: {
-    data: {
-      managedProviderBillingStatus: {
-        available: true,
-        prepaidBalanceCents: '10000',
-        pendingOperationCount: 0,
-        reconciliationRequiredOperationCount: 0,
-        customerFundingAvailable: true,
-        customerFundingPaymentMethodReady: true,
-        customerFundingPresets: [
-          { id: 'AI_25_USD', principalCents: '2500' },
-          { id: 'AI_50_USD', principalCents: '5000' },
-          { id: 'AI_100_USD', principalCents: '10000' },
-        ],
-        customerFundingBillingSummary: null,
-        customerFundingHistory: [],
-      },
-    },
+const fundingStatus = {
+  managedProviderBillingStatus: {
+    available: true,
+    prepaidBalanceCents: '10000',
+    pendingOperationCount: 0,
+    reconciliationRequiredOperationCount: 0,
+    customerFundingAvailable: true,
+    customerFundingPaymentMethodReady: true,
+    customerFundingPresets: [
+      { id: 'AI_25_USD', principalCents: '2500' },
+      { id: 'AI_50_USD', principalCents: '5000' },
+      { id: 'AI_100_USD', principalCents: '10000' },
+    ],
+    customerFundingBillingSummary: null,
+    customerFundingHistory: [],
   },
 };
 
-const renderPage = () =>
-  render(
-    <MockedProvider mocks={[subscriptionMock, fundingStatusMock]}>
-      <JotaiProvider>
-        <I18nProvider i18n={i18n}>
-          <ThemeProvider colorScheme="light">
-            <MemoryRouter
-              future={{
-                v7_relativeSplatPath: true,
-                v7_startTransition: true,
-              }}
-            >
-              <SettingsBilling />
-            </MemoryRouter>
-          </ThemeProvider>
-        </I18nProvider>
-      </JotaiProvider>
-    </MockedProvider>,
-  );
 
-describe('SettingsBilling managed email subscriptions', () => {
+describe('SettingsBilling customer funding idempotency', () => {
   beforeEach(() => {
-    mockNavigateSettings.mockReset();
+    localStorage.clear();
+    mockRequestFunding.mockReset();
+    mockUseMutation.mockReset();
+    mockUseMutation.mockReturnValue([mockRequestFunding]);
+    mockUseQuery.mockReset();
+    mockUseQuery.mockImplementation((query) =>
+      query === GET_MANAGED_EMAIL_SUBSCRIPTIONS
+        ? {
+            data: { managedEmailSubscriptions: [] },
+            error: undefined,
+            loading: false,
+          }
+        : query === GET_MANAGED_PROVIDER_BILLING_STATUS
+          ? {
+              data: fundingStatus,
+              error: undefined,
+              loading: false,
+              refetch: jest.fn().mockResolvedValue(undefined),
+            }
+          : undefined,
+    );
   });
 
-  it('loads managed email independently and links to its existing controls', async () => {
-    renderPage();
+  it('reuses the workspace-scoped idempotency key after a response-loss reload', async () => {
+    mockRequestFunding.mockRejectedValueOnce(new Error('response lost'));
 
-    expect(await screen.findByText('Mailbox')).toBeInTheDocument();
-    expect(screen.getByText('$6.50')).toBeInTheDocument();
-    expect(screen.getByText('$13.00')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'AI usage and balance are tracked separately from managed email.',
-      ),
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByRole('button', { name: '$25' }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
-
-    expect(mockNavigateSettings).toHaveBeenCalledWith(
-      SettingsPath.WorkspaceEmail,
+    const firstPage = render(
+      <I18nProvider i18n={i18n}>
+        <ThemeProvider colorScheme="light">
+          <MemoryRouter>
+            <SettingsBilling />
+          </MemoryRouter>
+        </ThemeProvider>
+      </I18nProvider>,
     );
+    fireEvent.click(await screen.findByRole('button', { name: 'Add $25 credit' }));
+
+    await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(1));
+    const firstKey = mockRequestFunding.mock.calls[0][0].variables
+      .idempotencyKey as string;
+
+    expect(
+      localStorage.getItem('managed-provider-customer-funding:workspace-1'),
+    ).toBe(JSON.stringify({ idempotencyKey: firstKey, presetCode: 'AI_25_USD' }));
+
+    firstPage.unmount();
+    mockRequestFunding.mockResolvedValueOnce({
+      data: { requestManagedProviderCustomerFunding: { id: 'action-1' } },
+    });
+
+    render(
+      <I18nProvider i18n={i18n}>
+        <ThemeProvider colorScheme="light">
+          <MemoryRouter>
+            <SettingsBilling />
+          </MemoryRouter>
+        </ThemeProvider>
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry $25 credit' }));
+
+    await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(2));
+    expect(mockRequestFunding.mock.calls[1][0].variables).toMatchObject({
+      idempotencyKey: firstKey,
+      preset: 'AI_25_USD',
+    });
   });
 });

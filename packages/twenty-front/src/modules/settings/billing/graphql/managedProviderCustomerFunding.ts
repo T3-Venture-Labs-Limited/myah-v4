@@ -194,3 +194,23 @@ export const ACKNOWLEDGE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION = gql`
   }
   ${MANAGED_PROVIDER_CUSTOMER_FUNDING_ITEM_FRAGMENT}
 `;
+
+export const GET_MANAGED_EMAIL_SUBSCRIPTIONS = gql`
+  query GetManagedEmailSubscriptions {
+    managedEmailSubscriptions {
+      action
+      billingInterval
+      currency
+      paidThrough
+      productKey
+      quantity
+      recurringAmountCents
+      resourceIds
+      resourceLabels
+      resourceType
+      service
+      status
+      unitPriceCents
+    }
+  }
+`;

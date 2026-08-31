@@ -3,17 +3,17 @@ import {
   type Meta,
   type StoryObj,
 } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
+import { expect, fn, userEvent, within } from 'storybook/test';
 
-import {
-  SettingsBilling,
-  type SettingsBillingProps,
-} from '~/pages/settings/billing/SettingsBilling';
 import {
   SettingsWorkspaceBillingContent,
   type WorkspaceBillingViewModel,
 } from '~/modules/settings/billing/components/SettingsWorkspaceBillingContent';
+import {
+  SettingsBilling,
+  type SettingsBillingProps,
+} from '~/pages/settings/billing/SettingsBilling';
 import {
   PageDecorator,
   type PageDecoratorArgs,
@@ -107,9 +107,21 @@ export const HealthyFundedWorkspace: Story = {
       canvas.findByRole('button', { name: '$25' }),
     ).resolves.toBeVisible();
     await expect(
-      canvas.findByText(/plus applicable tax/i),
+      canvas.findByText('Total collected: $27.00'),
+    ).resolves.toBeVisible();
+    await expect(
+      canvas.findByText(/Visa •••• 4242.*12\/30/i),
     ).resolves.toBeVisible();
     expect(canvas.queryByText(/automatic top-up/i)).not.toBeInTheDocument();
+  },
+};
+
+export const CustomerFundingUnavailable: Story = {
+  args: {
+    viewModel: {
+      ...healthyWorkspaceViewModel,
+      customerFundingAvailable: false,
+    },
   },
 };
 

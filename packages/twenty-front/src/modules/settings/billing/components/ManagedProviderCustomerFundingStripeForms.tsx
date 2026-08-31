@@ -156,27 +156,38 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
     const isOptional = ['line2', 'state', 'taxIdType', 'taxIdValue'].includes(
       field,
     );
+    const normalizedValue =
+      field === 'taxIdType'
+        ? value.trim().toLowerCase()
+        : field === 'taxIdValue'
+          ? value.trim()
+          : value;
 
     setDetails((current) => ({
       ...current,
-      [field]: isOptional ? value || null : value,
+      [field]: isOptional ? normalizedValue || null : normalizedValue,
     }));
   };
-  const hasTaxIdType = details.taxIdType !== null;
-  const hasTaxIdValue = details.taxIdValue !== null;
+  const normalizedDetails = {
+    ...details,
+    taxIdType: details.taxIdType?.trim().toLowerCase() || null,
+    taxIdValue: details.taxIdValue?.trim() || null,
+  };
+  const hasTaxIdType = normalizedDetails.taxIdType !== null;
+  const hasTaxIdValue = normalizedDetails.taxIdValue !== null;
   const canSave =
-    details.name.trim() !== '' &&
-    details.line1.trim() !== '' &&
-    details.city.trim() !== '' &&
-    details.postalCode.trim() !== '' &&
-    /^[A-Za-z]{2}$/.test(details.country) &&
+    normalizedDetails.name.trim() !== '' &&
+    normalizedDetails.line1.trim() !== '' &&
+    normalizedDetails.city.trim() !== '' &&
+    normalizedDetails.postalCode.trim() !== '' &&
+    /^[A-Za-z]{2}$/.test(normalizedDetails.country) &&
     hasTaxIdType === hasTaxIdValue;
 
   const saveAddressOnly = async () => {
     if (!canSave) return;
     setIsSavingAddress(true);
     try {
-      await onComplete(null, details);
+      await onComplete(null, normalizedDetails);
     } finally {
       setIsSavingAddress(false);
     }
@@ -266,7 +277,7 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
               <PaymentSetupControl
                 canSave={canSave}
                 clientSecret={clientSecret}
-                details={details}
+                details={normalizedDetails}
                 onComplete={onComplete}
                 setupIntentId={setupIntentId}
               />
