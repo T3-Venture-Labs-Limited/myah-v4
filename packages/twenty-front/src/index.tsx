@@ -1,4 +1,6 @@
+import './instrument';
 import ReactDOM from 'react-dom/client';
+import * as Sentry from '@sentry/react';
 
 import { App } from '@/app/components/App';
 import { migrateTokenPairCookieToLocalStorage } from '@/auth/utils/migrateTokenPairCookieToLocalStorage';
@@ -22,6 +24,10 @@ migrateTokenPairCookieToLocalStorage();
 const renderApp = () => {
   const root = ReactDOM.createRoot(
     document.getElementById('root') ?? document.body,
+    {
+      onUncaughtError: Sentry.reactErrorHandler(),
+      onRecoverableError: Sentry.reactErrorHandler(),
+    },
   );
 
   root.render(<App />);

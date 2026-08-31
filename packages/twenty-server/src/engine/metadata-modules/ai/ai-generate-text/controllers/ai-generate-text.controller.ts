@@ -19,6 +19,10 @@ import {
 import { AiBillingService } from 'src/engine/metadata-modules/ai/ai-billing/services/ai-billing.service';
 import { AiRestApiExceptionFilter } from 'src/engine/metadata-modules/ai/filters/ai-api-exception.filter';
 import { GenerateTextInput } from 'src/engine/metadata-modules/ai/ai-generate-text/dtos/generate-text.input';
+import {
+  AI_TELEMETRY_CONFIG,
+  MANAGED_AI_TELEMETRY_CONFIG,
+} from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
 import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
 import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-rest-api-exception.filter';
@@ -95,6 +99,9 @@ export class AiGenerateTextController {
         system: body.systemPrompt,
         prompt: body.userPrompt,
         maxRetries: usesManagedOpenRouter ? 0 : undefined,
+        experimental_telemetry: usesManagedOpenRouter
+          ? MANAGED_AI_TELEMETRY_CONFIG
+          : AI_TELEMETRY_CONFIG,
       });
 
       return {

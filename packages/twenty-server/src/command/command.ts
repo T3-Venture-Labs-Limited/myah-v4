@@ -1,3 +1,4 @@
+import 'src/instrument';
 import { CommandFactory } from 'nest-commander';
 
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';

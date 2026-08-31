@@ -16,9 +16,14 @@ export function generateFrontConfig(): void {
   const useAutoUrl =
     process.env.FRONT_AUTO_BASE_URL === 'true' || !process.env.SERVER_URL;
 
-  const envForFront = useAutoUrl
-    ? {}
-    : { REACT_APP_SERVER_BASE_URL: process.env.SERVER_URL };
+  const envForFront = {
+    ...(useAutoUrl
+      ? {}
+      : { REACT_APP_SERVER_BASE_URL: process.env.SERVER_URL }),
+    SENTRY_FRONT_DSN: process.env.SENTRY_FRONT_DSN,
+    SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
+    APP_VERSION: process.env.APP_VERSION,
+  };
 
   const configString = `<!-- BEGIN: Twenty Config -->
     <script id="twenty-env-config">

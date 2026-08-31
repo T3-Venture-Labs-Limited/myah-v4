@@ -1,5 +1,8 @@
 type ConfigModule = {
+  APP_VERSION?: string;
   REACT_APP_SERVER_BASE_URL: string;
+  SENTRY_ENVIRONMENT?: string;
+  SENTRY_FRONT_DSN?: string;
 };
 
 const windowWithEnvironment = window as Window & {
@@ -9,21 +12,19 @@ const windowWithEnvironment = window as Window & {
 const originalServerBaseUrl = process.env.REACT_APP_SERVER_BASE_URL;
 const originalRuntimeEnvironment = windowWithEnvironment._env_;
 
-const importServerBaseUrl = () => {
-  let serverBaseUrl: string | undefined;
+const importConfig = () => {
+  let configModule: ConfigModule | undefined;
 
-  // The config constant is evaluated on import, so each test needs a fresh module.
+  // The config constants are evaluated on import, so each test needs a fresh module.
   jest.isolateModules(() => {
-    const configModule = jest.requireActual<ConfigModule>('./index');
-
-    serverBaseUrl = configModule.REACT_APP_SERVER_BASE_URL;
+    configModule = jest.requireActual<ConfigModule>('./index');
   });
 
-  if (serverBaseUrl === undefined) {
-    throw new Error('Config module did not export a server base URL');
+  if (configModule === undefined) {
+    throw new Error('Config module did not load');
   }
 
-  return serverBaseUrl;
+  return configModule;
 };
 
 describe('REACT_APP_SERVER_BASE_URL', () => {
@@ -48,7 +49,9 @@ describe('REACT_APP_SERVER_BASE_URL', () => {
   it('uses the development environment URL instead of the local default', () => {
     process.env.REACT_APP_SERVER_BASE_URL = 'http://development-api:3000';
 
-    expect(importServerBaseUrl()).toBe('http://development-api:3000');
+    expect(importConfig().REACT_APP_SERVER_BASE_URL).toBe(
+      'http://development-api:3000',
+    );
   });
 
   it('prefers the runtime environment URL over the development environment URL', () => {
@@ -57,6 +60,24 @@ describe('REACT_APP_SERVER_BASE_URL', () => {
       REACT_APP_SERVER_BASE_URL: 'https://runtime-api.example.com',
     };
 
-    expect(importServerBaseUrl()).toBe('https://runtime-api.example.com');
+    expect(importConfig().REACT_APP_SERVER_BASE_URL).toBe(
+      'https://runtime-api.example.com',
+    );
+  });
+
+  it('exposes runtime Sentry config before the application starts', () => {
+    windowWithEnvironment._env_ = {
+      APP_VERSION: '2026.08.31',
+      SENTRY_ENVIRONMENT: 'production',
+      SENTRY_FRONT_DSN: 'https://public@example.ingest.sentry.io/1',
+    };
+
+    expect(importConfig()).toEqual(
+      expect.objectContaining({
+        APP_VERSION: '2026.08.31',
+        SENTRY_ENVIRONMENT: 'production',
+        SENTRY_FRONT_DSN: 'https://public@example.ingest.sentry.io/1',
+      }),
+    );
   });
 });
