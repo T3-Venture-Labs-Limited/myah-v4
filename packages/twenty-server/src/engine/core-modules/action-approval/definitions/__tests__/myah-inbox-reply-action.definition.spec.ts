@@ -486,6 +486,23 @@ describe('MyahInboxReplyActionDefinition', () => {
     ).toHaveBeenCalledWith({ workspaceId, connectedAccountId, messageChannelId });
   });
 
+  it('does not reject provider-free projection when its managed mailbox changes after acceptance', async () => {
+    const setup = createDefinition({
+      managedMailbox: { id: '00000000-0000-4000-8000-000000000099' },
+    });
+    const authority = await buildAuthority(setup.definition);
+    setup.managedEmailCampaignEligibilityService.findConnectedIdentity.mockResolvedValue(
+      null,
+    );
+
+    await expect(
+      setup.definition.rebuildProjectionAuthority({
+        workspaceId,
+        binding: authority.expectedActionBinding,
+      }),
+    ).resolves.toMatchObject({ canonicalGraph: { managedMailboxId: null } });
+  });
+
   it('keeps projection authority provider-free after mutable eligibility changes', async () => {
     const setup = createDefinition();
     const authority = await buildAuthority(setup.definition);

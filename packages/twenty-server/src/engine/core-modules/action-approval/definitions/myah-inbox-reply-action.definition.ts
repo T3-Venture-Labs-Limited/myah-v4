@@ -209,7 +209,20 @@ export class MyahInboxReplyActionDefinition {
       graph,
     });
 
-    if (!matchesMyahInboxReplyBinding(binding, authority.expectedActionBinding)) {
+    const bindingForComparison =
+      mode === 'projection'
+        ? {
+            ...binding,
+            sendingAccountFingerprint:
+              authority.expectedActionBinding.sendingAccountFingerprint,
+          }
+        : binding;
+    if (
+      !matchesMyahInboxReplyBinding(
+        bindingForComparison,
+        authority.expectedActionBinding,
+      )
+    ) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
       );

@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
 import { isNonEmptyString } from '@sniptt/guards';
-import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { MYAH_STANDARD_OBJECTS, STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { FieldActorSource } from 'twenty-shared/types';
 import { type DataSource, type EntityManager, type Repository } from 'typeorm';
 
@@ -52,10 +52,10 @@ type SentInboxMessageRow = {
   messageExternalId: string | null;
   messageThreadExternalId: string | null;
   recipientEmail: string | null;
+  recipientCount: number | string;
   senderEmail: string | null;
-  senderDisplayName: string | null;
+  senderCount: number | string;
   connectedAccountId: string | null;
-  managedMailboxId: string | null;
   parentMessageId: string | null;
   parentHeaderMessageId: string | null;
   parentMessageExternalId: string | null;
@@ -105,14 +105,16 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     if (!isNonEmptyString(input.providerMessageId)) {
       throw new Error('The sent Inbox Message is unavailable for projection');
     }
-
     const binding = this.toInboxProjectionBinding(input);
 
     await this.dataSource.transaction(async (manager) => {
       await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
         `myah-inbox-reply-projection:${input.workspaceId}:${input.draftId}`,
       ]);
-
+      const parentMessageId = await this.getInboxParentEvidenceId(
+        manager,
+        input,
+      );
       const currentDraft = await this.loadInboxDraft(
         manager,
         schemaName,
@@ -122,7 +124,8 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         manager,
         schemaName,
         input.providerMessageId,
-        this.getInboxParentEvidenceId(input),
+        input.providerExternalMessageId,
+        parentMessageId,
       );
 
       if (sentMessages.length > 1) {
@@ -136,6 +139,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
             existingMessage,
             input,
             currentDraft.myahReplyDraftRevision - 1,
+            parentMessageId,
           )
         ) {
           return;
@@ -165,6 +169,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
           existingMessage,
           input,
           canonicalGraph.draftRevision,
+          parentMessageId,
         ) ||
           existingMessage.messageChannelId !== canonicalGraph.messageChannelId ||
           existingMessage.senderEmail !== canonicalGraph.senderEmail)
@@ -207,7 +212,8 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         manager,
         schemaName,
         input.providerMessageId,
-        this.getInboxParentEvidenceId(input),
+        input.providerExternalMessageId,
+        parentMessageId,
       );
       if (
         matchingMessages.length !== 1 ||
@@ -215,6 +221,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
           matchingMessages[0],
           input,
           canonicalGraph.draftRevision,
+          parentMessageId,
         ) ||
         matchingMessages[0].messageChannelId !== canonicalGraph.messageChannelId ||
         matchingMessages[0].senderEmail !== canonicalGraph.senderEmail
@@ -255,17 +262,6 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       throw new Error('The approved Inbox reply is unavailable for projection');
     }
 
-    this.getInboxParentEvidenceId(input);
-    const draftEvidence = input.evidenceLinks.filter(
-      (evidenceLink) => evidenceLink.role === 'draft',
-    );
-    if (
-      draftEvidence.length !== 1 ||
-      draftEvidence[0].recordId !== input.draftId
-    ) {
-      throw new Error('The sent Inbox Message is unavailable for projection');
-    }
-
     return {
       workspaceId: input.workspaceId,
       actionName: input.actionName,
@@ -280,19 +276,74 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       evidenceLinks: input.evidenceLinks,
     };
   }
-
-  private getInboxParentEvidenceId(input: InboxProjectionInput): string {
-    const parentEvidence = input.evidenceLinks.filter(
-      (evidenceLink) => evidenceLink.role === 'thread_parent',
+  private async getInboxParentEvidenceId(
+    manager: EntityManager,
+    input: InboxProjectionInput,
+  ): Promise<string> {
+    const metadata = await manager.query<
+      { id: string; universalIdentifier: string }[]
+    >(
+      `SELECT "id", "universalIdentifier"
+        FROM core."objectMetadata"
+        WHERE "workspaceId" = $1
+          AND "universalIdentifier" IN ($2, $3)`,
+      [
+        input.workspaceId,
+        STANDARD_OBJECTS.messageThread.universalIdentifier,
+        STANDARD_OBJECTS.message.universalIdentifier,
+      ],
+    );
+    const messageThreadMetadataId = metadata.find(
+      (item) =>
+        item.universalIdentifier ===
+        STANDARD_OBJECTS.messageThread.universalIdentifier,
+    )?.id;
+    const messageMetadataId = metadata.find(
+      (item) =>
+        item.universalIdentifier === STANDARD_OBJECTS.message.universalIdentifier,
+    )?.id;
+    const exactEvidence = [
+      {
+        objectMetadataId: messageThreadMetadataId,
+        recordId: input.threadId,
+        role: 'draft',
+      },
+      {
+        objectMetadataId: messageMetadataId,
+        role: 'thread_parent',
+      },
+    ];
+    if (
+      !isNonEmptyString(messageThreadMetadataId) ||
+      !isNonEmptyString(messageMetadataId) ||
+      input.evidenceLinks.length !== exactEvidence.length
+    ) {
+      throw new Error('The sent Inbox Message is unavailable for projection');
+    }
+    const parentEvidence = input.evidenceLinks.find(
+      (evidenceLink) =>
+        evidenceLink.role === 'thread_parent' &&
+        evidenceLink.objectMetadataId === messageMetadataId &&
+        isNonEmptyString(evidenceLink.recordId),
     );
     if (
-      parentEvidence.length !== 1 ||
-      !isNonEmptyString(parentEvidence[0].recordId)
+      !parentEvidence ||
+      !exactEvidence.every((expected) =>
+        input.evidenceLinks.some(
+          (evidenceLink) =>
+            evidenceLink.role === expected.role &&
+            evidenceLink.objectMetadataId === expected.objectMetadataId &&
+            evidenceLink.recordId ===
+              (expected.role === 'draft'
+                ? expected.recordId
+                : parentEvidence.recordId),
+        ),
+      )
     ) {
       throw new Error('The sent Inbox Message is unavailable for projection');
     }
 
-    return parentEvidence[0].recordId;
+    return parentEvidence.recordId;
   }
 
   private async loadInboxDraft(
@@ -311,8 +362,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     >(
       `SELECT "myahReplyDraftBody", "myahReplyDraftRevision"
         FROM "${schemaName}"."messageThread"
-        WHERE "id" = $1
-        FOR UPDATE`,
+        WHERE "id" = $1`,
       [messageThreadId],
     );
     if (!draft || !Number.isInteger(draft.myahReplyDraftRevision)) {
@@ -326,6 +376,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     manager: EntityManager,
     schemaName: string,
     providerMessageId: string,
+    providerExternalMessageId: string | null,
     parentMessageId: string,
   ): Promise<SentInboxMessageRow[]> {
     return manager.query<SentInboxMessageRow[]>(
@@ -337,11 +388,23 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         association."messageChannelId",
         association."messageExternalId",
         association."messageThreadExternalId",
-        recipient."handle" AS "recipientEmail",
-        sender."handle" AS "senderEmail",
-        sender."displayName" AS "senderDisplayName",
+        (SELECT MIN(participant."handle")
+          FROM "${schemaName}"."messageParticipant" participant
+          WHERE participant."messageId" = message."id"
+            AND participant."role" = 'TO') AS "recipientEmail",
+        (SELECT COUNT(*)
+          FROM "${schemaName}"."messageParticipant" participant
+          WHERE participant."messageId" = message."id"
+            AND participant."role" = 'TO') AS "recipientCount",
+        (SELECT MIN(participant."handle")
+          FROM "${schemaName}"."messageParticipant" participant
+          WHERE participant."messageId" = message."id"
+            AND participant."role" = 'FROM') AS "senderEmail",
+        (SELECT COUNT(*)
+          FROM "${schemaName}"."messageParticipant" participant
+          WHERE participant."messageId" = message."id"
+            AND participant."role" = 'FROM') AS "senderCount",
         channel."connectedAccountId",
-        mailbox."id" AS "managedMailboxId",
         parent."id" AS "parentMessageId",
         parent."headerMessageId" AS "parentHeaderMessageId",
         parent_association."messageExternalId" AS "parentMessageExternalId",
@@ -351,24 +414,16 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         ON association."messageId" = message."id"
       INNER JOIN core."messageChannel" channel
         ON channel."id" = association."messageChannelId"
-      LEFT JOIN core."managedEmailMailbox" mailbox
-        ON mailbox."workspaceId" = channel."workspaceId"
-        AND mailbox."connectedAccountId" = channel."connectedAccountId"
-      LEFT JOIN "${schemaName}"."messageParticipant" recipient
-        ON recipient."messageId" = message."id"
-        AND recipient."role" = 'TO'
-      LEFT JOIN "${schemaName}"."messageParticipant" sender
-        ON sender."messageId" = message."id"
-        AND sender."role" = 'FROM'
       INNER JOIN "${schemaName}"."message" parent
-        ON parent."id" = $2
+        ON parent."id" = $3
         AND parent."messageThreadId" = message."messageThreadId"
       LEFT JOIN "${schemaName}"."messageChannelMessageAssociation" parent_association
         ON parent_association."messageId" = parent."id"
         AND parent_association."messageChannelId" = association."messageChannelId"
       WHERE message."headerMessageId" = $1
+        OR ($2 IS NOT NULL AND association."messageExternalId" = $2)
       LIMIT 2`,
-      [providerMessageId, parentMessageId],
+      [providerMessageId, providerExternalMessageId, parentMessageId],
     );
   }
 
@@ -376,33 +431,29 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     message: SentInboxMessageRow,
     input: InboxProjectionInput,
     approvedRevision: number,
+    parentMessageId: string,
   ): boolean {
     return (
       isNonEmptyString(message.id) &&
       message.messageThreadId === input.threadId &&
       isNonEmptyString(message.messageChannelId) &&
+      isNonEmptyString(message.connectedAccountId) &&
       isNonEmptyString(message.subject) &&
       isNonEmptyString(message.body) &&
       isNonEmptyString(message.recipientEmail) &&
+      isNonEmptyString(message.senderEmail) &&
+      Number(message.recipientCount) === 1 &&
+      Number(message.senderCount) === 1 &&
       (!isNonEmptyString(input.providerExternalMessageId) ||
         message.messageExternalId === input.providerExternalMessageId) &&
       (!isNonEmptyString(input.providerThreadExternalId) ||
         message.messageThreadExternalId === input.providerThreadExternalId) &&
-      message.parentMessageId === this.getInboxParentEvidenceId(input) &&
+      message.parentMessageId === parentMessageId &&
       computeActionContentDigest(
         JSON.stringify([message.subject, message.body]),
       ) === input.contentDigest &&
       computeActionContentDigest(JSON.stringify([message.recipientEmail])) ===
         input.recipientFingerprint &&
-      computeActionContentDigest(
-        JSON.stringify([
-          message.managedMailboxId,
-          message.connectedAccountId,
-          message.messageChannelId,
-          message.senderEmail,
-          message.senderDisplayName,
-        ]),
-      ) === input.sendingAccountFingerprint &&
       computeActionContentDigest(
         JSON.stringify([
           approvedRevision,

@@ -512,7 +512,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
           role: 'thread_parent',
         },
       ],
-    };
+    } as const;
     const canonicalGraph = {
       messageThreadId,
       draftRevision: 4,
@@ -541,7 +541,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         expectedActionBinding: { ...projection },
       }),
     };
+    const operations: string[] = [];
     let messagePersisted = false;
+    let duplicateCandidate = false;
     let revision = 4;
     let draftBody: string | null = body;
     const sentMessage = {
@@ -552,8 +554,10 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       messageChannelId,
       messageExternalId: 'provider-message-id',
       messageThreadExternalId: 'provider-thread-id',
+      recipientCount: 1,
       recipientEmail: 'creator@example.com',
       senderEmail: 'sender@example.com',
+      senderCount: 1,
       senderDisplayName: 'Sender',
       connectedAccountId: 'connected-account-id',
       managedMailboxId: null,
@@ -563,16 +567,40 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       parentThreadExternalId: 'provider-thread-id',
     };
     const query = jest.fn(async (sql: string, parameters?: unknown[]) => {
+      if (sql.includes('FOR UPDATE')) {
+        operations.push('row-lock');
+      }
       if (sql.includes('pg_advisory_xact_lock')) {
         return [];
       }
+      if (sql.includes('core."objectMetadata"')) {
+        return [
+          {
+            id: 'message-thread-metadata-id',
+            universalIdentifier: parameters?.[1],
+          },
+          {
+            id: 'message-metadata-id',
+            universalIdentifier: parameters?.[2],
+          },
+        ];
+      }
       if (sql.includes('"headerMessageId"')) {
-        return messagePersisted ? [sentMessage] : [];
+        const matchesProviderIdentity =
+          parameters?.[0] === providerMessageId ||
+          parameters?.[1] === 'provider-message-id';
+        if (!messagePersisted || !matchesProviderIdentity) {
+          return [];
+        }
+        return duplicateCandidate
+          ? [sentMessage, { ...sentMessage, id: 'different-message-id' }]
+          : [sentMessage];
       }
       if (
         String(sql).trimStart().startsWith('UPDATE') &&
         sql.includes('"messageThread"')
       ) {
+        operations.push('draft-cas');
         if (parameters?.[0] === messageThreadId && parameters?.[1] === 4) {
           draftBody = null;
           revision += 1;
@@ -597,18 +625,15 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       ),
     };
     const persistSentMessage = jest.fn(async () => {
+      operations.push('persist');
       messagePersisted = true;
       return { messageId: sentMessage.id, messageThreadId };
     });
-    const Writer =
-      ActionReceiptWorkspaceProjectionWriterService as unknown as new (
-        ...args: unknown[]
-      ) => { project: (input: typeof projection) => Promise<void> };
-    const writer = new Writer(
-      dataSource,
+    const writer = new ActionReceiptWorkspaceProjectionWriterService(
+      dataSource as never,
       {} as never,
-      { persistSentMessage },
-      actionDefinition,
+      { persistSentMessage } as never,
+      actionDefinition as never,
     );
 
     await writer.project(projection);
@@ -619,6 +644,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       [`myah-inbox-reply-projection:${workspaceId}:${messageThreadId}`],
     );
     expect(persistSentMessage).toHaveBeenCalledTimes(1);
+    expect(operations).toEqual(['persist', 'draft-cas']);
     expect(persistSentMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         sendResult: {
@@ -635,6 +661,10 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         workspaceId,
       }),
     );
+    const messageLookup = query.mock.calls.find(([sql]) =>
+      String(sql).includes('"recipientCount"'),
+    );
+    expect(messageLookup?.[0]).not.toContain('JOIN "messageParticipant"');
     expect(
       query.mock.calls.filter(
         ([sql]) =>
@@ -662,6 +692,21 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     await expect(writer.project(projection)).rejects.toThrow(
       'The approved Inbox reply is unavailable for projection',
     );
+
+    draftBody = body;
+    revision = 4;
+    await writer.project({
+      ...projection,
+      providerMessageId: '<alternate-sent@example.com>',
+    });
+    expect(persistSentMessage).toHaveBeenCalledTimes(1);
+
+    duplicateCandidate = true;
+    draftBody = null;
+    revision = 5;
+    await expect(writer.project(projection)).rejects.toThrow(
+      'The sent Inbox Message is unavailable for projection',
+    );
   });
 
   it.each([
@@ -676,6 +721,45 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
             objectMetadataId: 'message-thread-metadata-id',
             recordId: 'different-thread-id',
             role: 'draft',
+          },
+        ],
+      },
+    ],
+    [
+      'a MessageThread metadata mismatch',
+      {
+        evidenceLinks: [
+          {
+            objectMetadataId: 'wrong-metadata-id',
+            recordId: '00000000-0000-4000-8000-000000000112',
+            role: 'draft',
+          },
+          {
+            objectMetadataId: 'message-metadata-id',
+            recordId: 'parent-message-id',
+            role: 'thread_parent',
+          },
+        ],
+      },
+    ],
+    [
+      'an extra evidence link',
+      {
+        evidenceLinks: [
+          {
+            objectMetadataId: 'message-thread-metadata-id',
+            recordId: '00000000-0000-4000-8000-000000000112',
+            role: 'draft',
+          },
+          {
+            objectMetadataId: 'message-metadata-id',
+            recordId: 'parent-message-id',
+            role: 'thread_parent',
+          },
+          {
+            objectMetadataId: 'extra-metadata-id',
+            recordId: 'extra-record-id',
+            role: 'extra',
           },
         ],
       },
@@ -732,9 +816,21 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       ],
       ...override,
     };
-    const query = jest.fn(async (sql: string) => {
+    const query = jest.fn(async (sql: string, parameters?: unknown[]) => {
       if (sql.includes('pg_advisory_xact_lock')) {
         return [];
+      }
+      if (sql.includes('core."objectMetadata"')) {
+        return [
+          {
+            id: 'message-thread-metadata-id',
+            universalIdentifier: parameters?.[1],
+          },
+          {
+            id: 'message-metadata-id',
+            universalIdentifier: parameters?.[2],
+          },
+        ];
       }
       if (sql.includes('"headerMessageId"')) {
         return [
@@ -747,10 +843,10 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
             messageExternalId: 'provider-message-id',
             messageThreadExternalId: 'provider-thread-id',
             recipientEmail: 'creator@example.com',
+            recipientCount: 1,
             senderEmail: 'sender@example.com',
-            senderDisplayName: 'Sender',
+            senderCount: 1,
             connectedAccountId: 'connected-account-id',
-            managedMailboxId: null,
             parentMessageId: 'parent-message-id',
             parentHeaderMessageId: '<incoming@example.com>',
             parentMessageExternalId: 'incoming-provider-message-id',

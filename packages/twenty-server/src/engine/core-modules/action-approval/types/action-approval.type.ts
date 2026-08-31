@@ -90,6 +90,7 @@ export type ActionReceiptProjectionWriter = {
     threadId: string;
     initiatorUserWorkspaceId: string;
     contentDigest: string;
+    actionName: ExpectedActionBinding['actionName'];
     providerMessageId: string | null;
     providerExternalMessageId: string | null;
     providerThreadExternalId: string | null;
