@@ -61,6 +61,22 @@ const readinessReasons: Record<MyahInboxReplyUnavailableCode, string> = {
     'The sending mailbox is not eligible to send this reply.',
 };
 
+const readinessStatuses: Record<
+  MyahInboxReplyUnavailableCode,
+  MyahInboxReplySendReadinessStatus
+> = {
+  [MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE]:
+    MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
+  [MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE]:
+    MyahInboxReplySendReadinessStatus.SENDER_UNAVAILABLE,
+  [MyahInboxReplyUnavailableCode.RECIPIENT_UNAVAILABLE]:
+    MyahInboxReplySendReadinessStatus.RECIPIENT_UNAVAILABLE,
+  [MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED]:
+    MyahInboxReplySendReadinessStatus.RECONNECT_REQUIRED,
+  [MyahInboxReplyUnavailableCode.MAILBOX_INELIGIBLE]:
+    MyahInboxReplySendReadinessStatus.MAILBOX_INELIGIBLE,
+};
+
 @Injectable()
 export class MyahInboxReplySendService {
   constructor(
@@ -369,7 +385,7 @@ export class MyahInboxReplySendService {
   private toReadiness(error: unknown): MyahInboxReplySendReadiness {
     if (error instanceof MyahInboxReplyUnavailableError) {
       return {
-        status: error.code,
+        status: readinessStatuses[error.code],
         reason: readinessReasons[error.code],
       };
     }

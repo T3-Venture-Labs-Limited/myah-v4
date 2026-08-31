@@ -12,6 +12,67 @@ const parentMessageId = '00000000-0000-4000-8000-000000000005';
 const connectedAccountId = '00000000-0000-4000-8000-000000000006';
 const messageChannelId = '00000000-0000-4000-8000-000000000007';
 
+type InboxReplyAuthorityOverride = {
+  draft?: Partial<{
+    id: string;
+    subject: string;
+    myahReplyDraftBodyMarkdown: string | null;
+    myahReplyDraftBodyBlocknote: null;
+    myahReplyDraftRevision: number;
+  }>;
+  parent?: Partial<{
+    id: string;
+    messageThreadId: string;
+    isDraft: boolean;
+    receivedAt: Date;
+    headerMessageId: string | null;
+    messageParticipants: {
+      role: string;
+      handle: string;
+      displayName: string;
+    }[];
+    messageChannelMessageAssociations: {
+      messageChannelId: string;
+      direction: string;
+      messageExternalId?: string;
+      messageThreadExternalId?: string;
+    }[];
+  }>;
+  account?: Partial<{
+    id: string;
+    workspaceId: string;
+    userWorkspaceId: string;
+    handle: string;
+    handleAliases: string[];
+    provider: string;
+    archivedAt: Date | null;
+    name: string;
+  }>;
+  channel?: Partial<{
+    id: string;
+    workspaceId: string;
+    connectedAccountId: string;
+    handle: string;
+    type: string;
+    visibility: string;
+    isSyncEnabled: boolean;
+    syncStatus: string;
+  }>;
+};
+
+type InboxReplyDraftFixture = Required<
+  NonNullable<InboxReplyAuthorityOverride['draft']>
+>;
+type InboxReplyParentFixture = Required<
+  NonNullable<InboxReplyAuthorityOverride['parent']>
+>;
+type InboxReplyAccountFixture = Required<
+  NonNullable<InboxReplyAuthorityOverride['account']>
+>;
+type InboxReplyChannelFixture = Required<
+  NonNullable<InboxReplyAuthorityOverride['channel']>
+>;
+
 const metadata = [
   {
     id: '00000000-0000-4000-8000-000000000008',
@@ -74,10 +135,10 @@ const createDefinition = ({
   },
   managedMailbox = null,
 }: {
-  draft?: Record<string, unknown>;
-  parent?: Record<string, unknown>;
-  account?: Record<string, unknown>;
-  channel?: Record<string, unknown>;
+  draft?: InboxReplyDraftFixture;
+  parent?: InboxReplyParentFixture;
+  account?: InboxReplyAccountFixture;
+  channel?: InboxReplyChannelFixture;
   managedMailbox?: { id: string } | null;
 } = {}) => {
   const repositories = {
@@ -86,7 +147,12 @@ const createDefinition = ({
   };
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest.fn().mockImplementation((callback) => callback()),
-    getRepository: jest.fn().mockImplementation((_workspaceId, name) => repositories[name]),
+    getRepository: jest
+      .fn()
+      .mockImplementation(
+        (_workspaceId: string, name: keyof typeof repositories) =>
+          repositories[name],
+      ),
   };
   const workspaceRepository = {
     findOneBy: jest.fn().mockResolvedValue({ id: workspaceId }),
@@ -348,14 +414,16 @@ describe('MyahInboxReplyActionDefinition', () => {
     ).rejects.toThrow(MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE);
   });
 
-  it.each([
+  it.each<
+    [string, InboxReplyAuthorityOverride, MyahInboxReplyUnavailableCode]
+  >([
     [
       'an archived account',
       { account: { archivedAt: new Date() } },
       MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
     ],
     [
-      'a disabled channel sync',
+      'a disconnected channel',
       { channel: { isSyncEnabled: false } },
       MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
     ],

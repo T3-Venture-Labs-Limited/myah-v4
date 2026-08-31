@@ -81,24 +81,15 @@ export type ActionExecutionReservation = {
   receipt: SafeActionExecutionReceipt;
 };
 
+export type ActionReceiptProjectionInput = ExpectedActionBindingWithWorkspace & {
+  receiptId: string;
+  providerMessageId: string | null;
+  providerExternalMessageId: string | null;
+  providerThreadExternalId: string | null;
+};
+
 export type ActionReceiptProjectionWriter = {
-  project: (input: {
-    receiptId: string;
-    workspaceId: string;
-    draftId: string;
-    actionVersion: 1;
-    threadId: string;
-    initiatorUserWorkspaceId: string;
-    contentDigest: string;
-    actionName: ExpectedActionBinding['actionName'];
-    providerMessageId: string | null;
-    providerExternalMessageId: string | null;
-    providerThreadExternalId: string | null;
-    recipientFingerprint: string | null;
-    sendingAccountFingerprint: string | null;
-    actionContextFingerprint: string | null;
-    evidenceLinks: readonly ActionEvidenceLinkInput[];
-  }) => Promise<void>;
+  project: (input: ActionReceiptProjectionInput) => Promise<void>;
 };
 
 export const ACTION_RECEIPT_PROJECTION_WRITER = Symbol(

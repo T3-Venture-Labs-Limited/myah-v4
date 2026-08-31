@@ -18,6 +18,11 @@ import { SentMessagePersistenceService } from 'src/modules/messaging/message-out
 
 type ProjectionInput = Parameters<ActionReceiptProjectionWriter['project']>[0];
 
+type InboxProjectionAuthorityBuilder = Pick<
+  MyahInboxReplyActionDefinition,
+  'rebuildProjectionAuthority'
+>;
+
 type OutreachActionProjectionRow = {
   subject: string | null;
   body: string | null;
@@ -75,7 +80,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     private readonly sentMessagePersistenceService: SentMessagePersistenceService,
-    private readonly myahInboxReplyActionDefinition: MyahInboxReplyActionDefinition,
+    private readonly myahInboxReplyActionDefinition: InboxProjectionAuthorityBuilder,
   ) {}
 
   async project(input: ProjectionInput): Promise<void> {
@@ -106,6 +111,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     if (!isNonEmptyString(input.providerMessageId)) {
       throw new Error('The sent Inbox Message is unavailable for projection');
     }
+    const providerMessageId = input.providerMessageId;
     const binding = this.toInboxProjectionBinding(input);
 
     await this.dataSource.transaction(async (manager) => {
@@ -124,7 +130,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       const sentMessages = await this.findSentInboxMessages(
         manager,
         schemaName,
-        input.providerMessageId,
+        providerMessageId,
         input.providerExternalMessageId,
         parentMessageId,
       );
@@ -181,7 +187,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         const persisted =
           await this.sentMessagePersistenceService.persistSentMessage({
             sendResult: {
-              headerMessageId: input.providerMessageId,
+              headerMessageId: providerMessageId,
               messageExternalId: input.providerExternalMessageId ?? undefined,
               threadExternalId: input.providerThreadExternalId ?? undefined,
             },
@@ -211,7 +217,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       const matchingMessages = await this.findSentInboxMessages(
         manager,
         schemaName,
-        input.providerMessageId,
+        providerMessageId,
         input.providerExternalMessageId,
         parentMessageId,
       );

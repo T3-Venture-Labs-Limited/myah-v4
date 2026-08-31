@@ -291,6 +291,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
           dataSource,
           {} as never,
           {} as never,
+          { rebuildProjectionAuthority: jest.fn() },
         ),
       ),
     );
@@ -479,6 +480,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
       dataSource,
       {} as never,
       {} as never,
+      { rebuildProjectionAuthority: jest.fn() },
     );
     service = new ActionApprovalService(
       dataSource,
@@ -811,6 +813,7 @@ describe('ActionApprovalService (PostgreSQL)', () => {
         dataSource,
         {} as never,
         {} as never,
+        { rebuildProjectionAuthority: jest.fn() },
       ),
     );
 

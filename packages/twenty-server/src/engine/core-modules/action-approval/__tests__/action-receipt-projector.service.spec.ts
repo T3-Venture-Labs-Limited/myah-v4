@@ -18,6 +18,10 @@ describe('ActionReceiptProjectorService', () => {
       recipientFingerprint: 'b'.repeat(64),
       sendingAccountFingerprint: 'c'.repeat(64),
       actionContextFingerprint: 'd'.repeat(64),
+      inboundMessageId: null,
+      inboundSenderIgsid: null,
+      inboundDirection: null,
+      inboundReceivedAt: null,
       evidenceLinks: [
         {
           objectMetadataId: '00000000-0000-4000-8000-000000000004',
@@ -85,6 +89,30 @@ describe('ActionReceiptProjectorService', () => {
       { id: receipt.id, state: 'PROVIDER_ACCEPTED' },
       { state: 'SENT' },
     );
+  });
+
+  it('rejects a provider-accepted receipt with an unsupported binding before projecting it', async () => {
+    const writer = { project: jest.fn() };
+    const repository = {
+      findOne: jest.fn(async () => ({
+        ...receipt,
+        actionApprovalBinding: {
+          ...receipt.actionApprovalBinding,
+          actionVersion: 2,
+        },
+      })),
+      update: jest.fn(),
+    };
+    const service = new ActionReceiptProjectorService(
+      repository as never,
+      writer,
+    );
+
+    await expect(service.projectReceipt(receipt.id)).rejects.toThrow(
+      'Unsupported action receipt projection',
+    );
+    expect(writer.project).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it('does not project any state except PROVIDER_ACCEPTED', async () => {

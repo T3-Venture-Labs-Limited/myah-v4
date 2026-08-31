@@ -7,7 +7,13 @@ import {
   MyahInboxReplySendOutcome,
   MyahInboxReplySendReadinessStatus,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-send.dto';
-import { MyahInboxReplySendService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-send.service';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
+import {
+  MyahInboxReplySendService,
+  type MyahInboxReplySendRequest,
+} from 'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-send.service';
 
 const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const userWorkspaceId = '20202020-1234-4678-9012-345678901234';
@@ -16,14 +22,38 @@ const workspaceMemberId = '20202020-0b5c-4178-bed7-d371f6411eaa';
 const threadId = '20202020-0b5c-4178-bed7-d371f6411ea1';
 const receiptId = '20202020-0b5c-4178-bed7-d371f6411ea2';
 const approvalBindingId = '20202020-0b5c-4178-bed7-d371f6411ea3';
-const workspace = { id: workspaceId };
+const workspace = new WorkspaceEntity();
+workspace.id = workspaceId;
+const authWorkspace = {
+  ...workspace,
+  createdAt: '2026-08-31T00:00:00.000Z',
+  updatedAt: '2026-08-31T00:00:00.000Z',
+  deletedAt: undefined,
+  suspendedAt: null,
+};
+const user: AuthContextUser = {
+  id: userId,
+  firstName: 'Test',
+  lastName: 'User',
+  email: 'test@example.com',
+  isEmailVerified: true,
+  disabled: false,
+  canImpersonate: false,
+  canAccessFullAdminPanel: false,
+  createdAt: '2026-08-31T00:00:00.000Z',
+  updatedAt: '2026-08-31T00:00:00.000Z',
+  deletedAt: '2026-08-31T00:00:00.000Z',
+  locale: 'en',
+};
+const workspaceMember = new WorkspaceMemberWorkspaceEntity();
+workspaceMember.id = workspaceMemberId;
 const authContext = {
-  type: 'user',
-  workspace,
+  type: 'user' as const,
+  workspace: authWorkspace,
   userWorkspaceId,
-  user: { id: userId },
+  user,
   workspaceMemberId,
-  workspaceMember: { id: workspaceMemberId },
+  workspaceMember,
 };
 const expectedActionBinding = {
   workspaceId,
@@ -71,7 +101,7 @@ const receipt = (state: ActionExecutionReceiptState) => ({
   occurredAt: new Date('2026-08-31T00:00:00.000Z'),
 });
 
-const request = () => ({
+const request = (): MyahInboxReplySendRequest => ({
   threadId,
   expectedDraftRevision: 4,
   authContext,

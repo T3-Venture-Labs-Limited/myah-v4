@@ -611,7 +611,7 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
     const input = {
       workspaceId,
       receiptId: receipt.id,
-      actionName: 'send_inbox_reply',
+      actionName: 'send_inbox_reply' as const,
       draftId: inboxReplyBinding.draftId,
       initiatorUserWorkspaceId: userWorkspaceId,
     };

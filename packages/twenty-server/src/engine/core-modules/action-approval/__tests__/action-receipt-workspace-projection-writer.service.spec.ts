@@ -213,6 +213,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     const projection = {
       receiptId,
       workspaceId,
+      actionVersion: 1,
+      threadId: draftId,
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000021',
       draftId,
       contentDigest: computeActionContentDigest(
         JSON.stringify([subject, body]),
@@ -1127,7 +1130,7 @@ describe('Inbox projected Message association grouping', () => {
       0,
       'two-distinct-messages',
     ],
-  ])(
+  ] as const)(
     'rejects %s without hiding candidates behind a SQL row limit',
     async (_label, draftBody, revision, authorityCalls, associationMode) => {
       const fixture = setup({ draftBody, revision, associationMode });
@@ -1164,7 +1167,7 @@ describe('Inbox projected Message association grouping', () => {
       5,
       0,
     ],
-  ])(
+  ] as const)(
     'rejects ambiguous provider-identity candidates for %s',
     async (_label, associationMode, draftBody, revision, authorityCalls) => {
       const fixture = setup({ associationMode, draftBody, revision });
