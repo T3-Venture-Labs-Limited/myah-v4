@@ -29,7 +29,7 @@ const eligibleMailbox = {
 };
 
 describe('ManagedEmailCampaignEligibilityService', () => {
-  const mailboxRepository = { findOneBy: jest.fn() };
+  const mailboxRepository = { findOneBy: jest.fn(), find: jest.fn() };
   const service = new ManagedEmailCampaignEligibilityService(
     mailboxRepository as never,
     () => NOW,
@@ -38,6 +38,10 @@ describe('ManagedEmailCampaignEligibilityService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     mailboxRepository.findOneBy.mockResolvedValue({ ...eligibleMailbox });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   const assertEligible = (
@@ -196,5 +200,91 @@ describe('ManagedEmailCampaignEligibilityService', () => {
     ],
   ])('rejects a draft pinned to a different %s', async (_label, overrides) => {
     await expect(assertEligible(overrides)).rejects.toThrow(NOT_ELIGIBLE);
+  });
+
+  const assertConnectedIdentityEligibleForFollowUp = () =>
+    service.assertConnectedIdentityEligibleForFollowUp({
+      workspaceId: WORKSPACE_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+    });
+
+  it('returns null when an ordinary account has no managed mailbox', async () => {
+    mailboxRepository.find.mockResolvedValue([]);
+
+    await expect(
+      assertConnectedIdentityEligibleForFollowUp(),
+    ).resolves.toBeNull();
+  });
+
+  it('delegates one exact managed identity as a follow-up', async () => {
+    mailboxRepository.find.mockResolvedValue([{ ...eligibleMailbox }]);
+    const assertEligibleSpy = jest.spyOn(service, 'assertEligible');
+
+    await expect(
+      assertConnectedIdentityEligibleForFollowUp(),
+    ).resolves.toEqual<ManagedEmailCampaignMailbox>({
+      id: MAILBOX_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      effectiveDailyCap: 12,
+    });
+    expect(assertEligibleSpy).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      managedMailboxId: MAILBOX_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      isFollowUp: true,
+    });
+  });
+
+  it('resolves a managed identity without checking mutable eligibility', async () => {
+    mailboxRepository.find.mockResolvedValue([{ ...eligibleMailbox }]);
+
+    await expect(
+      service.findConnectedIdentity({
+        workspaceId: WORKSPACE_ID,
+        connectedAccountId: CONNECTED_ACCOUNT_ID,
+        messageChannelId: MESSAGE_CHANNEL_ID,
+      }),
+    ).resolves.toEqual({
+      id: MAILBOX_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+    });
+    expect(mailboxRepository.findOneBy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'an account-only managed mailbox',
+      [{ ...eligibleMailbox, messageChannelId: 'other-channel' }],
+    ],
+    [
+      'a channel-only managed mailbox',
+      [{ ...eligibleMailbox, connectedAccountId: 'other-account' }],
+    ],
+    [
+      'duplicate managed mailboxes',
+      [{ ...eligibleMailbox }, { ...eligibleMailbox, id: 'duplicate-mailbox' }],
+    ],
+  ])('fails closed for %s', async (_label, mailboxes) => {
+    mailboxRepository.find.mockResolvedValue(mailboxes);
+
+    await expect(
+      assertConnectedIdentityEligibleForFollowUp(),
+    ).rejects.toThrow(NOT_ELIGIBLE);
+  });
+
+  it('fails closed when the matched managed mailbox is blocked', async () => {
+    mailboxRepository.find.mockResolvedValue([{ ...eligibleMailbox }]);
+    mailboxRepository.findOneBy.mockResolvedValue({
+      ...eligibleMailbox,
+      campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
+    });
+
+    await expect(
+      assertConnectedIdentityEligibleForFollowUp(),
+    ).rejects.toThrow(NOT_ELIGIBLE);
   });
 });
