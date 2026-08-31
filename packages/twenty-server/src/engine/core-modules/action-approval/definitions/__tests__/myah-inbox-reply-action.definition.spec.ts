@@ -2,6 +2,11 @@ import {
   MyahInboxReplyActionDefinition,
   MyahInboxReplyUnavailableCode,
 } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
+import {
+  ConnectedAccountProvider,
+  MessageChannelType,
+} from 'twenty-shared/types';
+
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-authority-context.service';
 
@@ -299,6 +304,52 @@ describe('MyahInboxReplyActionDefinition', () => {
     ]);
     expect(
       managedEmailCampaignEligibilityService.assertConnectedIdentityEligibleForFollowUp,
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      connectedAccountId,
+      messageChannelId,
+    });
+  });
+
+  it('builds the same canonical authority for an active Email Group channel', async () => {
+    const canonical = createDefinition();
+    const emailGroup = createDefinition({
+      account: {
+        id: connectedAccountId,
+        workspaceId,
+        userWorkspaceId: initiatorUserWorkspaceId,
+        handle: 'team@brand.com',
+        handleAliases: ['brand-alias@brand.com'],
+        provider: ConnectedAccountProvider.EMAIL_GROUP,
+        archivedAt: null,
+        name: 'Brand',
+      },
+      channel: {
+        id: messageChannelId,
+        workspaceId,
+        connectedAccountId,
+        handle: 'team@brand.com',
+        type: MessageChannelType.EMAIL_GROUP,
+        visibility: 'SHARE_EVERYTHING',
+        isSyncEnabled: true,
+        syncStatus: 'ACTIVE',
+      },
+    });
+
+    const canonicalAuthority = await buildAuthority(canonical.definition);
+    const emailGroupAuthority = await buildAuthority(emailGroup.definition);
+    const { connectedAccount: _canonicalAccount, ...canonicalGraph } =
+      canonicalAuthority.canonicalGraph;
+    const { connectedAccount: _emailGroupAccount, ...emailGroupGraph } =
+      emailGroupAuthority.canonicalGraph;
+
+    expect(emailGroupGraph).toEqual(canonicalGraph);
+    expect(emailGroupAuthority.expectedActionBinding).toEqual(
+      canonicalAuthority.expectedActionBinding,
+    );
+    expect(
+      emailGroup.managedEmailCampaignEligibilityService
+        .assertConnectedIdentityEligibleForFollowUp,
     ).toHaveBeenCalledWith({
       workspaceId,
       connectedAccountId,

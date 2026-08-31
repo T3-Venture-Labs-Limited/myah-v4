@@ -75,3 +75,28 @@ npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-serv
 ```text
 NX Successfully ran target typecheck for project twenty-server
 ```
+
+## Follow-up — Email Group reply authority
+
+The shared Inbox reply authority now accepts `ConnectedAccountProvider.EMAIL_GROUP` and `MessageChannelType.EMAIL_GROUP` through the existing provider and channel allow-lists. No Email Group-specific execution path or provider call was added.
+
+The authority definition regression test first failed with `SENDER_UNAVAILABLE`, then passed after the shared allow-list update. It verifies that the Email Group fixture produces the same canonical graph and expected action binding as the existing email fixture (apart from the factual connected-account provider), and continues through the common managed-identity eligibility service.
+
+Passed:
+
+```sh
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/definitions/__tests__/myah-inbox-reply-action.definition.spec.ts --config packages/twenty-server/jest.config.mjs --runInBand
+```
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       26 passed, 26 total
+```
+
+```sh
+npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec nx typecheck twenty-server --excludeTaskDependencies
+```
+
+```text
+NX Successfully ran target typecheck for project twenty-server
+```

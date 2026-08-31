@@ -304,7 +304,10 @@ export class MyahInboxReplyActionDefinition {
       !channel ||
       !account ||
       channel.connectedAccountId !== account.id ||
-      channel.type !== MessageChannelType.EMAIL
+      ![
+        MessageChannelType.EMAIL,
+        MessageChannelType.EMAIL_GROUP,
+      ].includes(channel.type)
     ) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
@@ -424,6 +427,7 @@ export class MyahInboxReplyActionDefinition {
       ConnectedAccountProvider.GOOGLE,
       ConnectedAccountProvider.MICROSOFT,
       ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+      ConnectedAccountProvider.EMAIL_GROUP,
     ].includes(provider);
   }
 
