@@ -391,8 +391,7 @@ export class ManagedProviderFundingJournalService {
       workspaceId: input.workspaceId,
       metronomeCustomerId: input.metronomeCustomerId ?? null,
       metronomeContractId: input.metronomeContractId ?? null,
-      stripeBillingConfigurationId:
-        input.stripeBillingConfigurationId ?? null,
+      stripeBillingConfigurationId: input.stripeBillingConfigurationId ?? null,
       stripeDeliveryMethodId: input.stripeDeliveryMethodId ?? null,
       stripeCustomerId: input.stripeCustomerId ?? null,
       prepaidPrincipalCents,

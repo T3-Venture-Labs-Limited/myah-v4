@@ -68,21 +68,20 @@ type PaymentGatedInvoicePaymentBase = Readonly<{
   totalCents: number;
 }>;
 
-export type PaymentGatedInvoicePayment =
-  PaymentGatedInvoicePaymentBase &
-    (
-      | Readonly<{ status: 'PENDING' }>
-      | Readonly<{ clientSecret: string; status: 'ACTION_REQUIRED' }>
-      | Readonly<{ paidAt: string; status: 'PAID' }>
-      | Readonly<{
-          reason:
-            | 'INVOICE_UNCOLLECTIBLE'
-            | 'INVOICE_VOID'
-            | 'PAYMENT_INTENT_CANCELED'
-            | 'PAYMENT_METHOD_REQUIRED';
-          status: 'FAILED_DEFINITIVE';
-        }>
-    );
+export type PaymentGatedInvoicePayment = PaymentGatedInvoicePaymentBase &
+  (
+    | Readonly<{ status: 'PENDING' }>
+    | Readonly<{ clientSecret: string; status: 'ACTION_REQUIRED' }>
+    | Readonly<{ paidAt: string; status: 'PAID' }>
+    | Readonly<{
+        reason:
+          | 'INVOICE_UNCOLLECTIBLE'
+          | 'INVOICE_VOID'
+          | 'PAYMENT_INTENT_CANCELED'
+          | 'PAYMENT_METHOD_REQUIRED';
+        status: 'FAILED_DEFINITIVE';
+      }>
+  );
 
 const safeStripeCentsSchema = z
   .number()
@@ -197,7 +196,9 @@ export class ManagedProviderStripeService {
       customer: customerId,
       usage: 'off_session',
     });
-    if (intent.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)) {
+    if (
+      intent.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
+    ) {
       throw new Error('Stripe SetupIntent mode is invalid');
     }
     if (!intent.client_secret)
@@ -342,7 +343,8 @@ export class ManagedProviderStripeService {
       invoicePaymentInvoiceId !== stripeInvoiceId ||
       invoicePayment.payment.type !== 'payment_intent' ||
       invoicePaymentIntentId !== paymentIntentId ||
-      invoicePayment.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
+      invoicePayment.livemode !==
+        this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe external invoice proof is invalid');
     }
@@ -359,7 +361,8 @@ export class ManagedProviderStripeService {
       paymentIntent.amount_received !== expectedAmountCents ||
       paymentIntent.currency.toLowerCase() !== currency.toLowerCase() ||
       paymentIntentCustomerId !== customerId ||
-      paymentIntent.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
+      paymentIntent.livemode !==
+        this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe external invoice proof is invalid');
     }
@@ -463,8 +466,9 @@ export class ManagedProviderStripeService {
         type: 'payment_intent',
       },
     });
-    const parsedAssociationPayments =
-      stripeInvoicePaymentsSchema.safeParse(rawAssociationPayments);
+    const parsedAssociationPayments = stripeInvoicePaymentsSchema.safeParse(
+      rawAssociationPayments,
+    );
     const associationPayment = parsedAssociationPayments.success
       ? parsedAssociationPayments.data.data[0]
       : undefined;
@@ -544,7 +548,6 @@ export class ManagedProviderStripeService {
       };
     }
 
-
     if (invoice.status === 'uncollectible') {
       return {
         ...base,
@@ -600,10 +603,8 @@ export class ManagedProviderStripeService {
       };
     }
 
-
     return { ...base, status: 'PENDING' };
   }
-
 
   async refundPaymentGatedInvoice(
     input: RefundPaymentGatedInvoiceInput,
@@ -847,8 +848,7 @@ export class ManagedProviderStripeService {
     if (
       customer.deleted ||
       customer.id !== customerId ||
-      customer.livemode !==
-        this.expectedLivemode(metronomeBaseUrlEnvironment)
+      customer.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe Customer proof is invalid');
     }
@@ -941,8 +941,7 @@ export class ManagedProviderStripeService {
 
         return (
           taxIdCustomer !== customerId ||
-          taxId.livemode !==
-            this.expectedLivemode(metronomeBaseUrlEnvironment)
+          taxId.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
         );
       })
     ) {

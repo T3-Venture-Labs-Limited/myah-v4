@@ -109,7 +109,6 @@ export class ManagedProviderOperationService {
     });
   }
 
-
   async reserveOperation(
     input: ReserveManagedProviderOperationInput,
     options: { rejectReplay?: boolean } = {},

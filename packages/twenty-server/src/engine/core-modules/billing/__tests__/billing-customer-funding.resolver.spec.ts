@@ -67,7 +67,9 @@ const createResolver = () => {
     }),
   };
   const fundingService = {
-    acknowledgeCustomerFundingPaymentAction: jest.fn().mockResolvedValue(action),
+    acknowledgeCustomerFundingPaymentAction: jest
+      .fn()
+      .mockResolvedValue(action),
     completeCustomerFundingPaymentMethod: jest.fn().mockResolvedValue({
       billingSummary,
       clientSecret: null,
@@ -77,7 +79,9 @@ const createResolver = () => {
     }),
     createCustomerFunding: jest.fn().mockResolvedValue(action),
     getCustomerFundingAction: jest.fn().mockResolvedValue(action),
-    getCustomerFundingBillingSummary: jest.fn().mockResolvedValue(billingSummary),
+    getCustomerFundingBillingSummary: jest
+      .fn()
+      .mockResolvedValue(billingSummary),
     getCustomerFundingPaymentAction: jest.fn().mockResolvedValue({
       clientSecret: 'pi_secret',
       paymentIntentId: 'pi_1',
@@ -116,29 +120,36 @@ describe('BillingResolver customer AI funding', () => {
     'completeManagedProviderCustomerFundingPaymentMethod',
     'prepareManagedProviderCustomerFundingPaymentAction',
     'acknowledgeManagedProviderCustomerFundingPaymentAction',
-  ] as const)('protects %s as a non-impersonated billing-admin action', (method) => {
-    const guards = Reflect.getMetadata(
-      GUARDS_METADATA,
-      BillingResolver.prototype[method],
-    ) as unknown[];
+  ] as const)(
+    'protects %s as a non-impersonated billing-admin action',
+    (method) => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        BillingResolver.prototype[method],
+      ) as unknown[];
 
-    expect(guards).toEqual(
-      expect.arrayContaining([
-        WorkspaceAuthGuard,
-        UserAuthGuard,
-        NoImpersonationGuard,
-      ]),
-    );
-  });
+      expect(guards).toEqual(
+        expect.arrayContaining([
+          WorkspaceAuthGuard,
+          UserAuthGuard,
+          NoImpersonationGuard,
+        ]),
+      );
+    },
+  );
 
   it('requests one server-owned preset bound to workspace and actor', async () => {
     const { fundingService, resolver } = createResolver();
 
     await expect(
-      resolver.requestManagedProviderCustomerFunding(workspace as never, user as never, {
-        idempotencyKey: 'browser-key',
-        preset: 'AI_25_USD',
-      }),
+      resolver.requestManagedProviderCustomerFunding(
+        workspace as never,
+        user as never,
+        {
+          idempotencyKey: 'browser-key',
+          preset: 'AI_25_USD',
+        },
+      ),
     ).resolves.toMatchObject({
       id: action.id,
       presetId: 'AI_25_USD',
@@ -189,7 +200,6 @@ describe('BillingResolver customer AI funding', () => {
       reconciliationRequiredOperationCount: 0,
     });
   });
-
 
   it('forwards bounded billing details when completing payment setup', async () => {
     const { fundingService, resolver } = createResolver();

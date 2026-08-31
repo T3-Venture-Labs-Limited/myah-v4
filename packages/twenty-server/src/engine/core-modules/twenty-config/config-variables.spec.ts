@@ -214,8 +214,7 @@ describe('managed email execution safety', () => {
     ICEMAIL_API_KEY: 'sandbox-icemail-key',
     WARMUP_INBOX_API_KEY: 'sandbox-warmup-key',
     MANAGED_EMAIL_METRONOME_RATE_CARD_ALIAS: 'sandbox-rate-card',
-    METRONOME_STRIPE_DELIVERY_METHOD_ID:
-      '123e4567-e89b-42d3-a456-426614174000',
+    METRONOME_STRIPE_DELIVERY_METHOD_ID: '123e4567-e89b-42d3-a456-426614174000',
     MANAGED_EMAIL_ALLOWED_WORKSPACE_IDS: [
       '123e4567-e89b-42d3-a456-426614174000',
     ],

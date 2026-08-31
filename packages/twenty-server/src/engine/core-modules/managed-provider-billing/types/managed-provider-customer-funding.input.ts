@@ -34,9 +34,7 @@ export class ManagedProviderCustomerFundingActionInput {
 }
 
 @ArgsType()
-export class CompleteManagedProviderCustomerFundingPaymentMethodInput
-  implements WorkspaceBillingDetailsInput
-{
+export class CompleteManagedProviderCustomerFundingPaymentMethodInput implements WorkspaceBillingDetailsInput {
   @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()

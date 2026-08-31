@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 
-import { MetronomeClientException } from '../metronome-client.exception';
-import { MetronomeClientExceptionCode } from '../metronome-client.exception';
+import {
+  MetronomeClientException,
+  MetronomeClientExceptionCode,
+} from '../metronome-client.exception';
 import {
   AI_TOP_UP_PRESETS,
   ManagedProviderCustomerFundingService,
@@ -123,9 +125,9 @@ describe('ManagedProviderCustomerFundingService', () => {
         .mockResolvedValue(Object.assign(action, { createdByCaller: true })),
       findByIdempotency: jest.fn().mockResolvedValue(existing),
       findWorkspaceAction: jest.fn().mockResolvedValue(existing),
-      listWorkspaceActions: jest.fn().mockResolvedValue(
-        existing === null ? [] : [existing],
-      ),
+      listWorkspaceActions: jest
+        .fn()
+        .mockResolvedValue(existing === null ? [] : [existing]),
       transitionCompareAndSet: jest
         .fn()
         .mockResolvedValueOnce(recorded)
@@ -187,7 +189,9 @@ describe('ManagedProviderCustomerFundingService', () => {
       getWorkspaceBillingDetailsSummary: jest
         .fn()
         .mockResolvedValue(billingSummary),
-      updateWorkspaceBillingDetails: jest.fn().mockResolvedValue(billingSummary),
+      updateWorkspaceBillingDetails: jest
+        .fn()
+        .mockResolvedValue(billingSummary),
     };
     const twentyConfig = {
       get: jest.fn((key: keyof typeof config) => config[key]),
@@ -238,30 +242,28 @@ describe('ManagedProviderCustomerFundingService', () => {
     },
   }: {
     actionOverrides?: Partial<ManagedProviderFundingActionEntity>;
-    externalInvoice?:
-      | null
-      | {
-          issuedAt: string | null;
-          pdfUrl: string | null;
-          status:
-            | 'DRAFT'
-            | 'FINALIZED'
-            | 'PAID'
-            | 'PARTIALLY_PAID'
-            | 'UNCOLLECTIBLE'
-            | 'VOID'
-            | 'DELETED'
-            | 'PAYMENT_FAILED'
-            | 'INVALID_REQUEST_ERROR'
-            | 'SKIPPED'
-            | 'SENT'
-            | 'QUEUED';
-          stripeInvoiceId: string | null;
-          stripePaymentIntentId: string | null;
-          subtotalCents: number | null;
-          taxCents: number | null;
-          totalCents: number | null;
-        };
+    externalInvoice?: null | {
+      issuedAt: string | null;
+      pdfUrl: string | null;
+      status:
+        | 'DRAFT'
+        | 'FINALIZED'
+        | 'PAID'
+        | 'PARTIALLY_PAID'
+        | 'UNCOLLECTIBLE'
+        | 'VOID'
+        | 'DELETED'
+        | 'PAYMENT_FAILED'
+        | 'INVALID_REQUEST_ERROR'
+        | 'SKIPPED'
+        | 'SENT'
+        | 'QUEUED';
+      stripeInvoiceId: string | null;
+      stripePaymentIntentId: string | null;
+      subtotalCents: number | null;
+      taxCents: number | null;
+      totalCents: number | null;
+    };
     invoiceStatus?: 'DRAFT' | 'FINALIZED' | 'VOID';
     recoveryInvoiceId?: string | null;
     expiryAlreadyApplied?: boolean;
@@ -288,9 +290,7 @@ describe('ManagedProviderCustomerFundingService', () => {
     };
     Object.assign(metronome, {
       assertPaymentGatedPrepaidCommitExpiry: expiryAlreadyApplied
-        ? jest
-            .fn()
-            .mockResolvedValue({ expiresAt: '2027-08-29T10:40:00.000Z' })
+        ? jest.fn().mockResolvedValue({ expiresAt: '2027-08-29T10:40:00.000Z' })
         : jest
             .fn()
             .mockRejectedValueOnce(new Error('expiry not applied'))
@@ -352,23 +352,26 @@ describe('ManagedProviderCustomerFundingService', () => {
   it.each([
     ['disabled', false, [workspaceId]],
     ['not allowlisted', true, ['other-workspace']],
-  ])('rejects new funding while %s before creating an intent', async (_, enabled, allowlist) => {
-    const { journal, service, workspaceCustomer } = createHarness({
-      customerFundingEnabled: enabled,
-      allowedWorkspaceIds: allowlist,
-    });
+  ])(
+    'rejects new funding while %s before creating an intent',
+    async (_, enabled, allowlist) => {
+      const { journal, service, workspaceCustomer } = createHarness({
+        customerFundingEnabled: enabled,
+        allowedWorkspaceIds: allowlist,
+      });
 
-    await expect(
-      service.createCustomerFunding({
-        actorId,
-        idempotencyKey,
-        preset: 'AI_25_USD',
-        workspaceId,
-      }),
-    ).rejects.toThrow('Customer AI funding is unavailable');
-    expect(journal.createPending).not.toHaveBeenCalled();
-    expect(workspaceCustomer.ensureWorkspaceContract).not.toHaveBeenCalled();
-  });
+      await expect(
+        service.createCustomerFunding({
+          actorId,
+          idempotencyKey,
+          preset: 'AI_25_USD',
+          workspaceId,
+        }),
+      ).rejects.toThrow('Customer AI funding is unavailable');
+      expect(journal.createPending).not.toHaveBeenCalled();
+      expect(workspaceCustomer.ensureWorkspaceContract).not.toHaveBeenCalled();
+    },
+  );
 
   it('returns an exact existing replay without reopening remote admission', async () => {
     const existing = createAction();
@@ -566,9 +569,9 @@ describe('ManagedProviderCustomerFundingService', () => {
     await expect(
       service.getCustomerFundingAction(workspaceId, existing.id),
     ).resolves.toBe(existing);
-    await expect(service.listCustomerFundingHistory(workspaceId)).resolves.toEqual(
-      [existing],
-    );
+    await expect(
+      service.listCustomerFundingHistory(workspaceId),
+    ).resolves.toEqual([existing]);
     expect(journal.findWorkspaceAction).toHaveBeenCalledWith(
       workspaceId,
       existing.id,
@@ -664,9 +667,9 @@ describe('ManagedProviderCustomerFundingService', () => {
     const { action, journal, metronome, service } =
       createReconciliationHarness();
 
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'SUCCEEDED' },
-    );
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'SUCCEEDED' });
     const expiryIntentTransition =
       journal.transitionCompareAndSet.mock.calls[0][0];
     expect(expiryIntentTransition).toEqual(
@@ -688,7 +691,8 @@ describe('ManagedProviderCustomerFundingService', () => {
     expect(
       journal.transitionCompareAndSet.mock.invocationCallOrder[0],
     ).toBeLessThan(
-      metronome.updatePaymentGatedPrepaidCommitExpiry.mock.invocationCallOrder[0],
+      metronome.updatePaymentGatedPrepaidCommitExpiry.mock
+        .invocationCallOrder[0],
     );
     expect(
       metronome.updatePaymentGatedPrepaidCommitExpiry,
@@ -743,9 +747,9 @@ describe('ManagedProviderCustomerFundingService', () => {
         externalInvoice: null,
       });
 
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'PAYMENT_PENDING' },
-    );
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'PAYMENT_PENDING' });
     expect(stripe.readPaymentGatedInvoicePayment).not.toHaveBeenCalled();
     expect(
       metronome.updatePaymentGatedPrepaidCommitExpiry,
@@ -775,9 +779,9 @@ describe('ManagedProviderCustomerFundingService', () => {
       },
     });
 
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'PAYMENT_ACTION_REQUIRED' },
-    );
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'PAYMENT_ACTION_REQUIRED' });
     const transition =
       journal.transitionCompareAndSet.mock.calls[
         journal.transitionCompareAndSet.mock.calls.length - 1
@@ -813,8 +817,8 @@ describe('ManagedProviderCustomerFundingService', () => {
   });
 
   it('records an exact definitive payment failure with no balance expiry', async () => {
-    const { action, journal, metronome, service } =
-      createReconciliationHarness({
+    const { action, journal, metronome, service } = createReconciliationHarness(
+      {
         stripeState: {
           invoiceUrl: 'https://invoice.example/in_metronome',
           paymentIntentId: 'pi_metronome',
@@ -825,11 +829,12 @@ describe('ManagedProviderCustomerFundingService', () => {
           taxCents: 500,
           totalCents: 3_000,
         },
-      });
-
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'FAILED_DEFINITIVE' },
+      },
     );
+
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'FAILED_DEFINITIVE' });
     expect(
       metronome.updatePaymentGatedPrepaidCommitExpiry,
     ).not.toHaveBeenCalled();
@@ -853,9 +858,9 @@ describe('ManagedProviderCustomerFundingService', () => {
       },
     });
 
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'SUCCEEDED' },
-    );
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'SUCCEEDED' });
     expect(journal.transitionCompareAndSet.mock.calls[0][0]).toEqual({
       expectedState: 'RECONCILIATION_REQUIRED',
       id: 'funding-action-id',
@@ -873,21 +878,22 @@ describe('ManagedProviderCustomerFundingService', () => {
   });
 
   it('uses the recorded phase when reconciliation fails after recovering IDs', async () => {
-    const { action, journal, metronome, service } =
-      createReconciliationHarness({
+    const { action, journal, metronome, service } = createReconciliationHarness(
+      {
         actionOverrides: {
           commitmentId: null,
           metronomeEditId: null,
           state: 'RECONCILIATION_REQUIRED',
         },
-      });
+      },
+    );
     metronome.readPaymentGatedPrepaidCommitInvoice.mockRejectedValue(
       new Error('temporary invoice read failure'),
     );
 
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'RECONCILIATION_REQUIRED' },
-    );
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'RECONCILIATION_REQUIRED' });
     expect(journal.transitionCompareAndSet.mock.calls[1][0]).toEqual(
       expect.objectContaining({
         expectedState: 'METRONOME_EDIT_RECORDED',
@@ -917,24 +923,23 @@ describe('ManagedProviderCustomerFundingService', () => {
       expiryAlreadyApplied: true,
     });
 
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'SUCCEEDED' },
-    );
-    expect(
-      metronome.recoverPaymentGatedPrepaidCommit,
-    ).not.toHaveBeenCalled();
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'SUCCEEDED' });
+    expect(metronome.recoverPaymentGatedPrepaidCommit).not.toHaveBeenCalled();
     expect(
       metronome.updatePaymentGatedPrepaidCommitExpiry,
     ).not.toHaveBeenCalled();
   });
 
   it('keeps a recovered commitment pending while its invoice materializes', async () => {
-    const { action, journal, metronome, service } =
-      createReconciliationHarness({ recoveryInvoiceId: null });
-
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'PAYMENT_PENDING' },
+    const { action, journal, metronome, service } = createReconciliationHarness(
+      { recoveryInvoiceId: null },
     );
+
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'PAYMENT_PENDING' });
     expect(
       metronome.readPaymentGatedPrepaidCommitInvoice,
     ).not.toHaveBeenCalled();
@@ -955,9 +960,9 @@ describe('ManagedProviderCustomerFundingService', () => {
       invoiceStatus: 'VOID',
     });
 
-    await expect(service.reconcileCustomerFunding(action)).resolves.toMatchObject(
-      { state: 'FAILED_DEFINITIVE' },
-    );
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'FAILED_DEFINITIVE' });
     expect(journal.transitionCompareAndSet).toHaveBeenLastCalledWith(
       expect.objectContaining({
         nextState: 'FAILED_DEFINITIVE',
@@ -1030,7 +1035,6 @@ describe('ManagedProviderCustomerFundingService', () => {
     ).rejects.toThrow('Customer AI payment action is unavailable');
     expect(stripe.readPaymentGatedInvoicePayment).not.toHaveBeenCalled();
   });
-
 
   it('rechecks the action deadline after authoritative remote reads', async () => {
     const { action, service, stripe } = createReconciliationHarness({

@@ -625,8 +625,7 @@ export class BillingResolver {
       id: action.id,
       invoiceUrl,
       presetId: evidence.success ? evidence.data.preset : null,
-      principalCents:
-        action.prepaidPrincipalCents ?? action.amountCents,
+      principalCents: action.prepaidPrincipalCents ?? action.amountCents,
       state: CUSTOMER_FUNDING_STATE_LABELS[action.state],
       taxCents: action.taxCents,
       updatedAt: action.updatedAt,

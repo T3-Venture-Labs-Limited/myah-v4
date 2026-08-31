@@ -521,8 +521,7 @@ export class MetronomeClientService {
           add_billing_provider_configuration_update: {
             billing_provider_configuration: {
               billing_provider: 'stripe',
-              billing_provider_configuration_id:
-                input.billingConfigurationId,
+              billing_provider_configuration_id: input.billingConfigurationId,
               delivery_method: 'direct_to_billing_provider',
             },
             schedule: { effective_at: 'START_OF_CURRENT_PERIOD' },
@@ -803,7 +802,10 @@ export class MetronomeClientService {
     );
     const candidateCustomerCommits = customerWideCommits.filter(
       (commit) =>
-        this.hasPartialPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
+        this.hasPartialPaymentGatedPrepaidCommitFundingEvidence(
+          commit,
+          input,
+        ) ||
         (commit.contract?.id === input.contractId &&
           this.getPaymentGatedPrepaidCommitRecoveryDetails(
             commit,
@@ -874,10 +876,7 @@ export class MetronomeClientService {
         ) !== null,
     );
 
-    if (
-      candidateCommits.length !== 1 ||
-      structuralCommitMatches.length !== 1
-    ) {
+    if (candidateCommits.length !== 1 || structuralCommitMatches.length !== 1) {
       throw new Error('Metronome payment-gated commit recovery mismatch');
     }
 
@@ -976,9 +975,7 @@ export class MetronomeClientService {
       input.commitmentId.trim() === '' ||
       input.invoiceId.trim() === ''
     ) {
-      throw new Error(
-        'Metronome payment-gated commit expiry proof is invalid',
-      );
+      throw new Error('Metronome payment-gated commit expiry proof is invalid');
     }
 
     const client = this.getClient();
@@ -997,9 +994,7 @@ export class MetronomeClientService {
     );
 
     if (candidates.length !== 1) {
-      throw new Error(
-        'Metronome payment-gated commit expiry proof is invalid',
-      );
+      throw new Error('Metronome payment-gated commit expiry proof is invalid');
     }
 
     const commit = candidates[0];
@@ -1015,9 +1010,7 @@ export class MetronomeClientService {
       details?.accessScheduleItemId !== input.accessScheduleItemId ||
       details.invoiceId !== input.invoiceId
     ) {
-      throw new Error(
-        'Metronome payment-gated commit expiry proof is invalid',
-      );
+      throw new Error('Metronome payment-gated commit expiry proof is invalid');
     }
 
     return { expiresAt };
@@ -1154,8 +1147,9 @@ export class MetronomeClientService {
         invoice_id: input.invoiceId,
       }),
     );
-    const parsedInvoice =
-      metronomePaymentGatedPrepaidInvoiceSchema.safeParse(response.data);
+    const parsedInvoice = metronomePaymentGatedPrepaidInvoiceSchema.safeParse(
+      response.data,
+    );
 
     if (!parsedInvoice.success) {
       throw new MetronomeClientException(
@@ -1241,7 +1235,6 @@ export class MetronomeClientService {
       status,
     };
   }
-
 
   async addSubscription(
     input: MetronomeAddSubscriptionInput,
@@ -2159,7 +2152,9 @@ export class MetronomeClientService {
           ...(nextPage === undefined ? {} : { next_page: nextPage }),
         }),
       );
-      commits.push(...(response.data.filter((item) => item.type !== 'CREDIT') as Commit[]));
+      commits.push(
+        ...(response.data.filter((item) => item.type !== 'CREDIT') as Commit[]),
+      );
       const cursor = response.next_page;
 
       if (cursor === '' || cursor === null || cursor === undefined) {
@@ -2172,7 +2167,9 @@ export class MetronomeClientService {
       nextPage = cursor;
     }
 
-    throw new Error('Metronome refund commitment pagination exceeded its limit');
+    throw new Error(
+      'Metronome refund commitment pagination exceeded its limit',
+    );
   }
 
   private isExactRefundCommit(
@@ -2221,7 +2218,10 @@ export class MetronomeClientService {
         }),
       );
 
-      if (!Array.isArray(response.data) || typeof response.next_page !== 'string') {
+      if (
+        !Array.isArray(response.data) ||
+        typeof response.next_page !== 'string'
+      ) {
         throw new Error('Metronome commitment pagination response is invalid');
       }
       commits.push(...response.data);
@@ -2311,11 +2311,13 @@ export class MetronomeClientService {
     ]);
   }
 
-  private validatePaymentGatedPrepaidCommitIdentifiers(
-    values: string[],
-  ): void {
-    if (values.some((value) => typeof value !== 'string' || value.trim() === '')) {
-      throw new Error('Metronome payment-gated commit identifiers are required');
+  private validatePaymentGatedPrepaidCommitIdentifiers(values: string[]): void {
+    if (
+      values.some((value) => typeof value !== 'string' || value.trim() === '')
+    ) {
+      throw new Error(
+        'Metronome payment-gated commit identifiers are required',
+      );
     }
   }
 
@@ -2358,7 +2360,10 @@ export class MetronomeClientService {
   private validatePaymentGatedPrepaidCommitInput(
     input: MetronomePaymentGatedPrepaidCommitInput,
   ): void {
-    if (!Number.isSafeInteger(input.principalCents) || input.principalCents <= 0) {
+    if (
+      !Number.isSafeInteger(input.principalCents) ||
+      input.principalCents <= 0
+    ) {
       throw new Error(
         'Metronome payment-gated commit amount must be positive safe cents',
       );
@@ -2391,7 +2396,6 @@ export class MetronomeClientService {
 
     return date.toISOString();
   }
-
 
   private toWriteException(error: unknown): MetronomeClientException {
     if (error instanceof MetronomeClientException) {

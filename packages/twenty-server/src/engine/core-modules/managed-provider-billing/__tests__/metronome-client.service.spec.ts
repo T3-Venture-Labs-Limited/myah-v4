@@ -1104,7 +1104,10 @@ describe('MetronomeClientService', () => {
                   ],
                 },
                 priority: 100,
-                product: { id: 'commitment-product-id', name: 'Managed AI credits' },
+                product: {
+                  id: 'commitment-product-id',
+                  name: 'Managed AI credits',
+                },
                 type: 'PREPAID',
               },
             ],
@@ -1166,23 +1169,26 @@ describe('MetronomeClientService', () => {
           uniquenessKey: 'funding-key',
         }),
     ],
-  ])('fails closed when the payment-gated %s response names another contract', async (_, response, invoke) => {
-    const edit = jest.fn().mockResolvedValue(response);
-    metronomeConstructor.mockImplementation(
-      () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
-    );
-    const service = new MetronomeClientService({
-      get: jest.fn((key: keyof ConfigVariables) => {
-        if (key === 'METRONOME_ENABLED') return true;
-        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
-        throw new Error(`Unexpected config key: ${key}`);
-      }),
-    } as unknown as TwentyConfigService);
+  ])(
+    'fails closed when the payment-gated %s response names another contract',
+    async (_, response, invoke) => {
+      const edit = jest.fn().mockResolvedValue(response);
+      metronomeConstructor.mockImplementation(
+        () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+      );
+      const service = new MetronomeClientService({
+        get: jest.fn((key: keyof ConfigVariables) => {
+          if (key === 'METRONOME_ENABLED') return true;
+          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+          throw new Error(`Unexpected config key: ${key}`);
+        }),
+      } as unknown as TwentyConfigService);
 
-    await expect(invoke(service)).rejects.toMatchObject({
-      code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
-    });
-  });
+      await expect(invoke(service)).rejects.toMatchObject({
+        code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+      });
+    },
+  );
 
   it('fails closed when a create receipt exposes a contradictory commercial commit shape', async () => {
     const exactCommit = {
@@ -1215,7 +1221,10 @@ describe('MetronomeClientService', () => {
     const malformedCommits = [
       {
         ...exactCommit,
-        product: { id: 'different-commitment-product-id', name: 'Managed AI credits' },
+        product: {
+          id: 'different-commitment-product-id',
+          name: 'Managed AI credits',
+        },
       },
       { ...exactCommit, type: 'POSTPAID' },
       {
@@ -1411,9 +1420,7 @@ describe('MetronomeClientService', () => {
           ],
         },
         applicable_product_ids: ['charge-product-id'],
-        ...(commitContract === undefined
-          ? {}
-          : { contract: commitContract }),
+        ...(commitContract === undefined ? {} : { contract: commitContract }),
         created_at: '2026-08-29T10:00:00.000Z',
         custom_fields: {
           myah_funding_action_id: 'funding-action-id',
@@ -1491,9 +1498,7 @@ describe('MetronomeClientService', () => {
     [
       'returns duplicate commitments',
       (commit: object) =>
-        jest
-          .fn()
-          .mockResolvedValue({ data: [commit, commit], next_page: '' }),
+        jest.fn().mockResolvedValue({ data: [commit, commit], next_page: '' }),
     ],
     [
       'repeats a cursor',
@@ -1799,7 +1804,10 @@ describe('MetronomeClientService', () => {
         ],
       },
       priority: 100,
-      product: { id: 'different-commitment-product-id', name: 'Managed AI credits' },
+      product: {
+        id: 'different-commitment-product-id',
+        name: 'Managed AI credits',
+      },
       type: 'PREPAID',
     };
     const edit = jest.fn();
@@ -1895,7 +1903,10 @@ describe('MetronomeClientService', () => {
         ],
       },
       id: 'conflicting-commitment-id',
-      product: { id: 'different-commitment-product-id', name: 'Managed AI credits' },
+      product: {
+        id: 'different-commitment-product-id',
+        name: 'Managed AI credits',
+      },
     };
     const edit = jest.fn();
     const getEditHistory = jest.fn().mockResolvedValue({
@@ -2054,7 +2065,10 @@ describe('MetronomeClientService', () => {
         },
         custom_fields: customFields,
         id: 'partial-commitment-id',
-        product: { id: 'different-commitment-product-id', name: 'Managed AI credits' },
+        product: {
+          id: 'different-commitment-product-id',
+          name: 'Managed AI credits',
+        },
       };
       const edit = jest.fn();
       const getEditHistory = jest.fn().mockResolvedValue({
@@ -2198,7 +2212,10 @@ describe('MetronomeClientService', () => {
         contract: { id: 'different-contract-id' },
         custom_fields: customFields,
         id: 'cross-contract-commitment-id',
-        product: { id: 'different-commitment-product-id', name: 'Managed AI credits' },
+        product: {
+          id: 'different-commitment-product-id',
+          name: 'Managed AI credits',
+        },
       };
       const edit = jest.fn();
       const getEditHistory = jest.fn().mockResolvedValue({
@@ -2296,7 +2313,10 @@ describe('MetronomeClientService', () => {
         myah_funding_action_id: 'funding-action-id',
         myah_funding_identity: 'funding-identity',
       },
-      product: { id: 'different-commitment-product-id', name: 'Managed AI credits' },
+      product: {
+        id: 'different-commitment-product-id',
+        name: 'Managed AI credits',
+      },
     };
     const edit = jest.fn();
     const getEditHistory = jest.fn().mockResolvedValue({
@@ -2925,45 +2945,48 @@ describe('MetronomeClientService', () => {
     ['is missing', { id: 'expiry-edit-id' }],
     [
       'contains a different commit ID',
-      { id: 'expiry-edit-id', update_commits: [{ id: 'different-commitment-id' }] },
+      {
+        id: 'expiry-edit-id',
+        update_commits: [{ id: 'different-commitment-id' }],
+      },
     ],
-  ])(
-    'fails closed when the expiry edit receipt %s',
-    async (_, editReceipt) => {
-      const edit = jest
-        .fn()
-        .mockResolvedValue({ data: { edit: editReceipt, id: 'contract-id' } });
-      metronomeConstructor.mockImplementation(
-        () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
-      );
-      const service = new MetronomeClientService({
-        get: jest.fn((key: keyof ConfigVariables) => {
-          if (key === 'METRONOME_ENABLED') return true;
-          if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
-          throw new Error(`Unexpected config key: ${key}`);
-        }),
-      } as unknown as TwentyConfigService);
+  ])('fails closed when the expiry edit receipt %s', async (_, editReceipt) => {
+    const edit = jest
+      .fn()
+      .mockResolvedValue({ data: { edit: editReceipt, id: 'contract-id' } });
+    metronomeConstructor.mockImplementation(
+      () => ({ v2: { contracts: { edit } } }) as unknown as Metronome,
+    );
+    const service = new MetronomeClientService({
+      get: jest.fn((key: keyof ConfigVariables) => {
+        if (key === 'METRONOME_ENABLED') return true;
+        if (key === 'METRONOME_API_KEY') return 'metronome-api-key';
+        throw new Error(`Unexpected config key: ${key}`);
+      }),
+    } as unknown as TwentyConfigService);
 
-      await expect(
-        service.updatePaymentGatedPrepaidCommitExpiry({
-          accessScheduleItemId: 'access-schedule-item-id',
-          commitmentId: 'commitment-id',
-          contractId: 'contract-id',
-          customerId: 'customer-id',
-          paidAt: '2026-08-29T10:37:42.123Z',
-          uniquenessKey: 'funding-key',
-        }),
-      ).rejects.toMatchObject({
-        code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
-      });
-    },
-  );
+    await expect(
+      service.updatePaymentGatedPrepaidCommitExpiry({
+        accessScheduleItemId: 'access-schedule-item-id',
+        commitmentId: 'commitment-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        paidAt: '2026-08-29T10:37:42.123Z',
+        uniquenessKey: 'funding-key',
+      }),
+    ).rejects.toMatchObject({
+      code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
+    });
+  });
 
   it.each([
     ['is missing', { id: 'archive-edit-id' }],
     [
       'contains a different commit ID',
-      { archive_commits: [{ id: 'different-commitment-id' }], id: 'archive-edit-id' },
+      {
+        archive_commits: [{ id: 'different-commitment-id' }],
+        id: 'archive-edit-id',
+      },
     ],
   ])(
     'fails closed when the archive edit receipt %s',
@@ -4567,7 +4590,9 @@ describe('MetronomeClientService', () => {
     });
     metronomeConstructor.mockImplementation(
       () =>
-        ({ v1: { customers: { invoices: { retrieve } } } }) as unknown as Metronome,
+        ({
+          v1: { customers: { invoices: { retrieve } } },
+        }) as unknown as Metronome,
     );
     const service = new MetronomeClientService({
       get: jest.fn((key: keyof ConfigVariables) => {
@@ -4642,7 +4667,9 @@ describe('MetronomeClientService', () => {
     });
     metronomeConstructor.mockImplementation(
       () =>
-        ({ v1: { customers: { invoices: { retrieve } } } }) as unknown as Metronome,
+        ({
+          v1: { customers: { invoices: { retrieve } } },
+        }) as unknown as Metronome,
     );
     const service = new MetronomeClientService({
       get: jest.fn((key: keyof ConfigVariables) => {
@@ -4811,7 +4838,9 @@ describe('MetronomeClientService', () => {
     const retrieve = jest.fn().mockResolvedValue({ data: invoice });
     metronomeConstructor.mockImplementation(
       () =>
-        ({ v1: { customers: { invoices: { retrieve } } } }) as unknown as Metronome,
+        ({
+          v1: { customers: { invoices: { retrieve } } },
+        }) as unknown as Metronome,
     );
     const service = new MetronomeClientService({
       get: jest.fn((key: keyof ConfigVariables) => {
@@ -4902,7 +4931,6 @@ describe('MetronomeClientService', () => {
       code: MetronomeClientExceptionCode.CREATE_OUTCOME_UNCERTAIN,
     });
   });
-
 });
 
 describe('MetronomeClientService rate-card product resolution', () => {

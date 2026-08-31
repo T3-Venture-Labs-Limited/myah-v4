@@ -249,8 +249,12 @@ describe('ManagedProviderOperationService', () => {
   });
 
   it('rejects new reservations while a workspace refund fence is active', async () => {
-    const { fundingActionRepository, manager, metronomeClientService, service } =
-      createService({ refundBlocked: true });
+    const {
+      fundingActionRepository,
+      manager,
+      metronomeClientService,
+      service,
+    } = createService({ refundBlocked: true });
 
     await expect(service.reserveOperation(input)).rejects.toThrow(
       'Managed provider workspace refund is in progress',

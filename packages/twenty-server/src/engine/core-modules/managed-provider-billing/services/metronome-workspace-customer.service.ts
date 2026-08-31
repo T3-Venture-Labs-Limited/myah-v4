@@ -239,8 +239,7 @@ export class MetronomeWorkspaceCustomerService {
       throw new Error('Metronome billing contract could not be reconciled');
     }
 
-    const activeConfiguration =
-      contracts[0].activeBillingProviderConfiguration;
+    const activeConfiguration = contracts[0].activeBillingProviderConfiguration;
     const expectedDeliveryMethodId = this.twentyConfigService.get(
       'METRONOME_STRIPE_DELIVERY_METHOD_ID',
     );

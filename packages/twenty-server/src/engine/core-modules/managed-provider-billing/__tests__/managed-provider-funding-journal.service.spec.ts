@@ -126,7 +126,10 @@ describe('ManagedProviderFundingJournalService', () => {
     const { repository, service } = createService();
 
     await expect(
-      service.createPending({ ...intent, ...invalidInput } as CreateFundingIntent),
+      service.createPending({
+        ...intent,
+        ...invalidInput,
+      } as CreateFundingIntent),
     ).rejects.toThrow('must be a non-negative safe integer');
     expect(repository.save).not.toHaveBeenCalled();
   });
@@ -268,9 +271,9 @@ describe('ManagedProviderFundingJournalService', () => {
     );
     const now = new Date('2026-08-29T01:00:00.000Z');
 
-    await expect(service.claimDueReconciliationActions(10, now)).resolves.toEqual(
-      [claimedAction],
-    );
+    await expect(
+      service.claimDueReconciliationActions(10, now),
+    ).resolves.toEqual([claimedAction]);
     expect(manager.query).toHaveBeenCalledWith(
       'SELECT pg_advisory_xact_lock(hashtext($1))',
       ['myah:managed-provider-funding-reconciliation'],

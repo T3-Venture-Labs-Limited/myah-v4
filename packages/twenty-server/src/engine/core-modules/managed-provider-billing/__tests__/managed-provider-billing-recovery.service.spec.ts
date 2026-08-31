@@ -177,9 +177,10 @@ describe('ManagedProviderBillingRecoveryService', () => {
 
     await service.recover();
 
-    expect(
-      fundingJournal.claimDueCustomerFundingActions,
-    ).toHaveBeenCalledWith(50, new Date('2026-07-16T00:02:00.000Z'));
+    expect(fundingJournal.claimDueCustomerFundingActions).toHaveBeenCalledWith(
+      50,
+      new Date('2026-07-16T00:02:00.000Z'),
+    );
     expect(customerFunding.reconcileCustomerFunding).toHaveBeenCalledTimes(2);
     expect(customerFunding.reconcileCustomerFunding).toHaveBeenNthCalledWith(
       1,

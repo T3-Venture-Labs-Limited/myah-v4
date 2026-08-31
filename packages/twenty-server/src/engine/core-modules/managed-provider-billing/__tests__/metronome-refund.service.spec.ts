@@ -121,7 +121,9 @@ describe('MetronomeClientService refunds', () => {
   });
 
   it('voids and reads back the exact Metronome payment invoice', async () => {
-    const voidInvoice = jest.fn().mockResolvedValue({ data: { id: 'invoice-id' } });
+    const voidInvoice = jest
+      .fn()
+      .mockResolvedValue({ data: { id: 'invoice-id' } });
     const retrieve = jest.fn().mockResolvedValue({
       data: {
         contract_id: 'contract-id',

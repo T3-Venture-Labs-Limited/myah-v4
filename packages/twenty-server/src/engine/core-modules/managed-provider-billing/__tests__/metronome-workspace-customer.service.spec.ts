@@ -1153,7 +1153,13 @@ describe('MetronomeWorkspaceCustomerService shared Stripe billing context', () =
     ],
   ] as const)(
     'fails closed when %s',
-    async (_, { environment }, contracts, existingConfiguration, fiatCreditType) => {
+    async (
+      _,
+      { environment },
+      contracts,
+      existingConfiguration,
+      fiatCreditType,
+    ) => {
       const { service } = createService({
         contracts: [...contracts],
         environment,

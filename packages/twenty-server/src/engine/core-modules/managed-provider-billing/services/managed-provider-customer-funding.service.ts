@@ -261,9 +261,7 @@ export class ManagedProviderCustomerFundingService {
       throw new Error('Customer AI funding is unavailable');
     }
 
-    const environment = this.twentyConfig.get(
-      'METRONOME_BASE_URL_ENVIRONMENT',
-    );
+    const environment = this.twentyConfig.get('METRONOME_BASE_URL_ENVIRONMENT');
     const chargeProductId = this.twentyConfig.get(
       'MANAGED_OPENROUTER_CHARGE_PRODUCT_ID',
     );
@@ -308,7 +306,8 @@ export class ManagedProviderCustomerFundingService {
       paymentMethod.ready !== true ||
       paymentMethod.stripeCustomerId !== billingContext.stripeCustomerId ||
       billingConfiguration.id !== billingContext.billingConfigurationId ||
-      billingConfiguration.stripeCustomerId !== billingContext.stripeCustomerId ||
+      billingConfiguration.stripeCustomerId !==
+        billingContext.stripeCustomerId ||
       billingContext.metronomeContractId !== contractId ||
       billingContext.environment !== environment ||
       billingContext.fiatCreditTypeName !== 'USD (cents)'
@@ -362,17 +361,18 @@ export class ManagedProviderCustomerFundingService {
     }
 
     try {
-      const receipt = await this.metronomeClient.createPaymentGatedPrepaidCommit({
-        chargeProductId,
-        commitmentProductId: creditProductId,
-        contractId: billingContext.metronomeContractId,
-        customerId: billingContext.metronomeCustomerId,
-        fundingActionId: action.id,
-        fundingIdentity,
-        principalCents,
-        purchaseAt,
-        uniquenessKey: action.metronomeUniquenessKey,
-      });
+      const receipt =
+        await this.metronomeClient.createPaymentGatedPrepaidCommit({
+          chargeProductId,
+          commitmentProductId: creditProductId,
+          contractId: billingContext.metronomeContractId,
+          customerId: billingContext.metronomeCustomerId,
+          fundingActionId: action.id,
+          fundingIdentity,
+          principalCents,
+          purchaseAt,
+          uniquenessKey: action.metronomeUniquenessKey,
+        });
 
       return await this.fundingJournal.transitionCompareAndSet({
         expectedState: 'PENDING',
@@ -484,9 +484,7 @@ export class ManagedProviderCustomerFundingService {
       throw new Error('Customer AI payment action is unavailable');
     }
 
-    const environment = this.twentyConfig.get(
-      'METRONOME_BASE_URL_ENVIRONMENT',
-    );
+    const environment = this.twentyConfig.get('METRONOME_BASE_URL_ENVIRONMENT');
 
     if (environment !== 'PRODUCTION' && environment !== 'SANDBOX') {
       throw new Error('Customer AI payment action is unavailable');
@@ -619,9 +617,7 @@ export class ManagedProviderCustomerFundingService {
       throw new Error('Customer AI funding evidence is invalid');
     }
 
-    const environment = this.twentyConfig.get(
-      'METRONOME_BASE_URL_ENVIRONMENT',
-    );
+    const environment = this.twentyConfig.get('METRONOME_BASE_URL_ENVIRONMENT');
 
     if (environment !== 'PRODUCTION' && environment !== 'SANDBOX') {
       throw new Error('Customer AI funding environment is invalid');
@@ -681,7 +677,9 @@ export class ManagedProviderCustomerFundingService {
             metronomeEditId: action.metronomeEditId,
           }
         : null
-      : await this.metronomeClient.recoverPaymentGatedPrepaidCommit(commitInput);
+      : await this.metronomeClient.recoverPaymentGatedPrepaidCommit(
+          commitInput,
+        );
 
     if (
       recovered === null ||
@@ -1033,9 +1031,7 @@ export class ManagedProviderCustomerFundingService {
   }
 
   private getCustomerFundingEnvironment(): 'PRODUCTION' | 'SANDBOX' {
-    const environment = this.twentyConfig.get(
-      'METRONOME_BASE_URL_ENVIRONMENT',
-    );
+    const environment = this.twentyConfig.get('METRONOME_BASE_URL_ENVIRONMENT');
 
     if (environment !== 'PRODUCTION' && environment !== 'SANDBOX') {
       throw new Error('Customer AI funding environment is invalid');

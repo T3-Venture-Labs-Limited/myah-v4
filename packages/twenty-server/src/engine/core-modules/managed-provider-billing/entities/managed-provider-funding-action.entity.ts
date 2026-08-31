@@ -85,10 +85,14 @@ export class ManagedProviderFundingActionEntity {
   @Column({ type: 'text', nullable: true }) metronomeInvoiceId: string | null;
   @Column({ type: 'text', nullable: true })
   stripeBillingConfigurationId: string | null;
-  @Column({ type: 'text', nullable: true }) stripeDeliveryMethodId: string | null;
+  @Column({ type: 'text', nullable: true }) stripeDeliveryMethodId:
+    | string
+    | null;
   @Column({ type: 'text', nullable: true }) stripeCustomerId: string | null;
   @Column({ type: 'text', nullable: true }) stripeInvoiceId: string | null;
-  @Column({ type: 'text', nullable: true }) stripePaymentIntentId: string | null;
+  @Column({ type: 'text', nullable: true }) stripePaymentIntentId:
+    | string
+    | null;
   @Column({ type: 'text', nullable: true }) stripeCreditNoteId: string | null;
   @Column({ type: 'text', nullable: true }) stripeRefundId: string | null;
   @Column({ type: 'bigint', nullable: true })
