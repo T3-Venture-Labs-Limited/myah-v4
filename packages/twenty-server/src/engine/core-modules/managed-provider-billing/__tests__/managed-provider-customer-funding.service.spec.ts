@@ -784,7 +784,9 @@ describe('ManagedProviderCustomerFundingService', () => {
       service.reconcileCustomerFunding(action),
     ).resolves.toMatchObject({ state: 'PAYMENT_PENDING' });
     expect(stripe.readPaymentGatedInvoicePayment).not.toHaveBeenCalled();
-    expect(metronome.assertPaymentGatedPrepaidCommitExpiry).not.toHaveBeenCalled();
+    expect(
+      metronome.assertPaymentGatedPrepaidCommitExpiry,
+    ).not.toHaveBeenCalled();
     expect(journal.transitionCompareAndSet).toHaveBeenLastCalledWith(
       expect.objectContaining({ nextState: 'PAYMENT_PENDING' }),
     );
@@ -814,7 +816,9 @@ describe('ManagedProviderCustomerFundingService', () => {
         service.reconcileCustomerFunding(action),
       ).resolves.toMatchObject({ state: 'FAILED_DEFINITIVE' });
       expect(stripe.readPaymentGatedInvoicePayment).not.toHaveBeenCalled();
-      expect(metronome.updatePaymentGatedPrepaidCommitExpiry).not.toHaveBeenCalled();
+      expect(
+        metronome.updatePaymentGatedPrepaidCommitExpiry,
+      ).not.toHaveBeenCalled();
       expect(journal.transitionCompareAndSet).toHaveBeenLastCalledWith(
         expect.objectContaining({
           nextState: 'FAILED_DEFINITIVE',
@@ -937,14 +941,15 @@ describe('ManagedProviderCustomerFundingService', () => {
   });
 
   it('reconciles a pending customer funding action after a provider-write crash', async () => {
-    const { action, journal, metronome, service } =
-      createReconciliationHarness({
+    const { action, journal, metronome, service } = createReconciliationHarness(
+      {
         actionOverrides: {
           commitmentId: null,
           metronomeEditId: null,
           state: 'PENDING',
         },
-      });
+      },
+    );
 
     await expect(
       service.reconcileCustomerFunding(action),

@@ -181,7 +181,6 @@ describe('MetronomeClientService refunds', () => {
     );
   });
 
-
   it('does not void an otherwise exact payment invoice before its finalization proof', async () => {
     const voidInvoice = jest.fn();
     const retrieve = jest.fn().mockResolvedValue({

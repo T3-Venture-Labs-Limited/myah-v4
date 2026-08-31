@@ -62,7 +62,6 @@ const fundingStatus = {
   },
 };
 
-
 describe('SettingsBilling customer funding idempotency', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -100,7 +99,9 @@ describe('SettingsBilling customer funding idempotency', () => {
         </ThemeProvider>
       </I18nProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Add $25 credit' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Add $25 credit' }),
+    );
 
     await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(1));
     const firstKey = mockRequestFunding.mock.calls[0][0].variables
@@ -108,7 +109,9 @@ describe('SettingsBilling customer funding idempotency', () => {
 
     expect(
       localStorage.getItem('managed-provider-customer-funding:workspace-1'),
-    ).toBe(JSON.stringify({ idempotencyKey: firstKey, presetCode: 'AI_25_USD' }));
+    ).toBe(
+      JSON.stringify({ idempotencyKey: firstKey, presetCode: 'AI_25_USD' }),
+    );
 
     firstPage.unmount();
     mockRequestFunding.mockResolvedValueOnce({
@@ -124,7 +127,9 @@ describe('SettingsBilling customer funding idempotency', () => {
         </ThemeProvider>
       </I18nProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Retry $25 credit' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Retry $25 credit' }),
+    );
 
     await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(2));
     expect(mockRequestFunding.mock.calls[1][0].variables).toMatchObject({

@@ -2812,7 +2812,9 @@ describe('MetronomeClientService', () => {
       });
       await expect(
         service.assertPaymentGatedPrepaidCommitExpiry(input),
-      ).rejects.toThrow('Metronome payment-gated commit expiry proof is invalid');
+      ).rejects.toThrow(
+        'Metronome payment-gated commit expiry proof is invalid',
+      );
     }
 
     commit.invoice_schedule.schedule_items[0].invoice_id = 'other-invoice-id';

@@ -57,7 +57,9 @@ describe('ManagedProviderCustomerFundingPaymentForm tax IDs', () => {
     fireEvent.change(screen.getByLabelText('Tax ID value (optional)'), {
       target: { value: '  12-3456789  ' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save billing details' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save billing details' }),
+    );
 
     await waitFor(() =>
       expect(onComplete).toHaveBeenCalledWith(

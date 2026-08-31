@@ -1304,36 +1304,39 @@ describe('ManagedProviderStripeService', () => {
 
   it.each([
     ['a foreign Customer ID', { ...readyBillingCustomer, id: 'cus_foreign' }],
-    ['a Customer from the wrong Stripe mode', {
-      ...readyBillingCustomer,
-      livemode: true,
-    }],
-    ['a non-Customer Stripe object', {
-      ...readyBillingCustomer,
-      object: 'not_customer',
-    }],
-  ])(
-    'refuses billing mutations for %s',
-    async (_, invalidCustomer) => {
-      const { service, stripe } = createService({
+    [
+      'a Customer from the wrong Stripe mode',
+      {
+        ...readyBillingCustomer,
+        livemode: true,
+      },
+    ],
+    [
+      'a non-Customer Stripe object',
+      {
+        ...readyBillingCustomer,
+        object: 'not_customer',
+      },
+    ],
+  ])('refuses billing mutations for %s', async (_, invalidCustomer) => {
+    const { service, stripe } = createService({
+      workspaceId,
+      stripeCustomerId,
+    });
+    stripe.customers.retrieve.mockResolvedValue(invalidCustomer);
+
+    await expect(
+      service.updateWorkspaceBillingDetails({
+        billingDetails,
+        metronomeBaseUrlEnvironment: 'SANDBOX',
         workspaceId,
-        stripeCustomerId,
-      });
-      stripe.customers.retrieve.mockResolvedValue(invalidCustomer);
+      }),
+    ).rejects.toThrow('Stripe Customer proof is invalid');
 
-      await expect(
-        service.updateWorkspaceBillingDetails({
-          billingDetails,
-          metronomeBaseUrlEnvironment: 'SANDBOX',
-          workspaceId,
-        }),
-      ).rejects.toThrow('Stripe Customer proof is invalid');
-
-      expect(stripe.customers.update).not.toHaveBeenCalled();
-      expect(stripe.taxIds.create).not.toHaveBeenCalled();
-      expect(stripe.taxIds.del).not.toHaveBeenCalled();
-    },
-  );
+    expect(stripe.customers.update).not.toHaveBeenCalled();
+    expect(stripe.taxIds.create).not.toHaveBeenCalled();
+    expect(stripe.taxIds.del).not.toHaveBeenCalled();
+  });
 
   it('removes every tax ID and proves the empty result when no tax ID is supplied', async () => {
     const { service, stripe } = createService({
@@ -1351,7 +1354,11 @@ describe('ManagedProviderStripeService', () => {
 
     await expect(
       service.updateWorkspaceBillingDetails({
-        billingDetails: { ...billingDetails, taxIdType: null, taxIdValue: null },
+        billingDetails: {
+          ...billingDetails,
+          taxIdType: null,
+          taxIdValue: null,
+        },
         metronomeBaseUrlEnvironment: 'SANDBOX',
         workspaceId,
       }),

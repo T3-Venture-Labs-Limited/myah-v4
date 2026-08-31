@@ -96,7 +96,9 @@ describe('SettingsWorkspaceBillingContent customer funding', () => {
       screen.getByRole('table', { name: 'AI funding history' }),
     ).getAllByRole('row')[1];
 
-    expect(within(historyRow).getByText('Principal: $50.00')).toBeInTheDocument();
+    expect(
+      within(historyRow).getByText('Principal: $50.00'),
+    ).toBeInTheDocument();
     expect(within(historyRow).getByText('Tax: $5.00')).toBeInTheDocument();
     expect(
       within(historyRow).getByText('Total collected: $55.00'),
@@ -129,6 +131,8 @@ describe('SettingsWorkspaceBillingContent customer funding', () => {
     expect(
       screen.queryByRole('button', { name: 'Update payment details' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add $25 credit' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Add $25 credit' }),
+    ).toBeDisabled();
   });
 });

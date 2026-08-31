@@ -699,10 +699,7 @@ export class ManagedProviderStripeService {
 
     const customerId = await this.persistedCustomerId(workspaceId);
     const stripe = this.stripe();
-    await this.readWorkspaceCustomer(
-      customerId,
-      metronomeBaseUrlEnvironment,
-    );
+    await this.readWorkspaceCustomer(customerId, metronomeBaseUrlEnvironment);
     await stripe.customers.update(customerId, {
       address: {
         city: normalized.city,
@@ -942,8 +939,7 @@ export class ManagedProviderStripeService {
     const matchingCreditNotes = creditNotes.data.filter(
       (creditNote) =>
         creditNote.object === 'credit_note' &&
-        creditNote.metadata?.myah_funding_action_id ===
-          input.fundingActionId &&
+        creditNote.metadata?.myah_funding_action_id === input.fundingActionId &&
         creditNote.metadata?.myah_refund_identity === input.idempotencyKey,
     );
 
@@ -1069,8 +1065,7 @@ export class ManagedProviderStripeService {
       invoice.subtotal !== input.expectedPrincipalCents ||
       invoiceTaxCents !== input.expectedTaxCents ||
       invoice.total !== input.expectedTotalCents ||
-      invoice.post_payment_credit_notes_amount !==
-        input.expectedTotalCents ||
+      invoice.post_payment_credit_notes_amount !== input.expectedTotalCents ||
       invoice.pre_payment_credit_notes_amount !== 0
     ) {
       throw new Error('Stripe full refund proof is invalid');
@@ -1094,8 +1089,7 @@ export class ManagedProviderStripeService {
       customer.deleted ||
       customer.object !== 'customer' ||
       customer.id !== customerId ||
-      customer.livemode !==
-        this.expectedLivemode(metronomeBaseUrlEnvironment)
+      customer.livemode !== this.expectedLivemode(metronomeBaseUrlEnvironment)
     ) {
       throw new Error('Stripe Customer proof is invalid');
     }

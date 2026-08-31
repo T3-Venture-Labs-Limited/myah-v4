@@ -192,9 +192,8 @@ export const SettingsBilling = ({
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const workspaceId = currentWorkspace?.id ?? null;
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pendingPresetId, setPendingPresetId] = useState<
-    CustomerFundingPresetCode | null
-  >(null);
+  const [pendingPresetId, setPendingPresetId] =
+    useState<CustomerFundingPresetCode | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [pendingFundingRequest, setPendingFundingRequest] =
     useState<PendingFundingRequest | null>(() =>
@@ -337,12 +336,11 @@ export const SettingsBilling = ({
     }
   };
   const submitFunding = async (presetCode: CustomerFundingPresetCode) => {
-    const request =
-      activePendingFundingRequest ?? {
-        idempotencyKey: newIdempotencyKey(),
-        presetCode,
-        workspaceId,
-      };
+    const request = activePendingFundingRequest ?? {
+      idempotencyKey: newIdempotencyKey(),
+      presetCode,
+      workspaceId,
+    };
 
     if (activePendingFundingRequest === null) {
       persistPendingFundingRequest(request);
