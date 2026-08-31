@@ -220,6 +220,87 @@ describe('MyahInboxReplyActionDefinition', () => {
     ).toHaveBeenCalledWith({ workspaceId, connectedAccountId, messageChannelId });
   });
 
+  it('preserves saved Markdown whitespace in the canonical graph and fingerprint', async () => {
+    const markdown = '  Thanks for the update  \n';
+    const { definition } = createDefinition({
+      draft: {
+        id: messageThreadId,
+        subject: 'Partnership',
+        myahReplyDraftBodyMarkdown: markdown,
+        myahReplyDraftBodyBlocknote: null,
+        myahReplyDraftRevision: 4,
+      },
+    });
+
+    await expect(buildAuthority(definition)).resolves.toMatchObject({
+      canonicalGraph: { draftBody: { markdown } },
+      expectedActionBinding: {
+        contentDigest: computeActionContentDigest(
+          JSON.stringify(['Re: Partnership', markdown]),
+        ),
+      },
+    });
+  });
+
+  it.each(['not-a-message-id', '<invalid value@example.com>'])(
+    'rejects malformed parent Message-ID %s',
+    async (headerMessageId) => {
+      const { definition } = createDefinition({
+        parent: {
+          id: parentMessageId,
+          messageThreadId,
+          isDraft: false,
+          receivedAt: new Date(),
+          headerMessageId,
+          messageParticipants: [
+            { role: 'FROM', handle: 'creator@example.com', displayName: 'Creator' },
+          ],
+          messageChannelMessageAssociations: [
+            { messageChannelId, direction: 'INCOMING' },
+          ],
+        },
+      });
+
+      await expect(buildAuthority(definition)).rejects.toThrow(
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      );
+    },
+  );
+
+  it('requires the channel handle to be an account identity but permits an alias', async () => {
+    const mismatch = createDefinition({
+      channel: {
+        id: messageChannelId,
+        workspaceId,
+        connectedAccountId,
+        handle: 'other@brand.com',
+        type: 'EMAIL',
+        visibility: 'SHARE_EVERYTHING',
+        isSyncEnabled: true,
+        syncStatus: 'ACTIVE',
+      },
+    });
+    const alias = createDefinition({
+      channel: {
+        id: messageChannelId,
+        workspaceId,
+        connectedAccountId,
+        handle: 'brand-alias@brand.com',
+        type: 'EMAIL',
+        visibility: 'SHARE_EVERYTHING',
+        isSyncEnabled: true,
+        syncStatus: 'ACTIVE',
+      },
+    });
+
+    await expect(buildAuthority(mismatch.definition)).rejects.toThrow(
+      MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
+    );
+    await expect(buildAuthority(alias.definition)).resolves.toMatchObject({
+      canonicalGraph: { senderEmail: 'brand-alias@brand.com' },
+    });
+  });
+
   it('allows SHARE_EVERYTHING channels for another workspace user', async () => {
     const { definition } = createDefinition();
 

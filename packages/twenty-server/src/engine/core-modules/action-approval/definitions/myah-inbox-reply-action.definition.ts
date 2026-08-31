@@ -8,18 +8,34 @@ import {
   MessageChannelSyncStatus,
   MessageChannelType,
   MessageChannelVisibility,
-  type ObjectRecord,
 } from 'twenty-shared/types';
 import { emailSchema } from 'twenty-shared/utils';
 import { In, type Repository } from 'typeorm';
 
 import { buildUserAuthContext } from 'src/engine/core-modules/auth/utils/build-user-auth-context.util';
-import {
-  type ActionEvidenceLinkInput,
-  type MyahInboxReplyExpectedActionBinding,
-} from 'src/engine/core-modules/action-approval/types/action-approval.type';
-import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { resolveMyahInboxReplyRecipient } from 'src/engine/core-modules/action-approval/utils/resolve-myah-inbox-reply-recipient.util';
+import {
+  buildMyahInboxReplyExpectedActionBinding,
+  matchesMyahInboxReplyBinding,
+} from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-action-binding.util';
+import {
+  type CanonicalMyahInboxReplyGraph,
+  type InboxMessageThreadRecord,
+  type InboxParentMessageRecord,
+  type MyahInboxReplyActionAuthority,
+  type MyahInboxReplyEvidenceObjectMetadataIds,
+  type MyahInboxReplyExpectedActionBindingWithWorkspace,
+  MyahInboxReplyUnavailableCode,
+  MyahInboxReplyUnavailableError,
+} from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
+export {
+  MyahInboxReplyUnavailableCode,
+  MyahInboxReplyUnavailableError,
+} from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
+export type {
+  CanonicalMyahInboxReplyGraph,
+  MyahInboxReplyActionAuthority,
+} from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import { type FlatUser } from 'src/engine/core-modules/user/types/flat-user.type';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
@@ -35,66 +51,9 @@ import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/module
 import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 
-export enum MyahInboxReplyUnavailableCode {
-  THREAD_UNAVAILABLE = 'THREAD_UNAVAILABLE',
-  SENDER_UNAVAILABLE = 'SENDER_UNAVAILABLE',
-  RECIPIENT_UNAVAILABLE = 'RECIPIENT_UNAVAILABLE',
-  RECONNECT_REQUIRED = 'RECONNECT_REQUIRED',
-  MAILBOX_INELIGIBLE = 'MAILBOX_INELIGIBLE',
-}
-
-export class MyahInboxReplyUnavailableError extends Error {
-  constructor(readonly code: MyahInboxReplyUnavailableCode) {
-    super(code);
-  }
-}
-
-type InboxMessageThreadRecord = ObjectRecord & {
-  id: string;
-  subject: string | null;
-  myahReplyDraftBodyMarkdown: string | null;
-  myahReplyDraftBodyBlocknote: string | null;
-  myahReplyDraftRevision: number;
-};
-
-type InboxParentMessageRecord = MessageWorkspaceEntity & {
-  messageParticipants: MessageParticipantWorkspaceEntity[];
-  messageChannelMessageAssociations: MessageChannelMessageAssociationWorkspaceEntity[];
-};
-
-type MyahInboxReplyEvidenceObjectMetadataIds = {
-  message: string;
-  messageThread: string;
-};
-
-type MyahInboxReplyExpectedActionBindingWithWorkspace =
-  MyahInboxReplyExpectedActionBinding & { workspaceId: string };
+const MESSAGE_ID_PATTERN = /^<[^<>\s@]+@[^<>\s@]+>$/;
 
 type LoadMode = 'execution' | 'projection';
-
-export type CanonicalMyahInboxReplyGraph = {
-  messageThreadId: string;
-  draftRevision: number;
-  draftBody: { markdown: string; blocknote: string | null };
-  connectedAccountId: string;
-  messageChannelId: string;
-  senderEmail: string;
-  senderDisplayName: string | null;
-  recipientEmail: string;
-  recipientLabel: string;
-  subject: string;
-  inReplyTo: string;
-  parentMessageId: string;
-  providerMessageExternalId: string | null;
-  providerThreadExternalId: string | null;
-  managedMailboxId: string | null;
-  connectedAccount: ConnectedAccountEntity;
-};
-
-export type MyahInboxReplyActionAuthority = {
-  expectedActionBinding: MyahInboxReplyExpectedActionBindingWithWorkspace;
-  canonicalGraph: CanonicalMyahInboxReplyGraph;
-};
 
 @Injectable()
 export class MyahInboxReplyActionDefinition {
@@ -190,7 +149,7 @@ export class MyahInboxReplyActionDefinition {
       graph,
     });
 
-    if (!this.matchesBinding(binding, authority.expectedActionBinding)) {
+    if (!matchesMyahInboxReplyBinding(binding, authority.expectedActionBinding)) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
       );
@@ -213,7 +172,7 @@ export class MyahInboxReplyActionDefinition {
 
     return {
       canonicalGraph: graph,
-      expectedActionBinding: this.buildExpectedActionBinding({
+      expectedActionBinding: buildMyahInboxReplyExpectedActionBinding({
         workspaceId,
         initiatorUserWorkspaceId,
         graph,
@@ -222,96 +181,6 @@ export class MyahInboxReplyActionDefinition {
     };
   }
 
-  private buildExpectedActionBinding({
-    workspaceId,
-    initiatorUserWorkspaceId,
-    graph,
-    evidenceObjectMetadataIds,
-  }: {
-    workspaceId: string;
-    initiatorUserWorkspaceId: string;
-    graph: CanonicalMyahInboxReplyGraph;
-    evidenceObjectMetadataIds: MyahInboxReplyEvidenceObjectMetadataIds;
-  }): MyahInboxReplyExpectedActionBindingWithWorkspace {
-    const evidenceLinks: ActionEvidenceLinkInput[] = [
-      {
-        objectMetadataId: evidenceObjectMetadataIds.messageThread,
-        recordId: graph.messageThreadId,
-        role: 'draft',
-      },
-      {
-        objectMetadataId: evidenceObjectMetadataIds.message,
-        recordId: graph.parentMessageId,
-        role: 'thread_parent',
-      },
-    ];
-
-    return {
-      workspaceId,
-      actionName: this.actionName,
-      actionVersion: this.actionVersion,
-      draftId: graph.messageThreadId,
-      contentDigest: computeActionContentDigest(
-        JSON.stringify([graph.subject, graph.draftBody.markdown]),
-      ),
-      recipientFingerprint: computeActionContentDigest(
-        JSON.stringify([graph.recipientEmail]),
-      ),
-      sendingAccountFingerprint: computeActionContentDigest(
-        JSON.stringify([
-          graph.managedMailboxId,
-          graph.connectedAccountId,
-          graph.messageChannelId,
-          graph.senderEmail,
-          graph.senderDisplayName,
-        ]),
-      ),
-      actionContextFingerprint: computeActionContentDigest(
-        JSON.stringify([
-          graph.draftRevision,
-          graph.inReplyTo,
-          graph.messageThreadId,
-          graph.providerThreadExternalId,
-          graph.providerMessageExternalId,
-        ]),
-      ),
-      threadId: graph.messageThreadId,
-      initiatorUserWorkspaceId,
-      evidenceLinks,
-    };
-  }
-
-  private matchesBinding(
-    actual: MyahInboxReplyExpectedActionBindingWithWorkspace,
-    expected: MyahInboxReplyExpectedActionBindingWithWorkspace,
-  ): boolean {
-    if (
-      actual.workspaceId !== expected.workspaceId ||
-      actual.actionName !== expected.actionName ||
-      actual.actionVersion !== expected.actionVersion ||
-      actual.draftId !== expected.draftId ||
-      actual.contentDigest !== expected.contentDigest ||
-      actual.recipientFingerprint !== expected.recipientFingerprint ||
-      actual.sendingAccountFingerprint !== expected.sendingAccountFingerprint ||
-      actual.actionContextFingerprint !== expected.actionContextFingerprint ||
-      actual.threadId !== expected.threadId ||
-      actual.initiatorUserWorkspaceId !== expected.initiatorUserWorkspaceId
-    ) {
-      return false;
-    }
-
-    const comparableEvidence = (evidence: readonly ActionEvidenceLinkInput[]) =>
-      evidence
-        .map(({ objectMetadataId, recordId, role }) =>
-          JSON.stringify([objectMetadataId, recordId, role]),
-        )
-        .sort();
-
-    return (
-      JSON.stringify(comparableEvidence(actual.evidenceLinks)) ===
-      JSON.stringify(comparableEvidence(expected.evidenceLinks))
-    );
-  }
 
   private async resolveEvidenceObjectMetadataIds(
     workspaceId: string,
@@ -401,14 +270,15 @@ export class MyahInboxReplyActionDefinition {
       authContext,
     );
 
-    const draftMarkdown = source.messageThread?.myahReplyDraftBodyMarkdown?.trim();
+    const draftMarkdown = source.messageThread?.myahReplyDraftBodyMarkdown;
+    const draftMarkdownForValidation = draftMarkdown?.trim();
     const subject = source.messageThread?.subject?.trim();
     const parentMessage = source.parentMessage;
 
     if (
       !source.messageThread ||
       source.messageThread.id !== messageThreadId ||
-      !isNonEmptyString(draftMarkdown) ||
+      !isNonEmptyString(draftMarkdownForValidation) ||
       !isNonEmptyString(subject) ||
       (expectedDraftRevision !== undefined &&
         source.messageThread.myahReplyDraftRevision !== expectedDraftRevision) ||
@@ -425,7 +295,7 @@ export class MyahInboxReplyActionDefinition {
     const headerMessageId = parentMessage.headerMessageId?.trim();
     const associations = parentMessage.messageChannelMessageAssociations ?? [];
 
-    if (!isNonEmptyString(headerMessageId)) {
+    if (!isNonEmptyString(headerMessageId) || !MESSAGE_ID_PATTERN.test(headerMessageId)) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
       );
@@ -473,7 +343,7 @@ export class MyahInboxReplyActionDefinition {
 
     const senderEmail = channel.handle.trim().toLowerCase();
     const senderHandles = new Set(
-      [account.handle, ...(account.handleAliases ?? []), channel.handle]
+      [account.handle, ...(account.handleAliases ?? [])]
         .map((handle) => handle.trim().toLowerCase())
         .filter((handle) => emailSchema.safeParse(handle).success),
     );
