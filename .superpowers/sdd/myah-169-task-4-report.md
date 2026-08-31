@@ -70,3 +70,24 @@ None known.
 ### GREEN evidence
 
 - Writer focused suite: 1 suite, 12 tests passed after restoring the parent Message join and normalizing connected-account sender display names.
+
+## Grouped Message association regressions
+
+### RED evidence
+
+- Coverage-only: the new regressions passed on their first run because committed projection code already grouped matching raw association rows by Message ID. No production change was appropriate.
+
+### GREEN evidence
+
+- `npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-workspace-projection-writer.service.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand` — 1 suite, 16 tests passed.
+- `npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/definitions/__tests__/myah-inbox-reply-action.definition.spec.ts packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-projector.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-reply-send.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/resolvers/__tests__/myah-inbox-reply-send.resolver.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-mutation.service.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand` — 5 suites, 94 tests passed.
+
+### Self-review
+
+- Active projection and cleared-draft replay each accept exactly one matching association row for a native Message while ignoring a sibling nonmatching association.
+- Active projection rejects two matching associations for the same Message; cleared replay rejects two matching Message IDs.
+- The candidate-query assertions prohibit a SQL `LIMIT`, so the second distinct Message cannot be hidden before grouped ambiguity evaluation.
+
+### Concerns
+
+None known.

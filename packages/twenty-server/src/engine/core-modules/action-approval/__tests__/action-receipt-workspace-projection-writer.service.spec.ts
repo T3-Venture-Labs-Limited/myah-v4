@@ -889,3 +889,244 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     );
   });
 });
+
+describe('Inbox projected Message association grouping', () => {
+  const setup = ({
+    draftBody,
+    revision,
+    associationMode,
+  }: {
+    draftBody: string | null;
+    revision: number;
+    associationMode:
+      | 'one-matching-and-one-nonmatching'
+      | 'two-matching-associations'
+      | 'two-distinct-messages';
+  }) => {
+    const workspaceId = '00000000-0000-4000-8000-000000000201';
+    const messageThreadId = '00000000-0000-4000-8000-000000000202';
+    const messageChannelId = '00000000-0000-4000-8000-000000000203';
+    const parentMessageId = '00000000-0000-4000-8000-000000000204';
+    const subject = 'Re: Partnership';
+    const body = 'Thanks for the update';
+    const projection = {
+      receiptId: '00000000-0000-4000-8000-000000000205',
+      workspaceId,
+      draftId: messageThreadId,
+      actionVersion: 1,
+      threadId: messageThreadId,
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000206',
+      actionName: 'send_inbox_reply' as const,
+      contentDigest: computeActionContentDigest(JSON.stringify([subject, body])),
+      recipientFingerprint: computeActionContentDigest(
+        JSON.stringify(['creator@example.com']),
+      ),
+      sendingAccountFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          null,
+          'connected-account-id',
+          messageChannelId,
+          'sender@example.com',
+          'Sender',
+        ]),
+      ),
+      actionContextFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          4,
+          '<incoming@example.com>',
+          messageThreadId,
+          'provider-thread-id',
+          'incoming-provider-message-id',
+          'connected-account-id',
+          messageChannelId,
+          'sender@example.com',
+          'Sender',
+        ]),
+      ),
+      providerMessageId: '<sent@example.com>',
+      providerExternalMessageId: 'provider-message-id',
+      providerThreadExternalId: 'provider-thread-id',
+      evidenceLinks: [
+        {
+          objectMetadataId: 'message-thread-metadata-id',
+          recordId: messageThreadId,
+          role: 'draft',
+        },
+        {
+          objectMetadataId: 'message-metadata-id',
+          recordId: parentMessageId,
+          role: 'thread_parent',
+        },
+      ],
+    } as const;
+    const canonicalGraph = {
+      messageThreadId,
+      draftRevision: 4,
+      draftBody: { markdown: body, blocknote: null },
+      connectedAccountId: 'connected-account-id',
+      messageChannelId,
+      senderEmail: 'sender@example.com',
+      senderDisplayName: 'Sender',
+      recipientEmail: 'creator@example.com',
+      recipientLabel: 'Creator',
+      subject,
+      inReplyTo: '<incoming@example.com>',
+      parentMessageId,
+      providerMessageExternalId: 'incoming-provider-message-id',
+      providerThreadExternalId: 'provider-thread-id',
+      managedMailboxId: null,
+      connectedAccount: {
+        id: 'connected-account-id',
+        workspaceId,
+        handle: 'sender@example.com',
+      },
+    };
+    const sentMessage = {
+      id: '00000000-0000-4000-8000-000000000207',
+      messageThreadId,
+      subject,
+      body,
+      messageChannelId,
+      messageExternalId: 'provider-message-id',
+      messageThreadExternalId: 'provider-thread-id',
+      recipientCount: 1,
+      recipientEmail: 'creator@example.com',
+      senderEmail: 'sender@example.com',
+      senderCount: 1,
+      senderDisplayName: 'Sender',
+      connectedAccountId: 'connected-account-id',
+      managedMailboxId: null,
+      parentMessageId,
+      parentHeaderMessageId: '<incoming@example.com>',
+      parentMessageExternalId: 'incoming-provider-message-id',
+      parentThreadExternalId: 'provider-thread-id',
+    };
+    const sentMessages =
+      associationMode === 'one-matching-and-one-nonmatching'
+        ? [
+            sentMessage,
+            {
+              ...sentMessage,
+              messageExternalId: 'other-provider-message-id',
+            },
+          ]
+        : associationMode === 'two-matching-associations'
+          ? [sentMessage, { ...sentMessage }]
+          : [{ ...sentMessage }, { ...sentMessage, id: 'different-message-id' }];
+    const actionDefinition = {
+      rebuildProjectionAuthority: jest.fn().mockResolvedValue({
+        canonicalGraph,
+        expectedActionBinding: projection,
+      }),
+    };
+    const query = jest.fn(async (sql: string, parameters?: unknown[]) => {
+      if (sql.includes('pg_advisory_xact_lock')) {
+        return [];
+      }
+      if (sql.includes('core."objectMetadata"')) {
+        return [
+          {
+            id: 'message-thread-metadata-id',
+            universalIdentifier: parameters?.[1],
+          },
+          {
+            id: 'message-metadata-id',
+            universalIdentifier: parameters?.[2],
+          },
+        ];
+      }
+      if (sql.includes('"headerMessageId"')) {
+        return sentMessages;
+      }
+      if (
+        String(sql).trimStart().startsWith('UPDATE') &&
+        sql.includes('"messageThread"')
+      ) {
+        return [{ id: messageThreadId }];
+      }
+      if (sql.includes('"myahReplyDraftBody"')) {
+        return [
+          {
+            myahReplyDraftBody: draftBody,
+            myahReplyDraftRevision: revision,
+          },
+        ];
+      }
+      return [];
+    });
+    const dataSource = {
+      transaction: jest.fn(
+        async (callback: (manager: { query: typeof query }) => unknown) =>
+          callback({ query }),
+      ),
+    };
+    const persistSentMessage = jest.fn();
+    const writer = new ActionReceiptWorkspaceProjectionWriterService(
+      dataSource as never,
+      {} as never,
+      { persistSentMessage } as never,
+      actionDefinition as never,
+    );
+
+    return { actionDefinition, persistSentMessage, projection, query, writer };
+  };
+
+  it.each([
+    ['an active draft projection', 'Thanks for the update', 4, 1],
+    ['a cleared-draft replay', null, 5, 0],
+  ])(
+    'accepts one matching and one nonmatching association for %s',
+    async (_label, draftBody, revision, authorityCalls) => {
+      const fixture = setup({
+        draftBody,
+        revision,
+        associationMode: 'one-matching-and-one-nonmatching',
+      });
+
+      await fixture.writer.project(fixture.projection);
+
+      expect(fixture.persistSentMessage).not.toHaveBeenCalled();
+      expect(
+        fixture.actionDefinition.rebuildProjectionAuthority,
+      ).toHaveBeenCalledTimes(authorityCalls);
+    },
+  );
+
+  it.each([
+    [
+      'two matching associations on one Message',
+      'Thanks for the update',
+      4,
+      1,
+      'two-matching-associations',
+    ],
+    [
+      'two matching distinct Message IDs',
+      null,
+      5,
+      0,
+      'two-distinct-messages',
+    ],
+  ])(
+    'rejects %s without hiding candidates behind a SQL row limit',
+    async (_label, draftBody, revision, authorityCalls, associationMode) => {
+      const fixture = setup({ draftBody, revision, associationMode });
+
+      await expect(fixture.writer.project(fixture.projection)).rejects.toThrow(
+        'The sent Inbox Message is unavailable for projection',
+      );
+
+      expect(fixture.persistSentMessage).not.toHaveBeenCalled();
+      expect(
+        fixture.actionDefinition.rebuildProjectionAuthority,
+      ).toHaveBeenCalledTimes(authorityCalls);
+      const lookups = fixture.query.mock.calls.filter(([sql]) =>
+        String(sql).includes('"headerMessageId"'),
+      );
+      expect(lookups).toHaveLength(1);
+      expect(lookups.every(([sql]) => !/\bLIMIT\b/i.test(String(sql)))).toBe(
+        true,
+      );
+    },
+  );
+});
