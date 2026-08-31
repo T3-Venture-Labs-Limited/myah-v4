@@ -277,11 +277,13 @@ export class ActionApprovalService {
     approvalBindingId,
     initiatorUserWorkspaceId,
     threadId,
+    draftId,
   }: {
     workspaceId: string;
     approvalBindingId: string;
     initiatorUserWorkspaceId: string;
     threadId: string;
+    draftId: string;
   }): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const binding = await manager.findOne(ActionApprovalBindingEntity, {
@@ -293,6 +295,7 @@ export class ActionApprovalService {
         binding.actionName !== 'send_inbox_reply' ||
         binding.initiatorUserWorkspaceId !== initiatorUserWorkspaceId ||
         binding.threadId !== threadId ||
+        binding.draftId !== draftId ||
         binding.state !== ActionApprovalBindingState.APPROVED
       ) {
         throw new Error('An approved Inbox reply binding cannot be invalidated');

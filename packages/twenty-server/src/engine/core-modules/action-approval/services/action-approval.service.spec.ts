@@ -637,6 +637,7 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
       approvalBindingId,
       initiatorUserWorkspaceId: userWorkspaceId,
       threadId,
+      draftId: inboxReplyBinding.draftId,
     };
 
     await expect(
@@ -655,6 +656,7 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
       },
       { ...inboxBinding, threadId: '00000000-0000-4000-8000-000000000099' },
       { ...inboxBinding, actionName: 'send_outreach_email' },
+      { ...inboxBinding, draftId: '00000000-0000-4000-8000-000000000099' },
     ]) {
       manager.findOne.mockImplementation(async (entity) =>
         entity === ActionApprovalBindingEntity ? rejectedBinding : null,

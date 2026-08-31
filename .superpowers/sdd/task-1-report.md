@@ -33,3 +33,9 @@ Complete.
 
 ## Concerns
 None known. Focused tests only, per Task 1 scope.
+
+## Follow-up invalidation scope fix
+- Commit: `fix(myah): scope Inbox binding invalidation`.
+- RED: `npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/services/action-approval.service.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand` failed as expected: a different-draft Inbox binding was invalidated instead of rejected.
+- GREEN: the same focused command passed: 1 suite, 21 tests.
+- Self-review: invalidation now requires the request's exact `draftId` in addition to workspace, actor, thread, action, approved state, and receipt absence; every existing call in scope supplies the new field.
