@@ -173,14 +173,6 @@ msgstr "{0, plural, one {{1} job could not be deleted} other {{2} jobs could not
 msgid "{0, plural, one {{1} job could not be retried} other {{2} jobs could not be retried}}"
 msgstr "{0, plural, one {{1} job could not be retried} other {{2} jobs could not be retried}}"
 
-#. js-lingui-id: k1H+PU
-#. placeholder {0}: viewModel.settledOperationCount
-#. placeholder {1}: viewModel.settledOperationCount
-#. placeholder {2}: viewModel.settledOperationCount
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "{0, plural, one {{1} managed operation} other {{2} managed operations}}"
-msgstr "{0, plural, one {{1} managed operation} other {{2} managed operations}}"
-
 #. js-lingui-id: exVznc
 #. placeholder {0}: selectedWarmupEffectiveQuantity ?? 0
 #. placeholder {1}: selectedWarmupEffectiveQuantity ?? 0
@@ -264,13 +256,6 @@ msgstr "{0, plural, one {You do not have permission to access the {fieldsList} f
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "{0} — {1}"
 msgstr "{0} — {1}"
-
-#. js-lingui-id: 2UOALe
-#. placeholder {0}: entry.member
-#. placeholder {1}: getUsageStatus(entry.status).label
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "{0} · {1}"
-msgstr "{0} · {1}"
 
 #. js-lingui-id: 0uojbq
 #. placeholder {0}: i18n._(getDomainRemovalActionMessage(domainToRemove))
@@ -441,11 +426,11 @@ msgstr "{0} of {1}"
 msgid "{0} opted out of this topic"
 msgstr "{0} opted out of this topic"
 
-#. js-lingui-id: dPloSB
-#. placeholder {0}: formatUsdCents(viewModel.purchasedBalanceCents)
+#. js-lingui-id: wtDoTf
+#. placeholder {0}: viewModel.pendingOperationCount
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "{0} purchased"
-msgstr "{0} purchased"
+msgid "{0} payment or usage operation(s) pending"
+msgstr "{0} payment or usage operation(s) pending"
 
 #. js-lingui-id: Klinir
 #. placeholder {0}: record.type
@@ -476,12 +461,6 @@ msgstr "{0} selected"
 #: src/modules/side-panel/pages/page-layout/hooks/useRecordTableSettingsDescriptions.ts
 msgid "{0} shown"
 msgstr "{0} shown"
-
-#. js-lingui-id: QHs74d
-#. placeholder {0}: formatUsdCents(viewModel.sponsoredBalanceCents)
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "{0} sponsored"
-msgstr "{0} sponsored"
 
 #. js-lingui-id: nZUq+6
 #. placeholder {0}: preview.globallyUnsubscribed
@@ -1482,6 +1461,8 @@ msgstr "ACS Url copied to clipboard"
 
 #. js-lingui-id: bwRvnp
 #: src/modules/ai/components/AiChatApprovalCard.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/utils/getActionHeaderTypeOrThrow.ts
@@ -1592,11 +1573,6 @@ msgstr "Active installs"
 msgid "Active Sync"
 msgstr "Active Sync"
 
-#. js-lingui-id: XJOV1Y
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Activity"
-msgstr "Activity"
-
 #. js-lingui-id: m16xKo
 #: src/pages/settings/ai/components/SettingsAgentEvalsTab.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -1607,6 +1583,12 @@ msgstr "Add"
 #: src/modules/settings/data-model/fields/forms/select/components/AddSelectOptionMenuItem.tsx
 msgid "Add \"{trimmedName}\" to options"
 msgstr "Add \"{trimmedName}\" to options"
+
+#. js-lingui-id: lvbgDR
+#. placeholder {0}: formatUsdCents(selectedPreset.principalCents).replace('.00', '')
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Add {0} credit"
+msgstr "Add {0} credit"
 
 #. js-lingui-id: 9CHcSG
 #: src/modules/object-record/record-table/empty-state/components/RecordTableEmptyStateNoRecordFoundForFilter.tsx
@@ -1629,11 +1611,6 @@ msgstr "Add a Group"
 #: src/modules/ai/components/suggested-prompts/default-suggested-prompts.ts
 msgid "Add a new company we're in touch with (e.g. name, website, industry). Details: "
 msgstr "Add a new company we're in touch with (e.g. name, website, industry). Details: "
-
-#. js-lingui-id: BcKlYM
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Add a payment method before enabling automatic top-up."
-msgstr "Add a payment method before enabling automatic top-up."
 
 #. js-lingui-id: nGv1DN
 #: src/modules/side-panel/utils/getSidePanelSubPageTitle.ts
@@ -1664,6 +1641,12 @@ msgstr "Add a video conferencing link"
 #: src/pages/settings/accounts/SettingsAccountsConfigurationStepEmail.tsx
 msgid "Add account"
 msgstr "Add account"
+
+#. js-lingui-id: 8qXT7+
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Add AI credit"
+msgstr "Add AI credit"
 
 #. js-lingui-id: n2kEWb
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -1790,14 +1773,6 @@ msgstr "Add filter rule"
 #: src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterAddRootStepFilterButton.tsx
 msgid "Add first filter"
 msgstr "Add first filter"
-
-#. js-lingui-id: BSj/hz
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Add funds"
-msgstr "Add funds"
 
 #. js-lingui-id: 7K4Hxr
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
@@ -1929,11 +1904,6 @@ msgstr "Add or remove users"
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowOutputSchemaBuilder.tsx
 msgid "Add Output Field"
 msgstr "Add Output Field"
-
-#. js-lingui-id: lRpmgk
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Add payment method"
-msgstr "Add payment method"
 
 #. js-lingui-id: aYtHO6
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowAiAgentPermissionsTab.tsx
@@ -2166,10 +2136,15 @@ msgstr "Address 1"
 msgid "Address 2"
 msgstr "Address 2"
 
-#. js-lingui-id: xek+6t
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Adjustment"
-msgstr "Adjustment"
+#. js-lingui-id: NY/x1b
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Address line 1"
+msgstr "Address line 1"
+
+#. js-lingui-id: x+ZyYd
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Address line 2 (optional)"
+msgstr "Address line 2 (optional)"
 
 #. js-lingui-id: U3pytU
 #: src/modules/settings/members/components/MemberInfosTab.tsx
@@ -2365,6 +2340,22 @@ msgstr "AI agent run"
 msgid "AI agents"
 msgstr "AI agents"
 
+#. js-lingui-id: a191qo
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "AI balance"
+msgstr "AI balance"
+
+#. js-lingui-id: 4BKIzM
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "AI billing information is temporarily unavailable."
+msgstr "AI billing information is temporarily unavailable."
+
+#. js-lingui-id: e2h0Ze
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "AI billing is not connected for this workspace."
+msgstr "AI billing is not connected for this workspace."
+
 #. js-lingui-id: V+Qj+q
 #: src/modules/settings/usage/utils/getOperationTypeLabel.ts
 msgid "AI Chat"
@@ -2384,6 +2375,17 @@ msgstr "AI consumption across all workspaces."
 #: src/pages/settings/ai/components/SettingsAiUsageTab.tsx
 msgid "AI consumption over time."
 msgstr "AI consumption over time."
+
+#. js-lingui-id: ChQ/5B
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "AI credit amount"
+msgstr "AI credit amount"
+
+#. js-lingui-id: wU8cNK
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "AI funding history"
+msgstr "AI funding history"
 
 #. js-lingui-id: kNfr85
 #: src/pages/settings/ai/components/SettingsAgentSettingsTab.tsx
@@ -2438,7 +2440,6 @@ msgid "AI usage analytics will appear here once you start using AI features."
 msgstr "AI usage analytics will appear here once you start using AI features."
 
 #. js-lingui-id: Tg/YZp
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "AI usage and balance are tracked separately from managed email."
 msgstr "AI usage and balance are tracked separately from managed email."
@@ -2731,7 +2732,6 @@ msgstr "Amber"
 
 #. js-lingui-id: hehnjM
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Amount"
@@ -2854,7 +2854,6 @@ msgstr "And"
 
 #. js-lingui-id: YkfDoz
 #: src/modules/settings/billing/components/internal/SettingsBillingPlanComparisonTable.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -3510,6 +3509,12 @@ msgstr "Auth"
 msgid "Auth failed at"
 msgstr "Auth failed at"
 
+#. js-lingui-id: 15sT8t
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Authenticate payment"
+msgstr "Authenticate payment"
+
 #. js-lingui-id: P8fBlG
 #: src/modules/settings/security/components/SettingsSecuritySettings.tsx
 msgid "Authentication"
@@ -3576,12 +3581,6 @@ msgstr "Auto-creation"
 msgid "Auto-generated role for {agentDisplayName}"
 msgstr "Auto-generated role for {agentDisplayName}"
 
-#. js-lingui-id: vUbP+p
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Automatic top-up"
-msgstr "Automatic top-up"
-
 #. js-lingui-id: YRT7ZW
 #: src/modules/settings/accounts/components/SettingsAccountsCalendarChannelDetails.tsx
 msgid "Automatically create contacts for people you've participated in an event with."
@@ -3614,16 +3613,11 @@ msgid "Availability"
 msgstr "Availability"
 
 #. js-lingui-id: csDS2L
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/data-model/new-object/components/SettingsAvailableStandardObjectsSection.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Available"
 msgstr "Available"
-
-#. js-lingui-id: 9Kl6Ee
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Available balance"
-msgstr "Available balance"
 
 #. js-lingui-id: y4R8Q6
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -3655,6 +3649,11 @@ msgstr "Avatar file field not found for person object"
 #: src/modules/object-record/record-board/record-board-column/utils/getAggregateOperationShortLabel.ts
 msgid "Average"
 msgstr "Average"
+
+#. js-lingui-id: 3wF4Q/
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Awaiting payment"
+msgstr "Awaiting payment"
 
 #. js-lingui-id: li9In6
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
@@ -3730,21 +3729,15 @@ msgstr "Background"
 msgid "Background Colors"
 msgstr "Background Colors"
 
-#. js-lingui-id: fsBGk0
+#. js-lingui-id: 8bol0K
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Balance"
-msgstr "Balance"
+msgid "Balance active"
+msgstr "Balance active"
 
 #. js-lingui-id: uayqnb
 #: src/modules/workflow/workflow-steps/workflow-actions/pick-record-action/components/WorkflowEditActionPickRecord.tsx
 msgid "Balance by"
 msgstr "Balance by"
-
-#. js-lingui-id: CKhG7Z
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Balance threshold"
-msgstr "Balance threshold"
 
 #. js-lingui-id: b2ghLW
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
@@ -3852,28 +3845,15 @@ msgstr "Billed monthly"
 msgid "Billing"
 msgstr "Billing"
 
+#. js-lingui-id: pTJZhK
+#: src/pages/settings/billing/SettingsBilling.tsx
+msgid "Billing action could not be completed."
+msgstr "Billing action could not be completed."
+
 #. js-lingui-id: dSjFxR
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Billing history"
 msgstr "Billing history"
-
-#. js-lingui-id: i6YpbP
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Billing history views"
-msgstr "Billing history views"
-
-#. js-lingui-id: rYqnJ3
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Billing history will appear here when billing data is connected."
-msgstr "Billing history will appear here when billing data is connected."
-
-#. js-lingui-id: 0czN77
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Billing information is temporarily unavailable."
-msgstr "Billing information is temporarily unavailable."
 
 #. js-lingui-id: nJGwRf
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
@@ -3882,6 +3862,11 @@ msgstr "Billing information is temporarily unavailable."
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
 msgid "Billing interval"
 msgstr "Billing interval"
+
+#. js-lingui-id: Vnka6j
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Billing name"
+msgstr "Billing name"
 
 #. js-lingui-id: 8tzR0k
 #: src/modules/settings/billing/components/internal/SettingsBillingPlanComparisonTable.tsx
@@ -4246,6 +4231,8 @@ msgstr "Can't scan? Copy the"
 #: src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter.tsx
 #: src/modules/settings/billing/components/AddCreditCardModal.tsx
 #: src/modules/settings/billing/components/internal/ResourceCreditPackagePickerModal.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
 #: src/modules/settings/components/SaveAndCancelButtons/CancelButton.tsx
 #: src/modules/settings/components/SaveAndCancelButtons/CancelButton.tsx
 #: src/modules/side-panel/pages/compose-campaign/components/SidePanelCampaignComposerPage.tsx
@@ -4485,6 +4472,12 @@ msgstr "Captcha (anti-bot check) is still loading, try again"
 #: src/modules/side-panel/pages/page-layout/components/record-page/SidePanelRecordPageFieldSettings.tsx
 msgid "Card"
 msgstr "Card"
+
+#. js-lingui-id: Ac/cAm
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Card payment is currently unavailable."
+msgstr "Card payment is currently unavailable."
 
 #. js-lingui-id: Z93S+U
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
@@ -4835,6 +4828,7 @@ msgstr "Choose which profile fields users with the Edit Profile permission can m
 #: src/modules/object-metadata/hooks/useSortSubFieldChoicesForField.ts
 #: src/modules/object-record/record-field/ui/form-types/components/FormAddressFieldInput.tsx
 #: src/modules/object-record/record-field/ui/form-types/components/FormAddressFieldInput.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
 #: src/modules/settings/data-model/fields/forms/address/constants/DefaultSelectionAddressWithMessages.ts
 #: src/modules/ui/field/input/components/AddressInput.tsx
 msgid "City"
@@ -5166,6 +5160,11 @@ msgstr "Compare plans"
 msgid "Complete domain locally"
 msgstr "Complete domain locally"
 
+#. js-lingui-id: M9t5CO
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Complete every required billing field. Tax ID type and value must be entered together."
+msgstr "Complete every required billing field. Tax ID type and value must be entered together."
+
 #. js-lingui-id: d+HfDD
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Complete fixed mailbox identities"
@@ -5181,10 +5180,20 @@ msgstr "Complete local DNS verification before adding or repairing this domain."
 msgid "Complete locally — {reviewAmount}"
 msgstr "Complete locally — {reviewAmount}"
 
+#. js-lingui-id: guBeyC
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Complete payment"
+msgstr "Complete payment"
+
 #. js-lingui-id: 3WrMP5
 #: src/modules/settings/accounts/components/SettingsAccountsRowDropdownMenu.tsx
 msgid "Complete setup"
 msgstr "Complete setup"
+
+#. js-lingui-id: StE+so
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Complete the additional authentication requested by your payment provider."
+msgstr "Complete the additional authentication requested by your payment provider."
 
 #. js-lingui-id: VPhefa
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
@@ -6167,6 +6176,11 @@ msgstr "Count unique values"
 msgid "Country"
 msgstr "Country"
 
+#. js-lingui-id: 87bpog
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Country code"
+msgstr "Country code"
+
 #. js-lingui-id: 1NDkH/
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Covered by existing capacity. This mailbox uses one paid spare pool slot and adds no local charge."
@@ -6936,7 +6950,6 @@ msgstr "Database event"
 #: src/modules/object-record/record-board/record-board-column/components/RecordBoardColumnHeaderAggregateDropdownMenuContent.tsx
 #: src/modules/object-record/record-table/record-table-footer/components/RecordTableColumnAggregateFooterDropdownContent.tsx
 #: src/modules/object-record/record-table/record-table-footer/components/RecordTableColumnAggregateFooterMenuContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/ai/components/SettingsAgentLogsTab.tsx
 #: src/pages/settings/ai/components/SettingsAgentLogsTab.tsx
@@ -7832,11 +7845,6 @@ msgstr "Do not import"
 msgid "Docs"
 msgstr "Docs"
 
-#. js-lingui-id: 7Zdnlq
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Document"
-msgstr "Document"
-
 #. js-lingui-id: TvY/XA
 #: src/modules/navigation/components/NavigationDrawerOtherSection.tsx
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
@@ -7887,11 +7895,6 @@ msgstr "Domain Setup"
 msgid "Domain source"
 msgstr "Domain source"
 
-#. js-lingui-id: iV0AlT
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Domain, mailbox, and warmup renewals will appear here after purchase."
-msgstr "Domain, mailbox, and warmup renewals will appear here after purchase."
-
 #. js-lingui-id: 8OA9dM
 #. placeholder {0}: reviewDraft.selectedDomain
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -7910,11 +7913,6 @@ msgstr "Domains"
 #: src/pages/settings/security/SettingsSecurityApprovedAccessDomain.tsx
 msgid "Domains have to be smaller than 256 characters, cannot contain spaces and cannot contain any special characters."
 msgstr "Domains have to be smaller than 256 characters, cannot contain spaces and cannot contain any special characters."
-
-#. js-lingui-id: vADny9
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Domains, mailboxes, and warmup renewals"
-msgstr "Domains, mailboxes, and warmup renewals"
 
 #. js-lingui-id: KUxVkp
 #: src/modules/settings/accounts/components/SettingsAccountsMessageAutoCreationCard.tsx
@@ -8747,26 +8745,11 @@ msgstr "Enter a Shopify store domain first."
 msgid "Enter a UUID"
 msgstr "Enter a UUID"
 
-#. js-lingui-id: /auHxp
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Enter a valid balance threshold."
-msgstr "Enter a valid balance threshold."
-
 #. js-lingui-id: n2/T9I
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.spec.ts
 #: src/pages/settings/email/__stories__/ManagedEmailDesign.fixtures.ts
 msgid "Enter a valid domain name, such as example.com."
 msgstr "Enter a valid domain name, such as example.com."
-
-#. js-lingui-id: /sReX7
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Enter a valid monthly limit."
-msgstr "Enter a valid monthly limit."
-
-#. js-lingui-id: BA4rcf
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Enter a valid top-up amount."
-msgstr "Enter a valid top-up amount."
 
 #. js-lingui-id: oiVP/+
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx
@@ -9239,7 +9222,6 @@ msgid "Evaluations"
 msgstr "Evaluations"
 
 #. js-lingui-id: 0pC/y6
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/event-logs/utils/getColumnsForEventLogTable.tsx
 msgid "Event"
 msgstr "Event"
@@ -9455,6 +9437,7 @@ msgid "Experience"
 msgstr "Experience"
 
 #. js-lingui-id: LxRNPw
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/developers/components/SettingsApiKeysTable.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
 msgid "Expiration"
@@ -9476,13 +9459,6 @@ msgstr "Expired"
 #: src/modules/settings/roles/role-assignment/components/SettingsRoleAssignmentTable.tsx
 msgid "Expires"
 msgstr "Expires"
-
-#. js-lingui-id: H/strO
-#. placeholder {0}: String(paymentSettings.defaultPaymentMethod.expiryMonth).padStart(2, '0')
-#. placeholder {1}: String(paymentSettings.defaultPaymentMethod.expiryYear).slice(-2)
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Expires {0}/{1}"
-msgstr "Expires {0}/{1}"
 
 #. js-lingui-id: i9qiyR
 #: src/pages/settings/members/tabs/SettingsWorkspaceMembersInviteTab.tsx
@@ -10472,11 +10448,6 @@ msgstr "Function name"
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsCodeDetail.tsx
 msgid "Function run"
 msgstr "Function run"
-
-#. js-lingui-id: 6w/wSq
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Funding events will appear here when funds are added or adjusted."
-msgstr "Funding events will appear here when funds are added or adjusted."
 
 #. js-lingui-id: e4FdDl
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -11677,11 +11648,6 @@ msgstr "Instructions Editor"
 msgid "Internet accounts per user"
 msgstr "Internet accounts per user"
 
-#. js-lingui-id: 0Xa99f
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Interval"
-msgstr "Interval"
-
 #. js-lingui-id: jyjroS
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
 msgid "Interval switching has been cancelled."
@@ -11850,6 +11816,11 @@ msgstr "Invite user"
 #: src/pages/onboarding/InviteTeam.tsx
 msgid "Invite your team"
 msgstr "Invite your team"
+
+#. js-lingui-id: IuMGvq
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Invoice"
+msgstr "Invoice"
 
 #. js-lingui-id: 2InwTp
 #: src/modules/settings/billing/components/SettingsBillingSubscriptionInfo.tsx
@@ -12181,7 +12152,6 @@ msgid "Last 24 Hours (oldest → newest)"
 msgstr "Last 24 Hours (oldest → newest)"
 
 #. js-lingui-id: uq2BmQ
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/usage/utils/getPeriodOptions.ts
 msgid "Last 30 days"
 msgstr "Last 30 days"
@@ -12197,7 +12167,6 @@ msgid "Last 4 Hours (oldest → newest)"
 msgstr "Last 4 Hours (oldest → newest)"
 
 #. js-lingui-id: ct2SYD
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/usage/utils/getPeriodOptions.ts
 msgid "Last 7 days"
 msgstr "Last 7 days"
@@ -12208,7 +12177,6 @@ msgid "Last 7 Days (oldest → newest)"
 msgstr "Last 7 Days (oldest → newest)"
 
 #. js-lingui-id: XgOuA7
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/usage/utils/getPeriodOptions.ts
 msgid "Last 90 days"
 msgstr "Last 90 days"
@@ -12604,11 +12572,6 @@ msgstr "Listing"
 msgid "Listings"
 msgstr "Listings"
 
-#. js-lingui-id: kgbWXw
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Live billing information has not been connected yet."
-msgstr "Live billing information has not been connected yet."
-
 #. js-lingui-id: C5bVie
 #: src/modules/settings/logic-functions/components/triggers/SettingsLogicFunctionHttpTriggerSection.tsx
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerWebhookForm.tsx
@@ -12864,11 +12827,6 @@ msgstr "Longitude"
 msgid "loop"
 msgstr "loop"
 
-#. js-lingui-id: anIJz7
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Low balance"
-msgstr "Low balance"
-
 #. js-lingui-id: MsaCqr
 #: src/modules/settings/accounts/components/SettingsAccountsConnectionForm.tsx
 msgid "Mail Account"
@@ -13044,7 +13002,6 @@ msgstr "Make private"
 
 #. js-lingui-id: wckWOP
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/side-panel/pages/page-layout/components/CanvasTabSettingsContent.tsx
 #: src/modules/side-panel/pages/page-layout/components/WidgetSettingsManageSection.tsx
 msgid "Manage"
@@ -13112,11 +13069,6 @@ msgstr "Manage Members"
 #: src/pages/settings/data-model/SettingsObjects.tsx
 msgid "Manage objects, fields and relationships"
 msgstr "Manage objects, fields and relationships"
-
-#. js-lingui-id: Ibxanu
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Manage payment method"
-msgstr "Manage payment method"
 
 #. js-lingui-id: JUwWxH
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -13356,16 +13308,6 @@ msgstr "Managed mailbox: No managed mailbox service selected"
 msgid "Managed sending domain"
 msgstr "Managed sending domain"
 
-#. js-lingui-id: b/6ruH
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Managed service activity will appear here when your workspace starts using it."
-msgstr "Managed service activity will appear here when your workspace starts using it."
-
-#. js-lingui-id: 1STcee
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Managed services may pause soon."
-msgstr "Managed services may pause soon."
-
 #. js-lingui-id: TwpYwH
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDashboard.tsx
@@ -13535,11 +13477,6 @@ msgstr "Me (User ID)"
 #: src/modules/advanced-text-editor/extensions/slash-command/DefaultSlashCommands.ts
 msgid "Medium section heading"
 msgstr "Medium section heading"
-
-#. js-lingui-id: OvoEq7
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Member"
-msgstr "Member"
 
 #. js-lingui-id: Sma10A
 #: src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/components/WorkspacesForSignIn.tsx
@@ -13785,12 +13722,6 @@ msgstr "Month"
 msgid "Month of the year"
 msgstr "Month of the year"
 
-#. js-lingui-id: ptY9WG
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Month-to-date spend"
-msgstr "Month-to-date spend"
-
 #. js-lingui-id: rdfE9o
 #: src/modules/settings/billing/hooks/useBillingWording.ts
 msgid "monthly"
@@ -13799,7 +13730,6 @@ msgstr "monthly"
 #. js-lingui-id: +8Nek/
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
 #: src/modules/settings/billing/components/internal/SettingsBillingPlanComparisonTable.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailReview.tsx
@@ -13809,20 +13739,10 @@ msgstr "monthly"
 msgid "Monthly"
 msgstr "Monthly"
 
-#. js-lingui-id: AFHmxG
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Monthly automatic top-up limit (optional)"
-msgstr "Monthly automatic top-up limit (optional)"
-
 #. js-lingui-id: KbzD3g
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Monthly effective date: {monthlyEffectiveDate}"
 msgstr "Monthly effective date: {monthlyEffectiveDate}"
-
-#. js-lingui-id: LJL0nj
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Monthly limit must be at least the top-up amount."
-msgstr "Monthly limit must be at least the top-up amount."
 
 #. js-lingui-id: B/YRn2
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -14106,6 +14026,11 @@ msgstr "Navigation tabs"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "Needs attention"
 msgstr "Needs attention"
+
+#. js-lingui-id: 8mDP6r
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Needs support"
+msgstr "Needs support"
 
 #. js-lingui-id: wW3b68
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsHttpRequestDetail.tsx
@@ -14512,6 +14437,11 @@ msgstr "No agents match your search"
 msgid "No AI consumption recorded for this user."
 msgstr "No AI consumption recorded for this user."
 
+#. js-lingui-id: ntQaLD
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "No AI funding activity yet"
+msgstr "No AI funding activity yet"
+
 #. js-lingui-id: 1GMOHe
 #: src/modules/ai/components/AiChatEditorSection.tsx
 #: src/modules/ai/hooks/useAgentChat.ts
@@ -14562,11 +14492,6 @@ msgstr "No available tabs"
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
 msgid "No billing data is available for this workspace."
 msgstr "No billing data is available for this workspace."
-
-#. js-lingui-id: XY66HQ
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "No billing events yet"
-msgstr "No billing events yet"
 
 #. js-lingui-id: V/RzSE
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx
@@ -14958,11 +14883,6 @@ msgstr "No metrics data available"
 msgid "No models available. Please configure AI models in your workspace settings."
 msgstr "No models available. Please configure AI models in your workspace settings."
 
-#. js-lingui-id: e4+R/P
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "No monthly limit allows repeated automatic charges."
-msgstr "No monthly limit allows repeated automatic charges."
-
 #. js-lingui-id: 9VrTfZ
 #: src/modules/activities/notes/components/NotesCard.tsx
 msgid "No notes"
@@ -14998,6 +14918,11 @@ msgstr "No output available"
 #: src/pages/settings/ai/components/SettingsToolParameterTable.tsx
 msgid "No parameters"
 msgstr "No parameters"
+
+#. js-lingui-id: wTcfYW
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "No payment and billing details saved."
+msgstr "No payment and billing details saved."
 
 #. js-lingui-id: 5pSj4j
 #: src/modules/settings/billing/effect-components/EndTrialAfterPaymentMethodEffect.tsx
@@ -15209,11 +15134,6 @@ msgstr "No usage data is available for this workspace."
 msgid "No usage data yet"
 msgstr "No usage data yet"
 
-#. js-lingui-id: i8pl7N
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "No usage yet"
-msgstr "No usage yet"
-
 #. js-lingui-id: EsP4NW
 #: src/modules/settings/admin-panel/components/SettingsAdminGeneral.tsx
 msgid "No users found matching your search criteria."
@@ -15364,11 +15284,6 @@ msgstr "Not available for default view"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 msgid "Not available on Default View"
 msgstr "Not available on Default View"
-
-#. js-lingui-id: yBm5U3
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Not charged"
-msgstr "Not charged"
 
 #. js-lingui-id: S33tz3
 #: src/pages/settings/accounts/SettingsAccountsInstagram.tsx
@@ -15766,12 +15681,6 @@ msgstr "Onboarding Packs"
 msgid "One or more filters reference deactivated or deleted fields and will be automatically removed on save."
 msgstr "One or more filters reference deactivated or deleted fields and will be automatically removed on save."
 
-#. js-lingui-id: 1m8ynK
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Online top-ups coming soon"
-msgstr "Online top-ups coming soon"
-
 #. js-lingui-id: oFTo3P
 #: src/modules/settings/event-logs/components/SettingsLogs.tsx
 msgid "Only application logs are available on your current plan. Other log types require an Enterprise subscription."
@@ -15928,11 +15837,6 @@ msgstr "Operation"
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminHealthStatusRightContainer.tsx
 msgid "Operational"
 msgstr "Operational"
-
-#. js-lingui-id: B1MDds
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Operations"
-msgstr "Operations"
 
 #. js-lingui-id: lVa1Xn
 #: src/modules/settings/data-model/fields/forms/select/hooks/useSelectSettingsFormInitialValues.ts
@@ -16207,7 +16111,6 @@ msgid "Pages"
 msgstr "Pages"
 
 #. js-lingui-id: VUgoZi
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailDetails.tsx
 msgid "Paid through"
 msgstr "Paid through"
@@ -16344,37 +16247,41 @@ msgstr "payment"
 msgid "Payment"
 msgstr "Payment"
 
+#. js-lingui-id: MKQqcT
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Payment & billing details"
+msgstr "Payment & billing details"
+
+#. js-lingui-id: vAL/Ol
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Payment authentication could not be completed."
+msgstr "Payment authentication could not be completed."
+
+#. js-lingui-id: 3wFdTq
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Payment details are unavailable because AI funding is not enabled for this workspace."
+msgstr "Payment details are unavailable because AI funding is not enabled for this workspace."
+
+#. js-lingui-id: wRVm2c
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Payment details could not be saved."
+msgstr "Payment details could not be saved."
+
 #. js-lingui-id: Htt4Gk
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Payment evidence IDs"
 msgstr "Payment evidence IDs"
 
+#. js-lingui-id: pJxzaT
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Payment failed"
+msgstr "Payment failed"
+
 #. js-lingui-id: QmXBEc
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Payment issue"
 msgstr "Payment issue"
-
-#. js-lingui-id: ENEPLY
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Payment method"
-msgstr "Payment method"
-
-#. js-lingui-id: lyt3eP
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Payment method and automatic top-up"
-msgstr "Payment method and automatic top-up"
-
-#. js-lingui-id: +kTlqg
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Payment settings"
-msgstr "Payment settings"
-
-#. js-lingui-id: gYrq2N
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Payment settings will appear when billing is connected."
-msgstr "Payment settings will appear when billing is connected."
 
 #. js-lingui-id: Ah+ZUg
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -16387,7 +16294,6 @@ msgid "PDF"
 msgstr "PDF"
 
 #. js-lingui-id: UbRKMZ
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/components/SettingsDnsRecordsTable.tsx
 #: src/modules/settings/domains/components/SettingsPublicDomainsListCard.tsx
 #: src/modules/settings/security/components/approvedAccessDomains/SettingsApprovedAccessDomainsListCard.tsx
@@ -16461,7 +16367,6 @@ msgid "Perform administrative actions or permanently delete this user"
 msgstr "Perform administrative actions or permanently delete this user"
 
 #. js-lingui-id: NtQvjo
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/event-logs/components/EventLogFilters.tsx
 msgid "Period"
 msgstr "Period"
@@ -16733,6 +16638,11 @@ msgstr "Post Code"
 msgid "Post-install"
 msgstr "Post-install"
 
+#. js-lingui-id: U4aiMW
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Postal code"
+msgstr "Postal code"
+
 #. js-lingui-id: OKJUcC
 #: src/modules/object-metadata/hooks/useSortSubFieldChoicesForField.ts
 #: src/modules/settings/data-model/fields/forms/address/constants/DefaultSelectionAddressWithMessages.ts
@@ -16773,6 +16683,21 @@ msgstr "Prefilling your workspace data..."
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
 msgid "Prefix"
 msgstr "Prefix"
+
+#. js-lingui-id: tHK5AV
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Prepaid credit used by Myah-managed AI."
+msgstr "Prepaid credit used by Myah-managed AI."
+
+#. js-lingui-id: umrA4t
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Prepaid managed AI credit."
+msgstr "Prepaid managed AI credit."
+
+#. js-lingui-id: lknEar
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Preparing payment"
+msgstr "Preparing payment"
 
 #. js-lingui-id: NwnQoz
 #: src/modules/settings/mcp-and-apis/utils/buildMcpSetupCategories.tsx
@@ -16922,6 +16847,12 @@ msgstr "Primary Link Label"
 msgid "Primary Link URL"
 msgstr "Primary Link URL"
 
+#. js-lingui-id: g7DDb9
+#. placeholder {0}: formatUsdCents(entry.principalCents)
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Principal: {0}"
+msgstr "Principal: {0}"
+
 #. js-lingui-id: rW8PxS
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
 msgid "Prioritized"
@@ -16970,16 +16901,16 @@ msgstr "Pro plan"
 msgid "Problem"
 msgstr "Problem"
 
-#. js-lingui-id: vrnnn9
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Processing"
-msgstr "Processing"
-
 #. js-lingui-id: k1ifdL
 #: src/modules/spreadsheet-import/steps/components/UploadStep/components/DropZone.tsx
 #: src/modules/workflow/components/WorkflowStepExecutionResult.tsx
 msgid "Processing..."
 msgstr "Processing..."
+
+#. js-lingui-id: K47k8R
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Product"
+msgstr "Product"
 
 #. js-lingui-id: vERlcd
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
@@ -17146,15 +17077,14 @@ msgid "Purchase reference: {0}"
 msgstr "Purchase reference: {0}"
 
 #. js-lingui-id: dsFmM+
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "Purchased"
 msgstr "Purchased"
 
-#. js-lingui-id: LXYzps
+#. js-lingui-id: NA6W84
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Purchased top-up"
-msgstr "Purchased top-up"
+msgid "Purchased and sponsored AI credit activity."
+msgstr "Purchased and sponsored AI credit activity."
 
 #. js-lingui-id: mF9LxA
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
@@ -17167,7 +17097,6 @@ msgid "Python Code Execution"
 msgstr "Python Code Execution"
 
 #. js-lingui-id: VbWX2u
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
@@ -17410,11 +17339,6 @@ msgstr "Recent Events (oldest → newest)"
 msgid "Recent Users"
 msgstr "Recent Users"
 
-#. js-lingui-id: V/IO7g
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Recent workspace usage"
-msgstr "Recent workspace usage"
-
 #. js-lingui-id: AQbgLJ
 #: src/modules/ai/components/AiChatThreadsList.tsx
 #: src/modules/ai/components/NavigationDrawerAiChatContent.tsx
@@ -17643,10 +17567,10 @@ msgstr "Recover warmup capacity"
 msgid "Recovered mailbox quote accepted. Complete locally to apply it."
 msgstr "Recovered mailbox quote accepted. Complete locally to apply it."
 
-#. js-lingui-id: wuhHPE
+#. js-lingui-id: pM8nai
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Recurring"
-msgstr "Recurring"
+msgid "Recurring total"
+msgstr "Recurring total"
 
 #. js-lingui-id: wRTiSD
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
@@ -17696,10 +17620,10 @@ msgstr "Refresh quote"
 msgid "Refresh status"
 msgstr "Refresh status"
 
-#. js-lingui-id: J0LAHU
+#. js-lingui-id: /BI0y9
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Refund"
-msgstr "Refund"
+msgid "Refunded"
+msgstr "Refunded"
 
 #. js-lingui-id: vpZcGd
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
@@ -18312,6 +18236,11 @@ msgstr "Resource unavailable"
 msgid "Resource: {0}"
 msgstr "Resource: {0}"
 
+#. js-lingui-id: s+MGs7
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Resources"
+msgstr "Resources"
+
 #. js-lingui-id: ZlCDf+
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsHttpRequestDetail.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestExecutionResult.tsx
@@ -18441,6 +18370,12 @@ msgstr "Retest/Reconnect"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignDashboard.tsx
 msgid "Retry"
 msgstr "Retry"
+
+#. js-lingui-id: 2oJwet
+#. placeholder {0}: formatUsdCents(selectedPreset.principalCents).replace('.00', '')
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Retry {0} credit"
+msgstr "Retry {0} credit"
 
 #. js-lingui-id: ex8PR1
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
@@ -18863,16 +18798,20 @@ msgstr "Save 25% when billed yearly"
 msgid "Save as new view"
 msgstr "Save as new view"
 
-#. js-lingui-id: y3aU20
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Save changes"
-msgstr "Save changes"
+#. js-lingui-id: gjqGP0
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Save billing details"
+msgstr "Save billing details"
 
 #. js-lingui-id: 7byqGp
 #: src/modules/layout-customization/hooks/useEnterLayoutCustomizationMode.ts
 msgid "Save or cancel dashboard changes before editing the layout."
 msgstr "Save or cancel dashboard changes before editing the layout."
+
+#. js-lingui-id: p+TgBu
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Save payment details"
+msgstr "Save payment details"
 
 #. js-lingui-id: 3LQxeL
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
@@ -19358,6 +19297,12 @@ msgstr "Secret (optional)"
 msgid "Secret Access Key"
 msgstr "Secret Access Key"
 
+#. js-lingui-id: +7jFSq
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Secure payment form is loading."
+msgstr "Secure payment form is loading."
+
 #. js-lingui-id: a3LDKx
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useSettingsRolePermissionFlagConfig.ts
@@ -19834,7 +19779,6 @@ msgid "Server variables are applied to all workspace installations."
 msgstr "Server variables are applied to all workspace installations."
 
 #. js-lingui-id: T3bXxK
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignPage.tsx
 msgid "Service"
@@ -19984,16 +19928,6 @@ msgstr "Settings All Access"
 #: src/modules/settings/roles/role-permissions/permission-flags/components/SettingsRolePermissionsSettingsSection.tsx
 msgid "Settings permissions"
 msgstr "Settings permissions"
-
-#. js-lingui-id: KWsCqG
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Settled"
-msgstr "Settled"
-
-#. js-lingui-id: QFTHLq
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Settled operations"
-msgstr "Settled operations"
 
 #. js-lingui-id: Ue7X/E
 #: src/modules/settings/accounts/components/SettingsAccountsConnectedAccountsRowRightContainer.tsx
@@ -20389,6 +20323,11 @@ msgstr "smtp.example.com"
 msgid "Some"
 msgstr "Some"
 
+#. js-lingui-id: Woh1xU
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Some billing activity needs support review."
+msgstr "Some billing activity needs support review."
+
 #. js-lingui-id: p+7y+p
 #: src/modules/myah/creator-crm/hooks/useApplyCreatorBulkRelationship.ts
 msgid "Some creators were already absent from this list."
@@ -20558,16 +20497,6 @@ msgstr "Speed up reads on the fields you filter or sort by most. Each index also
 msgid "Split multiple values"
 msgstr "Split multiple values"
 
-#. js-lingui-id: UQNoq2
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Sponsored"
-msgstr "Sponsored"
-
-#. js-lingui-id: 14+Tx0
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Sponsored grant"
-msgstr "Sponsored grant"
-
 #. js-lingui-id: vnS6Rf
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 #: src/modules/settings/security/components/SettingsSecuritySettings.tsx
@@ -20690,6 +20619,11 @@ msgstr "Starts at"
 #: src/modules/ui/field/input/components/AddressInput.tsx
 msgid "State"
 msgstr "State"
+
+#. js-lingui-id: a3TkWq
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "State / region (optional)"
+msgstr "State / region (optional)"
 
 #. js-lingui-id: uAQUqI
 #: src/modules/ai/components/AiChatThreadFilterDropdownRootMenu.tsx
@@ -20844,6 +20778,11 @@ msgstr "Stripe customer linked to this workspace"
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
 msgid "Stripe subscription"
 msgstr "Stripe subscription"
+
+#. js-lingui-id: EOTOJP
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Stripe uses this address to calculate applicable tax."
+msgstr "Stripe uses this address to calculate applicable tax."
 
 #. js-lingui-id: 1CalO6
 #: src/modules/side-panel/pages/page-layout/constants/ChartSettingsHeadings.ts
@@ -21322,6 +21261,29 @@ msgstr "Task title"
 msgid "Task Title"
 msgstr "Task Title"
 
+#. js-lingui-id: BVtdal
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Tax ID type (optional)"
+msgstr "Tax ID type (optional)"
+
+#. js-lingui-id: sASExI
+#: src/modules/settings/billing/components/ManagedProviderCustomerFundingStripeForms.tsx
+msgid "Tax ID value (optional)"
+msgstr "Tax ID value (optional)"
+
+#. js-lingui-id: dKIQGn
+#. placeholder {0}: summary.taxId.type
+#. placeholder {1}: summary.taxId.country === null ? '' : ` (${summary.taxId.country})`
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Tax ID: {0}{1}"
+msgstr "Tax ID: {0}{1}"
+
+#. js-lingui-id: /Z5+4I
+#. placeholder {0}: formatUsdCents(entry.taxCents)
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Tax: {0}"
+msgstr "Tax: {0}"
+
 #. js-lingui-id: KM6m8p
 #: src/pages/settings/members/SettingsWorkspaceMembers.tsx
 #: src/pages/settings/members/SettingsWorkspaceMembers.tsx
@@ -21734,6 +21696,11 @@ msgstr "The reply cannot be approved until its source is available."
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "The reply will be sent to the existing conversation."
 msgstr "The reply will be sent to the existing conversation."
+
+#. js-lingui-id: 7KjM3t
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "The selected amount is prepaid principal, plus applicable tax. Purchased AI credit expires 12 months after successful payment."
+msgstr "The selected amount is prepaid principal, plus applicable tax. Purchased AI credit expires 12 months after successful payment."
 
 #. js-lingui-id: wxyrqd
 #: src/modules/workflow/workflow-steps/workflow-actions/pick-record-action/components/WorkflowEditActionPickRecord.tsx
@@ -22456,16 +22423,17 @@ msgstr "Top 10 workspaces by number of users"
 msgid "Top Workspaces"
 msgstr "Top Workspaces"
 
-#. js-lingui-id: A26u8p
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Top-up amount"
-msgstr "Top-up amount"
-
 #. js-lingui-id: 72c5Qo
 #: src/modules/page-layout/widgets/graph/graph-widget-pie-chart/hooks/usePieChartCenterMetricData.ts
 #: src/modules/settings/billing/components/internal/SettingsBillingSubscriptionInfoCard.tsx
 msgid "Total"
 msgstr "Total"
+
+#. js-lingui-id: Rv3xUC
+#. placeholder {0}: formatUsdCents(entry.collectedTotalCents)
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Total collected: {0}"
+msgstr "Total collected: {0}"
 
 #. js-lingui-id: hg5QeV
 #: src/modules/ai/components/internal/AiChatContextUsageButton.tsx
@@ -22824,11 +22792,6 @@ msgstr "Unavailable in this inventory"
 msgid "Undefined"
 msgstr "Undefined"
 
-#. js-lingui-id: SS66p5
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Under review"
-msgstr "Under review"
-
 #. js-lingui-id: o23uCL
 #: src/modules/side-panel/pages/page-layout/utils/getChartLimitMessage.ts
 msgid "Undisplayed data: max {maxItems} {granularityLabel} per chart."
@@ -23183,6 +23146,11 @@ msgstr "Update campaign cap"
 msgid "Update payment"
 msgstr "Update payment"
 
+#. js-lingui-id: Meqgb/
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Update payment details"
+msgstr "Update payment details"
+
 #. js-lingui-id: Y69tSP
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Update payment method"
@@ -23450,7 +23418,6 @@ msgstr "us-east-1"
 #. js-lingui-id: 7FaY4u
 #: src/modules/settings/admin-panel/ai/components/SettingsAdminAI.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 #: src/modules/settings/usage/components/UsageByUserTableSection.tsx
 #: src/pages/settings/ai/SettingsAI.tsx
 #: src/pages/settings/billing/SettingsUsage.tsx
@@ -23491,25 +23458,13 @@ msgstr "Usage by Type"
 msgid "Usage by User"
 msgstr "Usage by User"
 
-#. js-lingui-id: OWQoe/
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Usage details will appear here when billing data is connected."
-msgstr "Usage details will appear here when billing data is connected."
-
 #. js-lingui-id: CedRjP
 #: src/modules/settings/event-logs/components/EventLogTableSelector.tsx
 msgid "Usage Events"
 msgstr "Usage Events"
 
-#. js-lingui-id: qfYN4h
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Usage history"
-msgstr "Usage history"
-
 #. js-lingui-id: 6SbZqO
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "Usage period"
 msgstr "Usage period"
 
@@ -23602,6 +23557,11 @@ msgstr "Used for chats, agents, and complex reasoning"
 #: src/pages/settings/ai/components/SettingsAiModelsTab.tsx
 msgid "Used for lightweight tasks like title generation"
 msgstr "Used for lightweight tasks like title generation"
+
+#. js-lingui-id: jpLan7
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Used for Stripe payment collection and applicable tax."
+msgstr "Used for Stripe payment collection and applicable tax."
 
 #. js-lingui-id: AQVj2A
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
@@ -24808,17 +24768,6 @@ msgstr "Workflows"
 msgid "Workspace"
 msgstr "Workspace"
 
-#. js-lingui-id: DBCACX
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Workspace billing activity"
-msgstr "Workspace billing activity"
-
-#. js-lingui-id: prpYVh
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Workspace billing summary"
-msgstr "Workspace billing summary"
-
 #. js-lingui-id: fQ8teq
 #: src/modules/auth/sign-in-up/hooks/useSignUpInNewWorkspace.ts
 #: src/pages/onboarding/WorkspaceActivation.tsx
@@ -25185,11 +25134,6 @@ msgstr "You've hit your usage limit. Subscribe for more usage."
 #: src/modules/apollo/services/apollo.factory.ts
 msgid "Your app version is out of date. Please refresh the page."
 msgstr "Your app version is out of date. Please refresh the page."
-
-#. js-lingui-id: Ee1KPJ
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "Your balance is empty. Managed services are paused until funds are added."
-msgstr "Your balance is empty. Managed services are paused until funds are added."
 
 #. js-lingui-id: dtOZU/
 #: src/modules/settings/billing/hooks/useBillingWording.ts
