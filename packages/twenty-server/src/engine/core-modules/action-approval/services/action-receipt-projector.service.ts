@@ -10,6 +10,7 @@ import {
   ACTION_RECEIPT_PROJECTION_WRITER,
   type ActionApprovalFaultHooks,
   type ActionReceiptProjectionWriter,
+  type ExpectedActionBinding,
 } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 
 @Injectable()
@@ -42,10 +43,13 @@ export class ActionReceiptProjectorService {
       receiptId: receipt.id,
       workspaceId: receipt.workspaceId,
       draftId: receipt.actionApprovalBinding.draftId,
+      actionVersion: receipt.actionApprovalBinding.actionVersion,
+      threadId: receipt.actionApprovalBinding.threadId,
+      initiatorUserWorkspaceId:
+        receipt.actionApprovalBinding.initiatorUserWorkspaceId,
       contentDigest: receipt.actionApprovalBinding.contentDigest,
-      actionName: receipt.actionApprovalBinding.actionName as
-        | 'send_instagram_reply'
-        | 'send_outreach_email',
+      actionName: receipt.actionApprovalBinding
+        .actionName as ExpectedActionBinding['actionName'],
       providerMessageId: receipt.providerMessageId,
       providerExternalMessageId: receipt.providerExternalMessageId,
       providerThreadExternalId: receipt.providerThreadExternalId,

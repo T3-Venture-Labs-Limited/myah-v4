@@ -8,6 +8,8 @@ import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { FieldActorSource } from 'twenty-shared/types';
 import { type DataSource, type EntityManager, type Repository } from 'typeorm';
 
+import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
+import { type MyahInboxReplyExpectedActionBindingWithWorkspace } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
 import { type ActionReceiptProjectionWriter } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -41,6 +43,29 @@ type SentOutreachMessageRow = {
   messageThreadExternalId: string | null;
 };
 
+type SentInboxMessageRow = {
+  id: string;
+  messageThreadId: string | null;
+  subject: string | null;
+  body: string | null;
+  messageChannelId: string | null;
+  messageExternalId: string | null;
+  messageThreadExternalId: string | null;
+  recipientEmail: string | null;
+  senderEmail: string | null;
+  senderDisplayName: string | null;
+  connectedAccountId: string | null;
+  managedMailboxId: string | null;
+  parentMessageId: string | null;
+  parentHeaderMessageId: string | null;
+  parentMessageExternalId: string | null;
+  parentThreadExternalId: string | null;
+};
+
+type InboxProjectionInput = ProjectionInput & {
+  actionName: 'send_inbox_reply';
+};
+
 @Injectable()
 export class ActionReceiptWorkspaceProjectionWriterService implements ActionReceiptProjectionWriter {
   constructor(
@@ -49,6 +74,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     private readonly sentMessagePersistenceService: SentMessagePersistenceService,
+    private readonly myahInboxReplyActionDefinition: MyahInboxReplyActionDefinition,
   ) {}
 
   async project(input: ProjectionInput): Promise<void> {
@@ -64,7 +90,329 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
       return;
     }
 
+    if (input.actionName === 'send_inbox_reply') {
+      await this.projectInboxReply(input, schemaName);
+      return;
+    }
+
     throw new Error('Unsupported action receipt projection');
+  }
+
+  private async projectInboxReply(
+    input: InboxProjectionInput,
+    schemaName: string,
+  ): Promise<void> {
+    if (!isNonEmptyString(input.providerMessageId)) {
+      throw new Error('The sent Inbox Message is unavailable for projection');
+    }
+
+    const binding = this.toInboxProjectionBinding(input);
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `myah-inbox-reply-projection:${input.workspaceId}:${input.draftId}`,
+      ]);
+
+      const currentDraft = await this.loadInboxDraft(
+        manager,
+        schemaName,
+        input.draftId,
+      );
+      const sentMessages = await this.findSentInboxMessages(
+        manager,
+        schemaName,
+        input.providerMessageId,
+        this.getInboxParentEvidenceId(input),
+      );
+
+      if (sentMessages.length > 1) {
+        throw new Error('The sent Inbox Message is unavailable for projection');
+      }
+
+      const existingMessage = sentMessages[0];
+      if (existingMessage && currentDraft.myahReplyDraftBody === null) {
+        if (
+          this.isMatchingSentInboxMessage(
+            existingMessage,
+            input,
+            currentDraft.myahReplyDraftRevision - 1,
+          )
+        ) {
+          return;
+        }
+
+        throw new Error('The sent Inbox Message is unavailable for projection');
+      }
+
+      const authority =
+        await this.myahInboxReplyActionDefinition.rebuildProjectionAuthority({
+          workspaceId: input.workspaceId,
+          binding,
+        });
+      const { canonicalGraph } = authority;
+
+      if (
+        canonicalGraph.messageThreadId !== input.threadId ||
+        canonicalGraph.draftRevision !== currentDraft.myahReplyDraftRevision ||
+        currentDraft.myahReplyDraftBody === null
+      ) {
+        throw new Error('The approved Inbox reply is unavailable for projection');
+      }
+
+      if (
+        existingMessage &&
+        (!this.isMatchingSentInboxMessage(
+          existingMessage,
+          input,
+          canonicalGraph.draftRevision,
+        ) ||
+          existingMessage.messageChannelId !== canonicalGraph.messageChannelId ||
+          existingMessage.senderEmail !== canonicalGraph.senderEmail)
+      ) {
+        throw new Error('The sent Inbox Message is unavailable for projection');
+      }
+
+      if (!existingMessage) {
+        const persisted =
+          await this.sentMessagePersistenceService.persistSentMessage({
+            sendResult: {
+              headerMessageId: input.providerMessageId,
+              messageExternalId: input.providerExternalMessageId ?? undefined,
+              threadExternalId: input.providerThreadExternalId ?? undefined,
+            },
+            subject: canonicalGraph.subject,
+            body: canonicalGraph.draftBody.markdown,
+            recipients: {
+              to: [canonicalGraph.recipientEmail],
+              cc: [],
+              bcc: [],
+            },
+            connectedAccount: canonicalGraph.connectedAccount,
+            messageChannelId: canonicalGraph.messageChannelId,
+            inReplyTo: canonicalGraph.inReplyTo,
+            parentThreadExternalId:
+              canonicalGraph.providerThreadExternalId ?? undefined,
+            workspaceId: input.workspaceId,
+          });
+
+        if (
+          !persisted ||
+          persisted.messageThreadId !== canonicalGraph.messageThreadId
+        ) {
+          throw new Error('The sent Inbox Message is unavailable for projection');
+        }
+      }
+
+      const matchingMessages = await this.findSentInboxMessages(
+        manager,
+        schemaName,
+        input.providerMessageId,
+        this.getInboxParentEvidenceId(input),
+      );
+      if (
+        matchingMessages.length !== 1 ||
+        !this.isMatchingSentInboxMessage(
+          matchingMessages[0],
+          input,
+          canonicalGraph.draftRevision,
+        ) ||
+        matchingMessages[0].messageChannelId !== canonicalGraph.messageChannelId ||
+        matchingMessages[0].senderEmail !== canonicalGraph.senderEmail
+      ) {
+        throw new Error('The sent Inbox Message is unavailable for projection');
+      }
+
+      const cleared = await manager.query<{ id: string }[]>(
+        `UPDATE "${schemaName}"."messageThread"
+          SET
+            "myahReplyDraftBody" = NULL,
+            "myahReplyDraftRevision" = "myahReplyDraftRevision" + 1,
+            "updatedAt" = NOW()
+          WHERE "id" = $1
+            AND "myahReplyDraftRevision" = $2
+            AND "myahReplyDraftBody" IS NOT NULL
+          RETURNING "id"`,
+        [input.draftId, canonicalGraph.draftRevision],
+      );
+      if (cleared.length !== 1) {
+        throw new Error('The approved Inbox reply is unavailable for projection');
+      }
+    });
+  }
+
+  private toInboxProjectionBinding(
+    input: InboxProjectionInput,
+  ): MyahInboxReplyExpectedActionBindingWithWorkspace {
+    if (
+      input.actionVersion !== 1 ||
+      input.draftId !== input.threadId ||
+      !isNonEmptyString(input.contentDigest) ||
+      !isNonEmptyString(input.recipientFingerprint) ||
+      !isNonEmptyString(input.sendingAccountFingerprint) ||
+      !isNonEmptyString(input.actionContextFingerprint) ||
+      !isNonEmptyString(input.initiatorUserWorkspaceId)
+    ) {
+      throw new Error('The approved Inbox reply is unavailable for projection');
+    }
+
+    this.getInboxParentEvidenceId(input);
+    const draftEvidence = input.evidenceLinks.filter(
+      (evidenceLink) => evidenceLink.role === 'draft',
+    );
+    if (
+      draftEvidence.length !== 1 ||
+      draftEvidence[0].recordId !== input.draftId
+    ) {
+      throw new Error('The sent Inbox Message is unavailable for projection');
+    }
+
+    return {
+      workspaceId: input.workspaceId,
+      actionName: input.actionName,
+      actionVersion: input.actionVersion,
+      draftId: input.draftId,
+      contentDigest: input.contentDigest,
+      recipientFingerprint: input.recipientFingerprint,
+      sendingAccountFingerprint: input.sendingAccountFingerprint,
+      actionContextFingerprint: input.actionContextFingerprint,
+      threadId: input.threadId,
+      initiatorUserWorkspaceId: input.initiatorUserWorkspaceId,
+      evidenceLinks: input.evidenceLinks,
+    };
+  }
+
+  private getInboxParentEvidenceId(input: InboxProjectionInput): string {
+    const parentEvidence = input.evidenceLinks.filter(
+      (evidenceLink) => evidenceLink.role === 'thread_parent',
+    );
+    if (
+      parentEvidence.length !== 1 ||
+      !isNonEmptyString(parentEvidence[0].recordId)
+    ) {
+      throw new Error('The sent Inbox Message is unavailable for projection');
+    }
+
+    return parentEvidence[0].recordId;
+  }
+
+  private async loadInboxDraft(
+    manager: EntityManager,
+    schemaName: string,
+    messageThreadId: string,
+  ): Promise<{
+    myahReplyDraftBody: unknown;
+    myahReplyDraftRevision: number;
+  }> {
+    const [draft] = await manager.query<
+      {
+        myahReplyDraftBody: unknown;
+        myahReplyDraftRevision: number;
+      }[]
+    >(
+      `SELECT "myahReplyDraftBody", "myahReplyDraftRevision"
+        FROM "${schemaName}"."messageThread"
+        WHERE "id" = $1
+        FOR UPDATE`,
+      [messageThreadId],
+    );
+    if (!draft || !Number.isInteger(draft.myahReplyDraftRevision)) {
+      throw new Error('The approved Inbox reply is unavailable for projection');
+    }
+
+    return draft;
+  }
+
+  private async findSentInboxMessages(
+    manager: EntityManager,
+    schemaName: string,
+    providerMessageId: string,
+    parentMessageId: string,
+  ): Promise<SentInboxMessageRow[]> {
+    return manager.query<SentInboxMessageRow[]>(
+      `SELECT
+        message."id",
+        message."messageThreadId",
+        message."subject",
+        message."text" AS "body",
+        association."messageChannelId",
+        association."messageExternalId",
+        association."messageThreadExternalId",
+        recipient."handle" AS "recipientEmail",
+        sender."handle" AS "senderEmail",
+        sender."displayName" AS "senderDisplayName",
+        channel."connectedAccountId",
+        mailbox."id" AS "managedMailboxId",
+        parent."id" AS "parentMessageId",
+        parent."headerMessageId" AS "parentHeaderMessageId",
+        parent_association."messageExternalId" AS "parentMessageExternalId",
+        parent_association."messageThreadExternalId" AS "parentThreadExternalId"
+      FROM "${schemaName}"."message" message
+      INNER JOIN "${schemaName}"."messageChannelMessageAssociation" association
+        ON association."messageId" = message."id"
+      INNER JOIN core."messageChannel" channel
+        ON channel."id" = association."messageChannelId"
+      LEFT JOIN core."managedEmailMailbox" mailbox
+        ON mailbox."workspaceId" = channel."workspaceId"
+        AND mailbox."connectedAccountId" = channel."connectedAccountId"
+      LEFT JOIN "${schemaName}"."messageParticipant" recipient
+        ON recipient."messageId" = message."id"
+        AND recipient."role" = 'TO'
+      LEFT JOIN "${schemaName}"."messageParticipant" sender
+        ON sender."messageId" = message."id"
+        AND sender."role" = 'FROM'
+      INNER JOIN "${schemaName}"."message" parent
+        ON parent."id" = $2
+        AND parent."messageThreadId" = message."messageThreadId"
+      LEFT JOIN "${schemaName}"."messageChannelMessageAssociation" parent_association
+        ON parent_association."messageId" = parent."id"
+        AND parent_association."messageChannelId" = association."messageChannelId"
+      WHERE message."headerMessageId" = $1
+      LIMIT 2`,
+      [providerMessageId, parentMessageId],
+    );
+  }
+
+  private isMatchingSentInboxMessage(
+    message: SentInboxMessageRow,
+    input: InboxProjectionInput,
+    approvedRevision: number,
+  ): boolean {
+    return (
+      isNonEmptyString(message.id) &&
+      message.messageThreadId === input.threadId &&
+      isNonEmptyString(message.messageChannelId) &&
+      isNonEmptyString(message.subject) &&
+      isNonEmptyString(message.body) &&
+      isNonEmptyString(message.recipientEmail) &&
+      (!isNonEmptyString(input.providerExternalMessageId) ||
+        message.messageExternalId === input.providerExternalMessageId) &&
+      (!isNonEmptyString(input.providerThreadExternalId) ||
+        message.messageThreadExternalId === input.providerThreadExternalId) &&
+      message.parentMessageId === this.getInboxParentEvidenceId(input) &&
+      computeActionContentDigest(
+        JSON.stringify([message.subject, message.body]),
+      ) === input.contentDigest &&
+      computeActionContentDigest(JSON.stringify([message.recipientEmail])) ===
+        input.recipientFingerprint &&
+      computeActionContentDigest(
+        JSON.stringify([
+          message.managedMailboxId,
+          message.connectedAccountId,
+          message.messageChannelId,
+          message.senderEmail,
+          message.senderDisplayName,
+        ]),
+      ) === input.sendingAccountFingerprint &&
+      computeActionContentDigest(
+        JSON.stringify([
+          approvedRevision,
+          message.parentHeaderMessageId,
+          input.threadId,
+          message.parentThreadExternalId,
+          message.parentMessageExternalId,
+        ]),
+      ) === input.actionContextFingerprint
+    );
   }
 
   private async projectInstagramReply(

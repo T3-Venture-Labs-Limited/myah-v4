@@ -27,6 +27,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       dataSource as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await writer.project({
@@ -69,6 +70,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(
       dataSource as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -206,6 +208,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       dataSource as never,
       connectedAccountRepository as never,
       { persistSentMessage } as never,
+      {} as never,
     );
     const projection = {
       receiptId,
@@ -396,6 +399,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       dataSource as never,
       { findOne: jest.fn().mockResolvedValue(null) } as never,
       { persistSentMessage: jest.fn() } as never,
+      {} as never,
     );
 
     await expect(
@@ -453,5 +457,331 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       ),
     ).toBe(false);
     expect(createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('projects one native Inbox sent Message, clears only its approved revision, and replays after the draft is cleared', async () => {
+    const workspaceId = '00000000-0000-4000-8000-000000000101';
+    const messageThreadId = '00000000-0000-4000-8000-000000000102';
+    const messageChannelId = '00000000-0000-4000-8000-000000000103';
+    const parentMessageId = '00000000-0000-4000-8000-000000000104';
+    const providerMessageId = '<sent@example.com>';
+    const subject = 'Re: Partnership';
+    const body = 'Thanks for the update';
+    const projection = {
+      receiptId: '00000000-0000-4000-8000-000000000105',
+      workspaceId,
+      draftId: messageThreadId,
+      actionVersion: 1,
+      threadId: messageThreadId,
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000106',
+      actionName: 'send_inbox_reply' as const,
+      contentDigest: computeActionContentDigest(JSON.stringify([subject, body])),
+      recipientFingerprint: computeActionContentDigest(
+        JSON.stringify(['creator@example.com']),
+      ),
+      sendingAccountFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          null,
+          'connected-account-id',
+          messageChannelId,
+          'sender@example.com',
+          'Sender',
+        ]),
+      ),
+      actionContextFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          4,
+          '<incoming@example.com>',
+          messageThreadId,
+          'provider-thread-id',
+          'incoming-provider-message-id',
+        ]),
+      ),
+      providerMessageId,
+      providerExternalMessageId: 'provider-message-id',
+      providerThreadExternalId: 'provider-thread-id',
+      evidenceLinks: [
+        {
+          objectMetadataId: 'message-thread-metadata-id',
+          recordId: messageThreadId,
+          role: 'draft',
+        },
+        {
+          objectMetadataId: 'message-metadata-id',
+          recordId: parentMessageId,
+          role: 'thread_parent',
+        },
+      ],
+    };
+    const canonicalGraph = {
+      messageThreadId,
+      draftRevision: 4,
+      draftBody: { markdown: body, blocknote: null },
+      connectedAccountId: 'connected-account-id',
+      messageChannelId,
+      senderEmail: 'sender@example.com',
+      senderDisplayName: 'Sender',
+      recipientEmail: 'creator@example.com',
+      recipientLabel: 'Creator',
+      subject,
+      inReplyTo: '<incoming@example.com>',
+      parentMessageId,
+      providerMessageExternalId: 'incoming-provider-message-id',
+      providerThreadExternalId: 'provider-thread-id',
+      managedMailboxId: null,
+      connectedAccount: {
+        id: 'connected-account-id',
+        workspaceId,
+        handle: 'sender@example.com',
+      },
+    };
+    const actionDefinition = {
+      rebuildProjectionAuthority: jest.fn().mockResolvedValue({
+        canonicalGraph,
+        expectedActionBinding: { ...projection },
+      }),
+    };
+    let messagePersisted = false;
+    let revision = 4;
+    let draftBody: string | null = body;
+    const sentMessage = {
+      id: '00000000-0000-4000-8000-000000000107',
+      messageThreadId,
+      subject,
+      body,
+      messageChannelId,
+      messageExternalId: 'provider-message-id',
+      messageThreadExternalId: 'provider-thread-id',
+      recipientEmail: 'creator@example.com',
+      senderEmail: 'sender@example.com',
+      senderDisplayName: 'Sender',
+      connectedAccountId: 'connected-account-id',
+      managedMailboxId: null,
+      parentMessageId,
+      parentHeaderMessageId: '<incoming@example.com>',
+      parentMessageExternalId: 'incoming-provider-message-id',
+      parentThreadExternalId: 'provider-thread-id',
+    };
+    const query = jest.fn(async (sql: string, parameters?: unknown[]) => {
+      if (sql.includes('pg_advisory_xact_lock')) {
+        return [];
+      }
+      if (sql.includes('"headerMessageId"')) {
+        return messagePersisted ? [sentMessage] : [];
+      }
+      if (
+        String(sql).trimStart().startsWith('UPDATE') &&
+        sql.includes('"messageThread"')
+      ) {
+        if (parameters?.[0] === messageThreadId && parameters?.[1] === 4) {
+          draftBody = null;
+          revision += 1;
+          return [{ id: messageThreadId }];
+        }
+        return [];
+      }
+      if (sql.includes('"myahReplyDraftBody')) {
+        return [
+          {
+            myahReplyDraftBody: draftBody,
+            myahReplyDraftRevision: revision,
+          },
+        ];
+      }
+      return [];
+    });
+    const dataSource = {
+      transaction: jest.fn(
+        async (callback: (manager: { query: typeof query }) => unknown) =>
+          callback({ query }),
+      ),
+    };
+    const persistSentMessage = jest.fn(async () => {
+      messagePersisted = true;
+      return { messageId: sentMessage.id, messageThreadId };
+    });
+    const Writer =
+      ActionReceiptWorkspaceProjectionWriterService as unknown as new (
+        ...args: unknown[]
+      ) => { project: (input: typeof projection) => Promise<void> };
+    const writer = new Writer(
+      dataSource,
+      {} as never,
+      { persistSentMessage },
+      actionDefinition,
+    );
+
+    await writer.project(projection);
+    await writer.project(projection);
+
+    expect(query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`myah-inbox-reply-projection:${workspaceId}:${messageThreadId}`],
+    );
+    expect(persistSentMessage).toHaveBeenCalledTimes(1);
+    expect(persistSentMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sendResult: {
+          headerMessageId: providerMessageId,
+          messageExternalId: 'provider-message-id',
+          threadExternalId: 'provider-thread-id',
+        },
+        subject,
+        body,
+        recipients: { to: ['creator@example.com'], cc: [], bcc: [] },
+        messageChannelId,
+        inReplyTo: '<incoming@example.com>',
+        parentThreadExternalId: 'provider-thread-id',
+        workspaceId,
+      }),
+    );
+    expect(
+      query.mock.calls.filter(
+        ([sql]) =>
+          String(sql).trimStart().startsWith('UPDATE') &&
+          String(sql).includes('"messageThread"'),
+      ),
+    ).toHaveLength(1);
+    expect(actionDefinition.rebuildProjectionAuthority).toHaveBeenCalledTimes(1);
+
+    draftBody = body;
+    revision = 4;
+    await writer.project(projection);
+    expect(persistSentMessage).toHaveBeenCalledTimes(1);
+
+    draftBody = body;
+    revision = 4;
+    sentMessage.senderEmail = 'unexpected@example.com';
+    await expect(writer.project(projection)).rejects.toThrow(
+      'The sent Inbox Message is unavailable for projection',
+    );
+
+    sentMessage.senderEmail = 'sender@example.com';
+    draftBody = body;
+    revision = 5;
+    await expect(writer.project(projection)).rejects.toThrow(
+      'The approved Inbox reply is unavailable for projection',
+    );
+  });
+
+  it.each([
+    ['a content fingerprint mismatch', { contentDigest: 'wrong' }],
+    ['a recipient fingerprint mismatch', { recipientFingerprint: 'wrong' }],
+    ['a context fingerprint mismatch', { actionContextFingerprint: 'wrong' }],
+    [
+      'an evidence mismatch',
+      {
+        evidenceLinks: [
+          {
+            objectMetadataId: 'message-thread-metadata-id',
+            recordId: 'different-thread-id',
+            role: 'draft',
+          },
+        ],
+      },
+    ],
+  ])('rejects an Inbox replay with %s', async (_label, override) => {
+    const workspaceId = '00000000-0000-4000-8000-000000000111';
+    const messageThreadId = '00000000-0000-4000-8000-000000000112';
+    const subject = 'Re: Partnership';
+    const body = 'Thanks for the update';
+    const projection = {
+      receiptId: 'receipt-id',
+      workspaceId,
+      draftId: messageThreadId,
+      actionVersion: 1,
+      threadId: messageThreadId,
+      initiatorUserWorkspaceId: 'user-workspace-id',
+      actionName: 'send_inbox_reply' as const,
+      contentDigest: computeActionContentDigest(JSON.stringify([subject, body])),
+      recipientFingerprint: computeActionContentDigest(
+        JSON.stringify(['creator@example.com']),
+      ),
+      sendingAccountFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          null,
+          'connected-account-id',
+          'message-channel-id',
+          'sender@example.com',
+          'Sender',
+        ]),
+      ),
+      actionContextFingerprint: computeActionContentDigest(
+        JSON.stringify([
+          4,
+          '<incoming@example.com>',
+          messageThreadId,
+          'provider-thread-id',
+          'incoming-provider-message-id',
+        ]),
+      ),
+      providerMessageId: '<sent@example.com>',
+      providerExternalMessageId: 'provider-message-id',
+      providerThreadExternalId: 'provider-thread-id',
+      evidenceLinks: [
+        {
+          objectMetadataId: 'message-thread-metadata-id',
+          recordId: messageThreadId,
+          role: 'draft',
+        },
+        {
+          objectMetadataId: 'message-metadata-id',
+          recordId: 'parent-message-id',
+          role: 'thread_parent',
+        },
+      ],
+      ...override,
+    };
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('pg_advisory_xact_lock')) {
+        return [];
+      }
+      if (sql.includes('"headerMessageId"')) {
+        return [
+          {
+            id: 'message-id',
+            messageThreadId,
+            subject,
+            body,
+            messageChannelId: 'message-channel-id',
+            messageExternalId: 'provider-message-id',
+            messageThreadExternalId: 'provider-thread-id',
+            recipientEmail: 'creator@example.com',
+            senderEmail: 'sender@example.com',
+            senderDisplayName: 'Sender',
+            connectedAccountId: 'connected-account-id',
+            managedMailboxId: null,
+            parentMessageId: 'parent-message-id',
+            parentHeaderMessageId: '<incoming@example.com>',
+            parentMessageExternalId: 'incoming-provider-message-id',
+            parentThreadExternalId: 'provider-thread-id',
+          },
+        ];
+      }
+      if (sql.includes('"myahReplyDraftBody')) {
+        return [{ myahReplyDraftBody: null, myahReplyDraftRevision: 5 }];
+      }
+      return [];
+    });
+    const dataSource = {
+      transaction: jest.fn(
+        async (callback: (manager: { query: typeof query }) => unknown) =>
+          callback({ query }),
+      ),
+    };
+    const Writer =
+      ActionReceiptWorkspaceProjectionWriterService as unknown as new (
+        ...args: unknown[]
+      ) => { project: (input: typeof projection) => Promise<void> };
+    const writer = new Writer(
+      dataSource,
+      {} as never,
+      { persistSentMessage: jest.fn() },
+      { rebuildProjectionAuthority: jest.fn() },
+    );
+
+    await expect(writer.project(projection)).rejects.toThrow(
+      'The sent Inbox Message is unavailable for projection',
+    );
   });
 });
