@@ -901,7 +901,9 @@ describe('Inbox projected Message association grouping', () => {
     associationMode:
       | 'one-matching-and-one-nonmatching'
       | 'two-matching-associations'
-      | 'two-distinct-messages';
+      | 'two-distinct-messages'
+      | 'two-matching-associations-and-message'
+      | 'matching-and-content-mismatched-messages';
   }) => {
     const workspaceId = '00000000-0000-4000-8000-000000000201';
     const messageThreadId = '00000000-0000-4000-8000-000000000202';
@@ -1012,7 +1014,25 @@ describe('Inbox projected Message association grouping', () => {
           ]
         : associationMode === 'two-matching-associations'
           ? [sentMessage, { ...sentMessage }]
-          : [{ ...sentMessage }, { ...sentMessage, id: 'different-message-id' }];
+          : associationMode === 'two-distinct-messages'
+            ? [
+                { ...sentMessage },
+                { ...sentMessage, id: 'different-message-id' },
+              ]
+            : associationMode === 'two-matching-associations-and-message'
+              ? [
+                  sentMessage,
+                  { ...sentMessage },
+                  { ...sentMessage, id: 'different-message-id' },
+                ]
+              : [
+                  sentMessage,
+                  {
+                    ...sentMessage,
+                    id: 'different-message-id',
+                    body: 'A different provider candidate',
+                  },
+                ];
     const actionDefinition = {
       rebuildProjectionAuthority: jest.fn().mockResolvedValue({
         canonicalGraph,
@@ -1127,6 +1147,36 @@ describe('Inbox projected Message association grouping', () => {
       expect(lookups.every(([sql]) => !/\bLIMIT\b/i.test(String(sql)))).toBe(
         true,
       );
+    },
+  );
+  it.each([
+    [
+      'two matching associations on Message A plus Message B',
+      'two-matching-associations-and-message',
+      'Thanks for the update',
+      4,
+      1,
+    ],
+    [
+      'Message A matching plus content-mismatched provider candidate Message B',
+      'matching-and-content-mismatched-messages',
+      null,
+      5,
+      0,
+    ],
+  ])(
+    'rejects ambiguous provider-identity candidates for %s',
+    async (_label, associationMode, draftBody, revision, authorityCalls) => {
+      const fixture = setup({ associationMode, draftBody, revision });
+
+      await expect(fixture.writer.project(fixture.projection)).rejects.toThrow(
+        'The sent Inbox Message is unavailable for projection',
+      );
+
+      expect(fixture.persistSentMessage).not.toHaveBeenCalled();
+      expect(
+        fixture.actionDefinition.rebuildProjectionAuthority,
+      ).toHaveBeenCalledTimes(authorityCalls);
     },
   );
 });

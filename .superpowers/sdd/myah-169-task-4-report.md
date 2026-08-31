@@ -91,3 +91,23 @@ None known.
 ### Concerns
 
 None known.
+
+## Provider-candidate grouping correction
+
+### RED evidence
+
+- The writer suite failed as expected with 2 new regressions: a duplicate matching association on Message A plus matching Message B, and a matching Message A plus content-mismatched provider candidate Message B, both resolved instead of rejecting.
+
+### GREEN evidence
+
+- `npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-workspace-projection-writer.service.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand` — 1 suite, 18 tests passed.
+- `npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/definitions/__tests__/myah-inbox-reply-action.definition.spec.ts packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-projector.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-reply-send.service.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/resolvers/__tests__/myah-inbox-reply-send.resolver.spec.ts packages/twenty-server/src/engine/core-modules/myah-inbox/services/__tests__/myah-inbox-mutation.service.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand` — 5 suites, 94 tests passed.
+
+### Self-review
+
+- Candidate ambiguity is now determined from all raw provider-identity rows before immutable association matching.
+- Exactly one distinct Message must remain, and it must have exactly one matching association; active projection and cleared replay continue through the same matcher.
+
+### Concerns
+
+None known.

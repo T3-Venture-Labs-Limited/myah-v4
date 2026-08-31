@@ -378,20 +378,22 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     messages: readonly SentInboxMessageRow[],
     matches: (message: SentInboxMessageRow) => boolean,
   ): SentInboxMessageRow | undefined {
-    const matchesByMessageId = new Map<string, SentInboxMessageRow[]>();
+    const candidatesByMessageId = new Map<string, SentInboxMessageRow[]>();
     for (const message of messages) {
-      if (!matches(message)) {
-        continue;
-      }
-      const grouped = matchesByMessageId.get(message.id) ?? [];
-      grouped.push(message);
-      matchesByMessageId.set(message.id, grouped);
+      const candidate = candidatesByMessageId.get(message.id) ?? [];
+      candidate.push(message);
+      candidatesByMessageId.set(message.id, candidate);
     }
-    const matchingGroups = [...matchesByMessageId.values()].filter(
-      (group) => group.length === 1,
-    );
+    if (candidatesByMessageId.size !== 1) {
+      return undefined;
+    }
 
-    return matchingGroups.length === 1 ? matchingGroups[0][0] : undefined;
+    const [candidate] = candidatesByMessageId.values();
+    const matchingAssociations = candidate.filter(matches);
+
+    return matchingAssociations.length === 1
+      ? matchingAssociations[0]
+      : undefined;
   }
 
   private async findSentInboxMessages(
