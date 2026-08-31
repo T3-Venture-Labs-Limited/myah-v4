@@ -18,4 +18,16 @@ describe('useCreateWorkspaceAppRouter', () => {
     );
     expect(myahRouteIndex).toBeLessThan(wildcardRouteIndex);
   });
+
+  it('creates the authenticated router through the Sentry wrapper', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../useCreateWorkspaceAppRouter.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain(
+      "import { sentryCreateBrowserRouter } from '~/instrument';",
+    );
+    expect(source).toContain('sentryCreateBrowserRouter(');
+  });
 });

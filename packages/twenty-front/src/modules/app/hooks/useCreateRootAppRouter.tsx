@@ -1,10 +1,5 @@
 import { lazy, useState } from 'react';
-import {
-  createBrowserRouter,
-  createRoutesFromElements,
-  Navigate,
-  Route,
-} from 'react-router-dom';
+import { createRoutesFromElements, Navigate, Route } from 'react-router-dom';
 import { AppPath } from 'twenty-shared/types';
 
 import { LazyRoute } from '@/app/components/LazyRoute';
@@ -14,6 +9,7 @@ import { OnboardingPageLoader } from '@/onboarding/components/OnboardingPageLoad
 import { OnboardingTransitionOutlet } from '@/onboarding/components/OnboardingTransitionOutlet';
 import { AuthFlowLayout } from '@/ui/layout/page/components/AuthFlowLayout';
 import { BlankLayout } from '@/ui/layout/page/components/BlankLayout';
+import { sentryCreateBrowserRouter } from '~/instrument';
 
 const SignInUp = lazy(() =>
   import('~/pages/auth/SignInUp').then((module) => ({
@@ -34,7 +30,7 @@ const PasswordReset = lazy(() =>
 );
 
 const createRootAppRouter = () =>
-  createBrowserRouter(
+  sentryCreateBrowserRouter(
     createRoutesFromElements(
       <Route element={<RootAppProviders />} loader={async () => null}>
         <Route element={<BlankLayout />}>

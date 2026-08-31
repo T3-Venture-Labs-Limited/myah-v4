@@ -11,12 +11,16 @@ import {
 } from '@opentelemetry/sdk-metrics';
 import * as Sentry from '@sentry/node';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
+import dotenv from 'dotenv';
 
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 
 import { ExceptionHandlerDriver } from 'src/engine/core-modules/exception-handler/interfaces';
 import { MeterDriver } from 'src/engine/core-modules/metrics/types/meter-driver.type';
 import { parseArrayEnvVar } from 'src/utils/parse-array-env-var';
+dotenv.config({
+  path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
+});
 
 const meterDrivers = parseArrayEnvVar(
   process.env.METER_DRIVER,
@@ -35,14 +39,12 @@ if (process.env.EXCEPTION_HANDLER_DRIVER === ExceptionHandlerDriver.SENTRY) {
       Sentry.expressIntegration(),
       Sentry.graphqlIntegration(),
       Sentry.postgresIntegration(),
-      Sentry.vercelAIIntegration({
-        recordInputs: true,
-        recordOutputs: true,
-      }),
+      Sentry.vercelAIIntegration(),
       nodeProfilingIntegration(),
     ],
     tracesSampleRate: 0.1,
-    profilesSampleRate: 0.3,
+    profileSessionSampleRate: 0.3,
+    profileLifecycle: 'trace',
     sendDefaultPii: true,
     debug: process.env.NODE_ENV === NodeEnvironment.DEVELOPMENT,
     beforeSendSpan: (span) => {

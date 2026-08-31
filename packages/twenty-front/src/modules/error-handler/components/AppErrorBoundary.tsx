@@ -1,5 +1,6 @@
 import { AppErrorBoundaryEffect } from '@/error-handler/components/internal/AppErrorBoundaryEffect';
 import { checkIfItsAViteStaleChunkLazyLoadingError } from '@/error-handler/utils/checkIfItsAViteStaleChunkLazyLoadingError';
+import * as Sentry from '@sentry/react';
 import { type ErrorInfo, type ReactNode } from 'react';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { type CustomError, isDefined } from 'twenty-shared/utils';
@@ -21,16 +22,13 @@ export const AppErrorBoundary = ({
   FallbackComponent,
   resetOnLocationChange = true,
 }: AppErrorBoundaryProps) => {
-  const handleError = async (error: Error | CustomError, info: ErrorInfo) => {
+  const handleError = (error: Error | CustomError, info: ErrorInfo) => {
     try {
-      const { captureException } = await import('@sentry/react');
-      captureException(error, (scope) => {
-        scope.setExtras({ info });
+      const fingerprint = hasErrorCode(error) ? error.code : error.message;
 
-        const fingerprint = hasErrorCode(error) ? error.code : error.message;
-        scope.setFingerprint([fingerprint]);
-        error.name = error.message;
-        return scope;
+      error.name = error.message;
+      Sentry.captureReactException(error, info, {
+        fingerprint: [fingerprint],
       });
     } catch (sentryError) {
       // oxlint-disable-next-line no-console

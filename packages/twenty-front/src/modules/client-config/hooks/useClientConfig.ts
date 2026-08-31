@@ -28,7 +28,6 @@ import { isMicrosoftCalendarEnabledState } from '@/client-config/states/isMicros
 import { isMicrosoftMessagingEnabledState } from '@/client-config/states/isMicrosoftMessagingEnabledState';
 import { isMultiWorkspaceEnabledState } from '@/client-config/states/isMultiWorkspaceEnabledState';
 import { labPublicFeatureFlagsState } from '@/client-config/states/labPublicFeatureFlagsState';
-import { sentryConfigState } from '@/client-config/states/sentryConfigState';
 import { supportChatState } from '@/client-config/states/supportChatState';
 import { type ClientConfig } from '@/client-config/types/ClientConfig';
 import { domainConfigurationState } from '@/domain-manager/states/domainConfigurationState';
@@ -89,7 +88,6 @@ export const useClientConfig = (): UseClientConfigResult => {
   const setBilling = useSetAtomState(billingState);
   const setSupportChat = useSetAtomState(supportChatState);
 
-  const setSentryConfig = useSetAtomState(sentryConfigState);
   const [clientConfigApiStatus, setClientConfigApiStatus] = useAtomState(
     clientConfigApiStatusState,
   );
@@ -277,12 +275,6 @@ export const useClientConfig = (): UseClientConfigResult => {
       setBilling(clientConfig.billing);
       setSupportChat(clientConfig.support);
 
-      setSentryConfig({
-        dsn: clientConfig?.sentry?.dsn,
-        release: clientConfig?.sentry?.release,
-        environment: clientConfig?.sentry?.environment,
-      });
-
       setCaptcha({
         provider: clientConfig?.captcha?.provider,
         siteKey: clientConfig?.captcha?.siteKey,
@@ -366,7 +358,6 @@ export const useClientConfig = (): UseClientConfigResult => {
     setMaintenanceMode,
     setIsMicrosoftCalendarEnabled,
     setIsMicrosoftMessagingEnabled,
-    setSentryConfig,
     setSupportChat,
     setAllowRequestsToTwentyIcons,
   ]);
