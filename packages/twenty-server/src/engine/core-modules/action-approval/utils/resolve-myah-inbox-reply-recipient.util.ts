@@ -30,7 +30,10 @@ export const resolveMyahInboxReplyRecipient = ({
     }
 
     const parsed = emailSchema.safeParse(participant.handle?.trim());
-    if (!parsed.success || normalizedSenderHandles.has(parsed.data.toLowerCase())) {
+    if (
+      !parsed.success ||
+      normalizedSenderHandles.has(parsed.data.toLowerCase())
+    ) {
       return [];
     }
 
@@ -41,7 +44,9 @@ export const resolveMyahInboxReplyRecipient = ({
       },
     ];
   });
-  const unique = [...new Map(candidates.map((item) => [item.email, item])).values()];
+  const unique = [
+    ...new Map(candidates.map((item) => [item.email, item])).values(),
+  ];
 
   if (unique.length !== 1) {
     throw new Error('RECIPIENT_UNAVAILABLE');

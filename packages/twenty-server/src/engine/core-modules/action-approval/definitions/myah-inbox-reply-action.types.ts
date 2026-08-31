@@ -38,7 +38,6 @@ export type MyahInboxReplyEvidenceObjectMetadataIds = {
   messageThread: string;
 };
 
-
 export type MyahInboxReplyReadableDraftSnapshot = {
   revision: number;
   body: { markdown: string; blocknote: string | null } | null;

@@ -271,9 +271,9 @@ describe('ManagedEmailCampaignEligibilityService', () => {
   ])('fails closed for %s', async (_label, mailboxes) => {
     mailboxRepository.find.mockResolvedValue(mailboxes);
 
-    await expect(
-      assertConnectedIdentityEligibleForFollowUp(),
-    ).rejects.toThrow(NOT_ELIGIBLE);
+    await expect(assertConnectedIdentityEligibleForFollowUp()).rejects.toThrow(
+      NOT_ELIGIBLE,
+    );
   });
 
   it('fails closed when the matched managed mailbox is blocked', async () => {
@@ -283,8 +283,8 @@ describe('ManagedEmailCampaignEligibilityService', () => {
       campaignEligibility: ManagedEmailCampaignEligibility.BLOCKED,
     });
 
-    await expect(
-      assertConnectedIdentityEligibleForFollowUp(),
-    ).rejects.toThrow(NOT_ELIGIBLE);
+    await expect(assertConnectedIdentityEligibleForFollowUp()).rejects.toThrow(
+      NOT_ELIGIBLE,
+    );
   });
 });

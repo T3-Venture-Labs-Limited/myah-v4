@@ -298,9 +298,9 @@ describe('MyahInboxReplyWorkspace', () => {
   it('renders Generate Reply then Send as the only normal action row controls', () => {
     render(<MyahInboxReplyWorkspace thread={thread} />);
 
-    const buttons = within(
-      screen.getByLabelText('Draft actions'),
-    ).getAllByRole('button');
+    const buttons = within(screen.getByLabelText('Draft actions')).getAllByRole(
+      'button',
+    );
 
     expect(buttons.map((button) => button.textContent)).toEqual([
       'Generate Reply',
@@ -395,7 +395,6 @@ describe('MyahInboxReplyWorkspace', () => {
       screen.getByRole('button', { name: 'Make pending local edit' }),
     ).toBeDisabled();
   });
-
 
   it('serializes direct generated replies through the autosave controller', async () => {
     const application = createDeferred<boolean>();

@@ -1,4 +1,9 @@
-import { ForbiddenException, type CanActivate, type ExecutionContext, type Type } from '@nestjs/common';
+import {
+  ForbiddenException,
+  type CanActivate,
+  type ExecutionContext,
+  type Type,
+} from '@nestjs/common';
 import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
 import { GqlExecutionContext } from '@nestjs/graphql';
 
@@ -33,9 +38,12 @@ jest.mock(
   'src/engine/metadata-modules/ai/ai-agent-execution/ai-agent-execution.module',
   () => ({ AiAgentExecutionModule: class AiAgentExecutionModule {} }),
 );
-jest.mock('src/engine/metadata-modules/ai/ai-billing/ai-billing.module', () => ({
-  AiBillingModule: class AiBillingModule {},
-}));
+jest.mock(
+  'src/engine/metadata-modules/ai/ai-billing/ai-billing.module',
+  () => ({
+    AiBillingModule: class AiBillingModule {},
+  }),
+);
 jest.mock('src/engine/metadata-modules/ai/ai-models/ai-models.module', () => ({
   AiModelsModule: class AiModelsModule {},
 }));
@@ -61,15 +69,21 @@ jest.mock(
 );
 jest.mock(
   'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-briefing.service',
-  () => ({ MyahInboxReplyBriefingService: class MyahInboxReplyBriefingService {} }),
+  () => ({
+    MyahInboxReplyBriefingService: class MyahInboxReplyBriefingService {},
+  }),
 );
 jest.mock(
   'src/engine/core-modules/myah-inbox/services/myah-inbox-reply-proposal.service',
-  () => ({ MyahInboxReplyProposalService: class MyahInboxReplyProposalService {} }),
+  () => ({
+    MyahInboxReplyProposalService: class MyahInboxReplyProposalService {},
+  }),
 );
 jest.mock(
   'src/engine/core-modules/myah-inbox/tools/myah-inbox-tool.workspace-service',
-  () => ({ MyahInboxToolWorkspaceService: class MyahInboxToolWorkspaceService {} }),
+  () => ({
+    MyahInboxToolWorkspaceService: class MyahInboxToolWorkspaceService {},
+  }),
 );
 jest.mock(
   'src/engine/metadata-modules/ai/ai-chat/services/brand-brain-preflight.service',
@@ -93,7 +107,9 @@ const authContext = {
 };
 
 const createResolver = () => {
-  const getReadiness = jest.fn().mockResolvedValue({ status: 'READY', reason: null });
+  const getReadiness = jest
+    .fn()
+    .mockResolvedValue({ status: 'READY', reason: null });
   const send = jest.fn().mockResolvedValue({
     outcome: 'SENT',
     receiptId,
@@ -108,9 +124,11 @@ const createResolver = () => {
   });
 
   return {
-    resolver: new MyahInboxReplySendResolver(
-      { getReadiness, send, getStatus } as never,
-    ),
+    resolver: new MyahInboxReplySendResolver({
+      getReadiness,
+      send,
+      getStatus,
+    } as never),
     getReadiness,
     send,
     getStatus,
@@ -119,9 +137,7 @@ const createResolver = () => {
 
 describe('MyahInboxReplySendResolver', () => {
   beforeEach(() => {
-    jest
-      .mocked(getWorkspaceAuthContext)
-      .mockReturnValue(authContext as never);
+    jest.mocked(getWorkspaceAuthContext).mockReturnValue(authContext as never);
   });
 
   it('forwards only the narrow send input and authenticated server context', async () => {
@@ -258,7 +274,9 @@ describe('MyahInboxReplySendResolver', () => {
     );
 
     await expect(guard.canActivate(executionContext)).resolves.toBe(true);
-    expect(permissionsService.userHasWorkspaceSettingPermission).toHaveBeenCalledWith({
+    expect(
+      permissionsService.userHasWorkspaceSettingPermission,
+    ).toHaveBeenCalledWith({
       apiKeyId: undefined,
       applicationId: undefined,
       setting: PermissionFlagType.SEND_EMAIL_TOOL,

@@ -986,10 +986,12 @@ describe('MyahInboxMutationService', () => {
       'SELECT pg_advisory_xact_lock(hashtext($1))',
       [`myah-inbox-reply:${workspaceId}:${threadId}`],
     );
-    expect(setup.transactionManager.query.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(
+      setup.transactionManager.query.mock.invocationCallOrder[0],
+    ).toBeLessThan(setup.isDraftExecutionLocked.mock.invocationCallOrder[0]);
+    expect(
       setup.isDraftExecutionLocked.mock.invocationCallOrder[0],
-    );
-    expect(setup.isDraftExecutionLocked.mock.invocationCallOrder[0]).toBeLessThan(
+    ).toBeLessThan(
       setup.bypassedMessageThreadRepository.update.mock.invocationCallOrder[0],
     );
   });

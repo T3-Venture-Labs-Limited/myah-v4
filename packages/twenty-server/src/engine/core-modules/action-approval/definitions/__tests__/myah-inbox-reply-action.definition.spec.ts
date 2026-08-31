@@ -146,7 +146,9 @@ const createDefinition = ({
     message: { find: jest.fn().mockResolvedValue([parent]) },
   };
   const globalWorkspaceOrmManager = {
-    executeInWorkspaceContext: jest.fn().mockImplementation((callback) => callback()),
+    executeInWorkspaceContext: jest
+      .fn()
+      .mockImplementation((callback) => callback()),
     getRepository: jest
       .fn()
       .mockImplementation(
@@ -182,7 +184,9 @@ const createDefinition = ({
     find: jest.fn().mockResolvedValue([channel]),
   };
   const managedEmailCampaignEligibilityService = {
-    assertConnectedIdentityEligibleForFollowUp: jest.fn().mockResolvedValue(managedMailbox),
+    assertConnectedIdentityEligibleForFollowUp: jest
+      .fn()
+      .mockResolvedValue(managedMailbox),
     findConnectedIdentity: jest.fn().mockResolvedValue(managedMailbox),
   };
   const Definition = MyahInboxReplyActionDefinition as unknown as new (
@@ -287,7 +291,11 @@ describe('MyahInboxReplyActionDefinition', () => {
     ]);
     expect(
       managedEmailCampaignEligibilityService.assertConnectedIdentityEligibleForFollowUp,
-    ).toHaveBeenCalledWith({ workspaceId, connectedAccountId, messageChannelId });
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      connectedAccountId,
+      messageChannelId,
+    });
   });
 
   it('preserves saved Markdown whitespace in the canonical graph and fingerprint', async () => {
@@ -320,27 +328,30 @@ describe('MyahInboxReplyActionDefinition', () => {
     '<local@-example.com>',
     '<local@example-.com>',
   ])('rejects malformed parent Message-ID %s', async (headerMessageId) => {
-      const { definition } = createDefinition({
-        parent: {
-          id: parentMessageId,
-          messageThreadId,
-          isDraft: false,
-          receivedAt: new Date(),
-          headerMessageId,
-          messageParticipants: [
-            { role: 'FROM', handle: 'creator@example.com', displayName: 'Creator' },
-          ],
-          messageChannelMessageAssociations: [
-            { messageChannelId, direction: 'INCOMING' },
-          ],
-        },
-      });
+    const { definition } = createDefinition({
+      parent: {
+        id: parentMessageId,
+        messageThreadId,
+        isDraft: false,
+        receivedAt: new Date(),
+        headerMessageId,
+        messageParticipants: [
+          {
+            role: 'FROM',
+            handle: 'creator@example.com',
+            displayName: 'Creator',
+          },
+        ],
+        messageChannelMessageAssociations: [
+          { messageChannelId, direction: 'INCOMING' },
+        ],
+      },
+    });
 
-      await expect(buildAuthority(definition)).rejects.toThrow(
-        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-      );
-    },
-  );
+    await expect(buildAuthority(definition)).rejects.toThrow(
+      MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+    );
+  });
 
   it('requires the channel handle to be an account identity but permits an alias', async () => {
     const mismatch = createDefinition({
@@ -414,64 +425,64 @@ describe('MyahInboxReplyActionDefinition', () => {
     ).rejects.toThrow(MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE);
   });
 
-  it.each<
-    [string, InboxReplyAuthorityOverride, MyahInboxReplyUnavailableCode]
-  >([
+  it.each<[string, InboxReplyAuthorityOverride, MyahInboxReplyUnavailableCode]>(
     [
-      'an archived account',
-      { account: { archivedAt: new Date() } },
-      MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
-    ],
-    [
-      'a disconnected channel',
-      { channel: { isSyncEnabled: false } },
-      MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
-    ],
-    [
-      'a non-email channel',
-      { channel: { type: 'SMS' } },
-      MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
-    ],
-    [
-      'a missing parent header',
-      { parent: { headerMessageId: null } },
-      MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-    ],
-    [
-      'ambiguous channel associations',
-      {
-        parent: {
-          messageChannelMessageAssociations: [
-            { messageChannelId, direction: 'INCOMING' },
-            { messageChannelId, direction: 'INCOMING' },
-          ],
+      [
+        'an archived account',
+        { account: { archivedAt: new Date() } },
+        MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
+      ],
+      [
+        'a disconnected channel',
+        { channel: { isSyncEnabled: false } },
+        MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+      ],
+      [
+        'a non-email channel',
+        { channel: { type: 'SMS' } },
+        MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
+      ],
+      [
+        'a missing parent header',
+        { parent: { headerMessageId: null } },
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      ],
+      [
+        'ambiguous channel associations',
+        {
+          parent: {
+            messageChannelMessageAssociations: [
+              { messageChannelId, direction: 'INCOMING' },
+              { messageChannelId, direction: 'INCOMING' },
+            ],
+          },
         },
-      },
-      MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
-    ],
-    [
-      'an ambiguous recipient',
-      {
-        parent: {
-          messageParticipants: [
-            { role: 'FROM', handle: 'one@example.com', displayName: 'One' },
-            { role: 'FROM', handle: 'two@example.com', displayName: 'Two' },
-          ],
+        MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
+      ],
+      [
+        'an ambiguous recipient',
+        {
+          parent: {
+            messageParticipants: [
+              { role: 'FROM', handle: 'one@example.com', displayName: 'One' },
+              { role: 'FROM', handle: 'two@example.com', displayName: 'Two' },
+            ],
+          },
         },
-      },
-      MyahInboxReplyUnavailableCode.RECIPIENT_UNAVAILABLE,
+        MyahInboxReplyUnavailableCode.RECIPIENT_UNAVAILABLE,
+      ],
+      [
+        'a blank draft',
+        { draft: { myahReplyDraftBodyMarkdown: '   ' } },
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      ],
+      [
+        'a stale draft revision',
+        { draft: { myahReplyDraftRevision: 5 } },
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      ],
     ],
-    [
-      'a blank draft',
-      { draft: { myahReplyDraftBodyMarkdown: '   ' } },
-      MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-    ],
-    [
-      'a stale draft revision',
-      { draft: { myahReplyDraftRevision: 5 } },
-      MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
-    ],
-  ])('fails closed for %s', async (_label, override, code) => {
+  )('fails closed for %s', async (_label, override, code) => {
     const setup = createDefinition();
     const draft = {
       id: messageThreadId,
@@ -555,7 +566,11 @@ describe('MyahInboxReplyActionDefinition', () => {
     });
     expect(
       setup.managedEmailCampaignEligibilityService.findConnectedIdentity,
-    ).toHaveBeenCalledWith({ workspaceId, connectedAccountId, messageChannelId });
+    ).toHaveBeenCalledWith({
+      workspaceId,
+      connectedAccountId,
+      messageChannelId,
+    });
   });
 
   it('does not reject provider-free projection when its managed mailbox changes after acceptance', async () => {

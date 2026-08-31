@@ -182,9 +182,7 @@ export class MyahInboxReplySendService {
     return this.getStatus({ ...input, receiptId: receipt.id });
   }
 
-  private async prepareSend(
-    input: MyahInboxReplySendRequest,
-  ): Promise<
+  private async prepareSend(input: MyahInboxReplySendRequest): Promise<
     | { result: MyahInboxReplySendResult }
     | {
         authority: MyahInboxReplyActionAuthority;
@@ -238,10 +236,15 @@ export class MyahInboxReplySendService {
 
             if (
               !reservation.created ||
-              reservation.receipt.state !== ActionExecutionReceiptState.PROCESSING
+              reservation.receipt.state !==
+                ActionExecutionReceiptState.PROCESSING
             ) {
               return {
-                result: this.toReceiptOutcome(input, reservation.receipt, rebuilt),
+                result: this.toReceiptOutcome(
+                  input,
+                  reservation.receipt,
+                  rebuilt,
+                ),
               };
             }
 
@@ -303,7 +306,6 @@ export class MyahInboxReplySendService {
     }
   }
 
-
   private async recordProviderFailure(
     input: MyahInboxReplySendRequest,
     authority: MyahInboxReplyActionAuthority,
@@ -327,11 +329,12 @@ export class MyahInboxReplySendService {
         return this.toUnknownOutcome(input, receiptId, authority);
       }
 
-      const receipt = await this.actionApprovalService.recordProviderTerminalState({
-        receiptId,
-        state: ActionExecutionReceiptState.FAILED,
-        code: 'failed',
-      });
+      const receipt =
+        await this.actionApprovalService.recordProviderTerminalState({
+          receiptId,
+          state: ActionExecutionReceiptState.FAILED,
+          code: 'failed',
+        });
       if (receipt.state !== ActionExecutionReceiptState.FAILED) {
         return this.toReceiptOutcome(input, receipt, authority);
       }
@@ -362,7 +365,12 @@ export class MyahInboxReplySendService {
       // The public result remains unknown when the receipt store is unavailable.
     }
 
-    return this.toResult(MyahInboxReplySendOutcome.UNKNOWN, receiptId, authority, input);
+    return this.toResult(
+      MyahInboxReplySendOutcome.UNKNOWN,
+      receiptId,
+      authority,
+      input,
+    );
   }
 
   private async invalidateBinding(
@@ -392,7 +400,8 @@ export class MyahInboxReplySendService {
 
     return {
       status: MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE,
-      reason: readinessReasons[MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE],
+      reason:
+        readinessReasons[MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE],
     };
   }
 
@@ -401,7 +410,12 @@ export class MyahInboxReplySendService {
     receipt: SafeActionExecutionReceipt,
     authority: MyahInboxReplyActionAuthority,
   ): MyahInboxReplySendResult {
-    return this.toResult(this.toOutcome(receipt.state), receipt.id, authority, input);
+    return this.toResult(
+      this.toOutcome(receipt.state),
+      receipt.id,
+      authority,
+      input,
+    );
   }
 
   private toStaleOutcome(
@@ -425,7 +439,9 @@ export class MyahInboxReplySendService {
       outcome,
       receiptId,
       revision:
-        authority?.canonicalGraph.draftRevision ?? input?.expectedDraftRevision ?? 0,
+        authority?.canonicalGraph.draftRevision ??
+        input?.expectedDraftRevision ??
+        0,
       body: authority?.canonicalGraph.draftBody ?? null,
     };
   }

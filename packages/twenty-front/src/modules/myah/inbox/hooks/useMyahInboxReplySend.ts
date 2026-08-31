@@ -101,7 +101,9 @@ export const useMyahInboxReplySend = (threadId: string) => {
     { client: apolloCoreClient },
   );
   // oxlint-disable-next-line twenty/no-state-useref
-  const activePollingOperationsRef = useRef(new Map<number, PollingOperation>());
+  const activePollingOperationsRef = useRef(
+    new Map<number, PollingOperation>(),
+  );
   // oxlint-disable-next-line twenty/no-state-useref
   const nextPollingOperationTokenRef = useRef(0);
 

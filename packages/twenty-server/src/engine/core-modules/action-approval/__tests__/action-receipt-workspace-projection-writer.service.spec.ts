@@ -478,7 +478,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       threadId: messageThreadId,
       initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000106',
       actionName: 'send_inbox_reply' as const,
-      contentDigest: computeActionContentDigest(JSON.stringify([subject, body])),
+      contentDigest: computeActionContentDigest(
+        JSON.stringify([subject, body]),
+      ),
       recipientFingerprint: computeActionContentDigest(
         JSON.stringify(['creator@example.com']),
       ),
@@ -679,7 +681,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
           String(sql).includes('"messageThread"'),
       ),
     ).toHaveLength(1);
-    expect(actionDefinition.rebuildProjectionAuthority).toHaveBeenCalledTimes(1);
+    expect(actionDefinition.rebuildProjectionAuthority).toHaveBeenCalledTimes(
+      1,
+    );
 
     draftBody = body;
     revision = 4;
@@ -784,7 +788,9 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       threadId: messageThreadId,
       initiatorUserWorkspaceId: 'user-workspace-id',
       actionName: 'send_inbox_reply' as const,
-      contentDigest: computeActionContentDigest(JSON.stringify([subject, body])),
+      contentDigest: computeActionContentDigest(
+        JSON.stringify([subject, body]),
+      ),
       recipientFingerprint: computeActionContentDigest(
         JSON.stringify(['creator@example.com']),
       ),
@@ -922,7 +928,9 @@ describe('Inbox projected Message association grouping', () => {
       threadId: messageThreadId,
       initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000206',
       actionName: 'send_inbox_reply' as const,
-      contentDigest: computeActionContentDigest(JSON.stringify([subject, body])),
+      contentDigest: computeActionContentDigest(
+        JSON.stringify([subject, body]),
+      ),
       recipientFingerprint: computeActionContentDigest(
         JSON.stringify(['creator@example.com']),
       ),
@@ -1123,13 +1131,7 @@ describe('Inbox projected Message association grouping', () => {
       1,
       'two-matching-associations',
     ],
-    [
-      'two matching distinct Message IDs',
-      null,
-      5,
-      0,
-      'two-distinct-messages',
-    ],
+    ['two matching distinct Message IDs', null, 5, 0, 'two-distinct-messages'],
   ] as const)(
     'rejects %s without hiding candidates behind a SQL row limit',
     async (_label, draftBody, revision, authorityCalls, associationMode) => {

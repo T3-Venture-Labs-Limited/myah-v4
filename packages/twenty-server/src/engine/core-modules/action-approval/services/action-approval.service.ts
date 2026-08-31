@@ -315,13 +315,17 @@ export class ActionApprovalService {
         binding.draftId !== draftId ||
         binding.state !== ActionApprovalBindingState.APPROVED
       ) {
-        throw new Error('An approved Inbox reply binding cannot be invalidated');
+        throw new Error(
+          'An approved Inbox reply binding cannot be invalidated',
+        );
       }
       const receipt = await manager.findOne(ActionExecutionReceiptEntity, {
         where: { workspaceId, actionApprovalBindingId: binding.id },
       });
       if (receipt) {
-        throw new Error('An approved Inbox reply binding cannot be invalidated');
+        throw new Error(
+          'An approved Inbox reply binding cannot be invalidated',
+        );
       }
 
       binding.state = ActionApprovalBindingState.CHANGES_REQUESTED;
@@ -978,7 +982,6 @@ export class ActionApprovalService {
     };
   }
 
-
   private async convergeInboxReplyBindingInTransaction(
     manager: EntityManager,
     approvalBindingId: string,
@@ -997,12 +1000,12 @@ export class ActionApprovalService {
       await this.findEvidence(manager, binding.id),
     );
     const receipt = await manager.findOne(ActionExecutionReceiptEntity, {
-      where: { workspaceId: input.workspaceId, actionApprovalBindingId: binding.id },
+      where: {
+        workspaceId: input.workspaceId,
+        actionApprovalBindingId: binding.id,
+      },
     });
-    if (
-      !receipt &&
-      binding.state === ActionApprovalBindingState.APPROVED
-    ) {
+    if (!receipt && binding.state === ActionApprovalBindingState.APPROVED) {
       binding.state = ActionApprovalBindingState.CHANGES_REQUESTED;
       binding.decidedAt = new Date();
       await manager.save(ActionApprovalBindingEntity, binding);

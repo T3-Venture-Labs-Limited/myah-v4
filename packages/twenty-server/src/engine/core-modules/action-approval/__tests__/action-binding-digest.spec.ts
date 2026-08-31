@@ -35,7 +35,6 @@ describe('action binding digest', () => {
     evidenceLinks: [],
   };
 
-
   it('normalizes Unicode and line endings without trimming message content', () => {
     expect(computeActionContentDigest('  Cafe\u0301\r\n  ')).toBe(
       computeActionContentDigest('  Caf\u00e9\n  '),

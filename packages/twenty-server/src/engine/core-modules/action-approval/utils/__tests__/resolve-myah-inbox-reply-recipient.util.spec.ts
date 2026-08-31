@@ -6,7 +6,11 @@ describe('resolveMyahInboxReplyRecipient', () => {
       resolveMyahInboxReplyRecipient({
         direction: 'INCOMING',
         participants: [
-          { role: 'FROM', handle: 'creator@example.com', displayName: 'Creator' },
+          {
+            role: 'FROM',
+            handle: 'creator@example.com',
+            displayName: 'Creator',
+          },
           { role: 'TO', handle: 'team@brand.com', displayName: 'Brand' },
         ],
         senderHandles: new Set(['team@brand.com']),

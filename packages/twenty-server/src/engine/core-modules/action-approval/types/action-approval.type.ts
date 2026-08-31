@@ -81,12 +81,13 @@ export type ActionExecutionReservation = {
   receipt: SafeActionExecutionReceipt;
 };
 
-export type ActionReceiptProjectionInput = ExpectedActionBindingWithWorkspace & {
-  receiptId: string;
-  providerMessageId: string | null;
-  providerExternalMessageId: string | null;
-  providerThreadExternalId: string | null;
-};
+export type ActionReceiptProjectionInput =
+  ExpectedActionBindingWithWorkspace & {
+    receiptId: string;
+    providerMessageId: string | null;
+    providerExternalMessageId: string | null;
+    providerThreadExternalId: string | null;
+  };
 
 export type ActionReceiptProjectionWriter = {
   project: (input: ActionReceiptProjectionInput) => Promise<void>;

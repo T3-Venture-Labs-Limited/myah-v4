@@ -4,7 +4,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
 import { isNonEmptyString } from '@sniptt/guards';
-import { MYAH_STANDARD_OBJECTS, STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import {
+  MYAH_STANDARD_OBJECTS,
+  STANDARD_OBJECTS,
+} from 'twenty-shared/metadata';
 import { FieldActorSource } from 'twenty-shared/types';
 import { type DataSource, type EntityManager, type Repository } from 'typeorm';
 
@@ -17,8 +20,6 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
 
 type ProjectionInput = Parameters<ActionReceiptProjectionWriter['project']>[0];
-
-
 
 type OutreachActionProjectionRow = {
   subject: string | null;
@@ -161,7 +162,9 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         canonicalGraph.draftRevision !== currentDraft.myahReplyDraftRevision ||
         currentDraft.myahReplyDraftBody === null
       ) {
-        throw new Error('The approved Inbox reply is unavailable for projection');
+        throw new Error(
+          'The approved Inbox reply is unavailable for projection',
+        );
       }
 
       existingMessage = this.selectOneInboxMessage(
@@ -207,7 +210,9 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
           !persisted ||
           persisted.messageThreadId !== canonicalGraph.messageThreadId
         ) {
-          throw new Error('The sent Inbox Message is unavailable for projection');
+          throw new Error(
+            'The sent Inbox Message is unavailable for projection',
+          );
         }
       }
 
@@ -247,7 +252,9 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         [input.draftId, canonicalGraph.draftRevision],
       );
       if (cleared.length !== 1) {
-        throw new Error('The approved Inbox reply is unavailable for projection');
+        throw new Error(
+          'The approved Inbox reply is unavailable for projection',
+        );
       }
     });
   }
@@ -305,7 +312,8 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     )?.id;
     const messageMetadataId = metadata.find(
       (item) =>
-        item.universalIdentifier === STANDARD_OBJECTS.message.universalIdentifier,
+        item.universalIdentifier ===
+        STANDARD_OBJECTS.message.universalIdentifier,
     )?.id;
     const exactEvidence = [
       {

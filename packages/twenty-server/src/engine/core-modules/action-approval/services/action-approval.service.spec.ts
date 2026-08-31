@@ -532,7 +532,9 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
   });
 
   it('locks an unexpired approved Inbox binding before receipt reservation', async () => {
-    const { service } = createLockingService([{ ...inboxBinding, receipts: [] }]);
+    const { service } = createLockingService([
+      { ...inboxBinding, receipts: [] },
+    ]);
 
     await expect(
       service.isDraftExecutionLocked({
@@ -560,17 +562,20 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
       consumedBindingWithReceipt(ActionExecutionReceiptState.UNKNOWN),
       'UNKNOWN',
     ],
-  ])('reports %s as the current scoped execution state', async (_case, binding, state) => {
-    const { service } = createLockingService([binding]);
+  ])(
+    'reports %s as the current scoped execution state',
+    async (_case, binding, state) => {
+      const { service } = createLockingService([binding]);
 
-    await expect(
-      service.getInboxReplyDraftExecutionState({
-        workspaceId,
-        initiatorUserWorkspaceId: userWorkspaceId,
-        draftId: inboxReplyBinding.draftId,
-      }),
-    ).resolves.toBe(state);
-  });
+      await expect(
+        service.getInboxReplyDraftExecutionState({
+          workspaceId,
+          initiatorUserWorkspaceId: userWorkspaceId,
+          draftId: inboxReplyBinding.draftId,
+        }),
+      ).resolves.toBe(state);
+    },
+  );
 
   it.each([
     ActionApprovalBindingState.PENDING,
@@ -642,13 +647,14 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
       { ...input, draftId: '00000000-0000-4000-8000-000000000099' },
     ]) {
       receiptRepository.findOne.mockResolvedValueOnce(null);
-      await expect(service.findExecutionReceipt(foreignInput)).resolves.toBeNull();
+      await expect(
+        service.findExecutionReceipt(foreignInput),
+      ).resolves.toBeNull();
     }
   });
 
   it('requires the exact MessageThread draft evidence before exposing an Inbox receipt', async () => {
-    const messageThreadMetadataId =
-      '00000000-0000-4000-8000-000000000023';
+    const messageThreadMetadataId = '00000000-0000-4000-8000-000000000023';
     const receipt = {
       id: '00000000-0000-4000-8000-000000000024',
       workspaceId,
@@ -688,7 +694,9 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
     ).resolves.toMatchObject({ id: receipt.id });
 
     receipt.actionApprovalBinding.evidenceLinks[0].role = 'message';
-    await expect(service.findInboxReplyExecutionReceipt(input)).resolves.toBeNull();
+    await expect(
+      service.findInboxReplyExecutionReceipt(input),
+    ).resolves.toBeNull();
   });
 
   it('invalidates only an unconsumed approved Inbox binding for its actor and thread', async () => {
@@ -737,7 +745,9 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
       );
       await expect(
         service.invalidateApprovedInboxReplyBinding(input),
-      ).rejects.toThrow('An approved Inbox reply binding cannot be invalidated');
+      ).rejects.toThrow(
+        'An approved Inbox reply binding cannot be invalidated',
+      );
       expect(rejectedBinding.state).not.toBe(
         ActionApprovalBindingState.CHANGES_REQUESTED,
       );

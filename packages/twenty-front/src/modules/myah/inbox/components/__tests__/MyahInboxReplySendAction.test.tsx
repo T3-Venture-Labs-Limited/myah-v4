@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 
 import { MyahInboxReplySendAction } from '@/myah/inbox/components/MyahInboxReplySendAction';
 import { type MyahInboxDraftAutosaveController } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
@@ -272,7 +278,6 @@ describe('MyahInboxReplySendAction', () => {
     },
   );
 
-
   it('does not send when the flushed draft is unsafe', async () => {
     mockFlush.mockResolvedValue(dirtyEntry);
     renderAction();
@@ -361,7 +366,6 @@ describe('MyahInboxReplySendAction', () => {
     expect(onSendingChange).toHaveBeenCalledTimes(1);
     expect(onSendingChange).toHaveBeenCalledWith(true);
   });
-
 
   it('keeps an unknown outcome inline and locks Send against another click', async () => {
     mockSend.mockResolvedValue({

@@ -31,7 +31,6 @@ const createDeferred = <Value,>() => {
   return { promise, resolve: resolve! };
 };
 
-
 const threadId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
 const receiptId = '30303030-1c25-4d02-bf25-6aeccf7ea419';
 
@@ -43,7 +42,10 @@ describe('useMyahInboxReplySend', () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     mockUseApolloCoreClient.mockReturnValue({ query: statusQuery } as never);
-    mockUseMutation.mockReturnValue([sendMutation, { loading: false }] as never);
+    mockUseMutation.mockReturnValue([
+      sendMutation,
+      { loading: false },
+    ] as never);
     mockUseQuery.mockReturnValue({
       data: {
         myahInboxReplySendReadiness: {
@@ -458,7 +460,6 @@ describe('useMyahInboxReplySend', () => {
     expect(statusQuery).toHaveBeenCalledTimes(1);
     expect(jest.getTimerCount()).toBe(0);
   });
-
 
   it('returns safe copy when the direct mutation fails', async () => {
     sendMutation.mockRejectedValue(new Error('provider credential failure'));

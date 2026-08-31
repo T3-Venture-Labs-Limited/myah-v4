@@ -63,7 +63,14 @@ jest.mock(
         />
       );
 
-      return label ? <label>{label}{textarea}</label> : textarea;
+      return label ? (
+        <label>
+          {label}
+          {textarea}
+        </label>
+      ) : (
+        textarea
+      );
     };
 
     return { FormAdvancedTextFieldInput };

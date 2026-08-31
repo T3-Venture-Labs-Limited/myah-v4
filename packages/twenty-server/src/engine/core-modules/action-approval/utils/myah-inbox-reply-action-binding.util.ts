@@ -21,15 +21,47 @@ export const buildMyahInboxReplyExpectedActionBinding = ({
   actionName: 'send_inbox_reply',
   actionVersion: 1,
   draftId: graph.messageThreadId,
-  contentDigest: computeActionContentDigest(JSON.stringify([graph.subject, graph.draftBody.markdown])),
-  recipientFingerprint: computeActionContentDigest(JSON.stringify([graph.recipientEmail])),
-  sendingAccountFingerprint: computeActionContentDigest(JSON.stringify([graph.managedMailboxId, graph.connectedAccountId, graph.messageChannelId, graph.senderEmail, graph.senderDisplayName])),
-  actionContextFingerprint: computeActionContentDigest(JSON.stringify([graph.draftRevision, graph.inReplyTo, graph.messageThreadId, graph.providerThreadExternalId, graph.providerMessageExternalId, graph.connectedAccountId, graph.messageChannelId, graph.senderEmail, graph.senderDisplayName])),
+  contentDigest: computeActionContentDigest(
+    JSON.stringify([graph.subject, graph.draftBody.markdown]),
+  ),
+  recipientFingerprint: computeActionContentDigest(
+    JSON.stringify([graph.recipientEmail]),
+  ),
+  sendingAccountFingerprint: computeActionContentDigest(
+    JSON.stringify([
+      graph.managedMailboxId,
+      graph.connectedAccountId,
+      graph.messageChannelId,
+      graph.senderEmail,
+      graph.senderDisplayName,
+    ]),
+  ),
+  actionContextFingerprint: computeActionContentDigest(
+    JSON.stringify([
+      graph.draftRevision,
+      graph.inReplyTo,
+      graph.messageThreadId,
+      graph.providerThreadExternalId,
+      graph.providerMessageExternalId,
+      graph.connectedAccountId,
+      graph.messageChannelId,
+      graph.senderEmail,
+      graph.senderDisplayName,
+    ]),
+  ),
   threadId: graph.messageThreadId,
   initiatorUserWorkspaceId,
   evidenceLinks: [
-    { objectMetadataId: evidenceObjectMetadataIds.messageThread, recordId: graph.messageThreadId, role: 'draft' },
-    { objectMetadataId: evidenceObjectMetadataIds.message, recordId: graph.parentMessageId, role: 'thread_parent' },
+    {
+      objectMetadataId: evidenceObjectMetadataIds.messageThread,
+      recordId: graph.messageThreadId,
+      role: 'draft',
+    },
+    {
+      objectMetadataId: evidenceObjectMetadataIds.message,
+      recordId: graph.parentMessageId,
+      role: 'thread_parent',
+    },
   ],
 });
 
@@ -38,13 +70,26 @@ export const matchesMyahInboxReplyBinding = (
   expected: MyahInboxReplyExpectedActionBindingWithWorkspace,
 ): boolean => {
   if (
-    actual.workspaceId !== expected.workspaceId || actual.actionName !== expected.actionName ||
-    actual.actionVersion !== expected.actionVersion || actual.draftId !== expected.draftId ||
-    actual.contentDigest !== expected.contentDigest || actual.recipientFingerprint !== expected.recipientFingerprint ||
+    actual.workspaceId !== expected.workspaceId ||
+    actual.actionName !== expected.actionName ||
+    actual.actionVersion !== expected.actionVersion ||
+    actual.draftId !== expected.draftId ||
+    actual.contentDigest !== expected.contentDigest ||
+    actual.recipientFingerprint !== expected.recipientFingerprint ||
     actual.sendingAccountFingerprint !== expected.sendingAccountFingerprint ||
-    actual.actionContextFingerprint !== expected.actionContextFingerprint || actual.threadId !== expected.threadId ||
+    actual.actionContextFingerprint !== expected.actionContextFingerprint ||
+    actual.threadId !== expected.threadId ||
     actual.initiatorUserWorkspaceId !== expected.initiatorUserWorkspaceId
-  ) return false;
-  const comparable = (evidence: readonly ActionEvidenceLinkInput[]) => evidence.map(({ objectMetadataId, recordId, role }) => JSON.stringify([objectMetadataId, recordId, role])).sort();
-  return JSON.stringify(comparable(actual.evidenceLinks)) === JSON.stringify(comparable(expected.evidenceLinks));
+  )
+    return false;
+  const comparable = (evidence: readonly ActionEvidenceLinkInput[]) =>
+    evidence
+      .map(({ objectMetadataId, recordId, role }) =>
+        JSON.stringify([objectMetadataId, recordId, role]),
+      )
+      .sort();
+  return (
+    JSON.stringify(comparable(actual.evidenceLinks)) ===
+    JSON.stringify(comparable(expected.evidenceLinks))
+  );
 };

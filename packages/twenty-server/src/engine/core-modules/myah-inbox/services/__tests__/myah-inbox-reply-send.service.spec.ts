@@ -67,7 +67,11 @@ const expectedActionBinding = {
   sendingAccountFingerprint: 'account-fingerprint',
   actionContextFingerprint: 'context-fingerprint',
   evidenceLinks: [
-    { objectMetadataId: 'thread-metadata-id', recordId: threadId, role: 'draft' },
+    {
+      objectMetadataId: 'thread-metadata-id',
+      recordId: threadId,
+      role: 'draft',
+    },
   ],
 };
 const authority = {
@@ -135,7 +139,9 @@ const createService = (overrides?: {
   const createApprovedInboxReplyBinding = jest
     .fn()
     .mockResolvedValue({ id: approvalBindingId });
-  const invalidateApprovedInboxReplyBinding = jest.fn().mockResolvedValue(undefined);
+  const invalidateApprovedInboxReplyBinding = jest
+    .fn()
+    .mockResolvedValue(undefined);
   const executeInboxReplyLocked =
     overrides?.executeInboxReplyLocked ??
     jest.fn(
@@ -144,9 +150,11 @@ const createService = (overrides?: {
         operation: (manager: object) => Promise<unknown>,
       ) => operation({}),
     );
-  const buildAuthority = overrides?.buildAuthority ?? jest.fn().mockResolvedValue(authority);
+  const buildAuthority =
+    overrides?.buildAuthority ?? jest.fn().mockResolvedValue(authority);
   const rebuildExecutionAuthority =
-    overrides?.rebuildExecutionAuthority ?? jest.fn().mockResolvedValue(authority);
+    overrides?.rebuildExecutionAuthority ??
+    jest.fn().mockResolvedValue(authority);
   const reserveExecutionForBinding =
     overrides?.reserveExecutionForBinding ??
     jest.fn().mockResolvedValue({
@@ -170,14 +178,23 @@ const createService = (overrides?: {
       threadExternalId: 'provider-thread-id',
     });
   const recordProviderAccepted =
-    overrides?.recordProviderAccepted ?? jest.fn().mockResolvedValue(receipt(ActionExecutionReceiptState.PROVIDER_ACCEPTED));
+    overrides?.recordProviderAccepted ??
+    jest
+      .fn()
+      .mockResolvedValue(
+        receipt(ActionExecutionReceiptState.PROVIDER_ACCEPTED),
+      );
   const recordProviderTerminalState =
     overrides?.recordProviderTerminalState ??
-    jest.fn().mockImplementation(({ state }) => Promise.resolve(receipt(state)));
+    jest
+      .fn()
+      .mockImplementation(({ state }) => Promise.resolve(receipt(state)));
   const findInboxReplyExecutionReceipt =
     overrides?.findInboxReplyExecutionReceipt ??
     jest.fn().mockResolvedValue(receipt(ActionExecutionReceiptState.SENT));
-  const projectReceipt = overrides?.projectReceipt ?? jest.fn().mockResolvedValue({ projected: true });
+  const projectReceipt =
+    overrides?.projectReceipt ??
+    jest.fn().mockResolvedValue({ projected: true });
   const saveMyahInboxDraftAfterProviderFailure =
     overrides?.saveMyahInboxDraftAfterProviderFailure ??
     jest.fn().mockResolvedValue({
@@ -323,11 +340,13 @@ describe('MyahInboxReplySendService', () => {
 
   it('returns a safe stale outcome before creating a binding for an old draft revision', async () => {
     const setup = createService({
-      buildAuthority: jest.fn().mockRejectedValue(
-        new MyahInboxReplyUnavailableError(
-          MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      buildAuthority: jest
+        .fn()
+        .mockRejectedValue(
+          new MyahInboxReplyUnavailableError(
+            MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+          ),
         ),
-      ),
     });
 
     await expect(setup.service.send(request())).resolves.toEqual({
@@ -342,11 +361,13 @@ describe('MyahInboxReplySendService', () => {
 
   it('invalidates only its receipt-free binding when authority changes after binding creation', async () => {
     const setup = createService({
-      rebuildExecutionAuthority: jest.fn().mockRejectedValue(
-        new MyahInboxReplyUnavailableError(
-          MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
+      rebuildExecutionAuthority: jest
+        .fn()
+        .mockRejectedValue(
+          new MyahInboxReplyUnavailableError(
+            MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
+          ),
         ),
-      ),
     });
 
     await expect(setup.service.send(request())).resolves.toMatchObject({
@@ -435,10 +456,14 @@ describe('MyahInboxReplySendService', () => {
 
   it('leaves a provider-accepted projection failure pending for provider-free reconciliation', async () => {
     const setup = createService({
-      projectReceipt: jest.fn().mockRejectedValue(new Error('projection failed')),
+      projectReceipt: jest
+        .fn()
+        .mockRejectedValue(new Error('projection failed')),
       findInboxReplyExecutionReceipt: jest
         .fn()
-        .mockResolvedValue(receipt(ActionExecutionReceiptState.PROVIDER_ACCEPTED)),
+        .mockResolvedValue(
+          receipt(ActionExecutionReceiptState.PROVIDER_ACCEPTED),
+        ),
     });
 
     await expect(setup.service.send(request())).resolves.toEqual({
@@ -501,24 +526,27 @@ describe('MyahInboxReplySendService', () => {
   it.each([
     ['deleted', new Error('thread unavailable')],
     ['unreadable', new Error('thread hidden')],
-  ])('does not expose a receipt when the status thread is %s', async (_case, error) => {
-    const setup = createService({
-      getReadableDraftSnapshot: jest.fn().mockRejectedValue(error),
-    });
+  ])(
+    'does not expose a receipt when the status thread is %s',
+    async (_case, error) => {
+      const setup = createService({
+        getReadableDraftSnapshot: jest.fn().mockRejectedValue(error),
+      });
 
-    await expect(
-      setup.service.getStatus({
-        ...request(),
-        receiptId,
-      }),
-    ).resolves.toEqual({
-      outcome: MyahInboxReplySendOutcome.STALE,
-      receiptId: null,
-      revision: 0,
-      body: null,
-    });
-    expect(setup.findInboxReplyExecutionReceipt).not.toHaveBeenCalled();
-  });
+      await expect(
+        setup.service.getStatus({
+          ...request(),
+          receiptId,
+        }),
+      ).resolves.toEqual({
+        outcome: MyahInboxReplySendOutcome.STALE,
+        receiptId: null,
+        revision: 0,
+        body: null,
+      });
+      expect(setup.findInboxReplyExecutionReceipt).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     [ActionExecutionReceiptState.FAILED, MyahInboxReplySendOutcome.FAILED],
@@ -533,11 +561,13 @@ describe('MyahInboxReplySendService', () => {
           revision: 5,
           body: null,
         }),
-        buildAuthority: jest.fn().mockRejectedValue(
-          new MyahInboxReplyUnavailableError(
-            MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+        buildAuthority: jest
+          .fn()
+          .mockRejectedValue(
+            new MyahInboxReplyUnavailableError(
+              MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+            ),
           ),
-        ),
         findInboxReplyExecutionReceipt: jest
           .fn()
           .mockResolvedValue(receipt(state)),
@@ -560,11 +590,13 @@ describe('MyahInboxReplySendService', () => {
 
   it('maps only known authority failures to safe readiness without exposing raw errors', async () => {
     const setup = createService({
-      buildAuthority: jest.fn().mockRejectedValue(
-        new MyahInboxReplyUnavailableError(
-          MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+      buildAuthority: jest
+        .fn()
+        .mockRejectedValue(
+          new MyahInboxReplyUnavailableError(
+            MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+          ),
         ),
-      ),
     });
 
     await expect(
@@ -595,52 +627,72 @@ describe('MyahInboxReplySendService', () => {
     });
   });
 
-
   it.each([
     ['PENDING', MyahInboxReplySendReadinessStatus.OUTCOME_PENDING],
     ['UNKNOWN', MyahInboxReplySendReadinessStatus.OUTCOME_UNKNOWN],
-  ])('reports existing %s before mutable readiness failures', async (state, status) => {
-    const setup = createService({
-      buildAuthority: jest.fn().mockRejectedValue(
-        new MyahInboxReplyUnavailableError(
-          MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
-        ),
-      ),
-      getInboxReplyDraftExecutionState: jest.fn().mockResolvedValue(state),
-    });
+  ])(
+    'reports existing %s before mutable readiness failures',
+    async (state, status) => {
+      const setup = createService({
+        buildAuthority: jest
+          .fn()
+          .mockRejectedValue(
+            new MyahInboxReplyUnavailableError(
+              MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+            ),
+          ),
+        getInboxReplyDraftExecutionState: jest.fn().mockResolvedValue(state),
+      });
 
-    await expect(setup.service.getReadiness(request())).resolves.toMatchObject({
-      status,
-    });
-    expect(setup.buildAuthority).not.toHaveBeenCalled();
-  });
+      await expect(
+        setup.service.getReadiness(request()),
+      ).resolves.toMatchObject({
+        status,
+      });
+      expect(setup.buildAuthority).not.toHaveBeenCalled();
+    },
+  );
   it.each([
-    ['CAS conflict', { status: 'CONFLICT', revision: 5, body: authority.canonicalGraph.draftBody }],
+    [
+      'CAS conflict',
+      {
+        status: 'CONFLICT',
+        revision: 5,
+        body: authority.canonicalGraph.draftBody,
+      },
+    ],
     ['CAS write error', new Error('write failed')],
-  ])('keeps the receipt locked as UNKNOWN after a failed-draft %s', async (_case, result) => {
-    const setup = createService({
-      sendMessage: jest.fn().mockRejectedValue({ responseCode: 550 }),
-      saveMyahInboxDraftAfterProviderFailure: jest.fn().mockImplementation(() =>
-        result instanceof Error ? Promise.reject(result) : Promise.resolve(result),
-      ),
-    });
+  ])(
+    'keeps the receipt locked as UNKNOWN after a failed-draft %s',
+    async (_case, result) => {
+      const setup = createService({
+        sendMessage: jest.fn().mockRejectedValue({ responseCode: 550 }),
+        saveMyahInboxDraftAfterProviderFailure: jest
+          .fn()
+          .mockImplementation(() =>
+            result instanceof Error
+              ? Promise.reject(result)
+              : Promise.resolve(result),
+          ),
+      });
 
-    await expect(setup.service.send(request())).resolves.toMatchObject({
-      outcome: MyahInboxReplySendOutcome.UNKNOWN,
-      receiptId,
-    });
-    expect(setup.recordProviderTerminalState).toHaveBeenCalledWith({
-      receiptId,
-      state: ActionExecutionReceiptState.UNKNOWN,
-      code: 'unknown',
-    });
-    expect(setup.recordProviderTerminalState).not.toHaveBeenCalledWith({
-      receiptId,
-      state: ActionExecutionReceiptState.FAILED,
-      code: 'failed',
-    });
-    expect(setup.sendMessage).toHaveBeenCalledTimes(1);
-  });
+      await expect(setup.service.send(request())).resolves.toMatchObject({
+        outcome: MyahInboxReplySendOutcome.UNKNOWN,
+        receiptId,
+      });
+      expect(setup.recordProviderTerminalState).toHaveBeenCalledWith({
+        receiptId,
+        state: ActionExecutionReceiptState.UNKNOWN,
+        code: 'unknown',
+      });
+      expect(setup.recordProviderTerminalState).not.toHaveBeenCalledWith({
+        receiptId,
+        state: ActionExecutionReceiptState.FAILED,
+        code: 'failed',
+      });
+      expect(setup.sendMessage).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it.each(['PENDING', 'UNKNOWN'])(
     'does not expose %s readiness for an unreadable thread',
@@ -663,7 +715,9 @@ describe('MyahInboxReplySendService', () => {
 
   it('contains invalidation failure as stale without provider I/O', async () => {
     const setup = createService({
-      rebuildExecutionAuthority: jest.fn().mockRejectedValue(new Error('changed')),
+      rebuildExecutionAuthority: jest
+        .fn()
+        .mockRejectedValue(new Error('changed')),
     });
     setup.invalidateApprovedInboxReplyBinding.mockRejectedValueOnce(
       new Error('cleanup failed'),

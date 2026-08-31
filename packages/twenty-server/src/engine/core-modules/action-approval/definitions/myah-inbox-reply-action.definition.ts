@@ -49,15 +49,20 @@ import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadat
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
-import { type MessageParticipantWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-participant.workspace-entity';
-import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 
 const isValidMessageId = (value: string): boolean => {
   const match = /^<([^@<>]+)@([^@<>]+)>$/.exec(value);
   if (!match) return false;
-  return /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/.test(match[1]) &&
-    match[2].split('.').every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label));
+  return (
+    /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/.test(
+      match[1],
+    ) &&
+    match[2]
+      .split('.')
+      .every((label) =>
+        /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label),
+      )
+  );
 };
 
 type LoadMode = 'execution' | 'projection';
@@ -118,7 +123,9 @@ export class MyahInboxReplyActionDefinition {
     initiatorUserWorkspaceId: string;
     messageThreadId: string;
   }): Promise<MyahInboxReplyReadableDraftSnapshot> {
-    const workspace = await this.workspaceRepository.findOneBy({ id: workspaceId });
+    const workspace = await this.workspaceRepository.findOneBy({
+      id: workspaceId,
+    });
     if (!workspace) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
@@ -128,18 +135,19 @@ export class MyahInboxReplyActionDefinition {
       workspace,
       initiatorUserWorkspaceId,
     );
-    const messageThread = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const repository =
-          await this.globalWorkspaceOrmManager.getRepository<InboxMessageThreadRecord>(
-            workspaceId,
-            'messageThread',
-          );
+    const messageThread =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const repository =
+            await this.globalWorkspaceOrmManager.getRepository<InboxMessageThreadRecord>(
+              workspaceId,
+              'messageThread',
+            );
 
-        return repository.findOneBy({ id: messageThreadId });
-      },
-      authContext,
-    );
+          return repository.findOneBy({ id: messageThreadId });
+        },
+        authContext,
+      );
     if (!messageThread || messageThread.id !== messageThreadId) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
@@ -191,7 +199,10 @@ export class MyahInboxReplyActionDefinition {
     binding: MyahInboxReplyExpectedActionBindingWithWorkspace;
     mode: LoadMode;
   }): Promise<MyahInboxReplyActionAuthority> {
-    if (binding.actionName !== this.actionName || binding.workspaceId !== workspaceId) {
+    if (
+      binding.actionName !== this.actionName ||
+      binding.workspaceId !== workspaceId
+    ) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
       );
@@ -254,7 +265,6 @@ export class MyahInboxReplyActionDefinition {
     };
   }
 
-
   private async resolveEvidenceObjectMetadataIds(
     workspaceId: string,
   ): Promise<MyahInboxReplyEvidenceObjectMetadataIds> {
@@ -271,7 +281,8 @@ export class MyahInboxReplyActionDefinition {
     const messageThread = metadata.find(
       ({ workspaceId: itemWorkspaceId, universalIdentifier }) =>
         itemWorkspaceId === workspaceId &&
-        universalIdentifier === STANDARD_OBJECTS.messageThread.universalIdentifier,
+        universalIdentifier ===
+          STANDARD_OBJECTS.messageThread.universalIdentifier,
     )?.id;
     const message = metadata.find(
       ({ workspaceId: itemWorkspaceId, universalIdentifier }) =>
@@ -301,7 +312,9 @@ export class MyahInboxReplyActionDefinition {
     expectedDraftRevision?: number;
     mode: LoadMode;
   }): Promise<CanonicalMyahInboxReplyGraph> {
-    const workspace = await this.workspaceRepository.findOneBy({ id: workspaceId });
+    const workspace = await this.workspaceRepository.findOneBy({
+      id: workspaceId,
+    });
 
     if (!workspace) {
       throw new MyahInboxReplyUnavailableError(
@@ -312,36 +325,40 @@ export class MyahInboxReplyActionDefinition {
     const authContext =
       mode === 'projection'
         ? buildSystemAuthContext(workspaceId)
-        : await this.buildInitiatorAuthContext(workspace, initiatorUserWorkspaceId);
-    const source = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const messageThreadRepository =
-          await this.globalWorkspaceOrmManager.getRepository<InboxMessageThreadRecord>(
-            workspaceId,
-            'messageThread',
+        : await this.buildInitiatorAuthContext(
+            workspace,
+            initiatorUserWorkspaceId,
           );
-        const messageRepository =
-          await this.globalWorkspaceOrmManager.getRepository<InboxParentMessageRecord>(
-            workspaceId,
-            'message',
-          );
-        const messageThread = await messageThreadRepository.findOneBy({
-          id: messageThreadId,
-        });
-        const messages = await messageRepository.find({
-          where: { messageThreadId, isDraft: false },
-          relations: {
-            messageParticipants: true,
-            messageChannelMessageAssociations: true,
-          },
-          order: { receivedAt: 'DESC', id: 'DESC' },
-          take: 1,
-        });
+    const source =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const messageThreadRepository =
+            await this.globalWorkspaceOrmManager.getRepository<InboxMessageThreadRecord>(
+              workspaceId,
+              'messageThread',
+            );
+          const messageRepository =
+            await this.globalWorkspaceOrmManager.getRepository<InboxParentMessageRecord>(
+              workspaceId,
+              'message',
+            );
+          const messageThread = await messageThreadRepository.findOneBy({
+            id: messageThreadId,
+          });
+          const messages = await messageRepository.find({
+            where: { messageThreadId, isDraft: false },
+            relations: {
+              messageParticipants: true,
+              messageChannelMessageAssociations: true,
+            },
+            order: { receivedAt: 'DESC', id: 'DESC' },
+            take: 1,
+          });
 
-        return { messageThread, parentMessage: messages[0] };
-      },
-      authContext,
-    );
+          return { messageThread, parentMessage: messages[0] };
+        },
+        authContext,
+      );
 
     const rawDraftMarkdown = source.messageThread?.myahReplyDraftBodyMarkdown;
     const subject = source.messageThread?.subject?.trim();
@@ -354,7 +371,8 @@ export class MyahInboxReplyActionDefinition {
       rawDraftMarkdown.trim().length === 0 ||
       !isNonEmptyString(subject) ||
       (expectedDraftRevision !== undefined &&
-        source.messageThread.myahReplyDraftRevision !== expectedDraftRevision) ||
+        source.messageThread.myahReplyDraftRevision !==
+          expectedDraftRevision) ||
       !parentMessage ||
       parentMessage.id === undefined ||
       parentMessage.messageThreadId !== messageThreadId ||
@@ -368,13 +386,19 @@ export class MyahInboxReplyActionDefinition {
     const headerMessageId = parentMessage.headerMessageId?.trim();
     const associations = parentMessage.messageChannelMessageAssociations ?? [];
 
-    if (!isNonEmptyString(headerMessageId) || !isValidMessageId(headerMessageId)) {
+    if (
+      !isNonEmptyString(headerMessageId) ||
+      !isValidMessageId(headerMessageId)
+    ) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
       );
     }
 
-    if (associations.length !== 1 || !isNonEmptyString(associations[0].messageChannelId)) {
+    if (
+      associations.length !== 1 ||
+      !isNonEmptyString(associations[0].messageChannelId)
+    ) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
       );
@@ -389,17 +413,21 @@ export class MyahInboxReplyActionDefinition {
     const connectedAccounts = await this.connectedAccountRepository.find({
       where: {
         workspaceId,
-        id: In(messageChannels.map(({ connectedAccountId }) => connectedAccountId)),
+        id: In(
+          messageChannels.map(({ connectedAccountId }) => connectedAccountId),
+        ),
       },
     });
     const channel = messageChannels.find(
       ({ id, workspaceId: channelWorkspaceId }) =>
-        id === associations[0].messageChannelId && channelWorkspaceId === workspaceId,
+        id === associations[0].messageChannelId &&
+        channelWorkspaceId === workspaceId,
     );
     const account = channel
       ? connectedAccounts.find(
           ({ id, workspaceId: accountWorkspaceId }) =>
-            id === channel.connectedAccountId && accountWorkspaceId === workspaceId,
+            id === channel.connectedAccountId &&
+            accountWorkspaceId === workspaceId,
         )
       : undefined;
 
@@ -421,7 +449,10 @@ export class MyahInboxReplyActionDefinition {
         .filter((handle) => emailSchema.safeParse(handle).success),
     );
 
-    if (!emailSchema.safeParse(senderEmail).success || !senderHandles.has(senderEmail)) {
+    if (
+      !emailSchema.safeParse(senderEmail).success ||
+      !senderHandles.has(senderEmail)
+    ) {
       throw new MyahInboxReplyUnavailableError(
         MyahInboxReplyUnavailableCode.SENDER_UNAVAILABLE,
       );
@@ -510,7 +541,8 @@ export class MyahInboxReplyActionDefinition {
       subject: /^re:\s*/i.test(subject) ? subject : `Re: ${subject}`,
       inReplyTo: headerMessageId,
       parentMessageId: parentMessage.id,
-      providerMessageExternalId: associations[0].messageExternalId?.trim() || null,
+      providerMessageExternalId:
+        associations[0].messageExternalId?.trim() || null,
       providerThreadExternalId:
         associations[0].messageThreadExternalId?.trim() || null,
       managedMailboxId,
@@ -519,7 +551,11 @@ export class MyahInboxReplyActionDefinition {
   }
 
   private isSupportedProvider(provider: ConnectedAccountProvider): boolean {
-    return [ConnectedAccountProvider.GOOGLE, ConnectedAccountProvider.MICROSOFT, ConnectedAccountProvider.IMAP_SMTP_CALDAV].includes(provider);
+    return [
+      ConnectedAccountProvider.GOOGLE,
+      ConnectedAccountProvider.MICROSOFT,
+      ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+    ].includes(provider);
   }
 
   private async buildInitiatorAuthContext(
