@@ -24,7 +24,7 @@ export const buildMyahInboxReplyExpectedActionBinding = ({
   contentDigest: computeActionContentDigest(JSON.stringify([graph.subject, graph.draftBody.markdown])),
   recipientFingerprint: computeActionContentDigest(JSON.stringify([graph.recipientEmail])),
   sendingAccountFingerprint: computeActionContentDigest(JSON.stringify([graph.managedMailboxId, graph.connectedAccountId, graph.messageChannelId, graph.senderEmail, graph.senderDisplayName])),
-  actionContextFingerprint: computeActionContentDigest(JSON.stringify([graph.draftRevision, graph.inReplyTo, graph.messageThreadId, graph.providerThreadExternalId, graph.providerMessageExternalId])),
+  actionContextFingerprint: computeActionContentDigest(JSON.stringify([graph.draftRevision, graph.inReplyTo, graph.messageThreadId, graph.providerThreadExternalId, graph.providerMessageExternalId, graph.connectedAccountId, graph.messageChannelId, graph.senderEmail, graph.senderDisplayName])),
   threadId: graph.messageThreadId,
   initiatorUserWorkspaceId,
   evidenceLinks: [

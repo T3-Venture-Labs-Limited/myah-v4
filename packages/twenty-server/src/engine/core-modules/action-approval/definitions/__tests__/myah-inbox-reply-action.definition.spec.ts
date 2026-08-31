@@ -200,6 +200,10 @@ describe('MyahInboxReplyActionDefinition', () => {
           messageThreadId,
           'provider-thread-id',
           'provider-message-id',
+          connectedAccountId,
+          messageChannelId,
+          'team@brand.com',
+          'Brand',
         ]),
       ),
     });

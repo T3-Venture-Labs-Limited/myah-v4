@@ -24,3 +24,24 @@
 ## Concerns
 
 None known.
+
+## Identity-binding follow-up
+
+### RED evidence
+
+The Task 2 authority suite failed after its expected action-context digest was extended with the connected account, channel, sender email, and sender display name: the prior binding omitted all four identities.
+
+### GREEN evidence
+
+- `npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/definitions/__tests__/myah-inbox-reply-action.definition.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand` — 1 suite, 25 tests passed.
+- `npx -y node@24.16.0 .yarn/releases/yarn-4.13.0.cjs exec jest packages/twenty-server/src/engine/core-modules/action-approval/__tests__/action-receipt-workspace-projection-writer.service.spec.ts --config=packages/twenty-server/jest.config.mjs --runInBand` — 1 suite, 12 tests passed.
+
+### Self-review
+
+- `actionContextFingerprint` now binds immutable connected-account, message-channel, sender-email, and sender-display identities in addition to the reply context.
+- Projection continues to tolerate only managed-mailbox lifecycle changes: the pre-send sending fingerprint remains strict, while projection replay checks the strengthened immutable context from native Message data.
+- Candidate SQL de-duplicates a Message before ambiguity evaluation and still requires one sender and recipient.
+
+### Concerns
+
+None known.

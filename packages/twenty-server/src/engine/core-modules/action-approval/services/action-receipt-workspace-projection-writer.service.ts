@@ -55,6 +55,7 @@ type SentInboxMessageRow = {
   recipientCount: number | string;
   senderEmail: string | null;
   senderCount: number | string;
+  senderDisplayName: string | null;
   connectedAccountId: string | null;
   parentMessageId: string | null;
   parentHeaderMessageId: string | null;
@@ -380,7 +381,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     parentMessageId: string,
   ): Promise<SentInboxMessageRow[]> {
     return manager.query<SentInboxMessageRow[]>(
-      `SELECT
+      `SELECT DISTINCT ON (message."id")
         message."id",
         message."messageThreadId",
         message."subject",
@@ -388,40 +389,24 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
         association."messageChannelId",
         association."messageExternalId",
         association."messageThreadExternalId",
-        (SELECT MIN(participant."handle")
-          FROM "${schemaName}"."messageParticipant" participant
-          WHERE participant."messageId" = message."id"
-            AND participant."role" = 'TO') AS "recipientEmail",
-        (SELECT COUNT(*)
-          FROM "${schemaName}"."messageParticipant" participant
-          WHERE participant."messageId" = message."id"
-            AND participant."role" = 'TO') AS "recipientCount",
-        (SELECT MIN(participant."handle")
-          FROM "${schemaName}"."messageParticipant" participant
-          WHERE participant."messageId" = message."id"
-            AND participant."role" = 'FROM') AS "senderEmail",
-        (SELECT COUNT(*)
-          FROM "${schemaName}"."messageParticipant" participant
-          WHERE participant."messageId" = message."id"
-            AND participant."role" = 'FROM') AS "senderCount",
+        (SELECT MIN(participant."handle") FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'TO') AS "recipientEmail",
+        (SELECT COUNT(*) FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'TO') AS "recipientCount",
+        (SELECT MIN(participant."handle") FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'FROM') AS "senderEmail",
+        (SELECT COUNT(*) FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'FROM') AS "senderCount",
+        (SELECT MIN(participant."displayName") FROM "${schemaName}"."messageParticipant" participant WHERE participant."messageId" = message."id" AND participant."role" = 'FROM') AS "senderDisplayName",
         channel."connectedAccountId",
         parent."id" AS "parentMessageId",
         parent."headerMessageId" AS "parentHeaderMessageId",
         parent_association."messageExternalId" AS "parentMessageExternalId",
         parent_association."messageThreadExternalId" AS "parentThreadExternalId"
       FROM "${schemaName}"."message" message
-      INNER JOIN "${schemaName}"."messageChannelMessageAssociation" association
-        ON association."messageId" = message."id"
-      INNER JOIN core."messageChannel" channel
-        ON channel."id" = association."messageChannelId"
-      INNER JOIN "${schemaName}"."message" parent
-        ON parent."id" = $3
-        AND parent."messageThreadId" = message."messageThreadId"
-      LEFT JOIN "${schemaName}"."messageChannelMessageAssociation" parent_association
-        ON parent_association."messageId" = parent."id"
-        AND parent_association."messageChannelId" = association."messageChannelId"
+      INNER JOIN "${schemaName}"."messageChannelMessageAssociation" association ON association."messageId" = message."id"
+      INNER JOIN core."messageChannel" channel ON channel."id" = association."messageChannelId"
+      INNER JOIN "${schemaName}"."message" parent ON parent."id" = $3 AND parent."messageThreadId" = message."messageThreadId"
+      LEFT JOIN "${schemaName}"."messageChannelMessageAssociation" parent_association ON parent_association."messageId" = parent."id" AND parent_association."messageChannelId" = association."messageChannelId"
       WHERE message."headerMessageId" = $1
         OR ($2 IS NOT NULL AND association."messageExternalId" = $2)
+      ORDER BY message."id"
       LIMIT 2`,
       [providerMessageId, providerExternalMessageId, parentMessageId],
     );
@@ -461,6 +446,10 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
           input.threadId,
           message.parentThreadExternalId,
           message.parentMessageExternalId,
+          message.connectedAccountId,
+          message.messageChannelId,
+          message.senderEmail,
+          message.senderDisplayName,
         ]),
       ) === input.actionContextFingerprint
     );
