@@ -90,7 +90,7 @@ export class MyahInboxReplyActionDefinition {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
     messageThreadId: string;
-    expectedDraftRevision: number;
+    expectedDraftRevision?: number;
   }): Promise<MyahInboxReplyActionAuthority> {
     const graph = await this.loadCanonicalGraph({
       workspaceId,

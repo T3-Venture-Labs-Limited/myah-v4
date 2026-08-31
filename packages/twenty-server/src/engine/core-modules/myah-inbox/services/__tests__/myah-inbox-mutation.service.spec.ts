@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 import {
   type UserWorkspaceAuthContext,
@@ -96,6 +100,7 @@ const createService = ({
   hasReadableMessage = true,
   projectionReadable = true,
   canUpdateMessageThread = true,
+  draftExecutionLocked = false,
 }: {
   thread?: ThreadRecord | null;
   readableCreatorIds?: string[];
@@ -104,6 +109,7 @@ const createService = ({
   hasReadableMessage?: boolean;
   projectionReadable?: boolean;
   canUpdateMessageThread?: boolean;
+  draftExecutionLocked?: boolean;
 } = {}) => {
   let persistedThread = thread;
   const targets = {
@@ -285,9 +291,13 @@ const createService = ({
         : null,
     });
   });
+  const isDraftExecutionLocked = jest
+    .fn()
+    .mockResolvedValue(draftExecutionLocked);
   const service = new MyahInboxMutationService(
     globalWorkspaceOrmManager as never,
     { getThreadSummary } as never,
+    { isDraftExecutionLocked } as never,
   );
 
   return {
@@ -298,6 +308,7 @@ const createService = ({
     transaction,
     transactionManager,
     getThreadSummary,
+    isDraftExecutionLocked,
     get persistedThread() {
       return persistedThread;
     },
@@ -908,5 +919,55 @@ describe('MyahInboxMutationService', () => {
     expect(setup.repositories.message.findOne).toHaveBeenCalled();
     expect(setup.repositories.message).not.toHaveProperty('save');
     expect(setup.repositories.message).not.toHaveProperty('insert');
+  });
+  it.each([
+    ['approved Inbox binding without a receipt'],
+    ['processing receipt'],
+    ['provider-accepted receipt'],
+    ['unknown receipt'],
+  ])('locks autosave for a %s', async () => {
+    const setup = createService({ draftExecutionLocked: true });
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'locked copy', blocknote: null },
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(setup.isDraftExecutionLocked).toHaveBeenCalledWith({
+      workspaceId,
+      actionName: 'send_inbox_reply',
+      draftId: threadId,
+    });
+    expect(setup.bypassedMessageThreadRepository.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['failed receipt'],
+    ['sent receipt'],
+    ['foreign-thread receipt'],
+    ['ordinary autosave'],
+  ])('keeps autosave writable after a %s', async () => {
+    const setup = createService({ draftExecutionLocked: false });
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'writable copy', blocknote: null },
+      }),
+    ).resolves.toEqual({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'writable copy', blocknote: null },
+    });
+    expect(setup.isDraftExecutionLocked).toHaveBeenCalledWith({
+      workspaceId,
+      actionName: 'send_inbox_reply',
+      draftId: threadId,
+    });
   });
 });

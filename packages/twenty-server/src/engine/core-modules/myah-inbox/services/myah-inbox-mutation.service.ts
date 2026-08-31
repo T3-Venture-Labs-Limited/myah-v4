@@ -10,6 +10,7 @@ import { IsNull, Not, type ObjectLiteral } from 'typeorm';
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
 
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
 import { validateRichTextFieldOrThrow } from 'src/engine/api/common/common-args-processors/data-arg-processor/validator-utils/validate-rich-text-field-or-throw.util';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
@@ -78,6 +79,7 @@ export class MyahInboxMutationService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly myahInboxQueryService: MyahInboxQueryService,
+    private readonly actionApprovalService: ActionApprovalService,
   ) {}
 
   async updateMyahInboxThread(
@@ -193,6 +195,18 @@ export class MyahInboxMutationService {
               input.threadId,
             );
             await this.assertPolicyVisibleThread(input);
+
+            if (
+              await this.actionApprovalService.isDraftExecutionLocked({
+                workspaceId: input.workspace.id,
+                actionName: 'send_inbox_reply',
+                draftId: input.threadId,
+              })
+            ) {
+              throw new ConflictException(
+                'Inbox reply draft is locked while delivery is being confirmed',
+              );
+            }
 
             const draftPatch = {
               myahReplyDraftBody: input.body,
