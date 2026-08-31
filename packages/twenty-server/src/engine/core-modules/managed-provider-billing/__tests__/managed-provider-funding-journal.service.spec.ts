@@ -383,6 +383,48 @@ describe('ManagedProviderFundingJournalService', () => {
     expect(query).not.toContain(`'REFUND_RECONCILIATION_REQUIRED'`);
   });
 
+  it('claims a pending prepaid commit after a provider-write crash', async () => {
+    const dueAction = {
+      ...persistedAction,
+      actionType: 'PREPAID_COMMIT',
+      reconciliationAttemptCount: 0,
+      state: 'PENDING',
+      workspaceId: 'workspace-id',
+    } as ManagedProviderFundingActionEntity;
+    const claimedAction = {
+      ...dueAction,
+      reconciliationAttemptCount: 1,
+    };
+    const managerRepository = {
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      findOneBy: jest.fn().mockResolvedValue(claimedAction),
+    };
+    const manager = {
+      query: jest.fn().mockResolvedValue([dueAction]),
+      getRepository: jest.fn().mockReturnValue(managerRepository),
+    };
+    const repository = {
+      manager: {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      },
+    };
+    const service = new ManagedProviderFundingJournalService(
+      repository as unknown as Repository<ManagedProviderFundingActionEntity>,
+    );
+    const now = new Date('2026-08-29T01:00:00.000Z');
+
+    await expect(
+      service.claimDueCustomerFundingActions(50, now),
+    ).resolves.toEqual([claimedAction]);
+    expect(manager.query.mock.calls[1][0]).toContain(`'PENDING'`);
+    expect(managerRepository.update).toHaveBeenCalledWith(
+      { id: dueAction.id, state: 'PENDING' },
+      expect.objectContaining({
+        reconciliationAttemptCount: 1,
+        reconciliationClaimedAt: now,
+      }),
+    );
+  });
   it('reads one funding action only within the supplied workspace', async () => {
     const repository = {
       findOneBy: jest.fn().mockResolvedValue(persistedAction),

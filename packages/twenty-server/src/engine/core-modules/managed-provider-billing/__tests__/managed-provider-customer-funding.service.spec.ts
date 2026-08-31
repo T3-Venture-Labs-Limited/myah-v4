@@ -765,6 +765,65 @@ describe('ManagedProviderCustomerFundingService', () => {
     );
   });
 
+  it('keeps a partially paid Metronome invoice pending despite contradictory Stripe payment evidence', async () => {
+    const { action, journal, metronome, service, stripe } =
+      createReconciliationHarness({
+        externalInvoice: {
+          issuedAt: '2026-08-29T10:40:00.000Z',
+          pdfUrl: 'https://invoice.example/in_metronome',
+          status: 'PARTIALLY_PAID',
+          stripeInvoiceId: 'in_metronome',
+          stripePaymentIntentId: 'pi_metronome',
+          subtotalCents: 2_500,
+          taxCents: 500,
+          totalCents: 3_000,
+        },
+      });
+
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'PAYMENT_PENDING' });
+    expect(stripe.readPaymentGatedInvoicePayment).not.toHaveBeenCalled();
+    expect(metronome.assertPaymentGatedPrepaidCommitExpiry).not.toHaveBeenCalled();
+    expect(journal.transitionCompareAndSet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ nextState: 'PAYMENT_PENDING' }),
+    );
+  });
+
+  it.each([
+    ['PAYMENT_FAILED', 'METRONOME_PAYMENT_FAILED'],
+    ['UNCOLLECTIBLE', 'METRONOME_UNCOLLECTIBLE'],
+  ] as const)(
+    'keeps a terminal Metronome invoice status %s from reaching Stripe reconciliation',
+    async (status, failureCode) => {
+      const { action, journal, metronome, service, stripe } =
+        createReconciliationHarness({
+          externalInvoice: {
+            issuedAt: '2026-08-29T10:40:00.000Z',
+            pdfUrl: 'https://invoice.example/in_metronome',
+            status,
+            stripeInvoiceId: 'in_metronome',
+            stripePaymentIntentId: 'pi_metronome',
+            subtotalCents: 2_500,
+            taxCents: 500,
+            totalCents: 3_000,
+          },
+        });
+
+      await expect(
+        service.reconcileCustomerFunding(action),
+      ).resolves.toMatchObject({ state: 'FAILED_DEFINITIVE' });
+      expect(stripe.readPaymentGatedInvoicePayment).not.toHaveBeenCalled();
+      expect(metronome.updatePaymentGatedPrepaidCommitExpiry).not.toHaveBeenCalled();
+      expect(journal.transitionCompareAndSet).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          nextState: 'FAILED_DEFINITIVE',
+          patch: expect.objectContaining({ failureCode }),
+        }),
+      );
+    },
+  );
+
   it('records action-required without persisting the client secret', async () => {
     const { action, journal, service } = createReconciliationHarness({
       stripeState: {
@@ -877,6 +936,29 @@ describe('ManagedProviderCustomerFundingService', () => {
     });
   });
 
+  it('reconciles a pending customer funding action after a provider-write crash', async () => {
+    const { action, journal, metronome, service } =
+      createReconciliationHarness({
+        actionOverrides: {
+          commitmentId: null,
+          metronomeEditId: null,
+          state: 'PENDING',
+        },
+      });
+
+    await expect(
+      service.reconcileCustomerFunding(action),
+    ).resolves.toMatchObject({ state: 'SUCCEEDED' });
+    expect(metronome.recoverPaymentGatedPrepaidCommit).toHaveBeenCalledWith(
+      expect.objectContaining({ principalCents: 2_500 }),
+    );
+    expect(journal.transitionCompareAndSet.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        expectedState: 'PENDING',
+        nextState: 'METRONOME_EDIT_RECORDED',
+      }),
+    );
+  });
   it('uses the recorded phase when reconciliation fails after recovering IDs', async () => {
     const { action, journal, metronome, service } = createReconciliationHarness(
       {

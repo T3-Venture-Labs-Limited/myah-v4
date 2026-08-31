@@ -120,10 +120,114 @@ describe('MetronomeClientService refunds', () => {
     ).rejects.toThrow('Metronome commitment is not fully refundable');
   });
 
-  it('voids and reads back the exact Metronome payment invoice', async () => {
+  it('proves a finalized exact invoice before voiding and proves its void poststate', async () => {
     const voidInvoice = jest
       .fn()
       .mockResolvedValue({ data: { id: 'invoice-id' } });
+    const finalizedInvoice = {
+      contract_id: 'contract-id',
+      credit_type: { id: 'fiat-id', name: 'USD (cents)' },
+      customer_id: 'customer-id',
+      external_invoice: null,
+      id: 'invoice-id',
+      issued_at: '2026-08-29T10:00:00.000Z',
+      line_items: [
+        {
+          commit_id: 'commitment-id',
+          credit_type: { id: 'fiat-id', name: 'USD (cents)' },
+          name: 'Commit purchase',
+          total: 5_000,
+          type: 'commit_purchase',
+        },
+      ],
+      status: 'FINALIZED',
+      subtotal: 5_000,
+      total: 5_000,
+      type: 'SCHEDULED',
+    };
+    const retrieve = jest
+      .fn()
+      .mockResolvedValueOnce({ data: finalizedInvoice })
+      .mockResolvedValueOnce({
+        data: { ...finalizedInvoice, status: 'VOID' },
+      });
+    const service = createService({
+      v1: {
+        customers: { invoices: { retrieve } },
+        invoices: { void: voidInvoice },
+      },
+    });
+
+    await expect(
+      service.voidPaymentGatedPrepaidInvoice({
+        commitmentId: 'commitment-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        fiatCreditTypeId: 'fiat-id',
+        invoiceId: 'invoice-id',
+        principalCents: 5_000,
+      }),
+    ).resolves.toEqual({ invoiceId: 'invoice-id' });
+    expect(voidInvoice).toHaveBeenCalledWith(
+      { id: 'invoice-id' },
+      { maxRetries: 0 },
+    );
+    expect(retrieve).toHaveBeenCalledTimes(2);
+    expect(retrieve.mock.invocationCallOrder[0]).toBeLessThan(
+      voidInvoice.mock.invocationCallOrder[0],
+    );
+    expect(voidInvoice.mock.invocationCallOrder[0]).toBeLessThan(
+      retrieve.mock.invocationCallOrder[1],
+    );
+  });
+
+
+  it('does not void an otherwise exact payment invoice before its finalization proof', async () => {
+    const voidInvoice = jest.fn();
+    const retrieve = jest.fn().mockResolvedValue({
+      data: {
+        contract_id: 'contract-id',
+        credit_type: { id: 'fiat-id', name: 'USD (cents)' },
+        customer_id: 'customer-id',
+        external_invoice: null,
+        id: 'invoice-id',
+        issued_at: '2026-08-29T10:00:00.000Z',
+        line_items: [
+          {
+            commit_id: 'commitment-id',
+            credit_type: { id: 'fiat-id', name: 'USD (cents)' },
+            name: 'Commit purchase',
+            total: 5_000,
+            type: 'commit_purchase',
+          },
+        ],
+        status: 'DRAFT',
+        subtotal: 5_000,
+        total: 5_000,
+        type: 'SCHEDULED',
+      },
+    });
+    const service = createService({
+      v1: {
+        customers: { invoices: { retrieve } },
+        invoices: { void: voidInvoice },
+      },
+    });
+
+    await expect(
+      service.voidPaymentGatedPrepaidInvoice({
+        commitmentId: 'commitment-id',
+        contractId: 'contract-id',
+        customerId: 'customer-id',
+        fiatCreditTypeId: 'fiat-id',
+        invoiceId: 'invoice-id',
+        principalCents: 5_000,
+      }),
+    ).rejects.toThrow('Metronome payment invoice void precondition is invalid');
+    expect(voidInvoice).not.toHaveBeenCalled();
+  });
+  it('does not repeat a void after a response-loss retry finds the exact invoice already voided', async () => {
+    const voidInvoice = jest.fn();
     const retrieve = jest.fn().mockResolvedValue({
       data: {
         contract_id: 'contract-id',
@@ -164,10 +268,7 @@ describe('MetronomeClientService refunds', () => {
         principalCents: 5_000,
       }),
     ).resolves.toEqual({ invoiceId: 'invoice-id' });
-    expect(voidInvoice).toHaveBeenCalledWith(
-      { id: 'invoice-id' },
-      { maxRetries: 0 },
-    );
+    expect(voidInvoice).not.toHaveBeenCalled();
   });
 
   it('proves the exact commitment is archived with zero balance and no ledger', async () => {

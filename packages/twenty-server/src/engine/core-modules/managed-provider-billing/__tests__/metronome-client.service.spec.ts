@@ -2728,7 +2728,7 @@ describe('MetronomeClientService', () => {
     );
   });
 
-  it('reads authoritative paid-at plus twelve-month commit expiry', async () => {
+  it('reads authoritative paid-at plus exact released balance and twelve-month commit expiry', async () => {
     const commit = {
       access_schedule: {
         schedule_items: [
@@ -2742,6 +2742,7 @@ describe('MetronomeClientService', () => {
       },
       applicable_product_ids: ['charge-product-id'],
       archived_at: undefined,
+      balance: 5_000,
       contract: { id: 'contract-id' },
       custom_fields: {
         myah_funding_action_id: 'funding-action-id',
@@ -2801,7 +2802,18 @@ describe('MetronomeClientService', () => {
       customer_id: 'customer-id',
       include_archived: true,
       include_contract_commits: true,
+      include_balance: true,
     });
+
+    for (const balance of [undefined, 0, 4_999]) {
+      list.mockResolvedValue({
+        data: [{ ...commit, balance }],
+        next_page: '',
+      });
+      await expect(
+        service.assertPaymentGatedPrepaidCommitExpiry(input),
+      ).rejects.toThrow('Metronome payment-gated commit expiry proof is invalid');
+    }
 
     commit.invoice_schedule.schedule_items[0].invoice_id = 'other-invoice-id';
     list.mockResolvedValue({ data: [commit], next_page: '' });

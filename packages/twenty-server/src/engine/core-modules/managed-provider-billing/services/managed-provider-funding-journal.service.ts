@@ -526,7 +526,7 @@ export class ManagedProviderFundingJournalService {
          WHERE ${
            customerPaymentOnly
              ? `\"actionType\" = 'PREPAID_COMMIT' AND \"state\" IN
-               ('RECONCILIATION_REQUIRED', 'PAYMENT_PENDING',
+               ('PENDING', 'RECONCILIATION_REQUIRED', 'PAYMENT_PENDING',
                 'PAYMENT_ACTION_REQUIRED', 'METRONOME_EDIT_RECORDED')`
              : `\"state\" IN ('RECONCILIATION_REQUIRED', 'PAYMENT_PENDING',
                'PAYMENT_ACTION_REQUIRED', 'METRONOME_EDIT_RECORDED',

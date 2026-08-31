@@ -770,34 +770,35 @@ export class ManagedProviderCustomerFundingService {
     }
 
     if (
+      external.status === 'PAYMENT_FAILED' ||
+      external.status === 'UNCOLLECTIBLE' ||
+      external.status === 'VOID' ||
+      external.status === 'DELETED' ||
+      external.status === 'INVALID_REQUEST_ERROR' ||
+      external.status === 'SKIPPED'
+    ) {
+      return await this.fundingJournal.transitionCompareAndSet({
+        expectedState: action.state,
+        id: action.id,
+        nextState: 'FAILED_DEFINITIVE',
+        patch: {
+          ...pendingPatch,
+          expiresAt: null,
+          failureCode: `METRONOME_${external.status}`,
+          nextReconciliationAt: null,
+        },
+        workspaceId: action.workspaceId,
+      });
+    }
+
+    if (
+      external.status !== 'PAID' ||
       external.stripeInvoiceId === null ||
       external.stripePaymentIntentId === null ||
       external.subtotalCents === null ||
       external.taxCents === null ||
       external.totalCents === null
     ) {
-      if (
-        external.status === 'PAYMENT_FAILED' ||
-        external.status === 'UNCOLLECTIBLE' ||
-        external.status === 'VOID' ||
-        external.status === 'DELETED' ||
-        external.status === 'INVALID_REQUEST_ERROR' ||
-        external.status === 'SKIPPED'
-      ) {
-        return await this.fundingJournal.transitionCompareAndSet({
-          expectedState: action.state,
-          id: action.id,
-          nextState: 'FAILED_DEFINITIVE',
-          patch: {
-            ...pendingPatch,
-            expiresAt: null,
-            failureCode: `METRONOME_${external.status}`,
-            nextReconciliationAt: null,
-          },
-          workspaceId: action.workspaceId,
-        });
-      }
-
       return await this.fundingJournal.transitionCompareAndSet({
         expectedState: action.state,
         id: action.id,

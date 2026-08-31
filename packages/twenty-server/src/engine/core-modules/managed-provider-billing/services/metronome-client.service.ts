@@ -983,6 +983,7 @@ export class MetronomeClientService {
       client,
       input.customerId,
       input.commitmentId,
+      true,
     );
     const startingAt = toMetronomeHourBoundary(input.purchaseAt).toISOString();
     const expiresAt = this.addCalendarMonths(input.paidAt, 12);
@@ -1006,6 +1007,7 @@ export class MetronomeClientService {
     );
 
     if (
+      commit.balance !== input.principalCents ||
       !this.hasPaymentGatedPrepaidCommitFundingEvidence(commit, input) ||
       details?.accessScheduleItemId !== input.accessScheduleItemId ||
       details.invoiceId !== input.invoiceId
@@ -1073,6 +1075,17 @@ export class MetronomeClientService {
   async voidPaymentGatedPrepaidInvoice(
     input: MetronomePaymentGatedPrepaidInvoiceInput,
   ): Promise<{ invoiceId: string }> {
+    const initialInvoice =
+      await this.readPaymentGatedPrepaidCommitInvoice(input);
+
+    if (initialInvoice.status === 'VOID') {
+      return { invoiceId: initialInvoice.metronomeInvoiceId };
+    }
+
+    if (initialInvoice.status !== 'FINALIZED') {
+      throw new Error('Metronome payment invoice void precondition is invalid');
+    }
+
     const client = this.getClient();
     const response = await client.v1.invoices.void(
       { id: input.invoiceId },
@@ -2202,6 +2215,7 @@ export class MetronomeClientService {
     client: Metronome,
     customerId: string,
     commitmentId?: string,
+    includeBalance = false,
   ): Promise<Commit[]> {
     const commits: Commit[] = [];
     const seenPageCursors = new Set<string>();
@@ -2213,6 +2227,7 @@ export class MetronomeClientService {
           ...(commitmentId === undefined ? {} : { commit_id: commitmentId }),
           customer_id: customerId,
           include_archived: true,
+          ...(includeBalance ? { include_balance: true } : {}),
           include_contract_commits: true,
           ...(nextPage === undefined ? {} : { next_page: nextPage }),
         }),
