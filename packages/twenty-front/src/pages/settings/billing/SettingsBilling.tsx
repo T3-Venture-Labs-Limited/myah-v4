@@ -99,7 +99,9 @@ const newIdempotencyKey = (): string =>
   globalThis.crypto?.randomUUID?.() ??
   `billing-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillingProps) => {
+export const SettingsBilling = ({
+  viewModel: suppliedViewModel,
+}: SettingsBillingProps) => {
   const { t } = useLingui();
   const navigateSettings = useNavigateSettings();
   const { enqueueErrorSnackBar } = useSnackBar();
@@ -177,63 +179,60 @@ export const SettingsBilling = ({ viewModel: suppliedViewModel }: SettingsBillin
       : !status.available
         ? { state: 'unavailable', reason: 'notConnected' }
         : {
-          availableBalanceCents: toSafeCents(status.prepaidBalanceCents),
-          customerFundingAvailable: status.customerFundingAvailable,
-          customerFundingBillingSummary:
-            status.customerFundingBillingSummary,
-          customerFundingPaymentMethodReady:
-            status.customerFundingPaymentMethodReady,
-          customerFundingPresets: status.customerFundingPresets
-            .map((preset) => ({
-              id: preset.id as
-                | 'AI_25_USD'
-                | 'AI_50_USD'
-                | 'AI_100_USD',
-              principalCents: toSafeCents(preset.principalCents),
-            }))
-            .filter(
-              (
-                preset,
-              ): preset is {
-                id: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD';
-                principalCents: number;
-              } => preset.principalCents !== null,
-            ),
-          fundingHistory: status.customerFundingHistory
-            .map((entry) => ({
-              ...entry,
-              collectedTotalCents: toSafeCents(entry.collectedTotalCents),
-              principalCents: toSafeCents(entry.principalCents),
-              taxCents: toSafeCents(entry.taxCents),
-            }))
-            .filter(
-              (entry): entry is typeof entry & { principalCents: number } =>
-                entry.principalCents !== null,
-            ),
-          isSubmitting: isSubmitting || pendingActionId !== null,
-          retryPresetId: pendingFundingRequest?.presetId ?? null,
-          pendingOperationCount: status.pendingOperationCount,
-          reconciliationRequiredOperationCount:
-            status.reconciliationRequiredOperationCount,
-          state: 'ready',
-        };
+            availableBalanceCents: toSafeCents(status.prepaidBalanceCents),
+            customerFundingAvailable: status.customerFundingAvailable,
+            customerFundingBillingSummary: status.customerFundingBillingSummary,
+            customerFundingPaymentMethodReady:
+              status.customerFundingPaymentMethodReady,
+            customerFundingPresets: status.customerFundingPresets
+              .map((preset) => ({
+                id: preset.id as 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD',
+                principalCents: toSafeCents(preset.principalCents),
+              }))
+              .filter(
+                (
+                  preset,
+                ): preset is {
+                  id: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD';
+                  principalCents: number;
+                } => preset.principalCents !== null,
+              ),
+            fundingHistory: status.customerFundingHistory
+              .map((entry) => ({
+                ...entry,
+                collectedTotalCents: toSafeCents(entry.collectedTotalCents),
+                principalCents: toSafeCents(entry.principalCents),
+                taxCents: toSafeCents(entry.taxCents),
+              }))
+              .filter(
+                (entry): entry is typeof entry & { principalCents: number } =>
+                  entry.principalCents !== null,
+              ),
+            isSubmitting: isSubmitting || pendingActionId !== null,
+            retryPresetId: pendingFundingRequest?.presetId ?? null,
+            pendingOperationCount: status.pendingOperationCount,
+            reconciliationRequiredOperationCount:
+              status.reconciliationRequiredOperationCount,
+            state: 'ready',
+          };
   const viewModel = suppliedViewModel ?? fetchedViewModel;
 
   const showError = (error: unknown) => {
     if (CombinedGraphQLErrors.is(error)) {
       enqueueErrorSnackBar({ apolloError: error });
     } else {
-      enqueueErrorSnackBar({ message: t`Billing action could not be completed.` });
+      enqueueErrorSnackBar({
+        message: t`Billing action could not be completed.`,
+      });
     }
   };
   const submitFunding = async (
     presetId: 'AI_25_USD' | 'AI_50_USD' | 'AI_100_USD',
   ) => {
-    const request =
-      pendingFundingRequest ?? {
-        idempotencyKey: newIdempotencyKey(),
-        presetId,
-      };
+    const request = pendingFundingRequest ?? {
+      idempotencyKey: newIdempotencyKey(),
+      presetId,
+    };
 
     setPendingFundingRequest(request);
     setIsSubmitting(true);

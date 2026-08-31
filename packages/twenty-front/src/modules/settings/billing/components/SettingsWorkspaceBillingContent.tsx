@@ -256,10 +256,13 @@ const ManagedEmailSubscriptions = ({
             </thead>
             <tbody>
               {viewModel.subscriptions.map((subscription) => (
-                <tr key={`${subscription.productKey}:${subscription.resourceIds.join(':')}`}>
+                <tr
+                  key={`${subscription.productKey}:${subscription.resourceIds.join(':')}`}
+                >
                   <td>{managedEmailProductLabel(subscription.productKey)}</td>
                   <td>
-                    {subscription.quantity} · {subscription.resourceLabels.join(', ')}
+                    {subscription.quantity} ·{' '}
+                    {subscription.resourceLabels.join(', ')}
                   </td>
                   <td>{formatUsdCents(subscription.unitPriceCents)}</td>
                   <td>{formatUsdCents(subscription.recurringAmountCents)}</td>
@@ -332,7 +335,9 @@ const PaymentSummary = ({
                 </strong>
               )}
               {summary.name !== null ? <span>{summary.name}</span> : null}
-              {addressText !== '' ? <StyledMuted>{addressText}</StyledMuted> : null}
+              {addressText !== '' ? (
+                <StyledMuted>{addressText}</StyledMuted>
+              ) : null}
               {summary.taxId !== null ? (
                 <StyledMuted>
                   {t`Tax ID: ${summary.taxId.type}${summary.taxId.country === null ? '' : ` (${summary.taxId.country})`}`}
@@ -406,7 +411,11 @@ const FundingHistory = ({
                 <td>
                   <StyledActions>
                     {entry.invoiceUrl !== null ? (
-                      <a href={entry.invoiceUrl} target="_blank" rel="noreferrer">
+                      <a
+                        href={entry.invoiceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         {t`Invoice`}
                       </a>
                     ) : null}
@@ -437,9 +446,8 @@ export const SettingsWorkspaceBillingContent = ({
   onRequestTopUp,
   viewModel,
 }: SettingsWorkspaceBillingContentProps) => {
-  const [selectedPresetId, setSelectedPresetId] = useState<
-    WorkspaceBillingPreset['id']
-  >('AI_25_USD');
+  const [selectedPresetId, setSelectedPresetId] =
+    useState<WorkspaceBillingPreset['id']>('AI_25_USD');
   const managedEmail = (
     <ManagedEmailSubscriptions
       viewModel={managedEmailSubscriptions}
@@ -479,8 +487,7 @@ export const SettingsWorkspaceBillingContent = ({
   }
 
   const selectedPreset =
-    viewModel.retryPresetId === undefined ||
-    viewModel.retryPresetId === null
+    viewModel.retryPresetId === undefined || viewModel.retryPresetId === null
       ? (viewModel.customerFundingPresets.find(
           (preset) => preset.id === selectedPresetId,
         ) ?? viewModel.customerFundingPresets[0])

@@ -186,7 +186,9 @@ export const ACKNOWLEDGE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION = gql`
   mutation AcknowledgeManagedProviderCustomerFundingPaymentAction(
     $actionId: String!
   ) {
-    acknowledgeManagedProviderCustomerFundingPaymentAction(actionId: $actionId) {
+    acknowledgeManagedProviderCustomerFundingPaymentAction(
+      actionId: $actionId
+    ) {
       ...ManagedProviderCustomerFundingItem
     }
   }

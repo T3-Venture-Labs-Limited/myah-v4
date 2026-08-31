@@ -212,13 +212,9 @@ describe('SettingsWorkspaceBillingContent fixed AI top-ups', () => {
     expect(screen.getByRole('button', { name: '$25' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '$50' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '$100' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/plus applicable tax/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/plus applicable tax/i)).toBeInTheDocument();
     expect(screen.getByText(/expires 12 months/i)).toBeInTheDocument();
-    expect(
-      screen.queryByText(/automatic top-up/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/automatic top-up/i)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/online top-ups coming soon/i),
     ).not.toBeInTheDocument();

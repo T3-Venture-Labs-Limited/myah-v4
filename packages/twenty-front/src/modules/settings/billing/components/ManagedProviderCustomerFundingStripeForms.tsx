@@ -153,12 +153,9 @@ export const ManagedProviderCustomerFundingPaymentForm = ({
   });
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const set = (field: keyof CustomerFundingBillingDetails, value: string) => {
-    const isOptional = [
-      'line2',
-      'state',
-      'taxIdType',
-      'taxIdValue',
-    ].includes(field);
+    const isOptional = ['line2', 'state', 'taxIdType', 'taxIdValue'].includes(
+      field,
+    );
 
     setDetails((current) => ({
       ...current,
