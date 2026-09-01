@@ -10,10 +10,6 @@ import { Provider } from 'jotai';
 
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { MyahCampaignAgent } from '@/page-layout/components/MyahCampaignAgent';
-import {
-  PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
-  type PageLayoutBeforeTabChangeBrowserEventDetail,
-} from '@/page-layout/constants/PageLayoutBeforeTabChangeBrowserEvent';
 import { resetJotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 
 const mockUpdateOneRecord = jest.fn();
@@ -187,6 +183,7 @@ jest.mock(
       fieldName,
       objectNameSingular,
       onBodyChange,
+      placeholder,
       recordId,
       shouldPersistChanges,
       showFormattingControls,
@@ -195,6 +192,7 @@ jest.mock(
       fieldName: string;
       objectNameSingular: string;
       onBodyChange?: (blocknote: string) => void;
+      placeholder?: string;
       recordId: string;
       shouldPersistChanges?: boolean;
       showFormattingControls?: boolean;
@@ -203,6 +201,7 @@ jest.mock(
         data-editor-min-height={editorMinHeight}
         data-field-name={fieldName}
         data-object-name={objectNameSingular}
+        data-placeholder={placeholder}
         data-record-id={recordId}
         data-should-persist={shouldPersistChanges}
         data-show-formatting-controls={showFormattingControls}
@@ -229,12 +228,7 @@ const renderAgent = (
   }
   const view = render(
     <Provider store={store}>
-      <MyahCampaignAgent
-        campaignId="campaign-1"
-        isInSidePanel={false}
-        tabListInstanceId="tab-list-1"
-        title="Campaign agent"
-      />
+      <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
     </Provider>,
   );
 
@@ -288,6 +282,7 @@ describe('MyahCampaignAgent', () => {
       expect(within(group).getByText(field.description)).toBeVisible();
       expect(editor).toHaveAttribute('data-editor-min-height', '80');
       expect(editor).toHaveAttribute('data-object-name', 'campaign');
+      expect(editor).toHaveAttribute('data-placeholder', 'Enter instructions');
       expect(editor).toHaveAttribute('data-record-id', 'campaign-1');
       expect(editor).toHaveAttribute('data-should-persist', 'false');
       expect(editor).toHaveAttribute('data-show-formatting-controls', 'false');
@@ -325,6 +320,39 @@ describe('MyahCampaignAgent', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
+  it('syncs externally changed clean fields without clobbering a dirty draft', async () => {
+    const { store } = renderAgent();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit campaignBrief' }));
+
+    await act(async () => {
+      store.set(recordStoreFamilyState.atomFamily('campaign-1'), {
+        ...persistedCampaign,
+        communicationGuidelines: {
+          blocknote: JSON.stringify([
+            { content: 'Externally updated guidelines', type: 'paragraph' },
+          ]),
+          markdown: null,
+        },
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateOneRecord).toHaveBeenCalledWith({
+        idToUpdate: 'campaign-1',
+        objectNameSingular: 'campaign',
+        updateOneRecordInput: {
+          campaignBrief: {
+            blocknote: draftBody('campaignBrief'),
+            markdown: null,
+          },
+        },
+      });
+    });
+  });
+
   it('keeps dirty drafts when Save fails', async () => {
     mockUpdateOneRecord.mockRejectedValueOnce(new Error('Write denied'));
     renderAgent();
@@ -356,12 +384,7 @@ describe('MyahCampaignAgent', () => {
     mockBlockerState = 'blocked';
     view.rerender(
       <Provider store={store}>
-        <MyahCampaignAgent
-          campaignId="campaign-1"
-          isInSidePanel={false}
-          tabListInstanceId="tab-list-1"
-          title="Campaign agent"
-        />
+        <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
       </Provider>,
     );
 
@@ -383,57 +406,6 @@ describe('MyahCampaignAgent', () => {
     expect(mockCloseModal).toHaveBeenCalled();
   });
 
-  it('guards direct non-link tab changes until the draft is discarded', async () => {
-    let didContinueTabChange = false;
-    renderAgent();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Edit additionalNotes' }),
-    );
-
-    const unrelatedTabChangeEvent =
-      new CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>(
-        PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
-        {
-          cancelable: true,
-          detail: {
-            continueTabChange: jest.fn(),
-            isInSidePanel: true,
-            tabListInstanceId: 'other-tab-list',
-          },
-        },
-      );
-
-    expect(window.dispatchEvent(unrelatedTabChangeEvent)).toBe(true);
-    expect(mockOpenModal).not.toHaveBeenCalled();
-
-    const beforeTabChangeEvent =
-      new CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>(
-        PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
-        {
-          cancelable: true,
-          detail: {
-            continueTabChange: () => {
-              didContinueTabChange = true;
-            },
-            isInSidePanel: false,
-            tabListInstanceId: 'tab-list-1',
-          },
-        },
-      );
-
-    expect(window.dispatchEvent(beforeTabChangeEvent)).toBe(false);
-    expect(didContinueTabChange).toBe(false);
-    await screen.findByRole('button', { name: 'Discard changes' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
-
-    await waitFor(() => {
-      expect(didContinueTabChange).toBe(true);
-    });
-    expect(mockCloseModal).toHaveBeenCalled();
-  });
-
   it('blocks in-app navigation and browser unload while dirty', async () => {
     const { store, view } = renderAgent();
 
@@ -448,12 +420,7 @@ describe('MyahCampaignAgent', () => {
     mockBlockerState = 'blocked';
     view.rerender(
       <Provider store={store}>
-        <MyahCampaignAgent
-          campaignId="campaign-1"
-          isInSidePanel={false}
-          tabListInstanceId="tab-list-1"
-          title="Campaign agent"
-        />
+        <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
       </Provider>,
     );
 
@@ -465,7 +432,11 @@ describe('MyahCampaignAgent', () => {
     expect(mockReset).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
-    expect(mockProceed).toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(mockProceed).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
   });
 
   it.each([

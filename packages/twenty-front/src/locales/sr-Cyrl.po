@@ -8853,6 +8853,11 @@ msgstr "Унесите филтер"
 msgid "Enter in Unicode format"
 msgstr "Унесите у формату Уникода"
 
+#. js-lingui-id: fFd9X1
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Enter instructions"
+msgstr ""
+
 #. js-lingui-id: 9CjMQ7
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableDatabaseInput.tsx
 msgid "Enter JSON array"
@@ -18785,6 +18790,7 @@ msgid "Saturday"
 msgstr "Субота"
 
 #. js-lingui-id: tfDRzk
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
 #: src/modules/page-layout/components/MyahCampaignAgent.tsx
 #: src/modules/settings/components/SaveAndCancelButtons/SaveButton.tsx
 #: src/pages/settings/data-model/new-field/SettingsObjectNewFieldConfigure.tsx

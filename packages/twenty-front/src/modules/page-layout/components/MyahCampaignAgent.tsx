@@ -8,10 +8,6 @@ import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { RichTextFieldEditor } from '@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useRecordShowContainerData } from '@/object-record/record-show/hooks/useRecordShowContainerData';
-import {
-  PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
-  type PageLayoutBeforeTabChangeBrowserEventDetail,
-} from '@/page-layout/constants/PageLayoutBeforeTabChangeBrowserEvent';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
@@ -32,6 +28,14 @@ const CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID =
 
 type CampaignAgentFieldName = (typeof CAMPAIGN_AGENT_FIELD_NAMES)[number];
 type CampaignAgentBodies = Record<CampaignAgentFieldName, string>;
+type CampaignAgentEditorVersions = Record<CampaignAgentFieldName, number>;
+const INITIAL_CAMPAIGN_AGENT_EDITOR_VERSIONS: CampaignAgentEditorVersions = {
+  additionalNotes: 0,
+  campaignBrief: 0,
+  communicationGuidelines: 0,
+  escalationBoundaries: 0,
+  replyRules: 0,
+};
 type CampaignAgentRichTextValue = {
   blocknote?: string | null;
   markdown?: string | null;
@@ -159,18 +163,14 @@ const StyledSkeletonEditor = styled(StyledSkeletonBlock)`
 type MyahCampaignAgentEditorProps = {
   campaignAgentFields: CampaignAgentField[];
   campaignId: string;
-  isInSidePanel: boolean;
   persistedBodies: CampaignAgentBodies;
-  tabListInstanceId: string;
   title: string;
 };
 
 const MyahCampaignAgentEditor = ({
   campaignAgentFields,
   campaignId,
-  isInSidePanel,
   persistedBodies,
-  tabListInstanceId,
   title,
 }: MyahCampaignAgentEditorProps) => {
   const { updateOneRecord } = useUpdateOneRecord();
@@ -180,10 +180,14 @@ const MyahCampaignAgentEditor = ({
     useState<CampaignAgentBodies>(persistedBodies);
   const [savedBodies, setSavedBodies] =
     useState<CampaignAgentBodies>(persistedBodies);
+  const [editorVersions, setEditorVersions] =
+    useState<CampaignAgentEditorVersions>(
+      INITIAL_CAMPAIGN_AGENT_EDITOR_VERSIONS,
+    );
   const [isSaving, setIsSaving] = useState(false);
-  const [pendingTabChange, setPendingTabChange] = useState<(() => void) | null>(
-    null,
-  );
+  const [pendingSavedBodies, setPendingSavedBodies] =
+    useState<CampaignAgentBodies | null>(null);
+  const unsavedChangesModalId = `${CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID}-${campaignId}`;
 
   const dirtyFieldNames = useMemo(
     () =>
@@ -194,6 +198,58 @@ const MyahCampaignAgentEditor = ({
   );
   const isDirty = dirtyFieldNames.length > 0;
   const blocker = useBlocker(isDirty);
+
+  useEffect(() => {
+    if (pendingSavedBodies) {
+      const hasRecordStoreSettled = CAMPAIGN_AGENT_FIELD_NAMES.every(
+        (fieldName) =>
+          persistedBodies[fieldName] === pendingSavedBodies[fieldName],
+      );
+
+      if (hasRecordStoreSettled) {
+        setPendingSavedBodies(null);
+      }
+
+      return;
+    }
+
+    const externallyChangedFieldNames = CAMPAIGN_AGENT_FIELD_NAMES.filter(
+      (fieldName) => persistedBodies[fieldName] !== savedBodies[fieldName],
+    );
+
+    if (externallyChangedFieldNames.length === 0) {
+      return;
+    }
+
+    const cleanExternallyChangedFieldNames = externallyChangedFieldNames.filter(
+      (fieldName) => draftBodies[fieldName] === savedBodies[fieldName],
+    );
+
+    setSavedBodies(persistedBodies);
+
+    if (cleanExternallyChangedFieldNames.length === 0) {
+      return;
+    }
+
+    setDraftBodies((currentDraftBodies) => {
+      const nextDraftBodies = { ...currentDraftBodies };
+
+      for (const fieldName of cleanExternallyChangedFieldNames) {
+        nextDraftBodies[fieldName] = persistedBodies[fieldName];
+      }
+
+      return nextDraftBodies;
+    });
+    setEditorVersions((currentVersions) => {
+      const nextVersions = { ...currentVersions };
+
+      for (const fieldName of cleanExternallyChangedFieldNames) {
+        nextVersions[fieldName] += 1;
+      }
+
+      return nextVersions;
+    });
+  }, [draftBodies, pendingSavedBodies, persistedBodies, savedBodies]);
 
   useEffect(() => {
     if (!isDirty) {
@@ -211,61 +267,17 @@ const MyahCampaignAgentEditor = ({
   }, [isDirty]);
 
   useEffect(() => {
-    if (!isDirty) {
-      return;
+    if (blocker.state === 'blocked') {
+      openModal(unsavedChangesModalId);
     }
-
-    const handleBeforeTabChange = (event: Event) => {
-      const beforeTabChangeEvent =
-        event as CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>;
-
-      if (
-        beforeTabChangeEvent.detail.isInSidePanel !== isInSidePanel ||
-        beforeTabChangeEvent.detail.tabListInstanceId !== tabListInstanceId
-      ) {
-        return;
-      }
-
-      beforeTabChangeEvent.preventDefault();
-      setPendingTabChange(() => beforeTabChangeEvent.detail.continueTabChange);
-      openModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
-    };
-
-    window.addEventListener(
-      PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
-      handleBeforeTabChange,
-    );
-
-    return () =>
-      window.removeEventListener(
-        PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
-        handleBeforeTabChange,
-      );
-  }, [isDirty, isInSidePanel, openModal, tabListInstanceId]);
+  }, [blocker.state, openModal, unsavedChangesModalId]);
 
   useEffect(() => {
-    if (blocker.state === 'blocked') {
-      openModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
-    }
-  }, [blocker.state, openModal]);
-
-  useEffect(() => {
-    if (isDirty) {
-      return;
-    }
-
-    if (blocker.state === 'blocked') {
-      closeModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
+    if (!isDirty && blocker.state === 'blocked') {
+      closeModal(unsavedChangesModalId);
       blocker.proceed();
-      return;
     }
-
-    if (pendingTabChange) {
-      closeModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
-      setPendingTabChange(null);
-      pendingTabChange();
-    }
-  }, [blocker, closeModal, isDirty, pendingTabChange]);
+  }, [blocker, closeModal, isDirty, unsavedChangesModalId]);
 
   const handleSave = async () => {
     if (!isDirty || isSaving) {
@@ -284,6 +296,7 @@ const MyahCampaignAgentEditor = ({
     );
 
     setIsSaving(true);
+    setPendingSavedBodies(draftBodiesToSave);
 
     try {
       await updateOneRecord({
@@ -299,29 +312,30 @@ const MyahCampaignAgentEditor = ({
       enqueueErrorSnackBar({
         message: t`Campaign Agent settings could not be saved.`,
       });
+      setPendingSavedBodies(null);
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDiscardChanges = () => {
-    if (isSaving) {
+    if (isSaving || blocker.state !== 'blocked') {
       return;
     }
 
-    if (pendingTabChange) {
-      setDraftBodies(savedBodies);
-      return;
-    }
+    setDraftBodies(savedBodies);
+    setEditorVersions((currentVersions) => {
+      const nextVersions = { ...currentVersions };
 
-    if (blocker.state === 'blocked') {
-      blocker.proceed();
-    }
+      for (const fieldName of dirtyFieldNames) {
+        nextVersions[fieldName] += 1;
+      }
+
+      return nextVersions;
+    });
   };
 
   const handleKeepEditing = () => {
-    setPendingTabChange(null);
-
     if (blocker.state === 'blocked') {
       blocker.reset();
     }
@@ -352,6 +366,7 @@ const MyahCampaignAgentEditor = ({
                 <RichTextFieldEditor
                   editorMinHeight={80}
                   fieldName={fieldName}
+                  key={`${fieldName}-${editorVersions[fieldName]}`}
                   objectNameSingular="campaign"
                   onBodyChange={(blocknote) => {
                     setDraftBodies((currentDraftBodies) => ({
@@ -359,6 +374,7 @@ const MyahCampaignAgentEditor = ({
                       [fieldName]: blocknote,
                     }));
                   }}
+                  placeholder={t`Enter instructions`}
                   recordId={campaignId}
                   shouldPersistChanges={false}
                   showFormattingControls={false}
@@ -380,7 +396,7 @@ const MyahCampaignAgentEditor = ({
       <ConfirmationModal
         confirmButtonText={t`Discard changes`}
         loading={isSaving}
-        modalInstanceId={CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID}
+        modalInstanceId={unsavedChangesModalId}
         onClose={handleKeepEditing}
         onConfirmClick={handleDiscardChanges}
         subtitle={t`Your Campaign Agent changes have not been saved.`}
@@ -392,16 +408,12 @@ const MyahCampaignAgentEditor = ({
 
 type MyahCampaignAgentProps = {
   campaignId: string;
-  isInSidePanel: boolean;
-  tabListInstanceId: string;
   title: string;
 };
 
 export const MyahCampaignAgent = ({
   campaignId,
-  isInSidePanel,
   title,
-  tabListInstanceId,
 }: MyahCampaignAgentProps) => {
   const { objectMetadataItems } = useObjectMetadataItems();
   const { recordLoading } = useRecordShowContainerData({
@@ -450,10 +462,8 @@ export const MyahCampaignAgent = ({
       <MyahCampaignAgentEditor
         campaignAgentFields={campaignAgentFields}
         campaignId={campaignId}
-        isInSidePanel={isInSidePanel}
         key={campaignId}
         persistedBodies={persistedBodies}
-        tabListInstanceId={tabListInstanceId}
         title={title}
       />
     );

@@ -11,6 +11,9 @@ const mockBlockNoteEditor = {
   document: [{ content: 'Draft', type: 'paragraph' }],
   domElement: { blur: jest.fn() },
 };
+const mockUseCreateBlockNote = jest.fn(
+  (_options: unknown) => mockBlockNoteEditor,
+);
 
 const mockCampaignObjectMetadataItem = {
   fields: [{ id: 'campaign-brief-field', name: 'campaignBrief' }],
@@ -130,7 +133,7 @@ jest.mock('@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement', () => ({
 }));
 
 jest.mock('@blocknote/react', () => ({
-  useCreateBlockNote: () => mockBlockNoteEditor,
+  useCreateBlockNote: (options: unknown) => mockUseCreateBlockNote(options),
 }));
 
 jest.mock('use-debounce', () => ({
@@ -225,6 +228,7 @@ describe('RichTextFieldEditor', () => {
           fieldName="campaignBrief"
           objectNameSingular="campaign"
           onBodyChange={onBodyChange}
+          placeholder="Enter instructions"
           recordId={recordId}
           shouldPersistChanges={false}
           showFormattingControls={false}
@@ -241,6 +245,11 @@ describe('RichTextFieldEditor', () => {
     expect(screen.getByRole('button', { name: 'Change body' })).toHaveAttribute(
       'data-show-formatting-controls',
       'false',
+    );
+    expect(mockUseCreateBlockNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        placeholders: { default: 'Enter instructions' },
+      }),
     );
   });
 });

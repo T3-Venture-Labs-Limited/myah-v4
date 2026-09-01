@@ -41,6 +41,7 @@ type RichTextFieldEditorProps = {
   onBodyChange?: (blocknote: string) => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  placeholder?: string;
   editorRef?: React.MutableRefObject<
     typeof BLOCK_SCHEMA.BlockNoteEditor | null
   >;
@@ -57,6 +58,7 @@ export const RichTextFieldEditor = ({
   onBodyChange,
   onFocus: onFocusOverride,
   onBlur: onBlurOverride,
+  placeholder,
   editorRef,
   shouldPersistChanges = true,
   showFormattingControls,
@@ -209,7 +211,7 @@ export const RichTextFieldEditor = ({
       ? handleEditorBuiltInUploadFile
       : undefined,
     placeholders: {
-      default: t`Type '/' for commands, '@' for mentions`,
+      default: placeholder ?? t`Type '/' for commands, '@' for mentions`,
     },
   });
 

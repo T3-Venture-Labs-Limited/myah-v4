@@ -11,10 +11,10 @@ import { MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER } from '@/page-la
 import { MYAH_CREATOR_LIST_PAGE_LAYOUT_UNIVERSAL_IDENTIFIERS } from '@/page-layout/constants/MyahCreatorListPageLayoutUniversalIdentifiers';
 import { PageLayoutContentProvider } from '@/page-layout/contexts/PageLayoutContentContext';
 import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageLayoutOrThrow';
+import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
 import { usePageLayoutTabWithVisibleWidgetsOrThrow } from '@/page-layout/hooks/usePageLayoutTabWithVisibleWidgetsOrThrow';
 import { getTabLayoutMode } from '@/page-layout/utils/getTabLayoutMode';
 import { getWidgetConfigurationViewId } from '@/page-layout/utils/getWidgetConfigurationViewId';
-import { getTabListInstanceIdFromPageLayoutAndRecord } from '@/page-layout/utils/getTabListInstanceIdFromPageLayoutAndRecord';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 
 const MYAH_CAMPAIGN_INFLUENCERS_TAB_UNIVERSAL_IDENTIFIER =
@@ -34,13 +34,8 @@ export const PageLayoutMainContent = ({
     tab: activeTab,
     pageLayoutType: currentPageLayout.type,
   });
-  const { isInSidePanel, layoutType, targetRecordIdentifier } =
-    useLayoutRenderingContext();
-  const tabListInstanceId = getTabListInstanceIdFromPageLayoutAndRecord({
-    layoutType,
-    pageLayoutId: currentPageLayout.id,
-    targetRecordIdentifier,
-  });
+  const { isInSidePanel, targetRecordIdentifier } = useLayoutRenderingContext();
+  const isPageLayoutInEditMode = useIsPageLayoutInEditMode();
   const shouldRenderCampaignHome =
     targetRecordIdentifier?.targetObjectNameSingular === 'campaign' &&
     currentPageLayout.universalIdentifier ===
@@ -54,6 +49,8 @@ export const PageLayoutMainContent = ({
     activeTab.universalIdentifier ===
       MYAH_CAMPAIGN_OUTREACH_TAB_UNIVERSAL_IDENTIFIER;
   const shouldRenderCampaignAgent =
+    !isInSidePanel &&
+    !isPageLayoutInEditMode &&
     targetRecordIdentifier?.targetObjectNameSingular === 'campaign' &&
     currentPageLayout.universalIdentifier ===
       MYAH_CAMPAIGN_RECORD_PAGE_LAYOUT_UNIVERSAL_IDENTIFIER &&
@@ -97,8 +94,6 @@ export const PageLayoutMainContent = ({
       ) : shouldRenderCampaignAgent ? (
         <MyahCampaignAgent
           campaignId={targetRecordIdentifier.id}
-          isInSidePanel={isInSidePanel}
-          tabListInstanceId={tabListInstanceId}
           title={campaignAgentTitle}
         />
       ) : (

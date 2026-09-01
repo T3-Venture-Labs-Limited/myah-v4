@@ -25,6 +25,8 @@ let activeTab: {
   universalIdentifier: string;
   widgets?: Array<{ title?: string }>;
 };
+let isInSidePanel = false;
+let isPageLayoutInEditMode = false;
 let targetRecordIdentifier:
   | { id: string; targetObjectNameSingular: string }
   | undefined;
@@ -71,6 +73,10 @@ jest.mock('@/page-layout/hooks/useCurrentPageLayoutOrThrow', () => ({
   useCurrentPageLayoutOrThrow: () => ({ currentPageLayout }),
 }));
 
+jest.mock('@/page-layout/hooks/useIsPageLayoutInEditMode', () => ({
+  useIsPageLayoutInEditMode: () => isPageLayoutInEditMode,
+}));
+
 jest.mock(
   '@/page-layout/hooks/usePageLayoutTabWithVisibleWidgetsOrThrow',
   () => ({
@@ -83,7 +89,10 @@ jest.mock('@/page-layout/utils/getTabLayoutMode', () => ({
 }));
 
 jest.mock('@/ui/layout/contexts/LayoutRenderingContext', () => ({
-  useLayoutRenderingContext: () => ({ targetRecordIdentifier }),
+  useLayoutRenderingContext: () => ({
+    isInSidePanel,
+    targetRecordIdentifier,
+  }),
 }));
 jest.mock('@/page-layout/utils/getWidgetConfigurationViewId', () => ({
   getWidgetConfigurationViewId: (...args: unknown[]) =>
@@ -96,6 +105,8 @@ describe('PageLayoutMainContent', () => {
       type: 'RECORD_PAGE',
       universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
     };
+    isInSidePanel = false;
+    isPageLayoutInEditMode = false;
     activeTab = {
       layout: 'VERTICAL_LIST',
       title: 'Home',
@@ -263,6 +274,26 @@ describe('PageLayoutMainContent', () => {
       ).not.toBeInTheDocument();
     },
   );
+
+  it.each([
+    ['a side panel', () => (isInSidePanel = true)],
+    ['page-layout edit mode', () => (isPageLayoutInEditMode = true)],
+  ])('keeps native Agent content in %s', (_description, arrange) => {
+    arrange();
+    activeTab = {
+      ...activeTab,
+      title: 'Agent',
+      universalIdentifier: '0d213a1a-e001-496c-970e-e692968cf17c',
+      widgets: [{ title: 'Campaign agent' }],
+    };
+
+    render(<PageLayoutMainContent tabId="agent-tab-id" />);
+
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+    expect(
+      screen.queryByText(/Campaign agent integration:/),
+    ).not.toBeInTheDocument();
+  });
   it.each([
     {
       description: 'the Campaign Tasks tab',
