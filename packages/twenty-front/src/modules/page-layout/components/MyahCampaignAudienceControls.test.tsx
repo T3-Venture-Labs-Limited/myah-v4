@@ -528,11 +528,15 @@ describe('MyahCampaignAudienceControls', () => {
       screen.getByRole('button', { name: 'Select creator list' }),
     );
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Could not attach Creator List. Try again.',
-      ),
+    const attachError = await screen.findByRole('alert');
+    expect(attachError).toHaveTextContent(
+      'Could not attach Creator List. Try again.',
     );
+    const creatorListsSection = screen.getByTestId('creator-lists-section');
+    const tagContainer =
+      within(creatorListsSection).getByTestId('creator-list-tags');
+    expect(creatorListsSection).toContainElement(attachError);
+    expect(tagContainer).not.toContainElement(attachError);
     expect(mockOpenMultipleRecordPicker).toHaveBeenCalledTimes(2);
     expect(mockMultipleRecordPickerPerformSearch).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -782,11 +786,14 @@ describe('MyahCampaignAudienceControls', () => {
     );
 
     await waitFor(() => expect(refetchCandidates).toHaveBeenCalled());
-    expect(
-      screen.getByText(
-        'Approved additions were saved, but the view could not refresh.',
-      ),
-    ).toBeVisible();
+    const refreshError = screen.getByText(
+      'Approved additions were saved, but the view could not refresh.',
+    );
+    expect(refreshError).toBeVisible();
+    const creatorListTag = screen.getByTestId('creator-list-tag');
+    const creatorListChip = screen.getByTestId('creator-list-chip');
+    expect(creatorListTag).toContainElement(refreshError);
+    expect(creatorListChip).not.toContainElement(refreshError);
     expect(
       screen.queryByRole('button', { name: 'Approve selected additions' }),
     ).not.toBeInTheDocument();
