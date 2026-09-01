@@ -62,35 +62,40 @@ export class ImapSmtpMessageOutboundService implements MessageOutboundDriver {
     });
 
     if (isDefined(connectionParameters?.IMAP)) {
-      const imapClient = await this.imapClientProvider.getClient(
-        connectedAccount.id,
-      );
+      try {
+        const imapClient = await this.imapClientProvider.getClient(
+          connectedAccount.id,
+        );
 
-      const messageChannel = await this.messageChannelRepository.findOne({
-        where: {
-          connectedAccountId: connectedAccount.id,
-          handle: handle,
-        },
-      });
+        try {
+          const messageChannel = await this.messageChannelRepository.findOne({
+            where: {
+              connectedAccountId: connectedAccount.id,
+              handle: handle,
+            },
+          });
 
-      let sentFolder: MessageFolderEntity | null = null;
+          const sentFolder = isDefined(messageChannel)
+            ? await this.messageFolderRepository.findOne({
+                where: {
+                  messageChannelId: messageChannel.id,
+                  isSentFolder: true,
+                },
+              })
+            : null;
+          const sentFolderPath = getImapFolderPath(sentFolder?.externalId);
 
-      if (isDefined(messageChannel)) {
-        sentFolder = await this.messageFolderRepository.findOne({
-          where: {
-            messageChannelId: messageChannel.id,
-            isSentFolder: true,
-          },
-        });
+          if (isDefined(sentFolderPath)) {
+            await imapClient.append(sentFolderPath, messageBuffer);
+          }
+        } finally {
+          await this.imapClientProvider.closeClient(imapClient);
+        }
+      } catch {
+        this.logger.warn(
+          'Failed to copy an accepted SMTP message to the IMAP Sent folder',
+        );
       }
-
-      const sentFolderPath = getImapFolderPath(sentFolder?.externalId);
-
-      if (isDefined(sentFolderPath)) {
-        await imapClient.append(sentFolderPath, messageBuffer);
-      }
-
-      await this.imapClientProvider.closeClient(imapClient);
     }
 
     return {

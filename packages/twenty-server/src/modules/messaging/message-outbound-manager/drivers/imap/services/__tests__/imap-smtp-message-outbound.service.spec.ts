@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { type Repository } from 'typeorm';
 
@@ -41,17 +42,25 @@ describe('ImapSmtpMessageOutboundService', () => {
     getClient: jest.fn().mockResolvedValue(imapClient),
     closeClient,
   } as unknown as ImapClientProvider;
-  const smtpClientProvider = {} as SmtpClientProvider;
+  const sendMail = jest.fn();
+  const smtpClientProvider = {
+    getClient: jest.fn().mockResolvedValue({ sendMail }),
+  } as unknown as SmtpClientProvider;
   const draftsFolderService = {
     findOrCreateDraftsFolder: jest.fn().mockResolvedValue({ path: 'Drafts' }),
   } as unknown as ImapFindDraftsFolderService;
-  const messageChannelRepository = {} as Repository<MessageChannelEntity>;
-  const messageFolderRepository = {} as Repository<MessageFolderEntity>;
+  const messageChannelRepository = {
+    findOne: jest.fn().mockResolvedValue({ id: 'message-channel-id' }),
+  } as unknown as Repository<MessageChannelEntity>;
+  const messageFolderRepository = {
+    findOne: jest.fn().mockResolvedValue({ externalId: 'Sent:1' }),
+  } as unknown as Repository<MessageFolderEntity>;
 
   let service: ImapSmtpMessageOutboundService;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sendMail.mockResolvedValue({ accepted: ['recipient@example.com'] });
     append.mockResolvedValue({ uid: 42 });
     getMailboxLock.mockResolvedValue({ release: releaseLock });
     draftsFolderService.findOrCreateDraftsFolder = jest
@@ -64,6 +73,42 @@ describe('ImapSmtpMessageOutboundService', () => {
       draftsFolderService,
       messageChannelRepository,
       messageFolderRepository,
+    );
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('keeps SMTP acceptance when the best-effort IMAP Sent copy fails', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    append.mockRejectedValueOnce(new Error('IMAP append failed'));
+
+    await expect(
+      service.sendMessage(
+        {
+          to: 'recipient@example.com',
+          subject: 'Subject',
+          body: 'Body',
+          html: 'Body',
+          attachments: [],
+        },
+        buildConnectedAccount(),
+      ),
+    ).resolves.toEqual({
+      headerMessageId: '<compiled-draft@example.com>',
+    });
+
+    expect(sendMail).toHaveBeenCalledWith({
+      from: 'sender@example.com',
+      to: 'recipient@example.com',
+      cc: undefined,
+      bcc: undefined,
+      raw: MOCKED_EMAIL_BUFFER,
+    });
+    expect(closeClient).toHaveBeenCalledWith(imapClient);
+    expect(warn).toHaveBeenCalledWith(
+      'Failed to copy an accepted SMTP message to the IMAP Sent folder',
     );
   });
 
