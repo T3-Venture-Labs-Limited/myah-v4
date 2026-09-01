@@ -17,6 +17,7 @@ export type RecordIndexOpenRequest = {
 
 export type RecordIndexEmbeddedSurfaceOptions = {
   hidePageHeader?: boolean;
+  showInformationBanner?: boolean;
   hideAddNew?: boolean;
   toolbarAction?: ReactNode;
   compactTable?: boolean;

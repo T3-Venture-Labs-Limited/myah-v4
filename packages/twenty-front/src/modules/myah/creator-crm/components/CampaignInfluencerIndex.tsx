@@ -308,6 +308,7 @@ export const CampaignInfluencerIndex = ({
           hideAddNew: true,
           compactTable: true,
           hidePageHeader: true,
+          showInformationBanner: false,
           hideQueryOnlyRecordFilters: true,
           hideViewPicker: true,
           hideCurrentRecordFilter: {

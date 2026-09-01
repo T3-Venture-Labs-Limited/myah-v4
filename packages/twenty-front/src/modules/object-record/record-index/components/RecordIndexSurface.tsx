@@ -213,6 +213,9 @@ const RecordIndexSurfaceInstance = ({
                     title={headerTitle ?? objectMetadataItem.labelPlural}
                   />
                   <PageCardLayout
+                    showInformationBanner={
+                      embeddedSurfaceOptions?.showInformationBanner
+                    }
                     header={
                       embeddedSurfaceOptions?.hidePageHeader ? undefined : (
                         <RecordIndexPageHeader
