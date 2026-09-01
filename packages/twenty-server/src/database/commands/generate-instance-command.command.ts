@@ -111,6 +111,7 @@ export class GenerateInstanceCommandCommand extends CommandRunner {
       return;
     }
 
+    this.assertClassNotRegistered(result.className);
     const filePath = path.join(versionDir, result.fileName);
 
     fs.writeFileSync(filePath, result.fileTemplate);
@@ -131,6 +132,20 @@ export class GenerateInstanceCommandCommand extends CommandRunner {
     const versionSlug = version.split('.').slice(0, 2).join('-');
 
     return path.join(UPGRADE_VERSION_COMMAND_DIR, versionSlug);
+  }
+
+  private assertClassNotRegistered(className: string): void {
+    const filePath = path.join(
+      UPGRADE_VERSION_COMMAND_DIR,
+      'instance-commands.constant.ts',
+    );
+    const content = fs.readFileSync(filePath, 'utf-8');
+
+    if (content.includes(className)) {
+      throw new Error(
+        `${className} is already registered in instance-commands.constant.ts`,
+      );
+    }
   }
 
   private appendToInstanceCommandsConstant(
