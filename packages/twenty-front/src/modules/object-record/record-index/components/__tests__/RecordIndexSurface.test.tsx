@@ -35,6 +35,23 @@ let deferContextStoreInitialization = false;
 let mockInitializeContextStore: (() => void) | undefined;
 const mockQueryOnlyRecordFilterWrites = jest.fn();
 const mockRecordIndexPageHeader = jest.fn();
+type MockPageCardLayoutProps = {
+  children: React.ReactNode;
+  header?: React.ReactNode;
+  secondaryBar: React.ReactNode;
+  showInformationBanner?: boolean;
+};
+const mockPageCardLayout = jest.fn(
+  ({ children, header, secondaryBar }: MockPageCardLayoutProps) => (
+    <>
+      {header === undefined || header === null ? null : (
+        <div data-testid="page-header">{header}</div>
+      )}
+      {secondaryBar}
+      {children}
+    </>
+  ),
+);
 
 const creatorObjectMetadataItem = {
   id: 'creator-object',
@@ -352,23 +369,7 @@ jest.mock(
 );
 
 jest.mock('@/ui/layout/page/components/PageCardLayout', () => ({
-  PageCardLayout: ({
-    children,
-    header,
-    secondaryBar,
-  }: {
-    children: React.ReactNode;
-    header?: React.ReactNode;
-    secondaryBar: React.ReactNode;
-  }) => (
-    <>
-      {header === undefined || header === null ? null : (
-        <div data-testid="page-header">{header}</div>
-      )}
-      {secondaryBar}
-      {children}
-    </>
-  ),
+  PageCardLayout: (props: MockPageCardLayoutProps) => mockPageCardLayout(props),
 }));
 
 jest.mock('@/ui/utilities/page-title/components/PageTitleEffect', () => ({
@@ -417,6 +418,7 @@ describe('RecordIndexSurface', () => {
     mockViewBar.mockClear();
     hasCurrentViewNonReadableFields = false;
     mockRecordIndexPageHeader.mockClear();
+    mockPageCardLayout.mockClear();
     deferContextStoreInitialization = false;
     mockInitializeContextStore = undefined;
   });
@@ -522,6 +524,28 @@ describe('RecordIndexSurface', () => {
 
     expect(screen.queryByTestId('page-header')).not.toBeInTheDocument();
     expect(mockRecordIndexPageHeader).not.toHaveBeenCalled();
+  });
+
+  it('forwards information-banner suppression to an embedded surface', async () => {
+    renderSurface(
+      <RecordIndexSurface
+        contextStoreInstanceId="campaign-influencers-index"
+        objectNameSingular="creator"
+        viewId="creator-default-view"
+        indexIdentifierUrl={creatorShowUrl}
+        embeddedSurfaceOptions={{ showInformationBanner: false }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecordIndexContainer).toHaveBeenCalled();
+    });
+
+    expect(mockPageCardLayout).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        showInformationBanner: false,
+      }),
+    );
   });
   it('hides the embedded view-picker title while retaining native toolbar controls', async () => {
     renderSurface(

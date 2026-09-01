@@ -68,6 +68,7 @@ const mockRecordIndexSurface = jest.fn(
       hideAddNew?: boolean;
       compactTable?: boolean;
       hidePageHeader?: boolean;
+      showInformationBanner?: boolean;
       hideQueryOnlyRecordFilters?: boolean;
       hideViewPicker?: boolean;
       hideCurrentRecordFilter?: {
@@ -389,6 +390,7 @@ describe('CampaignInfluencerIndex', () => {
         hideAddNew: true,
         compactTable: true,
         hidePageHeader: true,
+        showInformationBanner: false,
         hideQueryOnlyRecordFilters: true,
         hideViewPicker: true,
         hideCurrentRecordFilter: {
