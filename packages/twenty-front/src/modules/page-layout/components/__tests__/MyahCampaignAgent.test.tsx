@@ -229,7 +229,12 @@ const renderAgent = (
   }
   const view = render(
     <Provider store={store}>
-      <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
+      <MyahCampaignAgent
+        campaignId="campaign-1"
+        isInSidePanel={false}
+        tabListInstanceId="tab-list-1"
+        title="Campaign agent"
+      />
     </Provider>,
   );
 
@@ -351,7 +356,12 @@ describe('MyahCampaignAgent', () => {
     mockBlockerState = 'blocked';
     view.rerender(
       <Provider store={store}>
-        <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
+        <MyahCampaignAgent
+          campaignId="campaign-1"
+          isInSidePanel={false}
+          tabListInstanceId="tab-list-1"
+          title="Campaign agent"
+        />
       </Provider>,
     );
 
@@ -381,6 +391,22 @@ describe('MyahCampaignAgent', () => {
       screen.getByRole('button', { name: 'Edit additionalNotes' }),
     );
 
+    const unrelatedTabChangeEvent =
+      new CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>(
+        PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+        {
+          cancelable: true,
+          detail: {
+            continueTabChange: jest.fn(),
+            isInSidePanel: true,
+            tabListInstanceId: 'other-tab-list',
+          },
+        },
+      );
+
+    expect(window.dispatchEvent(unrelatedTabChangeEvent)).toBe(true);
+    expect(mockOpenModal).not.toHaveBeenCalled();
+
     const beforeTabChangeEvent =
       new CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>(
         PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
@@ -390,6 +416,8 @@ describe('MyahCampaignAgent', () => {
             continueTabChange: () => {
               didContinueTabChange = true;
             },
+            isInSidePanel: false,
+            tabListInstanceId: 'tab-list-1',
           },
         },
       );
@@ -420,7 +448,12 @@ describe('MyahCampaignAgent', () => {
     mockBlockerState = 'blocked';
     view.rerender(
       <Provider store={store}>
-        <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
+        <MyahCampaignAgent
+          campaignId="campaign-1"
+          isInSidePanel={false}
+          tabListInstanceId="tab-list-1"
+          title="Campaign agent"
+        />
       </Provider>,
     );
 

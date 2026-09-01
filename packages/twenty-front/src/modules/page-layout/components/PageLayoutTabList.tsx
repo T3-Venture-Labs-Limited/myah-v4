@@ -178,7 +178,11 @@ export const PageLayoutTabList = ({
           PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
           {
             cancelable: true,
-            detail: { continueTabChange },
+            detail: {
+              continueTabChange,
+              isInSidePanel: isInSidePanel === true,
+              tabListInstanceId: componentInstanceId,
+            },
           },
         );
 
@@ -186,7 +190,14 @@ export const PageLayoutTabList = ({
         continueTabChange();
       }
     },
-    [behaveAsLinks, isInSidePanel, navigate, setActiveTabId, onChangeTab],
+    [
+      behaveAsLinks,
+      componentInstanceId,
+      isInSidePanel,
+      navigate,
+      onChangeTab,
+      setActiveTabId,
+    ],
   );
 
   const selectTabFromDropdown = useCallback(

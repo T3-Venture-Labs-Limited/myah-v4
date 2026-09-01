@@ -159,14 +159,18 @@ const StyledSkeletonEditor = styled(StyledSkeletonBlock)`
 type MyahCampaignAgentEditorProps = {
   campaignAgentFields: CampaignAgentField[];
   campaignId: string;
+  isInSidePanel: boolean;
   persistedBodies: CampaignAgentBodies;
+  tabListInstanceId: string;
   title: string;
 };
 
 const MyahCampaignAgentEditor = ({
   campaignAgentFields,
   campaignId,
+  isInSidePanel,
   persistedBodies,
+  tabListInstanceId,
   title,
 }: MyahCampaignAgentEditorProps) => {
   const { updateOneRecord } = useUpdateOneRecord();
@@ -215,6 +219,13 @@ const MyahCampaignAgentEditor = ({
       const beforeTabChangeEvent =
         event as CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>;
 
+      if (
+        beforeTabChangeEvent.detail.isInSidePanel !== isInSidePanel ||
+        beforeTabChangeEvent.detail.tabListInstanceId !== tabListInstanceId
+      ) {
+        return;
+      }
+
       beforeTabChangeEvent.preventDefault();
       setPendingTabChange(() => beforeTabChangeEvent.detail.continueTabChange);
       openModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
@@ -230,7 +241,7 @@ const MyahCampaignAgentEditor = ({
         PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
         handleBeforeTabChange,
       );
-  }, [isDirty, openModal]);
+  }, [isDirty, isInSidePanel, openModal, tabListInstanceId]);
 
   useEffect(() => {
     if (blocker.state === 'blocked') {
@@ -381,12 +392,16 @@ const MyahCampaignAgentEditor = ({
 
 type MyahCampaignAgentProps = {
   campaignId: string;
+  isInSidePanel: boolean;
+  tabListInstanceId: string;
   title: string;
 };
 
 export const MyahCampaignAgent = ({
   campaignId,
+  isInSidePanel,
   title,
+  tabListInstanceId,
 }: MyahCampaignAgentProps) => {
   const { objectMetadataItems } = useObjectMetadataItems();
   const { recordLoading } = useRecordShowContainerData({
@@ -435,8 +450,10 @@ export const MyahCampaignAgent = ({
       <MyahCampaignAgentEditor
         campaignAgentFields={campaignAgentFields}
         campaignId={campaignId}
+        isInSidePanel={isInSidePanel}
         key={campaignId}
         persistedBodies={persistedBodies}
+        tabListInstanceId={tabListInstanceId}
         title={title}
       />
     );

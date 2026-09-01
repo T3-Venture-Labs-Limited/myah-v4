@@ -164,16 +164,17 @@ describe('PageLayoutTabList', () => {
   it('waits for a direct-tab guard before changing non-link tabs', () => {
     let continueTabChange: (() => void) | undefined;
 
+    const handleBeforeTabChange = jest.fn((event: Event) => {
+      const beforeTabChangeEvent =
+        event as CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>;
+
+      beforeTabChangeEvent.preventDefault();
+      continueTabChange = beforeTabChangeEvent.detail.continueTabChange;
+    });
+
     window.addEventListener(
       PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
-      (event) => {
-        const beforeTabChangeEvent =
-          event as CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>;
-
-        beforeTabChangeEvent.preventDefault();
-        continueTabChange = beforeTabChangeEvent.detail.continueTabChange;
-      },
-      { once: true },
+      handleBeforeTabChange,
     );
 
     render(
@@ -190,6 +191,7 @@ describe('PageLayoutTabList', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Select Agent' }));
+    expect(handleBeforeTabChange).toHaveBeenCalled();
 
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockSetActiveTabId).not.toHaveBeenCalled();
@@ -198,5 +200,9 @@ describe('PageLayoutTabList', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('#agent-tab');
     expect(mockSetActiveTabId).toHaveBeenCalledWith('agent-tab');
+    window.removeEventListener(
+      PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+      handleBeforeTabChange,
+    );
   });
 });

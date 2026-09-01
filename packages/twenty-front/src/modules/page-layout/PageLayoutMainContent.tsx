@@ -14,6 +14,7 @@ import { useCurrentPageLayoutOrThrow } from '@/page-layout/hooks/useCurrentPageL
 import { usePageLayoutTabWithVisibleWidgetsOrThrow } from '@/page-layout/hooks/usePageLayoutTabWithVisibleWidgetsOrThrow';
 import { getTabLayoutMode } from '@/page-layout/utils/getTabLayoutMode';
 import { getWidgetConfigurationViewId } from '@/page-layout/utils/getWidgetConfigurationViewId';
+import { getTabListInstanceIdFromPageLayoutAndRecord } from '@/page-layout/utils/getTabListInstanceIdFromPageLayoutAndRecord';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 
 const MYAH_CAMPAIGN_INFLUENCERS_TAB_UNIVERSAL_IDENTIFIER =
@@ -33,7 +34,13 @@ export const PageLayoutMainContent = ({
     tab: activeTab,
     pageLayoutType: currentPageLayout.type,
   });
-  const { targetRecordIdentifier } = useLayoutRenderingContext();
+  const { isInSidePanel, layoutType, targetRecordIdentifier } =
+    useLayoutRenderingContext();
+  const tabListInstanceId = getTabListInstanceIdFromPageLayoutAndRecord({
+    layoutType,
+    pageLayoutId: currentPageLayout.id,
+    targetRecordIdentifier,
+  });
   const shouldRenderCampaignHome =
     targetRecordIdentifier?.targetObjectNameSingular === 'campaign' &&
     currentPageLayout.universalIdentifier ===
@@ -90,6 +97,8 @@ export const PageLayoutMainContent = ({
       ) : shouldRenderCampaignAgent ? (
         <MyahCampaignAgent
           campaignId={targetRecordIdentifier.id}
+          isInSidePanel={isInSidePanel}
+          tabListInstanceId={tabListInstanceId}
           title={campaignAgentTitle}
         />
       ) : (
