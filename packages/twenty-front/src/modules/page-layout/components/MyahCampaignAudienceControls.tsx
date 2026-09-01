@@ -1,7 +1,7 @@
-import { gql } from '@apollo/client';
+import { type ApolloCache, gql } from '@apollo/client';
 import { useMutation, useQuery } from '@apollo/client/react';
+import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { RecordDetailRecordsListItemContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer';
 import { RecordDetailSectionContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailSectionContainer';
@@ -100,6 +100,14 @@ type CampaignInfluencerSnapshotVariables = {
   input: { campaignId: string };
 };
 
+type AttachCampaignCreatorListsData = {
+  attachCampaignCreatorLists: CampaignInfluencerSnapshotData['campaignInfluencerSnapshot'];
+};
+
+type AttachCampaignCreatorListsVariables = {
+  input: { campaignId: string; creatorListIds: string[] };
+};
+
 type CampaignCreatorListAdditionCandidatesData = {
   campaignCreatorListAdditionCandidates: { creatorIds: string[] };
 };
@@ -117,13 +125,30 @@ type ApproveCampaignCreatorListAdditionsVariables = {
 };
 
 type DetachCampaignCreatorListData = {
-  detachCampaignCreatorList: {
-    campaignCreatorLists: CampaignCreatorList[];
-  };
+  detachCampaignCreatorList: CampaignInfluencerSnapshotData['campaignInfluencerSnapshot'];
 };
 
 type DetachCampaignCreatorListVariables = {
   input: { campaignId: string; creatorListId: string };
+};
+
+const writeCampaignInfluencerSnapshot = ({
+  cache,
+  campaignId,
+  snapshot,
+}: {
+  cache: ApolloCache;
+  campaignId: string;
+  snapshot: CampaignInfluencerSnapshotData['campaignInfluencerSnapshot'];
+}) => {
+  cache.writeQuery<
+    CampaignInfluencerSnapshotData,
+    CampaignInfluencerSnapshotVariables
+  >({
+    query: SNAPSHOT,
+    variables: { input: { campaignId } },
+    data: { campaignInfluencerSnapshot: snapshot },
+  });
 };
 
 type CreatorListAttachmentProps = {
@@ -326,12 +351,10 @@ const CreatorListAttachment = ({
 
 type MyahCampaignAudienceControlsProps = {
   campaignId: string;
-  onAudienceChanged?: () => Promise<unknown>;
 };
 
 export const MyahCampaignAudienceControls = ({
   campaignId,
-  onAudienceChanged,
 }: MyahCampaignAudienceControlsProps) => {
   const [attachError, setAttachError] = useState<string>();
   const [isAttachingList, setIsAttachingList] = useState(false);
@@ -339,19 +362,25 @@ export const MyahCampaignAudienceControls = ({
   const { closeModal, openModal } = useModal();
   const pickerInstanceId = `campaign-creator-lists-picker-${campaignId}`;
   const detachModalInstanceId = `campaign-list-detach-${campaignId}`;
-  const { data, refetch } = useQuery<
+  const { data } = useQuery<
     CampaignInfluencerSnapshotData,
     CampaignInfluencerSnapshotVariables
   >(SNAPSHOT, { variables: { input: { campaignId } } });
-  const [attach] = useMutation(ATTACH);
+  const [attach] = useMutation<
+    AttachCampaignCreatorListsData,
+    AttachCampaignCreatorListsVariables
+  >(ATTACH);
   const [detach] = useMutation<
     DetachCampaignCreatorListData,
     DetachCampaignCreatorListVariables
   >(DETACH);
-  const apolloCoreClient = useApolloCoreClient();
   const { objectMetadataItem: creatorListObjectMetadataItem } =
     useObjectMetadataItem({
       objectNameSingular: 'creatorList',
+    });
+  const { objectMetadataItem: campaignCreatorObjectMetadataItem } =
+    useObjectMetadataItem({
+      objectNameSingular: 'campaignCreator',
     });
   const { closeDropdown } = useCloseDropdown();
   const setMultipleRecordPickerSearchFilter = useSetAtomComponentState(
@@ -381,29 +410,15 @@ export const MyahCampaignAudienceControls = ({
     recordGqlFields: { id: true, name: true },
     skip: attachedListIds.length === 0,
   });
-  const { refetch: refetchCampaignCreatorLists } =
-    useFindManyRecords<ObjectRecord>({
-      objectNameSingular: 'campaignCreatorList',
-      filter: { campaignId: { eq: campaignId } },
-      recordGqlFields: { id: true },
-      skip: !campaignId,
-    });
   const creatorListNames = new Map(
     creatorLists.map((record) => [record.id, record.name ?? 'Creator List']),
   );
 
-  const refresh = async () => {
-    await Promise.all([
-      refetch(),
-      refetchCampaignCreatorLists(),
-      apolloCoreClient.refetchQueries({
-        include: ['active', 'inactive', 'FindManyCampaignCreators'],
-        updateCache: (cache) => {
-          cache.evict({ fieldName: 'campaignCreators' });
-        },
-      }),
-    ]);
-    await onAudienceChanged?.();
+  const notifyAudienceChanged = async () => {
+    dispatchObjectRecordOperationBrowserEvent({
+      objectMetadataItem: campaignCreatorObjectMetadataItem,
+      operation: { type: 'create-many' },
+    });
   };
 
   const openDetach = (creatorListId: string) => {
@@ -423,9 +438,17 @@ export const MyahCampaignAudienceControls = ({
 
     await detach({
       variables: { input: { campaignId, creatorListId: detachingListId } },
+      update: (cache, { data: mutationData }) => {
+        if (mutationData) {
+          writeCampaignInfluencerSnapshot({
+            cache,
+            campaignId,
+            snapshot: mutationData.detachCampaignCreatorList,
+          });
+        }
+      },
     });
     closeDetach();
-    await refresh();
   };
 
   const openPicker = () => {
@@ -480,6 +503,15 @@ export const MyahCampaignAudienceControls = ({
         variables: {
           input: { campaignId, creatorListIds: [morphItem.recordId] },
         },
+        update: (cache, { data: mutationData }) => {
+          if (mutationData) {
+            writeCampaignInfluencerSnapshot({
+              cache,
+              campaignId,
+              snapshot: mutationData.attachCampaignCreatorLists,
+            });
+          }
+        },
       });
     } catch {
       setAttachError('Could not attach Creator List. Try again.');
@@ -488,15 +520,8 @@ export const MyahCampaignAudienceControls = ({
       return;
     }
 
-    try {
-      await refresh();
-    } catch {
-      setAttachError(
-        'Creator List was attached, but the view could not refresh.',
-      );
-    } finally {
-      setIsAttachingList(false);
-    }
+    await notifyAudienceChanged();
+    setIsAttachingList(false);
   };
 
   return (
@@ -540,7 +565,7 @@ export const MyahCampaignAudienceControls = ({
               creatorListNames.get(list.creatorListId) ?? 'Creator List'
             }
             key={list.id}
-            onChanged={refresh}
+            onChanged={notifyAudienceChanged}
             onDetach={openDetach}
           />
         ))}
