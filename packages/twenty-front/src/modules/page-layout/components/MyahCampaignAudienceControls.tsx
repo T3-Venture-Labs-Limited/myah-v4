@@ -48,7 +48,6 @@ const StyledCreatorListChipBoundary = styled.div`
 
   & > div {
     border: 1px solid ${themeCssVariables.border.color.light};
-    box-sizing: border-box;
     max-width: 100%;
     overflow: hidden;
   }
