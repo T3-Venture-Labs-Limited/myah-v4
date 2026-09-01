@@ -3884,7 +3884,6 @@ type Mutation {
   createWebhook(input: CreateWebhookInput!): Webhook!
   updateWebhook(input: UpdateWebhookInput!): Webhook!
   deleteWebhook(id: UUID!): Webhook!
-  runAgent(input: RunAgentInput!): RunAgentResult!
   sendEmailViaEmailingDomain(input: SendEmailViaDomainInput!): SendEmailViaDomainOutput!
   sendMessageCampaign(input: SendMessageCampaignInput!): SendMessageCampaignOutputDTO!
   createUnsubscribeTopic(input: CreateUnsubscribeTopicInput!): UnsubscribeTopic!
@@ -3896,6 +3895,7 @@ type Mutation {
   createEmailingDomain(input: CreateEmailingDomainInput!): EmailingDomain!
   deleteEmailingDomain(id: String!): Boolean!
   verifyEmailingDomain(id: String!): EmailingDomain!
+  runAgent(input: RunAgentInput!): RunAgentResult!
   updateMessageFolder(input: UpdateMessageFolderInput!): MessageFolder!
   updateMessageFolders(input: UpdateMessageFoldersInput!): [MessageFolder!]!
   updateCalendarChannel(input: UpdateCalendarChannelInput!): CalendarChannel!
@@ -5025,12 +5025,6 @@ input UpdateWebhookInputUpdates {
   secret: String
 }
 
-input RunAgentInput {
-  agentUniversalIdentifier: String!
-  prompt: String!
-  operationId: String
-}
-
 input SendEmailViaDomainInput {
   emailingDomainId: String!
   to: [String!]!
@@ -5085,6 +5079,12 @@ input CreateEmailGroupChannelInput {
 
 input CreateEmailingDomainInput {
   domain: String!
+}
+
+input RunAgentInput {
+  agentUniversalIdentifier: String!
+  prompt: String!
+  operationId: String
 }
 
 input UpdateMessageFolderInput {
