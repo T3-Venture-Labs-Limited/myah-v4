@@ -58,7 +58,7 @@ jest.mock(
           value={value}
           onChange={(event) => {
             setValue(event.target.value);
-            onChange(event.target.value);
+            onChange(`<p>${event.target.value}&nbsp;</p>`);
           }}
         />
       );
@@ -76,6 +76,36 @@ jest.mock(
     return { FormAdvancedTextFieldInput };
   },
 );
+
+jest.mock('@/ui/input/components/TextArea', () => ({
+  TextArea: ({
+    ariaLabel,
+    disabled,
+    minRows,
+    onChange,
+    placeholder,
+    readOnly,
+    value,
+  }: {
+    ariaLabel?: string;
+    minRows?: number;
+    disabled?: boolean;
+    onChange?: (value: string) => void;
+    placeholder?: string;
+    readOnly?: boolean;
+    value?: string;
+  }) => (
+    <textarea
+      aria-label={ariaLabel}
+      disabled={disabled}
+      placeholder={placeholder}
+      readOnly={readOnly}
+      rows={minRows}
+      value={value}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
+  ),
+}));
 
 jest.mock('twenty-ui/input', () => ({
   Button: ({
@@ -142,6 +172,14 @@ describe('MyahInboxDraftEditor', () => {
     expect(
       screen.getByRole('textbox', { name: 'Shared reply draft' }),
     ).toBeInTheDocument();
+  });
+
+  it('keeps the reply composer at its intended minimum height', () => {
+    renderEditor();
+
+    expect(
+      screen.getByRole('textbox', { name: 'Shared reply draft' }),
+    ).toHaveAttribute('rows', '6');
   });
 
   it('keeps autosave progress silent while retaining the draft actions', () => {
@@ -226,7 +264,7 @@ describe('MyahInboxDraftEditor', () => {
     expect(reloadConflict).toHaveBeenCalledTimes(1);
   });
 
-  it('delegates rich-text changes to the controller while conflicted', () => {
+  it('delegates plain-text changes without editor HTML', () => {
     const onDraftChange = jest.fn();
     renderEditor({
       draftEntry: {
