@@ -173,16 +173,37 @@ jest.mock(
     ),
   }),
 );
-jest.mock(
-  '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer',
-  () => ({
-    RecordDetailRecordsListItemContainer: ({
-      children,
-    }: {
-      children: ReactNode;
-    }) => <div data-testid="creator-list-row">{children}</div>,
-  }),
-);
+jest.mock('twenty-ui/data-display', () => ({
+  Avatar: ({ placeholder }: { placeholder: string }) => (
+    <span data-testid="creator-list-avatar">
+      {placeholder.trim().charAt(0).toUpperCase()}
+    </span>
+  ),
+  Chip: ({
+    clickable,
+    label,
+    leftComponent,
+    rightComponent,
+    tooltipLabel,
+  }: {
+    clickable?: boolean;
+    label: string;
+    leftComponent?: ReactNode;
+    rightComponent?: ReactNode;
+    tooltipLabel?: string;
+  }) => (
+    <div
+      data-clickable={clickable ? 'true' : 'false'}
+      data-testid="creator-list-chip"
+      title={tooltipLabel}
+    >
+      {leftComponent}
+      <span>{label}</span>
+      {rightComponent}
+    </div>
+  ),
+  ChipVariant: { Static: 'static' },
+}));
 jest.mock('twenty-ui/icon', () => ({
   IconPlus: () => null,
   IconX: () => null,
@@ -347,6 +368,56 @@ describe('MyahCampaignAudienceControls', () => {
     });
   });
 
+  it('renders attached Creator Lists as non-clickable compact tags', () => {
+    mockApolloQueries({ snapshotData: snapshot(['list-1', 'list-2']) });
+    mockRecords({
+      creatorLists: [
+        { id: 'list-1', name: 'VIP Creators' },
+        {
+          id: 'list-2',
+          name: 'Micro-creators with a deliberately long campaign source name',
+        },
+      ],
+    });
+
+    render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+
+    const creatorListsSection = screen.getByTestId('creator-lists-section');
+    const tagContainer =
+      within(creatorListsSection).getByTestId('creator-list-tags');
+    const chips = within(tagContainer).getAllByTestId('creator-list-chip');
+
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveAttribute('data-clickable', 'false');
+    expect(chips[0]).toHaveAttribute('title', 'VIP Creators');
+    expect(
+      within(chips[0]).getByTestId('creator-list-avatar'),
+    ).toHaveTextContent('V');
+    expect(chips[1]).toHaveTextContent(
+      'Micro-creators with a deliberately long campaign source name',
+    );
+    expect(
+      within(tagContainer).getAllByRole('button', {
+        name: 'Remove Creator List',
+      }),
+    ).toHaveLength(2);
+  });
+
+  it('does not reserve a tag container when no Creator Lists are attached', () => {
+    render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
+
+    const creatorListsSection = screen.getByTestId('creator-lists-section');
+
+    expect(
+      within(creatorListsSection).queryByTestId('creator-list-tags'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(creatorListsSection).getByRole('button', {
+        name: 'Add Creator List',
+      }),
+    ).toBeVisible();
+  });
+
   it('uses the Creator Lists picker to attach through the guarded mutation', async () => {
     mockAttach.mockResolvedValue(undefined);
     mockApolloQueries({ snapshotData: snapshot(['list-1']) });
@@ -457,11 +528,15 @@ describe('MyahCampaignAudienceControls', () => {
       screen.getByRole('button', { name: 'Select creator list' }),
     );
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Could not attach Creator List. Try again.',
-      ),
+    const attachError = await screen.findByRole('alert');
+    expect(attachError).toHaveTextContent(
+      'Could not attach Creator List. Try again.',
     );
+    const creatorListsSection = screen.getByTestId('creator-lists-section');
+    const tagContainer =
+      within(creatorListsSection).getByTestId('creator-list-tags');
+    expect(creatorListsSection).toContainElement(attachError);
+    expect(tagContainer).not.toContainElement(attachError);
     expect(mockOpenMultipleRecordPicker).toHaveBeenCalledTimes(2);
     expect(mockMultipleRecordPickerPerformSearch).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -499,9 +574,9 @@ describe('MyahCampaignAudienceControls', () => {
 
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
 
-    const creatorListsSection = screen.getByTestId('creator-lists-section');
+    const creatorListChip = screen.getByTestId('creator-list-chip');
     fireEvent.click(
-      within(creatorListsSection).getByRole('button', {
+      within(creatorListChip).getByRole('button', {
         name: 'Review 2 additions',
       }),
     );
@@ -711,11 +786,14 @@ describe('MyahCampaignAudienceControls', () => {
     );
 
     await waitFor(() => expect(refetchCandidates).toHaveBeenCalled());
-    expect(
-      screen.getByText(
-        'Approved additions were saved, but the view could not refresh.',
-      ),
-    ).toBeVisible();
+    const refreshError = screen.getByText(
+      'Approved additions were saved, but the view could not refresh.',
+    );
+    expect(refreshError).toBeVisible();
+    const creatorListTag = screen.getByTestId('creator-list-tag');
+    const creatorListChip = screen.getByTestId('creator-list-chip');
+    expect(creatorListTag).toContainElement(refreshError);
+    expect(creatorListChip).not.toContainElement(refreshError);
     expect(
       screen.queryByRole('button', { name: 'Approve selected additions' }),
     ).not.toBeInTheDocument();
@@ -736,10 +814,10 @@ describe('MyahCampaignAudienceControls', () => {
     render(<MyahCampaignAudienceControls campaignId="campaign-1" />);
 
     const creatorListsSection = screen.getByTestId('creator-lists-section');
-    expect(
-      within(creatorListsSection).getByTestId('creator-list-row'),
-    ).toHaveTextContent('VIP Creators');
-    const removeButton = within(creatorListsSection).getByRole('button', {
+    const creatorListChip =
+      within(creatorListsSection).getByTestId('creator-list-chip');
+    expect(creatorListChip).toHaveTextContent('VIP Creators');
+    const removeButton = within(creatorListChip).getByRole('button', {
       name: 'Remove Creator List',
     });
 
