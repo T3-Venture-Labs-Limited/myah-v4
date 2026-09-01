@@ -205,6 +205,12 @@ const MyahCampaignAgentEditor = ({
     }
   }, [blocker.state, openModal]);
 
+  useEffect(() => {
+    if (!isDirty && blocker.state === 'blocked') {
+      blocker.proceed();
+    }
+  }, [blocker, isDirty]);
+
   const handleSave = async () => {
     if (!isDirty || isSaving) {
       return;
@@ -243,7 +249,7 @@ const MyahCampaignAgentEditor = ({
   };
 
   const handleDiscardChanges = () => {
-    if (blocker.state === 'blocked') {
+    if (!isSaving && blocker.state === 'blocked') {
       blocker.proceed();
     }
   };
@@ -306,6 +312,7 @@ const MyahCampaignAgentEditor = ({
       </StyledActions>
       <ConfirmationModal
         confirmButtonText={t`Discard changes`}
+        loading={isSaving}
         modalInstanceId={CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID}
         onClose={handleKeepEditing}
         onConfirmClick={handleDiscardChanges}
@@ -390,6 +397,9 @@ export const MyahCampaignAgent = ({
           </StyledFieldRow>
         ))}
       </StyledFields>
+      <StyledActions>
+        <Button accent="brand" disabled title={t`Save`} />
+      </StyledActions>
     </StyledSurface>
   );
 };

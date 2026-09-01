@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -137,10 +138,12 @@ jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
 
 jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
   ConfirmationModal: ({
+    loading,
     onClose,
     onConfirmClick,
     title,
   }: {
+    loading?: boolean;
     onClose?: () => void;
     onConfirmClick: () => void;
     title: string;
@@ -151,7 +154,7 @@ jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
         <button onClick={onClose} type="button">
           Keep editing
         </button>
-        <button onClick={onConfirmClick} type="button">
+        <button disabled={loading} onClick={onConfirmClick} type="button">
           Discard changes
         </button>
       </div>
@@ -317,6 +320,42 @@ describe('MyahCampaignAgent', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
+  it('does not discard through navigation while Save is in flight', async () => {
+    let resolveSave: (() => void) | undefined;
+    mockUpdateOneRecord.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    const { store, view } = renderAgent();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit replyRules' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    mockBlockerState = 'blocked';
+    view.rerender(
+      <Provider store={store}>
+        <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
+      </Provider>,
+    );
+
+    const discardButton = await screen.findByRole('button', {
+      name: 'Discard changes',
+    });
+    expect(discardButton).toBeDisabled();
+    fireEvent.click(discardButton);
+    expect(mockProceed).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSave?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockProceed).toHaveBeenCalled();
+    });
+  });
+
   it('blocks in-app navigation and browser unload while dirty', async () => {
     const { store, view } = renderAgent();
 
@@ -363,6 +402,7 @@ describe('MyahCampaignAgent', () => {
     renderAgent(record);
 
     expect(screen.getByTestId('campaign-agent-loading')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.queryAllByTestId('campaign-agent-editor')).toHaveLength(0);
   });
 });
