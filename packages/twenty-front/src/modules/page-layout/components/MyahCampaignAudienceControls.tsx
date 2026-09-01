@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
-import { RecordDetailRecordsListItemContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer';
+import { Avatar, Chip, ChipVariant } from 'twenty-ui/data-display';
 import { RecordDetailSectionContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailSectionContainer';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
 import { useMultipleRecordPickerOpen } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerOpen';
@@ -26,9 +26,38 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const APPROVAL_BATCH_SIZE = 500;
 
+const StyledCreatorListTags = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[2]} 0
+    ${themeCssVariables.spacing[3]};
+`;
+
+const StyledCreatorListTag = styled.div`
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  min-width: 0;
+`;
+
+const StyledCreatorListChipBoundary = styled.div`
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+
+  & > div {
+    border: 1px solid ${themeCssVariables.border.color.light};
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow: hidden;
+  }
+`;
+
 const StyledCreatorListActions = styled.div`
   align-items: center;
   display: flex;
+  flex-shrink: 0;
   gap: ${themeCssVariables.spacing[2]};
 `;
 
@@ -274,29 +303,47 @@ const CreatorListAttachment = ({
 
   return (
     <>
-      <RecordDetailRecordsListItemContainer>
-        <span>{creatorListName}</span>
-        <StyledCreatorListActions>
-          {refreshError ? <p role="alert">{refreshError}</p> : null}
-          {candidateIds.length > 0 ? (
-            <Button
-              disabled={areCandidateLabelsLoading}
-              ariaLabel={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
-              onClick={openReview}
-              title={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
-              type="button"
-              variant="secondary"
-            />
-          ) : null}
-          <LightIconButton
-            accent="tertiary"
-            aria-label="Remove Creator List"
-            Icon={IconX}
-            onClick={() => onDetach(creatorListId)}
-            title="Remove Creator List"
+      <StyledCreatorListTag data-testid="creator-list-tag">
+        <StyledCreatorListChipBoundary>
+          <Chip
+            clickable={false}
+            label={creatorListName}
+            tooltipLabel={creatorListName}
+            variant={ChipVariant.Static}
+            leftComponent={
+              <Avatar
+                placeholder={creatorListName}
+                placeholderColorSeed={creatorListName}
+                size="xs"
+              />
+            }
+            rightComponent={
+              <StyledCreatorListActions>
+                {candidateIds.length > 0 ? (
+                  <Button
+                    disabled={areCandidateLabelsLoading}
+                    ariaLabel={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
+                    onClick={openReview}
+                    size="small"
+                    title={`Review ${candidateIds.length} addition${candidateIds.length === 1 ? '' : 's'}`}
+                    type="button"
+                    variant="secondary"
+                  />
+                ) : null}
+                <LightIconButton
+                  accent="tertiary"
+                  aria-label="Remove Creator List"
+                  Icon={IconX}
+                  onClick={() => onDetach(creatorListId)}
+                  size="small"
+                  title="Remove Creator List"
+                />
+              </StyledCreatorListActions>
+            }
           />
-        </StyledCreatorListActions>
-      </RecordDetailRecordsListItemContainer>
+        </StyledCreatorListChipBoundary>
+        {refreshError ? <p role="alert">{refreshError}</p> : null}
+      </StyledCreatorListTag>
       {isReviewOpen ? (
         <ModalStatefulWrapper
           isClosable
@@ -557,18 +604,22 @@ export const MyahCampaignAudienceControls = ({
         }
         title="Creator Lists"
       >
-        {attachedLists.map((list) => (
-          <CreatorListAttachment
-            campaignId={campaignId}
-            creatorListId={list.creatorListId}
-            creatorListName={
-              creatorListNames.get(list.creatorListId) ?? 'Creator List'
-            }
-            key={list.id}
-            onChanged={notifyAudienceChanged}
-            onDetach={openDetach}
-          />
-        ))}
+        {attachedLists.length > 0 ? (
+          <StyledCreatorListTags data-testid="creator-list-tags">
+            {attachedLists.map((list) => (
+              <CreatorListAttachment
+                campaignId={campaignId}
+                creatorListId={list.creatorListId}
+                creatorListName={
+                  creatorListNames.get(list.creatorListId) ?? 'Creator List'
+                }
+                key={list.id}
+                onChanged={notifyAudienceChanged}
+                onDetach={openDetach}
+              />
+            ))}
+          </StyledCreatorListTags>
+        ) : null}
         {attachError ? <p role="alert">{attachError}</p> : null}
       </RecordDetailSectionContainer>
       {detachingListId ? (
