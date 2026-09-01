@@ -4,6 +4,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { PageLayoutType } from '~/generated-metadata/graphql';
 
 import { PageLayoutTabList } from '@/page-layout/components/PageLayoutTabList';
+import {
+  PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+  type PageLayoutBeforeTabChangeBrowserEventDetail,
+} from '@/page-layout/constants/PageLayoutBeforeTabChangeBrowserEvent';
 import { type PageLayoutTab } from '@/page-layout/types/PageLayoutTab';
 
 const mockNavigate = jest.fn();
@@ -157,7 +161,21 @@ describe('PageLayoutTabList', () => {
     expect(mockSetActiveTabId).not.toHaveBeenCalled();
   });
 
-  it('updates active-tab state directly when tabs do not behave as links', () => {
+  it('waits for a direct-tab guard before changing non-link tabs', () => {
+    let continueTabChange: (() => void) | undefined;
+
+    window.addEventListener(
+      PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+      (event) => {
+        const beforeTabChangeEvent =
+          event as CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>;
+
+        beforeTabChangeEvent.preventDefault();
+        continueTabChange = beforeTabChangeEvent.detail.continueTabChange;
+      },
+      { once: true },
+    );
+
     render(
       <I18nProvider i18n={i18n}>
         <PageLayoutTabList
@@ -172,6 +190,11 @@ describe('PageLayoutTabList', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Select Agent' }));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockSetActiveTabId).not.toHaveBeenCalled();
+
+    continueTabChange?.();
 
     expect(mockNavigate).toHaveBeenCalledWith('#agent-tab');
     expect(mockSetActiveTabId).toHaveBeenCalledWith('agent-tab');

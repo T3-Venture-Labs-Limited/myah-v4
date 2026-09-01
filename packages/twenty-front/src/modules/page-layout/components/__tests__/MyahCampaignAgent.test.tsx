@@ -10,17 +10,23 @@ import { Provider } from 'jotai';
 
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { MyahCampaignAgent } from '@/page-layout/components/MyahCampaignAgent';
+import {
+  PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+  type PageLayoutBeforeTabChangeBrowserEventDetail,
+} from '@/page-layout/constants/PageLayoutBeforeTabChangeBrowserEvent';
 import { resetJotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 
 const mockUpdateOneRecord = jest.fn();
 const mockEnqueueSuccessSnackBar = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockOpenModal = jest.fn();
+const mockCloseModal = jest.fn();
 const mockProceed = jest.fn();
 const mockReset = jest.fn();
 
 let mockRecordLoading = false;
 let mockBlockerState: 'blocked' | 'proceeding' | 'unblocked' = 'unblocked';
+let mockModalOpened = false;
 let mockObjectMetadataItems: Array<{
   fields: Array<{
     description: string;
@@ -133,7 +139,10 @@ jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
 }));
 
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
-  useModal: () => ({ openModal: mockOpenModal }),
+  useModal: () => ({
+    closeModal: mockCloseModal,
+    openModal: mockOpenModal,
+  }),
 }));
 
 jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
@@ -148,7 +157,7 @@ jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
     onConfirmClick: () => void;
     title: string;
   }) =>
-    mockBlockerState === 'blocked' ? (
+    mockBlockerState === 'blocked' || mockModalOpened ? (
       <div>
         <span>{title}</span>
         <button onClick={onClose} type="button">
@@ -231,6 +240,13 @@ describe('MyahCampaignAgent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockBlockerState = 'unblocked';
+    mockModalOpened = false;
+    mockOpenModal.mockImplementation(() => {
+      mockModalOpened = true;
+    });
+    mockCloseModal.mockImplementation(() => {
+      mockModalOpened = false;
+    });
     mockRecordLoading = false;
     mockUpdateOneRecord.mockResolvedValue(undefined);
     mockObjectMetadataItems = [
@@ -354,6 +370,40 @@ describe('MyahCampaignAgent', () => {
     await waitFor(() => {
       expect(mockProceed).toHaveBeenCalled();
     });
+    expect(mockCloseModal).toHaveBeenCalled();
+  });
+
+  it('guards direct non-link tab changes until the draft is discarded', async () => {
+    let didContinueTabChange = false;
+    renderAgent();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit additionalNotes' }),
+    );
+
+    const beforeTabChangeEvent =
+      new CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>(
+        PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+        {
+          cancelable: true,
+          detail: {
+            continueTabChange: () => {
+              didContinueTabChange = true;
+            },
+          },
+        },
+      );
+
+    expect(window.dispatchEvent(beforeTabChangeEvent)).toBe(false);
+    expect(didContinueTabChange).toBe(false);
+    await screen.findByRole('button', { name: 'Discard changes' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+
+    await waitFor(() => {
+      expect(didContinueTabChange).toBe(true);
+    });
+    expect(mockCloseModal).toHaveBeenCalled();
   });
 
   it('blocks in-app navigation and browser unload while dirty', async () => {

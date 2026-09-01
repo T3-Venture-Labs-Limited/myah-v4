@@ -8,6 +8,10 @@ import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { RichTextFieldEditor } from '@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useRecordShowContainerData } from '@/object-record/record-show/hooks/useRecordShowContainerData';
+import {
+  PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+  type PageLayoutBeforeTabChangeBrowserEventDetail,
+} from '@/page-layout/constants/PageLayoutBeforeTabChangeBrowserEvent';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
@@ -167,12 +171,15 @@ const MyahCampaignAgentEditor = ({
 }: MyahCampaignAgentEditorProps) => {
   const { updateOneRecord } = useUpdateOneRecord();
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
-  const { openModal } = useModal();
+  const { closeModal, openModal } = useModal();
   const [draftBodies, setDraftBodies] =
     useState<CampaignAgentBodies>(persistedBodies);
   const [savedBodies, setSavedBodies] =
     useState<CampaignAgentBodies>(persistedBodies);
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingTabChange, setPendingTabChange] = useState<(() => void) | null>(
+    null,
+  );
 
   const dirtyFieldNames = useMemo(
     () =>
@@ -200,16 +207,54 @@ const MyahCampaignAgentEditor = ({
   }, [isDirty]);
 
   useEffect(() => {
+    if (!isDirty) {
+      return;
+    }
+
+    const handleBeforeTabChange = (event: Event) => {
+      const beforeTabChangeEvent =
+        event as CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>;
+
+      beforeTabChangeEvent.preventDefault();
+      setPendingTabChange(() => beforeTabChangeEvent.detail.continueTabChange);
+      openModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
+    };
+
+    window.addEventListener(
+      PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+      handleBeforeTabChange,
+    );
+
+    return () =>
+      window.removeEventListener(
+        PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+        handleBeforeTabChange,
+      );
+  }, [isDirty, openModal]);
+
+  useEffect(() => {
     if (blocker.state === 'blocked') {
       openModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
     }
   }, [blocker.state, openModal]);
 
   useEffect(() => {
-    if (!isDirty && blocker.state === 'blocked') {
-      blocker.proceed();
+    if (isDirty) {
+      return;
     }
-  }, [blocker, isDirty]);
+
+    if (blocker.state === 'blocked') {
+      closeModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
+      blocker.proceed();
+      return;
+    }
+
+    if (pendingTabChange) {
+      closeModal(CAMPAIGN_AGENT_UNSAVED_CHANGES_MODAL_ID);
+      setPendingTabChange(null);
+      pendingTabChange();
+    }
+  }, [blocker, closeModal, isDirty, pendingTabChange]);
 
   const handleSave = async () => {
     if (!isDirty || isSaving) {
@@ -249,12 +294,23 @@ const MyahCampaignAgentEditor = ({
   };
 
   const handleDiscardChanges = () => {
-    if (!isSaving && blocker.state === 'blocked') {
+    if (isSaving) {
+      return;
+    }
+
+    if (pendingTabChange) {
+      setDraftBodies(savedBodies);
+      return;
+    }
+
+    if (blocker.state === 'blocked') {
       blocker.proceed();
     }
   };
 
   const handleKeepEditing = () => {
+    setPendingTabChange(null);
+
     if (blocker.state === 'blocked') {
       blocker.reset();
     }

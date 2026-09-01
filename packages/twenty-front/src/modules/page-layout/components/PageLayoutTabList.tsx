@@ -32,6 +32,10 @@ import { PAGE_LAYOUT_TAB_LIST_DROPPABLE_IDS } from '@/page-layout/components/Pag
 import { PageLayoutTabListNewTabDropdownContent } from '@/page-layout/components/PageLayoutTabListNewTabDropdownContent';
 import { PageLayoutTabListReorderableOverflowDropdown } from '@/page-layout/components/PageLayoutTabListReorderableOverflowDropdown';
 import { PageLayoutTabListVisibleTabs } from '@/page-layout/components/PageLayoutTabListVisibleTabs';
+import {
+  PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+  type PageLayoutBeforeTabChangeBrowserEventDetail,
+} from '@/page-layout/constants/PageLayoutBeforeTabChangeBrowserEvent';
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
 import { PageLayoutComponentInstanceContext } from '@/page-layout/states/contexts/PageLayoutComponentInstanceContext';
 import { pageLayoutTabListCurrentDragDroppableIdComponentState } from '@/page-layout/states/pageLayoutTabListCurrentDragDroppableIdComponentState';
@@ -162,12 +166,25 @@ export const PageLayoutTabList = ({
         onChangeTab?.(tabId);
         return;
       }
+      const continueTabChange = () => {
+        if (!isInSidePanel) {
+          navigate(`#${tabId}`);
+        }
+        setActiveTabId(tabId);
+        onChangeTab?.(tabId);
+      };
+      const beforeTabChangeEvent =
+        new CustomEvent<PageLayoutBeforeTabChangeBrowserEventDetail>(
+          PAGE_LAYOUT_BEFORE_TAB_CHANGE_BROWSER_EVENT_NAME,
+          {
+            cancelable: true,
+            detail: { continueTabChange },
+          },
+        );
 
-      if (!isInSidePanel) {
-        navigate(`#${tabId}`);
+      if (window.dispatchEvent(beforeTabChangeEvent)) {
+        continueTabChange();
       }
-      setActiveTabId(tabId);
-      onChangeTab?.(tabId);
     },
     [behaveAsLinks, isInSidePanel, navigate, setActiveTabId, onChangeTab],
   );
