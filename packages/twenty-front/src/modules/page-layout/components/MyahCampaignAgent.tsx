@@ -201,15 +201,6 @@ const MyahCampaignAgentEditor = ({
 
   useEffect(() => {
     if (pendingSavedBodies) {
-      const hasRecordStoreSettled = CAMPAIGN_AGENT_FIELD_NAMES.every(
-        (fieldName) =>
-          persistedBodies[fieldName] === pendingSavedBodies[fieldName],
-      );
-
-      if (hasRecordStoreSettled) {
-        setPendingSavedBodies(null);
-      }
-
       return;
     }
 
@@ -305,6 +296,7 @@ const MyahCampaignAgentEditor = ({
         updateOneRecordInput,
       });
       setSavedBodies(draftBodiesToSave);
+      setPendingSavedBodies(null);
       enqueueSuccessSnackBar({
         message: t`Campaign Agent settings saved.`,
       });

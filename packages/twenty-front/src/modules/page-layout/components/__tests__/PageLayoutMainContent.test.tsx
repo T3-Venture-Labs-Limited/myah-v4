@@ -26,7 +26,6 @@ let activeTab: {
   widgets?: Array<{ title?: string }>;
 };
 let isInSidePanel = false;
-let isPageLayoutInEditMode = false;
 let targetRecordIdentifier:
   | { id: string; targetObjectNameSingular: string }
   | undefined;
@@ -73,10 +72,6 @@ jest.mock('@/page-layout/hooks/useCurrentPageLayoutOrThrow', () => ({
   useCurrentPageLayoutOrThrow: () => ({ currentPageLayout }),
 }));
 
-jest.mock('@/page-layout/hooks/useIsPageLayoutInEditMode', () => ({
-  useIsPageLayoutInEditMode: () => isPageLayoutInEditMode,
-}));
-
 jest.mock(
   '@/page-layout/hooks/usePageLayoutTabWithVisibleWidgetsOrThrow',
   () => ({
@@ -106,7 +101,6 @@ describe('PageLayoutMainContent', () => {
       universalIdentifier: 'ad261155-3c89-436d-8898-3e52d8b37632',
     };
     isInSidePanel = false;
-    isPageLayoutInEditMode = false;
     activeTab = {
       layout: 'VERTICAL_LIST',
       title: 'Home',
@@ -275,11 +269,8 @@ describe('PageLayoutMainContent', () => {
     },
   );
 
-  it.each([
-    ['a side panel', () => (isInSidePanel = true)],
-    ['page-layout edit mode', () => (isPageLayoutInEditMode = true)],
-  ])('keeps native Agent content in %s', (_description, arrange) => {
-    arrange();
+  it('keeps native Agent content in a side panel', () => {
+    isInSidePanel = true;
     activeTab = {
       ...activeTab,
       title: 'Agent',

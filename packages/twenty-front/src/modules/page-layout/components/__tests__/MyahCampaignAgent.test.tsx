@@ -369,15 +369,23 @@ describe('MyahCampaignAgent', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
-  it('does not discard through navigation while Save is in flight', async () => {
-    let resolveSave: (() => void) | undefined;
-    mockUpdateOneRecord.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveSave = resolve;
-        }),
-    );
+  it('preserves a dirty draft when an optimistic Save is rejected', async () => {
+    let rejectSave: ((error: Error) => void) | undefined;
     const { store, view } = renderAgent();
+
+    mockUpdateOneRecord.mockImplementationOnce(() => {
+      store.set(recordStoreFamilyState.atomFamily('campaign-1'), {
+        ...persistedCampaign,
+        replyRules: {
+          blocknote: draftBody('replyRules'),
+          markdown: null,
+        },
+      });
+
+      return new Promise<void>((_resolve, reject) => {
+        rejectSave = reject;
+      });
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit replyRules' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -392,15 +400,37 @@ describe('MyahCampaignAgent', () => {
       name: 'Discard changes',
     });
     expect(discardButton).toBeDisabled();
-    fireEvent.click(discardButton);
     expect(mockProceed).not.toHaveBeenCalled();
 
     await act(async () => {
-      resolveSave?.();
+      store.set(
+        recordStoreFamilyState.atomFamily('campaign-1'),
+        persistedCampaign,
+      );
+      rejectSave?.(new Error('Write denied'));
       await Promise.resolve();
     });
 
     await waitFor(() => {
+      expect(mockEnqueueErrorSnackBar).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    expect(mockProceed).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mockUpdateOneRecord).toHaveBeenCalledTimes(2);
+      expect(mockUpdateOneRecord).toHaveBeenLastCalledWith({
+        idToUpdate: 'campaign-1',
+        objectNameSingular: 'campaign',
+        updateOneRecordInput: {
+          replyRules: {
+            blocknote: draftBody('replyRules'),
+            markdown: null,
+          },
+        },
+      });
       expect(mockProceed).toHaveBeenCalled();
     });
     expect(mockCloseModal).toHaveBeenCalled();
