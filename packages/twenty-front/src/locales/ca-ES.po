@@ -4191,6 +4191,16 @@ msgstr "Prefix de trucada"
 msgid "campaign"
 msgstr ""
 
+#. js-lingui-id: DMy1O/
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Campaign Agent settings could not be saved."
+msgstr ""
+
+#. js-lingui-id: zwwnsW
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Campaign Agent settings saved."
+msgstr ""
+
 #. js-lingui-id: su0ybc
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
@@ -7644,6 +7654,11 @@ msgstr ""
 msgid "Disabled"
 msgstr ""
 
+#. js-lingui-id: 3EbjfR
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Discard changes"
+msgstr ""
+
 #. js-lingui-id: TEKXRb
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Discard connection passwords?"
@@ -7652,6 +7667,11 @@ msgstr ""
 #. js-lingui-id: lW4i24
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Discard passwords and go back"
+msgstr ""
+
+#. js-lingui-id: XkeQtf
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Discard unsaved changes?"
 msgstr ""
 
 #. js-lingui-id: +K0AvT
@@ -18765,6 +18785,7 @@ msgid "Saturday"
 msgstr "Dissabte"
 
 #. js-lingui-id: tfDRzk
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
 #: src/modules/settings/components/SaveAndCancelButtons/SaveButton.tsx
 #: src/pages/settings/data-model/new-field/SettingsObjectNewFieldConfigure.tsx
 msgid "Save"
@@ -25089,6 +25110,11 @@ msgstr ""
 #. js-lingui-id: R6FfrK
 #: src/modules/settings/billing/hooks/useBillingWording.ts
 msgid "Your billing interval will switch to yearly immediately and your trial will continue. When it ends, you will be charged ${yearlyPrice} per user per year billed annually."
+msgstr ""
+
+#. js-lingui-id: toljrd
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Your Campaign Agent changes have not been saved."
 msgstr ""
 
 #. js-lingui-id: 0L4hpS

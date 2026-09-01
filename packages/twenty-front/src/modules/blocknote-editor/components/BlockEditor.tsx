@@ -27,6 +27,7 @@ interface BlockEditorProps {
   onPaste?: (event: ClipboardEvent) => void;
   onChange?: () => void;
   readonly?: boolean;
+  showFormattingControls?: boolean;
 }
 
 // oxlint-disable-next-line twenty/no-hardcoded-colors
@@ -166,6 +167,7 @@ export const BlockEditor = ({
   onChange,
   onPaste,
   readonly,
+  showFormattingControls = true,
 }: BlockEditorProps) => {
   const { colorScheme } = useContext(ThemeContext);
   const { t } = useLingui();
@@ -217,21 +219,27 @@ export const BlockEditor = ({
         onChange={handleChange}
         editor={editor}
         theme={blockNoteTheme}
+        formattingToolbar={showFormattingControls}
+        linkToolbar={showFormattingControls}
         slashMenu={false}
         sideMenu={false}
         editable={!readonly}
       >
-        <CustomSideMenu editor={editor} />
-        <SuggestionMenuController
-          triggerCharacter="/"
-          getItems={getSlashMenuItems}
-          suggestionMenuComponent={CustomSlashMenu}
-        />
-        <SuggestionMenuController
-          triggerCharacter="@"
-          getItems={async (query) => getMentionItems(query)}
-          suggestionMenuComponent={CustomMentionMenu}
-        />
+        {showFormattingControls ? (
+          <>
+            <CustomSideMenu editor={editor} />
+            <SuggestionMenuController
+              triggerCharacter="/"
+              getItems={getSlashMenuItems}
+              suggestionMenuComponent={CustomSlashMenu}
+            />
+            <SuggestionMenuController
+              triggerCharacter="@"
+              getItems={async (query) => getMentionItems(query)}
+              suggestionMenuComponent={CustomMentionMenu}
+            />
+          </>
+        ) : null}
       </BlockNoteView>
     </StyledEditor>
   );

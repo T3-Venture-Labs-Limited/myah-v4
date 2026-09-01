@@ -37,12 +37,15 @@ jest.mock('@/blocknote-editor/components/BlockEditor', () => ({
   BlockEditor: ({
     editorMinHeight,
     onChange,
+    showFormattingControls,
   }: {
     editorMinHeight?: number;
     onChange: () => void;
+    showFormattingControls?: boolean;
   }) => (
     <button
       data-editor-min-height={editorMinHeight}
+      data-show-formatting-controls={showFormattingControls}
       onClick={onChange}
       type="button"
     >
@@ -207,6 +210,37 @@ describe('RichTextFieldEditor', () => {
     expect(screen.getByRole('button', { name: 'Change body' })).toHaveAttribute(
       'data-editor-min-height',
       '80',
+    );
+  });
+
+  it('reports manual draft changes without persisting or showing formatting controls', () => {
+    const store = resetJotaiStore();
+    const recordAtom = recordStoreFamilyState.atomFamily(recordId);
+    const onBodyChange = jest.fn();
+    store.set(recordAtom, persistedRecord);
+
+    render(
+      <Provider store={store}>
+        <RichTextFieldEditor
+          fieldName="campaignBrief"
+          objectNameSingular="campaign"
+          onBodyChange={onBodyChange}
+          recordId={recordId}
+          shouldPersistChanges={false}
+          showFormattingControls={false}
+        />
+      </Provider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change body' }));
+
+    expect(onBodyChange).toHaveBeenCalledWith(
+      JSON.stringify(mockBlockNoteEditor.document),
+    );
+    expect(mockUpdateOneRecord).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Change body' })).toHaveAttribute(
+      'data-show-formatting-controls',
+      'false',
     );
   });
 });

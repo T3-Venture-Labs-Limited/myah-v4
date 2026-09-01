@@ -38,11 +38,14 @@ type RichTextFieldEditorProps = {
   fieldName: string;
   editorMinHeight?: number;
   onPersistBody?: (blocknote: string) => void;
+  onBodyChange?: (blocknote: string) => void;
   onFocus?: () => void;
   onBlur?: () => void;
   editorRef?: React.MutableRefObject<
     typeof BLOCK_SCHEMA.BlockNoteEditor | null
   >;
+  shouldPersistChanges?: boolean;
+  showFormattingControls?: boolean;
 };
 
 export const RichTextFieldEditor = ({
@@ -51,9 +54,12 @@ export const RichTextFieldEditor = ({
   fieldName,
   editorMinHeight,
   onPersistBody,
+  onBodyChange,
   onFocus: onFocusOverride,
   onBlur: onBlurOverride,
   editorRef,
+  shouldPersistChanges = true,
+  showFormattingControls,
 }: RichTextFieldEditorProps) => {
   const [recordInStore] = useAtom(recordStoreFamilyState.atomFamily(recordId));
 
@@ -170,7 +176,11 @@ export const RichTextFieldEditor = ({
   const handleEditorChange = () => {
     const newStringifiedBody = JSON.stringify(editor.document) ?? '';
 
-    handleBodyChangeDebounced(newStringifiedBody);
+    onBodyChange?.(newStringifiedBody);
+
+    if (shouldPersistChanges) {
+      handleBodyChangeDebounced(newStringifiedBody);
+    }
   };
 
   const fieldValue = isDefined(recordInStore)
@@ -263,6 +273,7 @@ export const RichTextFieldEditor = ({
       onChange={handleEditorChange}
       editor={editor}
       readonly={isRecordFieldReadOnly}
+      showFormattingControls={showFormattingControls}
     />
   );
 };

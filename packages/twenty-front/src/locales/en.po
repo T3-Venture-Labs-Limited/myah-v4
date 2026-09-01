@@ -4186,6 +4186,16 @@ msgstr "Calling Code"
 msgid "campaign"
 msgstr "campaign"
 
+#. js-lingui-id: DMy1O/
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Campaign Agent settings could not be saved."
+msgstr "Campaign Agent settings could not be saved."
+
+#. js-lingui-id: zwwnsW
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Campaign Agent settings saved."
+msgstr "Campaign Agent settings saved."
+
 #. js-lingui-id: su0ybc
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
 #: src/modules/myah/creator-crm/components/CampaignInfluencerIndex.tsx
@@ -7639,6 +7649,11 @@ msgstr "Disable impersonation"
 msgid "Disabled"
 msgstr "Disabled"
 
+#. js-lingui-id: 3EbjfR
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Discard changes"
+msgstr "Discard changes"
+
 #. js-lingui-id: TEKXRb
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Discard connection passwords?"
@@ -7648,6 +7663,11 @@ msgstr "Discard connection passwords?"
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Discard passwords and go back"
 msgstr "Discard passwords and go back"
+
+#. js-lingui-id: XkeQtf
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Discard unsaved changes?"
+msgstr "Discard unsaved changes?"
 
 #. js-lingui-id: +K0AvT
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
@@ -18783,6 +18803,7 @@ msgid "Saturday"
 msgstr "Saturday"
 
 #. js-lingui-id: tfDRzk
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
 #: src/modules/settings/components/SaveAndCancelButtons/SaveButton.tsx
 #: src/pages/settings/data-model/new-field/SettingsObjectNewFieldConfigure.tsx
 msgid "Save"
@@ -25144,6 +25165,11 @@ msgstr "Your billing interval will switch to monthly immediately and your trial 
 #: src/modules/settings/billing/hooks/useBillingWording.ts
 msgid "Your billing interval will switch to yearly immediately and your trial will continue. When it ends, you will be charged ${yearlyPrice} per user per year billed annually."
 msgstr "Your billing interval will switch to yearly immediately and your trial will continue. When it ends, you will be charged ${yearlyPrice} per user per year billed annually."
+
+#. js-lingui-id: toljrd
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+msgid "Your Campaign Agent changes have not been saved."
+msgstr "Your Campaign Agent changes have not been saved."
 
 #. js-lingui-id: 0L4hpS
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
