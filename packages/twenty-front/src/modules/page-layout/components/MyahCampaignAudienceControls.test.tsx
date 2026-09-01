@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { MyahCampaignAudienceControls } from './MyahCampaignAudienceControls';
 
 const mockUseQuery = jest.fn();
@@ -23,7 +24,16 @@ const mockAttach = jest.fn();
 const mockApprove = jest.fn();
 const mockDetach = jest.fn();
 const mockRefetchQueries = jest.fn();
+const mockDispatchObjectRecordOperationBrowserEvent = jest.mocked(
+  dispatchObjectRecordOperationBrowserEvent,
+);
 
+jest.mock(
+  '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent',
+  () => ({
+    dispatchObjectRecordOperationBrowserEvent: jest.fn(),
+  }),
+);
 jest.mock('@apollo/client', () => ({
   gql: (source: TemplateStringsArray) => source.join(''),
 }));
@@ -314,12 +324,14 @@ describe('MyahCampaignAudienceControls', () => {
     mockRefetchQueries.mockResolvedValue(undefined);
     mockApolloQueries();
     mockRecords();
-    mockUseObjectMetadataItem.mockReturnValue({
-      objectMetadataItem: {
-        id: 'creator-list-metadata-id',
-        nameSingular: 'creatorList',
-      },
-    });
+    mockUseObjectMetadataItem.mockImplementation(
+      ({ objectNameSingular }: { objectNameSingular: string }) => ({
+        objectMetadataItem: {
+          id: `${objectNameSingular}-metadata-id`,
+          nameSingular: objectNameSingular,
+        },
+      }),
+    );
     mockUseMutation.mockImplementation((mutation: string) => {
       if (mutation.includes('AttachCampaignCreatorLists')) {
         return [mockAttach];
@@ -371,21 +383,47 @@ describe('MyahCampaignAudienceControls', () => {
     );
 
     await waitFor(() =>
-      expect(mockAttach).toHaveBeenCalledWith({
-        variables: {
-          input: {
-            campaignId: 'campaign-1',
-            creatorListIds: ['list-selected'],
+      expect(mockAttach).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.any(Function),
+          variables: {
+            input: {
+              campaignId: 'campaign-1',
+              creatorListIds: ['list-selected'],
+            },
           },
+        }),
+      ),
+    );
+    const updateSnapshot = mockAttach.mock.calls[0][0].update;
+    const writeQuery = jest.fn();
+    const attachedSnapshot = snapshot([
+      'list-1',
+      'list-selected',
+    ]).campaignInfluencerSnapshot;
+
+    updateSnapshot(
+      { writeQuery },
+      {
+        data: {
+          attachCampaignCreatorLists: attachedSnapshot,
         },
-      }),
+      },
     );
-    await waitFor(() =>
-      expect(mockRefetchQueries).toHaveBeenCalledWith({
-        include: ['active', 'inactive', 'FindManyCampaignCreators'],
-        updateCache: expect.any(Function),
-      }),
-    );
+
+    expect(writeQuery).toHaveBeenCalledWith({
+      query: expect.stringContaining('CampaignInfluencerSnapshot'),
+      variables: { input: { campaignId: 'campaign-1' } },
+      data: { campaignInfluencerSnapshot: attachedSnapshot },
+    });
+    expect(mockDispatchObjectRecordOperationBrowserEvent).toHaveBeenCalledWith({
+      objectMetadataItem: {
+        id: 'campaignCreator-metadata-id',
+        nameSingular: 'campaignCreator',
+      },
+      operation: { type: 'create-many' },
+    });
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
   });
 
   it('closes and disables the picker while an attachment is pending', async () => {
@@ -446,11 +484,11 @@ describe('MyahCampaignAudienceControls', () => {
   });
 
   it('reviews readable additions, approves only selected ids, and refreshes', async () => {
-    const { refetchSnapshot } = mockApolloQueries({
+    mockApolloQueries({
       snapshotData: snapshot(['list-1']),
       candidatesData: candidates(['creator-1', 'creator-2']),
     });
-    const { refetchCampaignCreatorLists } = mockRecords({
+    mockRecords({
       creatorLists: [{ id: 'list-1', name: 'VIP Creators' }],
       creators: [
         { id: 'creator-1', name: 'Ada' },
@@ -484,12 +522,14 @@ describe('MyahCampaignAudienceControls', () => {
         },
       }),
     );
-    expect(refetchSnapshot).toHaveBeenCalled();
-    expect(refetchCampaignCreatorLists).toHaveBeenCalled();
-    expect(mockRefetchQueries).toHaveBeenCalledWith({
-      include: ['active', 'inactive', 'FindManyCampaignCreators'],
-      updateCache: expect.any(Function),
+    expect(mockDispatchObjectRecordOperationBrowserEvent).toHaveBeenCalledWith({
+      objectMetadataItem: {
+        id: 'campaignCreator-metadata-id',
+        nameSingular: 'campaignCreator',
+      },
+      operation: { type: 'create-many' },
     });
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
   });
 
   it('approves more than 500 selected additions in bounded batches', async () => {
@@ -720,17 +760,15 @@ describe('MyahCampaignAudienceControls', () => {
     );
 
     await waitFor(() =>
-      expect(mockDetach).toHaveBeenCalledWith({
-        variables: {
-          input: { campaignId: 'campaign-1', creatorListId: 'list-1' },
-        },
-      }),
+      expect(mockDetach).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.any(Function),
+          variables: {
+            input: { campaignId: 'campaign-1', creatorListId: 'list-1' },
+          },
+        }),
+      ),
     );
-    await waitFor(() =>
-      expect(mockRefetchQueries).toHaveBeenCalledWith({
-        include: ['active', 'inactive', 'FindManyCampaignCreators'],
-        updateCache: expect.any(Function),
-      }),
-    );
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
   });
 });
