@@ -36,22 +36,32 @@ type RichTextFieldEditorProps = {
   recordId: string;
   objectNameSingular: string;
   fieldName: string;
+  editorMinHeight?: number;
   onPersistBody?: (blocknote: string) => void;
+  onBodyChange?: (blocknote: string) => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  placeholder?: string;
   editorRef?: React.MutableRefObject<
     typeof BLOCK_SCHEMA.BlockNoteEditor | null
   >;
+  shouldPersistChanges?: boolean;
+  showFormattingControls?: boolean;
 };
 
 export const RichTextFieldEditor = ({
   recordId,
   objectNameSingular,
   fieldName,
+  editorMinHeight,
   onPersistBody,
+  onBodyChange,
   onFocus: onFocusOverride,
   onBlur: onBlurOverride,
+  placeholder,
   editorRef,
+  shouldPersistChanges = true,
+  showFormattingControls,
 }: RichTextFieldEditorProps) => {
   const [recordInStore] = useAtom(recordStoreFamilyState.atomFamily(recordId));
 
@@ -168,7 +178,11 @@ export const RichTextFieldEditor = ({
   const handleEditorChange = () => {
     const newStringifiedBody = JSON.stringify(editor.document) ?? '';
 
-    handleBodyChangeDebounced(newStringifiedBody);
+    onBodyChange?.(newStringifiedBody);
+
+    if (shouldPersistChanges) {
+      handleBodyChangeDebounced(newStringifiedBody);
+    }
   };
 
   const fieldValue = isDefined(recordInStore)
@@ -197,7 +211,7 @@ export const RichTextFieldEditor = ({
       ? handleEditorBuiltInUploadFile
       : undefined,
     placeholders: {
-      default: t`Type '/' for commands, '@' for mentions`,
+      default: placeholder ?? t`Type '/' for commands, '@' for mentions`,
     },
   });
 
@@ -255,11 +269,13 @@ export const RichTextFieldEditor = ({
 
   return (
     <BlockEditor
+      editorMinHeight={editorMinHeight}
       onFocus={handleBlockEditorFocus}
       onBlur={handleBlockEditorBlur}
       onChange={handleEditorChange}
       editor={editor}
       readonly={isRecordFieldReadOnly}
+      showFormattingControls={showFormattingControls}
     />
   );
 };

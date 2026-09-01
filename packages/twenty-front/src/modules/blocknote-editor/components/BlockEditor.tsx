@@ -21,15 +21,17 @@ import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 interface BlockEditorProps {
   editor: typeof BLOCK_SCHEMA.BlockNoteEditor;
+  editorMinHeight?: number;
   onFocus?: () => void;
   onBlur?: () => void;
   onPaste?: (event: ClipboardEvent) => void;
   onChange?: () => void;
   readonly?: boolean;
+  showFormattingControls?: boolean;
 }
 
 // oxlint-disable-next-line twenty/no-hardcoded-colors
-const StyledEditor = styled.div`
+const StyledEditor = styled.div<{ editorMinHeight: number }>`
   max-width: 100%;
   min-width: 0;
   width: 100%;
@@ -38,7 +40,7 @@ const StyledEditor = styled.div`
     background: transparent;
     color: ${themeCssVariables.font.color.primary};
     font-size: 13px;
-    min-height: 400px;
+    min-height: ${({ editorMinHeight }) => editorMinHeight}px;
   }
   & .editor [class^='_inlineContent']:before {
     color: ${themeCssVariables.font.color.tertiary};
@@ -159,11 +161,13 @@ const StyledEditor = styled.div`
 
 export const BlockEditor = ({
   editor,
+  editorMinHeight = 400,
   onFocus,
   onBlur,
   onChange,
   onPaste,
   readonly,
+  showFormattingControls = true,
 }: BlockEditorProps) => {
   const { colorScheme } = useContext(ThemeContext);
   const { t } = useLingui();
@@ -207,7 +211,7 @@ export const BlockEditor = ({
   };
 
   return (
-    <StyledEditor>
+    <StyledEditor editorMinHeight={editorMinHeight}>
       <BlockNoteView
         onFocus={handleFocus}
         onBlur={handleBlur}
@@ -215,21 +219,27 @@ export const BlockEditor = ({
         onChange={handleChange}
         editor={editor}
         theme={blockNoteTheme}
+        formattingToolbar={showFormattingControls}
+        linkToolbar={showFormattingControls}
         slashMenu={false}
         sideMenu={false}
         editable={!readonly}
       >
-        <CustomSideMenu editor={editor} />
-        <SuggestionMenuController
-          triggerCharacter="/"
-          getItems={getSlashMenuItems}
-          suggestionMenuComponent={CustomSlashMenu}
-        />
-        <SuggestionMenuController
-          triggerCharacter="@"
-          getItems={async (query) => getMentionItems(query)}
-          suggestionMenuComponent={CustomMentionMenu}
-        />
+        {showFormattingControls ? (
+          <>
+            <CustomSideMenu editor={editor} />
+            <SuggestionMenuController
+              triggerCharacter="/"
+              getItems={getSlashMenuItems}
+              suggestionMenuComponent={CustomSlashMenu}
+            />
+            <SuggestionMenuController
+              triggerCharacter="@"
+              getItems={async (query) => getMentionItems(query)}
+              suggestionMenuComponent={CustomMentionMenu}
+            />
+          </>
+        ) : null}
       </BlockNoteView>
     </StyledEditor>
   );
