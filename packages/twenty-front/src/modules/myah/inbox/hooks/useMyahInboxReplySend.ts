@@ -98,6 +98,7 @@ export const useMyahInboxReplySend = (
     refetch: refetchReadiness,
   } = useQuery(MyahInboxReplySendReadinessDocument, {
     client: apolloCoreClient,
+    fetchPolicy: 'network-only',
     variables: { threadId },
   });
   const [sendMyahInboxReply, { loading: sending }] = useMutation(

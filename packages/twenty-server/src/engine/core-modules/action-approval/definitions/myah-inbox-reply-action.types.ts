@@ -69,6 +69,7 @@ export type CanonicalMyahInboxReplyGraph = {
   subject: string;
   inReplyTo: string;
   parentMessageId: string;
+  parentAssociationDirection: 'INCOMING' | 'OUTGOING';
   providerMessageExternalId: string | null;
   providerThreadExternalId: string | null;
   managedMailboxId: string | null;

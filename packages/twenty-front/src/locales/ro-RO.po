@@ -19672,6 +19672,7 @@ msgid "Selected subscription"
 msgstr ""
 
 #. js-lingui-id: JlFcis
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
 #: src/modules/side-panel/pages/compose-email/components/SidePanelComposeEmailPage.tsx
 msgid "Send"

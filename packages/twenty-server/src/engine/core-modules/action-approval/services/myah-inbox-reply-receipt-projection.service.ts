@@ -37,6 +37,7 @@ type SentInboxMessageRow = {
   senderDisplayName: string | null;
   connectedAccountId: string | null;
   parentMessageId: string | null;
+  parentAssociationDirection: string | null;
   parentHeaderMessageId: string | null;
   parentMessageExternalId: string | null;
   parentThreadExternalId: string | null;
@@ -389,7 +390,8 @@ export class MyahInboxReplyReceiptProjectionService {
         parent."id" AS "parentMessageId",
         parent."headerMessageId" AS "parentHeaderMessageId",
         parent_association."messageExternalId" AS "parentMessageExternalId",
-        parent_association."messageThreadExternalId" AS "parentThreadExternalId"
+        parent_association."messageThreadExternalId" AS "parentThreadExternalId",
+        parent_association."direction" AS "parentAssociationDirection"
       FROM "${schemaName}"."message" message
       INNER JOIN "${schemaName}"."messageChannelMessageAssociation" association ON association."messageId" = message."id"
       INNER JOIN core."messageChannel" channel ON channel."id" = association."messageChannelId"
@@ -434,6 +436,8 @@ export class MyahInboxReplyReceiptProjectionService {
           approvedRevision,
           message.parentHeaderMessageId,
           input.threadId,
+          message.parentMessageId,
+          message.parentAssociationDirection,
           message.parentThreadExternalId,
           message.parentMessageExternalId,
           message.connectedAccountId,

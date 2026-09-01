@@ -54,6 +54,7 @@ let mockObjectMetadataItems = [{ nameSingular: 'messageThread' }];
 type MockSendActionMode = 'deferred' | 'pending' | 'sending' | 'unknown';
 
 let mockSendActionMode: MockSendActionMode = 'sending';
+let mockIsGenerating = false;
 let mockSendActionDeferred: {
   promise: Promise<void>;
   resolve: (value: void) => void;
@@ -121,8 +122,10 @@ jest.mock(
 
     return {
       MyahInboxReplySendAction: ({
+        disabled,
         onSendingChange,
       }: {
+        disabled?: boolean;
         onSendingChange: (sending: boolean) => void;
       }) => {
         const [isLocked, setIsLocked] = React.useState(false);
@@ -152,7 +155,7 @@ jest.mock(
           <>
             <button
               data-variant="primary"
-              disabled={isLocked}
+              disabled={disabled || isLocked}
               onClick={handleSend}
             >
               Send
@@ -176,18 +179,20 @@ jest.mock('@/myah/inbox/components/MyahInboxProposalPreview', () => ({
     onApply: (body: { markdown: string; blocknote: null }) => void;
     renderGenerateAction: (
       generateAction: ReactType.ReactNode,
+      isGenerating: boolean,
     ) => ReactType.ReactNode;
   }) =>
     renderGenerateAction(
       <button
         data-variant="secondary"
-        disabled={disabled}
+        disabled={disabled || mockIsGenerating}
         onClick={() =>
           onApply({ markdown: 'generated reply', blocknote: null })
         }
       >
         Generate Reply
       </button>,
+      mockIsGenerating,
     ),
 }));
 const thread = {
@@ -217,6 +222,7 @@ describe('MyahInboxReplyWorkspace', () => {
     jest.clearAllMocks();
     mockCurrentWorkspace = { id: 'workspace-1' };
     mockSendActionMode = 'sending';
+    mockIsGenerating = false;
     mockSendActionDeferred = null;
     mockDraftEntry = {
       localBody: { markdown: 'Saved draft', blocknote: null },
@@ -310,6 +316,26 @@ describe('MyahInboxReplyWorkspace', () => {
     expect(buttons[1]).toHaveAttribute('data-variant', 'primary');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText('Approve & send')).not.toBeInTheDocument();
+  });
+
+  it('locks Send and draft mutation while reply generation is active', () => {
+    mockIsGenerating = true;
+
+    render(<MyahInboxReplyWorkspace thread={thread} />);
+
+    expect(
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Generate Reply',
+      }),
+    ).toBeDisabled();
+    expect(
+      within(screen.getByLabelText('Draft actions')).getByRole('button', {
+        name: 'Send',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Make pending local edit' }),
+    ).toBeDisabled();
   });
 
   it('locks generation and draft mutation while direct delivery is unresolved', () => {

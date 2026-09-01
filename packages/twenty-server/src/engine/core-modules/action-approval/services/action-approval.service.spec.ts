@@ -565,15 +565,21 @@ describe('ActionApprovalService direct Inbox reply authority', () => {
   ])(
     'reports %s as the current scoped execution state',
     async (_case, binding, state) => {
-      const { service } = createLockingService([binding]);
+      const { service, repository } = createLockingService([binding]);
 
       await expect(
         service.getInboxReplyDraftExecutionState({
           workspaceId,
-          initiatorUserWorkspaceId: userWorkspaceId,
           draftId: inboxReplyBinding.draftId,
         }),
       ).resolves.toBe(state);
+      expect(repository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.not.objectContaining({
+            initiatorUserWorkspaceId: userWorkspaceId,
+          }),
+        }),
+      );
     },
   );
 

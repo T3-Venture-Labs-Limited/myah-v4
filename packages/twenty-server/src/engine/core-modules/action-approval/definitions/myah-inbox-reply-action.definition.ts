@@ -38,6 +38,7 @@ import { MyahInboxReplyAuthorityContextService } from 'src/engine/core-modules/a
 import { ManagedEmailCampaignEligibilityService } from 'src/engine/core-modules/managed-email/services/managed-email-campaign-eligibility.service';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
+import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 
 const isValidMessageId = (value: string): boolean => {
   const match = /^<([^@<>]+)@([^@<>]+)>$/.exec(value);
@@ -68,6 +69,7 @@ export class MyahInboxReplyActionDefinition {
     @InjectRepository(MessageChannelEntity)
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly managedEmailCampaignEligibilityService: ManagedEmailCampaignEligibilityService,
+    private readonly messagingMessageOutboundService: MessagingMessageOutboundService,
   ) {}
 
   async buildAuthority({
@@ -328,7 +330,13 @@ export class MyahInboxReplyActionDefinition {
       );
     }
 
-    const senderEmail = channel.handle.trim().toLowerCase();
+    const senderEmail = (
+      channel.type === MessageChannelType.EMAIL_GROUP
+        ? account.handle
+        : channel.handle
+    )
+      .trim()
+      .toLowerCase();
     const senderHandles = new Set(
       [account.handle, ...(account.handleAliases ?? [])]
         .map((handle) => handle.trim().toLowerCase())
@@ -369,6 +377,16 @@ export class MyahInboxReplyActionDefinition {
       ) {
         throw new MyahInboxReplyUnavailableError(
           MyahInboxReplyUnavailableCode.RECONNECT_REQUIRED,
+        );
+      }
+
+      try {
+        await this.messagingMessageOutboundService.assertConnectedAccountSendable(
+          account,
+        );
+      } catch {
+        throw new MyahInboxReplyUnavailableError(
+          MyahInboxReplyUnavailableCode.MAILBOX_INELIGIBLE,
         );
       }
     }
@@ -431,6 +449,7 @@ export class MyahInboxReplyActionDefinition {
           : `Re: ${parentSubject}`,
       inReplyTo: headerMessageId,
       parentMessageId: parentMessage.id,
+      parentAssociationDirection: associations[0].direction,
       providerMessageExternalId:
         associations[0].messageExternalId?.trim() || null,
       providerThreadExternalId:

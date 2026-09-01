@@ -41,6 +41,8 @@ export const buildMyahInboxReplyExpectedActionBinding = ({
       graph.draftRevision,
       graph.inReplyTo,
       graph.messageThreadId,
+      graph.parentMessageId,
+      graph.parentAssociationDirection,
       graph.providerThreadExternalId,
       graph.providerMessageExternalId,
       graph.connectedAccountId,

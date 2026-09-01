@@ -67,6 +67,13 @@ describe('useMyahInboxReplySend', () => {
 
     expect(result.current.readiness).toEqual({ status: 'READY', reason: null });
     expect(result.current.readinessLoading).toBe(false);
+    expect(mockUseQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        fetchPolicy: 'network-only',
+        variables: { threadId },
+      }),
+    );
     expect(statusQuery).not.toHaveBeenCalled();
   });
 

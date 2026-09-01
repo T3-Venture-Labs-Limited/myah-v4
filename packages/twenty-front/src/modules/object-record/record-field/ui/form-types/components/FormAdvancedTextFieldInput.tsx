@@ -70,7 +70,6 @@ const StyledFullScreenEditorContainer = styled.div`
 
 type FormAdvancedTextFieldInputProps = {
   label?: string;
-  ariaLabel?: string;
   error?: string;
   hint?: string;
   defaultValue: string | undefined | null;
@@ -88,7 +87,6 @@ type FormAdvancedTextFieldInputProps = {
 };
 export const FormAdvancedTextFieldInput = ({
   label,
-  ariaLabel,
   error,
   hint,
   defaultValue,
@@ -116,7 +114,6 @@ export const FormAdvancedTextFieldInput = ({
   const editor = useAdvancedTextEditor(
     {
       placeholder: placeholder,
-      ariaLabel,
       readonly,
       defaultValue,
       contentType,

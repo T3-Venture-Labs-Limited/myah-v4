@@ -652,7 +652,6 @@ describe('MyahInboxReplySendService', () => {
     });
     expect(setup.getInboxReplyDraftExecutionState).toHaveBeenCalledWith({
       workspaceId,
-      initiatorUserWorkspaceId: userWorkspaceId,
       draftId: threadId,
     });
   });

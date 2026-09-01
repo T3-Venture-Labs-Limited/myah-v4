@@ -21,6 +21,7 @@ import { Button } from 'twenty-ui/input';
 
 export type MyahInboxReplySendActionProps = {
   draftKey: MyahInboxDraftAutosaveKey;
+  disabled?: boolean;
   entry: MyahInboxDraftAutosaveEntry;
   onDraftReconciled: (thread: MyahInboxDraftAutosaveThread) => void;
   onSendingChange: (sending: boolean) => void;
@@ -28,6 +29,7 @@ export type MyahInboxReplySendActionProps = {
 
 export const MyahInboxReplySendAction = ({
   draftKey,
+  disabled = false,
   entry,
   onDraftReconciled,
   onSendingChange,
@@ -49,6 +51,7 @@ export const MyahInboxReplySendAction = ({
   const [isPending, setIsPending] = useState(false);
 
   const canSend =
+    !disabled &&
     !isSending &&
     !sending &&
     !isPending &&
@@ -108,7 +111,7 @@ export const MyahInboxReplySendAction = ({
     setIsSending(true);
     onSendingChange(true);
 
-    let remainsPending = false;
+    let keepSharedDraftLocked = false;
 
     try {
       const flushed = await autosaveController.flush(draftKey);
@@ -137,12 +140,15 @@ export const MyahInboxReplySendAction = ({
           body: result.body,
         });
       }
-      remainsPending = result.outcome === MyahInboxReplySendOutcome.SENDING;
+      const remainsPending =
+        result.outcome === MyahInboxReplySendOutcome.SENDING;
       setIsPending(remainsPending);
+      keepSharedDraftLocked =
+        remainsPending || result.outcome === MyahInboxReplySendOutcome.UNKNOWN;
       handleOutcome(result);
     } finally {
       setIsSending(false);
-      if (!remainsPending) {
+      if (!keepSharedDraftLocked) {
         onSendingChange(false);
       }
     }
@@ -151,7 +157,7 @@ export const MyahInboxReplySendAction = ({
   return (
     <>
       <Button
-        title="Send"
+        title={t`Send`}
         variant="primary"
         size="small"
         disabled={!canSend}

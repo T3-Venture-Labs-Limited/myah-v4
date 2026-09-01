@@ -122,7 +122,7 @@ const MyahInboxReplyWorkspaceContent = ({
         draftEntry.status === 'conflict'
       }
       onApply={handleApplyProposal}
-      renderGenerateAction={(generateAction) => (
+      renderGenerateAction={(generateAction, isGenerating) => (
         <MyahInboxDraftEditor
           entry={draftEntry}
           onDraftChange={(body) =>
@@ -134,13 +134,14 @@ const MyahInboxReplyWorkspaceContent = ({
           onReloadConflict={() =>
             draftAutosaveController.reloadConflict(draftKey)
           }
-          disabled={isSending}
+          disabled={isSending || isGenerating || isApplyingProposal}
           actions={
             <>
               {generateAction}
               <MyahInboxReplySendAction
                 draftKey={draftKey}
                 entry={draftEntry}
+                disabled={isGenerating || isApplyingProposal}
                 onDraftReconciled={draftAutosaveController.reconcile}
                 onSendingChange={setIsSending}
               />

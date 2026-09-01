@@ -206,6 +206,9 @@ const createDefinition = ({
       .mockResolvedValue(managedMailbox),
     findConnectedIdentity: jest.fn().mockResolvedValue(managedMailbox),
   };
+  const messagingMessageOutboundService = {
+    assertConnectedAccountSendable: jest.fn().mockResolvedValue(undefined),
+  };
   const Context = MyahInboxReplyAuthorityContextService as unknown as new (
     ...args: unknown[]
   ) => MyahInboxReplyAuthorityContextService;
@@ -226,15 +229,16 @@ const createDefinition = ({
       connectedAccountRepository,
       messageChannelRepository,
       managedEmailCampaignEligibilityService,
+      messagingMessageOutboundService,
     ),
     repositories,
     parent,
     account,
     channel,
     managedEmailCampaignEligibilityService,
+    messagingMessageOutboundService,
   };
 };
-
 const buildAuthority = (definition: MyahInboxReplyActionDefinition) =>
   definition.buildAuthority({
     workspaceId,
@@ -261,6 +265,7 @@ describe('MyahInboxReplyActionDefinition', () => {
       subject: 'Re: Partnership',
       inReplyTo: '<incoming@example.com>',
       parentMessageId,
+      parentAssociationDirection: 'INCOMING',
       providerMessageExternalId: 'provider-message-id',
       providerThreadExternalId: 'provider-thread-id',
       managedMailboxId: null,
@@ -291,6 +296,8 @@ describe('MyahInboxReplyActionDefinition', () => {
           4,
           '<incoming@example.com>',
           messageThreadId,
+          parentMessageId,
+          'INCOMING',
           'provider-thread-id',
           'provider-message-id',
           connectedAccountId,
@@ -338,7 +345,7 @@ describe('MyahInboxReplyActionDefinition', () => {
         id: messageChannelId,
         workspaceId,
         connectedAccountId,
-        handle: 'team@brand.com',
+        handle: 'myah-inbound-123@reply.brand.test',
         type: MessageChannelType.EMAIL_GROUP,
         visibility: 'SHARE_EVERYTHING',
         isSyncEnabled: true,
@@ -365,6 +372,38 @@ describe('MyahInboxReplyActionDefinition', () => {
       connectedAccountId,
       messageChannelId,
     });
+  });
+
+  it('rejects an Email Group before approval when its outbound domain is unavailable', async () => {
+    const setup = createDefinition({
+      account: {
+        id: connectedAccountId,
+        workspaceId,
+        userWorkspaceId: initiatorUserWorkspaceId,
+        handle: 'team@brand.com',
+        handleAliases: [],
+        provider: ConnectedAccountProvider.EMAIL_GROUP,
+        archivedAt: null,
+        name: 'Brand',
+      },
+      channel: {
+        id: messageChannelId,
+        workspaceId,
+        connectedAccountId,
+        handle: 'myah-inbound-123@reply.brand.test',
+        type: MessageChannelType.EMAIL_GROUP,
+        visibility: 'SHARE_EVERYTHING',
+        isSyncEnabled: true,
+        syncStatus: 'ACTIVE',
+      },
+    });
+    setup.messagingMessageOutboundService.assertConnectedAccountSendable.mockRejectedValue(
+      new Error('Email Group domain is unavailable'),
+    );
+
+    await expect(buildAuthority(setup.definition)).rejects.toThrow(
+      MyahInboxReplyUnavailableCode.MAILBOX_INELIGIBLE,
+    );
   });
 
   it('preserves saved Markdown whitespace in the canonical graph and fingerprint', async () => {

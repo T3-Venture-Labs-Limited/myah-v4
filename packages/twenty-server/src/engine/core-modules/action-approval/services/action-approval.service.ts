@@ -586,11 +586,9 @@ export class ActionApprovalService {
 
   async getInboxReplyDraftExecutionState({
     workspaceId,
-    initiatorUserWorkspaceId,
     draftId,
   }: {
     workspaceId: string;
-    initiatorUserWorkspaceId: string;
     draftId: string;
   }): Promise<'PENDING' | 'UNKNOWN' | null> {
     const bindings = await this.dataSource
@@ -598,7 +596,6 @@ export class ActionApprovalService {
       .find({
         where: {
           workspaceId,
-          initiatorUserWorkspaceId,
           actionName: 'send_inbox_reply',
           draftId,
           state: In([

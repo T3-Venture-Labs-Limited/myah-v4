@@ -21,6 +21,16 @@ export class MessagingMessageOutboundService {
     private readonly emailGroupMessageOutboundService: EmailGroupMessageOutboundService,
   ) {}
 
+  public async assertConnectedAccountSendable(
+    connectedAccount: ConnectedAccountEntity,
+  ): Promise<void> {
+    if (connectedAccount.provider === ConnectedAccountProvider.EMAIL_GROUP) {
+      await this.emailGroupMessageOutboundService.assertSendable(
+        connectedAccount,
+      );
+    }
+  }
+
   public async sendMessage(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,

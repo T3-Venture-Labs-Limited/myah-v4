@@ -379,6 +379,7 @@ describe('MyahInboxReplySendAction', () => {
   });
 
   it('keeps an unknown outcome inline and locks Send against another click', async () => {
+    const onSendingChange = jest.fn();
     mockSend.mockResolvedValue({
       outcome: 'UNKNOWN',
       receiptId: null,
@@ -386,7 +387,7 @@ describe('MyahInboxReplySendAction', () => {
       body: null,
       error: 'safe unknown',
     });
-    renderAction();
+    renderAction({ onSendingChange });
 
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -396,6 +397,8 @@ describe('MyahInboxReplySendAction', () => {
       ),
     );
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(onSendingChange).toHaveBeenCalledTimes(1);
+    expect(onSendingChange).toHaveBeenCalledWith(true);
     expect(mockEnqueueWarningSnackBar).toHaveBeenCalledWith({
       message:
         'Delivery outcome is unknown. This draft is locked to prevent a duplicate send.',

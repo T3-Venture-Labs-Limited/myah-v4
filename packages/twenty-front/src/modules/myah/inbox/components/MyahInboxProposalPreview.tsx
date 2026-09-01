@@ -50,7 +50,10 @@ type MyahInboxProposalPreviewProps = {
   threadId: string;
   disabled: boolean;
   onApply: (body: ProposalBody) => void;
-  renderGenerateAction?: (generateAction: ReactNode) => ReactNode;
+  renderGenerateAction?: (
+    generateAction: ReactNode,
+    isGenerating: boolean,
+  ) => ReactNode;
 };
 
 export const MyahInboxProposalPreview = ({
@@ -98,7 +101,7 @@ export const MyahInboxProposalPreview = ({
   return (
     <StyledProposal aria-label="AI reply">
       {renderGenerateAction ? (
-        renderGenerateAction(generateAction)
+        renderGenerateAction(generateAction, isGenerating)
       ) : (
         <StyledActions>{generateAction}</StyledActions>
       )}

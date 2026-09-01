@@ -101,7 +101,6 @@ export class MyahInboxReplySendService {
       const executionState =
         await this.actionApprovalService.getInboxReplyDraftExecutionState({
           workspaceId: input.workspace.id,
-          initiatorUserWorkspaceId: input.userWorkspaceId,
           draftId: input.threadId,
         });
 
