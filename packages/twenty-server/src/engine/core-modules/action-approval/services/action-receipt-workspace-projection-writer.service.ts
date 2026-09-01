@@ -6,13 +6,14 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { isNonEmptyString } from '@sniptt/guards';
 import { MYAH_STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { FieldActorSource } from 'twenty-shared/types';
-import { type DataSource, type EntityManager, type Repository } from 'typeorm';
+import { DataSource, type EntityManager, Repository } from 'typeorm';
 
 import { type ActionReceiptProjectionWriter } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
+import { MyahInboxReplyReceiptProjectionService } from 'src/engine/core-modules/action-approval/services/myah-inbox-reply-receipt-projection.service';
 
 type ProjectionInput = Parameters<ActionReceiptProjectionWriter['project']>[0];
 
@@ -49,6 +50,7 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
     @InjectRepository(ConnectedAccountEntity)
     private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
     private readonly sentMessagePersistenceService: SentMessagePersistenceService,
+    private readonly myahInboxReplyReceiptProjectionService: MyahInboxReplyReceiptProjectionService,
   ) {}
 
   async project(input: ProjectionInput): Promise<void> {
@@ -61,6 +63,11 @@ export class ActionReceiptWorkspaceProjectionWriterService implements ActionRece
 
     if (input.actionName === 'send_outreach_email') {
       await this.projectOutreachEmail(input, schemaName);
+      return;
+    }
+
+    if (input.actionName === 'send_inbox_reply') {
+      await this.myahInboxReplyReceiptProjectionService.project(input);
       return;
     }
 

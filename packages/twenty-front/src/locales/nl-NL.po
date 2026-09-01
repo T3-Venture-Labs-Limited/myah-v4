@@ -7487,6 +7487,12 @@ msgstr ""
 msgid "Deleting this method will remove it permanently from your account."
 msgstr "Het verwijderen van deze methode zal het permanent van uw account verwijderen."
 
+#. js-lingui-id: kJHy3o
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Delivery outcome is unknown. This draft is locked to prevent a duplicate send."
+msgstr ""
+
 #. js-lingui-id: TvssMP
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -8012,6 +8018,11 @@ msgstr "Voorbeeldbestand downloaden"
 msgid "Draft"
 msgstr ""
 
+#. js-lingui-id: WYKeXP
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Draft changed. Review and send again."
+msgstr ""
+
 #. js-lingui-id: DbAw4C
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx
 msgid "Draft email"
@@ -8413,6 +8424,11 @@ msgstr "anders als"
 msgid "Email"
 msgstr "E-mail"
 
+#. js-lingui-id: MqUoVk
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Email accepted. Confirming delivery record…"
+msgstr ""
+
 #. js-lingui-id: ATGYL1
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Email address"
@@ -8478,6 +8494,11 @@ msgstr "E-mailadres moet geldig zijn"
 msgid "Email or domain is already in blocklist"
 msgstr "E-mail of domein staat al in de blokkeerlijst"
 
+#. js-lingui-id: z4VImh
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Email sent"
+msgstr ""
+
 #. js-lingui-id: Xl929X
 #: src/modules/activities/emails/hooks/useSendEmail.ts
 msgid "Email sent successfully"
@@ -8522,6 +8543,11 @@ msgstr "E-mailverificatielink opnieuw verzonden!"
 #: src/modules/auth/components/VerifyEmailEffect.tsx
 msgid "Email verified."
 msgstr "E-mail geverifieerd."
+
+#. js-lingui-id: Pv8rnn
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Email was not sent. Your draft is still available."
+msgstr ""
 
 #. js-lingui-id: VI2hiF
 #: src/modules/settings/accounts/components/SettingsAccountsBlocklistTable.tsx
@@ -19673,6 +19699,7 @@ msgid "Selected subscription"
 msgstr ""
 
 #. js-lingui-id: JlFcis
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
 #: src/modules/side-panel/pages/compose-email/components/SidePanelComposeEmailPage.tsx
 msgid "Send"

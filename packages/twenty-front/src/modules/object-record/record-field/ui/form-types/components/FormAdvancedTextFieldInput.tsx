@@ -85,7 +85,6 @@ type FormAdvancedTextFieldInputProps = {
   maxWidth: number;
   contentType?: AdvancedTextEditorContentType;
 };
-
 export const FormAdvancedTextFieldInput = ({
   label,
   error,

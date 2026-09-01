@@ -104,3 +104,40 @@ export const GENERATE_MYAH_INBOX_REPLY_PROPOSAL = gql`
     }
   }
 `;
+
+export const GET_MYAH_INBOX_REPLY_SEND_READINESS = gql`
+  query MyahInboxReplySendReadiness($threadId: UUID!) {
+    myahInboxReplySendReadiness(threadId: $threadId) {
+      status
+      reason
+    }
+  }
+`;
+
+export const SEND_MYAH_INBOX_REPLY = gql`
+  mutation SendMyahInboxReply($input: SendMyahInboxReplyInput!) {
+    sendMyahInboxReply(input: $input) {
+      outcome
+      receiptId
+      revision
+      body {
+        markdown
+        blocknote
+      }
+    }
+  }
+`;
+
+export const GET_MYAH_INBOX_REPLY_SEND_STATUS = gql`
+  query MyahInboxReplySendStatus($input: MyahInboxReplySendStatusInput!) {
+    myahInboxReplySendStatus(input: $input) {
+      outcome
+      receiptId
+      revision
+      body {
+        markdown
+        blocknote
+      }
+    }
+  }
+`;

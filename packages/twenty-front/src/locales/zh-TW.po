@@ -7487,6 +7487,12 @@ msgstr ""
 msgid "Deleting this method will remove it permanently from your account."
 msgstr "刪除此方法將永久從您的帳戶移除。"
 
+#. js-lingui-id: kJHy3o
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Delivery outcome is unknown. This draft is locked to prevent a duplicate send."
+msgstr ""
+
 #. js-lingui-id: TvssMP
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
@@ -8012,6 +8018,11 @@ msgstr "下載範例檔案"
 msgid "Draft"
 msgstr ""
 
+#. js-lingui-id: WYKeXP
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Draft changed. Review and send again."
+msgstr ""
+
 #. js-lingui-id: DbAw4C
 #: src/modules/workflow/workflow-run/observability/WorkflowRunStepLogsEmailDetail.tsx
 msgid "Draft email"
@@ -8413,6 +8424,11 @@ msgstr "否則如果"
 msgid "Email"
 msgstr "電子郵件"
 
+#. js-lingui-id: MqUoVk
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Email accepted. Confirming delivery record…"
+msgstr ""
+
 #. js-lingui-id: ATGYL1
 #: src/pages/settings/email/__stories__/ManagedEmailDesignJourney.tsx
 msgid "Email address"
@@ -8478,6 +8494,11 @@ msgstr "電子郵件必須為有效的電子郵件"
 msgid "Email or domain is already in blocklist"
 msgstr "電子郵件或域名已在阻止列表中"
 
+#. js-lingui-id: z4VImh
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Email sent"
+msgstr ""
+
 #. js-lingui-id: Xl929X
 #: src/modules/activities/emails/hooks/useSendEmail.ts
 msgid "Email sent successfully"
@@ -8522,6 +8543,11 @@ msgstr "電子郵件驗證鏈接已重新發送！"
 #: src/modules/auth/components/VerifyEmailEffect.tsx
 msgid "Email verified."
 msgstr "電子郵件已驗證。"
+
+#. js-lingui-id: Pv8rnn
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
+msgid "Email was not sent. Your draft is still available."
+msgstr ""
 
 #. js-lingui-id: VI2hiF
 #: src/modules/settings/accounts/components/SettingsAccountsBlocklistTable.tsx
@@ -19673,6 +19699,7 @@ msgid "Selected subscription"
 msgstr ""
 
 #. js-lingui-id: JlFcis
+#: src/modules/myah/inbox/components/MyahInboxReplySendAction.tsx
 #: src/modules/page-layout/widgets/email-thread/components/EmailThreadComposer.tsx
 #: src/modules/side-panel/pages/compose-email/components/SidePanelComposeEmailPage.tsx
 msgid "Send"

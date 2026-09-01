@@ -160,6 +160,7 @@ export type Mutation = {
   retryWorkflowRun: WorkflowRun;
   runWorkflowVersion: RunWorkflowVersion;
   saveMyahInboxDraft: MyahInboxDraftSaveResult;
+  sendMyahInboxReply: MyahInboxReplySendResult;
   stopWorkflowRun: WorkflowRun;
   submitFormStep: Scalars['Boolean']['output'];
   testHttpRequest: TestHttpRequest;
@@ -250,6 +251,11 @@ export type MutationSaveMyahInboxDraftArgs = {
 };
 
 
+export type MutationSendMyahInboxReplyArgs = {
+  input: SendMyahInboxReplyInput;
+};
+
+
 export type MutationStopWorkflowRunArgs = {
   workflowRunId: Scalars['UUID']['input'];
 };
@@ -305,6 +311,52 @@ export type MyahInboxReplyProposalBody = {
   __typename?: 'MyahInboxReplyProposalBody';
   blocknote?: Maybe<Scalars['String']['output']>;
   markdown: Scalars['String']['output'];
+};
+
+export enum MyahInboxReplySendOutcome {
+  FAILED = 'FAILED',
+  SENDING = 'SENDING',
+  SENT = 'SENT',
+  STALE = 'STALE',
+  UNKNOWN = 'UNKNOWN'
+}
+
+export type MyahInboxReplySendReadiness = {
+  __typename?: 'MyahInboxReplySendReadiness';
+  reason?: Maybe<Scalars['String']['output']>;
+  status: MyahInboxReplySendReadinessStatus;
+};
+
+export enum MyahInboxReplySendReadinessStatus {
+  MAILBOX_INELIGIBLE = 'MAILBOX_INELIGIBLE',
+  OUTCOME_PENDING = 'OUTCOME_PENDING',
+  OUTCOME_UNKNOWN = 'OUTCOME_UNKNOWN',
+  READY = 'READY',
+  RECIPIENT_UNAVAILABLE = 'RECIPIENT_UNAVAILABLE',
+  RECONNECT_REQUIRED = 'RECONNECT_REQUIRED',
+  SENDER_UNAVAILABLE = 'SENDER_UNAVAILABLE',
+  THREAD_UNAVAILABLE = 'THREAD_UNAVAILABLE'
+}
+
+export type MyahInboxReplySendResult = {
+  __typename?: 'MyahInboxReplySendResult';
+  body?: Maybe<MyahInboxRichText>;
+  outcome: MyahInboxReplySendOutcome;
+  receiptId?: Maybe<Scalars['String']['output']>;
+  revision: Scalars['Int']['output'];
+};
+
+export type MyahInboxReplySendStatus = {
+  __typename?: 'MyahInboxReplySendStatus';
+  body?: Maybe<MyahInboxRichText>;
+  outcome: MyahInboxReplySendOutcome;
+  receiptId?: Maybe<Scalars['String']['output']>;
+  revision: Scalars['Int']['output'];
+};
+
+export type MyahInboxReplySendStatusInput = {
+  receiptId: Scalars['UUID']['input'];
+  threadId: Scalars['UUID']['input'];
 };
 
 export type MyahInboxRichText = {
@@ -396,6 +448,8 @@ export type Query = {
   /** @deprecated Use getTimelineThreadsFromObjectRecord instead */
   getTimelineThreadsFromPersonId: TimelineThreadsWithTotal;
   isMaintenanceModeBannerDismissed: Scalars['Boolean']['output'];
+  myahInboxReplySendReadiness: MyahInboxReplySendReadiness;
+  myahInboxReplySendStatus: MyahInboxReplySendStatus;
   myahInboxThreads: MyahInboxThreadConnection;
   search: SearchResultConnection;
   workflowStepConnectedAccountHandle?: Maybe<ConnectedAccountHandleDto>;
@@ -462,6 +516,16 @@ export type QueryGetTimelineThreadsFromPersonIdArgs = {
   page: Scalars['Int']['input'];
   pageSize: Scalars['Int']['input'];
   personId: Scalars['UUID']['input'];
+};
+
+
+export type QueryMyahInboxReplySendReadinessArgs = {
+  threadId: Scalars['UUID']['input'];
+};
+
+
+export type QueryMyahInboxReplySendStatusArgs = {
+  input: MyahInboxReplySendStatusInput;
 };
 
 
@@ -538,6 +602,11 @@ export type SearchResultPageInfo = {
   __typename?: 'SearchResultPageInfo';
   endCursor?: Maybe<Scalars['String']['output']>;
   hasNextPage: Scalars['Boolean']['output'];
+};
+
+export type SendMyahInboxReplyInput = {
+  expectedDraftRevision: Scalars['Int']['input'];
+  threadId: Scalars['UUID']['input'];
 };
 
 export type SubmitFormStepInput = {
@@ -865,6 +934,27 @@ export type GenerateMyahInboxReplyProposalMutationVariables = Exact<{
 
 export type GenerateMyahInboxReplyProposalMutation = { __typename?: 'Mutation', generateMyahInboxReplyProposal: { __typename?: 'MyahInboxReplyProposal', body: { __typename?: 'MyahInboxReplyProposalBody', markdown: string, blocknote?: string | null } } };
 
+export type MyahInboxReplySendReadinessQueryVariables = Exact<{
+  threadId: Scalars['UUID']['input'];
+}>;
+
+
+export type MyahInboxReplySendReadinessQuery = { __typename?: 'Query', myahInboxReplySendReadiness: { __typename?: 'MyahInboxReplySendReadiness', status: MyahInboxReplySendReadinessStatus, reason?: string | null } };
+
+export type SendMyahInboxReplyMutationVariables = Exact<{
+  input: SendMyahInboxReplyInput;
+}>;
+
+
+export type SendMyahInboxReplyMutation = { __typename?: 'Mutation', sendMyahInboxReply: { __typename?: 'MyahInboxReplySendResult', outcome: MyahInboxReplySendOutcome, receiptId?: string | null, revision: number, body?: { __typename?: 'MyahInboxRichText', markdown: string, blocknote?: string | null } | null } };
+
+export type MyahInboxReplySendStatusQueryVariables = Exact<{
+  input: MyahInboxReplySendStatusInput;
+}>;
+
+
+export type MyahInboxReplySendStatusQuery = { __typename?: 'Query', myahInboxReplySendStatus: { __typename?: 'MyahInboxReplySendStatus', outcome: MyahInboxReplySendOutcome, receiptId?: string | null, revision: number, body?: { __typename?: 'MyahInboxRichText', markdown: string, blocknote?: string | null } | null } };
+
 export type WorkflowDiffFragmentFragment = { __typename?: 'WorkflowVersionStepChanges', triggerDiff?: any | null, stepsDiff?: any | null };
 
 export type ActivateWorkflowVersionMutationVariables = Exact<{
@@ -1016,6 +1106,9 @@ export const MyahInboxThreadsDocument = {"kind":"Document","definitions":[{"kind
 export const UpdateMyahInboxThreadDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateMyahInboxThread"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateMyahInboxThreadInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateMyahInboxThread"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"lastActivityAt"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"lastMessagePreview"}},{"kind":"Field","name":{"kind":"Name","value":"lastMessageSender"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"snoozedUntil"}},{"kind":"Field","name":{"kind":"Name","value":"creator"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"campaign"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"inboxOwner"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<UpdateMyahInboxThreadMutation, UpdateMyahInboxThreadMutationVariables>;
 export const SaveMyahInboxDraftDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SaveMyahInboxDraft"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SaveMyahInboxDraftInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"saveMyahInboxDraft"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<SaveMyahInboxDraftMutation, SaveMyahInboxDraftMutationVariables>;
 export const GenerateMyahInboxReplyProposalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"GenerateMyahInboxReplyProposal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GenerateMyahInboxReplyProposalInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"generateMyahInboxReplyProposal"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<GenerateMyahInboxReplyProposalMutation, GenerateMyahInboxReplyProposalMutationVariables>;
+export const MyahInboxReplySendReadinessDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxReplySendReadiness"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"threadId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxReplySendReadiness"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"threadId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"threadId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"reason"}}]}}]}}]} as unknown as DocumentNode<MyahInboxReplySendReadinessQuery, MyahInboxReplySendReadinessQueryVariables>;
+export const SendMyahInboxReplyDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendMyahInboxReply"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SendMyahInboxReplyInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendMyahInboxReply"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"outcome"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<SendMyahInboxReplyMutation, SendMyahInboxReplyMutationVariables>;
+export const MyahInboxReplySendStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"MyahInboxReplySendStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"MyahInboxReplySendStatusInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"myahInboxReplySendStatus"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"outcome"}},{"kind":"Field","name":{"kind":"Name","value":"receiptId"}},{"kind":"Field","name":{"kind":"Name","value":"revision"}},{"kind":"Field","name":{"kind":"Name","value":"body"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markdown"}},{"kind":"Field","name":{"kind":"Name","value":"blocknote"}}]}}]}}]}}]} as unknown as DocumentNode<MyahInboxReplySendStatusQuery, MyahInboxReplySendStatusQueryVariables>;
 export const ActivateWorkflowVersionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ActivateWorkflowVersion"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"workflowVersionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"activateWorkflowVersion"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"workflowVersionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"workflowVersionId"}}}]}]}}]} as unknown as DocumentNode<ActivateWorkflowVersionMutation, ActivateWorkflowVersionMutationVariables>;
 export const ComputeStepOutputSchemaDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ComputeStepOutputSchema"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ComputeStepOutputSchemaInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"computeStepOutputSchema"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<ComputeStepOutputSchemaMutation, ComputeStepOutputSchemaMutationVariables>;
 export const CreateDraftFromWorkflowVersionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateDraftFromWorkflowVersion"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateDraftFromWorkflowVersionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createDraftFromWorkflowVersion"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"trigger"}},{"kind":"Field","name":{"kind":"Name","value":"steps"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<CreateDraftFromWorkflowVersionMutation, CreateDraftFromWorkflowVersionMutationVariables>;

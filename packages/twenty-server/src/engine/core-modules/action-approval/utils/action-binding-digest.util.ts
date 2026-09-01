@@ -35,6 +35,7 @@ export const computeLogicalActionKey = (
         ]),
       );
     case 'send_outreach_email':
+    case 'send_inbox_reply':
       return sha256(
         JSON.stringify([
           'v1',

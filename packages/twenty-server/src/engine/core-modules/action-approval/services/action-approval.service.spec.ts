@@ -380,3 +380,443 @@ describe('ActionApprovalService outreach authority', () => {
     );
   });
 });
+
+describe('ActionApprovalService direct Inbox reply authority', () => {
+  const inboxReplyBinding = {
+    workspaceId,
+    actionName: 'send_inbox_reply' as const,
+    actionVersion: 1 as const,
+    draftId: '00000000-0000-4000-8000-000000000005',
+    contentDigest: 'a'.repeat(64),
+    recipientFingerprint: 'b'.repeat(64),
+    sendingAccountFingerprint: 'c'.repeat(64),
+    actionContextFingerprint: 'd'.repeat(64),
+    threadId,
+    initiatorUserWorkspaceId: userWorkspaceId,
+    evidenceLinks: [
+      {
+        objectMetadataId: '00000000-0000-4000-8000-000000000010',
+        recordId: '00000000-0000-4000-8000-000000000011',
+        role: 'draft',
+      },
+    ],
+  };
+  const inboxBinding = {
+    id: approvalBindingId,
+    ...inboxReplyBinding,
+    state: ActionApprovalBindingState.APPROVED,
+    expiresAt: new Date('2099-07-18T00:00:00.000Z'),
+    decidedAt: new Date('2026-07-26T00:00:00.000Z'),
+    inboundMessageId: null,
+    inboundSenderIgsid: null,
+    inboundDirection: null,
+    inboundReceivedAt: null,
+  };
+
+  it('creates a direct Inbox binding already approved by the Send click', async () => {
+    const manager = {
+      create: jest.fn((_entity, value) => value),
+      save: jest.fn(async (_entity, value) =>
+        value.actionName === 'send_inbox_reply'
+          ? { ...value, id: approvalBindingId }
+          : value,
+      ),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.createApprovedInboxReplyBinding(inboxReplyBinding),
+    ).resolves.toEqual({ id: approvalBindingId });
+    expect(manager.save).toHaveBeenCalledWith(
+      ActionApprovalBindingEntity,
+      expect.objectContaining({
+        actionName: 'send_inbox_reply',
+        state: ActionApprovalBindingState.APPROVED,
+        threadId,
+        draftId: inboxReplyBinding.draftId,
+        decidedAt: expect.any(Date),
+      }),
+    );
+    expect(manager.save).toHaveBeenCalledWith(
+      ActionApprovalBindingEvidenceLinkEntity,
+      expect.arrayContaining([
+        expect.objectContaining({
+          actionApprovalBindingId: approvalBindingId,
+          ...inboxReplyBinding.evidenceLinks[0],
+        }),
+      ]),
+    );
+  });
+
+  it('reconstructs an approved Inbox binding without Instagram fields', async () => {
+    const manager = {
+      findOne: jest.fn().mockResolvedValue(inboxBinding),
+      find: jest.fn().mockResolvedValue(inboxReplyBinding.evidenceLinks),
+      save: jest.fn(),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.getApprovedBinding({
+        workspaceId,
+        approvalBindingId,
+        initiatorUserWorkspaceId: userWorkspaceId,
+        threadId,
+      }),
+    ).resolves.toEqual(inboxReplyBinding);
+  });
+
+  const createLockingService = (bindings: unknown[]) => {
+    const repository = { find: jest.fn().mockResolvedValue(bindings) };
+
+    return {
+      repository,
+      service: new ActionApprovalService(
+        {
+          getRepository: jest.fn().mockReturnValue(repository),
+        } as never,
+        { projectReceipt: jest.fn() } as never,
+      ),
+    };
+  };
+
+  const consumedBindingWithReceipt = (state: ActionExecutionReceiptState) => ({
+    ...inboxBinding,
+    state: ActionApprovalBindingState.CONSUMED,
+    receipts: [{ state }],
+  });
+
+  it.each([
+    ActionExecutionReceiptState.PROCESSING,
+    ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+    ActionExecutionReceiptState.UNKNOWN,
+  ])('locks the approved draft for %s', async (state) => {
+    const { service } = createLockingService([
+      consumedBindingWithReceipt(state),
+    ]);
+
+    await expect(
+      service.isDraftExecutionLocked({
+        workspaceId,
+        actionName: 'send_inbox_reply',
+        draftId: inboxReplyBinding.draftId,
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it.each([
+    ActionExecutionReceiptState.FAILED,
+    ActionExecutionReceiptState.SENT,
+  ])('does not lock the draft for terminal %s', async (state) => {
+    const { service } = createLockingService([
+      consumedBindingWithReceipt(state),
+    ]);
+
+    await expect(
+      service.isDraftExecutionLocked({
+        workspaceId,
+        actionName: 'send_inbox_reply',
+        draftId: inboxReplyBinding.draftId,
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it('locks an unexpired approved Inbox binding before receipt reservation', async () => {
+    const { service } = createLockingService([
+      { ...inboxBinding, receipts: [] },
+    ]);
+
+    await expect(
+      service.isDraftExecutionLocked({
+        workspaceId,
+        actionName: 'send_inbox_reply',
+        draftId: inboxReplyBinding.draftId,
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it.each([
+    ['approved without receipt', { ...inboxBinding, receipts: [] }, 'PENDING'],
+    [
+      'processing receipt',
+      consumedBindingWithReceipt(ActionExecutionReceiptState.PROCESSING),
+      'PENDING',
+    ],
+    [
+      'provider-accepted receipt',
+      consumedBindingWithReceipt(ActionExecutionReceiptState.PROVIDER_ACCEPTED),
+      'PENDING',
+    ],
+    [
+      'unknown receipt',
+      consumedBindingWithReceipt(ActionExecutionReceiptState.UNKNOWN),
+      'UNKNOWN',
+    ],
+  ])(
+    'reports %s as the current scoped execution state',
+    async (_case, binding, state) => {
+      const { service, repository } = createLockingService([binding]);
+
+      await expect(
+        service.getInboxReplyDraftExecutionState({
+          workspaceId,
+          draftId: inboxReplyBinding.draftId,
+        }),
+      ).resolves.toBe(state);
+      expect(repository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.not.objectContaining({
+            initiatorUserWorkspaceId: userWorkspaceId,
+          }),
+        }),
+      );
+    },
+  );
+
+  it.each([
+    ActionApprovalBindingState.PENDING,
+    ActionApprovalBindingState.REJECTED,
+    ActionApprovalBindingState.EXPIRED,
+  ])('does not lock a %s Inbox binding', async (state) => {
+    const { service } = createLockingService([
+      { ...inboxBinding, state, receipts: [] },
+    ]);
+
+    await expect(
+      service.isDraftExecutionLocked({
+        workspaceId,
+        actionName: 'send_inbox_reply',
+        draftId: inboxReplyBinding.draftId,
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it('scopes an execution receipt to its Inbox action, draft, and initiator', async () => {
+    const receipt = {
+      id: '00000000-0000-4000-8000-000000000020',
+      workspaceId,
+      state: ActionExecutionReceiptState.PROCESSING,
+      providerCode: null,
+      redactedOutcome: null,
+      updatedAt: new Date('2026-07-26T00:00:00.000Z'),
+    };
+    const receiptRepository = {
+      findOne: jest.fn().mockResolvedValue(receipt),
+    };
+    const service = new ActionApprovalService(
+      {
+        getRepository: jest.fn().mockReturnValue(receiptRepository),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+    const input = {
+      workspaceId,
+      receiptId: receipt.id,
+      actionName: 'send_inbox_reply' as const,
+      draftId: inboxReplyBinding.draftId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+    };
+
+    await expect(service.findExecutionReceipt(input)).resolves.toMatchObject({
+      id: receipt.id,
+      workspaceId,
+    });
+    expect(receiptRepository.findOne).toHaveBeenCalledWith({
+      where: {
+        id: receipt.id,
+        workspaceId,
+        actionApprovalBinding: {
+          actionName: 'send_inbox_reply',
+          draftId: inboxReplyBinding.draftId,
+          initiatorUserWorkspaceId: userWorkspaceId,
+        },
+      },
+    });
+
+    for (const foreignInput of [
+      { ...input, workspaceId: '00000000-0000-4000-8000-000000000099' },
+      {
+        ...input,
+        initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000099',
+      },
+      { ...input, actionName: 'send_outreach_email' as const },
+      { ...input, draftId: '00000000-0000-4000-8000-000000000099' },
+    ]) {
+      receiptRepository.findOne.mockResolvedValueOnce(null);
+      await expect(
+        service.findExecutionReceipt(foreignInput),
+      ).resolves.toBeNull();
+    }
+  });
+
+  it('requires the exact MessageThread draft evidence before exposing an Inbox receipt', async () => {
+    const messageThreadMetadataId = '00000000-0000-4000-8000-000000000023';
+    const receipt = {
+      id: '00000000-0000-4000-8000-000000000024',
+      workspaceId,
+      state: ActionExecutionReceiptState.SENT,
+      providerCode: 'accepted',
+      redactedOutcome: 'accepted',
+      updatedAt: new Date('2026-08-31T00:00:00.000Z'),
+      actionApprovalBinding: {
+        evidenceLinks: [
+          {
+            objectMetadataId: messageThreadMetadataId,
+            recordId: inboxReplyBinding.draftId,
+            role: 'draft',
+          },
+        ],
+      },
+    };
+    const receiptRepository = {
+      findOne: jest.fn().mockResolvedValue(receipt),
+    };
+    const service = new ActionApprovalService(
+      {
+        getRepository: jest.fn().mockReturnValue(receiptRepository),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+    const input = {
+      workspaceId,
+      receiptId: receipt.id,
+      draftId: inboxReplyBinding.draftId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      messageThreadMetadataId,
+    };
+
+    await expect(
+      service.findInboxReplyExecutionReceipt(input),
+    ).resolves.toMatchObject({ id: receipt.id });
+
+    receipt.actionApprovalBinding.evidenceLinks[0].role = 'message';
+    await expect(
+      service.findInboxReplyExecutionReceipt(input),
+    ).resolves.toBeNull();
+  });
+
+  it('invalidates only an unconsumed approved Inbox binding for its actor and thread', async () => {
+    let receipt: object | null = null;
+    const binding = { ...inboxBinding };
+    const manager = {
+      findOne: jest.fn(async (entity) =>
+        entity === ActionApprovalBindingEntity ? binding : receipt,
+      ),
+      save: jest.fn(async (_entity, value) => value),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+    const input = {
+      workspaceId,
+      approvalBindingId,
+      initiatorUserWorkspaceId: userWorkspaceId,
+      threadId,
+      draftId: inboxReplyBinding.draftId,
+    };
+
+    await expect(
+      service.invalidateApprovedInboxReplyBinding(input),
+    ).resolves.toBeUndefined();
+    expect(binding).toMatchObject({
+      state: ActionApprovalBindingState.CHANGES_REQUESTED,
+      decidedAt: expect.any(Date),
+    });
+
+    for (const rejectedBinding of [
+      { ...inboxBinding, state: ActionApprovalBindingState.CONSUMED },
+      {
+        ...inboxBinding,
+        initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000099',
+      },
+      { ...inboxBinding, threadId: '00000000-0000-4000-8000-000000000099' },
+      { ...inboxBinding, actionName: 'send_outreach_email' },
+      { ...inboxBinding, draftId: '00000000-0000-4000-8000-000000000099' },
+    ]) {
+      manager.findOne.mockImplementation(async (entity) =>
+        entity === ActionApprovalBindingEntity ? rejectedBinding : null,
+      );
+      await expect(
+        service.invalidateApprovedInboxReplyBinding(input),
+      ).rejects.toThrow(
+        'An approved Inbox reply binding cannot be invalidated',
+      );
+      expect(rejectedBinding.state).not.toBe(
+        ActionApprovalBindingState.CHANGES_REQUESTED,
+      );
+    }
+
+    manager.findOne.mockImplementation(async (entity) =>
+      entity === ActionApprovalBindingEntity ? { ...inboxBinding } : receipt,
+    );
+    receipt = { id: '00000000-0000-4000-8000-000000000020' };
+    await expect(
+      service.invalidateApprovedInboxReplyBinding(input),
+    ).rejects.toThrow('An approved Inbox reply binding cannot be invalidated');
+  });
+
+  it('converges a new exact binding on a prior matching logical receipt without leaving it locked', async () => {
+    const priorBindingId = '00000000-0000-4000-8000-000000000021';
+    const newBinding = { ...inboxBinding };
+    const priorReceipt = {
+      id: '00000000-0000-4000-8000-000000000022',
+      workspaceId,
+      actionApprovalBindingId: priorBindingId,
+      state: ActionExecutionReceiptState.SENT,
+      providerCode: 'accepted',
+      redactedOutcome: 'accepted',
+      updatedAt: new Date('2026-08-31T00:00:00.000Z'),
+      actionApprovalBinding: {
+        ...inboxBinding,
+        id: priorBindingId,
+        evidenceLinks: inboxReplyBinding.evidenceLinks,
+      },
+    };
+    const manager = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(priorReceipt)
+        .mockResolvedValueOnce(newBinding)
+        .mockResolvedValueOnce(null),
+      find: jest.fn().mockResolvedValue(inboxReplyBinding.evidenceLinks),
+      save: jest.fn(async (_entity, value) => value),
+    };
+    const service = new ActionApprovalService(
+      {
+        transaction: jest.fn(async (callback) => callback(manager)),
+      } as never,
+      { projectReceipt: jest.fn() } as never,
+    );
+
+    await expect(
+      service.reserveExecutionForBinding({
+        approvalBindingId,
+        expectedActionBinding: inboxReplyBinding,
+      }),
+    ).resolves.toMatchObject({
+      created: false,
+      receipt: { id: priorReceipt.id },
+    });
+    expect(newBinding.state).toBe(ActionApprovalBindingState.CHANGES_REQUESTED);
+    expect(manager.save).toHaveBeenCalledWith(
+      ActionApprovalBindingEntity,
+      expect.objectContaining({
+        id: approvalBindingId,
+        state: ActionApprovalBindingState.CHANGES_REQUESTED,
+      }),
+    );
+  });
+});

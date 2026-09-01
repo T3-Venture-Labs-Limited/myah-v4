@@ -27,6 +27,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       dataSource as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await writer.project({
@@ -69,6 +70,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
     };
     const writer = new ActionReceiptWorkspaceProjectionWriterService(
       dataSource as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -206,10 +208,14 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       dataSource as never,
       connectedAccountRepository as never,
       { persistSentMessage } as never,
+      {} as never,
     );
     const projection = {
       receiptId,
       workspaceId,
+      actionVersion: 1,
+      threadId: draftId,
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000021',
       draftId,
       contentDigest: computeActionContentDigest(
         JSON.stringify([subject, body]),
@@ -396,6 +402,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       dataSource as never,
       { findOne: jest.fn().mockResolvedValue(null) } as never,
       { persistSentMessage: jest.fn() } as never,
+      {} as never,
     );
 
     await expect(
@@ -453,5 +460,23 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       ),
     ).toBe(false);
     expect(createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('dispatches an Inbox receipt to the Inbox projection service', async () => {
+    const inboxProjectionService = { project: jest.fn() };
+    const writer = new ActionReceiptWorkspaceProjectionWriterService(
+      {} as never,
+      {} as never,
+      {} as never,
+      inboxProjectionService as never,
+    );
+    const input = {
+      workspaceId: '00000000-0000-4000-8000-000000000001',
+      actionName: 'send_inbox_reply' as const,
+    } as never;
+
+    await writer.project(input);
+
+    expect(inboxProjectionService.project).toHaveBeenCalledWith(input);
   });
 });

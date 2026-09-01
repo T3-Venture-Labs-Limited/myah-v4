@@ -105,6 +105,47 @@ describe('useMyahInboxDraftAutosaveController', () => {
     });
   });
 
+  it('returns the final saved entry from a flush', async () => {
+    const saveDraft = jest.fn().mockResolvedValue({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'saved draft', blocknote: null },
+    });
+    mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
+    const { result } = renderAutosaveController();
+
+    act(() => result.current.reconcile(reconcileThread()));
+    act(() =>
+      result.current.updateDraft({
+        key: threadKey,
+        body: { markdown: 'saved draft', blocknote: null },
+      }),
+    );
+    const flushed = await result.current.flush(threadKey);
+
+    expect(flushed).toMatchObject({
+      confirmedRevision: 3,
+      dirty: false,
+      status: 'saved',
+    });
+  });
+
+  it('returns the current no-op entry from a flush', async () => {
+    const saveDraft = jest.fn();
+    mockUseMyahInboxThreadMutations.mockReturnValue({ saveDraft } as never);
+    const { result } = renderAutosaveController();
+
+    act(() => result.current.reconcile(reconcileThread()));
+    const flushed = await result.current.flush(threadKey);
+
+    expect(flushed).toMatchObject({
+      confirmedRevision: 2,
+      dirty: false,
+      status: 'idle',
+    });
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
+
   it('resets the uncontrolled editor after clean draft reconciliation', () => {
     const saveDraft = jest.fn();
     mockUseMyahInboxThreadMutations.mockReturnValue({
@@ -402,11 +443,17 @@ describe('useMyahInboxDraftAutosaveController', () => {
         body: { markdown: 'keep this', blocknote: null },
       }),
     );
-    await act(async () => result.current.flush(threadKey));
+    const flushed = await result.current.flush(threadKey);
 
     expect(readEntry(store, threadKey)).toMatchObject({
       localBody: { markdown: 'keep this', blocknote: null },
       confirmedRevision: 2,
+      status: 'error',
+    });
+
+    expect(flushed).toMatchObject({
+      confirmedRevision: 2,
+      dirty: false,
       status: 'error',
     });
 
@@ -436,7 +483,7 @@ describe('useMyahInboxDraftAutosaveController', () => {
         body: { markdown: 'my local copy', blocknote: null },
       }),
     );
-    await act(async () => result.current.flush(threadKey));
+    const flushed = await result.current.flush(threadKey);
 
     expect(readEntry(store, threadKey)).toMatchObject({
       localBody: { markdown: 'my local copy', blocknote: null },
@@ -445,6 +492,12 @@ describe('useMyahInboxDraftAutosaveController', () => {
         revision: 4,
         body: { markdown: 'other operator copy', blocknote: null },
       },
+    });
+
+    expect(flushed).toMatchObject({
+      confirmedRevision: 2,
+      dirty: false,
+      status: 'conflict',
     });
 
     act(() =>

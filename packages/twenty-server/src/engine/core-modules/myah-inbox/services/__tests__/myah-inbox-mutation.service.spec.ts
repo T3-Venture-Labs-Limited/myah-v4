@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 import {
   type UserWorkspaceAuthContext,
@@ -96,6 +100,7 @@ const createService = ({
   hasReadableMessage = true,
   projectionReadable = true,
   canUpdateMessageThread = true,
+  draftExecutionLocked = false,
 }: {
   thread?: ThreadRecord | null;
   readableCreatorIds?: string[];
@@ -104,6 +109,7 @@ const createService = ({
   hasReadableMessage?: boolean;
   projectionReadable?: boolean;
   canUpdateMessageThread?: boolean;
+  draftExecutionLocked?: boolean;
 } = {}) => {
   let persistedThread = thread;
   const targets = {
@@ -231,6 +237,7 @@ const createService = ({
     ]),
   );
   const transactionManager = {
+    query: jest.fn().mockResolvedValue(undefined),
     getRepository: jest.fn(
       (
         target: symbol,
@@ -249,6 +256,14 @@ const createService = ({
         run(transactionManager),
     );
   Object.assign(messageThreadRepository, { manager: { transaction } });
+  const coreTransactionManager = { query: jest.fn().mockResolvedValue([]) };
+  const coreTransaction = jest
+    .fn()
+    .mockImplementation(
+      (run: (manager: typeof coreTransactionManager) => unknown) =>
+        run(coreTransactionManager),
+    );
+  const dataSource = { transaction: coreTransaction };
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest
       .fn()
@@ -285,9 +300,14 @@ const createService = ({
         : null,
     });
   });
+  const isDraftExecutionLocked = jest
+    .fn()
+    .mockResolvedValue(draftExecutionLocked);
   const service = new MyahInboxMutationService(
     globalWorkspaceOrmManager as never,
     { getThreadSummary } as never,
+    { isDraftExecutionLocked } as never,
+    dataSource as never,
   );
 
   return {
@@ -297,7 +317,10 @@ const createService = ({
     globalWorkspaceOrmManager,
     transaction,
     transactionManager,
+    coreTransaction,
+    coreTransactionManager,
     getThreadSummary,
+    isDraftExecutionLocked,
     get persistedThread() {
       return persistedThread;
     },
@@ -908,5 +931,133 @@ describe('MyahInboxMutationService', () => {
     expect(setup.repositories.message.findOne).toHaveBeenCalled();
     expect(setup.repositories.message).not.toHaveProperty('save');
     expect(setup.repositories.message).not.toHaveProperty('insert');
+  });
+  it.each([
+    ['approved Inbox binding without a receipt'],
+    ['processing receipt'],
+    ['provider-accepted receipt'],
+    ['unknown receipt'],
+  ])('locks autosave for a %s', async () => {
+    const setup = createService({ draftExecutionLocked: true });
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'locked copy', blocknote: null },
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(setup.isDraftExecutionLocked).toHaveBeenCalledWith({
+      workspaceId,
+      actionName: 'send_inbox_reply',
+      draftId: threadId,
+    });
+    expect(setup.bypassedMessageThreadRepository.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['failed receipt'],
+    ['sent receipt'],
+    ['foreign-thread receipt'],
+    ['ordinary autosave'],
+  ])('keeps autosave writable after a %s', async () => {
+    const setup = createService({ draftExecutionLocked: false });
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'writable copy', blocknote: null },
+      }),
+    ).resolves.toEqual({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'writable copy', blocknote: null },
+    });
+    expect(setup.isDraftExecutionLocked).toHaveBeenCalledWith({
+      workspaceId,
+      actionName: 'send_inbox_reply',
+      draftId: threadId,
+    });
+  });
+
+  it('keeps workspace raw SQL forbidden while acquiring the advisory lock through the core transaction before CAS', async () => {
+    const setup = createService();
+    setup.transactionManager.query.mockRejectedValue(
+      new Error('Raw SQL queries are not allowed'),
+    );
+
+    await expect(
+      setup.service.saveMyahInboxDraft({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'core transaction copy', blocknote: null },
+      }),
+    ).resolves.toEqual({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'core transaction copy', blocknote: null },
+    });
+
+    expect(setup.coreTransaction).toHaveBeenCalledTimes(1);
+    expect(setup.coreTransactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`myah-inbox-reply:${workspaceId}:${threadId}`],
+    );
+    expect(
+      setup.coreTransactionManager.query.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      setup.bypassedMessageThreadRepository.update.mock.invocationCallOrder[0],
+    );
+    expect(setup.transactionManager.query).not.toHaveBeenCalled();
+  });
+
+  it('takes the shared advisory lock before checking the execution lock and draft CAS', async () => {
+    const setup = createService();
+
+    await setup.service.saveMyahInboxDraft({
+      ...request(),
+      threadId,
+      expectedRevision: 2,
+      body: { markdown: 'serialized copy', blocknote: null },
+    });
+
+    expect(setup.coreTransactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`myah-inbox-reply:${workspaceId}:${threadId}`],
+    );
+    expect(
+      setup.coreTransactionManager.query.mock.invocationCallOrder[0],
+    ).toBeLessThan(setup.isDraftExecutionLocked.mock.invocationCallOrder[0]);
+    expect(
+      setup.isDraftExecutionLocked.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      setup.bypassedMessageThreadRepository.update.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('uses the same advisory lock to preserve a rejected draft while its receipt is processing', async () => {
+    const setup = createService({ draftExecutionLocked: true });
+
+    await expect(
+      setup.service.saveMyahInboxDraftAfterProviderFailure({
+        ...request(),
+        threadId,
+        expectedRevision: 2,
+        body: { markdown: 'rejected copy', blocknote: null },
+      }),
+    ).resolves.toEqual({
+      status: 'SAVED',
+      revision: 3,
+      body: { markdown: 'rejected copy', blocknote: null },
+    });
+    expect(setup.isDraftExecutionLocked).not.toHaveBeenCalled();
+    expect(setup.coreTransactionManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [`myah-inbox-reply:${workspaceId}:${threadId}`],
+    );
   });
 });

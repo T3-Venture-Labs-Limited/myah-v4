@@ -10075,20 +10075,11 @@ export default {
                     ]
                 }
             ],
-            "runAgent": [
-                334,
-                {
-                    "input": [
-                        536,
-                        "RunAgentInput!"
-                    ]
-                }
-            ],
             "sendEmailViaEmailingDomain": [
                 301,
                 {
                     "input": [
-                        537,
+                        536,
                         "SendEmailViaDomainInput!"
                     ]
                 }
@@ -10097,7 +10088,7 @@ export default {
                 303,
                 {
                     "input": [
-                        538,
+                        537,
                         "SendMessageCampaignInput!"
                     ]
                 }
@@ -10106,7 +10097,7 @@ export default {
                 304,
                 {
                     "input": [
-                        539,
+                        538,
                         "CreateUnsubscribeTopicInput!"
                     ]
                 }
@@ -10115,7 +10106,7 @@ export default {
                 304,
                 {
                     "input": [
-                        540,
+                        539,
                         "UpdateUnsubscribeTopicInput!"
                     ]
                 }
@@ -10133,7 +10124,7 @@ export default {
                 291,
                 {
                     "input": [
-                        541,
+                        540,
                         "UpdateMessageChannelInput!"
                     ]
                 }
@@ -10142,7 +10133,7 @@ export default {
                 299,
                 {
                     "input": [
-                        543,
+                        542,
                         "CreateEmailGroupChannelInput!"
                     ]
                 }
@@ -10160,7 +10151,7 @@ export default {
                 289,
                 {
                     "input": [
-                        544,
+                        543,
                         "CreateEmailingDomainInput!"
                     ]
                 }
@@ -10180,6 +10171,15 @@ export default {
                     "id": [
                         1,
                         "String!"
+                    ]
+                }
+            ],
+            "runAgent": [
+                334,
+                {
+                    "input": [
+                        544,
+                        "RunAgentInput!"
                     ]
                 }
             ],
@@ -13078,20 +13078,6 @@ export default {
                 1
             ]
         },
-        "RunAgentInput": {
-            "agentUniversalIdentifier": [
-                1
-            ],
-            "prompt": [
-                1
-            ],
-            "operationId": [
-                1
-            ],
-            "__typename": [
-                1
-            ]
-        },
         "SendEmailViaDomainInput": {
             "emailingDomainId": [
                 1
@@ -13180,7 +13166,7 @@ export default {
                 3
             ],
             "update": [
-                542
+                541
             ],
             "__typename": [
                 1
@@ -13222,6 +13208,20 @@ export default {
         },
         "CreateEmailingDomainInput": {
             "domain": [
+                1
+            ],
+            "__typename": [
+                1
+            ]
+        },
+        "RunAgentInput": {
+            "agentUniversalIdentifier": [
+                1
+            ],
+            "prompt": [
+                1
+            ],
+            "operationId": [
                 1
             ],
             "__typename": [

@@ -21,6 +21,19 @@ describe('action binding digest', () => {
     initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000004',
     evidenceLinks: [],
   };
+  const inboxReplyBinding = {
+    workspaceId: base.workspaceId,
+    actionName: 'send_inbox_reply' as const,
+    actionVersion: 1 as const,
+    draftId: '20202020-0b5c-4178-bed7-d371f6411eaf',
+    contentDigest: 'a'.repeat(64),
+    recipientFingerprint: 'b'.repeat(64),
+    sendingAccountFingerprint: 'c'.repeat(64),
+    actionContextFingerprint: 'd'.repeat(64),
+    threadId: '20202020-0b5c-4178-bed7-d371f6411eaf',
+    initiatorUserWorkspaceId: base.initiatorUserWorkspaceId,
+    evidenceLinks: [],
+  };
 
   it('normalizes Unicode and line endings without trimming message content', () => {
     expect(computeActionContentDigest('  Cafe\u0301\r\n  ')).toBe(
@@ -97,5 +110,20 @@ describe('action binding digest', () => {
         threadId: '00000000-0000-4000-8000-000000000099',
       }),
     ).toBe(computeLogicalActionKey(outreach));
+  });
+
+  it('keeps identical Inbox reply sends on one logical key', () => {
+    expect(computeLogicalActionKey(inboxReplyBinding)).toBe(
+      computeLogicalActionKey({ ...inboxReplyBinding }),
+    );
+  });
+
+  it('changes the Inbox reply key when the saved revision context changes', () => {
+    expect(computeLogicalActionKey(inboxReplyBinding)).not.toBe(
+      computeLogicalActionKey({
+        ...inboxReplyBinding,
+        actionContextFingerprint: 'e'.repeat(64),
+      }),
+    );
   });
 });

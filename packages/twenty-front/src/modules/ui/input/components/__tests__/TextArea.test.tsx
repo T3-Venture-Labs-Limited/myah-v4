@@ -31,4 +31,21 @@ describe('TextArea', () => {
       },
     });
   });
+
+  it('supports an accessible name without rendering a visible label', () => {
+    render(
+      <JotaiProvider>
+        <TextArea
+          textAreaId="accessible-text-area"
+          value=""
+          ariaLabel="Shared reply draft"
+        />
+      </JotaiProvider>,
+    );
+
+    expect(
+      screen.getByRole('textbox', { name: 'Shared reply draft' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Shared reply draft')).not.toBeInTheDocument();
+  });
 });

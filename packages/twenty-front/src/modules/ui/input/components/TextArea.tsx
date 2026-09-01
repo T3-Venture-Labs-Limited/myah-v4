@@ -13,6 +13,7 @@ type TextAreaVariant = 'default' | 'transparent';
 
 export type TextAreaProps = {
   textAreaId: string;
+  ariaLabel?: string;
   label?: string;
   disabled?: boolean;
   height?: number;
@@ -94,6 +95,7 @@ const StyledTextAreaContainer = styled.div<{ variant: TextAreaVariant }>`
 
 export const TextArea = ({
   textAreaId,
+  ariaLabel,
   label,
   disabled,
   height,
@@ -145,6 +147,7 @@ export const TextArea = ({
       <StyledTextAreaContainer variant={variant}>
         <TextareaAutosize
           id={instanceId}
+          aria-label={ariaLabel}
           placeholder={placeholder}
           maxRows={maxRows}
           minRows={computedMinRows}

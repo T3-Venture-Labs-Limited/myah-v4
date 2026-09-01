@@ -11,6 +11,7 @@ import {
 import { useMyahInboxThreadMutations } from '@/myah/inbox/hooks/useMyahInboxThreadMutations';
 import { myahInboxDraftAutosaveFamilyState } from '@/myah/inbox/states/myahInboxDraftAutosaveFamilyState';
 import {
+  type MyahInboxDraftAutosaveEntry,
   type MyahInboxDraftAutosaveKey,
   type MyahInboxDraftAutosaveThread,
   type MyahInboxRichText,
@@ -44,7 +45,9 @@ type ProcessDraft = (key: MyahInboxDraftAutosaveKey) => Promise<void>;
 export type MyahInboxDraftAutosaveController = {
   reconcile: (thread: MyahInboxDraftAutosaveThread) => void;
   updateDraft: (params: UpdateDraftParams) => void;
-  flush: (key: MyahInboxDraftAutosaveKey) => Promise<void>;
+  flush: (
+    key: MyahInboxDraftAutosaveKey,
+  ) => Promise<MyahInboxDraftAutosaveEntry>;
   retry: (key: MyahInboxDraftAutosaveKey) => Promise<void>;
   reloadConflict: (key: MyahInboxDraftAutosaveKey) => void;
   applyProposal: (params: UpdateDraftParams) => Promise<boolean>;
@@ -221,13 +224,21 @@ export const useMyahInboxDraftAutosaveController =
     };
 
     const flush = useCallback(
-      (key: MyahInboxDraftAutosaveKey) => {
+      async (key: MyahInboxDraftAutosaveKey) => {
+        const atom = myahInboxDraftAutosaveFamilyState.atomFamily(key);
         cancelTimer(key);
         clearPendingDebounce(key);
+        await start(key);
 
-        return start(key);
+        const entry = store.get(atom);
+
+        if (!entry) {
+          throw new Error('Expected autosave draft entry after flush');
+        }
+
+        return entry;
       },
-      [cancelTimer, clearPendingDebounce, start],
+      [cancelTimer, clearPendingDebounce, start, store],
     );
 
     const reconcile = useCallback(
@@ -346,12 +357,12 @@ export const useMyahInboxDraftAutosaveController =
     );
 
     const retry = useCallback(
-      (key: MyahInboxDraftAutosaveKey) => {
+      async (key: MyahInboxDraftAutosaveKey) => {
         const atom = myahInboxDraftAutosaveFamilyState.atomFamily(key);
         const entry = store.get(atom);
 
         if (!entry || entry.status !== 'error') {
-          return Promise.resolve();
+          return;
         }
 
         store.set(atom, {
@@ -361,7 +372,7 @@ export const useMyahInboxDraftAutosaveController =
           error: null,
         });
 
-        return flush(key);
+        await flush(key);
       },
       [flush, store],
     );

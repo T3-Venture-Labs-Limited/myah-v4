@@ -1,5 +1,6 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { MyahInboxDraftEditor } from '@/myah/inbox/components/MyahInboxDraftEditor';
+import { MyahInboxReplySendAction } from '@/myah/inbox/components/MyahInboxReplySendAction';
 import { MyahInboxProposalPreview } from '@/myah/inbox/components/MyahInboxProposalPreview';
 import { useMyahInboxDraftAutosaveControllerContext } from '@/myah/inbox/hooks/useMyahInboxDraftAutosaveController';
 import { type MyahInboxThread } from '@/myah/inbox/hooks/useMyahInboxThreads';
@@ -84,6 +85,7 @@ const MyahInboxReplyWorkspaceContent = ({
     myahInboxDraftAutosaveFamilyState.atomFamily(draftKey),
   );
   const [isApplyingProposal, setIsApplyingProposal] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     if (!draftRecord) {
@@ -114,12 +116,13 @@ const MyahInboxReplyWorkspaceContent = ({
       threadId={thread.id}
       disabled={
         isApplyingProposal ||
+        isSending ||
         draftEntry.status === 'saving' ||
         draftEntry.status === 'error' ||
         draftEntry.status === 'conflict'
       }
       onApply={handleApplyProposal}
-      renderGenerateAction={(generateAction) => (
+      renderGenerateAction={(generateAction, isGenerating) => (
         <MyahInboxDraftEditor
           entry={draftEntry}
           onDraftChange={(body) =>
@@ -131,7 +134,19 @@ const MyahInboxReplyWorkspaceContent = ({
           onReloadConflict={() =>
             draftAutosaveController.reloadConflict(draftKey)
           }
-          proposalAction={generateAction}
+          disabled={isSending || isGenerating || isApplyingProposal}
+          actions={
+            <>
+              {generateAction}
+              <MyahInboxReplySendAction
+                draftKey={draftKey}
+                entry={draftEntry}
+                disabled={isGenerating || isApplyingProposal}
+                onDraftReconciled={draftAutosaveController.reconcile}
+                onSendingChange={setIsSending}
+              />
+            </>
+          }
         />
       )}
     />
@@ -159,6 +174,7 @@ export const MyahInboxReplyWorkspace = ({
       </StyledComposerHeader>
       {isMessageThreadMetadataReady && currentWorkspace ? (
         <MyahInboxReplyWorkspaceContent
+          key={`${currentWorkspace.id}:${thread.id}`}
           thread={thread}
           workspaceId={currentWorkspace.id}
         />

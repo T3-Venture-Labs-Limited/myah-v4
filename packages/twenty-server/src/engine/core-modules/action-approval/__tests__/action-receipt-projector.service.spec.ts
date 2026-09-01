@@ -9,17 +9,24 @@ describe('ActionReceiptProjectorService', () => {
     providerExternalMessageId: 'provider-message-id',
     providerThreadExternalId: 'provider-thread-id',
     actionApprovalBinding: {
-      actionName: 'send_outreach_email',
+      actionName: 'send_inbox_reply',
+      actionVersion: 1,
       draftId: '00000000-0000-4000-8000-000000000003',
+      threadId: '00000000-0000-4000-8000-000000000003',
+      initiatorUserWorkspaceId: '00000000-0000-4000-8000-000000000006',
       contentDigest: 'a'.repeat(64),
       recipientFingerprint: 'b'.repeat(64),
       sendingAccountFingerprint: 'c'.repeat(64),
       actionContextFingerprint: 'd'.repeat(64),
+      inboundMessageId: null,
+      inboundSenderIgsid: null,
+      inboundDirection: null,
+      inboundReceivedAt: null,
       evidenceLinks: [
         {
           objectMetadataId: '00000000-0000-4000-8000-000000000004',
           recordId: '00000000-0000-4000-8000-000000000005',
-          role: 'campaign_creator',
+          role: 'thread_parent',
         },
       ],
     },
@@ -63,7 +70,11 @@ describe('ActionReceiptProjectorService', () => {
       workspaceId: receipt.workspaceId,
       draftId: receipt.actionApprovalBinding.draftId,
       contentDigest: receipt.actionApprovalBinding.contentDigest,
-      actionName: 'send_outreach_email',
+      actionName: 'send_inbox_reply',
+      actionVersion: receipt.actionApprovalBinding.actionVersion,
+      threadId: receipt.actionApprovalBinding.threadId,
+      initiatorUserWorkspaceId:
+        receipt.actionApprovalBinding.initiatorUserWorkspaceId,
       providerMessageId: '<sent@example.com>',
       providerExternalMessageId: 'provider-message-id',
       providerThreadExternalId: 'provider-thread-id',
@@ -78,6 +89,30 @@ describe('ActionReceiptProjectorService', () => {
       { id: receipt.id, state: 'PROVIDER_ACCEPTED' },
       { state: 'SENT' },
     );
+  });
+
+  it('rejects a provider-accepted receipt with an unsupported binding before projecting it', async () => {
+    const writer = { project: jest.fn() };
+    const repository = {
+      findOne: jest.fn(async () => ({
+        ...receipt,
+        actionApprovalBinding: {
+          ...receipt.actionApprovalBinding,
+          actionVersion: 2,
+        },
+      })),
+      update: jest.fn(),
+    };
+    const service = new ActionReceiptProjectorService(
+      repository as never,
+      writer,
+    );
+
+    await expect(service.projectReceipt(receipt.id)).rejects.toThrow(
+      'Unsupported action receipt projection',
+    );
+    expect(writer.project).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
   });
 
   it('does not project any state except PROVIDER_ACCEPTED', async () => {

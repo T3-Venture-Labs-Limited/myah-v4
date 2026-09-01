@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { isNonEmptyString } from '@sniptt/guards';
+import { MessageChannelType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 
@@ -29,13 +31,50 @@ export class SentMessagePersistenceService {
       relations: { connectedAccount: true },
     });
 
-    const messageToSave = formatSentMessage(input);
+    const connectedAccount = messageChannel.connectedAccount;
+    if (
+      messageChannel.connectedAccountId !== connectedAccount.id ||
+      connectedAccount.workspaceId !== input.workspaceId ||
+      input.connectedAccount.id !== connectedAccount.id ||
+      input.connectedAccount.workspaceId !== input.workspaceId
+    ) {
+      throw new Error('Connected account does not own the message channel');
+    }
+
+    const senderHandle = (
+      messageChannel.type === MessageChannelType.EMAIL_GROUP
+        ? connectedAccount.handle
+        : messageChannel.handle
+    )
+      .trim()
+      .toLowerCase();
+    const connectedAccountHandles = new Set(
+      [connectedAccount.handle, ...(connectedAccount.handleAliases ?? [])]
+        .filter(isNonEmptyString)
+        .map((handle) => handle.trim().toLowerCase()),
+    );
+    if (
+      !isNonEmptyString(senderHandle) ||
+      !connectedAccountHandles.has(senderHandle)
+    ) {
+      throw new Error(
+        'Message channel sender is not a connected account alias',
+      );
+    }
+
+    const messageToSave = formatSentMessage({
+      ...input,
+      connectedAccount: {
+        ...connectedAccount,
+        handle: senderHandle,
+      },
+    });
 
     const savedMessagesResult =
       await this.saveMessagesAndEnqueueContactCreationService.saveMessagesAndEnqueueContactCreation(
         [messageToSave],
         messageChannel,
-        messageChannel.connectedAccount,
+        connectedAccount,
         input.workspaceId,
       );
 

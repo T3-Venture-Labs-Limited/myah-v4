@@ -29,9 +29,15 @@ export type OutreachEmailExpectedActionBinding = ActionBindingBase & {
   actionContextFingerprint: string;
 };
 
+export type MyahInboxReplyExpectedActionBinding = ActionBindingBase & {
+  actionName: 'send_inbox_reply';
+  actionContextFingerprint: string;
+};
+
 export type ExpectedActionBinding =
   | InstagramReplyExpectedActionBinding
-  | OutreachEmailExpectedActionBinding;
+  | OutreachEmailExpectedActionBinding
+  | MyahInboxReplyExpectedActionBinding;
 
 export type ExpectedActionBindingWithWorkspace = ExpectedActionBinding & {
   workspaceId: string;
@@ -75,21 +81,16 @@ export type ActionExecutionReservation = {
   receipt: SafeActionExecutionReceipt;
 };
 
-export type ActionReceiptProjectionWriter = {
-  project: (input: {
+export type ActionReceiptProjectionInput =
+  ExpectedActionBindingWithWorkspace & {
     receiptId: string;
-    workspaceId: string;
-    draftId: string;
-    contentDigest: string;
-    actionName: ExpectedActionBinding['actionName'];
     providerMessageId: string | null;
     providerExternalMessageId: string | null;
     providerThreadExternalId: string | null;
-    recipientFingerprint: string | null;
-    sendingAccountFingerprint: string | null;
-    actionContextFingerprint: string | null;
-    evidenceLinks: readonly ActionEvidenceLinkInput[];
-  }) => Promise<void>;
+  };
+
+export type ActionReceiptProjectionWriter = {
+  project: (input: ActionReceiptProjectionInput) => Promise<void>;
 };
 
 export const ACTION_RECEIPT_PROJECTION_WRITER = Symbol(

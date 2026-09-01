@@ -42,33 +42,70 @@ jest.mock(
 
     const FormAdvancedTextFieldInput = ({
       label,
+      ariaLabel,
       defaultValue,
       onChange,
     }: {
       label?: string;
+      ariaLabel?: string;
       defaultValue: string;
       onChange: (value: string) => void;
     }) => {
       const [value, setValue] = React.useState(defaultValue);
+      const textarea = (
+        <textarea
+          aria-label={ariaLabel}
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value);
+            onChange(`<p>${event.target.value}&nbsp;</p>`);
+          }}
+        />
+      );
 
-      return (
+      return label ? (
         <label>
           {label}
-          <textarea
-            aria-label={label}
-            value={value}
-            onChange={(event) => {
-              setValue(event.target.value);
-              onChange(event.target.value);
-            }}
-          />
+          {textarea}
         </label>
+      ) : (
+        textarea
       );
     };
 
     return { FormAdvancedTextFieldInput };
   },
 );
+
+jest.mock('@/ui/input/components/TextArea', () => ({
+  TextArea: ({
+    ariaLabel,
+    disabled,
+    minRows,
+    onChange,
+    placeholder,
+    readOnly,
+    value,
+  }: {
+    ariaLabel?: string;
+    minRows?: number;
+    disabled?: boolean;
+    onChange?: (value: string) => void;
+    placeholder?: string;
+    readOnly?: boolean;
+    value?: string;
+  }) => (
+    <textarea
+      aria-label={ariaLabel}
+      disabled={disabled}
+      placeholder={placeholder}
+      readOnly={readOnly}
+      rows={minRows}
+      value={value}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
+  ),
+}));
 
 jest.mock('twenty-ui/input', () => ({
   Button: ({
@@ -104,11 +141,18 @@ const renderEditor = ({
   onDraftChange = jest.fn(),
   retry = jest.fn(),
   reloadConflict = jest.fn(),
+  actions = (
+    <>
+      <button>Generate Reply</button>
+      <button>Send</button>
+    </>
+  ),
 }: {
   draftEntry?: MyahInboxDraftAutosaveEntry;
   onDraftChange?: (body: MyahInboxRichText) => void;
   retry?: () => void;
   reloadConflict?: () => void;
+  actions?: ReactType.ReactNode;
 } = {}) =>
   render(
     <MyahInboxDraftEditor
@@ -116,11 +160,28 @@ const renderEditor = ({
       onDraftChange={onDraftChange}
       onRetry={retry}
       onReloadConflict={reloadConflict}
-      proposalAction={<button>Generate Reply</button>}
+      actions={actions}
     />,
   );
 
 describe('MyahInboxDraftEditor', () => {
+  it('keeps the shared reply draft name accessible without a visible label', () => {
+    renderEditor();
+
+    expect(screen.queryByText('Shared reply draft')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Shared reply draft' }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the reply composer at its intended minimum height', () => {
+    renderEditor();
+
+    expect(
+      screen.getByRole('textbox', { name: 'Shared reply draft' }),
+    ).toHaveAttribute('rows', '6');
+  });
+
   it('keeps autosave progress silent while retaining the draft actions', () => {
     renderEditor({
       draftEntry: {
@@ -203,7 +264,7 @@ describe('MyahInboxDraftEditor', () => {
     expect(reloadConflict).toHaveBeenCalledTimes(1);
   });
 
-  it('delegates rich-text changes to the controller while conflicted', () => {
+  it('delegates plain-text changes without editor HTML', () => {
     const onDraftChange = jest.fn();
     renderEditor({
       draftEntry: {
@@ -227,13 +288,15 @@ describe('MyahInboxDraftEditor', () => {
     });
   });
 
-  it('keeps Generate Reply as the only normal action-row button', () => {
+  it('renders supplied draft actions once in their supplied order', () => {
     renderEditor();
 
     const actions = screen.getByLabelText('Draft actions');
     expect(
-      within(actions).getByRole('button', { name: 'Generate Reply' }),
-    ).toBeVisible();
+      within(actions)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Generate Reply', 'Send']);
     expect(
       within(actions).queryByRole('button', { name: 'Save draft' }),
     ).not.toBeInTheDocument();

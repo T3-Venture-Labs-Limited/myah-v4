@@ -20,6 +20,12 @@ export type ManagedEmailCampaignMailbox = Readonly<{
   effectiveDailyCap: number;
 }>;
 
+export type ManagedEmailConnectedIdentity = Readonly<{
+  id: string;
+  connectedAccountId: string;
+  messageChannelId: string;
+}>;
+
 type AssertEligibleInput = Readonly<{
   workspaceId: string;
   managedMailboxId: string;
@@ -92,6 +98,57 @@ export class ManagedEmailCampaignEligibilityService {
       connectedAccountId: mailbox.connectedAccountId,
       messageChannelId: mailbox.messageChannelId,
       effectiveDailyCap,
+    };
+  }
+
+  async assertConnectedIdentityEligibleForFollowUp(input: {
+    workspaceId: string;
+    connectedAccountId: string;
+    messageChannelId: string;
+  }): Promise<ManagedEmailCampaignMailbox | null> {
+    const mailbox = await this.findConnectedIdentity(input);
+
+    if (mailbox === null) {
+      return null;
+    }
+
+    return this.assertEligible({
+      workspaceId: input.workspaceId,
+      managedMailboxId: mailbox.id,
+      connectedAccountId: input.connectedAccountId,
+      messageChannelId: input.messageChannelId,
+      isFollowUp: true,
+    });
+  }
+
+  async findConnectedIdentity(input: {
+    workspaceId: string;
+    connectedAccountId: string;
+    messageChannelId: string;
+  }): Promise<ManagedEmailConnectedIdentity | null> {
+    const mailboxes = await this.mailboxRepository.find(input.workspaceId, {
+      where: [
+        { connectedAccountId: input.connectedAccountId },
+        { messageChannelId: input.messageChannelId },
+      ],
+    });
+
+    if (mailboxes.length === 0) {
+      return null;
+    }
+
+    if (
+      mailboxes.length !== 1 ||
+      mailboxes[0].connectedAccountId !== input.connectedAccountId ||
+      mailboxes[0].messageChannelId !== input.messageChannelId
+    ) {
+      throw new Error(NOT_ELIGIBLE);
+    }
+
+    return {
+      id: mailboxes[0].id,
+      connectedAccountId: mailboxes[0].connectedAccountId,
+      messageChannelId: mailboxes[0].messageChannelId,
     };
   }
 

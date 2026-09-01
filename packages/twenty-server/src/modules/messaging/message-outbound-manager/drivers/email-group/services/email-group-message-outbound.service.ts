@@ -27,18 +27,21 @@ export class EmailGroupMessageOutboundService implements MessageOutboundDriver {
     private readonly emailingDomainSenderService: EmailingDomainSenderService,
   ) {}
 
+  async assertSendable(
+    connectedAccount: ConnectedAccountEntity,
+  ): Promise<void> {
+    const emailingDomain = await this.resolveEmailingDomain(connectedAccount);
+
+    this.assertEmailingDomainVerified(emailingDomain, connectedAccount);
+  }
+
   async sendMessage(
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
     const emailingDomain = await this.resolveEmailingDomain(connectedAccount);
 
-    if (emailingDomain.status !== EmailingDomainStatus.VERIFIED) {
-      throw new MessageChannelException(
-        `Cannot send from ${connectedAccount.handle}: domain ${emailingDomain.domain} is not verified for outbound (status: ${emailingDomain.status}).`,
-        MessageChannelExceptionCode.EMAIL_GROUP_NOT_CONFIGURED,
-      );
-    }
+    this.assertEmailingDomainVerified(emailingDomain, connectedAccount);
 
     const result = await this.emailingDomainSenderService.sendEmail(
       connectedAccount.workspaceId,
@@ -55,6 +58,21 @@ export class EmailGroupMessageOutboundService implements MessageOutboundDriver {
         from: connectedAccount.handle,
         replyTo: [connectedAccount.handle],
         attachments: sendMessageInput.attachments,
+        headers: isNonEmptyString(sendMessageInput.inReplyTo)
+          ? [
+              {
+                name: 'In-Reply-To',
+                value: sendMessageInput.inReplyTo,
+              },
+              {
+                name: 'References',
+                value:
+                  sendMessageInput.references
+                    ?.filter(isNonEmptyString)
+                    .join(' ') || sendMessageInput.inReplyTo,
+              },
+            ]
+          : undefined,
       },
     );
 
@@ -113,6 +131,18 @@ export class EmailGroupMessageOutboundService implements MessageOutboundDriver {
     }
 
     return emailingDomain;
+  }
+
+  private assertEmailingDomainVerified(
+    emailingDomain: EmailingDomainEntity,
+    connectedAccount: ConnectedAccountEntity,
+  ): void {
+    if (emailingDomain.status !== EmailingDomainStatus.VERIFIED) {
+      throw new MessageChannelException(
+        `Cannot send from ${connectedAccount.handle}: domain ${emailingDomain.domain} is not verified for outbound (status: ${emailingDomain.status}).`,
+        MessageChannelExceptionCode.EMAIL_GROUP_NOT_CONFIGURED,
+      );
+    }
   }
 
   private toRecipientArray(value: string | string[] | undefined): string[] {

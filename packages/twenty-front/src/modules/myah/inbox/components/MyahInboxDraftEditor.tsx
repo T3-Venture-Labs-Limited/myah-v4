@@ -1,6 +1,6 @@
-import { FormAdvancedTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput';
+import { TextArea } from '@/ui/input/components/TextArea';
 import { styled } from '@linaria/react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -46,7 +46,8 @@ type MyahInboxDraftEditorProps = {
   onDraftChange: (body: MyahInboxRichText) => void;
   onRetry: () => void;
   onReloadConflict: () => void;
-  proposalAction: ReactNode;
+  actions: ReactNode;
+  disabled?: boolean;
 };
 
 export const MyahInboxDraftEditor = ({
@@ -54,9 +55,11 @@ export const MyahInboxDraftEditor = ({
   onDraftChange,
   onRetry,
   onReloadConflict,
-  proposalAction,
+  actions,
+  disabled = false,
 }: MyahInboxDraftEditorProps) => {
   const conflictPanelRef = useRef<HTMLDivElement>(null);
+  const editorId = useId();
 
   useEffect(() => {
     if (entry.status === 'conflict') {
@@ -66,21 +69,19 @@ export const MyahInboxDraftEditor = ({
 
   return (
     <StyledDraftEditor aria-label="Shared reply draft editor">
-      <FormAdvancedTextFieldInput
+      <TextArea
         key={entry.editorVersion}
-        label="Shared reply draft"
-        defaultValue={entry.localBody.markdown}
+        textAreaId={editorId}
+        ariaLabel="Shared reply draft"
+        value={entry.localBody.markdown}
         placeholder="Write a reply draft"
-        readonly={false}
+        disabled={disabled}
         onChange={(markdown) => {
           onDraftChange({ markdown, blocknote: null });
         }}
-        minHeight={120}
-        maxWidth={600}
-        contentType="markdown"
-        enableFullScreen={false}
+        minRows={6}
       />
-      <StyledActions aria-label="Draft actions">{proposalAction}</StyledActions>
+      <StyledActions aria-label="Draft actions">{actions}</StyledActions>
       {entry.status === 'error' && (
         <StyledError role="alert">
           {entry.error}

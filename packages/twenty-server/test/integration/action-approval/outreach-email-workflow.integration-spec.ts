@@ -1046,11 +1046,15 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       dataSource,
       connectedAccountRepository as never,
       { persistSentMessage: recoverPersistence } as never,
+      {} as never,
     );
     const projection = {
       receiptId: recoveryReceiptId,
       workspaceId,
       draftId: recoveryActionId,
+      actionVersion: 1,
+      threadId: recoveryActionId,
+      initiatorUserWorkspaceId: userWorkspaceId,
       contentDigest: recoveryContentDigest,
       actionName: 'send_outreach_email',
       providerMessageId: recoveryProviderMessageId,

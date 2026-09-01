@@ -5,11 +5,17 @@ import {
   Injectable,
 } from '@nestjs/common';
 
+import { InjectDataSource } from '@nestjs/typeorm';
 import { isISO8601 } from 'class-validator';
-import { IsNull, Not, type ObjectLiteral } from 'typeorm';
+import { IsNull, Not, type DataSource, type ObjectLiteral } from 'typeorm';
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
 
+import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
+import {
+  getMyahInboxReplyAdvisoryLockKey,
+  MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY,
+} from 'src/engine/core-modules/action-approval/utils/myah-inbox-reply-advisory-lock.util';
 import { validateRichTextFieldOrThrow } from 'src/engine/api/common/common-args-processors/data-arg-processor/validator-utils/validate-rich-text-field-or-throw.util';
 import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
@@ -78,6 +84,9 @@ export class MyahInboxMutationService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly myahInboxQueryService: MyahInboxQueryService,
+    private readonly actionApprovalService: ActionApprovalService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   async updateMyahInboxThread(
@@ -158,88 +167,121 @@ export class MyahInboxMutationService {
   async saveMyahInboxDraft(
     input: SaveMyahInboxDraftMutationInput,
   ): Promise<MyahInboxDraftSaveResult> {
+    return this.saveMyahInboxDraftInternal(input, true);
+  }
+
+  async saveMyahInboxDraftAfterProviderFailure(
+    input: SaveMyahInboxDraftMutationInput,
+  ): Promise<MyahInboxDraftSaveResult> {
+    return this.saveMyahInboxDraftInternal(input, false);
+  }
+
+  private async saveMyahInboxDraftInternal(
+    input: SaveMyahInboxDraftMutationInput,
+    enforceExecutionLock: boolean,
+  ): Promise<MyahInboxDraftSaveResult> {
     this.assertUserRequest(input);
     this.assertValidDraftInput(input);
     await this.assertPolicyVisibleThread(input);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const { rolePermissionConfig, repositories } =
-          await this.loadRepositories(input);
+    return this.dataSource.transaction(async (coreManager) => {
+      await coreManager.query(MYAH_INBOX_REPLY_ADVISORY_LOCK_QUERY, [
+        getMyahInboxReplyAdvisoryLockKey(input.workspace.id, input.threadId),
+      ]);
 
-        return repositories.messageThread.manager.transaction(
-          async (manager) => {
-            const transactionalRepositories = this.getTransactionalRepositories(
-              manager as WorkspaceEntityManager,
-              repositories,
-              rolePermissionConfig,
-              input.authContext,
-            );
-            const draftRepository = (
-              manager as WorkspaceEntityManager
-            ).getRepository<InboxThreadRecord>(
-              repositories.messageThread.target,
-              { shouldBypassPermissionChecks: true },
-              input.authContext,
-            );
+      return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const { rolePermissionConfig, repositories } =
+            await this.loadRepositories(input);
 
-            await this.assertReadableCurrentMember(
-              transactionalRepositories.workspaceMember,
-              input.workspaceMemberId,
-            );
+          return repositories.messageThread.manager.transaction(
+            async (manager) => {
+              const transactionalRepositories =
+                this.getTransactionalRepositories(
+                  manager as WorkspaceEntityManager,
+                  repositories,
+                  rolePermissionConfig,
+                  input.authContext,
+                );
+              const draftRepository = (
+                manager as WorkspaceEntityManager
+              ).getRepository<InboxThreadRecord>(
+                repositories.messageThread.target,
+                { shouldBypassPermissionChecks: true },
+                input.authContext,
+              );
 
-            await this.assertReplyEligible(
-              transactionalRepositories.message,
-              input.threadId,
-            );
-            await this.assertPolicyVisibleThread(input);
+              await this.assertReadableCurrentMember(
+                transactionalRepositories.workspaceMember,
+                input.workspaceMemberId,
+              );
 
-            const draftPatch = {
-              myahReplyDraftBody: input.body,
-              myahReplyDraftRevision: () => '"myahReplyDraftRevision" + 1',
-            } as unknown as QueryDeepPartialEntity<InboxThreadRecord>;
+              await this.assertReplyEligible(
+                transactionalRepositories.message,
+                input.threadId,
+              );
+              await this.assertPolicyVisibleThread(input);
 
-            const result = await draftRepository.update(
-              {
-                id: input.threadId,
-                myahReplyDraftRevision: input.expectedRevision,
-              },
-              draftPatch,
-              {
-                returning: ['myahReplyDraftBody', 'myahReplyDraftRevision'],
-              },
-            );
-            const saved = (result.raw[0] ?? result.generatedMaps[0]) as
-              | InboxThreadRecord
-              | undefined;
+              if (
+                enforceExecutionLock &&
+                (await this.actionApprovalService.isDraftExecutionLocked({
+                  workspaceId: input.workspace.id,
+                  actionName: 'send_inbox_reply',
+                  draftId: input.threadId,
+                }))
+              ) {
+                throw new ConflictException(
+                  'Inbox reply draft is locked while delivery is being confirmed',
+                );
+              }
 
-            if (saved) {
+              const draftPatch = {
+                myahReplyDraftBody: input.body,
+                myahReplyDraftRevision: () => '"myahReplyDraftRevision" + 1',
+              } as unknown as QueryDeepPartialEntity<InboxThreadRecord>;
+
+              const result = await draftRepository.update(
+                {
+                  id: input.threadId,
+                  myahReplyDraftRevision: input.expectedRevision,
+                },
+                draftPatch,
+                {
+                  returning: ['myahReplyDraftBody', 'myahReplyDraftRevision'],
+                },
+              );
+              const saved = (result.raw[0] ?? result.generatedMaps[0]) as
+                | InboxThreadRecord
+                | undefined;
+
+              if (saved) {
+                return {
+                  status: MyahInboxDraftSaveStatus.SAVED,
+                  revision: saved.myahReplyDraftRevision,
+                  body: input.body,
+                };
+              }
+
+              const current = await this.loadReadableThread(
+                transactionalRepositories.messageThread,
+                input.threadId,
+              );
+
+              if (current.myahReplyDraftRevision === input.expectedRevision) {
+                throw new ForbiddenException('Inbox draft is not writable');
+              }
+
               return {
-                status: MyahInboxDraftSaveStatus.SAVED,
-                revision: saved.myahReplyDraftRevision,
-                body: input.body,
+                status: MyahInboxDraftSaveStatus.CONFLICT,
+                revision: current.myahReplyDraftRevision,
+                body: this.toDraftBody(current),
               };
-            }
-
-            const current = await this.loadReadableThread(
-              transactionalRepositories.messageThread,
-              input.threadId,
-            );
-
-            if (current.myahReplyDraftRevision === input.expectedRevision) {
-              throw new ForbiddenException('Inbox draft is not writable');
-            }
-
-            return {
-              status: MyahInboxDraftSaveStatus.CONFLICT,
-              revision: current.myahReplyDraftRevision,
-              body: this.toDraftBody(current),
-            };
-          },
-        );
-      },
-      input.authContext,
-    );
+            },
+          );
+        },
+        input.authContext,
+      );
+    });
   }
 
   private assertUserRequest(
