@@ -153,14 +153,18 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
         if (parameters?.[0] === messageThreadId && parameters?.[1] === 4) {
           draftBody = null;
           revision += 1;
-          return [{ id: messageThreadId }];
+          return [[{ id: messageThreadId }], 1];
         }
-        return [];
+        return [[], 0];
       }
-      if (sql.includes('"myahReplyDraftBody')) {
+      if (
+        sql.includes('"myahReplyDraftBodyMarkdown"') ||
+        sql.includes('"myahReplyDraftBodyBlocknote"')
+      ) {
         return [
           {
-            myahReplyDraftBody: draftBody,
+            myahReplyDraftBodyMarkdown: draftBody,
+            myahReplyDraftBodyBlocknote: null,
             myahReplyDraftRevision: revision,
           },
         ];
@@ -192,6 +196,27 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
       [`myah-inbox-reply-projection:${workspaceId}:${messageThreadId}`],
     );
     expect(persistSentMessage).toHaveBeenCalledTimes(1);
+    const draftLoadQuery = query.mock.calls.find(
+      ([sql]) =>
+        String(sql).trimStart().startsWith('SELECT') &&
+        String(sql).includes('"messageThread"') &&
+        String(sql).includes('"myahReplyDraftRevision"'),
+    )?.[0];
+    expect(draftLoadQuery).toContain('"myahReplyDraftBodyMarkdown"');
+    expect(draftLoadQuery).toContain('"myahReplyDraftBodyBlocknote"');
+    expect(draftLoadQuery).not.toMatch(
+      /"myahReplyDraftBody"(?!Markdown|Blocknote)/,
+    );
+    const draftClearQuery = query.mock.calls.find(
+      ([sql]) =>
+        String(sql).trimStart().startsWith('UPDATE') &&
+        String(sql).includes('"messageThread"'),
+    )?.[0];
+    expect(draftClearQuery).toContain('"myahReplyDraftBodyMarkdown" = NULL');
+    expect(draftClearQuery).toContain('"myahReplyDraftBodyBlocknote" = NULL');
+    expect(draftClearQuery).not.toMatch(
+      /"myahReplyDraftBody"(?!Markdown|Blocknote)/,
+    );
     expect(operations).toEqual(['persist', 'draft-cas']);
     expect(persistSentMessage).toHaveBeenCalledWith({
       sendResult: {
@@ -210,6 +235,10 @@ describe('MyahInboxReplyReceiptProjectionService', () => {
     });
     const messageLookup = query.mock.calls.find(([sql]) =>
       String(sql).includes('"recipientCount"'),
+    );
+    expect(messageLookup?.[0]).toContain('$2::text IS NOT NULL');
+    expect(messageLookup?.[0]).toContain(
+      'association."messageExternalId" = $2::text',
     );
     expect(messageLookup?.[0]).not.toContain('JOIN "messageParticipant"');
     expect(
@@ -609,12 +638,16 @@ describe('Inbox projected Message association grouping', () => {
         String(sql).trimStart().startsWith('UPDATE') &&
         sql.includes('"messageThread"')
       ) {
-        return [{ id: messageThreadId }];
+        return [[{ id: messageThreadId }], 1];
       }
-      if (sql.includes('"myahReplyDraftBody"')) {
+      if (
+        sql.includes('"myahReplyDraftBodyMarkdown"') ||
+        sql.includes('"myahReplyDraftBodyBlocknote"')
+      ) {
         return [
           {
-            myahReplyDraftBody: draftBody,
+            myahReplyDraftBodyMarkdown: draftBody,
+            myahReplyDraftBodyBlocknote: null,
             myahReplyDraftRevision: revision,
           },
         ];

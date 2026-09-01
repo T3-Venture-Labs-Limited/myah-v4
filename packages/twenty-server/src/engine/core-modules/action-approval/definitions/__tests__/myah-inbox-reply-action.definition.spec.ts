@@ -157,7 +157,10 @@ const createDefinition = ({
 } = {}) => {
   const repositories = {
     messageThread: { findOneBy: jest.fn().mockResolvedValue(draft) },
-    message: { find: jest.fn().mockResolvedValue([parent]) },
+    message: {
+      find: jest.fn().mockResolvedValue([parent]),
+      findOne: jest.fn().mockResolvedValue(parent),
+    },
   };
   const globalWorkspaceOrmManager = {
     executeInWorkspaceContext: jest
@@ -825,6 +828,39 @@ describe('MyahInboxReplyActionDefinition', () => {
       workspaceId,
       connectedAccountId,
       messageChannelId,
+    });
+  });
+
+  it('anchors provider-free projection to the approved parent when a newer message arrives', async () => {
+    const setup = createDefinition();
+    const authority = await buildAuthority(setup.definition);
+    setup.repositories.message.find.mockResolvedValue([
+      {
+        ...setup.parent,
+        id: '00000000-0000-4000-8000-000000000011',
+        headerMessageId: '<newer@example.com>',
+        receivedAt: new Date('2026-08-06T12:05:00.000Z'),
+      },
+    ]);
+
+    await expect(
+      setup.definition.rebuildProjectionAuthority({
+        workspaceId,
+        binding: authority.expectedActionBinding,
+      }),
+    ).resolves.toMatchObject({
+      canonicalGraph: { parentMessageId },
+    });
+    expect(setup.repositories.message.findOne).toHaveBeenCalledWith({
+      where: {
+        id: parentMessageId,
+        messageThreadId,
+        isDraft: false,
+      },
+      relations: {
+        messageParticipants: true,
+        messageChannelMessageAssociations: true,
+      },
     });
   });
 

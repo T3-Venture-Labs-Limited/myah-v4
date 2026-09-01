@@ -149,12 +149,23 @@ export class MyahInboxReplyActionDefinition {
         MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
       );
     }
+    const projectionParentMessageId =
+      mode === 'projection'
+        ? binding.evidenceLinks.find(({ role }) => role === 'thread_parent')
+            ?.recordId
+        : undefined;
+    if (mode === 'projection' && !isNonEmptyString(projectionParentMessageId)) {
+      throw new MyahInboxReplyUnavailableError(
+        MyahInboxReplyUnavailableCode.THREAD_UNAVAILABLE,
+      );
+    }
 
     const graph = await this.loadCanonicalGraph({
       workspaceId,
       initiatorUserWorkspaceId: binding.initiatorUserWorkspaceId,
       messageThreadId: binding.draftId,
       mode,
+      parentMessageId: projectionParentMessageId,
     });
     const authority = await this.toAuthority({
       workspaceId,
@@ -214,6 +225,7 @@ export class MyahInboxReplyActionDefinition {
     initiatorUserWorkspaceId,
     messageThreadId,
     expectedDraftRevision,
+    parentMessageId,
     mode,
   }: {
     workspaceId: string;
@@ -221,12 +233,14 @@ export class MyahInboxReplyActionDefinition {
     messageThreadId: string;
     expectedDraftRevision?: number;
     mode: LoadMode;
+    parentMessageId?: string;
   }): Promise<CanonicalMyahInboxReplyGraph> {
     const source = await this.authorityContextService.loadAuthoritySource({
       workspaceId,
       initiatorUserWorkspaceId,
       messageThreadId,
       mode,
+      parentMessageId,
     });
 
     const draftBody = source.messageThread

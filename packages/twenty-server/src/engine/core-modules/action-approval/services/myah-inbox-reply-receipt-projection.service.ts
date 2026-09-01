@@ -6,9 +6,13 @@ import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { DataSource, type EntityManager } from 'typeorm';
 
 import { MyahInboxReplyActionDefinition } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.definition';
-import { type MyahInboxReplyExpectedActionBindingWithWorkspace } from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
+import {
+  type MyahInboxReplyDraft,
+  type MyahInboxReplyExpectedActionBindingWithWorkspace,
+} from 'src/engine/core-modules/action-approval/definitions/myah-inbox-reply-action.types';
 import { type ActionReceiptProjectionWriter } from 'src/engine/core-modules/action-approval/types/action-approval.type';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
+import { normalizeMyahInboxReplyDraft } from 'src/engine/core-modules/action-approval/utils/normalize-myah-inbox-reply-draft.util';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { SentMessagePersistenceService } from 'src/modules/messaging/message-outbound-manager/services/sent-message-persistence.service';
 
@@ -182,15 +186,16 @@ export class MyahInboxReplyReceiptProjectionService {
         throw new Error('The sent Inbox Message is unavailable for projection');
       }
 
-      const cleared = await manager.query<{ id: string }[]>(
+      const [cleared] = await manager.query<[{ id: string }[], number]>(
         `UPDATE "${schemaName}"."messageThread"
           SET
-            "myahReplyDraftBody" = NULL,
+            "myahReplyDraftBodyMarkdown" = NULL,
+            "myahReplyDraftBodyBlocknote" = NULL,
             "myahReplyDraftRevision" = "myahReplyDraftRevision" + 1,
             "updatedAt" = NOW()
           WHERE "id" = $1
             AND "myahReplyDraftRevision" = $2
-            AND "myahReplyDraftBody" IS NOT NULL
+            AND "myahReplyDraftBodyMarkdown" IS NOT NULL
           RETURNING "id"`,
         [input.draftId, canonicalGraph.draftRevision],
       );
@@ -308,16 +313,20 @@ export class MyahInboxReplyReceiptProjectionService {
     schemaName: string,
     messageThreadId: string,
   ): Promise<{
-    myahReplyDraftBody: unknown;
+    myahReplyDraftBody: MyahInboxReplyDraft | null;
     myahReplyDraftRevision: number;
   }> {
     const [draft] = await manager.query<
       {
-        myahReplyDraftBody: unknown;
+        myahReplyDraftBodyMarkdown: string | null;
+        myahReplyDraftBodyBlocknote: string | null;
         myahReplyDraftRevision: number;
       }[]
     >(
-      `SELECT "myahReplyDraftBody", "myahReplyDraftRevision"
+      `SELECT
+          "myahReplyDraftBodyMarkdown",
+          "myahReplyDraftBodyBlocknote",
+          "myahReplyDraftRevision"
         FROM "${schemaName}"."messageThread"
         WHERE "id" = $1`,
       [messageThreadId],
@@ -327,7 +336,10 @@ export class MyahInboxReplyReceiptProjectionService {
       throw new Error('The approved Inbox reply is unavailable for projection');
     }
 
-    return draft;
+    return {
+      myahReplyDraftBody: normalizeMyahInboxReplyDraft(draft),
+      myahReplyDraftRevision: draft.myahReplyDraftRevision,
+    };
   }
 
   private selectOneInboxMessage(
@@ -385,7 +397,7 @@ export class MyahInboxReplyReceiptProjectionService {
       INNER JOIN "${schemaName}"."message" parent ON parent."id" = $3 AND parent."messageThreadId" = message."messageThreadId"
       LEFT JOIN "${schemaName}"."messageChannelMessageAssociation" parent_association ON parent_association."messageId" = parent."id" AND parent_association."messageChannelId" = association."messageChannelId"
       WHERE message."headerMessageId" = $1
-        OR ($2 IS NOT NULL AND association."messageExternalId" = $2)`,
+        OR ($2::text IS NOT NULL AND association."messageExternalId" = $2::text)`,
       [providerMessageId, providerExternalMessageId, parentMessageId],
     );
   }

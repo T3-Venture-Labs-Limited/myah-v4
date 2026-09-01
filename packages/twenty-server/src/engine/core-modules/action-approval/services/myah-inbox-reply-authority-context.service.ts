@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { isNonEmptyString } from '@sniptt/guards';
+
 import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 import { In, Repository } from 'typeorm';
 
@@ -119,11 +121,13 @@ export class MyahInboxReplyAuthorityContextService {
     workspaceId,
     initiatorUserWorkspaceId,
     messageThreadId,
+    parentMessageId,
     mode,
   }: {
     workspaceId: string;
     initiatorUserWorkspaceId: string;
     messageThreadId: string;
+    parentMessageId?: string;
     mode: 'execution' | 'projection';
   }): Promise<MyahInboxReplyAuthoritySource> {
     const workspace = await this.workspaceRepository.findOneBy({
@@ -156,17 +160,31 @@ export class MyahInboxReplyAuthorityContextService {
         const messageThread = await messageThreadRepository.findOneBy({
           id: messageThreadId,
         });
-        const messages = await messageRepository.find({
-          where: { messageThreadId, isDraft: false },
-          relations: {
-            messageParticipants: true,
-            messageChannelMessageAssociations: true,
-          },
-          order: { receivedAt: 'DESC', id: 'DESC' },
-          take: 1,
-        });
+        const parentMessage = isNonEmptyString(parentMessageId)
+          ? ((await messageRepository.findOne({
+              where: {
+                id: parentMessageId,
+                messageThreadId,
+                isDraft: false,
+              },
+              relations: {
+                messageParticipants: true,
+                messageChannelMessageAssociations: true,
+              },
+            })) ?? undefined)
+          : (
+              await messageRepository.find({
+                where: { messageThreadId, isDraft: false },
+                relations: {
+                  messageParticipants: true,
+                  messageChannelMessageAssociations: true,
+                },
+                order: { receivedAt: 'DESC', id: 'DESC' },
+                take: 1,
+              })
+            )[0];
 
-        return { messageThread, parentMessage: messages[0] };
+        return { messageThread, parentMessage };
       },
       authContext,
     );
