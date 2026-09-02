@@ -4,6 +4,12 @@ import { CacheStorageNamespace } from 'src/engine/core-modules/cache-storage/typ
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import {
+  getAcknowledgedMessageSyncIdsCacheKey,
+  getMessagesToImportCacheKey,
+  getPendingMessageSyncCursorsCacheKey,
+  getPendingMessageSyncGenerationCacheKey,
+} from 'src/modules/messaging/message-import-manager/utils/get-message-sync-cache-keys.util';
 
 export type MessagingCleanCacheJobData = {
   workspaceId: string;
@@ -19,8 +25,32 @@ export class MessagingCleanCacheJob {
 
   @Process(MessagingCleanCacheJob.name)
   async handle(data: MessagingCleanCacheJobData): Promise<void> {
-    await this.cacheStorage.del(
-      `messages-to-import:${data.workspaceId}:${data.messageChannelId}`,
-    );
+    const generationKey = getPendingMessageSyncGenerationCacheKey({
+      messageChannelId: data.messageChannelId,
+      workspaceId: data.workspaceId,
+    });
+    const generationId = await this.cacheStorage.get<string>(generationKey);
+
+    await this.cacheStorage.mdel([
+      getMessagesToImportCacheKey({
+        messageChannelId: data.messageChannelId,
+        workspaceId: data.workspaceId,
+      }),
+      generationKey,
+      ...(generationId
+        ? [
+            getPendingMessageSyncCursorsCacheKey({
+              generationId,
+              messageChannelId: data.messageChannelId,
+              workspaceId: data.workspaceId,
+            }),
+            getAcknowledgedMessageSyncIdsCacheKey({
+              generationId,
+              messageChannelId: data.messageChannelId,
+              workspaceId: data.workspaceId,
+            }),
+          ]
+        : []),
+    ]);
   }
 }

@@ -9,6 +9,7 @@ import { Processor } from 'src/engine/core-modules/message-queue/decorators/proc
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { MessageChannelSyncLockService } from 'src/modules/messaging/common/services/message-channel-sync-lock.service';
 import { MessagingMessagesImportService } from 'src/modules/messaging/message-import-manager/services/messaging-messages-import.service';
 import { MessagingMonitoringService } from 'src/modules/messaging/monitoring/services/messaging-monitoring.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
@@ -25,6 +26,7 @@ export type MessagingMessagesImportJobData = {
 export class MessagingMessagesImportJob {
   constructor(
     private readonly messagingMessagesImportService: MessagingMessagesImportService,
+    private readonly messageChannelSyncLockService: MessageChannelSyncLockService,
     private readonly messagingMonitoringService: MessagingMonitoringService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(MessageChannelEntity)
@@ -41,47 +43,52 @@ export class MessagingMessagesImportJob {
       messageChannelId,
     });
 
-    const authContext = buildSystemAuthContext(workspaceId);
-
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+    await this.messageChannelSyncLockService.withLock(
+      { messageChannelId, workspaceId },
       async () => {
-        const messageChannel = await this.messageChannelRepository.findOne({
-          where: {
-            id: messageChannelId,
-            workspaceId,
+        const authContext = buildSystemAuthContext(workspaceId);
+
+        await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          async () => {
+            const messageChannel = await this.messageChannelRepository.findOne({
+              where: {
+                id: messageChannelId,
+                workspaceId,
+              },
+              relations: { connectedAccount: true, messageFolders: true },
+            });
+
+            if (!messageChannel) {
+              await this.messagingMonitoringService.track({
+                eventName: 'messages_import.error.message_channel_not_found',
+                messageChannelId,
+                workspaceId,
+              });
+
+              return;
+            }
+
+            if (!messageChannel?.isSyncEnabled) {
+              return;
+            }
+
+            if (
+              messageChannel.syncStage !==
+              MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED
+            ) {
+              return;
+            }
+
+            await this.messagingMessagesImportService.processMessageBatchImport(
+              messageChannel,
+              messageChannel.connectedAccount,
+              workspaceId,
+            );
           },
-          relations: { connectedAccount: true, messageFolders: true },
-        });
-
-        if (!messageChannel) {
-          await this.messagingMonitoringService.track({
-            eventName: 'messages_import.error.message_channel_not_found',
-            messageChannelId,
-            workspaceId,
-          });
-
-          return;
-        }
-
-        if (!messageChannel?.isSyncEnabled) {
-          return;
-        }
-
-        if (
-          messageChannel.syncStage !==
-          MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED
-        ) {
-          return;
-        }
-
-        await this.messagingMessagesImportService.processMessageBatchImport(
-          messageChannel,
-          messageChannel.connectedAccount,
-          workspaceId,
+          authContext,
+          { lite: true },
         );
       },
-      authContext,
-      { lite: true },
     );
   }
 }

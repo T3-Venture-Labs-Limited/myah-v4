@@ -20,18 +20,19 @@ import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/se
 import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
 import { MessagingMessageCleanerService } from 'src/modules/messaging/message-cleaner/services/messaging-message-cleaner.service';
 import { SyncMessageFoldersService } from 'src/modules/messaging/message-folder-manager/services/sync-message-folders.service';
-import { MessagingCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-cursor.service';
 import { MessagingGetMessageListService } from 'src/modules/messaging/message-import-manager/services/messaging-get-message-list.service';
 import {
   MessageImportExceptionHandlerService,
   MessageImportSyncStep,
 } from 'src/modules/messaging/message-import-manager/services/messaging-import-exception-handler.service';
 import { MessagingMessagesImportService } from 'src/modules/messaging/message-import-manager/services/messaging-messages-import.service';
+import { MessagingPendingSyncCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-pending-sync-cursor.service';
 import {
   MessagingProcessFolderActionsService,
   type ProcessFolderActionsResult,
 } from 'src/modules/messaging/message-import-manager/services/messaging-process-folder-actions.service';
 import { MessagingProcessGroupEmailActionsService } from 'src/modules/messaging/message-import-manager/services/messaging-process-group-email-actions.service';
+import { getMessagesToImportCacheKey } from 'src/modules/messaging/message-import-manager/utils/get-message-sync-cache-keys.util';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 
 const ONE_WEEK_IN_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
@@ -49,7 +50,7 @@ export class MessagingMessageListFetchService {
     private readonly messagingGetMessageListService: MessagingGetMessageListService,
     private readonly messageImportErrorHandlerService: MessageImportExceptionHandlerService,
     private readonly messagingMessageCleanerService: MessagingMessageCleanerService,
-    private readonly messagingCursorService: MessagingCursorService,
+    private readonly messagingPendingSyncCursorService: MessagingPendingSyncCursorService,
     private readonly messagingMessagesImportService: MessagingMessagesImportService,
     private readonly syncMessageFoldersService: SyncMessageFoldersService,
     private readonly messagingProcessGroupEmailActionsService: MessagingProcessGroupEmailActionsService,
@@ -114,15 +115,16 @@ export class MessagingMessageListFetchService {
               folder.pendingSyncAction === MessageFolderPendingSyncAction.NONE,
           );
 
+          await this.messagingPendingSyncCursorService.clear({
+            messageChannelId: freshMessageChannel.id,
+            workspaceId,
+          });
+
           const messageLists =
             await this.messagingGetMessageListService.getMessageLists(
               freshMessageChannel,
               messageFoldersToSync,
             );
-
-          await this.cacheStorage.del(
-            `messages-to-import:${workspaceId}:${freshMessageChannel.id}`,
-          );
 
           const messageExternalIds = [
             ...messageLists.flatMap(
@@ -142,6 +144,7 @@ export class MessagingMessageListFetchService {
             ) && !isNonEmptyString(freshMessageChannel.syncCursor);
 
           let totalMessagesToImportCount = 0;
+          const messageExternalIdsToImportForSync: string[] = [];
 
           this.logger.log(
             `WorkspaceId: ${workspaceId}, MessageChannelId: ${freshMessageChannel.id} - Is full sync: ${isFullSync}, toImportCount: ${messageExternalIds.length}, toDeleteCount: ${messageExternalIdsToDelete.length}`,
@@ -186,25 +189,27 @@ export class MessagingMessageListFetchService {
               );
 
               totalMessagesToImportCount += messageExternalIdsToImport.length;
+              messageExternalIdsToImportForSync.push(
+                ...messageExternalIdsToImport,
+              );
 
               await this.cacheStorage.setAdd(
-                `messages-to-import:${workspaceId}:${freshMessageChannel.id}`,
+                getMessagesToImportCacheKey({
+                  messageChannelId: freshMessageChannel.id,
+                  workspaceId,
+                }),
                 messageExternalIdsToImport,
                 ONE_WEEK_IN_MILLISECONDS,
               );
             }
           }
 
-          for (const messageList of messageLists) {
-            const { nextSyncCursor, folderId } = messageList;
-
-            await this.messagingCursorService.updateCursor(
-              freshMessageChannel,
-              nextSyncCursor,
-              workspaceId,
-              folderId,
-            );
-          }
+          await this.messagingPendingSyncCursorService.stage({
+            messageChannelId: freshMessageChannel.id,
+            messageExternalIds: messageExternalIdsToImportForSync,
+            messageLists,
+            workspaceId,
+          });
 
           const fullSyncMessageChannelMessageAssociationsToDelete = isFullSync
             ? await this.computeFullSyncMessageChannelMessageAssociationsToDelete(
@@ -251,6 +256,11 @@ export class MessagingMessageListFetchService {
           );
 
           if (totalMessagesToImportCount === 0) {
+            await this.messagingPendingSyncCursorService.commit({
+              messageChannel: freshMessageChannel,
+              workspaceId,
+            });
+
             await this.messageChannelSyncStatusService.markAsMessageSyncCompleted(
               [freshMessageChannel.id],
               workspaceId,

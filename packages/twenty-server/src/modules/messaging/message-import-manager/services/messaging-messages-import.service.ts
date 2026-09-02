@@ -29,7 +29,9 @@ import {
   MessageImportSyncStep,
 } from 'src/modules/messaging/message-import-manager/services/messaging-import-exception-handler.service';
 import { MessagingSaveMessagesAndEnqueueContactCreationService } from 'src/modules/messaging/message-import-manager/services/messaging-save-messages-and-enqueue-contact-creation.service';
+import { MessagingPendingSyncCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-pending-sync-cursor.service';
 import { filterEmails } from 'src/modules/messaging/message-import-manager/utils/filter-emails.util';
+import { getMessagesToImportCacheKey } from 'src/modules/messaging/message-import-manager/utils/get-message-sync-cache-keys.util';
 import { MessagingMonitoringService } from 'src/modules/messaging/monitoring/services/messaging-monitoring.service';
 import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 import { MessageChannelSyncStage } from 'twenty-shared/types';
@@ -52,6 +54,7 @@ export class MessagingMessagesImportService {
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly messagingGetMessagesService: MessagingGetMessagesService,
     private readonly messageImportErrorHandlerService: MessageImportExceptionHandlerService,
+    private readonly messagingPendingSyncCursorService: MessagingPendingSyncCursorService,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     @InjectRepository(WorkspaceEntity)
@@ -103,11 +106,19 @@ export class MessagingMessagesImportService {
           }
 
           messageIdsToFetch = await this.cacheStorage.setPop(
-            `messages-to-import:${workspaceId}:${messageChannel.id}`,
+            getMessagesToImportCacheKey({
+              messageChannelId: messageChannel.id,
+              workspaceId,
+            }),
             messagesGetBatchSize,
           );
 
           if (!messageIdsToFetch?.length) {
+            await this.messagingPendingSyncCursorService.commit({
+              messageChannel,
+              workspaceId,
+            });
+
             await this.messageChannelSyncStatusService.markAsMessageSyncCompleted(
               [messageChannel.id],
               workspaceId,
@@ -212,8 +223,18 @@ export class MessagingMessagesImportService {
               workspaceId,
             );
           }
+          await this.messagingPendingSyncCursorService.acknowledge({
+            messageChannelId: messageChannel.id,
+            processedMessageExternalIds: messageIdsToFetch,
+            workspaceId,
+          });
 
           if (messageIdsToFetch.length < messagesGetBatchSize) {
+            await this.messagingPendingSyncCursorService.commit({
+              messageChannel,
+              workspaceId,
+            });
+
             await this.messageChannelSyncStatusService.markAsMessageSyncCompleted(
               [messageChannel.id],
               workspaceId,
@@ -243,7 +264,10 @@ export class MessagingMessagesImportService {
             `WorkspaceId: ${workspaceId}, MessageChannelId: ${messageChannel.id} - Error (${error.code}) importing messages: ${error.message}`,
           );
           await this.cacheStorage.setAdd(
-            `messages-to-import:${workspaceId}:${messageChannel.id}`,
+            getMessagesToImportCacheKey({
+              messageChannelId: messageChannel.id,
+              workspaceId,
+            }),
             messageIdsToFetch,
           );
 

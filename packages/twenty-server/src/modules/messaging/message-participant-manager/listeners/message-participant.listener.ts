@@ -33,6 +33,15 @@ export class MessageParticipantListener {
     if (!isDefined(batchEvent.workspaceId)) {
       return;
     }
+    const hasParticipantWithPersonId = batchEvent.events.some((event) =>
+      (event.participants ?? []).some((participant) =>
+        isDefined(participant.personId),
+      ),
+    );
+
+    if (!hasParticipantWithPersonId) {
+      return;
+    }
 
     const messageObjectMetadata =
       await this.objectMetadataRepository.findOneOrFail({

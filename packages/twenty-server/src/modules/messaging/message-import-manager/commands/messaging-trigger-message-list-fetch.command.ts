@@ -11,14 +11,17 @@ import { MessageQueueService } from 'src/engine/core-modules/message-queue/servi
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/services/message-channel-sync-status.service';
 import {
   MessagingMessageListFetchJob,
   type MessagingMessageListFetchJobData,
 } from 'src/modules/messaging/message-import-manager/jobs/messaging-message-list-fetch.job';
 
 type MessagingTriggerMessageListFetchCommandOptions = {
-  workspaceId: string;
+  dryRun?: boolean;
   messageChannelId?: string;
+  resetSync?: boolean;
+  workspaceId: string;
 };
 
 @Command({
@@ -37,6 +40,7 @@ export class MessagingTriggerMessageListFetchCommand extends CommandRunner {
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     @InjectMessageQueue(MessageQueue.messagingQueue)
     private readonly messageQueueService: MessageQueueService,
+    private readonly messageChannelSyncStatusService: MessageChannelSyncStatusService,
   ) {
     super();
   }
@@ -45,7 +49,11 @@ export class MessagingTriggerMessageListFetchCommand extends CommandRunner {
     _passedParam: string[],
     options: MessagingTriggerMessageListFetchCommandOptions,
   ): Promise<void> {
-    const { workspaceId, messageChannelId } = options;
+    const { dryRun, messageChannelId, resetSync, workspaceId } = options;
+
+    if (resetSync && !messageChannelId) {
+      throw new Error('--reset-sync requires --message-channel-id');
+    }
 
     this.logger.log(
       `Triggering message list fetch for workspace ${workspaceId}${messageChannelId ? ` and channel ${messageChannelId}` : ' (all pending channels)'}`,
@@ -58,16 +66,18 @@ export class MessagingTriggerMessageListFetchCommand extends CommandRunner {
         const messageChannels = await this.messageChannelRepository.find({
           where: {
             isSyncEnabled: true,
-            syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
-            ...(messageChannelId ? { id: messageChannelId } : {}),
+            ...(resetSync
+              ? { id: messageChannelId }
+              : {
+                  syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
+                  ...(messageChannelId ? { id: messageChannelId } : {}),
+                }),
             workspaceId,
           },
         });
 
         if (messageChannels.length === 0) {
-          this.logger.warn(
-            'No message channels found with MESSAGE_LIST_FETCH_PENDING status',
-          );
+          this.logger.warn('No eligible message channels found');
 
           return;
         }
@@ -75,23 +85,70 @@ export class MessagingTriggerMessageListFetchCommand extends CommandRunner {
         this.logger.log(
           `Found ${messageChannels.length} message channel(s) to process`,
         );
+        if (
+          resetSync &&
+          messageChannels.some((messageChannel) =>
+            [
+              MessageChannelSyncStage.MESSAGE_LIST_FETCH_SCHEDULED,
+              MessageChannelSyncStage.MESSAGE_LIST_FETCH_ONGOING,
+              MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED,
+              MessageChannelSyncStage.MESSAGES_IMPORT_ONGOING,
+            ].includes(messageChannel.syncStage),
+          )
+        ) {
+          throw new Error('Cannot reset an in-flight message channel');
+        }
+
+        if (dryRun) {
+          this.logger.log('Dry run complete; no message channel state changed');
+
+          return;
+        }
 
         for (const messageChannel of messageChannels) {
-          await this.messageChannelRepository.update(
-            { id: messageChannel.id, workspaceId },
-            {
-              syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_SCHEDULED,
-              syncStageStartedAt: new Date().toISOString(),
-            },
-          );
+          const scheduledUpdate = {
+            syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_SCHEDULED,
+            syncStageStartedAt: new Date().toISOString(),
+          };
 
-          await this.messageQueueService.add<MessagingMessageListFetchJobData>(
-            MessagingMessageListFetchJob.name,
-            {
-              messageChannelId: messageChannel.id,
-              workspaceId,
-            },
-          );
+          if (resetSync) {
+            const claimed =
+              await this.messageChannelSyncStatusService.claimAndResetSyncCursors(
+                messageChannel.id,
+                workspaceId,
+              );
+
+            if (!claimed) {
+              this.logger.warn(
+                `Message channel ${messageChannel.id} was claimed by another scheduler`,
+              );
+              continue;
+            }
+          } else {
+            await this.messageChannelRepository.update(
+              { id: messageChannel.id, workspaceId },
+              scheduledUpdate,
+            );
+          }
+
+          try {
+            await this.messageQueueService.add<MessagingMessageListFetchJobData>(
+              MessagingMessageListFetchJob.name,
+              {
+                messageChannelId: messageChannel.id,
+                workspaceId,
+              },
+            );
+          } catch (error) {
+            if (resetSync) {
+              await this.messageChannelSyncStatusService.markAsMessagesListFetchPending(
+                [messageChannel.id],
+                workspaceId,
+              );
+            }
+
+            throw error;
+          }
 
           this.logger.log(
             `Triggered fetch for message channel ${messageChannel.id}`,
@@ -124,5 +181,21 @@ export class MessagingTriggerMessageListFetchCommand extends CommandRunner {
   })
   parseMessageChannelId(value: string): string {
     return value;
+  }
+  @Option({
+    flags: '--dry-run',
+    description: 'Report eligible channels without changing state',
+  })
+  parseDryRun(): boolean {
+    return true;
+  }
+
+  @Option({
+    flags: '--reset-sync',
+    description:
+      'Reset cursors for one non-running channel before triggering fetch',
+  })
+  parseResetSync(): boolean {
+    return true;
   }
 }
