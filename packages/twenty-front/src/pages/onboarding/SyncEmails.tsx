@@ -100,7 +100,6 @@ export const SyncEmails = () => {
 
   return (
     <ImportContacts
-      creditsReward={onboardingConfig?.importContactsCreditsReward}
       onContinueWithGoogle={
         isGoogleProviderEnabled
           ? () => connectWithProvider(ConnectedAccountProvider.GOOGLE)

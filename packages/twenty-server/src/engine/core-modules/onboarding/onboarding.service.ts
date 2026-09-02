@@ -97,9 +97,6 @@ export class OnboardingService {
       userVars.get(OnboardingStepKeys.ONBOARDING_CONNECT_ACCOUNT_PENDING) ===
       true;
 
-    const isInstallAppsPending =
-      userVars.get(OnboardingStepKeys.ONBOARDING_INSTALL_APPS_PENDING) === true;
-
     const isInviteTeamPending =
       userVars.get(OnboardingStepKeys.ONBOARDING_INVITE_TEAM_PENDING) === true;
 
@@ -109,10 +106,6 @@ export class OnboardingService {
 
     if (isConnectAccountPending) {
       return OnboardingStatus.SYNC_EMAIL;
-    }
-
-    if (isInstallAppsPending) {
-      return OnboardingStatus.APPS_INSTALLATION;
     }
 
     if (isProfileCreationPending) {

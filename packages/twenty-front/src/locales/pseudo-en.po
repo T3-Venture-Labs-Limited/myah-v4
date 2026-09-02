@@ -10402,11 +10402,6 @@ msgstr ""
 msgid "free credits ({creditsRewardPerApp} per tool)"
 msgstr ""
 
-#. js-lingui-id: 7thh0w
-#: src/pages/onboarding/InviteTeam.tsx
-msgid "free credits per user"
-msgstr ""
-
 #. js-lingui-id: nLC6tu
 #: src/pages/settings/profile/appearance/components/LocalePicker.tsx
 msgid "French"
