@@ -1,6 +1,7 @@
 import { type ComponentPropsWithoutRef, forwardRef } from 'react';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import { IconChevronDown } from 'twenty-ui/icon';
 import { TabButton } from 'twenty-ui/input';
 
@@ -10,6 +11,8 @@ const StyledTabMoreButtonContainer = styled.div`
   display: flex;
   height: ${TAB_LIST_HEIGHT};
 `;
+
+export const tabMoreLabel = msg`More`;
 
 type TabMoreButtonProps = {
   hiddenTabsCount: number;
@@ -38,7 +41,7 @@ export const TabMoreButton = forwardRef<HTMLElement, TabMoreButtonProps>(
         ref={ref}
         id="tab-more-button"
         active={active}
-        title={`+${hiddenTabsCount} ${t`More`}`}
+        title={`+${hiddenTabsCount} ${i18n._(tabMoreLabel)}`}
         RightIcon={IconChevronDown}
         className={className}
         aria-controls={ariaControls}
