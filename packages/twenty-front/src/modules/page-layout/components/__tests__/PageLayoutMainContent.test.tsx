@@ -1,8 +1,23 @@
 import { render, screen } from '@testing-library/react';
 
 import { PageLayoutMainContent } from '@/page-layout/PageLayoutMainContent';
+import { ViewType, WidgetType } from '~/generated-metadata/graphql';
 
 const mockGetWidgetConfigurationViewId = jest.fn();
+
+const canonicalCampaignOperationsWidget = {
+  id: 'operations-fields-widget',
+  title: 'Campaign operations',
+  type: WidgetType.FIELDS,
+  configuration: { viewId: 'operations-fields-view' },
+};
+
+const canonicalCampaignOperationsView = {
+  id: 'operations-fields-view',
+  universalIdentifier: '9c4f90c5-2a03-436b-8130-93d50a4d0e3e',
+  type: ViewType.FIELDS_WIDGET,
+  isActive: true,
+};
 
 jest.mock('@/myah/creator-crm/components/CampaignInfluencerIndex', () => ({
   CampaignInfluencerIndex: ({
@@ -23,12 +38,24 @@ let activeTab: {
   layout: string;
   title: string;
   universalIdentifier: string;
-  widgets?: Array<{ title?: string }>;
+  widgets?: Array<{
+    id?: string;
+    title?: string;
+    type?: WidgetType;
+    configuration?: { viewId?: string };
+  }>;
 };
 let isInSidePanel = false;
 let targetRecordIdentifier:
   | { id: string; targetObjectNameSingular: string }
   | undefined;
+
+let runtimeViews: Array<{
+  id: string;
+  universalIdentifier: string;
+  type: ViewType;
+  isActive: boolean;
+}>;
 
 jest.mock('@/page-layout/components/PageLayoutContent', () => ({
   PageLayoutContent: () => <div>Native page layout content</div>,
@@ -48,6 +75,22 @@ jest.mock('@/page-layout/components/MyahCampaignAgent', () => ({
     campaignId: string;
     title: string;
   }) => <div>{`Campaign agent integration:${campaignId}:${title}`}</div>,
+}));
+
+jest.mock('@/page-layout/components/MyahCampaignOperations', () => ({
+  MyahCampaignOperations: ({
+    campaignId,
+    title,
+    fieldsWidget,
+  }: {
+    campaignId: string;
+    title: string;
+    fieldsWidget: { id: string };
+  }) => (
+    <div>
+      Campaign operations integration:{campaignId}:{title}:{fieldsWidget.id}
+    </div>
+  ),
 }));
 
 jest.mock('@/myah-outreach/components/CampaignOutreachTab', () => ({
@@ -78,6 +121,14 @@ jest.mock(
     usePageLayoutTabWithVisibleWidgetsOrThrow: () => activeTab,
   }),
 );
+
+jest.mock('@/views/states/selectors/viewsSelector', () => ({
+  viewsSelector: {},
+}));
+
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
+  useAtomStateValue: () => runtimeViews,
+}));
 
 jest.mock('@/page-layout/utils/getTabLayoutMode', () => ({
   getTabLayoutMode: () => 'VERTICAL_LIST',
@@ -110,10 +161,17 @@ describe('PageLayoutMainContent', () => {
       id: 'campaign-1',
       targetObjectNameSingular: 'campaign',
     };
-    mockGetWidgetConfigurationViewId.mockReturnValue(
-      'campaign-influencers-view',
+    mockGetWidgetConfigurationViewId.mockImplementation(
+      (configuration: unknown) =>
+        typeof configuration === 'object' &&
+        configuration !== null &&
+        'viewId' in configuration &&
+        typeof configuration.viewId === 'string'
+          ? configuration.viewId
+          : 'campaign-influencers-view',
     );
     mockGetWidgetConfigurationViewId.mockClear();
+    runtimeViews = [canonicalCampaignOperationsView];
   });
 
   it('mounts Campaign Home with native page layout content', () => {
@@ -236,6 +294,157 @@ describe('PageLayoutMainContent', () => {
     ).toBeVisible();
     expect(
       screen.queryByText('Native page layout content'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('mounts the editor only on the canonical Campaign Operations tab', () => {
+    activeTab = {
+      ...activeTab,
+      title: 'Operations',
+      universalIdentifier: 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+      widgets: [canonicalCampaignOperationsWidget],
+    };
+
+    render(<PageLayoutMainContent tabId="operations-tab-id" />);
+
+    expect(
+      screen.getByText(
+        'Campaign operations integration:campaign-1:Campaign operations:operations-fields-widget',
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText('Native page layout content'),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      'side panel',
+      () => {
+        isInSidePanel = true;
+      },
+    ],
+    [
+      'different layout',
+      () => {
+        currentPageLayout = {
+          ...currentPageLayout,
+          universalIdentifier: 'different-layout',
+        };
+      },
+    ],
+    [
+      'non-Campaign object',
+      () => {
+        targetRecordIdentifier = {
+          id: 'record-1',
+          targetObjectNameSingular: 'person',
+        };
+      },
+    ],
+    [
+      'different tab',
+      () => {
+        activeTab = {
+          ...activeTab,
+          title: 'Tasks',
+          universalIdentifier: 'a2ad78b4-249f-45d4-85b5-ee9ea3c30fda',
+        };
+      },
+    ],
+    [
+      'missing widget',
+      () => {
+        activeTab = { ...activeTab, widgets: [] };
+      },
+    ],
+    [
+      'multiple widgets',
+      () => {
+        activeTab = {
+          ...activeTab,
+          widgets: [
+            canonicalCampaignOperationsWidget,
+            canonicalCampaignOperationsWidget,
+          ],
+        };
+      },
+    ],
+    [
+      'wrong widget type',
+      () => {
+        activeTab = {
+          ...activeTab,
+          widgets: [
+            {
+              ...canonicalCampaignOperationsWidget,
+              type: WidgetType.FIELD,
+            },
+          ],
+        };
+      },
+    ],
+    [
+      'wrong view ID',
+      () => {
+        activeTab = {
+          ...activeTab,
+          widgets: [
+            {
+              ...canonicalCampaignOperationsWidget,
+              configuration: { viewId: 'wrong-operations-fields-view' },
+            },
+          ],
+        };
+      },
+    ],
+    [
+      'wrong view universal identifier',
+      () => {
+        runtimeViews = [
+          {
+            ...canonicalCampaignOperationsView,
+            universalIdentifier: 'wrong-view-universal-identifier',
+          },
+        ];
+      },
+    ],
+    [
+      'wrong view type',
+      () => {
+        runtimeViews = [
+          {
+            ...canonicalCampaignOperationsView,
+            type: ViewType.TABLE_WIDGET,
+          },
+        ];
+      },
+    ],
+    [
+      'inactive view',
+      () => {
+        runtimeViews = [
+          {
+            ...canonicalCampaignOperationsView,
+            isActive: false,
+          },
+        ];
+      },
+    ],
+  ])('keeps native content for Operations with %s', (_description, setup) => {
+    activeTab = {
+      ...activeTab,
+      title: 'Operations',
+      universalIdentifier: 'a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+      widgets: [canonicalCampaignOperationsWidget],
+    };
+    setup();
+
+    render(<PageLayoutMainContent tabId="operations-tab-id" />);
+
+    expect(screen.getByText('Native page layout content')).toBeVisible();
+    expect(
+      screen.queryByText(/Campaign operations integration:/),
     ).not.toBeInTheDocument();
   });
 
