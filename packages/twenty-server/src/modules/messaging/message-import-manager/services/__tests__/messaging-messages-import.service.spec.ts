@@ -18,6 +18,7 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 import { MessagingGetMessagesService } from 'src/modules/messaging/message-import-manager/services/messaging-get-messages.service';
 import { MessageImportExceptionHandlerService } from 'src/modules/messaging/message-import-manager/services/messaging-import-exception-handler.service';
 import { MessagingMessagesImportService } from 'src/modules/messaging/message-import-manager/services/messaging-messages-import.service';
+import { MessagingPendingSyncCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-pending-sync-cursor.service';
 import { MessagingSaveMessagesAndEnqueueContactCreationService } from 'src/modules/messaging/message-import-manager/services/messaging-save-messages-and-enqueue-contact-creation.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
@@ -32,6 +33,7 @@ describe('MessagingMessagesImportService', () => {
   let emailAliasManagerService: EmailAliasManagerService;
   let messagingGetMessagesService: MessagingGetMessagesService;
   let saveMessagesService: MessagingSaveMessagesAndEnqueueContactCreationService;
+  let pendingSyncCursorService: MessagingPendingSyncCursorService;
 
   const workspaceId = 'workspace-id';
   let mockMessageChannel: Pick<
@@ -161,6 +163,13 @@ describe('MessagingMessagesImportService', () => {
         },
       },
       {
+        provide: MessagingPendingSyncCursorService,
+        useValue: {
+          acknowledge: jest.fn().mockResolvedValue(undefined),
+          commit: jest.fn().mockResolvedValue(undefined),
+        },
+      },
+      {
         provide: getRepositoryToken(UserWorkspaceEntity),
         useValue: {
           findOne: jest.fn().mockResolvedValue({ userId: 'user-id' }),
@@ -218,6 +227,7 @@ describe('MessagingMessagesImportService', () => {
       module.get<MessagingSaveMessagesAndEnqueueContactCreationService>(
         MessagingSaveMessagesAndEnqueueContactCreationService,
       );
+    pendingSyncCursorService = module.get(MessagingPendingSyncCursorService);
   });
 
   it('should fails if SyncStage is not MESSAGES_IMPORT_SCHEDULED', async () => {
@@ -257,6 +267,22 @@ describe('MessagingMessagesImportService', () => {
     expect(
       messageChannelSyncStatusService.markAsMessagesImportPending,
     ).toHaveBeenCalledTimes(0);
+    expect(pendingSyncCursorService.acknowledge).toHaveBeenCalledWith({
+      messageChannelId: mockMessageChannel.id,
+      processedMessageExternalIds: ['message-id-1', 'message-id-2'],
+      workspaceId,
+    });
+    expect(pendingSyncCursorService.commit).toHaveBeenCalledWith({
+      messageChannel: mockMessageChannel,
+      workspaceId,
+    });
+    expect(
+      (pendingSyncCursorService.commit as jest.Mock).mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      (messageChannelSyncStatusService.markAsMessageSyncCompleted as jest.Mock)
+        .mock.invocationCallOrder[0],
+    );
   });
 
   it('should process message batch import of more than MESSAGING_GMAIL_USERS_MESSAGES_GET_BATCH_SIZE successfully', async () => {
@@ -310,5 +336,88 @@ describe('MessagingMessagesImportService', () => {
     expect(
       messageChannelSyncStatusService.markAsMessagesImportPending,
     ).toHaveBeenCalledTimes(1);
+    pendingSyncCursorService = module.get(MessagingPendingSyncCursorService);
+    expect(pendingSyncCursorService.acknowledge).toHaveBeenCalledWith({
+      messageChannelId: mockMessageChannel.id,
+      processedMessageExternalIds: arrayMessagesBig,
+      workspaceId,
+    });
+    expect(pendingSyncCursorService.commit).not.toHaveBeenCalled();
+  });
+
+  it('commits an acknowledged exact-size batch on the empty-tail invocation', async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ...providersBase,
+        {
+          provide: CacheStorageNamespace.ModuleMessaging,
+          useValue: {
+            setAdd: jest.fn().mockResolvedValue(undefined),
+            setPop: jest.fn().mockResolvedValue([]),
+          },
+        },
+      ],
+    }).compile();
+    service = module.get(MessagingMessagesImportService);
+    pendingSyncCursorService = module.get(MessagingPendingSyncCursorService);
+    messageChannelSyncStatusService = module.get(
+      MessageChannelSyncStatusService,
+    );
+
+    await service.processMessageBatchImport(
+      mockMessageChannel as MessageChannelEntity,
+      mockConnectedAccount,
+      workspaceId,
+    );
+
+    expect(pendingSyncCursorService.acknowledge).not.toHaveBeenCalled();
+    expect(pendingSyncCursorService.commit).toHaveBeenCalledWith({
+      messageChannel: mockMessageChannel,
+      workspaceId,
+    });
+    expect(
+      messageChannelSyncStatusService.markAsMessageSyncCompleted,
+    ).toHaveBeenCalledWith([mockMessageChannel.id], workspaceId);
+  });
+
+  it('does not acknowledge or commit a failed batch', async () => {
+    const loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    const cacheStorage = {
+      setAdd: jest.fn().mockResolvedValue(undefined),
+      setPop: jest.fn().mockResolvedValue(['message-id-1']),
+    };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ...providersBase,
+        {
+          provide: CacheStorageNamespace.ModuleMessaging,
+          useValue: cacheStorage,
+        },
+      ],
+    }).compile();
+    service = module.get(MessagingMessagesImportService);
+    pendingSyncCursorService = module.get(MessagingPendingSyncCursorService);
+    saveMessagesService = module.get(
+      MessagingSaveMessagesAndEnqueueContactCreationService,
+    );
+    jest
+      .spyOn(saveMessagesService, 'saveMessagesAndEnqueueContactCreation')
+      .mockRejectedValueOnce(new Error('Person metadata missing'));
+
+    await service.processMessageBatchImport(
+      mockMessageChannel as MessageChannelEntity,
+      mockConnectedAccount,
+      workspaceId,
+    );
+
+    expect(pendingSyncCursorService.acknowledge).not.toHaveBeenCalled();
+    expect(pendingSyncCursorService.commit).not.toHaveBeenCalled();
+    expect(cacheStorage.setAdd).toHaveBeenCalledWith(
+      `messages-to-import:${workspaceId}:${mockMessageChannel.id}`,
+      ['message-id-1'],
+    );
+    loggerErrorSpy.mockRestore();
   });
 });

@@ -17,6 +17,7 @@ import { MessagingGetMessageListService } from 'src/modules/messaging/message-im
 import { MessageImportExceptionHandlerService } from 'src/modules/messaging/message-import-manager/services/messaging-import-exception-handler.service';
 import { MessagingMessageListFetchService } from 'src/modules/messaging/message-import-manager/services/messaging-message-list-fetch.service';
 import { MessagingMessagesImportService } from 'src/modules/messaging/message-import-manager/services/messaging-messages-import.service';
+import { MessagingPendingSyncCursorService } from 'src/modules/messaging/message-import-manager/services/messaging-pending-sync-cursor.service';
 import { MessagingProcessFolderActionsService } from 'src/modules/messaging/message-import-manager/services/messaging-process-folder-actions.service';
 import { MessagingProcessGroupEmailActionsService } from 'src/modules/messaging/message-import-manager/services/messaging-process-group-email-actions.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
@@ -28,6 +29,7 @@ describe('MessagingMessageListFetchService', () => {
   let messageChannelSyncStatusService: MessageChannelSyncStatusService;
   let globalWorkspaceOrmManager: GlobalWorkspaceOrmManager;
   let messagingCursorService: MessagingCursorService;
+  let pendingSyncCursorService: MessagingPendingSyncCursorService;
 
   let mockMicrosoftMessageChannel: MessageChannelEntity;
   let mockGoogleMessageChannel: MessageChannelEntity;
@@ -157,6 +159,14 @@ describe('MessagingMessageListFetchService', () => {
           },
         },
         {
+          provide: MessagingPendingSyncCursorService,
+          useValue: {
+            clear: jest.fn().mockResolvedValue(undefined),
+            commit: jest.fn().mockResolvedValue(undefined),
+            stage: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
           provide: MessageChannelSyncStatusService,
           useValue: {
             markAsMessagesListFetchOngoing: jest
@@ -166,6 +176,7 @@ describe('MessagingMessageListFetchService', () => {
             markAsMessagesImportScheduled: jest
               .fn()
               .mockResolvedValue(undefined),
+            markAsMessageSyncCompleted: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -271,6 +282,7 @@ describe('MessagingMessageListFetchService', () => {
     messagingCursorService = module.get<MessagingCursorService>(
       MessagingCursorService,
     );
+    pendingSyncCursorService = module.get(MessagingPendingSyncCursorService);
   });
 
   it('should process Microsoft message list fetch correctly', async () => {
@@ -302,12 +314,17 @@ describe('MessagingMessageListFetchService', () => {
       'messageChannelMessageAssociation',
     );
 
-    expect(messagingCursorService.updateCursor).toHaveBeenCalledWith(
-      mockMicrosoftMessageChannel,
-      'new-sync-cursor',
+    expect(messagingCursorService.updateCursor).not.toHaveBeenCalled();
+    expect(pendingSyncCursorService.stage).toHaveBeenCalledWith({
+      messageChannelId: mockMicrosoftMessageChannel.id,
+      messageExternalIds: [
+        'external-id-new-message-1',
+        'external-id-new-message-2',
+      ],
+      messageLists: expect.any(Array),
       workspaceId,
-      'inbox-folder-id',
-    );
+    });
+    expect(pendingSyncCursorService.commit).not.toHaveBeenCalled();
 
     expect(
       messageChannelSyncStatusService.markAsMessagesImportScheduled,
@@ -343,15 +360,63 @@ describe('MessagingMessageListFetchService', () => {
       'messageChannelMessageAssociation',
     );
 
-    expect(messagingCursorService.updateCursor).toHaveBeenCalledWith(
-      mockGoogleMessageChannel,
-      'new-google-history-id',
+    expect(messagingCursorService.updateCursor).not.toHaveBeenCalled();
+    expect(pendingSyncCursorService.stage).toHaveBeenCalledWith({
+      messageChannelId: mockGoogleMessageChannel.id,
+      messageExternalIds: [
+        'external-id-google-message-1',
+        'external-id-google-message-2',
+      ],
+      messageLists: expect.any(Array),
       workspaceId,
-      undefined,
-    );
+    });
+    expect(pendingSyncCursorService.commit).not.toHaveBeenCalled();
 
     expect(
       messageChannelSyncStatusService.markAsMessagesImportScheduled,
     ).toHaveBeenCalledWith([mockGoogleMessageChannel.id], workspaceId);
+  });
+
+  it('clears the prior generation before fetching and commits an empty delta', async () => {
+    jest
+      .spyOn(messagingGetMessageListService, 'getMessageLists')
+      .mockResolvedValue([
+        {
+          folderId: 'inbox-folder-id',
+          messageExternalIds: ['external-id-existing-message-1'],
+          messageExternalIdsToDelete: [],
+          nextSyncCursor: 'empty-delta-cursor',
+          previousSyncCursor: 'inbox-sync-cursor',
+        },
+      ]);
+
+    await messagingMessageListFetchService.processMessageListFetch(
+      mockMicrosoftMessageChannel,
+      workspaceId,
+    );
+
+    expect(pendingSyncCursorService.clear).toHaveBeenCalledWith({
+      messageChannelId: mockMicrosoftMessageChannel.id,
+      workspaceId,
+    });
+    expect(
+      (pendingSyncCursorService.clear as jest.Mock).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      (messagingGetMessageListService.getMessageLists as jest.Mock).mock
+        .invocationCallOrder[0],
+    );
+    expect(pendingSyncCursorService.stage).toHaveBeenCalledWith({
+      messageChannelId: mockMicrosoftMessageChannel.id,
+      messageExternalIds: [],
+      messageLists: expect.any(Array),
+      workspaceId,
+    });
+    expect(pendingSyncCursorService.commit).toHaveBeenCalledWith({
+      messageChannel: mockMicrosoftMessageChannel,
+      workspaceId,
+    });
+    expect(
+      messageChannelSyncStatusService.markAsMessageSyncCompleted,
+    ).toHaveBeenCalledWith([mockMicrosoftMessageChannel.id], workspaceId);
   });
 });

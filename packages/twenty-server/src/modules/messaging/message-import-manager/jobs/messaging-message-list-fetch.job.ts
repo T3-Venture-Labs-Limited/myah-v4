@@ -9,6 +9,7 @@ import { Processor } from 'src/engine/core-modules/message-queue/decorators/proc
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { MessageChannelSyncLockService } from 'src/modules/messaging/common/services/message-channel-sync-lock.service';
 import {
   MessageImportExceptionHandlerService,
   MessageImportSyncStep,
@@ -29,6 +30,7 @@ export type MessagingMessageListFetchJobData = {
 export class MessagingMessageListFetchJob {
   constructor(
     private readonly messagingMessageListFetchService: MessagingMessageListFetchService,
+    private readonly messageChannelSyncLockService: MessageChannelSyncLockService,
     private readonly messagingMonitoringService: MessagingMonitoringService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(MessageChannelEntity)
@@ -46,65 +48,71 @@ export class MessagingMessageListFetchJob {
       workspaceId,
     });
 
-    const authContext = buildSystemAuthContext(workspaceId);
-
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+    await this.messageChannelSyncLockService.withLock(
+      { messageChannelId, workspaceId },
       async () => {
-        const messageChannel = await this.messageChannelRepository.findOne({
-          where: {
-            id: messageChannelId,
-            workspaceId,
+        const authContext = buildSystemAuthContext(workspaceId);
+
+        await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          async () => {
+            const messageChannel = await this.messageChannelRepository.findOne({
+              where: {
+                id: messageChannelId,
+                workspaceId,
+              },
+              relations: { connectedAccount: true, messageFolders: true },
+            });
+
+            if (!messageChannel) {
+              await this.messagingMonitoringService.track({
+                eventName:
+                  'message_list_fetch_job.error.message_channel_not_found',
+                messageChannelId,
+                workspaceId,
+              });
+
+              return;
+            }
+
+            if (
+              messageChannel.syncStage !==
+              MessageChannelSyncStage.MESSAGE_LIST_FETCH_SCHEDULED
+            ) {
+              return;
+            }
+
+            try {
+              await this.messagingMonitoringService.track({
+                eventName: 'message_list_fetch.started',
+                workspaceId,
+                connectedAccountId: messageChannel.connectedAccount.id,
+                messageChannelId: messageChannel.id,
+              });
+
+              await this.messagingMessageListFetchService.processMessageListFetch(
+                messageChannel,
+                workspaceId,
+              );
+
+              await this.messagingMonitoringService.track({
+                eventName: 'message_list_fetch.completed',
+                workspaceId,
+                connectedAccountId: messageChannel.connectedAccount.id,
+                messageChannelId: messageChannel.id,
+              });
+            } catch (error) {
+              await this.messageImportErrorHandlerService.handleDriverException(
+                error,
+                MessageImportSyncStep.MESSAGE_LIST_FETCH,
+                messageChannel,
+                workspaceId,
+              );
+            }
           },
-          relations: { connectedAccount: true, messageFolders: true },
-        });
-
-        if (!messageChannel) {
-          await this.messagingMonitoringService.track({
-            eventName: 'message_list_fetch_job.error.message_channel_not_found',
-            messageChannelId,
-            workspaceId,
-          });
-
-          return;
-        }
-
-        if (
-          messageChannel.syncStage !==
-          MessageChannelSyncStage.MESSAGE_LIST_FETCH_SCHEDULED
-        ) {
-          return;
-        }
-
-        try {
-          await this.messagingMonitoringService.track({
-            eventName: 'message_list_fetch.started',
-            workspaceId,
-            connectedAccountId: messageChannel.connectedAccount.id,
-            messageChannelId: messageChannel.id,
-          });
-
-          await this.messagingMessageListFetchService.processMessageListFetch(
-            messageChannel,
-            workspaceId,
-          );
-
-          await this.messagingMonitoringService.track({
-            eventName: 'message_list_fetch.completed',
-            workspaceId,
-            connectedAccountId: messageChannel.connectedAccount.id,
-            messageChannelId: messageChannel.id,
-          });
-        } catch (error) {
-          await this.messageImportErrorHandlerService.handleDriverException(
-            error,
-            MessageImportSyncStep.MESSAGE_LIST_FETCH,
-            messageChannel,
-            workspaceId,
-          );
-        }
+          authContext,
+          { lite: true },
+        );
       },
-      authContext,
-      { lite: true },
     );
   }
 }

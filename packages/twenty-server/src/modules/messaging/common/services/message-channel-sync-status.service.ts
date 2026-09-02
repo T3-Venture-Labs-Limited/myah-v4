@@ -23,6 +23,13 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import { AccountsToReconnectService } from 'src/modules/connected-account/services/accounts-to-reconnect.service';
 import { AccountsToReconnectKeys } from 'src/modules/connected-account/types/accounts-to-reconnect-key-value.type';
 import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
+import { MessageChannelSyncLockService } from 'src/modules/messaging/common/services/message-channel-sync-lock.service';
+import {
+  getAcknowledgedMessageSyncIdsCacheKey,
+  getMessagesToImportCacheKey,
+  getPendingMessageSyncCursorsCacheKey,
+  getPendingMessageSyncGenerationCacheKey,
+} from 'src/modules/messaging/message-import-manager/utils/get-message-sync-cache-keys.util';
 
 @Injectable()
 export class MessageChannelSyncStatusService {
@@ -39,6 +46,7 @@ export class MessageChannelSyncStatusService {
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     private readonly accountsToReconnectService: AccountsToReconnectService,
+    private readonly messageChannelSyncLockService: MessageChannelSyncLockService,
     private readonly metricsService: MetricsService,
   ) {}
 
@@ -102,25 +110,109 @@ export class MessageChannelSyncStatusService {
     messageChannelIds: string[],
     workspaceId: string,
   ) {
-    if (!messageChannelIds.length) {
-      return;
-    }
+    await this.resetSyncCursors(messageChannelIds, workspaceId);
+    await this.markAsMessagesListFetchPending(messageChannelIds, workspaceId);
+  }
 
+  public async claimAndResetSyncCursors(
+    messageChannelId: string,
+    workspaceId: string,
+  ): Promise<boolean> {
+    return this.messageChannelSyncLockService.withLock(
+      { messageChannelId, workspaceId },
+      async () => {
+        const messageChannel = await this.messageChannelRepository.findOne({
+          where: { id: messageChannelId, isSyncEnabled: true, workspaceId },
+        });
+
+        if (!messageChannel) {
+          return false;
+        }
+
+        if (
+          [
+            MessageChannelSyncStage.MESSAGE_LIST_FETCH_SCHEDULED,
+            MessageChannelSyncStage.MESSAGE_LIST_FETCH_ONGOING,
+            MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED,
+            MessageChannelSyncStage.MESSAGES_IMPORT_ONGOING,
+          ].includes(messageChannel.syncStage)
+        ) {
+          throw new Error('Cannot reset an in-flight message channel');
+        }
+
+        const claimResult = await this.messageChannelRepository.update(
+          {
+            id: messageChannelId,
+            isSyncEnabled: true,
+            syncStage: messageChannel.syncStage,
+            workspaceId,
+          },
+          {
+            syncStage: MessageChannelSyncStage.MESSAGE_LIST_FETCH_SCHEDULED,
+            syncStageStartedAt: new Date().toISOString(),
+          },
+        );
+
+        if (claimResult.affected !== 1) {
+          return false;
+        }
+
+        await this.resetOneSyncCursor(messageChannelId, workspaceId);
+
+        return true;
+      },
+    );
+  }
+
+  public async resetSyncCursors(
+    messageChannelIds: string[],
+    workspaceId: string,
+  ) {
     for (const messageChannelId of messageChannelIds) {
-      await this.cacheStorage.del(
-        `messages-to-import:${workspaceId}:${messageChannelId}`,
+      await this.messageChannelSyncLockService.withLock(
+        { messageChannelId, workspaceId },
+        () => this.resetOneSyncCursor(messageChannelId, workspaceId),
       );
     }
+  }
+
+  private async resetOneSyncCursor(
+    messageChannelId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const generationKey = getPendingMessageSyncGenerationCacheKey({
+      messageChannelId,
+      workspaceId,
+    });
+    const generationId = await this.cacheStorage.get<string>(generationKey);
+
+    await this.cacheStorage.mdel([
+      getMessagesToImportCacheKey({ messageChannelId, workspaceId }),
+      generationKey,
+      ...(generationId
+        ? [
+            getPendingMessageSyncCursorsCacheKey({
+              generationId,
+              messageChannelId,
+              workspaceId,
+            }),
+            getAcknowledgedMessageSyncIdsCacheKey({
+              generationId,
+              messageChannelId,
+              workspaceId,
+            }),
+          ]
+        : []),
+    ]);
 
     const authContext = buildSystemAuthContext(workspaceId);
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
         await this.messageChannelRepository.update(
-          { id: In(messageChannelIds), workspaceId },
+          { id: messageChannelId, workspaceId },
           {
             syncCursor: '',
-            syncStageStartedAt: null,
             throttleFailureCount: 0,
             throttleRetryAfter: null,
             pendingGroupEmailsAction:
@@ -129,7 +221,7 @@ export class MessageChannelSyncStatusService {
         );
 
         await this.messageFolderRepository.update(
-          { messageChannelId: In(messageChannelIds), workspaceId },
+          { messageChannelId, workspaceId },
           {
             syncCursor: '',
             pendingSyncAction: MessageFolderPendingSyncAction.NONE,
@@ -139,8 +231,6 @@ export class MessageChannelSyncStatusService {
       authContext,
       { lite: true },
     );
-
-    await this.markAsMessagesListFetchPending(messageChannelIds, workspaceId);
   }
 
   public async resetSyncStageStartedAt(

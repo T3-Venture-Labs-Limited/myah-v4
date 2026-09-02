@@ -16,6 +16,8 @@ import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/
 
 describe('CreateCompanyAndPersonService', () => {
   let service: CreateCompanyAndPersonService;
+  let getRepository: jest.Mock;
+  let hasMetadata: jest.Mock;
 
   const mockConnectedAccount = {
     id: 'connected-account-1',
@@ -25,6 +27,8 @@ describe('CreateCompanyAndPersonService', () => {
   } as unknown as ConnectedAccountEntity;
 
   beforeEach(async () => {
+    getRepository = jest.fn();
+    hasMetadata = jest.fn().mockReturnValue(true);
     const mockCreateCompaniesService = {
       createOrRestoreCompanies: jest.fn(),
     };
@@ -46,7 +50,15 @@ describe('CreateCompanyAndPersonService', () => {
         },
         {
           provide: GlobalWorkspaceOrmManager,
-          useValue: {},
+          useValue: {
+            executeInWorkspaceContext: jest
+              .fn()
+              .mockImplementation((callback: () => unknown) => callback()),
+            getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
+              hasMetadata,
+            }),
+            getRepository,
+          },
         },
         {
           provide: ExceptionHandlerService,
@@ -71,6 +83,25 @@ describe('CreateCompanyAndPersonService', () => {
       CreateCompanyAndPersonService,
     );
   });
+
+  it.each(['person', 'company'])(
+    'skips contact creation when %s metadata is absent',
+    async (missingMetadata) => {
+      hasMetadata.mockImplementation((name) => name !== missingMetadata);
+
+      await expect(
+        service.createCompaniesAndPeople(
+          mockConnectedAccount,
+          [{ displayName: 'Creator', handle: 'creator@example.com' }],
+          'workspace-id',
+          FieldActorSource.EMAIL,
+          null,
+        ),
+      ).resolves.toEqual([]);
+
+      expect(getRepository).not.toHaveBeenCalled();
+    },
+  );
 
   describe('computeContactsThatNeedPersonCreateAndRestoreAndWorkDomainNamesToCreate', () => {
     const mockContacts: Contact[] = [

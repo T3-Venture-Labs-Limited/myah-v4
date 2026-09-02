@@ -61,6 +61,16 @@ export class CreateCompanyAndPersonService {
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
+        const globalWorkspaceDataSource =
+          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+
+        if (
+          !globalWorkspaceDataSource.hasMetadata('person') ||
+          !globalWorkspaceDataSource.hasMetadata('company')
+        ) {
+          return [];
+        }
+
         const personRepository =
           await this.globalWorkspaceOrmManager.getRepository(
             workspaceId,

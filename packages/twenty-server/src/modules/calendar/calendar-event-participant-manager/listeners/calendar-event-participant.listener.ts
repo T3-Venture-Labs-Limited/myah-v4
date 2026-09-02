@@ -33,6 +33,15 @@ export class CalendarEventParticipantListener {
     if (!isDefined(batchEvent.workspaceId)) {
       return;
     }
+    const hasParticipantWithPersonId = batchEvent.events.some((event) =>
+      (event.participants ?? []).some((participant) =>
+        isDefined(participant.personId),
+      ),
+    );
+
+    if (!hasParticipantWithPersonId) {
+      return;
+    }
 
     const calendarEventObjectMetadata =
       await this.objectMetadataRepository.findOneOrFail({

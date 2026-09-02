@@ -91,24 +91,37 @@ export class MatchParticipantService<
       return;
     }
 
-    const personRepository =
-      await this.globalWorkspaceOrmManager.getRepository<PersonWorkspaceEntity>(
-        workspaceId,
-        'person',
-        { shouldBypassPermissionChecks: true },
-      );
+    const globalWorkspaceDataSource =
+      await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+
+    const shouldMatchWithWorkspaceMember =
+      matchWith === 'workspaceMemberAndPerson' ||
+      matchWith === 'workspaceMemberOnly';
+    const shouldMatchWithPerson =
+      matchWith === 'personOnly' ||
+      (matchWith === 'workspaceMemberAndPerson' &&
+        globalWorkspaceDataSource.hasMetadata('person'));
+
+    const personRepository = shouldMatchWithPerson
+      ? await this.globalWorkspaceOrmManager.getRepository<PersonWorkspaceEntity>(
+          workspaceId,
+          'person',
+          { shouldBypassPermissionChecks: true },
+        )
+      : undefined;
 
     const participantRepository = await this.getParticipantRepository(
       workspaceId,
       objectMetadataName,
     );
 
-    const workspaceMemberRepository =
-      await this.globalWorkspaceOrmManager.getRepository<WorkspaceMemberWorkspaceEntity>(
-        workspaceId,
-        'workspaceMember',
-        { shouldBypassPermissionChecks: true },
-      );
+    const workspaceMemberRepository = shouldMatchWithWorkspaceMember
+      ? await this.globalWorkspaceOrmManager.getRepository<WorkspaceMemberWorkspaceEntity>(
+          workspaceId,
+          'workspaceMember',
+          { shouldBypassPermissionChecks: true },
+        )
+      : undefined;
 
     const chunkSize = 200;
     const chunkedParticipants = chunk(participants, chunkSize);
@@ -118,23 +131,25 @@ export class MatchParticipantService<
         ...new Set(participants.map((participant) => participant.handle)),
       ].filter(isDefined);
 
-      const queryBuilder = addPersonEmailFiltersToQueryBuilder({
-        queryBuilder: personRepository.createQueryBuilder('person'),
-        emails: uniqueParticipantsHandles,
-      });
+      const people = isDefined(personRepository)
+        ? await addPersonEmailFiltersToQueryBuilder({
+            queryBuilder: personRepository.createQueryBuilder('person'),
+            emails: uniqueParticipantsHandles,
+          })
+            .orderBy('person.createdAt', 'ASC')
+            .getMany()
+        : [];
 
-      const people = await queryBuilder
-        .orderBy('person.createdAt', 'ASC')
-        .getMany();
-
-      const workspaceMembers = await workspaceMemberRepository.find(
-        {
-          where: {
-            userEmail: Any(uniqueParticipantsHandles),
-          },
-        },
-        transactionManager,
-      );
+      const workspaceMembers = isDefined(workspaceMemberRepository)
+        ? await workspaceMemberRepository.find(
+            {
+              where: {
+                userEmail: Any(uniqueParticipantsHandles),
+              },
+            },
+            transactionManager,
+          )
+        : [];
 
       const partipantsToBeUpdated = participants
         .map((participant) => ({
@@ -152,14 +167,6 @@ export class MatchParticipantService<
               workspaceMember.userEmail === participant.handle,
           );
 
-          const shouldMatchWithPerson =
-            matchWith === 'workspaceMemberAndPerson' ||
-            matchWith === 'personOnly';
-
-          const shouldMatchWithWorkspaceMember =
-            matchWith === 'workspaceMemberAndPerson' ||
-            matchWith === 'workspaceMemberOnly';
-
           const newParticipant = {
             ...participant,
             ...(shouldMatchWithPerson && {
@@ -172,14 +179,16 @@ export class MatchParticipantService<
             }),
           };
 
-          if (
-            newParticipant.personId === participant.personId &&
-            newParticipant.workspaceMemberId === participant.workspaceMemberId
-          ) {
-            return null;
-          }
+          const isPersonUnchanged =
+            !shouldMatchWithPerson ||
+            newParticipant.personId === participant.personId;
+          const isWorkspaceMemberUnchanged =
+            !shouldMatchWithWorkspaceMember ||
+            newParticipant.workspaceMemberId === participant.workspaceMemberId;
 
-          return newParticipant;
+          return isPersonUnchanged && isWorkspaceMemberUnchanged
+            ? null
+            : newParticipant;
         })
         .filter(isDefined);
 
@@ -187,8 +196,12 @@ export class MatchParticipantService<
         partipantsToBeUpdated.map((participant) => ({
           criteria: participant.id,
           partialEntity: {
-            personId: participant.personId,
-            workspaceMemberId: participant.workspaceMemberId,
+            ...(shouldMatchWithPerson && {
+              personId: participant.personId,
+            }),
+            ...(shouldMatchWithWorkspaceMember && {
+              workspaceMemberId: participant.workspaceMemberId,
+            }),
           },
         })),
       );

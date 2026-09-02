@@ -8,6 +8,7 @@ import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channe
 import { MessageFolderEntity } from 'src/engine/metadata-modules/message-folder/entities/message-folder.entity';
 import { WorkspaceDataSourceModule } from 'src/engine/workspace-datasource/workspace-datasource.module';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
+import { MessageChannelSyncLockService } from 'src/modules/messaging/common/services/message-channel-sync-lock.service';
 import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/services/message-channel-sync-status.service';
 
 @Module({
@@ -22,7 +23,7 @@ import { MessageChannelSyncStatusService } from 'src/modules/messaging/common/se
     ConnectedAccountModule,
     MetricsModule,
   ],
-  providers: [MessageChannelSyncStatusService],
-  exports: [MessageChannelSyncStatusService],
+  providers: [MessageChannelSyncLockService, MessageChannelSyncStatusService],
+  exports: [MessageChannelSyncLockService, MessageChannelSyncStatusService],
 })
 export class MessagingCommonModule {}
