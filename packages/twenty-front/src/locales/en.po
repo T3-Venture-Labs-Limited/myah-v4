@@ -7656,7 +7656,7 @@ msgid "Disabled"
 msgstr "Disabled"
 
 #. js-lingui-id: 3EbjfR
-#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+#: src/modules/page-layout/components/MyahCampaignRichTextSettings.tsx
 msgid "Discard changes"
 msgstr "Discard changes"
 
@@ -7671,7 +7671,7 @@ msgid "Discard passwords and go back"
 msgstr "Discard passwords and go back"
 
 #. js-lingui-id: XkeQtf
-#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+#: src/modules/page-layout/components/MyahCampaignRichTextSettings.tsx
 msgid "Discard unsaved changes?"
 msgstr "Discard unsaved changes?"
 
@@ -8504,6 +8504,16 @@ msgstr "Email sent successfully"
 msgid "Email sharing"
 msgstr "Email sharing"
 
+#. js-lingui-id: 5N/WmC
+#: src/modules/page-layout/components/MyahCampaignOperations.tsx
+msgid "Email signature could not be saved."
+msgstr "Email signature could not be saved."
+
+#. js-lingui-id: w+c8U7
+#: src/modules/page-layout/components/MyahCampaignOperations.tsx
+msgid "Email signature saved."
+msgstr "Email signature saved."
+
 #. js-lingui-id: jvneza
 #: src/modules/settings/applications/components/SettingsApplicationAboutSidebar.tsx
 msgid "Email support"
@@ -8833,6 +8843,11 @@ msgstr "Enter BCC emails, comma-separated"
 msgid "Enter CC emails, comma-separated"
 msgstr "Enter CC emails, comma-separated"
 
+#. js-lingui-id: LcB/Zx
+#: src/modules/page-layout/components/MyahCampaignOperations.tsx
+msgid "Enter email signature"
+msgstr "Enter email signature"
+
 #. js-lingui-id: MJoxIi
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionEmailBase.tsx
 msgid "Enter email subject"
@@ -8875,6 +8890,10 @@ msgid "Enter in Unicode format"
 msgstr "Enter in Unicode format"
 
 #. js-lingui-id: fFd9X1
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+#: src/modules/page-layout/components/MyahCampaignAgent.tsx
 #: src/modules/page-layout/components/MyahCampaignAgent.tsx
 msgid "Enter instructions"
 msgstr "Enter instructions"
@@ -12087,6 +12106,11 @@ msgstr "Just for me"
 #: src/modules/views/types/ViewType.ts
 msgid "Kanban"
 msgstr "Kanban"
+
+#. js-lingui-id: 4OjqAQ
+#: src/modules/page-layout/components/MyahCampaignOperations.tsx
+msgid "Keep editing"
+msgstr "Keep editing"
 
 #. js-lingui-id: 7sMeHQ
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/KeyValuePairInput.tsx
@@ -18829,8 +18853,8 @@ msgid "Saturday"
 msgstr "Saturday"
 
 #. js-lingui-id: tfDRzk
-#: src/modules/page-layout/components/MyahCampaignAgent.tsx
-#: src/modules/page-layout/components/MyahCampaignAgent.tsx
+#: src/modules/page-layout/components/MyahCampaignRichTextSettings.tsx
+#: src/modules/page-layout/components/MyahCampaignRichTextSettings.tsx
 #: src/modules/settings/components/SaveAndCancelButtons/SaveButton.tsx
 #: src/pages/settings/data-model/new-field/SettingsObjectNewFieldConfigure.tsx
 msgid "Save"
@@ -25203,6 +25227,11 @@ msgstr "Your Campaign Agent changes have not been saved."
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailPaymentSetup.tsx
 msgid "Your card is saved securely by Stripe for this managed mailbox service. Your order will not be submitted until setup is complete."
 msgstr "Your card is saved securely by Stripe for this managed mailbox service. Your order will not be submitted until setup is complete."
+
+#. js-lingui-id: OsP2AI
+#: src/modules/page-layout/components/MyahCampaignOperations.tsx
+msgid "Your Email signature changes have not been saved."
+msgstr "Your Email signature changes have not been saved."
 
 #. js-lingui-id: ahEwS4
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx

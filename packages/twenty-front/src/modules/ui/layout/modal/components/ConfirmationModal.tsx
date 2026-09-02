@@ -21,6 +21,7 @@ export type ConfirmationModalProps = {
   subtitle: ReactNode;
   onClose?: () => void;
   onConfirmClick: () => void;
+  cancelButtonText?: string;
   confirmButtonText?: string;
   confirmationPlaceholder?: string;
   confirmationValue?: string;
@@ -87,6 +88,7 @@ export const ConfirmationModal = ({
   subtitle,
   onConfirmClick,
   onClose,
+  cancelButtonText,
   confirmButtonText,
   confirmationValue,
   confirmationPlaceholder,
@@ -198,7 +200,7 @@ export const ConfirmationModal = ({
         ref={cancelButtonRef}
         onClick={handleCancelClick}
         variant="secondary"
-        title={t`Cancel`}
+        title={cancelButtonText ?? t`Cancel`}
         fullWidth
         justify="center"
         dataTestId="confirmation-modal-cancel-button"

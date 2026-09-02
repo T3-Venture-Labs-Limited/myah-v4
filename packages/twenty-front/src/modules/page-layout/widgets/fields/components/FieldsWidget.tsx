@@ -22,6 +22,7 @@ import {
 } from 'twenty-ui/feedback';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { type FieldsConfiguration } from '~/generated-metadata/graphql';
+import { isDefined } from 'twenty-shared/utils';
 
 const StyledContainer = styled.div`
   box-sizing: border-box;
@@ -55,9 +56,13 @@ const StyledInlineFieldsPropertyBox = styled.div<{
 
 type FieldsWidgetProps = {
   widget: PageLayoutWidget;
+  includeFieldNames?: readonly string[];
 };
 
-export const FieldsWidget = ({ widget }: FieldsWidgetProps) => {
+export const FieldsWidget = ({
+  widget,
+  includeFieldNames,
+}: FieldsWidgetProps) => {
   const targetRecord = useTargetRecord();
   const { isInSidePanel } = useLayoutRenderingContext();
 
@@ -81,16 +86,48 @@ export const FieldsWidget = ({ widget }: FieldsWidgetProps) => {
     objectNameSingular: targetRecord.targetObjectNameSingular,
   });
 
+  const includedFieldNames = isDefined(includeFieldNames)
+    ? new Set(includeFieldNames)
+    : null;
+
+  const groupsToDisplay = includedFieldNames
+    ? (() => {
+        let nextGlobalIndex = 0;
+
+        return groups
+          .map((group) => ({
+            ...group,
+            fields: group.fields
+              .filter(({ fieldMetadataItem }) =>
+                includedFieldNames.has(fieldMetadataItem.name),
+              )
+              .map((field) => ({
+                ...field,
+                globalIndex: nextGlobalIndex++,
+              })),
+          }))
+          .filter((group) => group.fields.length > 0);
+      })()
+    : groups;
+
+  const hiddenFieldsToDisplay = includedFieldNames
+    ? hiddenFields.filter(({ fieldMetadataItem }) =>
+        includedFieldNames.has(fieldMetadataItem.name),
+      )
+    : hiddenFields;
+
   const shouldShowHiddenFields =
     fieldsConfiguration.shouldAllowUserToSeeHiddenFields === true &&
-    hiddenFields.length > 0;
+    hiddenFieldsToDisplay.length > 0;
 
-  const visibleFields = groups.flatMap((group) => group.fields);
+  const visibleFields = groupsToDisplay.flatMap((group) => group.fields);
 
   const hiddenFieldsWithOffsetGlobalIndex = shouldShowHiddenFields
-    ? hiddenFields.map((field) => ({
+    ? hiddenFieldsToDisplay.map((field, index) => ({
         ...field,
-        globalIndex: field.globalIndex + visibleFields.length,
+        globalIndex: includedFieldNames
+          ? visibleFields.length + index
+          : field.globalIndex + visibleFields.length,
       }))
     : [];
 
@@ -101,7 +138,9 @@ export const FieldsWidget = ({ widget }: FieldsWidgetProps) => {
     ),
   ];
 
-  const hasFieldsToDisplay = groups.length > 0;
+  const hasFieldsToDisplay =
+    groupsToDisplay.length > 0 ||
+    (includedFieldNames !== null && shouldShowHiddenFields);
 
   if (!hasFieldsToDisplay) {
     return (
@@ -136,12 +175,12 @@ export const FieldsWidget = ({ widget }: FieldsWidgetProps) => {
               hasMoreGroup={shouldShowHiddenFields}
             >
               <FieldsWidgetFieldList
-                fields={groups.flatMap((group) => group.fields)}
+                fields={groupsToDisplay.flatMap((group) => group.fields)}
                 instanceId={instanceId}
               />
             </StyledInlineFieldsPropertyBox>
           ) : (
-            groups.map((group) => (
+            groupsToDisplay.map((group) => (
               <FieldsWidgetGroupContainer key={group.id} title={group.name}>
                 <StyledPropertyBox>
                   <FieldsWidgetFieldList

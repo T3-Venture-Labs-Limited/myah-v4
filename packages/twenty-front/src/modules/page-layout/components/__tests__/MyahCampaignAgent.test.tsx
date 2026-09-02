@@ -143,11 +143,13 @@ jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
 
 jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
   ConfirmationModal: ({
+    cancelButtonText,
     loading,
     onClose,
     onConfirmClick,
     title,
   }: {
+    cancelButtonText?: string;
     loading?: boolean;
     onClose?: () => void;
     onConfirmClick: () => void;
@@ -157,7 +159,7 @@ jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
       <div>
         <span>{title}</span>
         <button onClick={onClose} type="button">
-          Keep editing
+          {cancelButtonText ?? 'Cancel'}
         </button>
         <button disabled={loading} onClick={onConfirmClick} type="button">
           Discard changes
@@ -458,7 +460,7 @@ describe('MyahCampaignAgent', () => {
       expect(mockOpenModal).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(mockReset).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
@@ -485,7 +487,9 @@ describe('MyahCampaignAgent', () => {
     arrange();
     renderAgent(record);
 
-    expect(screen.getByTestId('campaign-agent-loading')).toBeVisible();
+    expect(
+      screen.getByTestId('campaign-rich-text-settings-surface'),
+    ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.queryAllByTestId('campaign-agent-editor')).toHaveLength(0);
   });
