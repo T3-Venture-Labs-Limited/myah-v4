@@ -93,9 +93,9 @@ describe('useSetNextOnboardingStatus', () => {
     expect(nextOnboardingStatus).toEqual(OnboardingStatus.SYNC_EMAIL);
   });
 
-  it('should install apps after syncing emails', () => {
+  it('should create the profile after syncing emails', () => {
     const nextOnboardingStatus = renderHooks(OnboardingStatus.SYNC_EMAIL);
-    expect(nextOnboardingStatus).toEqual(OnboardingStatus.APPS_INSTALLATION);
+    expect(nextOnboardingStatus).toEqual(OnboardingStatus.PROFILE_CREATION);
   });
 
   it('should create profile after installing apps', () => {

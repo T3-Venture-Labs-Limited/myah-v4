@@ -1,6 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
+import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { Repository } from 'typeorm';
 
 import { BillingCreditService } from 'src/engine/core-modules/billing/services/billing-credit.service';
@@ -10,20 +11,24 @@ import { MessageQueueService } from 'src/engine/core-modules/message-queue/servi
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import { ONBOARDING_INSTALLABLE_APP_UNIVERSAL_IDENTIFIERS } from 'src/engine/core-modules/onboarding/constants/onboarding-installable-app-universal-identifiers';
 import { INSTALL_ONBOARDING_APPS_JOB_NAME } from 'src/engine/core-modules/onboarding/jobs/install-onboarding-apps.job-constants';
+import { OnboardingStatus } from 'src/engine/core-modules/onboarding/enums/onboarding-status.enum';
 import {
   OnboardingService,
   OnboardingStepKeys,
 } from 'src/engine/core-modules/onboarding/onboarding.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserVarsService } from 'src/engine/core-modules/user/user-vars/services/user-vars.service';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 describe('OnboardingService', () => {
   let service: OnboardingService;
+  let billingService: BillingService;
   let userVarsService: UserVarsService;
   let billingCreditService: BillingCreditService;
   let twentyConfigService: TwentyConfigService;
   let messageQueueService: MessageQueueService;
+  let workspaceRepository: Repository<WorkspaceEntity>;
 
   const userId = 'user-id';
   const workspaceId = 'workspace-id';
@@ -48,6 +53,7 @@ describe('OnboardingService', () => {
           provide: UserVarsService,
           useValue: {
             get: jest.fn(),
+            getAll: jest.fn(),
             set: jest.fn(),
             delete: jest.fn(),
           },
@@ -60,7 +66,9 @@ describe('OnboardingService', () => {
         },
         {
           provide: getRepositoryToken(WorkspaceEntity),
-          useClass: Repository,
+          useValue: {
+            findOne: jest.fn(),
+          },
         },
         {
           provide: getQueueToken(MessageQueue.workspaceQueue),
@@ -72,6 +80,7 @@ describe('OnboardingService', () => {
     }).compile();
 
     service = module.get<OnboardingService>(OnboardingService);
+    billingService = module.get<BillingService>(BillingService);
     userVarsService = module.get<UserVarsService>(UserVarsService);
     billingCreditService =
       module.get<BillingCreditService>(BillingCreditService);
@@ -79,10 +88,37 @@ describe('OnboardingService', () => {
     messageQueueService = module.get<MessageQueueService>(
       getQueueToken(MessageQueue.workspaceQueue),
     );
+    workspaceRepository = module.get<Repository<WorkspaceEntity>>(
+      getRepositoryToken(WorkspaceEntity),
+    );
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe('getOnboardingStatus', () => {
+    it('skips a pending install-apps step', async () => {
+      jest.spyOn(workspaceRepository, 'findOne').mockResolvedValue({
+        id: workspaceId,
+        activationStatus: WorkspaceActivationStatus.ACTIVE,
+      } as WorkspaceEntity);
+      const userVars = new Map<OnboardingStepKeys, boolean>();
+
+      userVars.set(OnboardingStepKeys.ONBOARDING_INSTALL_APPS_PENDING, true);
+      userVars.set(OnboardingStepKeys.ONBOARDING_CREATE_PROFILE_PENDING, true);
+      jest.spyOn(userVarsService, 'getAll').mockResolvedValue(userVars);
+      jest
+        .spyOn(billingService, 'isSubscriptionIncompleteOnboardingStatus')
+        .mockResolvedValue(false);
+
+      await expect(
+        service.getOnboardingStatus({
+          user: { id: userId } as UserEntity,
+          workspaceId,
+        }),
+      ).resolves.toBe(OnboardingStatus.PROFILE_CREATION);
+    });
   });
 
   describe('completeOnboardingConnectAccountStep', () => {

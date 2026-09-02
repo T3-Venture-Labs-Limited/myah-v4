@@ -379,15 +379,6 @@ export class SignInUpService {
       },
       queryRunner,
     );
-
-    await this.onboardingService.setOnboardingInstallAppsPending(
-      {
-        userId: user.id,
-        workspaceId: workspace.id,
-        value: true,
-      },
-      queryRunner,
-    );
   }
 
   private async saveNewUser(

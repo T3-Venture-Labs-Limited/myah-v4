@@ -1,7 +1,7 @@
 import { getOperationName } from '~/utils/getOperationName';
 import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { HttpResponse, graphql } from 'msw';
-import { within } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 import { AppPath } from 'twenty-shared/types';
 
 import { OnboardingStatus } from '~/generated-metadata/graphql';
@@ -45,5 +45,6 @@ export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement.ownerDocument.body);
     await canvas.findByText('Invite your team');
+    expect(canvas.queryByText('free credits per user')).not.toBeInTheDocument();
   },
 };

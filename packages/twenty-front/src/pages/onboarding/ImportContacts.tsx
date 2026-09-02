@@ -3,9 +3,7 @@ import { OnboardingStepAnimatedItem } from '@/onboarding/components/OnboardingSt
 import { StyledOnboardingStepHeading } from '@/onboarding/components/StyledOnboardingStepHeading';
 import { StyledOnboardingStepPage } from '@/onboarding/components/StyledOnboardingStepPage';
 import { StyledOnboardingStepSubtitle } from '@/onboarding/components/StyledOnboardingStepSubtitle';
-import { StyledOnboardingStepTagsRow } from '@/onboarding/components/StyledOnboardingStepTagsRow';
 import { StyledOnboardingStepTitle } from '@/onboarding/components/StyledOnboardingStepTitle';
-import { OnboardingCreditsRewardTag } from '@/onboarding/components/import-contacts/OnboardingCreditsRewardTag';
 import { OnboardingImportPreview } from '@/onboarding/components/import-contacts/OnboardingImportPreview';
 import { OnboardingTrustBadges } from '@/onboarding/components/import-contacts/OnboardingTrustBadges';
 import { ONBOARDING_CONTENT_BLOCK_WIDTH } from '@/onboarding/constants/OnboardingContentBlockWidth';
@@ -49,14 +47,12 @@ const StyledButtons = styled.div`
 `;
 
 type ImportContactsProps = {
-  creditsReward?: number;
   onContinueWithGoogle?: () => void;
   onContinueWithMicrosoft?: () => void;
   onSkip?: () => void;
 };
 
 export const ImportContacts = ({
-  creditsReward,
   onContinueWithGoogle,
   onContinueWithMicrosoft,
   onSkip,
@@ -75,23 +71,16 @@ export const ImportContacts = ({
             {t`Connect your email and calendar to see your entire network instantly. Takes only 30 seconds.`}
           </StyledSubtitle>
         </OnboardingStepAnimatedItem>
-        {isDefined(creditsReward) && (
-          <OnboardingStepAnimatedItem index={2}>
-            <StyledOnboardingStepTagsRow>
-              <OnboardingCreditsRewardTag amount={creditsReward} />
-            </StyledOnboardingStepTagsRow>
-          </OnboardingStepAnimatedItem>
-        )}
       </StyledOnboardingStepHeading>
 
-      <OnboardingStepAnimatedItem index={3}>
+      <OnboardingStepAnimatedItem index={2}>
         <StyledMiddle>
           <OnboardingTrustBadges />
           <OnboardingImportPreview />
         </StyledMiddle>
       </OnboardingStepAnimatedItem>
 
-      <OnboardingStepAnimatedItem index={4}>
+      <OnboardingStepAnimatedItem index={3}>
         <StyledFooter>
           <StyledButtons>
             {isDefined(onContinueWithMicrosoft) && (
