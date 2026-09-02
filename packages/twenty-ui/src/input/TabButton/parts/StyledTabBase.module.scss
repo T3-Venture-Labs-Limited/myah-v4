@@ -12,6 +12,8 @@
   text-decoration: none;
   position: relative;
 
+  @include focus-ring;
+
   &::after {
     content: '';
     position: absolute;
