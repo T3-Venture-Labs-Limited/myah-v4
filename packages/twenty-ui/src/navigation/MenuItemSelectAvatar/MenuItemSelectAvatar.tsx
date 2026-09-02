@@ -1,4 +1,8 @@
-import { type ReactNode } from 'react';
+import {
+  type FocusEventHandler,
+  type KeyboardEventHandler,
+  type ReactNode,
+} from 'react';
 
 import {
   StyledMenuItemIconCheck,
@@ -23,6 +27,10 @@ type MenuItemSelectAvatarProps = {
   disabled?: boolean;
   focused?: boolean;
   testId?: string;
+  id?: string;
+  tabIndex?: number;
+  onFocus?: FocusEventHandler<HTMLDivElement>;
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 };
 
 export const MenuItemSelectAvatar = ({
@@ -35,11 +43,19 @@ export const MenuItemSelectAvatar = ({
   disabled,
   focused,
   testId,
+  id,
+  tabIndex,
+  onFocus,
+  onKeyDown,
 }: MenuItemSelectAvatarProps) => {
   const theme = useTheme();
 
   return (
     <StyledMenuItemSelect
+      id={id}
+      tabIndex={tabIndex}
+      onFocus={onFocus}
+      onKeyDown={onKeyDown}
       onClick={onClick}
       className={className}
       disabled={disabled}
