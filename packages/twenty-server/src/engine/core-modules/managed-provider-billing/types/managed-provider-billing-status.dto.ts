@@ -27,7 +27,7 @@ export class ManagedProviderBillingStatusDTO {
   customerFundingPaymentMethodReady?: boolean;
 
   @Field(() => ManagedProviderAiTopUpPolicyDTO)
-  customerFundingPolicy: ManagedProviderAiTopUpPolicyDTO;
+  customerFundingPolicy?: ManagedProviderAiTopUpPolicyDTO;
 
   @Field(() => [ManagedProviderCustomerFundingHistoryItemDTO])
   customerFundingHistory?: ManagedProviderCustomerFundingHistoryItemDTO[];
