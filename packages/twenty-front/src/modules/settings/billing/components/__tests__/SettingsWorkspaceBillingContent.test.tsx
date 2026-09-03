@@ -108,11 +108,7 @@ describe('SettingsWorkspaceBillingContent customer funding', () => {
   it('renders policy suggestions and sends each amount through one funding callback', () => {
     const { onRequestFunding } = renderFunding();
 
-    for (const [label, principalCents] of [
-      ['$25', 2_500],
-      ['$50', 5_000],
-      ['$100', 10_000],
-    ] as const) {
+    for (const label of ['$25', '$50', '$100']) {
       expect(screen.getByRole('button', { name: label })).toBeVisible();
       fireEvent.click(screen.getByRole('button', { name: label }));
       fireEvent.click(
