@@ -356,36 +356,52 @@ export class ManagedProviderCustomerFundingService {
       billingContext.fiatCreditTypeName,
     );
     const externalReference = `customer-ai-top-up:${input.workspaceId}:${input.idempotencyKey}`;
-    const action = await this.fundingJournal.createPending({
-      actionType: 'PREPAID_COMMIT',
-      amountCents: principalCents,
-      applicableProductIds: [chargeProductId],
-      applicability: { productIds: [chargeProductId] },
-      creditProductId,
-      currency: 'USD',
-      expiresAt: null,
-      externalReference,
-      idempotencyKey: input.idempotencyKey,
-      metronomeContractId: billingContext.metronomeContractId,
-      metronomeCustomerId: billingContext.metronomeCustomerId,
-      operatorIdentity: input.actorId,
-      paymentEvidence: {
-        evidenceVersion: 'principal-cents-v1',
-        fiatCreditTypeId: billingContext.fiatCreditTypeId,
-        fiatCreditTypeName: billingContext.fiatCreditTypeName,
-        fundingIdentity,
-        paymentActionDeadlineAt,
-        principalCents,
-        purchaseAt,
-      },
-      permissionUsed: 'workspace_billing',
-      prepaidPrincipalCents: principalCents,
-      reason: `Customer AI top-up ${principalCents} cents`,
-      stripeBillingConfigurationId: billingContext.billingConfigurationId,
-      stripeCustomerId: billingContext.stripeCustomerId,
-      stripeDeliveryMethodId: billingContext.deliveryMethodId,
-      workspaceId: input.workspaceId,
-    });
+    let action: ManagedProviderFundingActionEntity & {
+      createdByCaller?: boolean;
+    };
+
+    try {
+      action = await this.fundingJournal.createPending({
+        actionType: 'PREPAID_COMMIT',
+        amountCents: principalCents,
+        applicableProductIds: [chargeProductId],
+        applicability: { productIds: [chargeProductId] },
+        creditProductId,
+        currency: 'USD',
+        expiresAt: null,
+        externalReference,
+        idempotencyKey: input.idempotencyKey,
+        metronomeContractId: billingContext.metronomeContractId,
+        metronomeCustomerId: billingContext.metronomeCustomerId,
+        operatorIdentity: input.actorId,
+        paymentEvidence: {
+          evidenceVersion: 'principal-cents-v1',
+          fiatCreditTypeId: billingContext.fiatCreditTypeId,
+          fiatCreditTypeName: billingContext.fiatCreditTypeName,
+          fundingIdentity,
+          paymentActionDeadlineAt,
+          principalCents,
+          purchaseAt,
+        },
+        permissionUsed: 'workspace_billing',
+        prepaidPrincipalCents: principalCents,
+        reason: `Customer AI top-up ${principalCents} cents`,
+        stripeBillingConfigurationId: billingContext.billingConfigurationId,
+        stripeCustomerId: billingContext.stripeCustomerId,
+        stripeDeliveryMethodId: billingContext.deliveryMethodId,
+        workspaceId: input.workspaceId,
+      });
+    } catch (error) {
+      const concurrent = await this.fundingJournal.findByIdempotency(
+        input.workspaceId,
+        input.idempotencyKey,
+      );
+
+      if (concurrent === null) throw error;
+
+      this.assertExistingReplay(concurrent, input, principalCents);
+      return concurrent;
+    }
 
     if (action.createdByCaller === false) {
       this.assertExistingReplay(action, input, principalCents);

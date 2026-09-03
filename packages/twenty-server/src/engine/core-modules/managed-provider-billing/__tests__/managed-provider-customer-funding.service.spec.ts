@@ -22,11 +22,13 @@ describe('ManagedProviderCustomerFundingService', () => {
   const now = new Date('2026-08-29T10:37:42.123Z');
   const purchaseAt = '2026-08-29T10:00:00.000Z';
   const defaultPrincipalCents = 2_500;
-  const fundingIdentity = createHash('sha256')
-    .update(
-      `${workspaceId}:${defaultPrincipalCents}:${idempotencyKey}:fiat-credit-type-id:USD (cents)`,
-    )
-    .digest('hex');
+  const getCurrentFundingIdentity = (principalCents: number) =>
+    createHash('sha256')
+      .update(
+        `${workspaceId}:${principalCents}:${idempotencyKey}:fiat-credit-type-id:USD (cents)`,
+      )
+      .digest('hex');
+  const fundingIdentity = getCurrentFundingIdentity(defaultPrincipalCents);
   const legacyFundingIdentity = createHash('sha256')
     .update(
       `${workspaceId}:AI_25_USD:${idempotencyKey}:fiat-credit-type-id:USD (cents)`,
@@ -65,10 +67,11 @@ describe('ManagedProviderCustomerFundingService', () => {
 
   const createAction = (
     overrides: Partial<ManagedProviderFundingActionEntity> = {},
+    principalCents = defaultPrincipalCents,
   ) =>
     ({
       actionType: 'PREPAID_COMMIT',
-      amountCents: String(defaultPrincipalCents),
+      amountCents: String(principalCents),
       applicableProductIds: [chargeProductId],
       commitmentId: null,
       creditProductId,
@@ -82,14 +85,14 @@ describe('ManagedProviderCustomerFundingService', () => {
         evidenceVersion: 'principal-cents-v1',
         fiatCreditTypeId: 'fiat-credit-type-id',
         fiatCreditTypeName: 'USD (cents)',
-        fundingIdentity,
+        fundingIdentity: getCurrentFundingIdentity(principalCents),
         paymentActionDeadlineAt: '2026-09-05T10:00:00.000Z',
-        principalCents: defaultPrincipalCents,
+        principalCents,
         purchaseAt,
       },
       permissionUsed: 'workspace_billing',
-      prepaidPrincipalCents: String(defaultPrincipalCents),
-      reason: `Customer AI top-up ${defaultPrincipalCents} cents`,
+      prepaidPrincipalCents: String(principalCents),
+      reason: `Customer AI top-up ${principalCents} cents`,
       state: 'PENDING',
       workspaceId,
       ...overrides,
@@ -124,11 +127,13 @@ describe('ManagedProviderCustomerFundingService', () => {
     allowedWorkspaceIds = [workspaceId],
     existing = null,
     createCommitError,
+    principalCents = defaultPrincipalCents,
   }: {
     customerFundingEnabled?: boolean;
     allowedWorkspaceIds?: string[];
     existing?: ManagedProviderFundingActionEntity | null;
     createCommitError?: unknown;
+    principalCents?: number;
   } = {}) => {
     const config = {
       BILLING_STRIPE_API_KEY: 'sk_test',
@@ -140,16 +145,22 @@ describe('ManagedProviderCustomerFundingService', () => {
       METRONOME_BASE_URL_ENVIRONMENT: 'SANDBOX',
       METRONOME_ENABLED: true,
     } as const;
-    const action = createAction();
-    const recorded = createAction({
-      commitmentId: 'commitment-id',
-      metronomeEditId: 'edit-id',
-      state: 'METRONOME_EDIT_RECORDED',
-    });
-    const reconciliating = createAction({
-      safeErrorCode: 'METRONOME_CREATE_OUTCOME_UNCERTAIN',
-      state: 'RECONCILIATION_REQUIRED',
-    });
+    const action = createAction({}, principalCents);
+    const recorded = createAction(
+      {
+        commitmentId: 'commitment-id',
+        metronomeEditId: 'edit-id',
+        state: 'METRONOME_EDIT_RECORDED',
+      },
+      principalCents,
+    );
+    const reconciliating = createAction(
+      {
+        safeErrorCode: 'METRONOME_CREATE_OUTCOME_UNCERTAIN',
+        state: 'RECONCILIATION_REQUIRED',
+      },
+      principalCents,
+    );
     const journal = {
       createPending: jest
         .fn()
@@ -418,11 +429,31 @@ describe('ManagedProviderCustomerFundingService', () => {
   it.each([500, 2_500, 5_000, 10_000, 50_000] as const)(
     'accepts the allowed %i-cent amount',
     async (principalCents) => {
-      const { journal, metronome, recorded, service } = createHarness();
+      const { action, journal, metronome, recorded, service } = createHarness({
+        principalCents,
+      });
+      const expectedAction = {
+        amountCents: String(principalCents),
+        paymentEvidence: {
+          evidenceVersion: 'principal-cents-v1',
+          fiatCreditTypeId: 'fiat-credit-type-id',
+          fiatCreditTypeName: 'USD (cents)',
+          fundingIdentity: getCurrentFundingIdentity(principalCents),
+          paymentActionDeadlineAt: '2026-09-05T10:00:00.000Z',
+          principalCents,
+          purchaseAt,
+        },
+        prepaidPrincipalCents: String(principalCents),
+        reason: `Customer AI top-up ${principalCents} cents`,
+      };
 
-      await expect(
-        service.createCustomerFunding(createFundingInput(principalCents)),
-      ).resolves.toBe(recorded);
+      expect(action).toMatchObject(expectedAction);
+      expect(recorded).toMatchObject(expectedAction);
+      const result = await service.createCustomerFunding(
+        createFundingInput(principalCents),
+      );
+      expect(result).toBe(recorded);
+      expect(result).toMatchObject(expectedAction);
       expect(journal.createPending).toHaveBeenCalledWith(
         expect.objectContaining({
           amountCents: principalCents,
@@ -575,6 +606,67 @@ describe('ManagedProviderCustomerFundingService', () => {
     expect(stripe.assertWorkspacePaymentMethodReady).not.toHaveBeenCalled();
     expect(stripe.assertWorkspaceBillingDetailsReady).not.toHaveBeenCalled();
     expect(workspaceCustomer.ensureWorkspaceCustomer).not.toHaveBeenCalled();
+    expect(metronome.createPaymentGatedPrepaidCommit).not.toHaveBeenCalled();
+  });
+
+  it('returns a concurrent legacy insert without opening a Metronome action', async () => {
+    const concurrentLegacyAction = createLegacyAction();
+    const { journal, metronome, service } = createHarness();
+    const journalConflict = new Error('concurrent funding action insert');
+    journal.findByIdempotency
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(concurrentLegacyAction);
+    journal.createPending.mockRejectedValueOnce(journalConflict);
+
+    await expect(
+      service.createCustomerFunding(createFundingInput()),
+    ).resolves.toBe(concurrentLegacyAction);
+    expect(journal.findByIdempotency).toHaveBeenCalledTimes(2);
+    expect(journal.findByIdempotency).toHaveBeenNthCalledWith(
+      1,
+      workspaceId,
+      idempotencyKey,
+    );
+    expect(journal.findByIdempotency).toHaveBeenNthCalledWith(
+      2,
+      workspaceId,
+      idempotencyKey,
+    );
+    expect(journal.createPending).toHaveBeenCalledTimes(1);
+    expect(metronome.createPaymentGatedPrepaidCommit).not.toHaveBeenCalled();
+  });
+
+  it('rethrows the original unresolved concurrent insert error without a Metronome action', async () => {
+    const { journal, metronome, service } = createHarness();
+    const sentinel = new Error('concurrent funding action insert failed');
+    journal.findByIdempotency
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    journal.createPending.mockRejectedValueOnce(sentinel);
+
+    await expect(
+      service.createCustomerFunding(createFundingInput()),
+    ).rejects.toBe(sentinel);
+    expect(journal.findByIdempotency).toHaveBeenCalledTimes(2);
+    expect(metronome.createPaymentGatedPrepaidCommit).not.toHaveBeenCalled();
+  });
+
+  it('rejects a conflicting concurrent legacy insert without a Metronome action', async () => {
+    const conflictingLegacyAction = createLegacyAction({
+      operatorIdentity: 'other-actor',
+    });
+    const { journal, metronome, service } = createHarness();
+    journal.findByIdempotency
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(conflictingLegacyAction);
+    journal.createPending.mockRejectedValueOnce(
+      new Error('concurrent funding action insert'),
+    );
+
+    await expect(
+      service.createCustomerFunding(createFundingInput()),
+    ).rejects.toThrow('Customer AI funding replay conflicts');
+    expect(journal.findByIdempotency).toHaveBeenCalledTimes(2);
     expect(metronome.createPaymentGatedPrepaidCommit).not.toHaveBeenCalled();
   });
 
