@@ -44,6 +44,8 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
 i18n.load({ [SOURCE_LOCALE]: messages });
 i18n.activate(SOURCE_LOCALE);
 
+const pendingFundingStorageKey =
+  'managed-provider-customer-funding:workspace-1';
 const fundingStatus = {
   managedProviderBillingStatus: {
     available: true,
@@ -52,14 +54,38 @@ const fundingStatus = {
     reconciliationRequiredOperationCount: 0,
     customerFundingAvailable: true,
     customerFundingPaymentMethodReady: true,
-    customerFundingPresets: [
-      { id: 'AI_25_USD', principalCents: '2500' },
-      { id: 'AI_50_USD', principalCents: '5000' },
-      { id: 'AI_100_USD', principalCents: '10000' },
-    ],
+    customerFundingPolicy: {
+      incrementCents: 100,
+      maximumPrincipalCents: 50_000,
+      minimumPrincipalCents: 500,
+      suggestedPrincipalCents: [2_500, 5_000, 10_000],
+    },
     customerFundingBillingSummary: null,
     customerFundingHistory: [],
   },
+};
+
+const renderBilling = () =>
+  render(
+    <I18nProvider i18n={i18n}>
+      <ThemeProvider colorScheme="light">
+        <MemoryRouter>
+          <SettingsBilling />
+        </MemoryRouter>
+      </ThemeProvider>
+    </I18nProvider>,
+  );
+
+const enterCustomAmount = async (amount: string) => {
+  fireEvent.change(await screen.findByLabelText('Custom amount'), {
+    target: { value: amount },
+  });
+};
+
+const readPendingFundingRequest = () => {
+  const serialized = localStorage.getItem(pendingFundingStorageKey);
+
+  return serialized === null ? null : JSON.parse(serialized);
 };
 
 describe('SettingsBilling customer funding idempotency', () => {
@@ -87,30 +113,54 @@ describe('SettingsBilling customer funding idempotency', () => {
     );
   });
 
-  it('reuses the workspace-scoped idempotency key after a response-loss reload', async () => {
+  it('requests custom funding in cents and persists amount-only pending state', async () => {
+    mockRequestFunding.mockResolvedValueOnce({
+      data: { requestManagedProviderCustomerFunding: { id: 'action-1' } },
+    });
+
+    renderBilling();
+    await enterCustomAmount('5');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Add $5 credit' }),
+    );
+
+    await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(1));
+    const variables = mockRequestFunding.mock.calls[0][0].variables;
+    const idempotencyKey = variables.idempotencyKey as string;
+
+    expect(variables).toEqual({
+      idempotencyKey: expect.any(String),
+      principalCents: 500,
+    });
+    await waitFor(() =>
+      expect(readPendingFundingRequest()).toEqual({
+        actionId: 'action-1',
+        idempotencyKey,
+        principalCents: 500,
+      }),
+    );
+    expect(readPendingFundingRequest()).not.toHaveProperty('presetCode');
+  });
+
+  it('reuses the workspace-scoped cents and idempotency key after a response-loss reload', async () => {
     mockRequestFunding.mockRejectedValueOnce(new Error('response lost'));
 
-    const firstPage = render(
-      <I18nProvider i18n={i18n}>
-        <ThemeProvider colorScheme="light">
-          <MemoryRouter>
-            <SettingsBilling />
-          </MemoryRouter>
-        </ThemeProvider>
-      </I18nProvider>,
-    );
+    const firstPage = renderBilling();
+    await enterCustomAmount('37');
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Add $25 credit' }),
+      await screen.findByRole('button', { name: 'Add $37 credit' }),
     );
 
     await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(1));
     const firstKey = mockRequestFunding.mock.calls[0][0].variables
       .idempotencyKey as string;
 
-    expect(
-      localStorage.getItem('managed-provider-customer-funding:workspace-1'),
-    ).toBe(
-      JSON.stringify({ idempotencyKey: firstKey, presetCode: 'AI_25_USD' }),
+    await waitFor(() =>
+      expect(readPendingFundingRequest()).toEqual({
+        actionId: null,
+        idempotencyKey: firstKey,
+        principalCents: 3_700,
+      }),
     );
 
     firstPage.unmount();
@@ -118,23 +168,72 @@ describe('SettingsBilling customer funding idempotency', () => {
       data: { requestManagedProviderCustomerFunding: { id: 'action-1' } },
     });
 
-    render(
-      <I18nProvider i18n={i18n}>
-        <ThemeProvider colorScheme="light">
-          <MemoryRouter>
-            <SettingsBilling />
-          </MemoryRouter>
-        </ThemeProvider>
-      </I18nProvider>,
+    renderBilling();
+
+    expect(await screen.findByLabelText('Custom amount')).toHaveValue('37');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Retry $37 credit' }),
     );
+
+    await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(2));
+    expect(mockRequestFunding.mock.calls[1][0].variables).toEqual({
+      idempotencyKey: firstKey,
+      principalCents: 3_700,
+    });
+  });
+
+  it('privately migrates a known legacy preset while recovering its pending request', async () => {
+    localStorage.setItem(
+      pendingFundingStorageKey,
+      JSON.stringify({
+        idempotencyKey: 'legacy-idempotency-key',
+        presetCode: 'AI_25_USD',
+      }),
+    );
+    mockRequestFunding.mockResolvedValueOnce({
+      data: {
+        requestManagedProviderCustomerFunding: { id: 'legacy-action-id' },
+      },
+    });
+
+    renderBilling();
+
+    expect(await screen.findByLabelText('Custom amount')).toHaveValue('25');
     fireEvent.click(
       await screen.findByRole('button', { name: 'Retry $25 credit' }),
     );
 
-    await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(2));
-    expect(mockRequestFunding.mock.calls[1][0].variables).toMatchObject({
-      idempotencyKey: firstKey,
-      preset: 'AI_25_USD',
+    await waitFor(() => expect(mockRequestFunding).toHaveBeenCalledTimes(1));
+    expect(mockRequestFunding.mock.calls[0][0].variables).toEqual({
+      idempotencyKey: 'legacy-idempotency-key',
+      principalCents: 2_500,
     });
+    await waitFor(() =>
+      expect(readPendingFundingRequest()).toEqual({
+        actionId: 'legacy-action-id',
+        idempotencyKey: 'legacy-idempotency-key',
+        principalCents: 2_500,
+      }),
+    );
+  });
+
+  it('discards unknown legacy presets instead of submitting them', async () => {
+    localStorage.setItem(
+      pendingFundingStorageKey,
+      JSON.stringify({
+        idempotencyKey: 'unknown-idempotency-key',
+        presetCode: 'AI_UNKNOWN_USD',
+      }),
+    );
+
+    renderBilling();
+
+    await waitFor(() =>
+      expect(localStorage.getItem(pendingFundingStorageKey)).toBeNull(),
+    );
+    expect(mockRequestFunding).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', { name: 'Add $25 credit' }),
+    ).toBeEnabled();
   });
 });
