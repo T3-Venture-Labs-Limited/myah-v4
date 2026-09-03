@@ -13,12 +13,12 @@ describe('AdminPanelManagedProviderBillingService', () => {
   const workspaceId = '11111111-1111-4111-8111-111111111111';
   const operatorId = '22222222-2222-4222-8222-222222222222';
 
-  const createConfig = () => ({
+  const createConfig = (fundingWorkspaceIds = [workspaceId]) => ({
     get: jest.fn((key: string) => {
       const values: Record<string, unknown> = {
         MANAGED_OPENROUTER_CREDIT_PRODUCT_ID: 'credit-product-id',
         MANAGED_OPENROUTER_CHARGE_PRODUCT_ID: 'charge-product-id',
-        MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: [workspaceId],
+        MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: fundingWorkspaceIds,
         MANAGED_OPENROUTER_GRANT_DAILY_ACTION_LIMIT: 20,
         MANAGED_OPENROUTER_GRANT_OPERATOR_USER_IDS: [operatorId],
         MANAGED_OPENROUTER_MAX_GRANT_CENTS: 1_000_000,
@@ -135,6 +135,60 @@ describe('AdminPanelManagedProviderBillingService', () => {
       undefined,
       'edit-id',
     );
+  });
+
+  it('grants credit to an unlisted workspace on the wildcard allowlist', async () => {
+    const wildcardWorkspaceId = '33333333-3333-4333-8333-333333333333';
+    const metronomeClientService = {
+      createCustomerCredit: jest.fn().mockResolvedValue({
+        creditId: 'credit-id',
+        metronomeEditId: 'edit-id',
+      }),
+    };
+    const metronomeWorkspaceCustomerService = {
+      ensureWorkspaceContract: jest.fn().mockResolvedValue('contract-id'),
+      ensureWorkspaceCustomer: jest.fn().mockResolvedValue('customer-id'),
+    };
+    const fundingJournalService = {
+      countRecentActions: jest.fn().mockResolvedValue(0),
+      createPendingRateLimited: jest.fn().mockResolvedValue({
+        applicableProductIds: ['charge-product-id'],
+        createdAt: new Date('2026-07-19T10:00:00.000Z'),
+        createdByCaller: true,
+        creditProductId: 'credit-product-id',
+        id: 'funding-action-id',
+        metronomeUniquenessKey: 'myah:wildcard-funding-key',
+        state: 'PENDING',
+      }),
+      transition: jest.fn().mockResolvedValue({
+        createdAt: new Date('2026-07-19T10:00:00.000Z'),
+        failureCode: null,
+        state: 'SUCCEEDED',
+        updatedAt: new Date('2026-07-19T10:00:00.000Z'),
+      }),
+    };
+    const service = new AdminPanelManagedProviderBillingService(
+      metronomeClientService as unknown as MetronomeClientService,
+      metronomeWorkspaceCustomerService as unknown as MetronomeWorkspaceCustomerService,
+      createConfig(['*']) as unknown as TwentyConfigService,
+      fundingJournalService as unknown as ManagedProviderFundingJournalService,
+    );
+
+    await expect(
+      service.grantCredit(
+        {
+          amountCents: 5_000,
+          endingBefore: new Date('2026-08-01T00:00:00.000Z'),
+          idempotencyKey: 'wildcard-grant',
+          reason: 'wildcard eligibility',
+          workspaceId: wildcardWorkspaceId,
+        },
+        operatorId,
+      ),
+    ).resolves.toMatchObject({ workspaceId: wildcardWorkspaceId });
+    expect(
+      metronomeWorkspaceCustomerService.ensureWorkspaceCustomer,
+    ).toHaveBeenCalledWith(wildcardWorkspaceId);
   });
 
   it('returns immutable journal facts on an exact replay', async () => {

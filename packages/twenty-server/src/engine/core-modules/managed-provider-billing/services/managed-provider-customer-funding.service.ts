@@ -16,6 +16,7 @@ import {
   type WorkspaceBillingDetailsSummary,
 } from '../stripe/managed-provider-stripe.service';
 import { toMetronomeHourBoundary } from '../utils/to-metronome-hour-boundary.util';
+import { isManagedProviderWorkspaceAllowed } from '../utils/is-managed-provider-workspace-allowed.util';
 import { ManagedProviderFundingJournalService } from './managed-provider-funding-journal.service';
 import { MetronomeClientService } from './metronome-client.service';
 import { MetronomeWorkspaceCustomerService } from './metronome-workspace-customer.service';
@@ -78,9 +79,12 @@ export class ManagedProviderCustomerFundingService {
     return (
       this.twentyConfig.get('MANAGED_PROVIDER_CUSTOMER_FUNDING_ENABLED') ===
         true &&
-      this.twentyConfig
-        .get('MANAGED_PROVIDER_CUSTOMER_FUNDING_WORKSPACE_IDS')
-        .includes(workspaceId)
+      isManagedProviderWorkspaceAllowed({
+        allowedWorkspaceIds: this.twentyConfig.get(
+          'MANAGED_PROVIDER_CUSTOMER_FUNDING_WORKSPACE_IDS',
+        ),
+        workspaceId,
+      })
     );
   }
 

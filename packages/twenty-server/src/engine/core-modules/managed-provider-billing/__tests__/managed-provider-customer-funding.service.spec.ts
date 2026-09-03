@@ -373,6 +373,25 @@ describe('ManagedProviderCustomerFundingService', () => {
     },
   );
 
+  it('accepts a new funding request for an unlisted workspace on the wildcard allowlist', async () => {
+    const wildcardWorkspaceId = 'wildcard-workspace-id';
+    const { journal, recorded, service } = createHarness({
+      allowedWorkspaceIds: ['*'],
+    });
+
+    await expect(
+      service.createCustomerFunding({
+        actorId,
+        idempotencyKey,
+        preset: 'AI_25_USD',
+        workspaceId: wildcardWorkspaceId,
+      }),
+    ).resolves.toBe(recorded);
+    expect(journal.createPending).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: wildcardWorkspaceId }),
+    );
+  });
+
   it('returns an exact existing replay without reopening remote admission', async () => {
     const existing = createAction();
     const { journal, metronome, service, workspaceCustomer } = createHarness({

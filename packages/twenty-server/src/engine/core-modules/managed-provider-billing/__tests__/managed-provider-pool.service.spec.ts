@@ -84,6 +84,27 @@ describe('ManagedProviderPoolService', () => {
     },
   );
 
+  it('treats an unlisted workspace as managed on the wildcard allowlist', () => {
+    const configService = {
+      get: jest.fn((key: string) => {
+        const values: Record<string, unknown> = {
+          MANAGED_OPENROUTER_ENABLED: true,
+          MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: ['*'],
+        };
+
+        return values[key];
+      }),
+    };
+    const service = new ManagedProviderPoolService(
+      {} as Repository<ManagedProviderPoolEntity>,
+      configService as unknown as TwentyConfigService,
+    );
+
+    expect(
+      service.isManagedWorkspace('openrouter', 'unlisted-workspace-id'),
+    ).toBe(true);
+  });
+
   it('locks and admits only an exact active tariff and evidence version', async () => {
     const repository = {
       findOne: jest.fn().mockResolvedValue(activePool),

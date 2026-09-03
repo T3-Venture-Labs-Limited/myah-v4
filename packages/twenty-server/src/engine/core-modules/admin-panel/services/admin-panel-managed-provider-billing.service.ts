@@ -9,6 +9,7 @@ import {
   MetronomeClientExceptionCode,
 } from 'src/engine/core-modules/managed-provider-billing/metronome-client.exception';
 import { toMetronomeHourBoundary } from 'src/engine/core-modules/managed-provider-billing/utils/to-metronome-hour-boundary.util';
+import { isManagedProviderWorkspaceAllowed } from 'src/engine/core-modules/managed-provider-billing/utils/is-managed-provider-workspace-allowed.util';
 
 import { type GrantManagedProviderCreditInput } from '../dtos/grant-managed-provider-credit.input';
 import { type ManagedProviderCreditReceiptDTO } from '../dtos/managed-provider-credit-receipt.dto';
@@ -383,7 +384,12 @@ export class AdminPanelManagedProviderBillingService {
       'MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS',
     );
 
-    if (!allowedWorkspaceIds.includes(workspaceId)) {
+    if (
+      !isManagedProviderWorkspaceAllowed({
+        allowedWorkspaceIds,
+        workspaceId,
+      })
+    ) {
       throw new Error('Workspace is not eligible for managed provider funding');
     }
   }

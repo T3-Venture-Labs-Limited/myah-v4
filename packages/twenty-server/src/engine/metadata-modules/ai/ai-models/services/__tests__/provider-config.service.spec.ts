@@ -65,4 +65,19 @@ describe('ProviderConfigService', () => {
       },
     });
   });
+
+  it('treats an unlisted workspace as eligible on the wildcard allowlist', () => {
+    const values: Record<string, unknown> = {
+      MANAGED_OPENROUTER_ENABLED: true,
+      MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: ['*'],
+    };
+    const service = new ProviderConfigService(
+      { get: jest.fn((key: string) => values[key]) } as never,
+      { getDefaultAiCatalog: jest.fn() } as never,
+    );
+
+    expect(
+      service.isManagedOpenRouterWorkspaceEligible('unlisted-workspace-id'),
+    ).toBe(true);
+  });
 });
