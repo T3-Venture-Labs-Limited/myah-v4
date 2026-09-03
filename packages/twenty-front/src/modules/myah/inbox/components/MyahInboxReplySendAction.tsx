@@ -50,19 +50,25 @@ export const MyahInboxReplySendAction = ({
   const [isUnknown, setIsUnknown] = useState(false);
   const [isPending, setIsPending] = useState(false);
 
-  const canSend =
+  const hasPendingFirstSave =
+    (entry.dirty || entry.status === 'saving') &&
+    !entry.confirmedBody?.markdown.trim();
+  const hasEligibleReadiness =
+    readiness?.status === MyahInboxReplySendReadinessStatus.READY ||
+    (hasPendingFirstSave &&
+      readiness?.status ===
+        MyahInboxReplySendReadinessStatus.THREAD_UNAVAILABLE);
+  const canAttemptSend =
     !disabled &&
     !isSending &&
     !sending &&
     !isPending &&
     !isUnknown &&
     !readinessLoading &&
-    readiness?.status === MyahInboxReplySendReadinessStatus.READY &&
-    !entry.dirty &&
-    entry.status !== 'saving' &&
+    hasEligibleReadiness &&
     entry.status !== 'error' &&
     entry.status !== 'conflict' &&
-    Boolean(entry.confirmedBody?.markdown.trim());
+    Boolean(entry.localBody.markdown.trim());
 
   const handleOutcome = (result: MyahInboxReplySendResult) => {
     switch (result.outcome) {
@@ -104,7 +110,7 @@ export const MyahInboxReplySendAction = ({
   };
 
   const handleSend = async () => {
-    if (!canSend) {
+    if (!canAttemptSend) {
       return;
     }
 
@@ -159,8 +165,9 @@ export const MyahInboxReplySendAction = ({
       <Button
         title={t`Send`}
         variant="primary"
+        accent="brand"
         size="small"
-        disabled={!canSend}
+        disabled={!canAttemptSend}
         onClick={handleSend}
       />
       {isUnknown && (
