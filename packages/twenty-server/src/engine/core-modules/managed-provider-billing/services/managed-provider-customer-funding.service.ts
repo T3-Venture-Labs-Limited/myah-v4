@@ -21,18 +21,26 @@ import { ManagedProviderFundingJournalService } from './managed-provider-funding
 import { MetronomeClientService } from './metronome-client.service';
 import { MetronomeWorkspaceCustomerService } from './metronome-workspace-customer.service';
 
-export const AI_TOP_UP_PRESETS = {
+export const AI_TOP_UP_POLICY = {
+  incrementCents: 100,
+  maximumPrincipalCents: 50_000,
+  minimumPrincipalCents: 500,
+  suggestedPrincipalCents: [2_500, 5_000, 10_000],
+} as const;
+
+const LEGACY_AI_TOP_UP_PRESET_PRINCIPAL_CENTS = {
   AI_25_USD: 2_500,
   AI_50_USD: 5_000,
   AI_100_USD: 10_000,
 } as const;
 
-export type AiTopUpPreset = keyof typeof AI_TOP_UP_PRESETS;
+type LegacyAiTopUpPreset =
+  keyof typeof LEGACY_AI_TOP_UP_PRESET_PRINCIPAL_CENTS;
 
 export type CreateCustomerFundingInput = Readonly<{
   actorId: string;
   idempotencyKey: string;
-  preset: AiTopUpPreset;
+  principalCents: number;
   workspaceId: string;
 }>;
 
@@ -44,14 +52,31 @@ export type CustomerFundingPaymentMethodPreparation = Readonly<{
   setupIntentId: string | null;
 }>;
 
-const customerFundingEvidenceSchema = z.object({
-  fiatCreditTypeId: z.string().min(1),
-  fiatCreditTypeName: z.literal('USD (cents)'),
-  fundingIdentity: z.string().min(1),
-  paymentActionDeadlineAt: z.string().min(1),
-  preset: z.enum(['AI_25_USD', 'AI_50_USD', 'AI_100_USD']),
-  purchaseAt: z.string().min(1),
-});
+const currentCustomerFundingEvidenceSchema = z
+  .object({
+    evidenceVersion: z.literal('principal-cents-v1'),
+    fiatCreditTypeId: z.string().min(1),
+    fiatCreditTypeName: z.literal('USD (cents)'),
+    fundingIdentity: z.string().min(1),
+    paymentActionDeadlineAt: z.string().min(1),
+    principalCents: z.number().int(),
+    purchaseAt: z.string().min(1),
+  })
+  .strict();
+const legacyCustomerFundingEvidenceSchema = z
+  .object({
+    fiatCreditTypeId: z.string().min(1),
+    fiatCreditTypeName: z.literal('USD (cents)'),
+    fundingIdentity: z.string().min(1),
+    paymentActionDeadlineAt: z.string().min(1),
+    preset: z.enum(['AI_25_USD', 'AI_50_USD', 'AI_100_USD']),
+    purchaseAt: z.string().min(1),
+  })
+  .strict();
+const customerFundingEvidenceSchema = z.union([
+  currentCustomerFundingEvidenceSchema,
+  legacyCustomerFundingEvidenceSchema,
+]);
 const customerFundingExpiryIntentReceiptSchema = z.object({
   expiryUpdateIntent: z.object({
     accessScheduleItemId: z.string().min(1),
@@ -61,9 +86,11 @@ const customerFundingExpiryIntentReceiptSchema = z.object({
   }),
 });
 
-const isAiTopUpPreset = (value: unknown): value is AiTopUpPreset =>
-  typeof value === 'string' &&
-  Object.prototype.hasOwnProperty.call(AI_TOP_UP_PRESETS, value);
+const isValidAiTopUpPrincipalCents = (principalCents: number): boolean =>
+  Number.isSafeInteger(principalCents) &&
+  principalCents >= AI_TOP_UP_POLICY.minimumPrincipalCents &&
+  principalCents <= AI_TOP_UP_POLICY.maximumPrincipalCents &&
+  principalCents % AI_TOP_UP_POLICY.incrementCents === 0;
 
 @Injectable()
 export class ManagedProviderCustomerFundingService {
@@ -238,7 +265,7 @@ export class ManagedProviderCustomerFundingService {
     input: CreateCustomerFundingInput,
   ): Promise<ManagedProviderFundingActionEntity> {
     if (
-      !isAiTopUpPreset(input.preset) ||
+      !isValidAiTopUpPrincipalCents(input.principalCents) ||
       input.actorId.trim() === '' ||
       input.idempotencyKey.trim() === '' ||
       input.workspaceId.trim() === ''
@@ -246,7 +273,7 @@ export class ManagedProviderCustomerFundingService {
       throw new Error('Customer AI funding request is invalid');
     }
 
-    const principalCents = AI_TOP_UP_PRESETS[input.preset];
+    const principalCents = input.principalCents;
     const existing = await this.fundingJournal.findByIdempotency(
       input.workspaceId,
       input.idempotencyKey,
@@ -343,16 +370,17 @@ export class ManagedProviderCustomerFundingService {
       metronomeCustomerId: billingContext.metronomeCustomerId,
       operatorIdentity: input.actorId,
       paymentEvidence: {
+        evidenceVersion: 'principal-cents-v1',
         fiatCreditTypeId: billingContext.fiatCreditTypeId,
         fiatCreditTypeName: billingContext.fiatCreditTypeName,
         fundingIdentity,
         paymentActionDeadlineAt,
-        preset: input.preset,
+        principalCents,
         purchaseAt,
       },
       permissionUsed: 'workspace_billing',
       prepaidPrincipalCents: principalCents,
-      reason: `Customer AI top-up ${input.preset}`,
+      reason: `Customer AI top-up ${principalCents} cents`,
       stripeBillingConfigurationId: billingContext.billingConfigurationId,
       stripeCustomerId: billingContext.stripeCustomerId,
       stripeDeliveryMethodId: billingContext.deliveryMethodId,
@@ -1003,21 +1031,22 @@ export class ManagedProviderCustomerFundingService {
     input: CreateCustomerFundingInput,
     principalCents: number,
   ): void {
-    const evidence = customerFundingEvidenceSchema.safeParse(
+    const currentEvidence = currentCustomerFundingEvidenceSchema.safeParse(
       existing.paymentEvidence,
     );
-    const expectedIdentity = evidence.success
-      ? this.getFundingIdentity(
-          input,
-          evidence.data.fiatCreditTypeId,
-          evidence.data.fiatCreditTypeName,
-        )
-      : null;
+    const legacyEvidence = legacyCustomerFundingEvidenceSchema.safeParse(
+      existing.paymentEvidence,
+    );
+    const evidence = currentEvidence.success
+      ? currentEvidence.data
+      : legacyEvidence.success
+        ? legacyEvidence.data
+        : null;
 
     if (
-      !evidence.success ||
-      !Number.isFinite(Date.parse(evidence.data.purchaseAt)) ||
-      !Number.isFinite(Date.parse(evidence.data.paymentActionDeadlineAt)) ||
+      evidence === null ||
+      !Number.isFinite(Date.parse(evidence.purchaseAt)) ||
+      !Number.isFinite(Date.parse(evidence.paymentActionDeadlineAt)) ||
       existing.workspaceId !== input.workspaceId ||
       existing.idempotencyKey !== input.idempotencyKey ||
       existing.actionType !== 'PREPAID_COMMIT' ||
@@ -1027,9 +1056,47 @@ export class ManagedProviderCustomerFundingService {
       existing.prepaidPrincipalCents !== String(principalCents) ||
       existing.currency !== 'USD' ||
       existing.externalReference !==
-        `customer-ai-top-up:${input.workspaceId}:${input.idempotencyKey}` ||
-      evidence.data.preset !== input.preset ||
-      evidence.data.fundingIdentity !== expectedIdentity
+        `customer-ai-top-up:${input.workspaceId}:${input.idempotencyKey}`
+    ) {
+      throw new Error('Customer AI funding replay conflicts');
+    }
+
+    if (currentEvidence.success) {
+      const expectedIdentity = this.getFundingIdentity(
+        input,
+        currentEvidence.data.fiatCreditTypeId,
+        currentEvidence.data.fiatCreditTypeName,
+      );
+
+      if (
+        !isValidAiTopUpPrincipalCents(
+          currentEvidence.data.principalCents,
+        ) ||
+        currentEvidence.data.principalCents !== principalCents ||
+        currentEvidence.data.fundingIdentity !== expectedIdentity
+      ) {
+        throw new Error('Customer AI funding replay conflicts');
+      }
+
+      return;
+    }
+
+    if (!legacyEvidence.success) {
+      throw new Error('Customer AI funding replay conflicts');
+    }
+
+    const legacyPrincipalCents =
+      LEGACY_AI_TOP_UP_PRESET_PRINCIPAL_CENTS[legacyEvidence.data.preset];
+    const expectedIdentity = this.getLegacyFundingIdentity(
+      input,
+      legacyEvidence.data.preset,
+      legacyEvidence.data.fiatCreditTypeId,
+      legacyEvidence.data.fiatCreditTypeName,
+    );
+
+    if (
+      legacyPrincipalCents !== principalCents ||
+      legacyEvidence.data.fundingIdentity !== expectedIdentity
     ) {
       throw new Error('Customer AI funding replay conflicts');
     }
@@ -1052,7 +1119,20 @@ export class ManagedProviderCustomerFundingService {
   ): string {
     return createHash('sha256')
       .update(
-        `${input.workspaceId}:${input.preset}:${input.idempotencyKey}:${fiatCreditTypeId}:${fiatCreditTypeName}`,
+        `${input.workspaceId}:${input.principalCents}:${input.idempotencyKey}:${fiatCreditTypeId}:${fiatCreditTypeName}`,
+      )
+      .digest('hex');
+  }
+
+  private getLegacyFundingIdentity(
+    input: CreateCustomerFundingInput,
+    preset: LegacyAiTopUpPreset,
+    fiatCreditTypeId: string,
+    fiatCreditTypeName: 'USD (cents)',
+  ): string {
+    return createHash('sha256')
+      .update(
+        `${input.workspaceId}:${preset}:${input.idempotencyKey}:${fiatCreditTypeId}:${fiatCreditTypeName}`,
       )
       .digest('hex');
   }
