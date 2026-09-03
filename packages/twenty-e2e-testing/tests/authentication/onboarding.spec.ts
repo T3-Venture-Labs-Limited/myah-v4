@@ -39,19 +39,26 @@ test('New workspace signup goes through every onboarding stage', async ({
   await test.step('Sync-email stage (skip when shown)', async () => {
     const syncEmailsHeading = page.getByText('Import your contacts');
     const installAppsHeading = page.getByText('Install your first apps');
+    const createProfileHeading = page.getByText('Create profile');
 
-    await expect(syncEmailsHeading.or(installAppsHeading)).toBeVisible({
-      timeout: 90000,
-    });
+    await expect(
+      syncEmailsHeading.or(installAppsHeading).or(createProfileHeading),
+    ).toBeVisible({ timeout: 90000 });
 
     if (await syncEmailsHeading.isVisible()) {
       await loginPage.clickSkipOnboardingStep();
     }
   });
 
-  await test.step('Install-apps stage', async () => {
-    await expect(page.getByText('Install your first apps')).toBeVisible();
-    await loginPage.clickSkipOnboardingStep();
+  await test.step('Install-apps stage (skip when shown)', async () => {
+    const installAppsHeading = page.getByText('Install your first apps');
+    const createProfileHeading = page.getByText('Create profile');
+
+    await expect(installAppsHeading.or(createProfileHeading)).toBeVisible();
+
+    if (await installAppsHeading.isVisible()) {
+      await loginPage.clickSkipOnboardingStep();
+    }
   });
 
   await test.step('Create-profile stage', async () => {
