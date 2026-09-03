@@ -236,4 +236,31 @@ describe('SettingsBilling customer funding idempotency', () => {
       await screen.findByRole('button', { name: 'Add $25 credit' }),
     ).toBeEnabled();
   });
+
+  it.each([1, 501, 50_001])(
+    'discards a pending principal amount outside the current policy (%i cents)',
+    async (principalCents) => {
+      localStorage.setItem(
+        pendingFundingStorageKey,
+        JSON.stringify({
+          actionId: null,
+          idempotencyKey: `invalid-principal-${principalCents}`,
+          principalCents,
+        }),
+      );
+
+      renderBilling();
+
+      await waitFor(() =>
+        expect(localStorage.getItem(pendingFundingStorageKey)).toBeNull(),
+      );
+      expect(mockRequestFunding).not.toHaveBeenCalled();
+      expect(
+        await screen.findByRole('button', { name: 'Add $25 credit' }),
+      ).toBeEnabled();
+      expect(
+        screen.queryByRole('button', { name: /Retry/ }),
+      ).not.toBeInTheDocument();
+    },
+  );
 });

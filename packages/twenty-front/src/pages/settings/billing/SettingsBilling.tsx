@@ -112,6 +112,15 @@ const legacyPresetPrincipalCents: Readonly<Record<string, number>> = {
   AI_100_USD: 10_000,
 };
 
+const isPrincipalCentsAllowedByPolicy = (
+  principalCents: number,
+  policy: WorkspaceBillingFundingPolicy,
+): boolean =>
+  Number.isSafeInteger(principalCents) &&
+  principalCents >= policy.minimumPrincipalCents &&
+  principalCents <= policy.maximumPrincipalCents &&
+  principalCents % policy.incrementCents === 0;
+
 const pendingFundingStorageKey = (workspaceId: string): string =>
   `${CUSTOMER_FUNDING_PENDING_STORAGE_KEY_PREFIX}${workspaceId}`;
 
@@ -282,6 +291,7 @@ export const SettingsBilling = ({
               managedEmailSubscriptionsData?.managedEmailSubscriptions ?? [],
           };
   const status = fundingData?.managedProviderBillingStatus;
+  const customerFundingPolicy = status?.customerFundingPolicy;
 
   useEffect(() => {
     const request = readPendingFundingRequest(workspaceId);
@@ -314,9 +324,34 @@ export const SettingsBilling = ({
   ]);
 
   const activePendingFundingRequest =
-    pendingFundingRequest?.workspaceId === workspaceId
+    pendingFundingRequest !== null &&
+    workspaceId !== null &&
+    pendingFundingRequest.workspaceId === workspaceId &&
+    customerFundingPolicy !== undefined &&
+    isPrincipalCentsAllowedByPolicy(
+      pendingFundingRequest.principalCents,
+      customerFundingPolicy,
+    )
       ? pendingFundingRequest
       : null;
+  useEffect(() => {
+    if (
+      workspaceId === null ||
+      pendingFundingRequest === null ||
+      pendingFundingRequest.workspaceId !== workspaceId ||
+      customerFundingPolicy === undefined ||
+      isPrincipalCentsAllowedByPolicy(
+        pendingFundingRequest.principalCents,
+        customerFundingPolicy,
+      )
+    ) {
+      return;
+    }
+
+    clearPendingFundingRequest(workspaceId);
+    setPendingFundingRequest(null);
+    setPendingActionId(null);
+  }, [customerFundingPolicy, pendingFundingRequest, workspaceId]);
   const fetchedViewModel: WorkspaceBillingViewModel = fundingLoading
     ? { state: 'loading' }
     : fundingError !== undefined || status === undefined
@@ -341,7 +376,10 @@ export const SettingsBilling = ({
                 (entry): entry is typeof entry & { principalCents: number } =>
                   entry.principalCents !== null,
               ),
-            isSubmitting: isSubmitting || pendingActionId !== null,
+            isSubmitting:
+              isSubmitting ||
+              (activePendingFundingRequest !== null &&
+                activePendingFundingRequest.actionId !== null),
             retryPrincipalCents:
               activePendingFundingRequest?.principalCents ?? null,
             pendingOperationCount: status.pendingOperationCount,
