@@ -112,7 +112,7 @@ describe('SettingsWorkspaceBillingContent customer funding', () => {
       ['$25', 2_500],
       ['$50', 5_000],
       ['$100', 10_000],
-    ]) {
+    ] as const) {
       expect(screen.getByRole('button', { name: label })).toBeVisible();
       fireEvent.click(screen.getByRole('button', { name: label }));
       fireEvent.click(
