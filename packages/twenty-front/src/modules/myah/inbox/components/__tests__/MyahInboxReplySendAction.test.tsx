@@ -28,12 +28,14 @@ let mockSending = false;
 jest.mock('twenty-ui/input', () => ({
   Button: ({
     title,
+    accent,
     ariaLabel,
     variant,
     disabled,
     onClick,
   }: {
     title: string;
+    accent?: string;
     ariaLabel?: string;
     variant: string;
     disabled?: boolean;
@@ -41,6 +43,7 @@ jest.mock('twenty-ui/input', () => ({
   }) => (
     <button
       aria-label={ariaLabel}
+      data-accent={accent}
       data-variant={variant}
       disabled={disabled}
       onClick={onClick}
@@ -103,8 +106,24 @@ const emptyEntry = confirmedEntry({
   localBody: { markdown: '', blocknote: null },
   confirmedBody: null,
 });
-const dirtyEntry = confirmedEntry({ dirty: true });
-const savingEntry = confirmedEntry({ status: 'saving' });
+const dirtyEntry = confirmedEntry({
+  localBody: { markdown: 'Latest local draft', blocknote: null },
+  dirty: true,
+});
+const savingEntry = confirmedEntry({
+  localBody: { markdown: 'Latest local draft', blocknote: null },
+  status: 'saving',
+});
+const firstSaveDirtyEntry = confirmedEntry({
+  localBody: { markdown: 'First local draft', blocknote: null },
+  confirmedBody: null,
+  dirty: true,
+});
+const firstSaveSavingEntry = confirmedEntry({
+  localBody: { markdown: 'First local draft', blocknote: null },
+  confirmedBody: { markdown: '   ', blocknote: null },
+  status: 'saving',
+});
 const errorEntry = confirmedEntry({ status: 'error', error: 'Save failed' });
 const conflictEntry = confirmedEntry({
   status: 'conflict',
@@ -173,14 +192,74 @@ describe('MyahInboxReplySendAction', () => {
 
   it.each([
     ['empty', emptyEntry],
-    ['dirty', dirtyEntry],
-    ['saving', savingEntry],
     ['error', errorEntry],
     ['conflict', conflictEntry],
   ])('disables Send for %s draft state', (_name, entry) => {
     renderAction({ entry, readiness: 'READY' });
 
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  });
+
+  it.each([
+    ['dirty', dirtyEntry],
+    ['saving', savingEntry],
+  ])('enables Send immediately for a non-empty %s edit', (_name, entry) => {
+    renderAction({ entry, readiness: 'READY' });
+
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+  });
+
+  it.each([
+    ['dirty with no confirmed body', firstSaveDirtyEntry],
+    ['saving with a whitespace confirmed body', firstSaveSavingEntry],
+  ])(
+    'enables Send immediately for a non-empty first-save %s',
+    (_name, entry) => {
+      renderAction({ entry, readiness: 'THREAD_UNAVAILABLE' });
+
+      expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+    },
+  );
+
+  it.each([
+    ['dirty', dirtyEntry],
+    ['saving', savingEntry],
+  ])(
+    'does not bypass THREAD_UNAVAILABLE for an already confirmed %s draft',
+    (_name, entry) => {
+      renderAction({ entry, readiness: 'THREAD_UNAVAILABLE' });
+
+      expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    },
+  );
+
+  it.each([
+    'SENDER_UNAVAILABLE',
+    'RECIPIENT_UNAVAILABLE',
+    'RECONNECT_REQUIRED',
+    'MAILBOX_INELIGIBLE',
+    'OUTCOME_PENDING',
+    'OUTCOME_UNKNOWN',
+  ])(
+    'does not bypass hard %s readiness for a first-save draft',
+    (readiness) => {
+      renderAction({ entry: firstSaveDirtyEntry, readiness });
+
+      expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    },
+  );
+
+  it('uses the native primary brand treatment', () => {
+    renderAction();
+
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute(
+      'data-variant',
+      'primary',
+    );
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute(
+      'data-accent',
+      'brand',
+    );
   });
 
   it('passes the confirmed draft revision to readiness', () => {
@@ -247,6 +326,40 @@ describe('MyahInboxReplySendAction', () => {
       ],
     });
   });
+
+  it.each([
+    ['dirty persisted edit', dirtyEntry, 'READY'],
+    ['saving persisted edit', savingEntry, 'READY'],
+    ['dirty first save', firstSaveDirtyEntry, 'THREAD_UNAVAILABLE'],
+    ['saving first save', firstSaveSavingEntry, 'THREAD_UNAVAILABLE'],
+  ])(
+    'flushes a non-empty %s and sends only the returned revision',
+    async (_name, entry, readiness) => {
+      mockFlush.mockResolvedValue(
+        confirmedEntry({
+          confirmedRevision: 7,
+          confirmedBody: {
+            markdown: 'Latest persisted draft',
+            blocknote: null,
+          },
+        }),
+      );
+
+      renderAction({ entry, readiness });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await waitFor(() =>
+        expect(mockSend).toHaveBeenCalledWith({
+          threadId: 'thread-1',
+          expectedDraftRevision: 7,
+        }),
+      );
+      expect(mockFlush).toHaveBeenCalledWith(draftKey);
+      expect(mockFlush.mock.invocationCallOrder[0]).toBeLessThan(
+        mockSend.mock.invocationCallOrder[0],
+      );
+    },
+  );
   it('reconciles the canonical empty draft after a sent receipt', async () => {
     const onDraftReconciled = jest.fn();
     mockSend.mockResolvedValue({
