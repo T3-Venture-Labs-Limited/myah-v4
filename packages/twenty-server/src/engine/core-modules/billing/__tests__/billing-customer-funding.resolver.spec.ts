@@ -9,6 +9,11 @@ const workspace = { id: 'workspace-id' };
 const user = { id: 'actor-id' };
 const createdAt = new Date('2026-08-29T10:00:00.000Z');
 const updatedAt = new Date('2026-08-29T10:40:00.000Z');
+const legacyPresetEvidence = {
+  preset: 'AI_25_USD',
+  providerSecret: 'hidden',
+};
+
 const action = {
   actionType: 'PREPAID_COMMIT',
   amountCents: '2500',
@@ -16,13 +21,27 @@ const action = {
   createdAt,
   expiresAt: new Date('2027-08-29T10:40:00.000Z'),
   id: '11111111-1111-4111-8111-111111111111',
-  paymentEvidence: { preset: 'AI_25_USD', providerSecret: 'hidden' },
+  paymentEvidence: legacyPresetEvidence,
   paymentReceipt: {
     invoiceUrl: 'https://invoice.example/in_1',
     providerError: 'hidden',
   },
   prepaidPrincipalCents: '2500',
   state: 'SUCCEEDED',
+  taxCents: '250',
+  updatedAt,
+};
+
+const expectedCustomerFundingHistoryItem = {
+  actionRequired: false,
+  collectedTotalCents: '2750',
+  createdAt,
+  expiresAt: action.expiresAt,
+  fundingType: 'PURCHASED',
+  id: action.id,
+  invoiceUrl: 'https://invoice.example/in_1',
+  principalCents: '2500',
+  state: 'BALANCE_ACTIVE',
   taxCents: '250',
   updatedAt,
 };
@@ -138,67 +157,54 @@ describe('BillingResolver customer AI funding', () => {
     },
   );
 
-  it('requests one server-owned preset bound to workspace and actor', async () => {
+  it('requests one principal amount bound to workspace and actor', async () => {
     const { fundingService, resolver } = createResolver();
 
-    await expect(
-      resolver.requestManagedProviderCustomerFunding(
-        workspace as never,
-        user as never,
-        {
-          idempotencyKey: 'browser-key',
-          preset: 'AI_25_USD',
-        },
-      ),
-    ).resolves.toMatchObject({
+    const result = await resolver.requestManagedProviderCustomerFunding(
+      workspace as never,
+      user as never,
+      {
+        idempotencyKey: 'browser-key',
+        principalCents: 500,
+      } as never,
+    );
+
+    expect(result).toMatchObject({
       id: action.id,
-      presetId: 'AI_25_USD',
       principalCents: '2500',
       state: 'BALANCE_ACTIVE',
     });
+    expect(result).not.toHaveProperty('presetId');
     expect(fundingService.createCustomerFunding).toHaveBeenCalledWith({
       actorId: user.id,
       idempotencyKey: 'browser-key',
-      preset: 'AI_25_USD',
+      principalCents: 500,
       workspaceId: workspace.id,
     });
   });
 
-  it('extends billing status with bounded presets, readiness, and safe history', async () => {
+  it('extends billing status with amount policy, readiness, and safe history', async () => {
     const { resolver } = createResolver();
 
-    await expect(
-      resolver.managedProviderBillingStatus(workspace as never),
-    ).resolves.toEqual({
+    const status = await resolver.managedProviderBillingStatus(workspace as never);
+
+    expect(status).toEqual({
       available: true,
       customerFundingAvailable: true,
       customerFundingBillingSummary: billingSummary,
-      customerFundingHistory: [
-        {
-          actionRequired: false,
-          collectedTotalCents: '2750',
-          createdAt,
-          expiresAt: action.expiresAt,
-          fundingType: 'PURCHASED',
-          id: action.id,
-          invoiceUrl: 'https://invoice.example/in_1',
-          presetId: 'AI_25_USD',
-          principalCents: '2500',
-          state: 'BALANCE_ACTIVE',
-          taxCents: '250',
-          updatedAt,
-        },
-      ],
+      customerFundingHistory: [expectedCustomerFundingHistoryItem],
       customerFundingPaymentMethodReady: true,
-      customerFundingPresets: [
-        { id: 'AI_25_USD', principalCents: '2500' },
-        { id: 'AI_50_USD', principalCents: '5000' },
-        { id: 'AI_100_USD', principalCents: '10000' },
-      ],
+      customerFundingPolicy: {
+        incrementCents: 100,
+        maximumPrincipalCents: 50000,
+        minimumPrincipalCents: 500,
+        suggestedPrincipalCents: [2500, 5000, 10000],
+      },
       pendingOperationCount: 1,
       prepaidBalanceCents: '10000',
       reconciliationRequiredOperationCount: 0,
     });
+    expect(status.customerFundingHistory?.[0]).not.toHaveProperty('presetId');
   });
 
   it('forwards bounded billing details when completing payment setup', async () => {
@@ -230,12 +236,16 @@ describe('BillingResolver customer AI funding', () => {
       ),
     ).resolves.toEqual({ clientSecret: 'pi_secret' });
   });
-  it('looks up a polled action through the authenticated workspace boundary', async () => {
+  it('maps a polled action through the authenticated workspace without legacy preset evidence', async () => {
     const { fundingService, resolver } = createResolver();
 
-    await resolver.managedProviderCustomerFundingAction(workspace as never, {
-      actionId: action.id,
-    });
+    const result = await resolver.managedProviderCustomerFundingAction(
+      workspace as never,
+      { actionId: action.id },
+    );
+
+    expect(result).toEqual(expectedCustomerFundingHistoryItem);
+    expect(result).not.toHaveProperty('presetId');
     expect(fundingService.getCustomerFundingAction).toHaveBeenCalledWith(
       workspace.id,
       action.id,

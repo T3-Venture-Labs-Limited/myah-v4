@@ -1,23 +1,28 @@
-import { ArgsType, Field } from '@nestjs/graphql';
+import { ArgsType, Field, Int } from '@nestjs/graphql';
 import {
-  IsIn,
+  IsDivisibleBy,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
-import { type AiTopUpPreset } from '../services/managed-provider-customer-funding.service';
+import { AI_TOP_UP_POLICY } from '../services/managed-provider-customer-funding.service';
 import { type WorkspaceBillingDetailsInput } from '../stripe/managed-provider-stripe.service';
 
 @ArgsType()
 export class RequestManagedProviderCustomerFundingInput {
-  @Field(() => String)
-  @IsString()
-  @IsIn(['AI_25_USD', 'AI_50_USD', 'AI_100_USD'])
-  preset: AiTopUpPreset;
+  @Field(() => Int)
+  @IsInt()
+  @Min(AI_TOP_UP_POLICY.minimumPrincipalCents)
+  @Max(AI_TOP_UP_POLICY.maximumPrincipalCents)
+  @IsDivisibleBy(AI_TOP_UP_POLICY.incrementCents)
+  principalCents: number;
 
   @Field(() => String)
   @IsString()
