@@ -34,8 +34,7 @@ const LEGACY_AI_TOP_UP_PRESET_PRINCIPAL_CENTS = {
   AI_100_USD: 10_000,
 } as const;
 
-type LegacyAiTopUpPreset =
-  keyof typeof LEGACY_AI_TOP_UP_PRESET_PRINCIPAL_CENTS;
+type LegacyAiTopUpPreset = keyof typeof LEGACY_AI_TOP_UP_PRESET_PRINCIPAL_CENTS;
 
 export type CreateCustomerFundingInput = Readonly<{
   actorId: string;
@@ -1085,9 +1084,7 @@ export class ManagedProviderCustomerFundingService {
       );
 
       if (
-        !isValidAiTopUpPrincipalCents(
-          currentEvidence.data.principalCents,
-        ) ||
+        !isValidAiTopUpPrincipalCents(currentEvidence.data.principalCents) ||
         currentEvidence.data.principalCents !== principalCents ||
         currentEvidence.data.fundingIdentity !== expectedIdentity
       ) {

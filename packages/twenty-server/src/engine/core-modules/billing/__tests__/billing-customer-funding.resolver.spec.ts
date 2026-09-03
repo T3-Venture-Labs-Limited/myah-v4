@@ -186,7 +186,9 @@ describe('BillingResolver customer AI funding', () => {
   it('extends billing status with amount policy, readiness, and safe history', async () => {
     const { resolver } = createResolver();
 
-    const status = await resolver.managedProviderBillingStatus(workspace as never);
+    const status = await resolver.managedProviderBillingStatus(
+      workspace as never,
+    );
 
     expect(status).toEqual({
       available: true,

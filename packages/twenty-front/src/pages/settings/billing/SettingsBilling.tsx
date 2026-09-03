@@ -183,8 +183,7 @@ const readPendingFundingRequest = (
     const actionId =
       pending.actionId === undefined || pending.actionId === null
         ? null
-        : typeof pending.actionId === 'string' &&
-            pending.actionId.trim() !== ''
+        : typeof pending.actionId === 'string' && pending.actionId.trim() !== ''
           ? pending.actionId
           : undefined;
     if (

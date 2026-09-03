@@ -5,4 +5,5 @@ export const isManagedProviderWorkspaceAllowed = ({
   allowedWorkspaceIds: string[];
   workspaceId: string;
 }): boolean =>
-  allowedWorkspaceIds.includes('*') || allowedWorkspaceIds.includes(workspaceId);
+  allowedWorkspaceIds.includes('*') ||
+  allowedWorkspaceIds.includes(workspaceId);

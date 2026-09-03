@@ -491,10 +491,8 @@ export const SettingsWorkspaceBillingContent = ({
 }: SettingsWorkspaceBillingContentProps) => {
   const [customAmountDollars, setCustomAmountDollars] = useState('');
   const [isCustomAmountActive, setIsCustomAmountActive] = useState(false);
-  const [
-    selectedSuggestedPrincipalCents,
-    setSelectedSuggestedPrincipalCents,
-  ] = useState<number | null>(null);
+  const [selectedSuggestedPrincipalCents, setSelectedSuggestedPrincipalCents] =
+    useState<number | null>(null);
   const managedEmail = (
     <ManagedEmailSubscriptions
       viewModel={managedEmailSubscriptions}

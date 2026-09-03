@@ -161,9 +161,7 @@ describe('SettingsWorkspaceBillingContent customer funding', () => {
 
       expect(customAmountInput).toHaveAttribute('aria-invalid', 'true');
       expect(
-        screen.getByText(
-          'Enter a whole-dollar amount from $5 to $500.',
-        ),
+        screen.getByText('Enter a whole-dollar amount from $5 to $500.'),
       ).toBeInTheDocument();
       const chargeButton = screen.getByRole('button', {
         name: 'Add AI credit',
@@ -187,9 +185,7 @@ describe('SettingsWorkspaceBillingContent customer funding', () => {
     expect(customAmountInput).toHaveAttribute('readonly');
     expect(screen.getByRole('button', { name: '$25' })).toBeDisabled();
     fireEvent.change(customAmountInput, { target: { value: '5' } });
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Retry $37 credit' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Retry $37 credit' }));
 
     expect(onRequestFunding).toHaveBeenCalledWith(3_700);
   });

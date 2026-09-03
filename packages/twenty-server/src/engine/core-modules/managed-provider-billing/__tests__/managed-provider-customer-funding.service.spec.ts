@@ -420,9 +420,7 @@ describe('ManagedProviderCustomerFundingService', () => {
       expect(
         workspaceCustomer.ensureWorkspaceContractStripeBillingContext,
       ).not.toHaveBeenCalled();
-      expect(
-        metronome.createPaymentGatedPrepaidCommit,
-      ).not.toHaveBeenCalled();
+      expect(metronome.createPaymentGatedPrepaidCommit).not.toHaveBeenCalled();
     },
   );
 
@@ -740,9 +738,7 @@ describe('ManagedProviderCustomerFundingService', () => {
       expect(stripe.assertWorkspacePaymentMethodReady).not.toHaveBeenCalled();
       expect(stripe.assertWorkspaceBillingDetailsReady).not.toHaveBeenCalled();
       expect(workspaceCustomer.ensureWorkspaceCustomer).not.toHaveBeenCalled();
-      expect(
-        metronome.createPaymentGatedPrepaidCommit,
-      ).not.toHaveBeenCalled();
+      expect(metronome.createPaymentGatedPrepaidCommit).not.toHaveBeenCalled();
     },
   );
 
