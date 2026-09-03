@@ -426,23 +426,24 @@ describe('ManagedProviderCustomerFundingService', () => {
     },
   );
 
-  it.each([500, 2_500, 5_000, 10_000, 50_000] as const)(
+  it.each([500, 2_500, 3_700, 5_000, 10_000, 50_000] as const)(
     'accepts the allowed %i-cent amount',
     async (principalCents) => {
       const { action, journal, metronome, recorded, service } = createHarness({
         principalCents,
       });
+      const expectedPaymentEvidence = {
+        evidenceVersion: 'principal-cents-v1',
+        fiatCreditTypeId: 'fiat-credit-type-id',
+        fiatCreditTypeName: 'USD (cents)',
+        fundingIdentity: getCurrentFundingIdentity(principalCents),
+        paymentActionDeadlineAt: '2026-09-05T10:00:00.000Z',
+        principalCents,
+        purchaseAt,
+      };
       const expectedAction = {
         amountCents: String(principalCents),
-        paymentEvidence: {
-          evidenceVersion: 'principal-cents-v1',
-          fiatCreditTypeId: 'fiat-credit-type-id',
-          fiatCreditTypeName: 'USD (cents)',
-          fundingIdentity: getCurrentFundingIdentity(principalCents),
-          paymentActionDeadlineAt: '2026-09-05T10:00:00.000Z',
-          principalCents,
-          purchaseAt,
-        },
+        paymentEvidence: expectedPaymentEvidence,
         prepaidPrincipalCents: String(principalCents),
         reason: `Customer AI top-up ${principalCents} cents`,
       };
@@ -457,7 +458,9 @@ describe('ManagedProviderCustomerFundingService', () => {
       expect(journal.createPending).toHaveBeenCalledWith(
         expect.objectContaining({
           amountCents: principalCents,
+          paymentEvidence: expectedPaymentEvidence,
           prepaidPrincipalCents: principalCents,
+          reason: `Customer AI top-up ${principalCents} cents`,
         }),
       );
       expect(metronome.createPaymentGatedPrepaidCommit).toHaveBeenCalledWith(
