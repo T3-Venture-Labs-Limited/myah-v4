@@ -197,17 +197,26 @@ describe('ManagedOpenRouterModelService', () => {
     expect(operationService.reserveOperation).not.toHaveBeenCalled();
   });
 
-  it('accepts an unlisted workspace on the wildcard funding allowlist', () => {
-    const { service } = createService({ eligibleWorkspaceIds: ['*'] });
-    const { model } = createProviderModel();
+  it('admits an unlisted workspace on the wildcard funding allowlist', async () => {
+    const wildcardWorkspaceId = 'unlisted-workspace-id';
+    const { operationService, service } = createService({
+      eligibleWorkspaceIds: ['*'],
+    });
+    const { doGenerate, model } = createProviderModel();
+    const managedModel = wrap({
+      model,
+      service,
+      workspaceId: wildcardWorkspaceId,
+    });
 
-    expect(() =>
-      wrap({
-        model,
-        service,
-        workspaceId: 'unlisted-workspace-id',
-      }),
-    ).not.toThrow();
+    await expect(
+      managedModel.doGenerate({ prompt: [] } as never),
+    ).resolves.toBeDefined();
+    expect(operationService.reserveOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: wildcardWorkspaceId }),
+      { rejectReplay: true },
+    );
+    expect(doGenerate).toHaveBeenCalledTimes(1);
   });
 
   it('leaves an explicitly named custom OpenRouter provider on the BYOK path', () => {
