@@ -5,7 +5,13 @@ import {
 } from '@/settings/billing/graphql/managedProviderCustomerFunding';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
@@ -18,6 +24,7 @@ const mockUseMutation = jest.fn();
 const mockUseQuery = jest.fn();
 let customerFundingActionError: Error | undefined;
 let customerFundingActionState: string | undefined;
+let customerFundingActionDetails: Record<string, unknown> | undefined;
 
 jest.mock('@apollo/client/react', () => ({
   useMutation: (...args: unknown[]) => mockUseMutation(...args),
@@ -100,6 +107,7 @@ describe('SettingsBilling customer funding idempotency', () => {
     mockUseQuery.mockReset();
     customerFundingActionError = undefined;
     customerFundingActionState = 'AWAITING_PAYMENT';
+    customerFundingActionDetails = undefined;
     mockUseQuery.mockImplementation((query, options) =>
       query === GET_MANAGED_EMAIL_SUBSCRIPTIONS
         ? {
@@ -121,13 +129,23 @@ describe('SettingsBilling customer funding idempotency', () => {
                     ? undefined
                     : {
                         managedProviderCustomerFundingAction: {
+                          actionRequired: false,
+                          collectedTotalCents: null,
+                          createdAt: '2026-08-29T10:00:00.000Z',
+                          expiresAt: null,
+                          fundingType: 'PURCHASED',
                           id:
                             (
                               options as
                                 | { variables?: { actionId?: string } }
                                 | undefined
                             )?.variables?.actionId ?? 'action-1',
+                          invoiceUrl: null,
+                          principalCents: '2500',
                           state: customerFundingActionState,
+                          taxCents: null,
+                          updatedAt: '2026-08-29T10:00:00.000Z',
+                          ...customerFundingActionDetails,
                         },
                       },
                 error: customerFundingActionError,
@@ -292,6 +310,52 @@ describe('SettingsBilling customer funding idempotency', () => {
     expect(
       screen.queryByRole('button', { name: /Retry/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows a capped action-required funding action in history', async () => {
+    localStorage.setItem(
+      pendingFundingStorageKey,
+      JSON.stringify({
+        actionId: 'capped-action-id',
+        idempotencyKey: 'capped-idempotency-key',
+        principalCents: 2_500,
+      }),
+    );
+    customerFundingActionDetails = {
+      actionRequired: true,
+      collectedTotalCents: '2500',
+      createdAt: '2026-08-29T10:00:00.000Z',
+      expiresAt: null,
+      fundingType: 'PURCHASED',
+      id: 'capped-action-id',
+      invoiceUrl: null,
+      principalCents: '2500',
+      state: 'AWAITING_PAYMENT',
+      taxCents: null,
+      updatedAt: '2026-08-29T10:00:00.000Z',
+    };
+
+    renderBilling();
+
+    const historyTable = await screen.findByRole('table', {
+      name: 'AI funding history',
+    });
+    const historyRow = within(historyTable).getAllByRole('row')[1];
+    expect(
+      within(historyRow).getByText('Awaiting payment'),
+    ).toBeInTheDocument();
+    expect(
+      within(historyRow).getByText('Principal: $25.00'),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(historyRow).getByRole('button', { name: 'Complete payment' }),
+    );
+
+    await waitFor(() =>
+      expect(mockRequestFunding).toHaveBeenCalledWith({
+        variables: { actionId: 'capped-action-id' },
+      }),
+    );
   });
 
   it.each([

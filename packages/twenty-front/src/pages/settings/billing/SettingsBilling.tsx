@@ -74,10 +74,7 @@ type ManagedProviderBillingStatusQueryData = {
   };
 };
 type ManagedProviderCustomerFundingActionQueryData = {
-  managedProviderCustomerFundingAction: Pick<
-    FundingHistoryItem,
-    'state'
-  > | null;
+  managedProviderCustomerFundingAction: FundingHistoryItem | null;
 };
 type PaymentMethodPreparation = {
   billingSummary: WorkspaceBillingSafeSummary | null;
@@ -312,6 +309,17 @@ export const SettingsBilling = ({
           };
   const status = fundingData?.managedProviderBillingStatus;
   const customerFundingPolicy = status?.customerFundingPolicy;
+  const displayedFundingHistory =
+    status === undefined ||
+    pendingActionId === null ||
+    customerFundingAction === undefined ||
+    customerFundingAction === null ||
+    customerFundingAction.id !== pendingActionId ||
+    status.customerFundingHistory.some(
+      (entry) => entry.id === customerFundingAction.id,
+    )
+      ? (status?.customerFundingHistory ?? [])
+      : [customerFundingAction, ...status.customerFundingHistory];
 
   useEffect(() => {
     const request = readPendingFundingRequest(workspaceId);
@@ -401,7 +409,7 @@ export const SettingsBilling = ({
             customerFundingPaymentMethodReady:
               status.customerFundingPaymentMethodReady,
             customerFundingPolicy: status.customerFundingPolicy,
-            fundingHistory: status.customerFundingHistory
+            fundingHistory: displayedFundingHistory
               .map((entry) => ({
                 ...entry,
                 collectedTotalCents: toSafeCents(entry.collectedTotalCents),
