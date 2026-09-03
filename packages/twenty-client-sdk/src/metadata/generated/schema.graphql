@@ -1900,16 +1900,17 @@ type ManagedProviderCustomerFundingBillingSummary {
   taxId: ManagedProviderCustomerFundingTaxIdSummary
 }
 
-type ManagedProviderAiTopUpPreset {
-  id: String!
-  principalCents: String!
+type ManagedProviderAiTopUpPolicy {
+  incrementCents: Int!
+  minimumPrincipalCents: Int!
+  maximumPrincipalCents: Int!
+  suggestedPrincipalCents: [Int!]!
 }
 
 type ManagedProviderCustomerFundingHistoryItem {
   id: String!
   fundingType: String!
   state: String!
-  presetId: String
   principalCents: String!
   taxCents: String
   collectedTotalCents: String
@@ -1939,7 +1940,7 @@ type ManagedProviderBillingStatus {
   reconciliationRequiredOperationCount: Int!
   customerFundingAvailable: Boolean!
   customerFundingPaymentMethodReady: Boolean!
-  customerFundingPresets: [ManagedProviderAiTopUpPreset!]!
+  customerFundingPolicy: ManagedProviderAiTopUpPolicy!
   customerFundingHistory: [ManagedProviderCustomerFundingHistoryItem!]!
   customerFundingBillingSummary: ManagedProviderCustomerFundingBillingSummary
 }
@@ -3736,7 +3737,7 @@ type Mutation {
   generatePlaygroundToken: AuthToken!
   emailPasswordResetLink(email: String!, workspaceId: UUID): EmailPasswordResetLink!
   updatePasswordViaResetToken(passwordResetToken: String!, newPassword: String!): InvalidatePassword!
-  requestManagedProviderCustomerFunding(preset: String!, idempotencyKey: String!): ManagedProviderCustomerFundingHistoryItem!
+  requestManagedProviderCustomerFunding(principalCents: Int!, idempotencyKey: String!): ManagedProviderCustomerFundingHistoryItem!
   prepareManagedProviderCustomerFundingPaymentMethod: ManagedProviderCustomerFundingPaymentMethod!
   completeManagedProviderCustomerFundingPaymentMethod(setupIntentId: String, name: String!, line1: String!, line2: String, city: String!, state: String, postalCode: String!, country: String!, taxIdType: String, taxIdValue: String): ManagedProviderCustomerFundingPaymentMethod!
   prepareManagedProviderCustomerFundingPaymentAction(actionId: String!): ManagedProviderCustomerFundingPaymentAction!

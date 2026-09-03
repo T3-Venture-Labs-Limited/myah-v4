@@ -3668,12 +3668,18 @@ export default {
                 1
             ]
         },
-        "ManagedProviderAiTopUpPreset": {
-            "id": [
-                1
+        "ManagedProviderAiTopUpPolicy": {
+            "incrementCents": [
+                21
             ],
-            "principalCents": [
-                1
+            "minimumPrincipalCents": [
+                21
+            ],
+            "maximumPrincipalCents": [
+                21
+            ],
+            "suggestedPrincipalCents": [
+                21
             ],
             "__typename": [
                 1
@@ -3687,9 +3693,6 @@ export default {
                 1
             ],
             "state": [
-                1
-            ],
-            "presetId": [
                 1
             ],
             "principalCents": [
@@ -3767,7 +3770,7 @@ export default {
             "customerFundingPaymentMethodReady": [
                 6
             ],
-            "customerFundingPresets": [
+            "customerFundingPolicy": [
                 189
             ],
             "customerFundingHistory": [
@@ -8712,9 +8715,9 @@ export default {
             "requestManagedProviderCustomerFunding": [
                 190,
                 {
-                    "preset": [
-                        1,
-                        "String!"
+                    "principalCents": [
+                        21,
+                        "Int!"
                     ],
                     "idempotencyKey": [
                         1,
