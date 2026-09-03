@@ -1,6 +1,7 @@
 import {
   GET_MANAGED_EMAIL_SUBSCRIPTIONS,
   GET_MANAGED_PROVIDER_BILLING_STATUS,
+  GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION,
 } from '@/settings/billing/graphql/managedProviderCustomerFunding';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
@@ -15,6 +16,8 @@ import { SettingsBilling } from '~/pages/settings/billing/SettingsBilling';
 const mockRequestFunding = jest.fn();
 const mockUseMutation = jest.fn();
 const mockUseQuery = jest.fn();
+let customerFundingActionError: Error | undefined;
+let customerFundingActionState: string | undefined;
 
 jest.mock('@apollo/client/react', () => ({
   useMutation: (...args: unknown[]) => mockUseMutation(...args),
@@ -95,7 +98,9 @@ describe('SettingsBilling customer funding idempotency', () => {
     mockUseMutation.mockReset();
     mockUseMutation.mockReturnValue([mockRequestFunding]);
     mockUseQuery.mockReset();
-    mockUseQuery.mockImplementation((query) =>
+    customerFundingActionError = undefined;
+    customerFundingActionState = 'AWAITING_PAYMENT';
+    mockUseQuery.mockImplementation((query, options) =>
       query === GET_MANAGED_EMAIL_SUBSCRIPTIONS
         ? {
             data: { managedEmailSubscriptions: [] },
@@ -109,7 +114,26 @@ describe('SettingsBilling customer funding idempotency', () => {
               loading: false,
               refetch: jest.fn().mockResolvedValue(undefined),
             }
-          : undefined,
+          : query === GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION
+            ? {
+                data:
+                  customerFundingActionState === undefined
+                    ? undefined
+                    : {
+                        managedProviderCustomerFundingAction: {
+                          id:
+                            (
+                              options as
+                                | { variables?: { actionId?: string } }
+                                | undefined
+                            )?.variables?.actionId ?? 'action-1',
+                          state: customerFundingActionState,
+                        },
+                      },
+                error: customerFundingActionError,
+                loading: false,
+              }
+            : undefined,
     );
   });
 
@@ -236,6 +260,86 @@ describe('SettingsBilling customer funding idempotency', () => {
       await screen.findByRole('button', { name: 'Add $25 credit' }),
     ).toBeEnabled();
   });
+
+  it('clears a terminal restored action when capped history omits it', async () => {
+    localStorage.setItem(
+      pendingFundingStorageKey,
+      JSON.stringify({
+        actionId: 'capped-action-id',
+        idempotencyKey: 'capped-idempotency-key',
+        principalCents: 2_500,
+      }),
+    );
+    customerFundingActionState = 'BALANCE_ACTIVE';
+
+    renderBilling();
+
+    await waitFor(() =>
+      expect(mockUseQuery).toHaveBeenCalledWith(
+        GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION,
+        expect.objectContaining({
+          variables: { actionId: 'capped-action-id' },
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(localStorage.getItem(pendingFundingStorageKey)).toBeNull(),
+    );
+    expect(mockRequestFunding).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', { name: 'Add $25 credit' }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: /Retry/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { error: new Error('action lookup failed'), label: 'errors' },
+    { error: undefined, label: 'returns no action' },
+  ])(
+    'makes the restored amount retryable when the capped action query $label',
+    async ({ error }) => {
+      localStorage.setItem(
+        pendingFundingStorageKey,
+        JSON.stringify({
+          actionId: 'capped-action-id',
+          idempotencyKey: 'capped-idempotency-key',
+          principalCents: 3_700,
+        }),
+      );
+      customerFundingActionError = error;
+      customerFundingActionState = undefined;
+      mockRequestFunding.mockResolvedValueOnce({
+        data: { requestManagedProviderCustomerFunding: { id: 'retried-id' } },
+      });
+
+      renderBilling();
+
+      await waitFor(() =>
+        expect(readPendingFundingRequest()).toEqual({
+          actionId: null,
+          idempotencyKey: 'capped-idempotency-key',
+          principalCents: 3_700,
+        }),
+      );
+      expect(await screen.findByLabelText('Custom amount')).toHaveValue('37');
+      const retryButton = await screen.findByRole('button', {
+        name: 'Retry $37 credit',
+      });
+      expect(retryButton).toBeEnabled();
+      fireEvent.click(retryButton);
+
+      await waitFor(() =>
+        expect(mockRequestFunding).toHaveBeenCalledWith({
+          variables: {
+            idempotencyKey: 'capped-idempotency-key',
+            principalCents: 3_700,
+          },
+        }),
+      );
+    },
+  );
 
   it.each([1, 501, 50_001])(
     'discards a pending principal amount outside the current policy (%i cents)',

@@ -19,6 +19,7 @@ import {
   COMPLETE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD,
   GET_MANAGED_EMAIL_SUBSCRIPTIONS,
   GET_MANAGED_PROVIDER_BILLING_STATUS,
+  GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION,
   PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION,
   PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD,
   REQUEST_MANAGED_PROVIDER_CUSTOMER_FUNDING,
@@ -71,6 +72,12 @@ type ManagedProviderBillingStatusQueryData = {
     customerFundingBillingSummary: WorkspaceBillingSafeSummary | null;
     customerFundingHistory: FundingHistoryItem[];
   };
+};
+type ManagedProviderCustomerFundingActionQueryData = {
+  managedProviderCustomerFundingAction: Pick<
+    FundingHistoryItem,
+    'state'
+  > | null;
 };
 type PaymentMethodPreparation = {
   billingSummary: WorkspaceBillingSafeSummary | null;
@@ -264,6 +271,20 @@ export const SettingsBilling = ({
     GET_MANAGED_PROVIDER_BILLING_STATUS,
     { pollInterval: 5_000 },
   );
+  const {
+    data: customerFundingActionData,
+    error: customerFundingActionError,
+    loading: customerFundingActionLoading,
+  } = useQuery<ManagedProviderCustomerFundingActionQueryData>(
+    GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION,
+    {
+      pollInterval: 5_000,
+      skip: pendingActionId === null,
+      variables: { actionId: pendingActionId ?? '' },
+    },
+  );
+  const customerFundingAction =
+    customerFundingActionData?.managedProviderCustomerFundingAction;
   const [preparePaymentMethod] = useMutation<PreparePaymentMethodData>(
     PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD,
   );
@@ -299,14 +320,28 @@ export const SettingsBilling = ({
   }, [workspaceId]);
 
   useEffect(() => {
-    const action =
-      pendingActionId === null
-        ? undefined
-        : status?.customerFundingHistory.find(
-            (entry) => entry.id === pendingActionId,
-          );
+    if (pendingActionId === null || customerFundingActionLoading) {
+      return;
+    }
 
-    if (action === undefined || terminalFundingStates[action.state] !== true) {
+    if (
+      customerFundingActionError !== undefined ||
+      customerFundingAction === undefined ||
+      customerFundingAction === null
+    ) {
+      const retryRequest =
+        pendingFundingRequest?.workspaceId === workspaceId
+          ? { ...pendingFundingRequest, actionId: null }
+          : null;
+      if (retryRequest !== null) {
+        persistPendingFundingRequest(retryRequest);
+        setPendingFundingRequest(retryRequest);
+      }
+      setPendingActionId(null);
+      return;
+    }
+
+    if (terminalFundingStates[customerFundingAction.state] !== true) {
       return;
     }
 
@@ -316,9 +351,11 @@ export const SettingsBilling = ({
     setPendingFundingRequest(null);
     setPendingActionId(null);
   }, [
+    customerFundingAction,
+    customerFundingActionError,
+    customerFundingActionLoading,
     pendingActionId,
-    pendingFundingRequest?.workspaceId,
-    status?.customerFundingHistory,
+    pendingFundingRequest,
     workspaceId,
   ]);
 
