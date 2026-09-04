@@ -712,6 +712,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
               MYAH_STANDARD_OBJECTS.campaignCreator.universalIdentifier,
               MYAH_STANDARD_OBJECTS.creator.universalIdentifier,
               MYAH_STANDARD_OBJECTS.campaign.universalIdentifier,
+              MYAH_STANDARD_OBJECTS.campaignAccount.universalIdentifier,
               '20202020-3f6b-4425-80ab-e468899ab4b2',
             ],
           ],
@@ -768,6 +769,8 @@ describe('outreach email approval and send (PostgreSQL)', () => {
           effectiveDailyCap: 1,
         }),
       } as never,
+      {} as never,
+      { assertConnectedAccountSendable: async () => undefined } as never,
     );
     project = jest.fn().mockResolvedValue(undefined);
     const projector = new ActionReceiptProjectorService(
