@@ -1405,6 +1405,8 @@ describe('Myah standard metadata contract', () => {
       '113a57a6-701b-5595-bfbf-f433a198ec5e';
     const isDefaultFieldUniversalIdentifier =
       '19f14753-19a6-53fd-ae1e-45dd834b0470';
+    const messageChannelFieldUniversalIdentifier =
+      '8b1fe2fa-a30c-5196-a052-b2a13c31aedc';
     const campaignAccountsFieldUniversalIdentifier =
       '63ca6750-f2dc-5ff1-9e7f-a1b98a94cb86';
     const outreachActionCampaignAccountIdFieldUniversalIdentifier =
@@ -1421,6 +1423,9 @@ describe('Myah standard metadata contract', () => {
     const searchFieldMetadata = Object.values(
       result.allFlatEntityMaps.flatSearchFieldMetadataMaps
         .byUniversalIdentifier,
+    ).filter(isDefined);
+    const views = Object.values(
+      result.allFlatEntityMaps.flatViewMaps.byUniversalIdentifier,
     ).filter(isDefined);
     const objectPermissions = Object.values(
       mapsWithPermissions.flatObjectPermissionMaps.byUniversalIdentifier,
@@ -1474,6 +1479,16 @@ describe('Myah standard metadata contract', () => {
       isNullable: false,
       defaultValue: false,
     });
+    expect(fieldMetadata[messageChannelFieldUniversalIdentifier]).toMatchObject(
+      {
+        universalIdentifier: messageChannelFieldUniversalIdentifier,
+        objectMetadataUniversalIdentifier:
+          campaignAccountObjectUniversalIdentifier,
+        name: 'messageChannelId',
+        type: FieldMetadataType.TEXT,
+        isNullable: true,
+      },
+    );
     expect(
       fieldMetadata[campaignAccountsFieldUniversalIdentifier],
     ).toMatchObject({
@@ -1526,6 +1541,13 @@ describe('Myah standard metadata contract', () => {
     });
     expect(
       searchFieldMetadata.filter(
+        ({ objectMetadataUniversalIdentifier }) =>
+          objectMetadataUniversalIdentifier ===
+          campaignAccountObjectUniversalIdentifier,
+      ),
+    ).toHaveLength(0);
+    expect(
+      views.filter(
         ({ objectMetadataUniversalIdentifier }) =>
           objectMetadataUniversalIdentifier ===
           campaignAccountObjectUniversalIdentifier,
