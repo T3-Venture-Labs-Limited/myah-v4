@@ -43,8 +43,9 @@ describe('ImapSmtpMessageOutboundService', () => {
     closeClient,
   } as unknown as ImapClientProvider;
   const sendMail = jest.fn();
+  const verify = jest.fn();
   const smtpClientProvider = {
-    getClient: jest.fn().mockResolvedValue({ sendMail }),
+    getClient: jest.fn().mockResolvedValue({ sendMail, verify }),
   } as unknown as SmtpClientProvider;
   const draftsFolderService = {
     findOrCreateDraftsFolder: jest.fn().mockResolvedValue({ path: 'Drafts' }),
@@ -61,6 +62,7 @@ describe('ImapSmtpMessageOutboundService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sendMail.mockResolvedValue({ accepted: ['recipient@example.com'] });
+    verify.mockResolvedValue(true);
     append.mockResolvedValue({ uid: 42 });
     getMailboxLock.mockResolvedValue({ release: releaseLock });
     draftsFolderService.findOrCreateDraftsFolder = jest
@@ -78,6 +80,14 @@ describe('ImapSmtpMessageOutboundService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('preflights SMTP credentials without sending or creating a draft', async () => {
+    await service.assertSendable(buildConnectedAccount());
+
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(append).not.toHaveBeenCalled();
   });
 
   it('keeps SMTP acceptance when the best-effort IMAP Sent copy fails', async () => {
