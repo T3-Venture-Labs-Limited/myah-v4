@@ -1590,7 +1590,7 @@ msgid "Add \"{trimmedName}\" to options"
 msgstr "Lägg till \"{trimmedName}\" i alternativ"
 
 #. js-lingui-id: lvbgDR
-#. placeholder {0}: formatUsdCents(selectedPreset.principalCents).replace('.00', '')
+#. placeholder {0}: formatUsdWholeDollars(principalCents)
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "Add {0} credit"
 msgstr ""
@@ -6660,6 +6660,11 @@ msgstr "Anpassad"
 msgid "Custom AI Models"
 msgstr ""
 
+#. js-lingui-id: cV+1xZ
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Custom amount"
+msgstr ""
+
 #. js-lingui-id: OaTurC
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 msgid "Custom apps"
@@ -8816,6 +8821,13 @@ msgstr ""
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx
 msgid "Enter a value to store in database"
 msgstr "Ange ett värde att lagra i databasen"
+
+#. js-lingui-id: f8THyZ
+#. placeholder {0}: formatUsdWholeDollars(customerFundingPolicy.minimumPrincipalCents)
+#. placeholder {1}: formatUsdWholeDollars(customerFundingPolicy.maximumPrincipalCents)
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Enter a whole-dollar amount from {0} to {1}."
+msgstr ""
 
 #. js-lingui-id: P/e64M
 #: src/pages/settings/ai/components/SettingsAgentSettingsTab.tsx
@@ -18426,7 +18438,7 @@ msgid "Retry"
 msgstr "Återförsök"
 
 #. js-lingui-id: 2oJwet
-#. placeholder {0}: formatUsdCents(selectedPreset.principalCents).replace('.00', '')
+#. placeholder {0}: formatUsdWholeDollars(principalCents)
 #: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
 msgid "Retry {0} credit"
 msgstr ""
@@ -21726,11 +21738,6 @@ msgstr ""
 #. js-lingui-id: c82Ji/
 #: src/modules/ai/components/AiChatApprovalCard.tsx
 msgid "The reply will be sent to the existing conversation."
-msgstr ""
-
-#. js-lingui-id: 7KjM3t
-#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
-msgid "The selected amount is prepaid principal, plus applicable tax. Purchased AI credit expires 12 months after successful payment."
 msgstr ""
 
 #. js-lingui-id: wxyrqd
@@ -25262,6 +25269,11 @@ msgstr "Din leverantörs API-nyckel för autentisering"
 #. js-lingui-id: xfhFiy
 #: src/modules/settings/workspace/components/managed-email/ManagedEmailProgress.tsx
 msgid "Your quote and order identity are stored."
+msgstr ""
+
+#. js-lingui-id: GRra6D
+#: src/modules/settings/billing/components/SettingsWorkspaceBillingContent.tsx
+msgid "Your saved payment method will be charged immediately. Applicable tax may be added. Purchased credit expires 12 months after payment. Purchases are non-refundable except where law requires."
 msgstr ""
 
 #. js-lingui-id: 319YPG

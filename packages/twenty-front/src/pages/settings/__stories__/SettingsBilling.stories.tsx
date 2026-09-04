@@ -40,11 +40,12 @@ const healthyWorkspaceViewModel = {
   customerFundingAvailable: true,
   customerFundingBillingSummary: billingSummary,
   customerFundingPaymentMethodReady: true,
-  customerFundingPresets: [
-    { id: 'AI_25_USD', principalCents: 2_500 },
-    { id: 'AI_50_USD', principalCents: 5_000 },
-    { id: 'AI_100_USD', principalCents: 10_000 },
-  ],
+  customerFundingPolicy: {
+    incrementCents: 100,
+    maximumPrincipalCents: 50_000,
+    minimumPrincipalCents: 500,
+    suggestedPrincipalCents: [2_500, 5_000, 10_000],
+  },
   fundingHistory: [
     {
       actionRequired: false,
@@ -54,7 +55,6 @@ const healthyWorkspaceViewModel = {
       fundingType: 'PURCHASED',
       id: 'funding-active',
       invoiceUrl: '#invoice-active',
-      presetId: 'AI_25_USD',
       principalCents: 2_500,
       state: 'BALANCE_ACTIVE',
       taxCents: 200,
@@ -106,6 +106,13 @@ export const HealthyFundedWorkspace: Story = {
     await expect(
       canvas.findByRole('button', { name: '$25' }),
     ).resolves.toBeVisible();
+    const customAmountInput = await canvas.findByRole('textbox', {
+      name: 'Custom amount',
+    });
+    await userEvent.type(customAmountInput, '37');
+    await expect(
+      canvas.findByRole('button', { name: 'Add $37 credit' }),
+    ).resolves.toBeVisible();
     await expect(
       canvas.findByText('Total collected: $27.00'),
     ).resolves.toBeVisible();
@@ -156,7 +163,7 @@ export const MissingPaymentDetails: Story = {
   },
 };
 
-export const MobileFixedTopUps: Story = {
+export const MobileCustomTopUps: Story = {
   parameters: {
     componentCanvas: true,
     layout: 'fullscreen',
@@ -171,13 +178,13 @@ export const MobileFixedTopUps: Story = {
     },
   },
   render: () => {
-    const onRequestTopUp = fn();
+    const onRequestFunding = fn();
 
     return (
       <MemoryRouter>
         <div data-testid="billing-mobile-canvas">
           <SettingsWorkspaceBillingContent
-            onRequestTopUp={onRequestTopUp}
+            onRequestFunding={onRequestFunding}
             viewModel={healthyWorkspaceViewModel}
           />
         </div>
@@ -186,9 +193,12 @@ export const MobileFixedTopUps: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '$50' }));
+    const customAmountInput = await canvas.findByRole('textbox', {
+      name: 'Custom amount',
+    });
+    await userEvent.type(customAmountInput, '500');
     await expect(
-      canvas.findByRole('button', { name: 'Add $50 credit' }),
+      canvas.findByRole('button', { name: 'Add $500 credit' }),
     ).resolves.toBeVisible();
     const mobileCanvas = await canvas.findByTestId('billing-mobile-canvas');
     expect(mobileCanvas.scrollWidth).toBeLessThanOrEqual(

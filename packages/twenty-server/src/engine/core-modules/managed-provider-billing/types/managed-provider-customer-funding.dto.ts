@@ -1,4 +1,4 @@
-import { Field, ObjectType } from '@nestjs/graphql';
+import { Field, Int, ObjectType } from '@nestjs/graphql';
 
 @ObjectType('ManagedProviderCustomerFundingBillingAddress')
 export class ManagedProviderCustomerFundingBillingAddressDTO {
@@ -67,13 +67,19 @@ export class ManagedProviderCustomerFundingBillingSummaryDTO {
   taxId: ManagedProviderCustomerFundingTaxIdSummaryDTO | null;
 }
 
-@ObjectType('ManagedProviderAiTopUpPreset')
-export class ManagedProviderAiTopUpPresetDTO {
-  @Field(() => String)
-  id: string;
+@ObjectType('ManagedProviderAiTopUpPolicy')
+export class ManagedProviderAiTopUpPolicyDTO {
+  @Field(() => Int)
+  incrementCents: number;
 
-  @Field(() => String)
-  principalCents: string;
+  @Field(() => Int)
+  minimumPrincipalCents: number;
+
+  @Field(() => Int)
+  maximumPrincipalCents: number;
+
+  @Field(() => [Int])
+  suggestedPrincipalCents: readonly number[];
 }
 
 @ObjectType('ManagedProviderCustomerFundingHistoryItem')
@@ -86,9 +92,6 @@ export class ManagedProviderCustomerFundingHistoryItemDTO {
 
   @Field(() => String)
   state: string;
-
-  @Field(() => String, { nullable: true })
-  presetId: string | null;
 
   @Field(() => String)
   principalCents: string;

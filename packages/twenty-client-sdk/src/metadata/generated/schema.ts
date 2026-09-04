@@ -1553,17 +1553,18 @@ export interface ManagedProviderCustomerFundingBillingSummary {
     __typename: 'ManagedProviderCustomerFundingBillingSummary'
 }
 
-export interface ManagedProviderAiTopUpPreset {
-    id: Scalars['String']
-    principalCents: Scalars['String']
-    __typename: 'ManagedProviderAiTopUpPreset'
+export interface ManagedProviderAiTopUpPolicy {
+    incrementCents: Scalars['Int']
+    minimumPrincipalCents: Scalars['Int']
+    maximumPrincipalCents: Scalars['Int']
+    suggestedPrincipalCents: Scalars['Int'][]
+    __typename: 'ManagedProviderAiTopUpPolicy'
 }
 
 export interface ManagedProviderCustomerFundingHistoryItem {
     id: Scalars['String']
     fundingType: Scalars['String']
     state: Scalars['String']
-    presetId?: Scalars['String']
     principalCents: Scalars['String']
     taxCents?: Scalars['String']
     collectedTotalCents?: Scalars['String']
@@ -1596,7 +1597,7 @@ export interface ManagedProviderBillingStatus {
     reconciliationRequiredOperationCount: Scalars['Int']
     customerFundingAvailable: Scalars['Boolean']
     customerFundingPaymentMethodReady: Scalars['Boolean']
-    customerFundingPresets: ManagedProviderAiTopUpPreset[]
+    customerFundingPolicy: ManagedProviderAiTopUpPolicy
     customerFundingHistory: ManagedProviderCustomerFundingHistoryItem[]
     customerFundingBillingSummary?: ManagedProviderCustomerFundingBillingSummary
     __typename: 'ManagedProviderBillingStatus'
@@ -5088,9 +5089,11 @@ export interface ManagedProviderCustomerFundingBillingSummaryGenqlSelection{
     __scalar?: boolean | number
 }
 
-export interface ManagedProviderAiTopUpPresetGenqlSelection{
-    id?: boolean | number
-    principalCents?: boolean | number
+export interface ManagedProviderAiTopUpPolicyGenqlSelection{
+    incrementCents?: boolean | number
+    minimumPrincipalCents?: boolean | number
+    maximumPrincipalCents?: boolean | number
+    suggestedPrincipalCents?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -5099,7 +5102,6 @@ export interface ManagedProviderCustomerFundingHistoryItemGenqlSelection{
     id?: boolean | number
     fundingType?: boolean | number
     state?: boolean | number
-    presetId?: boolean | number
     principalCents?: boolean | number
     taxCents?: boolean | number
     collectedTotalCents?: boolean | number
@@ -5135,7 +5137,7 @@ export interface ManagedProviderBillingStatusGenqlSelection{
     reconciliationRequiredOperationCount?: boolean | number
     customerFundingAvailable?: boolean | number
     customerFundingPaymentMethodReady?: boolean | number
-    customerFundingPresets?: ManagedProviderAiTopUpPresetGenqlSelection
+    customerFundingPolicy?: ManagedProviderAiTopUpPolicyGenqlSelection
     customerFundingHistory?: ManagedProviderCustomerFundingHistoryItemGenqlSelection
     customerFundingBillingSummary?: ManagedProviderCustomerFundingBillingSummaryGenqlSelection
     __typename?: boolean | number
@@ -6970,7 +6972,7 @@ export interface MutationGenqlSelection{
     generatePlaygroundToken?: AuthTokenGenqlSelection
     emailPasswordResetLink?: (EmailPasswordResetLinkGenqlSelection & { __args: {email: Scalars['String'], workspaceId?: (Scalars['UUID'] | null)} })
     updatePasswordViaResetToken?: (InvalidatePasswordGenqlSelection & { __args: {passwordResetToken: Scalars['String'], newPassword: Scalars['String']} })
-    requestManagedProviderCustomerFunding?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {preset: Scalars['String'], idempotencyKey: Scalars['String']} })
+    requestManagedProviderCustomerFunding?: (ManagedProviderCustomerFundingHistoryItemGenqlSelection & { __args: {principalCents: Scalars['Int'], idempotencyKey: Scalars['String']} })
     prepareManagedProviderCustomerFundingPaymentMethod?: ManagedProviderCustomerFundingPaymentMethodGenqlSelection
     completeManagedProviderCustomerFundingPaymentMethod?: (ManagedProviderCustomerFundingPaymentMethodGenqlSelection & { __args: {setupIntentId?: (Scalars['String'] | null), name: Scalars['String'], line1: Scalars['String'], line2?: (Scalars['String'] | null), city: Scalars['String'], state?: (Scalars['String'] | null), postalCode: Scalars['String'], country: Scalars['String'], taxIdType?: (Scalars['String'] | null), taxIdValue?: (Scalars['String'] | null)} })
     prepareManagedProviderCustomerFundingPaymentAction?: (ManagedProviderCustomerFundingPaymentActionGenqlSelection & { __args: {actionId: Scalars['String']} })
@@ -8642,10 +8644,10 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     
 
 
-    const ManagedProviderAiTopUpPreset_possibleTypes: string[] = ['ManagedProviderAiTopUpPreset']
-    export const isManagedProviderAiTopUpPreset = (obj?: { __typename?: any } | null): obj is ManagedProviderAiTopUpPreset => {
-      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderAiTopUpPreset"')
-      return ManagedProviderAiTopUpPreset_possibleTypes.includes(obj.__typename)
+    const ManagedProviderAiTopUpPolicy_possibleTypes: string[] = ['ManagedProviderAiTopUpPolicy']
+    export const isManagedProviderAiTopUpPolicy = (obj?: { __typename?: any } | null): obj is ManagedProviderAiTopUpPolicy => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isManagedProviderAiTopUpPolicy"')
+      return ManagedProviderAiTopUpPolicy_possibleTypes.includes(obj.__typename)
     }
     
 

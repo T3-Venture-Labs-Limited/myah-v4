@@ -81,12 +81,14 @@ const createService = ({
   customOpenRouter = false,
   enabled = true,
   eligible = true,
+  eligibleWorkspaceIds = eligible ? ['workspace-id'] : [],
   gemmaEligible = true,
   operationState = ManagedProviderOperationState.RESERVED,
 }: {
   customOpenRouter?: boolean;
   enabled?: boolean;
   eligible?: boolean;
+  eligibleWorkspaceIds?: string[];
   gemmaEligible?: boolean;
   operationState?: ManagedProviderOperationState;
 } = {}) => {
@@ -113,9 +115,7 @@ const createService = ({
         MANAGED_OPENROUTER_CASH_PAID_MICROUSD: '105500000',
         MANAGED_OPENROUTER_USABLE_CREDITS_MICROUSD: '100000000',
         MANAGED_OPENROUTER_MULTIPLIER_EVIDENCE_VERSION: 'topup-2026-07-19',
-        MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: eligible
-          ? ['workspace-id']
-          : [],
+        MANAGED_OPENROUTER_FUNDING_WORKSPACE_IDS: eligibleWorkspaceIds,
         MANAGED_OPENROUTER_GEMMA_TEST_WORKSPACE_IDS: gemmaEligible
           ? ['workspace-id']
           : [],
@@ -142,10 +142,12 @@ const wrap = ({
   executionSurface = 'chat',
   modelConfig: wrappedModelConfig = modelConfig,
   providerName = 'openrouter',
+  workspaceId = 'workspace-id',
 }: {
   model: LanguageModel;
   modelConfig?: AiModelConfig;
   service: ManagedOpenRouterModelService;
+  workspaceId?: string;
   executionSurface?:
     | 'rest-generate'
     | 'graphql-agent'
@@ -162,7 +164,7 @@ const wrap = ({
     modelConfig: wrappedModelConfig,
     providerName,
     requestIdRoot: 'chat-turn-1',
-    workspaceId: 'workspace-id',
+    workspaceId,
   });
 
   return wrappedModel as LanguageModelV3;
@@ -193,6 +195,28 @@ describe('ManagedOpenRouterModelService', () => {
     );
     expect(doGenerate).not.toHaveBeenCalled();
     expect(operationService.reserveOperation).not.toHaveBeenCalled();
+  });
+
+  it('admits an unlisted workspace on the wildcard funding allowlist', async () => {
+    const wildcardWorkspaceId = 'unlisted-workspace-id';
+    const { operationService, service } = createService({
+      eligibleWorkspaceIds: ['*'],
+    });
+    const { doGenerate, model } = createProviderModel();
+    const managedModel = wrap({
+      model,
+      service,
+      workspaceId: wildcardWorkspaceId,
+    });
+
+    await expect(
+      managedModel.doGenerate({ prompt: [] } as never),
+    ).resolves.toBeDefined();
+    expect(operationService.reserveOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: wildcardWorkspaceId }),
+      { rejectReplay: true },
+    );
+    expect(doGenerate).toHaveBeenCalledTimes(1);
   });
 
   it('leaves an explicitly named custom OpenRouter provider on the BYOK path', () => {
