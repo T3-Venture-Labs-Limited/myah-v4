@@ -20,6 +20,10 @@ import {
   MyahCampaignAccountCreateOnePreQueryHook,
   MyahCampaignAccountDeleteManyPreQueryHook,
   MyahCampaignAccountDeleteOnePreQueryHook,
+  MyahCampaignAccountDestroyManyPreQueryHook,
+  MyahCampaignAccountDestroyOnePreQueryHook,
+  MyahCampaignAccountRestoreManyPreQueryHook,
+  MyahCampaignAccountRestoreOnePreQueryHook,
   MyahCampaignAccountUpdateManyPreQueryHook,
   MyahCampaignAccountUpdateOnePreQueryHook,
 } from 'src/modules/myah-campaign/query-hooks/myah-campaign-account-write.pre-query.hooks';
@@ -245,6 +249,10 @@ describe('Campaign Account generic-write query hooks', () => {
     [MyahCampaignAccountUpdateManyPreQueryHook, 'campaignAccount.updateMany'],
     [MyahCampaignAccountDeleteOnePreQueryHook, 'campaignAccount.deleteOne'],
     [MyahCampaignAccountDeleteManyPreQueryHook, 'campaignAccount.deleteMany'],
+    [MyahCampaignAccountDestroyOnePreQueryHook, 'campaignAccount.destroyOne'],
+    [MyahCampaignAccountDestroyManyPreQueryHook, 'campaignAccount.destroyMany'],
+    [MyahCampaignAccountRestoreOnePreQueryHook, 'campaignAccount.restoreOne'],
+    [MyahCampaignAccountRestoreManyPreQueryHook, 'campaignAccount.restoreMany'],
   ] as const;
 
   it.each(accountHookCases)(

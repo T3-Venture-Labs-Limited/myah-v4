@@ -72,3 +72,47 @@ export class MyahCampaignAccountDeleteManyPreQueryHook implements WorkspacePreQu
     return rejectGenericCampaignAccountWrite();
   }
 }
+
+@WorkspaceQueryHook('campaignAccount.destroyOne')
+export class MyahCampaignAccountDestroyOnePreQueryHook implements WorkspacePreQueryHookInstance {
+  async execute(
+    _authContext: WorkspaceAuthContext,
+    _objectName: string,
+    _payload: ResolverArgs,
+  ): Promise<ResolverArgs> {
+    return rejectGenericCampaignAccountWrite();
+  }
+}
+
+@WorkspaceQueryHook('campaignAccount.destroyMany')
+export class MyahCampaignAccountDestroyManyPreQueryHook implements WorkspacePreQueryHookInstance {
+  async execute(
+    _authContext: WorkspaceAuthContext,
+    _objectName: string,
+    _payload: ResolverArgs,
+  ): Promise<ResolverArgs> {
+    return rejectGenericCampaignAccountWrite();
+  }
+}
+
+@WorkspaceQueryHook('campaignAccount.restoreOne')
+export class MyahCampaignAccountRestoreOnePreQueryHook implements WorkspacePreQueryHookInstance {
+  async execute(
+    _authContext: WorkspaceAuthContext,
+    _objectName: string,
+    _payload: ResolverArgs,
+  ): Promise<ResolverArgs> {
+    return rejectGenericCampaignAccountWrite();
+  }
+}
+
+@WorkspaceQueryHook('campaignAccount.restoreMany')
+export class MyahCampaignAccountRestoreManyPreQueryHook implements WorkspacePreQueryHookInstance {
+  async execute(
+    _authContext: WorkspaceAuthContext,
+    _objectName: string,
+    _payload: ResolverArgs,
+  ): Promise<ResolverArgs> {
+    return rejectGenericCampaignAccountWrite();
+  }
+}

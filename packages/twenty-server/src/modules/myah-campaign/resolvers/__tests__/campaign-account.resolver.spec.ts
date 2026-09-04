@@ -1,4 +1,4 @@
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, PIPES_METADATA } from '@nestjs/common/constants';
 import { validate } from 'class-validator';
 
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
@@ -9,6 +9,7 @@ import {
   CampaignEmailAccountLinkInput,
   LinkCampaignEmailAccountInput,
 } from 'src/modules/myah-campaign/dtos/campaign-account.dto';
+import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { CampaignAccountResolver } from 'src/modules/myah-campaign/resolvers/campaign-account.resolver';
 
 jest.mock(
@@ -46,10 +47,25 @@ describe('CampaignAccountResolver', () => {
     await expect(validate(input)).resolves.toHaveLength(1);
   });
 
-  it('requires workspace authentication and custom permission guards', () => {
+  it.each([
+    [LinkCampaignEmailAccountInput, 'connectedAccountId'],
+    [CampaignEmailAccountLinkInput, 'campaignAccountId'],
+  ])('validates the secondary UUID field for %s', async (Input, field) => {
+    const input = Object.assign(new Input(), {
+      campaignId,
+      [field]: 'not-a-uuid',
+    });
+
+    await expect(validate(input)).resolves.toHaveLength(1);
+  });
+
+  it('requires workspace authentication, custom permission guards, and resolver validation', () => {
     expect(
       Reflect.getMetadata(GUARDS_METADATA, CampaignAccountResolver),
     ).toEqual([WorkspaceAuthGuard, CustomPermissionGuard]);
+    expect(
+      Reflect.getMetadata(PIPES_METADATA, CampaignAccountResolver),
+    ).toEqual([ResolverValidationPipe]);
   });
 
   it.each([

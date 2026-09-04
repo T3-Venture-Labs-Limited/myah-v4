@@ -119,6 +119,7 @@ export class CampaignAccountService {
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
     return this.mutate(input.campaignId, authContext, async (manager) => {
+      this.assertCampaignUpdatePermission(authContext);
       await this.assertCampaign(input.campaignId, authContext, manager);
       const account = await this.connectedAccountRepository.findOne({
         where: {
@@ -189,6 +190,7 @@ export class CampaignAccountService {
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
     return this.mutate(input.campaignId, authContext, async (manager) => {
+      this.assertCampaignUpdatePermission(authContext);
       await this.assertCampaign(input.campaignId, authContext, manager);
       const campaignAccounts =
         await this.campaignAccountRepository(authContext);
@@ -242,6 +244,7 @@ export class CampaignAccountService {
     authContext: WorkspaceAuthContext,
   ): Promise<CampaignEmailAccountDTO[]> {
     return this.mutate(input.campaignId, authContext, async (manager) => {
+      this.assertCampaignUpdatePermission(authContext);
       await this.assertCampaign(input.campaignId, authContext, manager);
       const campaignAccounts =
         await this.campaignAccountRepository(authContext);
@@ -358,6 +361,22 @@ export class CampaignAccountService {
     });
     if (!options) throw new Error('Role could not be resolved');
     return options;
+  }
+
+  private assertCampaignUpdatePermission(authContext: WorkspaceAuthContext) {
+    const options = this.permissionOptions(authContext);
+    if ('shouldBypassPermissionChecks' in options) return;
+    const context = getWorkspaceContext();
+    const objectId = context.objectIdByNameSingular.campaign;
+    const isUnion = 'unionOf' in options;
+    const roleIds = isUnion ? options.unionOf : options.intersectionOf;
+    const allowed = roleIds.map(
+      (roleId) =>
+        context.permissionsPerRoleId[roleId]?.[objectId]
+          ?.canUpdateObjectRecords === true,
+    );
+    if (isUnion ? !allowed.some(Boolean) : !allowed.every(Boolean))
+      throw new Error('Campaign update permission is required');
   }
 
   private async campaignRepository(authContext: WorkspaceAuthContext) {

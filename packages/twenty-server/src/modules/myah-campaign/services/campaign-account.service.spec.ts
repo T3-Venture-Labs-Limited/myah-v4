@@ -115,6 +115,7 @@ const createHarness = (
     messageChannels?: Row[];
     campaigns?: Row[];
   } = {},
+  options: { testWorkspaceContext?: ORMWorkspaceContext } = {},
 ) => {
   const rows = {
     campaign: [
@@ -137,7 +138,10 @@ const createHarness = (
   const transactionManager = { query: jest.fn().mockResolvedValue(undefined) };
   const orm = {
     executeInWorkspaceContext: jest.fn(async (callback: () => unknown) =>
-      withWorkspaceContext(workspaceContext, callback),
+      withWorkspaceContext(
+        options.testWorkspaceContext ?? workspaceContext,
+        callback,
+      ),
     ),
     getGlobalWorkspaceDataSource: jest.fn().mockResolvedValue({
       transaction: jest.fn(async (callback: (manager: unknown) => unknown) =>
@@ -595,6 +599,74 @@ describe('CampaignAccountService', () => {
         authContext,
       ),
     ).rejects.toThrow('not found');
+  });
+
+  it('requires Campaign update permission for linking, setting a default, and removing a linked account', async () => {
+    const readOnlyAuthContext = {
+      type: 'user',
+      workspace: { id: workspaceId },
+      userWorkspaceId: 'user-workspace-1',
+    } as never;
+    const readOnlyWorkspaceContext = {
+      authContext: readOnlyAuthContext,
+      userWorkspaceRoleMap: { 'user-workspace-1': 'role-1' },
+      apiKeyRoleMap: {},
+      objectIdByNameSingular: { campaign: 'campaign-object' },
+      permissionsPerRoleId: {
+        'role-1': {
+          'campaign-object': {
+            canReadObjectRecords: true,
+            canUpdateObjectRecords: false,
+          },
+        },
+      },
+    } as unknown as ORMWorkspaceContext;
+    const harness = createHarness(
+      {
+        campaignAccounts: [
+          {
+            id: 'linked',
+            campaignId,
+            connectedAccountId: accountId,
+            messageChannelId: channelId,
+            channel: 'EMAIL',
+            isDefault: true,
+          },
+        ],
+        connectedAccounts: [
+          connectedAccount(),
+          connectedAccount({ id: secondAccountId, handle: 'team@brand.test' }),
+        ],
+        messageChannels: [
+          messageChannel(),
+          messageChannel({
+            id: secondChannelId,
+            connectedAccountId: secondAccountId,
+            handle: 'team@brand.test',
+          }),
+        ],
+      },
+      { testWorkspaceContext: readOnlyWorkspaceContext },
+    );
+
+    await expect(
+      harness.service.link(
+        { campaignId, connectedAccountId: secondAccountId },
+        readOnlyAuthContext,
+      ),
+    ).rejects.toThrow('Campaign update permission is required');
+    await expect(
+      harness.service.setDefault(
+        { campaignId, campaignAccountId: 'linked' },
+        readOnlyAuthContext,
+      ),
+    ).rejects.toThrow('Campaign update permission is required');
+    await expect(
+      harness.service.remove(
+        { campaignId, campaignAccountId: 'linked' },
+        readOnlyAuthContext,
+      ),
+    ).rejects.toThrow('Campaign update permission is required');
   });
 
   it('does not cross workspace boundaries', async () => {
