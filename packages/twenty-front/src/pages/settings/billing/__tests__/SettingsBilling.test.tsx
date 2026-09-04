@@ -2,6 +2,8 @@ import {
   GET_MANAGED_EMAIL_SUBSCRIPTIONS,
   GET_MANAGED_PROVIDER_BILLING_STATUS,
   GET_MANAGED_PROVIDER_CUSTOMER_FUNDING_ACTION,
+  PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION,
+  PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD,
 } from '@/settings/billing/graphql/managedProviderCustomerFunding';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
@@ -12,6 +14,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { print } from 'graphql';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
@@ -22,6 +25,7 @@ import { SettingsBilling } from '~/pages/settings/billing/SettingsBilling';
 const mockRequestFunding = jest.fn();
 const mockUseMutation = jest.fn();
 const mockUseQuery = jest.fn();
+const mockUseStripePromise = jest.fn();
 let customerFundingActionError: Error | undefined;
 let customerFundingActionState: string | undefined;
 let customerFundingActionDetails: Record<string, unknown> | undefined;
@@ -29,6 +33,11 @@ let customerFundingActionDetails: Record<string, unknown> | undefined;
 jest.mock('@apollo/client/react', () => ({
   useMutation: (...args: unknown[]) => mockUseMutation(...args),
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
+}));
+
+jest.mock('@/settings/billing/hooks/useStripePromise', () => ({
+  useStripePromise: (publishableKey?: string | null) =>
+    mockUseStripePromise(publishableKey),
 }));
 
 jest.mock('~/hooks/useNavigateSettings', () => ({
@@ -104,6 +113,9 @@ describe('SettingsBilling customer funding idempotency', () => {
     mockRequestFunding.mockReset();
     mockUseMutation.mockReset();
     mockUseMutation.mockReturnValue([mockRequestFunding]);
+    mockUseStripePromise.mockReset();
+    mockUseStripePromise.mockReturnValue(null);
+    fundingStatus.managedProviderBillingStatus.customerFundingPaymentMethodReady = true;
     mockUseQuery.mockReset();
     customerFundingActionError = undefined;
     customerFundingActionState = 'AWAITING_PAYMENT';
@@ -183,6 +195,46 @@ describe('SettingsBilling customer funding idempotency', () => {
     );
     expect(readPendingFundingRequest()).not.toHaveProperty('presetCode');
   });
+
+  it.each([
+    { buttonName: 'Add $5 credit', enterAmount: true },
+    { buttonName: 'Update payment details', enterAmount: false },
+  ])(
+    'opens managed payment setup with its Stripe key from $buttonName',
+    async ({ buttonName, enterAmount }) => {
+      const preparePaymentMethod = jest.fn().mockResolvedValue({
+        data: {
+          prepareManagedProviderCustomerFundingPaymentMethod: {
+            billingSummary: null,
+            clientSecret: 'seti_client_secret',
+            publishableKey: 'pk_test_managed',
+            ready: false,
+            setupIntentId: 'seti_1',
+          },
+        },
+      });
+
+      fundingStatus.managedProviderBillingStatus.customerFundingPaymentMethodReady = false;
+      mockUseMutation.mockImplementation((mutation) =>
+        mutation === PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_METHOD
+          ? [preparePaymentMethod]
+          : [mockRequestFunding],
+      );
+
+      renderBilling();
+      if (enterAmount) {
+        await enterCustomAmount('5');
+      }
+      fireEvent.click(await screen.findByRole('button', { name: buttonName }));
+
+      await waitFor(() =>
+        expect(preparePaymentMethod).toHaveBeenCalledTimes(1),
+      );
+      await waitFor(() =>
+        expect(mockUseStripePromise).toHaveBeenCalledWith('pk_test_managed'),
+      );
+    },
+  );
 
   it('reuses the workspace-scoped cents and idempotency key after a response-loss reload', async () => {
     mockRequestFunding.mockRejectedValueOnce(new Error('response lost'));
@@ -312,6 +364,12 @@ describe('SettingsBilling customer funding idempotency', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('requests the managed Stripe key for payment authentication', () => {
+    expect(
+      print(PREPARE_MANAGED_PROVIDER_CUSTOMER_FUNDING_PAYMENT_ACTION),
+    ).toContain('publishableKey');
+  });
+
   it('shows a capped action-required funding action in history', async () => {
     localStorage.setItem(
       pendingFundingStorageKey,
@@ -334,6 +392,14 @@ describe('SettingsBilling customer funding idempotency', () => {
       taxCents: null,
       updatedAt: '2026-08-29T10:00:00.000Z',
     };
+    mockRequestFunding.mockResolvedValueOnce({
+      data: {
+        prepareManagedProviderCustomerFundingPaymentAction: {
+          clientSecret: 'pi_client_secret',
+          publishableKey: 'pk_test_managed',
+        },
+      },
+    });
 
     renderBilling();
 
@@ -355,6 +421,9 @@ describe('SettingsBilling customer funding idempotency', () => {
       expect(mockRequestFunding).toHaveBeenCalledWith({
         variables: { actionId: 'capped-action-id' },
       }),
+    );
+    await waitFor(() =>
+      expect(mockUseStripePromise).toHaveBeenCalledWith('pk_test_managed'),
     );
   });
 

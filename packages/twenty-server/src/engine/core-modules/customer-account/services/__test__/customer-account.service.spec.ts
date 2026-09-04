@@ -7,6 +7,7 @@ import {
 } from 'src/engine/core-modules/customer-account/services/customer-account.service';
 import { CustomerAccountEntity } from 'src/engine/core-modules/customer-account/entities/customer-account.entity';
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 describe('CustomerAccountService', () => {
   let service: CustomerAccountService;
@@ -16,6 +17,13 @@ describe('CustomerAccountService', () => {
   }>;
   let myahWorkspaceInstallationRepository: jest.Mocked<{
     create: jest.Mock;
+    findOneBy: jest.Mock;
+    manager: { transaction: jest.Mock };
+    save: jest.Mock;
+  }>;
+  let transactionManager: jest.Mocked<{
+    create: jest.Mock;
+    findOne: jest.Mock;
     findOneBy: jest.Mock;
     save: jest.Mock;
   }>;
@@ -42,6 +50,7 @@ describe('CustomerAccountService', () => {
             create: jest.fn(),
             findOneBy: jest.fn(),
             save: jest.fn(),
+            manager: { transaction: jest.fn() },
           },
         },
       ],
@@ -53,6 +62,15 @@ describe('CustomerAccountService', () => {
     );
     myahWorkspaceInstallationRepository = module.get(
       getRepositoryToken(MyahWorkspaceInstallationEntity),
+    );
+    transactionManager = {
+      create: jest.fn(),
+      findOne: jest.fn(),
+      findOneBy: jest.fn(),
+      save: jest.fn(),
+    };
+    myahWorkspaceInstallationRepository.manager.transaction.mockImplementation(
+      (callback) => callback(transactionManager),
     );
   });
 
@@ -90,6 +108,69 @@ describe('CustomerAccountService', () => {
     expect(myahWorkspaceInstallationRepository.findOneBy).toHaveBeenCalledWith({
       workspaceId,
     });
+  });
+
+  it('reuses an existing installation after locking its workspace', async () => {
+    const workspace = { id: workspaceId };
+    const installation = { customerAccountId, workspaceId };
+
+    transactionManager.findOne.mockResolvedValue(workspace);
+    transactionManager.findOneBy.mockResolvedValue(installation);
+
+    await expect(
+      service.ensureWorkspaceInstallation(workspaceId),
+    ).resolves.toBe(installation);
+
+    expect(transactionManager.findOne).toHaveBeenCalledWith(WorkspaceEntity, {
+      lock: { mode: 'pessimistic_write' },
+      where: { id: workspaceId },
+    });
+    expect(transactionManager.findOneBy).toHaveBeenCalledWith(
+      MyahWorkspaceInstallationEntity,
+      { workspaceId },
+    );
+    expect(transactionManager.create).not.toHaveBeenCalled();
+    expect(transactionManager.save).not.toHaveBeenCalled();
+  });
+
+  it('creates one account and installation transactionally for a new workspace', async () => {
+    const workspace = { id: workspaceId };
+    const customerAccount = { id: customerAccountId };
+    const installation = { customerAccountId, workspaceId };
+
+    transactionManager.findOne.mockResolvedValue(workspace);
+    transactionManager.findOneBy.mockResolvedValue(null);
+    transactionManager.create
+      .mockReturnValueOnce(customerAccount)
+      .mockReturnValueOnce(installation);
+    transactionManager.save
+      .mockResolvedValueOnce(customerAccount)
+      .mockResolvedValueOnce(installation);
+
+    await expect(
+      service.ensureWorkspaceInstallation(workspaceId),
+    ).resolves.toBe(installation);
+
+    expect(transactionManager.create).toHaveBeenNthCalledWith(
+      1,
+      CustomerAccountEntity,
+      {},
+    );
+    expect(transactionManager.save).toHaveBeenNthCalledWith(
+      1,
+      CustomerAccountEntity,
+      customerAccount,
+    );
+    expect(transactionManager.create).toHaveBeenNthCalledWith(
+      2,
+      MyahWorkspaceInstallationEntity,
+      { customerAccountId, workspaceId },
+    );
+    expect(transactionManager.save).toHaveBeenNthCalledWith(
+      2,
+      MyahWorkspaceInstallationEntity,
+      installation,
+    );
   });
 
   it('attaches distinct workspaces to the same customer account', async () => {

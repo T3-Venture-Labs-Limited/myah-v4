@@ -1587,6 +1587,7 @@ export interface ManagedProviderCustomerFundingPaymentMethod {
 
 export interface ManagedProviderCustomerFundingPaymentAction {
     clientSecret: Scalars['String']
+    publishableKey: Scalars['String']
     __typename: 'ManagedProviderCustomerFundingPaymentAction'
 }
 
@@ -5126,6 +5127,7 @@ export interface ManagedProviderCustomerFundingPaymentMethodGenqlSelection{
 
 export interface ManagedProviderCustomerFundingPaymentActionGenqlSelection{
     clientSecret?: boolean | number
+    publishableKey?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }

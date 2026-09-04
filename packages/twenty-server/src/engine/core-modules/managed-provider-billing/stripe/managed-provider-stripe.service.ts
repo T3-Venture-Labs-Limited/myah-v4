@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { IsNull } from 'typeorm';
 
 import { MyahWorkspaceInstallationEntity } from 'src/engine/core-modules/customer-account/entities/myah-workspace-installation.entity';
+import { CustomerAccountService } from 'src/engine/core-modules/customer-account/services/customer-account.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
 import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
@@ -178,6 +179,7 @@ export class ManagedProviderStripeService {
     private readonly injectedStripeClient: Stripe | undefined,
     @InjectWorkspaceScopedRepository(MyahWorkspaceInstallationEntity)
     private readonly installationRepository: WorkspaceScopedRepository<MyahWorkspaceInstallationEntity>,
+    private readonly customerAccountService: CustomerAccountService,
     private readonly twentyConfigService?: TwentyConfigService,
   ) {}
 
@@ -205,7 +207,7 @@ export class ManagedProviderStripeService {
       throw new Error('Stripe SetupIntent did not return a client secret');
     return {
       clientSecret: intent.client_secret,
-      publishableKey: this.publishableKey(),
+      publishableKey: this.getPublishableKey(),
       setupIntentId: intent.id,
       ready: false,
       stripeCustomerId: customerId,
@@ -1136,6 +1138,7 @@ export class ManagedProviderStripeService {
     workspaceId: string,
     metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment,
   ): Promise<string> {
+    await this.customerAccountService.ensureWorkspaceInstallation(workspaceId);
     const installation = await this.installationRepository.findOneBy(
       workspaceId,
       {},
@@ -1214,7 +1217,7 @@ export class ManagedProviderStripeService {
     return this.stripeClient;
   }
 
-  private publishableKey(): string {
+  getPublishableKey(): string {
     const key = this.twentyConfigService?.get('BILLING_STRIPE_PUBLISHABLE_KEY');
     return key ?? '';
   }

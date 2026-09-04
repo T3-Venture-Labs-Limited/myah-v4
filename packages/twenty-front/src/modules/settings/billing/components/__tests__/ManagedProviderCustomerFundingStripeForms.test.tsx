@@ -1,4 +1,7 @@
-import { ManagedProviderCustomerFundingPaymentForm } from '@/settings/billing/components/ManagedProviderCustomerFundingStripeForms';
+import {
+  ManagedProviderCustomerFundingPaymentActionForm,
+  ManagedProviderCustomerFundingPaymentForm,
+} from '@/settings/billing/components/ManagedProviderCustomerFundingStripeForms';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -6,6 +9,13 @@ import { Provider as JotaiProvider } from 'jotai';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
 import { ThemeProvider } from 'twenty-ui/theme-constants';
 import { messages } from '~/locales/generated/en';
+
+const mockUseStripePromise = jest.fn();
+
+jest.mock('@/settings/billing/hooks/useStripePromise', () => ({
+  useStripePromise: (publishableKey?: string | null) =>
+    mockUseStripePromise(publishableKey),
+}));
 
 i18n.load({ [SOURCE_LOCALE]: messages });
 i18n.activate(SOURCE_LOCALE);
@@ -25,6 +35,11 @@ const billingSummary = {
   taxId: null,
 };
 
+beforeEach(() => {
+  mockUseStripePromise.mockReset();
+  mockUseStripePromise.mockReturnValue(null);
+});
+
 const renderPaymentForm = () => {
   const onComplete = jest.fn().mockResolvedValue(undefined);
 
@@ -35,6 +50,7 @@ const renderPaymentForm = () => {
           <ManagedProviderCustomerFundingPaymentForm
             billingSummary={billingSummary}
             clientSecret={null}
+            publishableKey="pk_test_managed"
             onCancel={jest.fn()}
             onComplete={onComplete}
             setupIntentId={null}
@@ -46,6 +62,33 @@ const renderPaymentForm = () => {
 
   return { onComplete };
 };
+
+describe('ManagedProviderCustomerFunding Stripe client', () => {
+  it('uses the managed publishable key for payment-method setup', () => {
+    renderPaymentForm();
+
+    expect(mockUseStripePromise).toHaveBeenCalledWith('pk_test_managed');
+  });
+
+  it('uses the managed publishable key for payment authentication', () => {
+    render(
+      <JotaiProvider>
+        <I18nProvider i18n={i18n}>
+          <ThemeProvider colorScheme="light">
+            <ManagedProviderCustomerFundingPaymentActionForm
+              clientSecret="pi_client_secret"
+              onCancel={jest.fn()}
+              onConfirmed={jest.fn().mockResolvedValue(undefined)}
+              publishableKey="pk_test_managed"
+            />
+          </ThemeProvider>
+        </I18nProvider>
+      </JotaiProvider>,
+    );
+
+    expect(mockUseStripePromise).toHaveBeenCalledWith('pk_test_managed');
+  });
+});
 
 describe('ManagedProviderCustomerFundingPaymentForm tax IDs', () => {
   it('normalizes and trims tax ID fields before submitting billing details', async () => {

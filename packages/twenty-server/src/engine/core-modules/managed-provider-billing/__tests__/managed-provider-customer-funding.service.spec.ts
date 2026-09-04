@@ -228,6 +228,7 @@ describe('ManagedProviderCustomerFundingService', () => {
         setupIntentId: 'seti_id',
         stripeCustomerId,
       }),
+      getPublishableKey: jest.fn().mockReturnValue('pk_test'),
       getWorkspaceBillingDetailsSummary: jest
         .fn()
         .mockResolvedValue(billingSummary),
@@ -1380,6 +1381,7 @@ describe('ManagedProviderCustomerFundingService', () => {
       service.getCustomerFundingPaymentAction({ action, workspaceId }),
     ).resolves.toEqual({
       clientSecret: 'pi_action_secret',
+      publishableKey: 'pk_test',
       paymentIntentId: 'pi_metronome',
       stripeInvoiceId: 'in_metronome',
     });

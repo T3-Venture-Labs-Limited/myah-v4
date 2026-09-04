@@ -89,6 +89,7 @@ type PreparePaymentMethodData = {
 type PreparePaymentActionData = {
   prepareManagedProviderCustomerFundingPaymentAction: {
     clientSecret: string;
+    publishableKey: string;
   };
 };
 type RequestFundingData = {
@@ -251,6 +252,7 @@ export const SettingsBilling = ({
   const [paymentAction, setPaymentAction] = useState<{
     actionId: string;
     clientSecret: string;
+    publishableKey: string;
   } | null>(null);
   const {
     data: managedEmailSubscriptionsData,
@@ -551,11 +553,14 @@ export const SettingsBilling = ({
     setIsSubmitting(true);
     try {
       const result = await preparePaymentAction({ variables: { actionId } });
-      const clientSecret =
-        result.data?.prepareManagedProviderCustomerFundingPaymentAction
-          .clientSecret;
-      if (clientSecret === undefined) throw new Error('Missing payment action');
-      setPaymentAction({ actionId, clientSecret });
+      const preparation =
+        result.data?.prepareManagedProviderCustomerFundingPaymentAction;
+      const clientSecret = preparation?.clientSecret;
+      const publishableKey = preparation?.publishableKey;
+      if (clientSecret === undefined || publishableKey === undefined) {
+        throw new Error('Missing payment action');
+      }
+      setPaymentAction({ actionId, clientSecret, publishableKey });
     } catch (error) {
       showError(error);
     } finally {
@@ -600,6 +605,7 @@ export const SettingsBilling = ({
           <ManagedProviderCustomerFundingPaymentForm
             billingSummary={paymentPreparation.billingSummary}
             clientSecret={paymentPreparation.clientSecret}
+            publishableKey={paymentPreparation.publishableKey}
             onCancel={() => {
               setPaymentPreparation(null);
               setPendingPrincipalCents(null);
@@ -610,6 +616,7 @@ export const SettingsBilling = ({
         ) : paymentAction !== null ? (
           <ManagedProviderCustomerFundingPaymentActionForm
             clientSecret={paymentAction.clientSecret}
+            publishableKey={paymentAction.publishableKey}
             onCancel={() => setPaymentAction(null)}
             onConfirmed={acknowledgeAction}
           />

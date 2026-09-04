@@ -1931,6 +1931,7 @@ type ManagedProviderCustomerFundingPaymentMethod {
 
 type ManagedProviderCustomerFundingPaymentAction {
   clientSecret: String!
+  publishableKey: String!
 }
 
 type ManagedProviderBillingStatus {
