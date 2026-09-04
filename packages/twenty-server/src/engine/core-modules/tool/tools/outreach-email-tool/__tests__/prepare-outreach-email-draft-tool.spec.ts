@@ -33,6 +33,7 @@ const authority: OutreachPreparationAuthority = {
   recipientEmail: 'creator@example.com',
   recipientLabel: 'Creator Name',
   campaignLabel: 'Launch Campaign',
+  campaignAccountId: null,
   mailboxSelection: {
     workspaceId: WORKSPACE_ID,
     outreachActionId: OUTREACH_ACTION_ID,

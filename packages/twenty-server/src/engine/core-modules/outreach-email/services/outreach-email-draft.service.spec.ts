@@ -1,4 +1,8 @@
-import { ConnectedAccountProvider } from 'twenty-shared/types';
+import {
+  ConnectedAccountProvider,
+  MessageChannelSyncStatus,
+  MessageChannelType,
+} from 'twenty-shared/types';
 import { type Repository } from 'typeorm';
 
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
@@ -9,6 +13,7 @@ import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connect
 import { type MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
+import { type CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_WORKSPACE_ID = '00000000-0000-4000-8000-000000000002';
@@ -20,6 +25,7 @@ const MESSAGE_CHANNEL_ID = '00000000-0000-4000-8000-000000000007';
 const PARENT_MESSAGE_ID = '00000000-0000-4000-8000-000000000008';
 const MESSAGE_THREAD_ID = '00000000-0000-4000-8000-000000000009';
 const MANAGED_MAILBOX_ID = '00000000-0000-4000-8000-000000000010';
+const CAMPAIGN_ACCOUNT_ID = '00000000-0000-4000-8000-000000000011';
 const CREATOR_EMAIL = 'creator@example.com';
 const PARENT_HEADER_MESSAGE_ID = '<parent@example.com>';
 
@@ -58,6 +64,9 @@ const messageChannel = {
   workspaceId: WORKSPACE_ID,
   connectedAccountId: CONNECTED_ACCOUNT_ID,
   handle: connectedAccount.handle,
+  type: MessageChannelType.EMAIL,
+  isSyncEnabled: true,
+  syncStatus: MessageChannelSyncStatus.ACTIVE,
 } as unknown as MessageChannelEntity;
 
 const buildComposedEmail = (
@@ -104,10 +113,16 @@ describe('OutreachEmailDraftService', () => {
   };
   const createDraft = jest.fn();
   const deleteDraft = jest.fn();
+  const assertConnectedAccountSendable = jest.fn();
   const messageOutboundService = {
     createDraft,
     deleteDraft,
+    assertConnectedAccountSendable,
   } as unknown as MessagingMessageOutboundService;
+  const resolveDefaultEmailAccount = jest.fn();
+  const campaignAccountService = {
+    resolveDefaultEmailAccount,
+  } as unknown as CampaignAccountService;
   const assertEligible = jest.fn();
   const campaignEligibilityService = {
     assertEligible,
@@ -138,6 +153,17 @@ describe('OutreachEmailDraftService', () => {
       messageChannelId: MESSAGE_CHANNEL_ID,
       effectiveDailyCap: 10,
     });
+    assertConnectedAccountSendable.mockResolvedValue(undefined);
+    resolveDefaultEmailAccount.mockResolvedValue({
+      id: CAMPAIGN_ACCOUNT_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      senderEmail: connectedAccount.handle,
+      label: connectedAccount.name,
+      provider: ConnectedAccountProvider.GOOGLE,
+      isDefault: true,
+      health: 'AVAILABLE',
+    });
     createDraft.mockResolvedValue({
       headerMessageId: '<provider-draft@example.com>',
       draftExternalId: 'provider-draft-id',
@@ -151,6 +177,7 @@ describe('OutreachEmailDraftService', () => {
       messageChannelRepository as unknown as Repository<MessageChannelEntity>,
       messageOutboundService,
       campaignEligibilityService,
+      campaignAccountService,
     );
   });
 
@@ -230,6 +257,7 @@ describe('OutreachEmailDraftService', () => {
       expect.objectContaining({
         id: authority.outreachActionId,
         campaignCreatorId: CAMPAIGN_CREATOR_ID,
+        campaignAccountId: null,
         channel: 'EMAIL',
         status: 'PENDING',
         subject: composedEmail.sanitizedSubject,
@@ -273,14 +301,169 @@ describe('OutreachEmailDraftService', () => {
     expect(result).not.toHaveProperty('accessToken');
   });
 
+  it.each([
+    ConnectedAccountProvider.GOOGLE,
+    ConnectedAccountProvider.MICROSOFT,
+    ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+  ])(
+    'uses the Campaign default %s mailbox when no managed mailbox is assigned',
+    async (provider) => {
+      campaignCreatorRepository.findOne.mockResolvedValue({
+        ...campaignCreator,
+        assignedManagedMailboxId: null,
+      });
+      connectedAccountRepository.findOne.mockResolvedValueOnce({
+        ...connectedAccount,
+        provider,
+      });
+      resolveDefaultEmailAccount.mockResolvedValueOnce({
+        id: CAMPAIGN_ACCOUNT_ID,
+        connectedAccountId: CONNECTED_ACCOUNT_ID,
+        messageChannelId: MESSAGE_CHANNEL_ID,
+        senderEmail: connectedAccount.handle,
+        label: connectedAccount.name,
+        provider,
+        isDefault: true,
+        health: 'AVAILABLE',
+      });
+
+      const authority = await resolveAuthority();
+      await service.persistPreparedDraft({
+        authority,
+        composedEmail: buildComposedEmail({
+          connectedAccount: { ...connectedAccount, provider },
+        }),
+      });
+
+      expect(authority.campaignAccountId).toBe(CAMPAIGN_ACCOUNT_ID);
+      expect(assertEligible).not.toHaveBeenCalled();
+      expect(resolveDefaultEmailAccount).toHaveBeenCalledWith(
+        CAMPAIGN_ID,
+        WORKSPACE_ID,
+      );
+      expect(outreachActionRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ campaignAccountId: CAMPAIGN_ACCOUNT_ID }),
+      );
+      expect(createDraft).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('rejects a Campaign default that does not match the supplied mailbox', async () => {
+    campaignCreatorRepository.findOne.mockResolvedValueOnce({
+      ...campaignCreator,
+      assignedManagedMailboxId: null,
+    });
+    resolveDefaultEmailAccount.mockResolvedValueOnce({
+      id: CAMPAIGN_ACCOUNT_ID,
+      connectedAccountId: 'other-connected-account-id',
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      senderEmail: connectedAccount.handle,
+      label: connectedAccount.name,
+      provider: ConnectedAccountProvider.GOOGLE,
+      isDefault: true,
+      health: 'AVAILABLE',
+    });
+
+    await expect(resolveAuthority()).rejects.toThrow(
+      'Selected outreach mailbox is unavailable',
+    );
+    expect(createDraft).not.toHaveBeenCalled();
+  });
+
+  it('rejects a Campaign default with a mismatched channel', async () => {
+    campaignCreatorRepository.findOne.mockResolvedValueOnce({
+      ...campaignCreator,
+      assignedManagedMailboxId: null,
+    });
+    resolveDefaultEmailAccount.mockResolvedValueOnce({
+      id: CAMPAIGN_ACCOUNT_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: 'other-message-channel-id',
+      senderEmail: connectedAccount.handle,
+      label: connectedAccount.name,
+      provider: ConnectedAccountProvider.GOOGLE,
+      isDefault: true,
+      health: 'AVAILABLE',
+    });
+
+    await expect(resolveAuthority()).rejects.toThrow(
+      'Selected outreach mailbox is unavailable',
+    );
+    expect(createDraft).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, '', '   '])(
+    'rejects malformed managed mailbox identifier %# without linked fallback',
+    async (assignedManagedMailboxId) => {
+      campaignCreatorRepository.findOne.mockResolvedValueOnce({
+        ...campaignCreator,
+        assignedManagedMailboxId,
+      });
+
+      await expect(resolveAuthority()).rejects.toThrow(
+        'Campaign Creator has an invalid assigned managed mailbox',
+      );
+      expect(resolveDefaultEmailAccount).not.toHaveBeenCalled();
+      expect(createDraft).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a changed Campaign default before provider draft creation', async () => {
+    campaignCreatorRepository.findOne.mockResolvedValue({
+      ...campaignCreator,
+      assignedManagedMailboxId: null,
+    });
+    const authority = await resolveAuthority();
+    resolveDefaultEmailAccount.mockResolvedValueOnce({
+      id: 'changed-campaign-account',
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      senderEmail: connectedAccount.handle,
+      label: connectedAccount.name,
+      provider: ConnectedAccountProvider.GOOGLE,
+      isDefault: true,
+      health: 'AVAILABLE',
+    });
+
+    await expect(
+      service.persistPreparedDraft({
+        authority,
+        composedEmail: buildComposedEmail(),
+      }),
+    ).rejects.toThrow('Outreach preparation authority has changed');
+    expect(createDraft).not.toHaveBeenCalled();
+  });
+
+  it('rejects a removed Campaign default before provider draft creation', async () => {
+    campaignCreatorRepository.findOne.mockResolvedValue({
+      ...campaignCreator,
+      assignedManagedMailboxId: null,
+    });
+    const authority = await resolveAuthority();
+    resolveDefaultEmailAccount.mockRejectedValueOnce(
+      new Error('Campaign has no unambiguous default email account'),
+    );
+
+    await expect(
+      service.persistPreparedDraft({
+        authority,
+        composedEmail: buildComposedEmail(),
+      }),
+    ).rejects.toThrow('Campaign has no unambiguous default email account');
+    expect(createDraft).not.toHaveBeenCalled();
+  });
+
   it('rejects an unassigned or ineligible managed mailbox before provider draft creation', async () => {
     campaignCreatorRepository.findOne.mockResolvedValueOnce({
       ...campaignCreator,
       assignedManagedMailboxId: null,
     });
+    resolveDefaultEmailAccount.mockRejectedValueOnce(
+      new Error('Campaign has no unambiguous default email account'),
+    );
 
     await expect(resolveAuthority()).rejects.toThrow(
-      'Campaign Creator does not have an assigned managed mailbox',
+      'Campaign has no unambiguous default email account',
     );
 
     assertEligible.mockRejectedValueOnce(
@@ -410,6 +593,84 @@ describe('OutreachEmailDraftService', () => {
     await expect(resolveAuthority()).rejects.toThrow(
       'Selected outreach mailbox is unavailable',
     );
+  });
+
+  it.each([
+    [
+      'an auth-failed account',
+      { ...connectedAccount, authFailedAt: new Date() },
+      [messageChannel],
+    ],
+    [
+      'an invalid sender address',
+      { ...connectedAccount, handle: 'not-an-email' },
+      [{ ...messageChannel, handle: 'not-an-email' }],
+    ],
+    [
+      'a non-email channel',
+      connectedAccount,
+      [{ ...messageChannel, type: MessageChannelType.EMAIL_GROUP }],
+    ],
+    [
+      'a disabled channel',
+      connectedAccount,
+      [{ ...messageChannel, isSyncEnabled: false }],
+    ],
+    [
+      'a non-active channel',
+      connectedAccount,
+      [
+        {
+          ...messageChannel,
+          syncStatus: MessageChannelSyncStatus.FAILED_UNKNOWN,
+        },
+      ],
+    ],
+    ['ambiguous channels', connectedAccount, [messageChannel, messageChannel]],
+  ])(
+    'rejects %s before provider draft creation',
+    async (_label, account, channels) => {
+      connectedAccountRepository.findOne.mockResolvedValueOnce(account);
+      messageChannelRepository.find.mockResolvedValueOnce(channels);
+
+      await expect(resolveAuthority()).rejects.toThrow(
+        'Selected outreach mailbox is unavailable',
+      );
+      expect(createDraft).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects an unsendable mailbox before provider draft creation', async () => {
+    assertConnectedAccountSendable.mockRejectedValueOnce(
+      new Error('Mailbox transport is unavailable'),
+    );
+
+    await expect(resolveAuthority()).rejects.toThrow(
+      'Mailbox transport is unavailable',
+    );
+    expect(createDraft).not.toHaveBeenCalled();
+  });
+
+  it('rejects a Campaign default that is not healthy', async () => {
+    campaignCreatorRepository.findOne.mockResolvedValueOnce({
+      ...campaignCreator,
+      assignedManagedMailboxId: null,
+    });
+    resolveDefaultEmailAccount.mockResolvedValueOnce({
+      id: CAMPAIGN_ACCOUNT_ID,
+      connectedAccountId: CONNECTED_ACCOUNT_ID,
+      messageChannelId: MESSAGE_CHANNEL_ID,
+      senderEmail: connectedAccount.handle,
+      label: connectedAccount.name,
+      provider: ConnectedAccountProvider.GOOGLE,
+      isDefault: true,
+      health: 'UNAVAILABLE',
+    });
+
+    await expect(resolveAuthority()).rejects.toThrow(
+      'Selected outreach mailbox is unavailable',
+    );
+    expect(createDraft).not.toHaveBeenCalled();
   });
 
   it('snapshots only a parent message on the selected channel', async () => {

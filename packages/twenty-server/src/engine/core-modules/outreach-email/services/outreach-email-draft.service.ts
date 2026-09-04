@@ -6,6 +6,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { isNonEmptyString } from '@sniptt/guards';
 import {
   ConnectedAccountProvider,
+  MessageChannelSyncStatus,
+  MessageChannelType,
   type ObjectRecord,
 } from 'twenty-shared/types';
 import { emailSchema } from 'twenty-shared/utils';
@@ -27,6 +29,8 @@ import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/module
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 import { MessagingMessageOutboundService } from 'src/modules/messaging/message-outbound-manager/services/messaging-message-outbound.service';
 import { type CreateDraftResult } from 'src/modules/messaging/message-outbound-manager/types/create-draft-result.type';
+import { CampaignEmailAccountHealth } from 'src/modules/myah-campaign/dtos/campaign-account.dto';
+import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 
 const INTERNAL_REPOSITORY_OPTIONS = {
   shouldBypassPermissionChecks: true,
@@ -56,6 +60,7 @@ type OutreachActionRecord = ObjectRecord & {
   id: string;
   name: string;
   campaignCreatorId: string;
+  campaignAccountId: string | null;
   channel: 'EMAIL';
   status: 'PENDING';
   subject: string;
@@ -94,6 +99,7 @@ export class OutreachEmailDraftService {
     private readonly messageChannelRepository: Repository<MessageChannelEntity>,
     private readonly messageOutboundService: MessagingMessageOutboundService,
     private readonly managedEmailCampaignEligibilityService: ManagedEmailCampaignEligibilityService,
+    private readonly campaignAccountService: CampaignAccountService,
   ) {}
 
   async resolvePreparationAuthority(
@@ -264,14 +270,6 @@ export class OutreachEmailDraftService {
           );
         }
 
-        if (
-          !isNonEmptyString(campaignCreator.assignedManagedMailboxId?.trim())
-        ) {
-          throw new Error(
-            'Campaign Creator does not have an assigned managed mailbox',
-          );
-        }
-
         const [creator, campaign] = await Promise.all([
           creatorRepository.findOne({
             where: { id: campaignCreator.creatorId },
@@ -294,6 +292,37 @@ export class OutreachEmailDraftService {
           !emailSchema.safeParse(recipientEmail).success
         ) {
           throw new Error('Creator does not have a valid email address');
+        }
+
+        let campaignAccountId: string | null = null;
+        let defaultEmailAccount:
+          | Awaited<
+              ReturnType<CampaignAccountService['resolveDefaultEmailAccount']>
+            >
+          | undefined;
+
+        if (campaignCreator.assignedManagedMailboxId === null) {
+          defaultEmailAccount =
+            await this.campaignAccountService.resolveDefaultEmailAccount(
+              campaign.id,
+              input.workspaceId,
+            );
+          if (
+            !defaultEmailAccount.isDefault ||
+            defaultEmailAccount.health !==
+              CampaignEmailAccountHealth.AVAILABLE ||
+            defaultEmailAccount.connectedAccountId !== input.connectedAccountId
+          ) {
+            throw new Error('Selected outreach mailbox is unavailable');
+          }
+          campaignAccountId = defaultEmailAccount.id;
+        } else if (
+          typeof campaignCreator.assignedManagedMailboxId !== 'string' ||
+          !isNonEmptyString(campaignCreator.assignedManagedMailboxId.trim())
+        ) {
+          throw new Error(
+            'Campaign Creator has an invalid assigned managed mailbox',
+          );
         }
 
         const connectedAccount = await this.connectedAccountRepository.findOne({
@@ -328,10 +357,20 @@ export class OutreachEmailDraftService {
         if (
           messageChannel.workspaceId !== input.workspaceId ||
           messageChannel.connectedAccountId !== connectedAccount.id ||
-          messageChannel.handle !== connectedAccount.handle
+          messageChannel.handle !== connectedAccount.handle ||
+          messageChannel.type !== MessageChannelType.EMAIL ||
+          !messageChannel.isSyncEnabled ||
+          messageChannel.syncStatus !== MessageChannelSyncStatus.ACTIVE ||
+          (defaultEmailAccount !== undefined &&
+            (defaultEmailAccount.messageChannelId !== messageChannel.id ||
+              defaultEmailAccount.senderEmail !== connectedAccount.handle))
         ) {
           throw new Error('Selected outreach mailbox is unavailable');
         }
+
+        await this.messageOutboundService.assertConnectedAccountSendable(
+          connectedAccount,
+        );
 
         const threadContext = await this.resolveThreadContext({
           inReplyTo: input.inReplyTo,
@@ -340,13 +379,15 @@ export class OutreachEmailDraftService {
           associationRepository,
         });
 
-        await this.managedEmailCampaignEligibilityService.assertEligible({
-          workspaceId: input.workspaceId,
-          managedMailboxId: campaignCreator.assignedManagedMailboxId.trim(),
-          connectedAccountId: connectedAccount.id,
-          messageChannelId: messageChannel.id,
-          isFollowUp: threadContext.inReplyTo !== null,
-        });
+        if (campaignCreator.assignedManagedMailboxId !== null) {
+          await this.managedEmailCampaignEligibilityService.assertEligible({
+            workspaceId: input.workspaceId,
+            managedMailboxId: campaignCreator.assignedManagedMailboxId.trim(),
+            connectedAccountId: connectedAccount.id,
+            messageChannelId: messageChannel.id,
+            isFollowUp: threadContext.inReplyTo !== null,
+          });
+        }
         const recipientLabel = isNonEmptyString(creator.name?.trim())
           ? creator.name.trim()
           : creator.id;
@@ -370,6 +411,7 @@ export class OutreachEmailDraftService {
             recipientEmail,
             recipientLabel,
             campaignLabel,
+            campaignAccountId,
             mailboxSelection: {
               workspaceId: input.workspaceId,
               outreachActionId: input.outreachActionId,
@@ -395,7 +437,10 @@ export class OutreachEmailDraftService {
       !connectedAccount ||
       connectedAccount.id !== connectedAccountId ||
       connectedAccount.workspaceId !== workspaceId ||
-      connectedAccount.archivedAt !== null
+      connectedAccount.archivedAt !== null ||
+      connectedAccount.authFailedAt != null ||
+      !isNonEmptyString(connectedAccount.handle) ||
+      !emailSchema.safeParse(connectedAccount.handle).success
     ) {
       throw new Error('Selected outreach mailbox is unavailable');
     }
@@ -487,6 +532,7 @@ export class OutreachEmailDraftService {
       expected.recipientEmail !== actual.recipientEmail ||
       expected.recipientLabel !== actual.recipientLabel ||
       expected.campaignLabel !== actual.campaignLabel ||
+      expected.campaignAccountId !== actual.campaignAccountId ||
       expected.inReplyTo !== actual.inReplyTo ||
       expected.messageThreadId !== actual.messageThreadId ||
       expected.messageThreadExternalId !== actual.messageThreadExternalId ||
@@ -580,6 +626,7 @@ export class OutreachEmailDraftService {
         id: authority.outreachActionId,
         name: `${authority.campaignLabel}: ${authority.recipientLabel}`,
         campaignCreatorId: authority.campaignCreatorId,
+        campaignAccountId: authority.campaignAccountId,
         channel: 'EMAIL',
         status: 'PENDING',
         subject: composedEmail.sanitizedSubject,
