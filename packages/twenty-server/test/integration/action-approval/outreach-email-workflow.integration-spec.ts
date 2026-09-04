@@ -10,6 +10,7 @@ import {
   ConnectedAccountProvider,
   MessageChannelPendingGroupEmailsAction,
   MessageChannelSyncStage,
+  MessageChannelSyncStatus,
   MessageChannelType,
   MessageChannelVisibility,
 } from 'twenty-shared/types';
@@ -30,6 +31,8 @@ import { ActionReceiptProjectorService } from 'src/engine/core-modules/action-ap
 import { ActionReceiptWorkspaceProjectionWriterService } from 'src/engine/core-modules/action-approval/services/action-receipt-workspace-projection-writer.service';
 import { computeActionContentDigest } from 'src/engine/core-modules/action-approval/utils/action-binding-digest.util';
 import { SendOutreachEmailTool } from 'src/engine/core-modules/tool/tools/outreach-email-tool/send-outreach-email-tool';
+import { CampaignEmailAccountHealth } from 'src/modules/myah-campaign/dtos/campaign-account.dto';
+import { CampaignAccountService } from 'src/modules/myah-campaign/services/campaign-account.service';
 import { CacheStorageNamespace } from 'src/engine/core-modules/cache-storage/types/cache-storage-namespace.enum';
 import { createRequestApprovalTool } from 'src/engine/metadata-modules/ai/ai-chat/tools/request-approval.tool';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
@@ -451,6 +454,32 @@ describe('outreach email approval and send (PostgreSQL)', () => {
   const projectedAssociationId = randomUUID();
   const recoveryActionId = randomUUID();
   const recoveryReceiptId = randomUUID();
+  const linkedCreatorId = randomUUID();
+  const linkedCampaignCreatorId = randomUUID();
+  const linkedStaleActionId = randomUUID();
+  const linkedActionId = randomUUID();
+  const linkedRecoveryActionId = randomUUID();
+  const linkedConnectedAccountId = randomUUID();
+  const linkedMessageChannelId = randomUUID();
+  const linkedCampaignAccountId = randomUUID();
+  const linkedProjectedMessageId = randomUUID();
+  const linkedProjectedMessageThreadId = randomUUID();
+  const linkedProjectedAssociationId = randomUUID();
+  const linkedRecoveryMessageId = randomUUID();
+  const linkedRecoveryMessageThreadId = randomUUID();
+  const linkedRecoveryAssociationId = randomUUID();
+  const linkedSenderEmail = 'linked-sender@example.com';
+  const linkedSubject = 'Linked sender partnership subject';
+  const linkedBody = 'Linked sender partnership body';
+  const linkedProviderDraftExternalId = 'provider-draft-linked';
+  const linkedRecoveryProviderDraftExternalId =
+    'provider-draft-linked-recovery';
+  const linkedProviderThreadExternalId = 'provider-thread-linked';
+  const linkedProviderMessageId = '<linked-sent@example.com>';
+  const linkedRecoveryProviderMessageId = '<linked-recovered@example.com>';
+  const linkedProviderExternalMessageId = 'linked-provider-message-id';
+  const linkedRecoveryProviderExternalMessageId =
+    'linked-recovered-provider-message-id';
   const recoveryProviderMessageId = '<recovered@example.com>';
   const recoveryProviderExternalMessageId = 'recovered-provider-message-id';
   let dataSource: DataSource;
@@ -460,9 +489,13 @@ describe('outreach email approval and send (PostgreSQL)', () => {
   let userWorkspaceId: string;
   let approvalBindingId: string;
   let sender: SendOutreachEmailTool;
+  let actionDefinition: OutreachEmailActionDefinition;
   let sendDraft: jest.Mock;
   let project: jest.Mock;
   let approvalDataSource: DataSource;
+  let campaignAccountService: CampaignAccountService;
+  let linkedApprovalBindingId: string;
+  let linkedRecoveryApprovalBindingId: string;
 
   beforeAll(async () => {
     dataSource = global.testDataSource;
@@ -552,8 +585,8 @@ describe('outreach email approval and send (PostgreSQL)', () => {
     await dataSource.query(
       `INSERT INTO core."messageChannel" (
         "id", "workspaceId", "connectedAccountId", "handle", "visibility",
-        "type", "pendingGroupEmailsAction", "syncStage"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        "type", "pendingGroupEmailsAction", "syncStatus", "syncStage"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         messageChannelId,
         workspaceId,
@@ -562,6 +595,37 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         MessageChannelVisibility.SHARE_EVERYTHING,
         MessageChannelType.EMAIL,
         MessageChannelPendingGroupEmailsAction.NONE,
+        MessageChannelSyncStatus.ACTIVE,
+        MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
+      ],
+    );
+    await dataSource.query(
+      `INSERT INTO core."connectedAccount" (
+        "id", "workspaceId", "userWorkspaceId", "handle", "name",
+        "provider", "visibility"
+      ) VALUES ($1, $2, $3, $4, 'Linked Sender', $5, 'workspace')`,
+      [
+        linkedConnectedAccountId,
+        workspaceId,
+        userWorkspaceId,
+        linkedSenderEmail,
+        ConnectedAccountProvider.GOOGLE,
+      ],
+    );
+    await dataSource.query(
+      `INSERT INTO core."messageChannel" (
+        "id", "workspaceId", "connectedAccountId", "handle", "visibility",
+        "type", "pendingGroupEmailsAction", "syncStatus", "syncStage"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        linkedMessageChannelId,
+        workspaceId,
+        linkedConnectedAccountId,
+        linkedSenderEmail,
+        MessageChannelVisibility.SHARE_EVERYTHING,
+        MessageChannelType.EMAIL,
+        MessageChannelPendingGroupEmailsAction.NONE,
+        MessageChannelSyncStatus.ACTIVE,
         MessageChannelSyncStage.MESSAGE_LIST_FETCH_PENDING,
       ],
     );
@@ -582,6 +646,56 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         "assignedManagedMailboxId"
       ) VALUES ($1, 'Launch Campaign: Creator Name', $2, $3, 'EMAIL', $4)`,
       [campaignCreatorId, creatorId, campaignId, managedMailboxId],
+    );
+    await dataSource.query(
+      `INSERT INTO "${schemaName}"."creator" ("id", "name", "email")
+       VALUES ($1, 'Linked Creator Name', $2)`,
+      [linkedCreatorId, recipientEmail],
+    );
+    await dataSource.query(
+      `INSERT INTO "${schemaName}"."campaignCreator" (
+        "id", "name", "creatorId", "campaignId", "selectedContactMethod",
+        "assignedManagedMailboxId"
+      ) VALUES ($1, 'Launch Campaign: Linked Creator Name', $2, $3, 'EMAIL', NULL)`,
+      [linkedCampaignCreatorId, linkedCreatorId, campaignId],
+    );
+    await dataSource.query(
+      `INSERT INTO "${schemaName}"."campaignAccount" (
+        "id", "campaignId", "connectedAccountId", "messageChannelId",
+        "channel", "isDefault"
+      ) VALUES ($1, $2, $3, $4, 'EMAIL', true)`,
+      [
+        linkedCampaignAccountId,
+        campaignId,
+        linkedConnectedAccountId,
+        linkedMessageChannelId,
+      ],
+    );
+    await dataSource.query(
+      `INSERT INTO "${schemaName}"."outreachAction" (
+        "id", "name", "campaignCreatorId", "channel", "status",
+        "subject", "body", "contentDigest", "recipientEmail",
+        "campaignAccountId", "connectedAccountId", "messageChannelId",
+        "senderEmail", "senderDisplayName", "providerDraftExternalId",
+        "providerThreadExternalId"
+      ) VALUES (
+        $1, 'Linked stale action', $2, 'EMAIL', 'PENDING',
+        $3, $4, $5, $6, $7, $8, $9, $10, 'Linked Sender', $11, $12
+      )`,
+      [
+        linkedStaleActionId,
+        linkedCampaignCreatorId,
+        linkedSubject,
+        linkedBody,
+        computeActionContentDigest(JSON.stringify([linkedSubject, linkedBody])),
+        recipientEmail,
+        linkedCampaignAccountId,
+        linkedConnectedAccountId,
+        linkedMessageChannelId,
+        linkedSenderEmail,
+        linkedProviderDraftExternalId,
+        linkedProviderThreadExternalId,
+      ],
     );
     await dataSource.query(
       `INSERT INTO "${schemaName}"."outreachAction" (
@@ -705,6 +819,24 @@ describe('outreach email approval and send (PostgreSQL)', () => {
             )
           )[0] ?? null,
       },
+      campaignAccount: {
+        find: async ({
+          where,
+        }: {
+          where: {
+            campaignId: string;
+            channel: string;
+            isDefault?: boolean;
+          };
+        }) =>
+          dataSource.query(
+            `SELECT * FROM "${schemaName}"."campaignAccount"
+             WHERE "campaignId" = $1
+               AND "channel" = $2
+               AND ($3::boolean IS NULL OR "isDefault" = $3)`,
+            [where.campaignId, where.channel, where.isDefault ?? null],
+          ),
+      },
       message: { find: async () => [] },
       messageChannelMessageAssociation: { find: async () => [] },
     };
@@ -759,27 +891,78 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       }),
     };
     const connectedAccountRepository = {
-      findOne: async () =>
+      findOne: async ({
+        where,
+      }: {
+        where: { id: string; workspaceId: string };
+      }) =>
         (
           await dataSource.query(
             `SELECT * FROM core."connectedAccount"
              WHERE "id" = $1 AND "workspaceId" = $2 AND "archivedAt" IS NULL`,
-            [connectedAccountId, workspaceId],
+            [where.id, where.workspaceId],
           )
         )[0] ?? null,
     };
     const messageChannelRepository = {
-      find: async () =>
+      findOne: async ({
+        where,
+      }: {
+        where: {
+          id: string;
+          workspaceId: string;
+          connectedAccountId: string;
+          handle: string;
+          type: MessageChannelType;
+        };
+      }) =>
+        (
+          await dataSource.query(
+            `SELECT * FROM core."messageChannel"
+             WHERE "id" = $1 AND "workspaceId" = $2
+               AND "connectedAccountId" = $3 AND "handle" = $4 AND "type" = $5`,
+            [
+              where.id,
+              where.workspaceId,
+              where.connectedAccountId,
+              where.handle,
+              where.type,
+            ],
+          )
+        )[0] ?? null,
+      find: async ({
+        where,
+      }: {
+        where: {
+          id: string;
+          workspaceId: string;
+          connectedAccountId: string;
+          handle?: string;
+        };
+      }) =>
         dataSource.query(
           `SELECT * FROM core."messageChannel"
            WHERE "id" = $1 AND "workspaceId" = $2
-             AND "connectedAccountId" = $3`,
-          [messageChannelId, workspaceId, connectedAccountId],
+             AND "connectedAccountId" = $3
+             AND ($4::text IS NULL OR "handle" = $4)`,
+          [
+            where.id,
+            where.workspaceId,
+            where.connectedAccountId,
+            where.handle ?? null,
+          ],
         ),
     };
     const workspaceMemberId = randomUUID();
 
-    const actionDefinition = new OutreachEmailActionDefinition(
+    campaignAccountService = new CampaignAccountService(
+      globalWorkspaceOrmManager as never,
+      connectedAccountRepository as never,
+      messageChannelRepository as never,
+      { assertConnectedAccountSendable: async () => undefined } as never,
+    );
+
+    actionDefinition = new OutreachEmailActionDefinition(
       workspaceRepository as never,
       globalWorkspaceOrmManager as never,
       objectMetadataRepository as never,
@@ -802,7 +985,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
           effectiveDailyCap: 1,
         }),
       } as never,
-      {} as never,
+      campaignAccountService,
       { assertConnectedAccountSendable: async () => undefined } as never,
     );
     const persistSentMessage = jest.fn(async () => {
@@ -908,9 +1091,19 @@ describe('outreach email approval and send (PostgreSQL)', () => {
            FROM core."actionExecutionReceipt" receipt
            INNER JOIN core."actionApprovalBinding" binding
              ON binding."id" = receipt."actionApprovalBindingId"
-           WHERE binding."workspaceId" = $1 AND binding."draftId" = $2
+           WHERE binding."workspaceId" = $1
+             AND binding."draftId" = ANY($2::uuid[])
          )`,
-        [workspaceId, outreachActionId],
+        [
+          workspaceId,
+          [
+            outreachActionId,
+            recoveryActionId,
+            linkedStaleActionId,
+            linkedActionId,
+            linkedRecoveryActionId,
+          ],
+        ],
       );
       await dataSource.query(
         `DELETE FROM "${schemaName}"."timelineActivity" WHERE "id" = $1`,
@@ -919,31 +1112,62 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       await dataSource.query(
         `DELETE FROM "${schemaName}"."messageChannelMessageAssociation"
          WHERE "id" = ANY($1::uuid[])`,
-        [[persistedAssociationId, projectedAssociationId]],
+        [
+          [
+            persistedAssociationId,
+            projectedAssociationId,
+            linkedProjectedAssociationId,
+            linkedRecoveryAssociationId,
+          ],
+        ],
       );
       await dataSource.query(
         `DELETE FROM "${schemaName}"."message" WHERE "id" = ANY($1::uuid[])`,
-        [[persistedMessageId, projectedMessageId]],
+        [
+          [
+            persistedMessageId,
+            projectedMessageId,
+            linkedProjectedMessageId,
+            linkedRecoveryMessageId,
+          ],
+        ],
       );
       await dataSource.query(
         `DELETE FROM "${schemaName}"."messageThread" WHERE "id" = ANY($1::uuid[])`,
-        [[persistedMessageThreadId, projectedMessageThreadId]],
+        [
+          [
+            persistedMessageThreadId,
+            projectedMessageThreadId,
+            linkedProjectedMessageThreadId,
+            linkedRecoveryMessageThreadId,
+          ],
+        ],
       );
       await dataSource.query(
-        `DELETE FROM "${schemaName}"."outreachAction" WHERE "id" = $1`,
-        [recoveryActionId],
+        `DELETE FROM "${schemaName}"."outreachAction"
+         WHERE "id" = ANY($1::uuid[])`,
+        [
+          [
+            recoveryActionId,
+            outreachActionId,
+            linkedStaleActionId,
+            linkedActionId,
+            linkedRecoveryActionId,
+          ],
+        ],
       );
       await dataSource.query(
-        `DELETE FROM "${schemaName}"."outreachAction" WHERE "id" = $1`,
-        [outreachActionId],
+        `DELETE FROM "${schemaName}"."campaignCreator"
+         WHERE "id" = ANY($1::uuid[])`,
+        [[campaignCreatorId, linkedCampaignCreatorId]],
       );
       await dataSource.query(
-        `DELETE FROM "${schemaName}"."campaignCreator" WHERE "id" = $1`,
-        [campaignCreatorId],
+        `DELETE FROM "${schemaName}"."creator" WHERE "id" = ANY($1::uuid[])`,
+        [[creatorId, linkedCreatorId]],
       );
       await dataSource.query(
-        `DELETE FROM "${schemaName}"."creator" WHERE "id" = $1`,
-        [creatorId],
+        `DELETE FROM "${schemaName}"."campaignAccount" WHERE "id" = $1`,
+        [linkedCampaignAccountId],
       );
       await dataSource.query(
         `DELETE FROM "${schemaName}"."campaign" WHERE "id" = $1`,
@@ -954,26 +1178,166 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       `DELETE FROM core."actionExecutionReceipt"
        WHERE "actionApprovalBindingId" IN (
          SELECT "id" FROM core."actionApprovalBinding"
-         WHERE "workspaceId" = $1 AND "draftId" = $2
+         WHERE "workspaceId" = $1 AND "draftId" = ANY($2::uuid[])
        )`,
-      [workspaceId, outreachActionId],
+      [
+        workspaceId,
+        [
+          outreachActionId,
+          recoveryActionId,
+          linkedStaleActionId,
+          linkedActionId,
+          linkedRecoveryActionId,
+        ],
+      ],
     );
     await dataSource.query(
       `DELETE FROM core."actionApprovalBinding"
-       WHERE "workspaceId" = $1 AND "draftId" = $2`,
-      [workspaceId, outreachActionId],
+       WHERE "workspaceId" = $1 AND "draftId" = ANY($2::uuid[])`,
+      [
+        workspaceId,
+        [
+          outreachActionId,
+          recoveryActionId,
+          linkedStaleActionId,
+          linkedActionId,
+          linkedRecoveryActionId,
+        ],
+      ],
     );
     await dataSource.query(
-      `DELETE FROM core."messageChannel" WHERE "id" = $1`,
-      [messageChannelId],
+      `DELETE FROM core."messageChannel" WHERE "id" = ANY($1::uuid[])`,
+      [[messageChannelId, linkedMessageChannelId]],
     );
     await dataSource.query(
-      `DELETE FROM core."connectedAccount" WHERE "id" = $1`,
-      [connectedAccountId],
+      `DELETE FROM core."connectedAccount" WHERE "id" = ANY($1::uuid[])`,
+      [[connectedAccountId, linkedConnectedAccountId]],
     );
+    await expect(
+      dataSource.query(
+        `SELECT COUNT(*)::int AS "count"
+         FROM "${schemaName}"."outreachAction"
+         WHERE "id" = ANY($1::uuid[])`,
+        [
+          [
+            outreachActionId,
+            recoveryActionId,
+            linkedStaleActionId,
+            linkedActionId,
+            linkedRecoveryActionId,
+          ],
+        ],
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+    await expect(
+      dataSource.query(
+        `SELECT COUNT(*)::int AS "count"
+         FROM core."actionApprovalBinding"
+         WHERE "workspaceId" = $1 AND "draftId" = ANY($2::uuid[])`,
+        [
+          workspaceId,
+          [
+            outreachActionId,
+            recoveryActionId,
+            linkedStaleActionId,
+            linkedActionId,
+            linkedRecoveryActionId,
+          ],
+        ],
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
     if (approvalDataSource?.isInitialized) {
       await approvalDataSource.destroy();
     }
+  });
+
+  it('binds the persisted linked Campaign default before approval', async () => {
+    await expect(
+      campaignAccountService.resolveDefaultEmailAccount(
+        campaignId,
+        workspaceId,
+      ),
+    ).resolves.toMatchObject({
+      id: linkedCampaignAccountId,
+      connectedAccountId: linkedConnectedAccountId,
+      messageChannelId: linkedMessageChannelId,
+      isDefault: true,
+      health: CampaignEmailAccountHealth.AVAILABLE,
+    });
+
+    const actionApprovalService = new ActionApprovalService(
+      approvalDataSource,
+      new ActionReceiptProjectorService(
+        approvalDataSource.getRepository(ActionExecutionReceiptEntity),
+        { project },
+      ),
+    );
+
+    const output = await createRequestApprovalTool({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      actionDefinitions: {
+        send_instagram_reply: {} as never,
+        send_outreach_email: actionDefinition,
+        send_myah_inbox_reply: {} as never,
+      },
+      actionApprovalService,
+    }).execute({
+      toolName: 'send_outreach_email',
+      actionInput: { outreachActionId: linkedStaleActionId },
+    });
+
+    expect(output.result).toMatchObject({ status: 'pending' });
+    expect(output.result).toEqual(
+      expect.objectContaining({
+        actionApprovalBindingId: expect.any(String),
+      }),
+    );
+    if (!output.result || !('actionApprovalBindingId' in output.result)) {
+      throw new Error('Linked approval producer did not return a binding');
+    }
+    linkedApprovalBindingId = output.result.actionApprovalBindingId;
+    await expect(
+      approvalDataSource
+        .getRepository(ActionApprovalBindingEntity)
+        .findOneOrFail({
+          where: { id: linkedApprovalBindingId },
+          relations: { evidenceLinks: true },
+        }),
+    ).resolves.toMatchObject({
+      evidenceLinks: expect.arrayContaining([
+        expect.objectContaining({
+          recordId: linkedCampaignAccountId,
+          role: 'campaign_account',
+        }),
+      ]),
+    });
+
+    await actionApprovalService.decidePendingBinding({
+      workspaceId,
+      userWorkspaceId,
+      threadId,
+      approvalBindingId: linkedApprovalBindingId,
+      decision: 'approved',
+    });
+    await dataSource.query(
+      `UPDATE "${schemaName}"."campaignAccount"
+       SET "isDefault" = false WHERE "id" = $1`,
+      [linkedCampaignAccountId],
+    );
+    await expect(
+      sender.execute(
+        { actionApprovalBindingId: linkedApprovalBindingId },
+        { workspaceId, userWorkspaceId, threadId },
+      ),
+    ).resolves.toMatchObject({ success: false });
+    expect(sendDraft).not.toHaveBeenCalled();
+    await dataSource.query(
+      `UPDATE "${schemaName}"."campaignAccount"
+       SET "isDefault" = true WHERE "id" = $1`,
+      [linkedCampaignAccountId],
+    );
   });
 
   it('requires approval and projects the definition-produced binding through the real writer', async () => {
@@ -1044,6 +1408,9 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         where: { id: approvalBindingId },
         relations: { evidenceLinks: true },
       });
+    expect(
+      binding.evidenceLinks.some(({ role }) => role === 'campaign_account'),
+    ).toBe(false);
     expect(project).toHaveBeenCalledWith(
       expect.objectContaining({
         draftId: binding.draftId,
@@ -1063,6 +1430,13 @@ describe('outreach email approval and send (PostgreSQL)', () => {
     ]);
     await expect(
       dataSource.query(
+        `SELECT "campaignAccountId" FROM "${schemaName}"."outreachAction"
+         WHERE "id" = $1`,
+        [outreachActionId],
+      ),
+    ).resolves.toEqual([{ campaignAccountId: null }]);
+    await expect(
+      dataSource.query(
         `SELECT "id" FROM "${schemaName}"."timelineActivity"
          WHERE "createdByContext" ->> 'actionReceiptId' IN (
            SELECT "id"::text FROM core."actionExecutionReceipt"
@@ -1071,6 +1445,298 @@ describe('outreach email approval and send (PostgreSQL)', () => {
         [approvalBindingId],
       ),
     ).resolves.toEqual([{ id: expect.any(String) }]);
+  });
+
+  it('sends and recovers linked Campaign approvals exactly once through the real receipt writer', async () => {
+    const insertLinkedAction = async (
+      actionId: string,
+      providerDraftExternalId: string,
+    ) => {
+      await dataSource.query(
+        `INSERT INTO "${schemaName}"."outreachAction" (
+          "id", "name", "campaignCreatorId", "channel", "status",
+          "subject", "body", "contentDigest", "recipientEmail",
+          "campaignAccountId", "connectedAccountId", "messageChannelId",
+          "senderEmail", "senderDisplayName", "providerDraftExternalId",
+          "providerThreadExternalId"
+        ) VALUES (
+          $1, 'Linked action', $2, 'EMAIL', 'PENDING',
+          $3, $4, $5, $6, $7, $8, $9, $10, 'Linked Sender', $11, $12
+        )`,
+        [
+          actionId,
+          linkedCampaignCreatorId,
+          linkedSubject,
+          linkedBody,
+          computeActionContentDigest(
+            JSON.stringify([linkedSubject, linkedBody]),
+          ),
+          recipientEmail,
+          linkedCampaignAccountId,
+          linkedConnectedAccountId,
+          linkedMessageChannelId,
+          linkedSenderEmail,
+          providerDraftExternalId,
+          linkedProviderThreadExternalId,
+        ],
+      );
+    };
+    const createLinkedApproval = async (outreachActionId: string) => {
+      const approvalService = new ActionApprovalService(
+        approvalDataSource,
+        new ActionReceiptProjectorService(
+          approvalDataSource.getRepository(ActionExecutionReceiptEntity),
+          { project },
+        ),
+      );
+      const output = await createRequestApprovalTool({
+        workspaceId,
+        userWorkspaceId,
+        threadId,
+        actionDefinitions: {
+          send_instagram_reply: {} as never,
+          send_outreach_email: actionDefinition,
+          send_myah_inbox_reply: {} as never,
+        },
+        actionApprovalService: approvalService,
+      }).execute({
+        toolName: 'send_outreach_email',
+        actionInput: { outreachActionId },
+      });
+      if (
+        !output.result ||
+        output.result.status !== 'pending' ||
+        !('actionApprovalBindingId' in output.result)
+      ) {
+        throw new Error('Linked approval producer did not return a binding');
+      }
+      await approvalService.decidePendingBinding({
+        workspaceId,
+        userWorkspaceId,
+        threadId,
+        approvalBindingId: output.result.actionApprovalBindingId,
+        decision: 'approved',
+      });
+
+      return {
+        approvalService,
+        approvalBindingId: output.result.actionApprovalBindingId,
+      };
+    };
+    const insertProviderMessage = async ({
+      messageId,
+      threadId: messageThreadId,
+      associationId,
+      headerMessageId,
+      externalMessageId,
+    }: {
+      messageId: string;
+      threadId: string;
+      associationId: string;
+      headerMessageId: string;
+      externalMessageId: string;
+    }) => {
+      await dataSource.query(
+        `INSERT INTO "${schemaName}"."messageThread" ("id") VALUES ($1)`,
+        [messageThreadId],
+      );
+      await dataSource.query(
+        `INSERT INTO "${schemaName}"."message" (
+          "id", "headerMessageId", "messageThreadId"
+        ) VALUES ($1, $2, $3)`,
+        [messageId, headerMessageId, messageThreadId],
+      );
+      await dataSource.query(
+        `INSERT INTO "${schemaName}"."messageChannelMessageAssociation" (
+          "id", "messageId", "messageChannelId", "messageExternalId",
+          "messageThreadExternalId"
+        ) VALUES ($1, $2, $3, $4, $5)`,
+        [
+          associationId,
+          messageId,
+          linkedMessageChannelId,
+          externalMessageId,
+          linkedProviderThreadExternalId,
+        ],
+      );
+    };
+    const linkedConnectedAccountRepository = {
+      findOne: async ({
+        where,
+      }: {
+        where: { id: string; workspaceId: string };
+      }) =>
+        (
+          await dataSource.query(
+            `SELECT * FROM core."connectedAccount"
+             WHERE "id" = $1 AND "workspaceId" = $2 AND "archivedAt" IS NULL`,
+            [where.id, where.workspaceId],
+          )
+        )[0] ?? null,
+    };
+    const linkedWriter = new ActionReceiptWorkspaceProjectionWriterService(
+      dataSource,
+      linkedConnectedAccountRepository as never,
+      {} as never,
+      {} as never,
+    );
+    const linkedProjector = new ActionReceiptProjectorService(
+      approvalDataSource.getRepository(ActionExecutionReceiptEntity),
+      linkedWriter,
+    );
+    const linkedApprovalService = new ActionApprovalService(
+      approvalDataSource,
+      linkedProjector,
+    );
+    const linkedTransport = jest.fn(async (draftExternalId: string) => {
+      if (draftExternalId === linkedProviderDraftExternalId) {
+        await insertProviderMessage({
+          messageId: linkedProjectedMessageId,
+          threadId: linkedProjectedMessageThreadId,
+          associationId: linkedProjectedAssociationId,
+          headerMessageId: linkedProviderMessageId,
+          externalMessageId: linkedProviderExternalMessageId,
+        });
+        return {
+          headerMessageId: linkedProviderMessageId,
+          messageExternalId: linkedProviderExternalMessageId,
+          threadExternalId: linkedProviderThreadExternalId,
+        };
+      }
+
+      return {
+        headerMessageId: linkedRecoveryProviderMessageId,
+        messageExternalId: linkedRecoveryProviderExternalMessageId,
+        threadExternalId: linkedProviderThreadExternalId,
+      };
+    });
+    const linkedSender = new SendOutreachEmailTool(
+      linkedApprovalService,
+      actionDefinition,
+      { sendDraft: linkedTransport } as never,
+      linkedProjector,
+    );
+
+    await insertLinkedAction(linkedActionId, linkedProviderDraftExternalId);
+    ({ approvalBindingId: linkedApprovalBindingId } =
+      await createLinkedApproval(linkedActionId));
+    await expect(
+      approvalDataSource.getRepository(ActionApprovalBindingEntity).find({
+        where: { workspaceId, draftId: linkedActionId },
+        relations: { evidenceLinks: true },
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: linkedApprovalBindingId,
+        evidenceLinks: expect.arrayContaining([
+          expect.objectContaining({
+            recordId: linkedCampaignAccountId,
+            role: 'campaign_account',
+          }),
+        ]),
+      }),
+    ]);
+    await expect(
+      linkedSender.execute(
+        { actionApprovalBindingId: linkedApprovalBindingId },
+        { workspaceId, userWorkspaceId, threadId },
+      ),
+    ).resolves.toEqual({ success: true, message: 'Outreach email accepted.' });
+    expect(linkedTransport).toHaveBeenCalledTimes(1);
+    await expect(
+      approvalDataSource
+        .getRepository(ActionExecutionReceiptEntity)
+        .findOneByOrFail({ actionApprovalBindingId: linkedApprovalBindingId }),
+    ).resolves.toMatchObject({ state: ActionExecutionReceiptState.SENT });
+    await expect(
+      dataSource.query(
+        `SELECT "status", "campaignAccountId", "messageId"
+         FROM "${schemaName}"."outreachAction" WHERE "id" = $1`,
+        [linkedActionId],
+      ),
+    ).resolves.toEqual([
+      {
+        status: 'APPLIED',
+        campaignAccountId: linkedCampaignAccountId,
+        messageId: linkedProjectedMessageId,
+      },
+    ]);
+    await expect(
+      dataSource.query(
+        `SELECT COUNT(*)::int AS "count"
+         FROM "${schemaName}"."message" message
+         INNER JOIN "${schemaName}"."messageChannelMessageAssociation" association
+           ON association."messageId" = message."id"
+         WHERE message."headerMessageId" = $1
+           AND association."messageChannelId" = $2`,
+        [linkedProviderMessageId, linkedMessageChannelId],
+      ),
+    ).resolves.toEqual([{ count: 1 }]);
+    await expect(
+      linkedSender.execute(
+        { actionApprovalBindingId: linkedApprovalBindingId },
+        { workspaceId, userWorkspaceId, threadId },
+      ),
+    ).resolves.toMatchObject({ success: true });
+    expect(linkedTransport).toHaveBeenCalledTimes(1);
+
+    await insertLinkedAction(
+      linkedRecoveryActionId,
+      linkedRecoveryProviderDraftExternalId,
+    );
+    ({ approvalBindingId: linkedRecoveryApprovalBindingId } =
+      await createLinkedApproval(linkedRecoveryActionId));
+    await expect(
+      linkedSender.execute(
+        { actionApprovalBindingId: linkedRecoveryApprovalBindingId },
+        { workspaceId, userWorkspaceId, threadId },
+      ),
+    ).resolves.toEqual({ success: true, message: 'Outreach email accepted.' });
+    expect(linkedTransport).toHaveBeenCalledTimes(2);
+    await expect(
+      approvalDataSource
+        .getRepository(ActionExecutionReceiptEntity)
+        .findOneByOrFail({
+          actionApprovalBindingId: linkedRecoveryApprovalBindingId,
+        }),
+    ).resolves.toMatchObject({
+      state: ActionExecutionReceiptState.PROVIDER_ACCEPTED,
+    });
+
+    await insertProviderMessage({
+      messageId: linkedRecoveryMessageId,
+      threadId: linkedRecoveryMessageThreadId,
+      associationId: linkedRecoveryAssociationId,
+      headerMessageId: linkedRecoveryProviderMessageId,
+      externalMessageId: linkedRecoveryProviderExternalMessageId,
+    });
+    await expect(
+      linkedSender.execute(
+        { actionApprovalBindingId: linkedRecoveryApprovalBindingId },
+        { workspaceId, userWorkspaceId, threadId },
+      ),
+    ).resolves.toEqual({ success: true, message: 'Outreach email accepted.' });
+    expect(linkedTransport).toHaveBeenCalledTimes(2);
+    await expect(
+      approvalDataSource
+        .getRepository(ActionExecutionReceiptEntity)
+        .findOneByOrFail({
+          actionApprovalBindingId: linkedRecoveryApprovalBindingId,
+        }),
+    ).resolves.toMatchObject({ state: ActionExecutionReceiptState.SENT });
+    await expect(
+      dataSource.query(
+        `SELECT "status", "executionReceiptId", "messageId"
+         FROM "${schemaName}"."outreachAction" WHERE "id" = $1`,
+        [linkedRecoveryActionId],
+      ),
+    ).resolves.toEqual([
+      {
+        status: 'APPLIED',
+        executionReceiptId: expect.any(String),
+        messageId: linkedRecoveryMessageId,
+      },
+    ]);
   });
 
   it('replays accepted Message persistence and projection without a provider send', async () => {
