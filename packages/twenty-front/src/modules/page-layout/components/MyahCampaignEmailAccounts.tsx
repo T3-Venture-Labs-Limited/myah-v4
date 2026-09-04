@@ -19,9 +19,13 @@ import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { styled } from '@linaria/react';
-import { useEffect, useRef, useState } from 'react';
-import { SettingsPath } from 'twenty-shared/types';
-import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import { EmailAccountConnectionCards } from '@/settings/accounts/components/EmailAccountConnectionCards';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AppPath } from 'twenty-shared/types';
+import { getAppPath } from 'twenty-shared/utils';
+
+import { MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER } from '@/page-layout/constants/MyahCampaignOperationsTabUniversalIdentifier';
 
 const CAMPAIGN_EMAIL_ACCOUNTS = gql`
   query CampaignEmailAccounts($input: CampaignEmailAccountCampaignInput!) {
@@ -132,6 +136,12 @@ const providerIcon = (provider: string) =>
 const accountIdentifier = (account: CampaignEmailAccount) =>
   account.senderEmail;
 
+const isUuid = (value: string | null): value is string =>
+  value !== null &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+
 export const MyahCampaignEmailAccounts = ({
   campaignId,
 }: {
@@ -148,7 +158,11 @@ export const MyahCampaignEmailAccounts = ({
   const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
   const { closeDropdown } = useCloseDropdown();
   const { openModal } = useModal();
-  const navigateSettings = useNavigateSettings();
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Persists the one-shot mutation through StrictMode's duplicate effect setup.
+  // oxlint-disable-next-line twenty/no-state-useref
+  const autoLinkedAccountRef = useRef<string | null>(null);
   const removeModalId = `campaign-email-account-remove-${campaignId}`;
   const pickerDropdownId = `campaign-email-account-picker-${campaignId}`;
   const accountQuery = useQuery<{
@@ -183,6 +197,11 @@ export const MyahCampaignEmailAccounts = ({
           account.connectedAccountId === candidate.connectedAccountId,
       ),
   );
+  const campaignOperationsReturnPath = `${getAppPath(
+    AppPath.RecordShowPage,
+    { objectNameSingular: 'campaign', objectRecordId: campaignId },
+    { linkConnectedAccount: 1 },
+  )}#${MYAH_CAMPAIGN_OPERATIONS_TAB_UNIVERSAL_IDENTIFIER}`;
 
   useEffect(() => {
     if (isPickerOpen) {
@@ -194,11 +213,13 @@ export const MyahCampaignEmailAccounts = ({
     if (result) setAccounts(result);
   };
 
-  const refreshAccountQueries = () => {
-    void Promise.all([accountQuery.refetch(), candidatesQuery.refetch()]).catch(
+  const { refetch: refetchAccounts } = accountQuery;
+  const { refetch: refetchCandidates } = candidatesQuery;
+  const refreshAccountQueries = useCallback(() => {
+    void Promise.all([refetchAccounts(), refetchCandidates()]).catch(
       () => undefined,
     );
-  };
+  }, [refetchAccounts, refetchCandidates]);
 
   const handleLink = async (candidate: CampaignEmailAccount) => {
     try {
@@ -218,6 +239,55 @@ export const MyahCampaignEmailAccounts = ({
       enqueueErrorSnackBar({ message: 'Email account could not be linked.' });
     }
   };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const shouldLink = searchParams.get('linkConnectedAccount') === '1';
+    const connectedAccountId = searchParams.get('connectedAccountId');
+
+    if (!shouldLink) return;
+
+    searchParams.delete('linkConnectedAccount');
+    searchParams.delete('connectedAccountId');
+    navigate(
+      {
+        hash: location.hash,
+        pathname: location.pathname,
+        search: searchParams.toString(),
+      },
+      { replace: true },
+    );
+
+    if (!isUuid(connectedAccountId) || autoLinkedAccountRef.current) {
+      if (!isUuid(connectedAccountId)) {
+        enqueueErrorSnackBar({ message: 'Email account could not be linked.' });
+      }
+      return;
+    }
+
+    autoLinkedAccountRef.current = connectedAccountId;
+    void linkAccount({
+      variables: { input: { campaignId, connectedAccountId } },
+    })
+      .then((result) => {
+        applyResult(result.data?.linkCampaignEmailAccount);
+        refreshAccountQueries();
+        enqueueSuccessSnackBar({ message: 'Email account linked.' });
+      })
+      .catch(() => {
+        enqueueErrorSnackBar({ message: 'Email account could not be linked.' });
+      });
+  }, [
+    campaignId,
+    enqueueErrorSnackBar,
+    enqueueSuccessSnackBar,
+    linkAccount,
+    location.hash,
+    location.pathname,
+    location.search,
+    navigate,
+    refreshAccountQueries,
+  ]);
 
   const handleSetDefault = async (account: CampaignEmailAccount) => {
     try {
@@ -326,17 +396,8 @@ export const MyahCampaignEmailAccounts = ({
                       );
                     })
                   : null}
-                <Button
-                  ariaLabel="Connect email account"
-                  onClick={() => navigateSettings(SettingsPath.NewAccount)}
-                  ref={
-                    firstAvailableCandidate === undefined
-                      ? pickerActionRef
-                      : undefined
-                  }
-                  title="Connect email account"
-                  type="button"
-                  variant="secondary"
+                <EmailAccountConnectionCards
+                  returnTo={campaignOperationsReturnPath}
                 />
               </div>
             }

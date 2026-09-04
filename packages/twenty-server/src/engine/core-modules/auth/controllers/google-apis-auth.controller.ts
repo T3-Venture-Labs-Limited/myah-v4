@@ -22,6 +22,7 @@ import { GoogleAPIsOauthExchangeCodeForTokenGuard } from 'src/engine/core-module
 import { GoogleAPIsOauthRequestCodeGuard } from 'src/engine/core-modules/auth/guards/google-apis-oauth-request-code.guard';
 import { GoogleAPIsService } from 'src/engine/core-modules/auth/services/google-apis.service';
 import { TransientTokenService } from 'src/engine/core-modules/auth/token/services/transient-token.service';
+import { appendConnectedAccountIdToRedirectLocation } from 'src/engine/core-modules/auth/utils/append-connected-account-id-to-redirect-location.util';
 import { APIsOAuthRequest } from 'src/engine/core-modules/auth/types/apis-oauth-request.type';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { GuardRedirectService } from 'src/engine/core-modules/guard-redirect/services/guard-redirect.service';
@@ -126,7 +127,10 @@ export class GoogleAPIsAuthController {
       }
 
       const pathname =
-        redirectLocation ||
+        appendConnectedAccountIdToRedirectLocation(
+          redirectLocation,
+          connectedAccountId,
+        ) ||
         getSettingsPath(SettingsPath.AccountsConfiguration, {
           connectedAccountId,
         });

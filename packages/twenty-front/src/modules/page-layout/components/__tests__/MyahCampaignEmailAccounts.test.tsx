@@ -1,11 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import userEvent from '@testing-library/user-event';
 
 import { MyahCampaignEmailAccounts } from '@/page-layout/components/MyahCampaignEmailAccounts';
 
 const mockUseQuery = jest.fn();
 const mockUseMutation = jest.fn();
-const mockNavigateSettings = jest.fn();
+const mockNavigate = jest.fn();
+const mockLocation = {
+  hash: '#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+  pathname: '/object/campaign/campaign-1',
+  search: '',
+};
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockEnqueueSuccessSnackBar = jest.fn();
 const mockCloseDropdown = jest.fn((dropdownId: string) => {
@@ -126,8 +132,22 @@ jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
   }),
 }));
 
-jest.mock('~/hooks/useNavigateSettings', () => ({
-  useNavigateSettings: () => mockNavigateSettings,
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useLocation: () => mockLocation,
+  useNavigate: () => mockNavigate,
+}));
+
+jest.mock('@/settings/accounts/components/EmailAccountConnectionCards', () => ({
+  EmailAccountConnectionCards: ({ returnTo }: { returnTo?: string }) => (
+    <button
+      aria-label="Connect email account"
+      data-return-to={returnTo}
+      type="button"
+    >
+      Connect email account
+    </button>
+  ),
 }));
 
 jest.mock('twenty-ui/data-display', () => ({
@@ -312,6 +332,7 @@ const openAccountPicker = () => {
 describe('MyahCampaignEmailAccounts', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLocation.search = '';
   });
 
   it('exposes Email Accounts as a real level-two heading', () => {
@@ -389,6 +410,41 @@ describe('MyahCampaignEmailAccounts', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
+  it('links a returned account once in StrictMode and replaces one-shot URL parameters', async () => {
+    const link = jest.fn().mockResolvedValue({
+      data: { linkCampaignEmailAccount: [linkedAccount] },
+    });
+    mockLocation.search =
+      '?linkConnectedAccount=1&connectedAccountId=123e4567-e89b-42d3-a456-426614174000';
+    configureHooks({ link });
+
+    render(
+      <StrictMode>
+        <MyahCampaignEmailAccounts campaignId="campaign-1" />
+      </StrictMode>,
+    );
+
+    await waitFor(() =>
+      expect(link).toHaveBeenCalledWith({
+        variables: {
+          input: {
+            campaignId: 'campaign-1',
+            connectedAccountId: '123e4567-e89b-42d3-a456-426614174000',
+          },
+        },
+      }),
+    );
+    expect(link).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith(
+      {
+        hash: '#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+        pathname: '/object/campaign/campaign-1',
+        search: '',
+      },
+      { replace: true },
+    );
+  });
+
   it('opens the existing account connection settings seam', () => {
     renderWithAccounts();
     openAccountPicker();
@@ -397,7 +453,12 @@ describe('MyahCampaignEmailAccounts', () => {
       screen.getByRole('button', { name: 'Connect email account' }),
     );
 
-    expect(mockNavigateSettings).toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Connect email account' }),
+    ).toHaveAttribute(
+      'data-return-to',
+      '/object/campaign/campaign-1?linkConnectedAccount=1#a62c90d6-08dc-4f2c-9b06-c7c10d3d12ba',
+    );
   });
 
   it('opens, activates, and closes the account picker with the keyboard', async () => {
