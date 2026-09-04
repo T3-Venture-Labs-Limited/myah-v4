@@ -22,6 +22,12 @@ type MockSettingsProps = {
   contentBeforeFields: ReactNode;
 };
 
+jest.mock('@/page-layout/components/MyahCampaignEmailAccounts', () => ({
+  MyahCampaignEmailAccounts: ({ campaignId }: { campaignId: string }) => (
+    <div data-testid="email-accounts" data-campaign-id={campaignId} />
+  ),
+}));
+
 jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
   MyahCampaignRichTextSettings: ({
     campaignId,
@@ -32,6 +38,7 @@ jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
     contentBeforeFields,
   }: MockSettingsProps) => (
     <>
+      {contentBeforeFields}
       <div
         data-campaign-id={campaignId}
         data-field-names={fields.map(({ fieldName }) => fieldName).join(',')}
@@ -49,7 +56,6 @@ jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
         data-title={title}
         data-unsaved-subtitle={copy.unsavedChangesSubtitle}
       />
-      {contentBeforeFields}
     </>
   ),
 }));
@@ -132,5 +138,21 @@ describe('MyahCampaignOperations', () => {
       'data-widget-id',
       operationsFieldsWidget.id,
     );
+    expect(screen.getByTestId('email-accounts')).toHaveAttribute(
+      'data-campaign-id',
+      'campaign-1',
+    );
+    expect(
+      screen
+        .getByTestId('native-status')
+        .compareDocumentPosition(screen.getByTestId('email-accounts')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByTestId('email-accounts')
+        .compareDocumentPosition(screen.getByTestId('settings-adapter')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
