@@ -111,6 +111,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       '00000000-0000-4000-8000-000000000020';
     const creatorId = '00000000-0000-4000-8000-000000000015';
     const campaignId = '00000000-0000-4000-8000-000000000016';
+    const campaignAccountId = '00000000-0000-4000-8000-000000000022';
     const messageChannelId = '00000000-0000-4000-8000-000000000017';
     const messageId = '00000000-0000-4000-8000-000000000018';
     const messageThreadId = '00000000-0000-4000-8000-000000000019';
@@ -143,6 +144,8 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
             campaignCreatorId,
             creatorId,
             campaignId,
+            assignedManagedMailboxId: null,
+            campaignAccountId,
             connectedAccountId: 'connected-account-id',
             messageChannelId,
             senderEmail: 'sender@example.com',
@@ -229,6 +232,8 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
       ),
       sendingAccountFingerprint: computeActionContentDigest(
         JSON.stringify([
+          null,
+          campaignAccountId,
           'connected-account-id',
           messageChannelId,
           'sender@example.com',
@@ -236,7 +241,12 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         ]),
       ),
       actionContextFingerprint: computeActionContentDigest(
-        JSON.stringify([null, null, providerThreadExternalId]),
+        JSON.stringify([
+          'provider-draft-id',
+          null,
+          null,
+          providerThreadExternalId,
+        ]),
       ),
       evidenceLinks: [
         {
@@ -247,12 +257,17 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         {
           objectMetadataId: 'creator-metadata-id',
           recordId: creatorId,
-          role: 'creator',
+          role: 'recipient',
         },
         {
           objectMetadataId: 'campaign-metadata-id',
           recordId: campaignId,
           role: 'campaign',
+        },
+        {
+          objectMetadataId: 'campaign-account-metadata-id',
+          recordId: campaignAccountId,
+          role: 'campaign_account',
         },
       ],
     } as const;
@@ -271,6 +286,10 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         sql.includes('FOR UPDATE'),
     );
     expect(actionSelect?.[0]).toContain('FOR UPDATE');
+    expect(actionSelect?.[0]).toContain(
+      'campaign_creator."assignedManagedMailboxId"',
+    );
+    expect(actionSelect?.[0]).toContain('outreach_action."campaignAccountId"');
     expect(actionSelect?.[0]).not.toContain('"_outreachAction"');
     const messageSelect = query.mock.calls.find(
       ([sql]) => sql.includes('"message"') && sql.includes('"headerMessageId"'),
@@ -361,6 +380,8 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
             campaignCreatorId: 'campaign-creator-id',
             creatorId: 'creator-id',
             campaignId: 'campaign-id',
+            assignedManagedMailboxId: null,
+            campaignAccountId: null,
             connectedAccountId: 'connected-account-id',
             messageChannelId: 'message-channel-id',
             senderEmail: 'sender@example.com',
@@ -422,6 +443,8 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
         ),
         sendingAccountFingerprint: computeActionContentDigest(
           JSON.stringify([
+            null,
+            null,
             'connected-account-id',
             'message-channel-id',
             'sender@example.com',
@@ -429,7 +452,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
           ]),
         ),
         actionContextFingerprint: computeActionContentDigest(
-          JSON.stringify([null, null, null]),
+          JSON.stringify(['provider-draft-id', null, null, null]),
         ),
         evidenceLinks: [
           {
@@ -440,7 +463,7 @@ describe('ActionReceiptWorkspaceProjectionWriterService', () => {
           {
             objectMetadataId: 'creator-metadata-id',
             recordId: 'creator-id',
-            role: 'creator',
+            role: 'recipient',
           },
           {
             objectMetadataId: 'campaign-metadata-id',

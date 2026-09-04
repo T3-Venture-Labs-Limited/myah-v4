@@ -416,6 +416,9 @@ describe('outreach email approval and send (PostgreSQL)', () => {
   const persistedMessageId = randomUUID();
   const persistedMessageThreadId = randomUUID();
   const persistedAssociationId = randomUUID();
+  const projectedMessageId = randomUUID();
+  const projectedMessageThreadId = randomUUID();
+  const projectedAssociationId = randomUUID();
   const recoveryActionId = randomUUID();
   const recoveryReceiptId = randomUUID();
   const recoveryProviderMessageId = '<recovered@example.com>';
@@ -772,10 +775,46 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       {} as never,
       { assertConnectedAccountSendable: async () => undefined } as never,
     );
-    project = jest.fn().mockResolvedValue(undefined);
+    const persistSentMessage = jest.fn(async () => {
+      await dataSource.query(
+        `INSERT INTO "${schemaName}"."messageThread" ("id") VALUES ($1)`,
+        [projectedMessageThreadId],
+      );
+      await dataSource.query(
+        `INSERT INTO "${schemaName}"."message" (
+          "id", "headerMessageId", "messageThreadId"
+        ) VALUES ($1, $2, $3)`,
+        [projectedMessageId, '<sent@example.com>', projectedMessageThreadId],
+      );
+      await dataSource.query(
+        `INSERT INTO "${schemaName}"."messageChannelMessageAssociation" (
+          "id", "messageId", "messageChannelId",
+          "messageExternalId", "messageThreadExternalId"
+        ) VALUES ($1, $2, $3, $4, $5)`,
+        [
+          projectedAssociationId,
+          projectedMessageId,
+          messageChannelId,
+          'provider-message-id',
+          providerThreadExternalId,
+        ],
+      );
+
+      return {
+        messageId: projectedMessageId,
+        messageThreadId: projectedMessageThreadId,
+      };
+    });
+    const writer = new ActionReceiptWorkspaceProjectionWriterService(
+      dataSource,
+      connectedAccountRepository as never,
+      { persistSentMessage } as never,
+      {} as never,
+    );
+    project = jest.spyOn(writer, 'project') as jest.Mock;
     const projector = new ActionReceiptProjectorService(
       approvalDataSource.getRepository(ActionExecutionReceiptEntity),
-      { project },
+      writer,
     );
     const actionApprovalService = new ActionApprovalService(
       approvalDataSource,
@@ -831,36 +870,34 @@ describe('outreach email approval and send (PostgreSQL)', () => {
     if (!dataSource?.isInitialized || !workspaceId) {
       return;
     }
-    await dataSource.query(
-      `DELETE FROM core."actionExecutionReceipt"
-       WHERE "actionApprovalBindingId" IN (
-         SELECT "id" FROM core."actionApprovalBinding"
-         WHERE "workspaceId" = $1 AND "draftId" = $2
-       )`,
-      [workspaceId, outreachActionId],
-    );
-    await dataSource.query(
-      `DELETE FROM core."actionApprovalBinding"
-       WHERE "workspaceId" = $1 AND "draftId" = $2`,
-      [workspaceId, outreachActionId],
-    );
     if (schemaName) {
+      await dataSource.query(
+        `DELETE FROM "${schemaName}"."timelineActivity"
+         WHERE "createdByContext" ->> 'actionReceiptId' IN (
+           SELECT receipt."id"
+           FROM core."actionExecutionReceipt" receipt
+           INNER JOIN core."actionApprovalBinding" binding
+             ON binding."id" = receipt."actionApprovalBindingId"
+           WHERE binding."workspaceId" = $1 AND binding."draftId" = $2
+         )`,
+        [workspaceId, outreachActionId],
+      );
       await dataSource.query(
         `DELETE FROM "${schemaName}"."timelineActivity" WHERE "id" = $1`,
         [recoveryReceiptId],
       );
       await dataSource.query(
         `DELETE FROM "${schemaName}"."messageChannelMessageAssociation"
-         WHERE "id" = $1`,
-        [persistedAssociationId],
+         WHERE "id" = ANY($1::uuid[])`,
+        [[persistedAssociationId, projectedAssociationId]],
       );
       await dataSource.query(
-        `DELETE FROM "${schemaName}"."message" WHERE "id" = $1`,
-        [persistedMessageId],
+        `DELETE FROM "${schemaName}"."message" WHERE "id" = ANY($1::uuid[])`,
+        [[persistedMessageId, projectedMessageId]],
       );
       await dataSource.query(
-        `DELETE FROM "${schemaName}"."messageThread" WHERE "id" = $1`,
-        [persistedMessageThreadId],
+        `DELETE FROM "${schemaName}"."messageThread" WHERE "id" = ANY($1::uuid[])`,
+        [[persistedMessageThreadId, projectedMessageThreadId]],
       );
       await dataSource.query(
         `DELETE FROM "${schemaName}"."outreachAction" WHERE "id" = $1`,
@@ -884,6 +921,19 @@ describe('outreach email approval and send (PostgreSQL)', () => {
       );
     }
     await dataSource.query(
+      `DELETE FROM core."actionExecutionReceipt"
+       WHERE "actionApprovalBindingId" IN (
+         SELECT "id" FROM core."actionApprovalBinding"
+         WHERE "workspaceId" = $1 AND "draftId" = $2
+       )`,
+      [workspaceId, outreachActionId],
+    );
+    await dataSource.query(
+      `DELETE FROM core."actionApprovalBinding"
+       WHERE "workspaceId" = $1 AND "draftId" = $2`,
+      [workspaceId, outreachActionId],
+    );
+    await dataSource.query(
       `DELETE FROM core."messageChannel" WHERE "id" = $1`,
       [messageChannelId],
     );
@@ -896,7 +946,7 @@ describe('outreach email approval and send (PostgreSQL)', () => {
     }
   });
 
-  it('requires approval and sends the exact prepared email once in its workspace', async () => {
+  it('requires approval and projects the definition-produced binding through the real writer', async () => {
     const input = { actionApprovalBindingId: approvalBindingId };
     const context = { workspaceId, userWorkspaceId, threadId };
 
@@ -958,6 +1008,22 @@ describe('outreach email approval and send (PostgreSQL)', () => {
     });
     expect(sendDraft).toHaveBeenCalledTimes(1);
     expect(project).toHaveBeenCalledTimes(1);
+    const binding = await approvalDataSource
+      .getRepository(ActionApprovalBindingEntity)
+      .findOneOrFail({
+        where: { id: approvalBindingId },
+        relations: { evidenceLinks: true },
+      });
+    expect(project).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: binding.draftId,
+        contentDigest: binding.contentDigest,
+        recipientFingerprint: binding.recipientFingerprint,
+        sendingAccountFingerprint: binding.sendingAccountFingerprint,
+        actionContextFingerprint: binding.actionContextFingerprint,
+        evidenceLinks: expect.arrayContaining(binding.evidenceLinks),
+      }),
+    );
     await expect(
       approvalDataSource.getRepository(ActionExecutionReceiptEntity).find({
         where: { actionApprovalBindingId: approvalBindingId },
@@ -965,6 +1031,16 @@ describe('outreach email approval and send (PostgreSQL)', () => {
     ).resolves.toEqual([
       expect.objectContaining({ state: ActionExecutionReceiptState.SENT }),
     ]);
+    await expect(
+      dataSource.query(
+        `SELECT "id" FROM "${schemaName}"."timelineActivity"
+         WHERE "createdByContext" ->> 'actionReceiptId' IN (
+           SELECT "id" FROM core."actionExecutionReceipt"
+           WHERE "actionApprovalBindingId" = $1
+         )`,
+        [approvalBindingId],
+      ),
+    ).resolves.toEqual([{ id: expect.any(String) }]);
   });
 
   it('replays accepted Message persistence and projection without a provider send', async () => {
