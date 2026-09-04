@@ -65,7 +65,7 @@ find "$HOME/.agents/skills" -name SKILL.md -type f | sort > /tmp/project-skill-s
 wc -l /tmp/project-skill-scoping-before-skill-paths.txt
 ```
 
-Expected: `118` discovered skill files. Stop if the count differs; update the approved inventory only after reconciling the change.
+Expected: a recorded, non-zero discovered-skill count. The count is evidence for the migration; it is not a fixed precondition because the personal library can legitimately change.
 
 - [ ] **Step 4: Record Hermes’s pre-migration skill inventory and filesystem hashes**
 
@@ -83,6 +83,20 @@ wc -l /tmp/project-skill-scoping-hermes-before.txt /tmp/project-skill-scoping-he
 Expected: both files are non-empty. The hash snapshot covers Hermes’s active `config.yaml`, default skill tree, and every profile-specific skill tree.
 
 ### Task 2: Migrate Pi’s global library without losing content
+
+**Rollback rule:** Run Tasks 2–4 in one shell session. Before Task 2 Step 1, execute this guard; it restores Pi’s former global discovery directory if any migration, local-copy, inventory, or final-verification command fails after the directory has been retired:
+
+```bash
+set -euo pipefail
+rollback_on_failure() {
+  if test ! -e "$HOME/.agents/skills" && test -d "$HOME/.agents/skills.pre-project-scoping"; then
+    mv "$HOME/.agents/skills.pre-project-scoping" "$HOME/.agents/skills"
+  fi
+}
+trap rollback_on_failure ERR
+```
+
+Expected: if any command in Tasks 2–4 fails after the retirement step, `~/.agents/skills/` is restored before the shell exits non-zero. Do not commit project-local changes after a failed command.
 
 **Files:**
 - Create: `~/.skills/`
@@ -302,19 +316,7 @@ Expected: the inventory lists all and only the approved local skills.
 
 ### Task 4: Verify isolation and the final inventory
 
-**Rollback rule:** Run Steps 1–4 in one shell session. Before Step 1, execute this guard; it restores Pi’s former global discovery directory if any final verification command fails:
-
-```bash
-set -euo pipefail
-rollback_on_failure() {
-  if test ! -e "$HOME/.agents/skills" && test -d "$HOME/.agents/skills.pre-project-scoping"; then
-    mv "$HOME/.agents/skills.pre-project-scoping" "$HOME/.agents/skills"
-  fi
-}
-trap rollback_on_failure ERR
-```
-
-Expected: if any local-inventory, Pi-isolation, or Hermes-preservation check fails, `~/.agents/skills/` is restored before the shell exits non-zero. Do not run Step 5 after a failed check.
+**Rollback rule:** Continue in the shell session initialized before Task 2. Its error trap remains active for all final verification steps. Do not run Step 5 after a failed check.
 
 **Files:**
 - Read: `~/.skills/`
